@@ -10,7 +10,6 @@
 // automatically (up to max_retries = 3).
 //
 // Handler locations:
-//   order.ingest     → src/modules/orders/orders.queue.ts
 //   payment.*        → src/modules/payments/process-payment.ts   (via switch below)
 //   order.notif      → src/modules/notifications/notifications.service.ts
 //   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
@@ -29,7 +28,6 @@ import {
   markOrderNotificationOutboxSent,
 } from "@scalius/core/modules/notifications";
 import { sendEmail } from "@scalius/core/integrations/email";
-import { handleOrderIngestBatch, type OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
@@ -175,9 +173,6 @@ async function enqueueOrderRefundNotificationAfterPolarWebhook(
   }
 }
 
-// Re-export so webhook routes can import message types from one place.
-export type { OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
-
 type PaymentWebhookEventLink = {
   webhookEventId?: string;
 };
@@ -291,7 +286,7 @@ export type AuthOtpQueueMessage =
  * Each message is processed independently; failures are retried by Cloudflare.
  */
 export async function handleQueueBatch(
-  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderIngestQueueMessage>,
+  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage>,
   env: Env,
   executionCtx?: ExecutionContext,
 ): Promise<void> {
@@ -299,26 +294,6 @@ export async function handleQueueBatch(
 
   if (batch.queue === "payment-events-dlq") {
     await handlePaymentEventsDlqBatch(batch as unknown as MessageBatch<QueueBody>, db);
-    return;
-  }
-
-  // Order ingest uses a different strategy and must be routed by queue name so
-  // a mixed/manual batch is not cast wholesale to order messages.
-  if (batch.queue === "order-ingest" || batch.queue === "order-ingest-queue") {
-    await handleOrderIngestBatch(batch as unknown as MessageBatch<OrderIngestQueueMessage>, db, env);
-    const orderMessages = batch.messages as unknown as Message<OrderIngestQueueMessage>[];
-    await invalidateProductAvailabilityCaches(
-      db,
-      {
-        orderIds: orderMessages.map((msg) => msg.body.orderData.id),
-        variantIds: orderMessages.flatMap((msg) =>
-          msg.body.items
-            .map((item) => item.variantId)
-            .filter((variantId): variantId is string => typeof variantId === "string" && variantId.length > 0),
-        ),
-      },
-      { env, executionCtx },
-    );
     return;
   }
 
@@ -343,7 +318,7 @@ export async function handleQueueBatch(
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
       await markPaymentWebhookEventFailedOnTerminalAttempt(
         db,
-        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderIngestQueueMessage>,
+        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage>,
         result.reason,
       );
       msg.retry({ delaySeconds: 30 });
@@ -731,7 +706,7 @@ async function processQueueMessage(
   }
 }
 
-type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderIngestQueueMessage;
+type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {

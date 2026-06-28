@@ -1,13 +1,13 @@
 # Orders Module
 
-Full order lifecycle: storefront checkout, admin CRUD, state machine validation, fulfillment, COD tracking, queue-based async ingestion, and notification dispatch.
+Full order lifecycle: storefront checkout, admin CRUD, state machine validation, fulfillment, COD tracking, synchronous storefront order commit, and notification dispatch.
 
 ## Files
 
 | File | Exports | Purpose |
 |------|---------|---------|
 | `index.ts` | barrel re-exports | Public API surface |
-| `orders.types.ts` | `OrderShipmentSummary`, `OrderListItem`, `OrderDetails`, `StorefrontOrderItem`, `CreateStorefrontOrderInput`, `CreateStorefrontOrderResult`, `OrderIngestQueuePayload`, `StatusUpdateResult` | Shared TypeScript interfaces for admin, storefront, and queue |
+| `orders.types.ts` | `OrderShipmentSummary`, `OrderListItem`, `OrderDetails`, `StorefrontOrderItem`, `CreateStorefrontOrderInput`, `CreateStorefrontOrderResult`, `StorefrontOrderCommitPayload`, `StatusUpdateResult` | Shared TypeScript interfaces for admin and storefront order flows |
 | `orders.admin.ts` | `listOrders()`, `getOrderDetails()`, `createOrder()`, `updateOrder()`, `deleteOrder()`, `restoreOrder()`, `permanentlyDeleteOrder()`, `bulkDeleteOrders()` | Admin dashboard queries and write operations |
 | `orders.storefront.ts` | `createStorefrontOrder()` | Storefront checkout validation and synchronous order payload builder |
 | `cart-validation.ts` | `validateStorefrontCartItems()` | Batched buyer-cart freshness checks for active products, concrete variants, stock availability, and server-authoritative prices |
@@ -15,7 +15,6 @@ Full order lifecycle: storefront checkout, admin CRUD, state machine validation,
 | `orders.fulfillment.ts` | `bulkShipOrders()`, `processCodAction()`, `getOrderShipments()`, `createFulfillmentShipment()`, `updateOrderStatus()` | Shipment creation, COD actions, status transitions with notification dispatch |
 | `orders.validation.ts` | `createOrderSchema`, `updateOrderSchema`, `bulkDeleteOrderSchema`, `bulkShipOrderSchema`, `CreateOrderInput`, `UpdateOrderInput`, `BulkDeleteOrderInput`, `BulkShipOrderInput` | Zod validation schemas for API routes |
 | `order-state-machine.ts` | `canTransitionTo()`, `validateTransition()`, `getAvailableTransitions()`, `StatusDimension` | Enforces valid order/payment/fulfillment status transitions |
-| `orders.queue.ts` | `handleOrderIngestBatch()`, `setCheckoutStatus()`, `OrderIngestQueueMessage` | Queue consumer for async order ingestion |
 
 ## Order State Machine
 
@@ -171,11 +170,10 @@ After release succeeds, the final archive soft-deletes the order, marks inventor
 
 ## Queue Processing
 
-Two queues are relevant:
+Storefront order creation is not queue-backed. Checkout commits the order synchronously through `commitStorefrontOrderPayload()`, then runs durable side effects after commit. One order-facing queue remains relevant:
 
 | Queue | Message Type | Handler |
 |-------|-------------|---------|
-| `ORDER_INGEST_QUEUE` | `order.ingest` | `handleOrderIngestBatch()` -- batched DB writes + inventory reservation |
 | `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | Outbox-backed `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM push) via `queue-consumer.ts` |
 
 The `order.notification` handler in `queue-consumer.ts` claims `order_notification_outbox` rows by `outboxId`, sends email/SMS/WhatsApp through `sendOrderNotificationEmail()` with `db` for channel preference checking, optionally sends FCM push notifications through `sendOrderNotification()`, then marks the row `sent` only if enabled receipt targets are accepted or skipped. Retryable customer-channel or admin-push failures mark the parent row retryable before the Cloudflare Queue message is retried.
@@ -186,8 +184,8 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 
 - **Optimistic locking on orders**: `version` column, CAS update in `updateOrder()` and `updateOrderStatus()`
 - **Optimistic locking on inventory**: `stockVersion` column on `productVariants`, separate from general `version`
-- **Reservation rollback**: `reserveMultiple()` rolls back all successful reservations if any fail; queue ingest uses checked `releaseMultiple()` results before retrying messages after an isolated DB-write failure
-- **Batch atomicity**: Queue handler uses `db.batch()` for atomic multi-row writes; on DB failure it treats the outcome as ambiguous, checks whether each order committed, and never reserves the same queue message twice
+- **Checkout reservation rollback**: `commitStorefrontOrderPayload()` reserves tracked stock before the order write and calls checked `releaseMultiple()` if the D1 order batch fails. Late reservation failures surface buyer-safe cart issues.
+- **Checkout idempotency**: `checkout_attempts` owns same-key replay, in-flight `202`, reserved order ids, and stale-claim recovery. `commitStorefrontOrderPayload()` also treats an already-committed order id as success so a crash after commit can converge without a duplicate order.
 - **Discount redemption authority**: Discount validation endpoints and pre-commit reads are advisory. The authoritative `maxUses` and one-per-customer guards are D1 triggers on `discount_usage`; one-per-customer redemptions also claim immutable `discount_customer_redemptions` rows keyed by the checkout phone proof so later admin edits to `orders.customerPhone` cannot reopen a coupon.
 
 ## API Endpoints
@@ -238,7 +236,7 @@ Bulk provider shipment creation uses a durable order-level shipment claim (`orde
 |--------|------|---------|---------|
 | GET | `/:id` | direct query | Order with items, shipments, delivery providers |
 | GET | `/status/:token` | KV lookup | Poll checkout processing status |
-| POST | `/` | `createStorefrontOrder()` + queue | Async order placement (returns 202) |
+| POST | `/` | `createStorefrontOrder()` + `commitStorefrontOrderPayload()` | Synchronous idempotent order placement (returns `201` after D1 commit; `202` only for duplicate in-flight submits) |
 
 ## Admin Full Edit Inventory Safety
 

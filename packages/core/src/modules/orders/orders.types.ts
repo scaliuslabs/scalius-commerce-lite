@@ -124,12 +124,11 @@ export interface CreateStorefrontOrderResult {
     orderId: string;
     paymentMethod: string;
     totalAmount: number;
-    queuePayload: OrderIngestQueuePayload;
+    commitPayload: StorefrontOrderCommitPayload;
 }
 
-/** Shape of the queue payload built by createStorefrontOrder and consumed by handleOrderIngestBatch. */
-export interface OrderIngestQueuePayload {
-    type: "order.ingest";
+/** Prepared, server-authoritative storefront order data committed synchronously by checkout. */
+export interface StorefrontOrderCommitPayload {
     checkoutToken: string;
     existingCustomer: { id: string } | null;
     orderData: {

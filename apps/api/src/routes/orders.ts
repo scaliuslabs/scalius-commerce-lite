@@ -819,7 +819,7 @@ app.openapi(createOrderRoute, async (c) => {
     );
 
     try {
-      await commitStorefrontOrderPayload(db, c.env, result.queuePayload);
+      await commitStorefrontOrderPayload(db, c.env, result.commitPayload);
       orderCommitted = true;
     } catch (commitError) {
       await c.env.CACHE.put(
@@ -862,7 +862,7 @@ app.openapi(createOrderRoute, async (c) => {
 
     const executionCtx = getOptionalExecutionContext(c);
     const sideEffects = Promise.all([
-      runStorefrontOrderPostCommitSideEffects(db, c.env, result.queuePayload),
+      runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
       invalidateStorefrontOrderAvailabilityCaches(db, c.env, result.orderId, executionCtx),
     ]).then(() => undefined);
     if (executionCtx && typeof executionCtx.waitUntil === "function") {

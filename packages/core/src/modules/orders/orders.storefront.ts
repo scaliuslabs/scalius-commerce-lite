@@ -137,9 +137,9 @@ export async function validateStorefrontDeliveryPreflight(
 }
 
 /**
- * Validates and prepares a storefront order for queue dispatch.
+ * Validates and prepares a storefront order for synchronous checkout commit.
  * Performs server-side price verification, discount validation, shipping verification,
- * and partial payment checks. Returns a queue payload ready for ORDER_INGEST_QUEUE.
+ * and partial payment checks. Returns the committed order identity plus the prepared commit payload.
  *
  * @param storefrontDb - The D1 database instance (from c.get("db"))
  * @param data - Parsed and validated order input
@@ -275,13 +275,12 @@ export async function createStorefrontOrder(
     }
 
     // ------------------------------------------------------------------
-    // Build Queue Payload
+    // Build Commit Payload
     // ------------------------------------------------------------------
     const orderId = identity?.orderId ?? generateOrderId();
     const checkoutToken = identity?.checkoutToken ?? `chk_${nanoid()}`;
 
-    const queuePayload = {
-        type: "order.ingest" as const,
+    const commitPayload = {
         checkoutToken,
         existingCustomer,
         orderData: {
@@ -331,6 +330,6 @@ export async function createStorefrontOrder(
         orderId,
         paymentMethod: data.paymentMethod,
         totalAmount,
-        queuePayload,
+        commitPayload,
     };
 }

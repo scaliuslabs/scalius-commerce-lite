@@ -41,8 +41,8 @@ Both admin-created and storefront-created customers now use the same E.164 forma
 `totalOrders`, `totalSpent`, and `lastOrderAt` are denormalized columns on the `customers` table. They are NOT updated by this module -- they are materialized by the orders domain:
 
 - **`orders.admin.ts`**: Recalculates stats via `calculateCustomerStats()` after order create/update, using `db.batch()` for atomicity
-- **`orders.queue.ts`**: Increments stats inline (`totalOrders + 1`, `totalSpent + amount`) during queue-based order processing
-- **`orders.storefront.ts`**: Reads stats during checkout for existing customer lookup
+- **`orders.ingest.ts`**: Increments stats inline (`totalOrders + 1`, `totalSpent + amount`) inside the synchronous storefront order commit batch for authenticated customer orders
+- **`orders.storefront.ts`**: Carries the authenticated customer identity resolved by the API checkout policy into the prepared commit payload
 
 ### Customer History Audit Log
 

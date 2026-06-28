@@ -25,7 +25,7 @@ import {
 } from "../notifications/order-notification-outbox";
 import { getDiscountUsageConstraintError } from "./discount-usage-constraints";
 import { shouldCreateOrderCreatedNotification } from "./order-created-notification-policy";
-import type { OrderIngestQueuePayload } from "./orders.types";
+import type { StorefrontOrderCommitPayload } from "./orders.types";
 import type { StorefrontCartItemIssue } from "./cart-validation";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
@@ -56,6 +56,9 @@ type ReservationEntry = {
 };
 
 const CHECKOUT_STATUS_TTL_SECONDS = 86400;
+// Durable reservation identity from the old queued checkout path. Keep the
+// value stable so crash retries can recognize reservations created before this
+// source-level queue retirement.
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
 
 export async function setStorefrontCheckoutStatus(
@@ -83,7 +86,7 @@ export async function setStorefrontCheckoutStatus(
             { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
         );
     } catch (error) {
-        console.error(`[orders/ingest] Failed to write checkout status ${status}:`, error);
+        console.error(`[orders/commit] Failed to write checkout status ${status}:`, error);
     }
 }
 
@@ -108,7 +111,7 @@ async function loadActiveCustomerById(db: Database, id: string): Promise<{ id: s
 
 async function resolveCustomerForOrder(
     db: Database,
-    payload: OrderIngestQueuePayload,
+    payload: StorefrontOrderCommitPayload,
 ): Promise<{ id: string } | null> {
     if (payload.existingCustomer?.id) {
         const authenticatedCustomer = await loadActiveCustomerById(db, payload.existingCustomer.id);
@@ -123,7 +126,7 @@ async function resolveCustomerForOrder(
 
 async function assertDiscountUsageStillAvailable(
     db: Database,
-    payload: OrderIngestQueuePayload,
+    payload: StorefrontOrderCommitPayload,
 ): Promise<void> {
     if (!payload.discountUsage) return;
 
@@ -170,10 +173,10 @@ async function assertDiscountUsageStillAvailable(
     }
 }
 
-function getReservationEntries(payload: OrderIngestQueuePayload): ReservationEntry[] {
+function getReservationEntries(payload: StorefrontOrderCommitPayload): ReservationEntry[] {
     if (payload.orderData.inventoryAction !== "reserved") return [];
     return payload.items
-        .filter((item): item is OrderIngestQueuePayload["items"][number] & { variantId: string } => item.variantId !== null && item.inventoryTracked !== false)
+        .filter((item): item is StorefrontOrderCommitPayload["items"][number] & { variantId: string } => item.variantId !== null && item.inventoryTracked !== false)
         .map((item) => ({
             variantId: item.variantId,
             quantity: item.quantity,
@@ -183,7 +186,7 @@ function getReservationEntries(payload: OrderIngestQueuePayload): ReservationEnt
 }
 
 function buildReservationItemIssues(
-    payload: OrderIngestQueuePayload,
+    payload: StorefrontOrderCommitPayload,
     results: Array<{ success: boolean; variantId: string; error?: string }>,
 ): StorefrontCartItemIssue[] {
     return results
@@ -210,7 +213,7 @@ function buildReservationItemIssues(
 
 async function reserveOrderInventory(
     db: Database,
-    payload: OrderIngestQueuePayload,
+    payload: StorefrontOrderCommitPayload,
 ): Promise<ReservationEntry[]> {
     const entries = getReservationEntries(payload);
     if (entries.length === 0) return [];
@@ -253,13 +256,13 @@ async function releaseReservedEntries(db: Database, entries: ReservationEntry[])
     if (entries.length === 0) return;
     const result = await releaseMultiple(db, entries, entries[0]!.orderId);
     if (!result.success) {
-        console.error("[orders/ingest] Failed to release reserved stock after order commit failure:", result.error);
+        console.error("[orders/commit] Failed to release reserved stock after order commit failure:", result.error);
     }
 }
 
 function buildOrderWriteBatch(
     db: Database,
-    payload: OrderIngestQueuePayload,
+    payload: StorefrontOrderCommitPayload,
     customerId: string | null,
 ): SQLiteBatchItem[] {
     const od = payload.orderData;
@@ -362,7 +365,7 @@ function buildOrderWriteBatch(
 export async function commitStorefrontOrderPayload(
     db: Database,
     env: StorefrontOrderCommitRuntime | undefined,
-    payload: OrderIngestQueuePayload,
+    payload: StorefrontOrderCommitPayload,
 ): Promise<StorefrontOrderCommitResult> {
     const existing = await loadExistingCommittedOrder(db, payload.orderData.id);
     if (existing) {
@@ -398,11 +401,11 @@ export async function commitStorefrontOrderPayload(
 export async function runStorefrontOrderPostCommitSideEffects(
     db: Database,
     env: StorefrontOrderCommitRuntime | undefined,
-    payload: OrderIngestQueuePayload,
+    payload: StorefrontOrderCommitPayload,
 ): Promise<void> {
     if (payload.orderData.paymentMethod === "cod") {
         await initCODTracking(db, { orderId: payload.orderData.id }).catch((error: unknown) =>
-            console.error("[orders/ingest] COD tracking init failed for order", payload.orderData.id, error),
+            console.error("[orders/commit] COD tracking init failed for order", payload.orderData.id, error),
         );
     }
 
@@ -425,10 +428,10 @@ export async function runStorefrontOrderPostCommitSideEffects(
         });
         if (!notificationResult.enqueued) {
             console.warn(
-                `[orders/ingest] order_created notification for ${payload.orderData.id} recorded but not enqueued: ${notificationResult.skippedReason}`,
+                `[orders/commit] order_created notification for ${payload.orderData.id} recorded but not enqueued: ${notificationResult.skippedReason}`,
             );
         }
     } catch (error) {
-        console.error(`[orders/ingest] Failed order_created notification side effect for ${payload.orderData.id}:`, error);
+        console.error(`[orders/commit] Failed order_created notification side effect for ${payload.orderData.id}:`, error);
     }
 }

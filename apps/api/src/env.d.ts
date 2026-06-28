@@ -161,7 +161,6 @@ interface Env {
   PAYMENT_EVENTS_QUEUE: Queue;
   ORDER_NOTIFICATIONS_QUEUE: Queue;
   AUTH_OTP_QUEUE: Queue;
-  ORDER_INGEST_QUEUE: Queue;
 
   // Secrets (set via `wrangler secret put`)
   BETTER_AUTH_SECRET: string;

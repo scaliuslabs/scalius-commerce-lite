@@ -55,7 +55,6 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     PAYMENT_EVENTS_QUEUE: createQueue(),
     ORDER_NOTIFICATIONS_QUEUE: createQueue(),
     AUTH_OTP_QUEUE: createQueue(),
-    ORDER_INGEST_QUEUE: createQueue(),
     BETTER_AUTH_SECRET: "test-secret",
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://storefront.example.test",
@@ -89,7 +88,6 @@ describe("API readiness route", () => {
       payment_events_queue: { status: "ok" },
       order_notifications_queue: { status: "ok" },
       auth_otp_queue: { status: "ok" },
-      order_ingest_queue: { status: "ok" },
       runtime_config: { status: "ok" },
     });
   });

@@ -278,13 +278,9 @@ It returns `503` with `status: "degraded"` when a required dependency is missing
 
 ## Queue Consumer
 
-`src/queue-consumer.ts` dispatches messages by type. Two queue strategies:
+`src/queue-consumer.ts` dispatches payment, notification, and OTP messages by type. Storefront order creation is not queue-backed; `POST /orders` commits through D1 before returning `201`, then schedules post-commit side effects.
 
-### Order Ingest Queue
-
-Queue name: `order-ingest`. Uses batch processing for throughput, but reservation, ambiguous-commit checks, fallback writes, checkout status, ack/retry, and rollback decisions remain isolated per order. A rejected or acked message must not be retried because another message in the same queue batch failed. Handles `order.ingest` messages. Delegated to `handleOrderIngestBatch()` in `@scalius/core/modules/orders/orders.queue`.
-
-### Payment/Notification/OTP Queue
+### Payment/Notification/OTP Queues
 
 Messages processed independently with `Promise.allSettled`. Successful messages are acked; failed messages retry with 30-second delay.
 
