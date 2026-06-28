@@ -10,7 +10,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 |---------|---------|
 | `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
 | `queue(batch)` | Queues -- payment events, OTP, notifications, storefront cache purge/warm, and cache DLQ evidence |
-| `scheduled(controller)` | Cron -- delegates to `src/scheduled-maintenance.ts`; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, prunes stale abandoned checkouts, expired customer OTP challenges, expired OTP rate-limit windows, expired/old customer sessions, and expired/old scanner QR claims, reconciles stale refund attempts with buyer-safe refund processing/failed/final notification facts, invalidates affected availability caches, and flushes the order notification outbox |
+| `scheduled(controller)` | Cron -- delegates to `src/scheduled-maintenance.ts`; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, prunes stale abandoned checkouts through timestamp-indexed oldest-first passes, prunes expired customer OTP challenges, expired OTP rate-limit windows, expired/old customer sessions, and expired/old scanner QR claims, reconciles stale refund attempts with buyer-safe refund processing/failed/final notification facts, invalidates affected availability caches, and flushes the order notification outbox |
 
 ## Route Organization
 

@@ -20,6 +20,9 @@ const ADMIN_ORDER_SINGLE_FILTER_INDEXES_MIGRATION = fileURLToPath(
 const REFUND_ATTEMPTS_MIGRATION = fileURLToPath(
     new URL("../migrations/0064_refund_attempts.sql", import.meta.url),
 );
+const ABANDONED_CHECKOUT_CLEANUP_INDEXES_MIGRATION = fileURLToPath(
+    new URL("../migrations/0068_abandoned_checkout_cleanup_indexes.sql", import.meta.url),
+);
 
 describe("order schema boundaries", () => {
     it("keeps admin order search and default list indexes aligned", () => {
@@ -90,5 +93,23 @@ describe("order schema boundaries", () => {
         expect(migrationSource).toContain("WHERE `provider_refund_id` IS NOT NULL");
         expect(migrationSource).toContain("CREATE UNIQUE INDEX `refund_attempts_live_source_payment_singleflight`");
         expect(migrationSource).toContain("'pending','processing','provider_unknown','reconcile_required'");
+    });
+
+    it("keeps abandoned checkout cleanup indexes aligned", () => {
+        const schemaSource = readFileSync(ORDERS_SCHEMA_SOURCE, "utf8");
+        const migrationSource = readFileSync(ABANDONED_CHECKOUT_CLEANUP_INDEXES_MIGRATION, "utf8");
+
+        expect(schemaSource).toContain(
+            'index("abandoned_checkouts_created_at_idx").on(table.createdAt, table.id)',
+        );
+        expect(schemaSource).toContain(
+            'index("abandoned_checkouts_empty_candidate_idx").on(table.customerPhone, table.updatedAt, table.id)',
+        );
+        expect(migrationSource).toContain(
+            "CREATE INDEX `abandoned_checkouts_created_at_idx` ON `abandoned_checkouts` (`created_at`, `id`)",
+        );
+        expect(migrationSource).toContain(
+            "CREATE INDEX `abandoned_checkouts_empty_candidate_idx` ON `abandoned_checkouts` (`customer_phone`, `updated_at`, `id`)",
+        );
     });
 });
