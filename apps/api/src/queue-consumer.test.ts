@@ -170,6 +170,14 @@ function createBatch<T>(
   };
 }
 
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 describe("handleQueueBatch payment confirmation retries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -312,6 +320,63 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
     }
     expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
+  });
+
+  it("caps normal queue message concurrency while preserving individual ack and retry", async () => {
+    const firstWave = createDeferred();
+    const finalMessage = createDeferred();
+    const started: string[] = [];
+    let active = 0;
+    let maxActive = 0;
+
+    mocks.processPaymentConfirmed.mockImplementation(async (_db, input: { orderId: string }) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      started.push(input.orderId);
+      try {
+        if (input.orderId === "order-4") {
+          await finalMessage.promise;
+          return { success: false, error: "D1 overloaded" };
+        }
+
+        await firstWave.promise;
+        return { success: true };
+      } finally {
+        active -= 1;
+      }
+    });
+
+    const messages = ["order-1", "order-2", "order-3", "order-4"].map((orderId) =>
+      createMessage({
+        type: "payment.stripe.confirmed",
+        orderId,
+        paymentIntentId: `pi_${orderId}`,
+        amount: 1000,
+        currency: "bdt",
+      }),
+    );
+
+    const run = handleQueueBatch(createBatch(messages), {} as Env);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(started).toEqual(["order-1", "order-2", "order-3"]);
+    expect(maxActive).toBe(3);
+
+    firstWave.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(started).toEqual(["order-1", "order-2", "order-3", "order-4"]);
+    expect(maxActive).toBe(3);
+
+    finalMessage.resolve();
+    await run;
+
+    for (const message of messages.slice(0, 3)) {
+      expect(message.ack).toHaveBeenCalledTimes(1);
+      expect(message.retry).not.toHaveBeenCalled();
+    }
+    expect(messages[3]?.ack).not.toHaveBeenCalled();
+    expect(messages[3]?.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 
   it("acks confirmed payment messages when processing succeeds", async () => {
@@ -803,6 +868,69 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.recordPaymentWebhookDlqEvidence).toHaveBeenCalledTimes(1);
     expect(message.ack).not.toHaveBeenCalled();
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 300 });
+  });
+
+  it("caps payment DLQ archive concurrency while preserving per-message ack and retry", async () => {
+    const firstWave = createDeferred();
+    const finalMessage = createDeferred();
+    const started: string[] = [];
+    let active = 0;
+    let maxActive = 0;
+
+    mocks.recordPaymentWebhookDlqEvidence.mockImplementation(async (_db, evidence: { orderId?: string }) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      started.push(evidence.orderId ?? "unknown");
+      try {
+        if (evidence.orderId === "order-dlq-3") {
+          await finalMessage.promise;
+          throw new Error("D1 unavailable");
+        }
+
+        await firstWave.promise;
+        return {
+          id: `stripe:payment_intent.succeeded:${evidence.orderId}`,
+          status: "failed",
+          inserted: false,
+        };
+      } finally {
+        active -= 1;
+      }
+    });
+
+    const messages = ["order-dlq-1", "order-dlq-2", "order-dlq-3"].map((orderId) =>
+      createMessage({
+        type: "payment.stripe.confirmed",
+        webhookEventId: `stripe:payment_intent.succeeded:${orderId}`,
+        orderId,
+        paymentIntentId: `pi_${orderId}`,
+        amount: 1000,
+        currency: "bdt",
+      }, 5),
+    );
+
+    const run = handleQueueBatch(createBatch(messages, "payment-events-dlq") as never, {} as Env);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(started).toEqual(["order-dlq-1", "order-dlq-2"]);
+    expect(maxActive).toBe(2);
+
+    firstWave.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(started).toEqual(["order-dlq-1", "order-dlq-2", "order-dlq-3"]);
+    expect(maxActive).toBe(2);
+
+    finalMessage.resolve();
+    await run;
+
+    for (const message of messages.slice(0, 2)) {
+      expect(message.ack).toHaveBeenCalledTimes(1);
+      expect(message.retry).not.toHaveBeenCalled();
+    }
+    expect(messages[2]?.ack).not.toHaveBeenCalled();
+    expect(messages[2]?.retry).toHaveBeenCalledWith({ delaySeconds: 300 });
+    expect(mocks.processPaymentConfirmed).not.toHaveBeenCalled();
   });
 
   it("archives storefront cache DLQ messages without replaying cache side effects", async () => {
