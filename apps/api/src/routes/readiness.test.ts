@@ -9,10 +9,15 @@ function createKv() {
   } as unknown as KVNamespace;
 }
 
-function createDb(options: { fail?: boolean } = {}) {
+function createDb(options: { fail?: boolean; transientFailures?: number } = {}) {
+  let attempts = 0;
   return {
     prepare: vi.fn(() => ({
       first: vi.fn(async () => {
+        attempts += 1;
+        if (options.transientFailures && attempts <= options.transientFailures) {
+          throw new Error("D1_ERROR: D1 DB is overloaded. Requests queued for too long.");
+        }
         if (options.fail) {
           throw new Error("D1 unavailable");
         }
@@ -133,5 +138,35 @@ describe("API readiness route", () => {
       status: "missing",
       detail: "missing STOREFRONT_URL, PURGE_TOKEN",
     });
+  });
+
+  it("retries transient D1 overloads before marking readiness degraded", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const db = createDb({ transientFailures: 2 });
+    const env = createEnv({ DB: db });
+
+    try {
+      const responsePromise = app.request("/api/v1/readyz", {}, env);
+      await vi.advanceTimersByTimeAsync(75);
+      await vi.advanceTimersByTimeAsync(200);
+      const response = await responsePromise;
+      const json = await response.json() as {
+        success?: boolean;
+        status?: string;
+        checks?: Record<string, { status?: string; detail?: string }>;
+      };
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(json.status).toBe("ready");
+      expect(json.checks?.d1).toMatchObject({
+        status: "ok",
+        detail: "SELECT 1",
+      });
+      expect(db.prepare).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

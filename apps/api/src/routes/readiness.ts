@@ -1,6 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
 
 const READINESS_TIMEOUT_MS = 1500;
+const READINESS_D1_RETRY_DELAYS_MS = [75, 200, 400] as const;
 const READINESS_KV_PROBE_KEY = "__scalius:readyz:probe";
 
 type CheckStatus = "ok" | "missing" | "error" | "timeout";
@@ -121,7 +123,10 @@ async function d1Check(env: Env): Promise<CheckResult> {
   if (!env.DB) return missing("d1");
 
   return runProbe("d1", true, async () => {
-    const row = await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
+    const row = await retryTransientD1(
+      () => env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>(),
+      { delaysMs: READINESS_D1_RETRY_DELAYS_MS },
+    );
     if (row?.ok !== 1) {
       throw new Error("unexpected D1 probe result");
     }
