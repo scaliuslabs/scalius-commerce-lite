@@ -66,6 +66,9 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 **Session management:**
 - Cookie name: `cs_tok` (HttpOnly, Secure)
 - Companion cookie: `cs_auth` (non-HttpOnly, for client-side auth state detection)
+- Cookies are host-only by default. `CUSTOMER_AUTH_COOKIE_DOMAIN` is the only
+  supported way to opt into a `Domain=` attribute; never derive it from the last
+  two hostname labels.
 - Session TTL: 30 days
 - `customer_sessions` stores only `tokenHash`, `customerId`, expiry/revocation timestamps, and audit timestamps. The raw cookie token is never persisted.
 - `getCustomerBySession()` hashes the cookie token, requires an active non-expired session row, joins the live `customers` row, rejects soft-deleted/missing customers, and returns the canonical profile projection including address, city/zone/area IDs, resolved labels, `profileComplete`, and `needsProfileCompletion`.
@@ -127,7 +130,7 @@ Astro page (SSR) -> loader (apiGet) -> admin proxy -> API worker -> customers.se
 Browser -> storefront same-origin proxy (/api/customer-auth/*) -> API worker (service binding) -> customer-auth.service -> D1 (OTP challenges/rate limits/customers/customer_sessions)
 ```
 
-The storefront proxy rewrites cookies (strips `Domain=`, changes `SameSite=None` to `Lax`) to ensure browser compatibility. A separate `/api/auth/logout` proxy handles logout with explicit cookie clearing.
+The storefront proxy rewrites cookies (strips `Domain=`, changes `SameSite=None` to `Lax`) to ensure browser compatibility. A separate `/api/auth/logout` proxy handles host-only logout cookie clearing.
 
 ### Customer Stats
 ```

@@ -348,10 +348,8 @@ export default function AuthModal() {
   };
 
   const handleLogout = async () => {
-    // Clear cs_auth for both host-only and root domain
-    const rootDomain = window.location.hostname.split(".").slice(-2).join(".");
+    // Clear the readable host-only auth mirror; the server clears cs_tok.
     document.cookie = "cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = `cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${rootDomain};`;
 
     await logoutCustomer();
     setCustomer(null);

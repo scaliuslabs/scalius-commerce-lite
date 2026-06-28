@@ -179,18 +179,25 @@ export function getSessionCookie(cookieHeader: string | null): string | null {
     return match ? (match[1] ?? null) : null;
 }
 
-export function getRootDomainAttr(url?: string): string {
-    if (!url) return "";
-    try {
-        const hostname = new URL(url).hostname;
-        const parts = hostname.split(".");
-        if (parts.length >= 2 && parts[parts.length - 1] !== "localhost") {
-            return `; Domain=.${parts.slice(-2).join(".")}`;
-        }
-    } catch {
-        return "";
-    }
-    return "";
+export function normalizeCustomerAuthCookieDomain(cookieDomain?: string): string {
+    const normalized = cookieDomain
+        ?.trim()
+        .replace(/^domain=/i, "")
+        .replace(/^\.+/, "")
+        .replace(/\.+$/, "")
+        .toLowerCase();
+
+    if (!normalized) return "";
+    if (normalized === "localhost") return "";
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized)) return "";
+    if (!normalized.includes(".")) return "";
+    if (!/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(normalized)) return "";
+    return normalized;
+}
+
+export function getCustomerAuthCookieDomainAttr(cookieDomain?: string): string {
+    const normalized = normalizeCustomerAuthCookieDomain(cookieDomain);
+    return normalized ? `; Domain=.${normalized}` : "";
 }
 
 export function isProduction(storefrontUrl?: string): boolean {
@@ -205,11 +212,14 @@ export function buildSetCookieHeader(token: string, maxAge: number, domainAttr: 
     return `${COOKIE_NAME}=${token}; Max-Age=${maxAge}; Path=/${domainAttr}; HttpOnly; SameSite=${sameSitePolicy}; Secure`;
 }
 
-export function getCookieConfig(storefrontUrl?: string): { sameSite: string; domainAttr: string } {
+export function getCookieConfig(
+    storefrontUrl?: string,
+    customerAuthCookieDomain?: string,
+): { sameSite: string; domainAttr: string } {
     const isProd = isProduction(storefrontUrl);
     return {
         sameSite: isProd ? "None" : "Lax",
-        domainAttr: isProd ? getRootDomainAttr(storefrontUrl) : "",
+        domainAttr: getCustomerAuthCookieDomainAttr(customerAuthCookieDomain),
     };
 }
 

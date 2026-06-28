@@ -53,6 +53,7 @@ interface Env {
   PUBLIC_API_BASE_URL?: string;
   PROJECT_CACHE_PREFIX?: string;
   STOREFRONT_URL?: string;
+  CUSTOMER_AUTH_COOKIE_DOMAIN?: string;
   R2_PUBLIC_URL?: string;
   CDN_DOMAIN_URL?: string;
 

@@ -735,11 +735,8 @@ const layoutData = await getLayoutData();
     // Logout handler
     const logoutBtn = document.getElementById("logoutBtn");
     if (logoutBtn) logoutBtn.onclick = async () => {
-      // Clear cs_auth for BOTH host-only and the root domain
-      // to cover however the cookie was originally set.
-      const rootDomain = window.location.hostname.split(".").slice(-2).join(".");
+      // Clear the readable host-only auth mirror; the server clears cs_tok.
       document.cookie = "cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-      document.cookie = `cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${rootDomain};`;
 
       await logoutCustomer();
       window.location.href = "/";

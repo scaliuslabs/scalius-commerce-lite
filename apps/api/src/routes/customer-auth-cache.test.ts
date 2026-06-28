@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   getCustomerOrderDetail: vi.fn(),
   resolveCustomerPaymentSessionRecovery: vi.fn(),
   getSessionCookie: vi.fn(),
+  getCookieConfig: vi.fn(),
+  buildSetCookieHeader: vi.fn(),
   createStripePaymentSession: vi.fn(),
   createSSLCommerzPaymentSession: vi.fn(),
   createPolarPaymentSession: vi.fn(),
@@ -27,8 +29,8 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   deleteCustomerSession: vi.fn(),
   updateCustomerProfile: mocks.updateCustomerProfile,
   getSessionCookie: mocks.getSessionCookie,
-  getCookieConfig: vi.fn(() => ({ sameSite: "Lax", domainAttr: "" })),
-  buildSetCookieHeader: vi.fn(() => "cs_tok=session_1; Path=/; HttpOnly"),
+  getCookieConfig: mocks.getCookieConfig,
+  buildSetCookieHeader: mocks.buildSetCookieHeader,
   COOKIE_NAME: "cs_tok",
   SESSION_TTL_SECONDS: 2_592_000,
 }));
@@ -67,6 +69,8 @@ describe("customer auth private cache policy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getSessionCookie.mockReturnValue("session_1");
+    mocks.getCookieConfig.mockReturnValue({ sameSite: "Lax", domainAttr: "" });
+    mocks.buildSetCookieHeader.mockReturnValue("cs_tok=session_1; Path=/; HttpOnly");
     mocks.sendOtp.mockResolvedValue({
       success: true,
       message: "Verification code sent to your email",
@@ -592,7 +596,11 @@ describe("customer auth private cache policy", () => {
           code: "123456",
         }),
       },
-      { CACHE: {} } as never,
+      {
+        CACHE: {},
+        STOREFRONT_URL: "https://shop.example.co.uk",
+        CUSTOMER_AUTH_COOKIE_DOMAIN: "example.co.uk",
+      } as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -602,6 +610,10 @@ describe("customer auth private cache policy", () => {
       expect.stringMatching(/^cs_tok=session_1; Path=\/; HttpOnly/),
       "cs_auth=1; Max-Age=2592000; Path=/; SameSite=Lax; Secure",
     ]));
+    expect(mocks.getCookieConfig).toHaveBeenCalledWith(
+      "https://shop.example.co.uk",
+      "example.co.uk",
+    );
   });
 
   it("marks customer order-history reads as private no-store", async () => {

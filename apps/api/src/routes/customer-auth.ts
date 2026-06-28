@@ -11,7 +11,7 @@
 //
 // Session storage: D1 customer_sessions table keyed by HMAC token hash.
 // OTP challenges:  D1 table "customer_auth_otp_challenges", key prefix "cust_otp:"
-// Cookie name:     "cs_tok" (httpOnly, SameSite=Strict, Secure)
+// Cookie name:     "cs_tok" (httpOnly, Secure; host-only unless explicitly configured)
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
@@ -394,7 +394,10 @@ app.openapi(verifyOtpRoute, async (c) => {
   }
 
   // Set cookies
-  const { sameSite, domainAttr } = getCookieConfig(c.env.STOREFRONT_URL as string | undefined);
+  const { sameSite, domainAttr } = getCookieConfig(
+    c.env.STOREFRONT_URL as string | undefined,
+    c.env.CUSTOMER_AUTH_COOKIE_DOMAIN as string | undefined,
+  );
   c.header("Set-Cookie", buildSetCookieHeader(result.session!.token, SESSION_TTL_SECONDS, domainAttr, sameSite));
   c.header("Set-Cookie", `cs_auth=1; Max-Age=${SESSION_TTL_SECONDS}; Path=/${domainAttr}; SameSite=${sameSite}; Secure`, { append: true });
 
@@ -484,7 +487,10 @@ const logoutRoute = createRoute({
 });
 
 app.openapi(logoutRoute, async (c) => {
-  const { sameSite, domainAttr } = getCookieConfig(c.env.STOREFRONT_URL as string | undefined);
+  const { sameSite, domainAttr } = getCookieConfig(
+    c.env.STOREFRONT_URL as string | undefined,
+    c.env.CUSTOMER_AUTH_COOKIE_DOMAIN as string | undefined,
+  );
 
   // Always clear cookies first
   c.header("Set-Cookie", `${COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=${sameSite}; Secure`);
