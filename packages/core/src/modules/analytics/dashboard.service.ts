@@ -9,8 +9,54 @@ import { retryTransientD1 } from "../../utils/transient-d1";
 
 const DASHBOARD_QUERY_RETRY_DELAYS_MS = [150, 350, 750] as const;
 
-async function runDashboardQuery<T>(operation: () => Promise<T> | T): Promise<T> {
-    return retryTransientD1(operation, { delaysMs: DASHBOARD_QUERY_RETRY_DELAYS_MS });
+function getDashboardQueryErrorMessage(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.length > 240 ? `${message.slice(0, 237)}...` : message;
+}
+
+async function runDashboardQuery<T>(
+    query: string,
+    operation: () => Promise<T> | T,
+): Promise<T> {
+    const startedAt = Date.now();
+    let lastAttempt = 0;
+
+    try {
+        const result = await retryTransientD1((attempt) => {
+            lastAttempt = attempt;
+            return operation();
+        }, {
+            delaysMs: DASHBOARD_QUERY_RETRY_DELAYS_MS,
+            onRetry: (error, attempt, delayMs) => {
+                console.warn("[dashboard-query]", {
+                    event: "dashboard_query_retry",
+                    query,
+                    attempt: attempt + 1,
+                    nextAttempt: attempt + 2,
+                    delayMs,
+                    error: getDashboardQueryErrorMessage(error),
+                });
+            },
+        });
+
+        console.log("[dashboard-query]", {
+            event: "dashboard_query_completed",
+            query,
+            attempts: lastAttempt + 1,
+            durationMs: Date.now() - startedAt,
+        });
+
+        return result;
+    } catch (error) {
+        console.error("[dashboard-query]", {
+            event: "dashboard_query_failed",
+            query,
+            attempts: lastAttempt + 1,
+            durationMs: Date.now() - startedAt,
+            error: getDashboardQueryErrorMessage(error),
+        });
+        throw error;
+    }
 }
 
 type CountRow = { count: number };
@@ -156,7 +202,7 @@ function mapDashboardSummaryStats([
 export async function getDashboardSummaryStats(db: Database) {
     const monthBounds = getDashboardMonthBounds();
 
-    const rows = await runDashboardQuery(() =>
+    const rows = await runDashboardQuery("summary_stats", () =>
         safeBatch(db, getDashboardSummaryQueries(db, monthBounds)) as Promise<[
             CountRow[],
             CountRow[],
@@ -178,7 +224,7 @@ export async function getDashboardStats(db: Database) {
         currentMonthArr,
         lastMonthArr,
         totalRevenueArr,
-    ] = await runDashboardQuery(() =>
+    ] = await runDashboardQuery("full_stats", () =>
         safeBatch(db, [
             ...getDashboardSummaryQueries(db, monthBounds),
             getDashboardTotalRevenueQuery(db),
@@ -207,7 +253,7 @@ export async function getDashboardStats(db: Database) {
 
 /** Returns the N most recent orders for the dashboard feed. */
 export async function getRecentOrders(db: Database, limit = 5) {
-    const recentOrders = await runDashboardQuery(() => db
+    const recentOrders = await runDashboardQuery("recent_orders", () => db
         .select({
             id: orders.id,
             customerName: orders.customerName,
@@ -235,8 +281,9 @@ export async function getDailyActivityData(db: Database, days: number) {
     startDate.setDate(now.getDate() - days);
     const startDateTs = Math.floor(startDate.getTime() / 1000);
 
-    const [dailyOrderData, dailyCustomerData] = await runDashboardQuery(() =>
-        safeBatch(db, [
+    const [dailyOrderData, dailyCustomerData] = await runDashboardQuery(
+        `daily_activity_${days}d`,
+        () => safeBatch(db, [
             db
                 .select({
                     date: sql<string>`strftime('%Y-%m-%d', datetime(${orders.createdAt}, 'unixepoch'))`,
