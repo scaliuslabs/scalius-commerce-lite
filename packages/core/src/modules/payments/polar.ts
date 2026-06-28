@@ -320,6 +320,47 @@ export interface PolarWebhookRefundParams {
     polarStatus: string;
 }
 
+export interface PolarWebhookRefundNotification {
+    notificationType: "order_refunded" | "order_partially_refunded";
+    dedupeKey: string;
+    data: {
+        gateway: "polar";
+        polarStatus: string;
+        amountRefunded: number;
+        totalAmount: number;
+        currency: string;
+        localRefundAmount: number;
+    };
+}
+
+export type PolarWebhookRefundResult =
+    | { success: true; notification?: PolarWebhookRefundNotification }
+    | { success: false; error: string };
+
+function buildPolarWebhookRefundNotification(
+    params: PolarWebhookRefundParams,
+    localRefundAmount: number,
+    isFullRefund: boolean,
+): PolarWebhookRefundNotification {
+    const currency = params.currency.toLowerCase();
+    const dedupeKey = isFullRefund
+        ? `polar-refund:${params.orderId}:full`
+        : `polar-refund:${params.orderId}:partial:${params.amountRefunded}:${params.totalAmount}:${currency}`;
+
+    return {
+        notificationType: isFullRefund ? "order_refunded" : "order_partially_refunded",
+        dedupeKey,
+        data: {
+            gateway: "polar",
+            polarStatus: params.polarStatus,
+            amountRefunded: params.amountRefunded,
+            totalAmount: params.totalAmount,
+            currency,
+            localRefundAmount,
+        },
+    };
+}
+
 /**
  * Process a Polar `order.refunded` webhook event.
  *
@@ -340,7 +381,7 @@ export interface PolarWebhookRefundParams {
 export async function processPolarWebhookRefund(
     db: Database,
     params: PolarWebhookRefundParams,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<PolarWebhookRefundResult> {
     try {
         const order = await db
             .select({
@@ -379,7 +420,10 @@ export async function processPolarWebhookRefund(
             !shouldChangeOrderStatus
         ) {
             await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
-            return { success: true };
+            return {
+                success: true,
+                notification: buildPolarWebhookRefundNotification(params, order.paidAmount ?? 0, isFullRefund),
+            };
         }
 
         if (
@@ -387,7 +431,10 @@ export async function processPolarWebhookRefund(
             order.paymentStatus === PaymentStatus.REFUNDED &&
             !shouldChangeOrderStatus
         ) {
-            return { success: true };
+            return {
+                success: true,
+                notification: buildPolarWebhookRefundNotification(params, order.paidAmount ?? 0, isFullRefund),
+            };
         }
 
         // For currency-converted payments (e.g. BDT→USD), the refunded amount from
@@ -442,7 +489,10 @@ export async function processPolarWebhookRefund(
             await applyInventoryForStatusChange(db, params.orderId, OrderStatus.CANCELLED);
         }
 
-        return { success: true };
+        return {
+            success: true,
+            notification: buildPolarWebhookRefundNotification(params, localRefundAmount, isFullRefund),
+        };
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Polar webhook refund processing error";
         console.error(`[Polar] Webhook refund error for order ${params.orderId}:`, err);

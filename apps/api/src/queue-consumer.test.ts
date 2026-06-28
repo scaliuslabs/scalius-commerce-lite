@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   invalidateProductAvailabilityCaches: vi.fn(),
   enqueueOrderBalancePaidNotificationForOrder: vi.fn(),
   enqueueOrderCreatedNotificationForOrder: vi.fn(),
+  enqueueOrderRefundNotificationForOrder: vi.fn(),
   getAdminNotificationChannels: vi.fn(),
   claimOrderNotificationOutboxForProcessing: vi.fn(),
   markOrderNotificationOutboxProcessingFailed: vi.fn(),
@@ -102,6 +103,7 @@ vi.mock("./utils/cache-invalidation", () => ({
 vi.mock("./utils/order-notification-queue", () => ({
   enqueueOrderBalancePaidNotificationForOrder: mocks.enqueueOrderBalancePaidNotificationForOrder,
   enqueueOrderCreatedNotificationForOrder: mocks.enqueueOrderCreatedNotificationForOrder,
+  enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
 }));
 
 vi.mock("@scalius/core/modules/settings/settings.service", () => ({
@@ -232,6 +234,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.enqueueOrderBalancePaidNotificationForOrder.mockResolvedValue({
       orderId: "order_1",
       outboxId: "outbox_balance_1",
+      enqueued: true,
+    });
+    mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({
+      orderId: "order_1",
+      outboxId: "outbox_refund_1",
       enqueued: true,
     });
     mocks.claimOrderNotificationOutboxForProcessing.mockResolvedValue({
@@ -472,6 +479,109 @@ describe("handleQueueBatch payment confirmation retries", () => {
         retryOnQueueFailure: true,
       }),
     );
+  });
+
+  it("enqueues Polar refund notifications only after the webhook refund processor succeeds", async () => {
+    mocks.processPolarWebhookRefund.mockResolvedValue({
+      success: true,
+      notification: {
+        notificationType: "order_refunded",
+        dedupeKey: "polar-refund:order-polar:full",
+        data: {
+          gateway: "polar",
+          polarStatus: "refunded",
+          amountRefunded: 10_000,
+          totalAmount: 10_000,
+          currency: "usd",
+          localRefundAmount: 100,
+        },
+      },
+    });
+    const notificationQueue = { send: vi.fn(async () => undefined) };
+
+    const message = createMessage({
+      type: "payment.polar.refunded",
+      webhookEventId: "polar:order.refunded:evt_refund",
+      orderId: "order-polar",
+      polarCheckoutId: "checkout_polar",
+      amountRefunded: 10_000,
+      totalAmount: 10_000,
+      currency: "usd",
+      polarStatus: "refunded",
+    });
+
+    await handleQueueBatch(createBatch([message]), {
+      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+    } as unknown as Env);
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(mocks.processPolarWebhookRefund).toHaveBeenCalledWith(
+      { id: "db" },
+      {
+        orderId: "order-polar",
+        amountRefunded: 10_000,
+        totalAmount: 10_000,
+        currency: "usd",
+        polarStatus: "refunded",
+      },
+    );
+    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+      { id: "db" },
+      { orderIds: ["order-polar"] },
+      { env: { ORDER_NOTIFICATIONS_QUEUE: notificationQueue }, executionCtx: undefined },
+    );
+    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
+      db: { id: "db" },
+      queue: notificationQueue,
+      orderId: "order-polar",
+      notificationType: "order_refunded",
+      dedupeKey: "polar-refund:order-polar:full",
+      source: "payment-polar-refunded",
+      data: {
+        gateway: "polar",
+        polarStatus: "refunded",
+        amountRefunded: 10_000,
+        totalAmount: 10_000,
+        currency: "usd",
+        localRefundAmount: 100,
+      },
+    });
+    expect(mocks.markWebhookEventProcessed).toHaveBeenCalledWith(
+      { id: "db" },
+      "polar:order.refunded:evt_refund",
+      expect.objectContaining({
+        queueType: "payment.polar.refunded",
+        orderId: "order-polar",
+        gateway: "polar",
+        outcome: "refunded",
+      }),
+    );
+  });
+
+  it("does not enqueue Polar refund notifications when local refund processing fails", async () => {
+    mocks.processPolarWebhookRefund.mockResolvedValue({
+      success: false,
+      error: "Order was modified concurrently while applying Polar refund; retry required",
+    });
+
+    const message = createMessage({
+      type: "payment.polar.refunded",
+      webhookEventId: "polar:order.refunded:evt_retry",
+      orderId: "order-polar",
+      polarCheckoutId: "checkout_polar",
+      amountRefunded: 10_000,
+      totalAmount: 10_000,
+      currency: "usd",
+      polarStatus: "refunded",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 
   it("marks webhook events processed after confirmed payment side effects succeed", async () => {
