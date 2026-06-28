@@ -48,6 +48,10 @@ import {
     summarizeActiveRefundOperation,
 } from "@scalius/core/modules/payments";
 import { listPaymentWebhookIssuesForOrder } from "../../utils/payment-webhook-issues";
+import {
+    listOrderNotificationOutboxForOrder,
+    retryFailedOrderNotificationOutboxById,
+} from "@scalius/core/modules/notifications";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -633,6 +637,115 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
         paymentWebhookIssues,
     });
 }) as unknown as AdminRouteHandler<typeof getPaymentsRoute>);
+
+// ─── GET /:id/notifications ────────────────────────────────────────────────
+
+const orderNotificationReceiptSchema = z.object({
+    id: z.string(),
+    receiptKey: z.string(),
+    channel: z.string(),
+    provider: z.string(),
+    recipientMasked: z.string().nullable(),
+    status: z.string(),
+    providerMessageId: z.string().nullable(),
+    providerStatus: z.string().nullable(),
+    attempts: z.number(),
+    nextAttemptAt: timestampSchema.nullable(),
+    lastAttemptAt: timestampSchema.nullable(),
+    lastError: z.string().nullable(),
+    acceptedAt: timestampSchema.nullable(),
+    deliveredAt: timestampSchema.nullable(),
+    failedAt: timestampSchema.nullable(),
+    skippedAt: timestampSchema.nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+});
+
+const orderNotificationOutboxSchema = z.object({
+    id: z.string(),
+    dedupeKey: z.string(),
+    orderId: z.string(),
+    notificationType: z.string(),
+    source: z.string(),
+    status: z.string(),
+    attempts: z.number(),
+    nextAttemptAt: timestampSchema,
+    lastError: z.string().nullable(),
+    queuedAt: timestampSchema.nullable(),
+    sentAt: timestampSchema.nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    receipts: z.array(orderNotificationReceiptSchema),
+});
+
+const getNotificationsRoute = createRoute({
+    method: "get",
+    path: "/{id}/notifications",
+    tags: ["Admin - Orders"],
+    summary: "Get order notification delivery history",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Order notification history",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        notifications: z.array(orderNotificationOutboxSchema),
+                    })),
+                },
+            },
+        },
+    },
+});
+
+app.openapi(getNotificationsRoute, (async (c: AdminRouteContext<typeof getNotificationsRoute>) => {
+    const orderId = c.req.valid("param").id;
+    const db = c.get("db");
+    const notifications = await listOrderNotificationOutboxForOrder(db, orderId);
+    return ok(c, { notifications });
+}) as unknown as AdminRouteHandler<typeof getNotificationsRoute>);
+
+// ─── POST /:id/notifications/:outboxId/retry ───────────────────────────────
+
+const retryNotificationRoute = createRoute({
+    method: "post",
+    path: "/{id}/notifications/{outboxId}/retry",
+    tags: ["Admin - Orders"],
+    summary: "Retry a failed order notification",
+    request: {
+        params: z.object({ id: z.string(), outboxId: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Retry result",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        outboxId: z.string(),
+                        dedupeKey: z.string(),
+                        created: z.boolean(),
+                        enqueued: z.boolean(),
+                        skippedReason: z.string().optional(),
+                    })),
+                },
+            },
+        },
+    },
+});
+
+app.openapi(retryNotificationRoute, (async (c: AdminRouteContext<typeof retryNotificationRoute>) => {
+    const { id: orderId, outboxId } = c.req.valid("param");
+    const db = c.get("db");
+    const result = await retryFailedOrderNotificationOutboxById({
+        db,
+        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        orderId,
+        outboxId,
+    });
+    return ok(c, result);
+}) as unknown as AdminRouteHandler<typeof retryNotificationRoute>);
 
 // ─── GET /:id/form-data ──────────────────────────────────────────────────────
 

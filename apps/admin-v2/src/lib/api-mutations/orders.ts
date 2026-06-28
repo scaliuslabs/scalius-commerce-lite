@@ -6,6 +6,7 @@ import {
   createOrder,
   createOrderShipment,
   refundOrder,
+  retryOrderNotification,
   restoreOrder,
   returnOrder,
   updateFulfillmentStatus,
@@ -178,6 +179,30 @@ export function useUpdateOrderCod() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to record COD action")),
+  });
+}
+
+export function useRetryOrderNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { orderId: string; outboxId: string }) =>
+      retryOrderNotification({ data }),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.notifications(variables.orderId),
+      });
+      if (result.enqueued) {
+        toast.success("Notification retry queued");
+        return;
+      }
+      toast.info("Notification retry scheduled", {
+        description: result.skippedReason
+          ? `Current state: ${result.skippedReason.replace(/_/g, " ")}`
+          : undefined,
+      });
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to retry notification")),
   });
 }
 

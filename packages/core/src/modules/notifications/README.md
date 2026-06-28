@@ -33,6 +33,8 @@ The order email flow is fully connected:
 5. `sendOrderNotificationEmail()` checks notification channel preferences before sending via enabled customer providers. Cloudflare Email is the native default, with Resend available as the external fallback.
 6. When the queue message carries `outboxId`, customer email/SMS/WhatsApp targets create deterministic delivery receipts before provider work. Accepted/skipped receipts are terminal and are not resent on queue/outbox retry.
 
+Admin order detail can read the durable outbox plus per-channel receipts for one order and can retry rows that are still `failed` or `pending`. The retry path resets the parent outbox through the existing durable enqueue helper, so accepted/skipped receipts remain terminal and already-sent notifications are not resent.
+
 ## Functions
 
 ### `sendOrderNotification(db, order, env, requestUrl, options?)`
