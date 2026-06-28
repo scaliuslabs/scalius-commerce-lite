@@ -85,12 +85,51 @@ export interface CustomerOrderDetailTimelineEvent {
     details?: string | null;
 }
 
+export interface CustomerOrderNotificationReceiptRow {
+    id: string;
+    notificationType: string;
+    channel: string;
+    status: string;
+    provider: string;
+    providerStatus: string | null;
+    acceptedAt: number | null;
+    deliveredAt: number | null;
+    failedAt: number | null;
+    skippedAt: number | null;
+    updatedAt: number | null;
+    createdAt: number | null;
+}
+
+export interface CustomerOrderNotificationReceipt {
+    id: string;
+    notificationType: string;
+    channel: string;
+    status: string;
+    provider: string;
+    providerStatus: string | null;
+    acceptedAt: string | null;
+    deliveredAt: string | null;
+    failedAt: string | null;
+    skippedAt: string | null;
+    updatedAt: string | null;
+    createdAt: string | null;
+}
+
 const normalizeStatusLabel = (status: string): string =>
     status
         .split("_")
         .filter(Boolean)
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" ");
+
+const NOTIFICATION_CHANNEL_LABELS: Record<string, string> = {
+    email: "Email",
+    sms: "SMS",
+    whatsapp: "WhatsApp",
+};
+
+const getNotificationChannelLabel = (channel: string): string =>
+    NOTIFICATION_CHANNEL_LABELS[channel] ?? normalizeStatusLabel(channel);
 
 const CUSTOMER_CLOSED_BALANCE_ORDER_STATUSES = [
     OrderStatus.CANCELLED,
@@ -248,6 +287,39 @@ export function buildCustomerOrderBaseTimelineEvents(order: {
             details: `Order is currently ${currentStatusLabel}.`,
         },
     ];
+}
+
+export function projectCustomerOrderNotifications(
+    receipts: CustomerOrderNotificationReceiptRow[],
+): CustomerOrderNotificationReceipt[] {
+    return receipts.map((receipt) => ({
+        ...receipt,
+        acceptedAt: timestampToIso(receipt.acceptedAt),
+        deliveredAt: timestampToIso(receipt.deliveredAt),
+        failedAt: timestampToIso(receipt.failedAt),
+        skippedAt: timestampToIso(receipt.skippedAt),
+        updatedAt: timestampToIso(receipt.updatedAt),
+        createdAt: timestampToIso(receipt.createdAt),
+    }));
+}
+
+export function buildCustomerOrderNotificationTimelineEvents(
+    notifications: CustomerOrderNotificationReceipt[],
+): CustomerOrderDetailTimelineEvent[] {
+    return notifications.map((notification) => ({
+        id: `notification:${notification.id}`,
+        type: "notification",
+        status: notification.status,
+        label: `${getNotificationChannelLabel(notification.channel)} notification ${normalizeStatusLabel(notification.status)}`,
+        happenedAt:
+            notification.deliveredAt ??
+            notification.acceptedAt ??
+            notification.failedAt ??
+            notification.skippedAt ??
+            notification.updatedAt ??
+            notification.createdAt,
+        details: normalizeStatusLabel(notification.notificationType),
+    }));
 }
 
 export async function listCustomers(
@@ -1049,20 +1121,7 @@ export async function getCustomerOrderDetail(
             collectedAt: number | null;
             updatedAt: number | null;
         }>,
-        Array<{
-            id: string;
-            notificationType: string;
-            channel: string;
-            status: string;
-            provider: string;
-            providerStatus: string | null;
-            acceptedAt: number | null;
-            deliveredAt: number | null;
-            failedAt: number | null;
-            skippedAt: number | null;
-            updatedAt: number | null;
-            createdAt: number | null;
-        }>,
+        CustomerOrderNotificationReceiptRow[],
     ];
 
     const formattedItems = items.map((item) => ({
@@ -1102,15 +1161,7 @@ export async function getCustomerOrderDetail(
         }
         : null;
 
-    const notifications = notificationReceipts.map((receipt) => ({
-        ...receipt,
-        acceptedAt: timestampToIso(receipt.acceptedAt),
-        deliveredAt: timestampToIso(receipt.deliveredAt),
-        failedAt: timestampToIso(receipt.failedAt),
-        skippedAt: timestampToIso(receipt.skippedAt),
-        updatedAt: timestampToIso(receipt.updatedAt),
-        createdAt: timestampToIso(receipt.createdAt),
-    }));
+    const notifications = projectCustomerOrderNotifications(notificationReceipts);
 
     const timeline: CustomerOrderDetailTimelineEvent[] = buildCustomerOrderBaseTimelineEvents(order);
 
@@ -1147,22 +1198,7 @@ export async function getCustomerOrderDetail(
         });
     }
 
-    for (const notification of notifications) {
-        timeline.push({
-            id: `notification:${notification.id}`,
-            type: "notification",
-            status: notification.status,
-            label: `${normalizeStatusLabel(notification.channel)} notification ${normalizeStatusLabel(notification.status)}`,
-            happenedAt:
-                notification.deliveredAt ??
-                notification.acceptedAt ??
-                notification.failedAt ??
-                notification.skippedAt ??
-                notification.updatedAt ??
-                notification.createdAt,
-            details: normalizeStatusLabel(notification.notificationType),
-        });
-    }
+    timeline.push(...buildCustomerOrderNotificationTimelineEvents(notifications));
 
     timeline.sort((a, b) => {
         if (!a.happenedAt && !b.happenedAt) return 0;
