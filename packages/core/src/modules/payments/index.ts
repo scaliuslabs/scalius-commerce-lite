@@ -109,10 +109,13 @@ export type {
 export {
   reconcileDueRefundAttempts,
   reconcileRefundAttemptById,
+  reconcileStripeExternalRefundWebhooks,
 } from "./refund-reconciliation";
 export type {
   RefundReconciliationOptions,
   RefundReconciliationResult,
+  StripeExternalRefundWebhookReconciliationOptions,
+  StripeExternalRefundWebhookReconciliationResult,
 } from "./refund-reconciliation";
 export {
   ACTIVE_REFUND_ATTEMPT_STATUSES,

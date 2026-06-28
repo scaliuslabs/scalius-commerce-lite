@@ -584,6 +584,51 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 
+  it("keeps Stripe refund webhooks audit-only until scheduled reconciliation imports them", async () => {
+    const message = createMessage({
+      type: "payment.stripe.refunded",
+      webhookEventId: "stripe:charge-refunded:evt_refund",
+      orderId: "order-stripe",
+      paymentIntentId: "pi_stripe",
+      amountRefunded: 1500,
+      currency: "bdt",
+      chargeId: "ch_stripe",
+      refunds: [{
+        id: "re_stripe",
+        amount: 1500,
+        currency: "bdt",
+        status: "succeeded",
+      }],
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventManualReconciliation).toHaveBeenCalledWith(
+      { id: "db" },
+      "stripe:charge-refunded:evt_refund",
+      expect.objectContaining({
+        queueType: "payment.stripe.refunded",
+        orderId: "order-stripe",
+        gateway: "stripe",
+        outcome: "external_refund_observed",
+        amountRefunded: 1500,
+        currency: "bdt",
+        paymentIntentId: "pi_stripe",
+        chargeId: "ch_stripe",
+        refunds: [{
+          id: "re_stripe",
+          amount: 1500,
+          currency: "bdt",
+          status: "succeeded",
+        }],
+      }),
+    );
+  });
+
   it("marks webhook events processed after confirmed payment side effects succeed", async () => {
     mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
     const notificationQueue = { send: vi.fn(async () => undefined) };

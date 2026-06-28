@@ -172,6 +172,14 @@ function buildQueueMessage(event: Stripe.Event): PaymentQueueMessage | null {
       const charge = event.data.object as Stripe.Charge;
       const orderId = charge.metadata?.orderId;
       if (!orderId) return null;
+      const refunds = charge.refunds?.data
+        ?.map((refund) => ({
+          id: refund.id,
+          amount: refund.amount,
+          currency: refund.currency,
+          status: refund.status ?? null,
+        }))
+        ?? [];
 
       return {
         type: "payment.stripe.refunded",
@@ -180,7 +188,9 @@ function buildQueueMessage(event: Stripe.Event): PaymentQueueMessage | null {
           ? charge.payment_intent
           : (charge.payment_intent as { id?: string })?.id ?? "",
         amountRefunded: charge.amount_refunded,
-        chargeId: charge.id
+        currency: charge.currency,
+        chargeId: charge.id,
+        refunds,
       };
     }
 

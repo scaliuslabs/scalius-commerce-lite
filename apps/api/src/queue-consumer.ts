@@ -209,7 +209,14 @@ export type PaymentQueueMessage =
     orderId: string;
     paymentIntentId: string;
     amountRefunded: number; // in smallest currency unit (cents, yen, fils — see ISO 4217)
+    currency: string;
     chargeId: string;
+    refunds?: Array<{
+      id: string;
+      amount: number;
+      currency: string;
+      status?: string | null;
+    }>;
   })
   | (PaymentWebhookEventLink & {
     type: "payment.sslcommerz.confirmed";
@@ -470,15 +477,20 @@ async function processQueueMessage(
     }
 
     case "payment.stripe.refunded": {
-      // Refunds are handled synchronously via the refund endpoint.
-      // This message exists for audit / notification purposes.
-      paymentWebhookStatus = "processed";
+      // Stripe refunds may originate in the Stripe dashboard. Keep this queue
+      // step audit-only; scheduled reconciliation imports provider-confirmed
+      // refunds into the local refund ledger before notifying buyers.
+      paymentWebhookStatus = "manual_reconciliation";
       paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
         gateway: "stripe",
-        outcome: "refunded",
+        outcome: "external_refund_observed",
         amountRefunded: payload.amountRefunded,
+        currency: payload.currency,
+        paymentIntentId: payload.paymentIntentId,
+        chargeId: payload.chargeId,
+        refunds: payload.refunds ?? [],
       });
-      console.log(`[Queue] Stripe refund recorded for order ${payload.orderId}`);
+      console.log(`[Queue] Stripe refund observed for order ${payload.orderId}; awaiting scheduled reconciliation`);
       break;
     }
 
@@ -787,7 +799,9 @@ function getPaymentDlqSnapshot(payload: PaymentOnlyQueueMessage): Record<string,
       return {
         paymentIntentId: payload.paymentIntentId,
         amountRefunded: payload.amountRefunded,
+        currency: payload.currency,
         chargeId: payload.chargeId,
+        refunds: payload.refunds ?? [],
       };
     case "payment.sslcommerz.confirmed":
       return {

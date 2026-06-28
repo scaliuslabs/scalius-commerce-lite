@@ -9,7 +9,7 @@ import {
   cleanupExpiredCustomerSessions,
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { cleanupExpiredScannerTokenClaims } from "@scalius/core/auth";
-import { reconcileDueRefundAttempts } from "@scalius/core/modules/payments";
+import { reconcileDueRefundAttempts, reconcileStripeExternalRefundWebhooks } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
@@ -27,6 +27,7 @@ export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
+export const STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 
@@ -166,6 +167,36 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
         `failed=${refundReconciliation.failed}, deferred=${refundReconciliation.deferred}, ` +
         `errors=${refundReconciliation.errors.length}, limit=${refundReconciliation.limit}, ` +
         `hasMore=${refundReconciliation.hasMore}`,
+    );
+  }
+
+  const stripeExternalRefunds = await reconcileStripeExternalRefundWebhooks(db, env.CACHE, {
+    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+    limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+  });
+  if (stripeExternalRefunds.finalizedOrderIds.length > 0) {
+    await invalidateProductAvailabilityCaches(
+      db,
+      { orderIds: stripeExternalRefunds.finalizedOrderIds },
+      { env, executionCtx },
+    );
+  }
+  if (stripeExternalRefunds.refundNotifications.length > 0) {
+    await enqueueReconciledRefundNotifications(db, env, stripeExternalRefunds.refundNotifications);
+  }
+  if (
+    stripeExternalRefunds.scanned > 0 ||
+    stripeExternalRefunds.imported > 0 ||
+    stripeExternalRefunds.deferred > 0 ||
+    stripeExternalRefunds.errors.length > 0 ||
+    stripeExternalRefunds.hasMore
+  ) {
+    console.log(
+      `[scheduled] Stripe external refund reconciliation: scanned=${stripeExternalRefunds.scanned}, ` +
+        `imported=${stripeExternalRefunds.imported}, finalized=${stripeExternalRefunds.finalized}, ` +
+        `skipped=${stripeExternalRefunds.skipped}, deferred=${stripeExternalRefunds.deferred}, ` +
+        `errors=${stripeExternalRefunds.errors.length}, limit=${stripeExternalRefunds.limit}, ` +
+        `hasMore=${stripeExternalRefunds.hasMore}`,
     );
   }
 
