@@ -186,6 +186,7 @@ describe("order notification dispatch", () => {
             "order_cancelled",
             "order_returned",
             "order_refunded",
+            "order_partially_refunded",
             "payment_balance_paid",
         ]);
     });
@@ -219,6 +220,52 @@ describe("order notification dispatch", () => {
             to: "+8801700000000",
             message:
                 "Hi SMS Customer, your order #order_1 has been refunded. Contact us if you have questions.",
+        });
+    });
+
+    it("renders partial-refund customer copy for email and SMS", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_partially_refunded: ["email", "sms"],
+        });
+        mocks.sendEmail.mockResolvedValue({
+            success: true,
+            provider: "cloudflare",
+            providerRef: "cf_msg_partial",
+            rawStatus: "accepted",
+        });
+        mocks.sendSms.mockResolvedValue({ success: true, providerRef: "sms_partial" });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "Test SMS",
+            sendSms: mocks.sendSms,
+        });
+
+        await sendOrderNotificationEmail(
+            "buyer@example.com",
+            "Refund Buyer",
+            "order_partial",
+            "order_partially_refunded",
+            { amount: 40 },
+            db,
+            { encryptionKey: "credential-key" },
+        );
+
+        expect(mocks.sendEmail).toHaveBeenCalledWith(
+            expect.objectContaining({
+                to: "buyer@example.com",
+                subject: "Order #order_partial Partially Refunded",
+                html: expect.stringContaining("partial refund"),
+            }),
+            {
+                db,
+                env: undefined,
+                encryptionKey: "credential-key",
+            },
+        );
+        expect(mocks.sendSms).toHaveBeenCalledWith({
+            to: "+8801700000000",
+            message:
+                "Hi Refund Buyer, a partial refund has been processed for order #order_partial. Contact us if you have questions.",
         });
     });
 

@@ -569,6 +569,7 @@ const NOTIFICATION_STATUSES: Record<string, OrderNotificationType> = {
     cancelled: "order_cancelled",
     returned: "order_returned",
     refunded: "order_refunded",
+    partially_refunded: "order_partially_refunded",
 };
 
 export async function updateOrderStatus(db: Database, orderId: string, status: string, data?: { trackingId?: string }): Promise<StatusUpdateResult> {

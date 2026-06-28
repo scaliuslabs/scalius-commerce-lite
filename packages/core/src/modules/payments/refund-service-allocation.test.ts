@@ -257,6 +257,7 @@ describe("refund allocation", () => {
       isFullRefund: true,
       refundId: "refund_balance,refund_deposit",
       refundNotification: {
+        notificationType: "order_refunded",
         amount: 100,
         refundId: "refund_balance,refund_deposit",
         dedupeKey: "refund:order_1:refund_order_1_3:full",
@@ -318,8 +319,13 @@ describe("refund allocation", () => {
     expect(result).toMatchObject({
       success: true,
       isFullRefund: false,
+      refundNotification: {
+        notificationType: "order_partially_refunded",
+        amount: 80,
+        refundId: "provider_refund,provider_refund",
+        dedupeKey: "refund:order_1:refund_order_1_3:partial",
+      },
     });
-    expect(result.refundNotification).toBeUndefined();
     expect(mocks.providerCreateRefund).toHaveBeenCalledTimes(2);
     expect(mocks.providerCreateRefund).toHaveBeenNthCalledWith(1, expect.objectContaining({
       transactionId: "ch_balance",

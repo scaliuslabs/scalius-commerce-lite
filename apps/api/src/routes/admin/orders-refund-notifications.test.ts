@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
     getUserPermissions: vi.fn(),
     getCredentialEncryptionKey: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
-    enqueueOrderRefundedNotificationForOrder: vi.fn(),
+    enqueueOrderRefundNotificationForOrder: vi.fn(),
     enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
@@ -29,7 +29,7 @@ vi.mock("../../utils/cache-invalidation", () => ({
 }));
 
 vi.mock("../../utils/order-notification-queue", () => ({
-    enqueueOrderRefundedNotificationForOrder: mocks.enqueueOrderRefundedNotificationForOrder,
+    enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
     enqueueOrderStatusChangeNotification: mocks.enqueueOrderStatusChangeNotification,
 }));
 
@@ -62,7 +62,7 @@ describe("admin refund notification routes", () => {
         mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
         mocks.getUserPermissions.mockResolvedValue(new Set(["orders.refund"]));
         mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
-        mocks.enqueueOrderRefundedNotificationForOrder.mockResolvedValue({ orderId: "order_1", enqueued: true });
+        mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({ orderId: "order_1", enqueued: true });
         mocks.enqueueOrderStatusChangeNotification.mockResolvedValue({ orderId: "order_1", enqueued: true });
     });
 
@@ -74,6 +74,7 @@ describe("admin refund notification routes", () => {
             amount: 120,
             isFullRefund: true,
             refundNotification: {
+                notificationType: "order_refunded",
                 dedupeKey: "refund:order_1:refund_order_1_4:full",
                 amount: 120,
                 refundId: "re_1",
@@ -93,10 +94,11 @@ describe("admin refund notification routes", () => {
             { orderIds: ["order_1"] },
             expect.anything(),
         );
-        expect(mocks.enqueueOrderRefundedNotificationForOrder).toHaveBeenCalledWith({
+        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
             db,
             queue,
             orderId: "order_1",
+            notificationType: "order_refunded",
             dedupeKey: "refund:order_1:refund_order_1_4:full",
             source: "orders-refund",
             data: { amount: 120, gateway: "stripe", refundId: "re_1" },
@@ -105,13 +107,19 @@ describe("admin refund notification routes", () => {
         expect(body.data).not.toHaveProperty("refundNotification");
     });
 
-    it("does not send full-refund copy for partial refunds", async () => {
+    it("enqueues partial-refund copy for partial refunds", async () => {
         mocks.processRefund.mockResolvedValue({
             success: true,
             gateway: "stripe",
             refundId: "re_partial",
             amount: 40,
             isFullRefund: false,
+            refundNotification: {
+                notificationType: "order_partially_refunded",
+                dedupeKey: "refund:order_1:refund_order_1_4:partial",
+                amount: 40,
+                refundId: "re_partial",
+            },
         });
         const { app, env } = createTestApp();
 
@@ -122,7 +130,17 @@ describe("admin refund notification routes", () => {
         }, env);
 
         expect(response.status).toBe(200);
-        expect(mocks.enqueueOrderRefundedNotificationForOrder).not.toHaveBeenCalled();
+        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
+            db,
+            queue,
+            orderId: "order_1",
+            notificationType: "order_partially_refunded",
+            dedupeKey: "refund:order_1:refund_order_1_4:partial",
+            source: "orders-refund",
+            data: { amount: 40, gateway: "stripe", refundId: "re_partial" },
+        });
+        const body = await response.json() as { data: Record<string, unknown> };
+        expect(body.data).not.toHaveProperty("refundNotification");
     });
 
     it("does not notify for already-refunded inventory repair results without a refund notification fact", async () => {
@@ -141,7 +159,7 @@ describe("admin refund notification routes", () => {
         }, env);
 
         expect(response.status).toBe(200);
-        expect(mocks.enqueueOrderRefundedNotificationForOrder).not.toHaveBeenCalled();
+        expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
     });
 
     it("enqueues a returned notification after a newly returned order", async () => {
@@ -204,6 +222,7 @@ describe("admin refund notification routes", () => {
                 amount: 120,
                 isFullRefund: true,
                 refundNotification: {
+                    notificationType: "order_refunded",
                     dedupeKey: "refund:order_1:refund_order_1_8:full",
                     amount: 120,
                     refundId: "re_return",
@@ -230,10 +249,11 @@ describe("admin refund notification routes", () => {
             },
             source: "orders-return",
         });
-        expect(mocks.enqueueOrderRefundedNotificationForOrder).toHaveBeenCalledWith({
+        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
             db,
             queue,
             orderId: "order_1",
+            notificationType: "order_refunded",
             dedupeKey: "refund:order_1:refund_order_1_8:full",
             source: "orders-return-refund",
             data: { amount: 120, gateway: "stripe", refundId: "re_return" },

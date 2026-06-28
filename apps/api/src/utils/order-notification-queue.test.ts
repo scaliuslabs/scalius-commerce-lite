@@ -23,7 +23,7 @@ import {
     enqueueOrderBalancePaidNotificationForOrder,
     enqueueOrderCreatedNotificationForOrder,
     enqueueOrderNotificationsForStatus,
-    enqueueOrderRefundedNotificationForOrder,
+    enqueueOrderRefundNotificationForOrder,
     enqueueOrderStatusChangeNotification,
     getOrderNotificationTypeForStatus,
 } from "./order-notification-queue";
@@ -93,9 +93,9 @@ describe("order notification queue helpers", () => {
         expect(getOrderNotificationTypeForStatus("DELIVERED")).toBe("order_delivered");
         expect(getOrderNotificationTypeForStatus("returned")).toBe("order_returned");
         expect(getOrderNotificationTypeForStatus("refunded")).toBe("order_refunded");
+        expect(getOrderNotificationTypeForStatus("partially_refunded")).toBe("order_partially_refunded");
         expect(getOrderNotificationTypeForStatus("cancelled")).toBe("order_cancelled");
         expect(getOrderNotificationTypeForStatus("confirmed")).toBeNull();
-        expect(getOrderNotificationTypeForStatus("partially_refunded")).toBeNull();
     });
 
     it("enqueues a status-change notification with customer contact and tracking data", async () => {
@@ -193,10 +193,11 @@ describe("order notification queue helpers", () => {
         ]);
         const queue = { send: vi.fn(async () => undefined) };
 
-        const result = await enqueueOrderRefundedNotificationForOrder({
+        const result = await enqueueOrderRefundNotificationForOrder({
             db: db as never,
             queue,
             orderId: "order_1",
+            notificationType: "order_refunded",
             dedupeKey: "refund:order_1:refund_order_1_4:full",
             source: "orders-refund",
             data: { amount: 120, gateway: "stripe", refundId: "re_1" },
@@ -215,6 +216,36 @@ describe("order notification queue helpers", () => {
             notification: expect.objectContaining({
                 dedupeKey: "refund:order_1:refund_order_1_4:full",
                 notificationType: "order_refunded",
+                source: "orders-refund",
+            }),
+        }));
+    });
+
+    it("enqueues partial refund notifications without full-refund wording", async () => {
+        const { db } = createDbMock([
+            { id: "order_1", customerEmail: "buyer@example.com", customerName: "Buyer" },
+        ]);
+        const queue = { send: vi.fn(async () => undefined) };
+
+        const result = await enqueueOrderRefundNotificationForOrder({
+            db: db as never,
+            queue,
+            orderId: "order_1",
+            notificationType: "order_partially_refunded",
+            dedupeKey: "refund:order_1:refund_order_1_4:partial",
+            source: "orders-refund",
+            data: { amount: 40, gateway: "stripe", refundId: "re_partial" },
+        });
+
+        expect(result).toEqual({ orderId: "order_1", outboxId: "outbox_order_1", enqueued: true });
+        expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+            notificationType: "order_partially_refunded",
+            data: { amount: 40, gateway: "stripe", refundId: "re_partial" },
+        }));
+        expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenCalledWith(expect.objectContaining({
+            notification: expect.objectContaining({
+                dedupeKey: "refund:order_1:refund_order_1_4:partial",
+                notificationType: "order_partially_refunded",
                 source: "orders-refund",
             }),
         }));

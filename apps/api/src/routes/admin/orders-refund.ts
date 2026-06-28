@@ -9,7 +9,7 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope } from "../../schemas/responses";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 import {
-    enqueueOrderRefundedNotificationForOrder,
+    enqueueOrderRefundNotificationForOrder,
     enqueueOrderStatusChangeNotification,
 } from "../../utils/order-notification-queue";
 
@@ -30,7 +30,7 @@ const returnResultSchema = successEnvelope(z.object({
     refundResult: refundResultSchema.optional(),
 }));
 
-async function enqueueFullRefundNotification(options: {
+async function enqueueRefundNotification(options: {
     db: Database;
     queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
     orderId: string;
@@ -38,6 +38,7 @@ async function enqueueFullRefundNotification(options: {
         gateway: string;
         refundId?: string;
         refundNotification?: {
+            notificationType: "order_refunded" | "order_partially_refunded";
             dedupeKey: string;
             amount: number;
             refundId?: string;
@@ -47,10 +48,11 @@ async function enqueueFullRefundNotification(options: {
 }) {
     const notification = options.result.refundNotification;
     if (!notification) return;
-    await enqueueOrderRefundedNotificationForOrder({
+    await enqueueOrderRefundNotificationForOrder({
         db: options.db,
         queue: options.queue,
         orderId: options.orderId,
+        notificationType: notification.notificationType,
         dedupeKey: notification.dedupeKey,
         source: options.source,
         data: {
@@ -109,7 +111,7 @@ app.openapi(returnOrderRoute, async (c) => {
         });
     }
     if (result.refundResult?.success) {
-        await enqueueFullRefundNotification({
+        await enqueueRefundNotification({
             db,
             queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
             orderId,
@@ -160,7 +162,7 @@ app.openapi(refundOrderRoute, async (c) => {
     const result = await processRefund(db, envCache, { orderId, amount: data.amount, reason: data.reason ?? "Refund requested", gateway: data.gateway }, encryptionKey);
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
-    await enqueueFullRefundNotification({
+    await enqueueRefundNotification({
         db,
         queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
         orderId,
