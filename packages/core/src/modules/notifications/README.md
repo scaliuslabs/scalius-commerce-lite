@@ -88,6 +88,7 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification
 - Queue: `ORDER_NOTIFICATIONS_QUEUE`
 - Retry: Cloudflare auto-retry up to 3 times, 30s delay on failure
 - Channel receipts: email, SMS, WhatsApp, and FCM push create one receipt per logical target. Accepted/skipped receipts are terminal; retryable failures keep the parent outbox retryable.
+- Stale queue recovery: scheduled maintenance replays parent outbox rows that remain `queued` for more than one hour. The replay uses the same `outboxId`, so channel receipts continue to skip already accepted/skipped targets, and the scheduler logs `staleQueued` for alerting.
 
 Delivery notification enqueue is intentionally API-local because it depends on the Cloudflare Queue binding. `updateOrderStatusFromShipment()` remains a pure order/inventory transition helper and does not send queue messages itself.
 

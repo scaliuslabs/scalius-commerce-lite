@@ -133,10 +133,15 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
     queue: env.ORDER_NOTIFICATIONS_QUEUE,
     limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
   });
-  if (notificationOutbox.scanned > 0 || notificationOutbox.failed > 0) {
+  if (
+    notificationOutbox.scanned > 0 ||
+    notificationOutbox.failed > 0 ||
+    notificationOutbox.staleQueued > 0
+  ) {
     console.log(
       `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
-        `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, skipped=${notificationOutbox.skipped}`,
+        `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, ` +
+        `skipped=${notificationOutbox.skipped}, staleQueued=${notificationOutbox.staleQueued}`,
     );
   }
 

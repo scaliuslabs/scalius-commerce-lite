@@ -137,6 +137,7 @@ describe("runScheduledMaintenance", () => {
       enqueued: 0,
       failed: 0,
       skipped: 0,
+      staleQueued: 0,
     });
     mocks.cleanupExpiredCustomerAuthOtpChallenges.mockResolvedValue({
       scanned: 0,
@@ -240,6 +241,7 @@ describe("runScheduledMaintenance", () => {
       enqueued: 1,
       failed: 0,
       skipped: 0,
+      staleQueued: 1,
     });
     mocks.reconcileDueRefundAttempts.mockResolvedValue({
       scanned: 1,
@@ -345,6 +347,7 @@ describe("runScheduledMaintenance", () => {
       queue: env.ORDER_NOTIFICATIONS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
     });
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("staleQueued=1"));
     expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledWith(mocks.db, undefined, {
       encryptionKey: undefined,
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,

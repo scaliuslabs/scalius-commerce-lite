@@ -92,6 +92,7 @@ type OutboxInsert = typeof orderNotificationOutbox.$inferInsert;
 
 const ENQUEUE_LEASE_SECONDS = 5 * 60;
 const PROCESSING_LEASE_SECONDS = 15 * 60;
+export const STALE_QUEUED_REPLAY_SECONDS = 60 * 60;
 const MAX_FLUSH_LIMIT = 25;
 const MAX_ERROR_LENGTH = 500;
 
@@ -222,14 +223,17 @@ export async function flushPendingOrderNotificationOutbox(options: {
     db: Database;
     queue: OrderNotificationQueue | undefined;
     limit?: number;
-}): Promise<{ scanned: number; enqueued: number; failed: number; skipped: number }> {
+}): Promise<{ scanned: number; enqueued: number; failed: number; skipped: number; staleQueued: number }> {
     const limit = Math.max(1, Math.min(options.limit ?? 10, MAX_FLUSH_LIMIT));
     if (!options.queue) {
-        return { scanned: 0, enqueued: 0, failed: 0, skipped: 0 };
+        return { scanned: 0, enqueued: 0, failed: 0, skipped: 0, staleQueued: 0 };
     }
 
     const dueRows = await options.db
-        .select({ id: orderNotificationOutbox.id })
+        .select({
+            id: orderNotificationOutbox.id,
+            status: orderNotificationOutbox.status,
+        })
         .from(orderNotificationOutbox)
         .where(
             or(
@@ -241,6 +245,10 @@ export async function flushPendingOrderNotificationOutbox(options: {
                     inArray(orderNotificationOutbox.status, ["enqueueing", "processing"]),
                     lte(orderNotificationOutbox.claimExpiresAt, sql`unixepoch()`),
                 ),
+                and(
+                    eq(orderNotificationOutbox.status, "queued"),
+                    lte(orderNotificationOutbox.queuedAt, sql`unixepoch() - ${STALE_QUEUED_REPLAY_SECONDS}`),
+                ),
             ),
         )
         .orderBy(asc(orderNotificationOutbox.nextAttemptAt), asc(orderNotificationOutbox.createdAt))
@@ -250,6 +258,7 @@ export async function flushPendingOrderNotificationOutbox(options: {
     let enqueued = 0;
     let failed = 0;
     let skipped = 0;
+    const staleQueued = dueRows.filter((row) => row.status === "queued").length;
 
     for (const row of dueRows) {
         const result = await enqueueOrderNotificationOutboxById({
@@ -262,7 +271,7 @@ export async function flushPendingOrderNotificationOutbox(options: {
         else skipped += 1;
     }
 
-    return { scanned: dueRows.length, enqueued, failed, skipped };
+    return { scanned: dueRows.length, enqueued, failed, skipped, staleQueued };
 }
 
 export async function listOrderNotificationOutboxForOrder(
@@ -588,6 +597,10 @@ async function claimOrderNotificationOutboxForEnqueue(
                     and(
                         inArray(orderNotificationOutbox.status, ["enqueueing", "processing"]),
                         lte(orderNotificationOutbox.claimExpiresAt, sql`unixepoch()`),
+                    ),
+                    and(
+                        eq(orderNotificationOutbox.status, "queued"),
+                        lte(orderNotificationOutbox.queuedAt, sql`unixepoch() - ${STALE_QUEUED_REPLAY_SECONDS}`),
                     ),
                 ),
             ),
