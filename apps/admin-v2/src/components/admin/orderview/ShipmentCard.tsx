@@ -1,5 +1,4 @@
 import React from "react";
-import { formatDateShort } from "@scalius/shared/timestamps";
 import {
   Card,
   CardContent,
@@ -23,6 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCreateOrderShipment } from "@/lib/api-mutations/orders";
 import { queryKeys } from "@/lib/query-keys";
 import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
+import { formatOrderDate } from "./formatters";
 
 interface ShipmentCardProps {
   order: Order;
@@ -131,8 +131,8 @@ const ShipmentHistoryItem = ({
     <div key={shipment.id} className="p-4">
       <div className="flex items-start justify-between">
         <div className="flex flex-col">
-          <span className="mb-1 text-xs text-muted-foreground" suppressHydrationWarning>
-            {formatDateShort(shipment.createdAt)}
+          <span className="mb-1 text-xs text-muted-foreground">
+            {formatOrderDate(shipment.createdAt) ?? "N/A"}
           </span>
           <ShipmentStatusIndicator
             shipment={{

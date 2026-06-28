@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, ArrowRight } from "lucide-react";
 import type { Order, OrderItem } from "./types";
 import { useCurrency } from "@/hooks/use-currency";
+import { formatOrderAmount } from "./formatters";
 
 interface OrderItemsCardProps {
   order: Order;
@@ -49,10 +50,10 @@ const OrderItemRow = ({ item, symbol }: { item: OrderItem; symbol: string }) => 
         </div>
         <div className="shrink-0 text-right">
           <p className="font-medium text-foreground">
-            {symbol}{(item.price * item.quantity).toLocaleString()}
+            {symbol}{formatOrderAmount(item.price * item.quantity)}
           </p>
           <p className="text-xs text-muted-foreground">
-            {symbol}{item.price.toLocaleString()} × {item.quantity}
+            {symbol}{formatOrderAmount(item.price)} × {item.quantity}
           </p>
         </div>
       </div>
@@ -105,25 +106,25 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
           <div className="ml-auto w-full space-y-1.5 sm:w-72">
             <SummaryRow
               label="Subtotal"
-              value={`${symbol}${subtotal.toLocaleString()}`}
+              value={`${symbol}${formatOrderAmount(subtotal)}`}
             />
             {order.shippingCharge > 0 && (
               <SummaryRow
                 label="Shipping"
-                value={`${symbol}${order.shippingCharge.toLocaleString()}`}
+                value={`${symbol}${formatOrderAmount(order.shippingCharge)}`}
               />
             )}
             {(order.discountAmount ?? 0) > 0 && (
               <SummaryRow
                 label="Discount"
-                value={`-${symbol}${order.discountAmount?.toLocaleString()}`}
+                value={`-${symbol}${formatOrderAmount(order.discountAmount)}`}
                 isDestructive
               />
             )}
             <div className="flex justify-between border-t border-border pt-1.5">
               <span className="font-medium text-foreground">Total</span>
               <span className="font-medium text-foreground">
-                {symbol}{order.totalAmount.toLocaleString()}
+                {symbol}{formatOrderAmount(order.totalAmount)}
               </span>
             </div>
           </div>

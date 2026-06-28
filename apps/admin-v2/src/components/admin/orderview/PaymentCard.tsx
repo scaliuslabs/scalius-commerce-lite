@@ -52,6 +52,8 @@ import { useUpdateOrderCod, useRefundOrder } from "@/lib/api-mutations/orders";
 import type { UpdateOrderCodInput } from "@/lib/api-functions/orders";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 type CodFailureReason = Extract<
   UpdateOrderCodInput,
@@ -152,14 +154,7 @@ const REFUND_SEVERITY_CLASS: Record<string, string> = {
 };
 
 function formatTimestamp(value: OrderTimestamp | null | undefined): string | null {
-  if (!value) return null;
-  const date = value instanceof Date
-    ? value
-    : typeof value === "number"
-      ? new Date(value < 10_000_000_000 ? value * 1000 : value)
-      : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString();
+  return formatOrderTimestamp(value);
 }
 
 function formatRefundReason(reason: string | null | undefined): string | null {
@@ -206,6 +201,7 @@ interface PaymentCardProps {
 export function PaymentCard({ order }: PaymentCardProps) {
   const queryClient = useQueryClient();
   const { symbol } = useCurrency();
+  const isHydrated = useHydrated();
   const { hasPermission } = usePermissions();
   const canRefund = hasPermission(PERMISSIONS.ORDERS_REFUND);
   const [historyExpanded, setHistoryExpanded] = React.useState(false);
@@ -237,6 +233,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
     refetch: refetchPayments,
   } = useQuery({
     ...orderPaymentsQueryOptions(order.id),
+    enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
   const paymentsResult = paymentsData as OrderPaymentsResult | null;
@@ -258,7 +255,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
   // COD data — conditionally fetch (useQuery, not suspense, since it's optional)
   const { data: codData } = useQuery({
     ...orderCodQueryOptions(order.id),
-    enabled: isCOD,
+    enabled: isHydrated && isCOD,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
   const codTracking = isCOD ? ((codData as { tracking: CODTracking | null } | null)?.tracking ?? null) : null;
@@ -370,7 +367,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
 	                  <p className="font-semibold">{activeRefundOperation.label}</p>
 	                  <p className="mt-1 opacity-90">{activeRefundOperation.message}</p>
 	                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-80">
-	                    <span>{activeRefundOperation.currency} {activeRefundOperation.amount.toLocaleString()}</span>
+	                    <span>{activeRefundOperation.currency} {formatOrderAmount(activeRefundOperation.amount)}</span>
 	                    <span>{activeRefundOperation.attemptCount} allocation{activeRefundOperation.attemptCount === 1 ? "" : "s"}</span>
 	                    {activeRefundOperation.reason && <span>Reason: {formatRefundReason(activeRefundOperation.reason)}</span>}
 	                    {activeRefundOperation.refundReference && <span className="font-mono">Ref {activeRefundOperation.refundReference}</span>}
@@ -406,35 +403,35 @@ export function PaymentCard({ order }: PaymentCardProps) {
             {(order.shippingCharge > 0 || (order.discountAmount ?? 0) > 0) && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
-                <span>{symbol}{(order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)).toLocaleString()}</span>
+                <span>{symbol}{formatOrderAmount(order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0))}</span>
               </div>
             )}
             {order.shippingCharge > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Shipping</span>
-                <span>{symbol}{order.shippingCharge.toLocaleString()}</span>
+                <span>{symbol}{formatOrderAmount(order.shippingCharge)}</span>
               </div>
             )}
             {(order.discountAmount ?? 0) > 0 && (
               <div className="flex justify-between text-green-600">
                 <span>Discount</span>
-                <span>-{symbol}{(order.discountAmount ?? 0).toLocaleString()}</span>
+                <span>-{symbol}{formatOrderAmount(order.discountAmount ?? 0)}</span>
               </div>
             )}
             <div className="flex justify-between font-semibold border-t border-border pt-1.5 mt-1.5">
               <span>Total</span>
-              <span>{symbol}{grandTotal.toLocaleString()}</span>
+              <span>{symbol}{formatOrderAmount(grandTotal)}</span>
             </div>
             {(order.paidAmount ?? 0) > 0 && (
               <div className="flex justify-between text-green-600">
                 <span>Paid</span>
-                <span>{symbol}{(order.paidAmount ?? 0).toLocaleString()}</span>
+                <span>{symbol}{formatOrderAmount(order.paidAmount ?? 0)}</span>
               </div>
             )}
             {(order.balanceDue ?? 0) > 0 && (
               <div className="flex justify-between text-amber-600 font-medium">
                 <span>Balance due</span>
-                <span>{symbol}{(order.balanceDue ?? 0).toLocaleString()}</span>
+                <span>{symbol}{formatOrderAmount(order.balanceDue ?? 0)}</span>
               </div>
             )}
           </div>
@@ -446,25 +443,25 @@ export function PaymentCard({ order }: PaymentCardProps) {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Deposit</span>
                 <span className={plan.depositPaidAt ? "text-green-600" : "text-amber-600"}>
-                  {symbol}{plan.depositAmount.toLocaleString()} {plan.depositPaidAt ? "✓" : "(pending)"}
+                  {symbol}{formatOrderAmount(plan.depositAmount)} {plan.depositPaidAt ? "✓" : "(pending)"}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Balance</span>
                 <span className={plan.balancePaidAt ? "text-green-600" : "text-amber-600"}>
-                  {symbol}{plan.balanceDue.toLocaleString()} {plan.balancePaidAt ? "✓" : plan.balanceDueDate ? `due ${plan.balanceDueDate}` : "(pending)"}
+                  {symbol}{formatOrderAmount(plan.balanceDue)} {plan.balancePaidAt ? "✓" : plan.balanceDueDate ? `due ${plan.balanceDueDate}` : "(pending)"}
                 </span>
               </div>
             </div>
           )}
 
-          {paymentsLoading && (
+          {(!isHydrated || paymentsLoading) && (
             <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
               Loading payment history...
             </div>
           )}
 
-          {paymentsError && (
+          {isHydrated && paymentsError && (
             <div
               role="status"
               className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
@@ -557,7 +554,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
           )}
 
           {/* COD tracking */}
-          {isCOD && (
+          {isHydrated && isCOD && (
             <div className="space-y-2">
               {codTracking && (
                 <div className="text-sm space-y-1 rounded-lg bg-muted/30 p-3">
@@ -582,7 +579,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   {codTracking.collectedAmount && (
                     <div className="flex justify-between text-green-600">
                       <span>Collected amount</span>
-                      <span>{symbol}{codTracking.collectedAmount.toLocaleString()}</span>
+                      <span>{symbol}{formatOrderAmount(codTracking.collectedAmount)}</span>
                     </div>
                   )}
                   {codTracking.failureReason && (
@@ -691,7 +688,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                       </div>
                     </div>
                     <span className="shrink-0 font-medium text-foreground">
-                      {attempt.currency} {attempt.amount.toLocaleString()}
+                      {attempt.currency} {formatOrderAmount(attempt.amount)}
                     </span>
                   </div>
                 );
@@ -727,7 +724,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
 	                  <div className="flex justify-between text-muted-foreground">
 	                    <span>{PAYMENT_METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</span>
 	                    <span className="font-medium text-foreground">
-	                      {p.currency} {p.amount.toLocaleString()}
+	                      {p.currency} {formatOrderAmount(p.amount)}
 	                    </span>
 	                  </div>
 	                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
@@ -871,7 +868,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
               ) : (
                 <div className="flex justify-between">
                   <span>Maximum refundable:</span>
-                  <span className="font-medium text-foreground">{symbol}{(order.paidAmount ?? 0).toLocaleString()}</span>
+                  <span className="font-medium text-foreground">{symbol}{formatOrderAmount(order.paidAmount ?? 0)}</span>
                 </div>
               )}
             </div>
