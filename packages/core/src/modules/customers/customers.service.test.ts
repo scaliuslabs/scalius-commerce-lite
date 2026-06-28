@@ -4,12 +4,14 @@ import { customerSessions, customers, OrderStatus, PaymentStatus } from "@scaliu
 import {
   bulkDeleteCustomers,
   buildCustomerOrderBaseTimelineEvents,
+  buildCustomerOrderNotificationTimelineEvents,
   decodeCustomerOrdersCursor,
   deleteCustomer,
   encodeCustomerOrdersCursor,
   getCustomerSpendContribution,
   getCustomerVisibleBalanceDue,
   permanentlyDeleteCustomer,
+  projectCustomerOrderNotifications,
   summarizeCustomerAccountOrders,
 } from "./customers.service";
 
@@ -206,6 +208,102 @@ describe("customer account order history pagination and timeline", () => {
         label: "Current status: Delivered",
         happenedAt: "2026-05-28T21:26:40.000Z",
         details: "Order is currently Delivered.",
+      },
+    ]);
+  });
+
+  it("surfaces post-sale notification receipts as customer account timeline events", () => {
+    const iso = (timestamp: number) => new Date(timestamp * 1000).toISOString();
+    const notifications = projectCustomerOrderNotifications([
+      {
+        id: "receipt_balance",
+        notificationType: "payment_balance_paid",
+        channel: "email",
+        status: "accepted",
+        provider: "resend",
+        providerStatus: null,
+        acceptedAt: 1_780_004_000,
+        deliveredAt: null,
+        failedAt: null,
+        skippedAt: null,
+        updatedAt: 1_780_003_990,
+        createdAt: 1_780_003_980,
+      },
+      {
+        id: "receipt_refund",
+        notificationType: "order_refunded",
+        channel: "sms",
+        status: "delivered",
+        provider: "sms_net_bd",
+        providerStatus: "sent",
+        acceptedAt: 1_780_005_000,
+        deliveredAt: 1_780_005_015,
+        failedAt: null,
+        skippedAt: null,
+        updatedAt: 1_780_005_010,
+        createdAt: 1_780_004_990,
+      },
+      {
+        id: "receipt_partial_refund",
+        notificationType: "order_partially_refunded",
+        channel: "whatsapp",
+        status: "skipped",
+        provider: "meta",
+        providerStatus: "template_paused",
+        acceptedAt: null,
+        deliveredAt: null,
+        failedAt: null,
+        skippedAt: 1_780_006_000,
+        updatedAt: 1_780_005_990,
+        createdAt: 1_780_005_980,
+      },
+    ]);
+
+    expect(notifications).toMatchObject([
+      {
+        id: "receipt_balance",
+        notificationType: "payment_balance_paid",
+        acceptedAt: iso(1_780_004_000),
+        updatedAt: iso(1_780_003_990),
+      },
+      {
+        id: "receipt_refund",
+        notificationType: "order_refunded",
+        deliveredAt: iso(1_780_005_015),
+        providerStatus: "sent",
+      },
+      {
+        id: "receipt_partial_refund",
+        notificationType: "order_partially_refunded",
+        skippedAt: iso(1_780_006_000),
+        providerStatus: "template_paused",
+      },
+    ]);
+
+    expect(buildCustomerOrderNotificationTimelineEvents(notifications)).toEqual([
+      {
+        id: "notification:receipt_balance",
+        type: "notification",
+        status: "accepted",
+        label: "Email notification Accepted",
+        happenedAt: iso(1_780_004_000),
+        details: "Payment Balance Paid",
+      },
+      {
+        id: "notification:receipt_refund",
+        type: "notification",
+        status: "delivered",
+        label: "SMS notification Delivered",
+        happenedAt: iso(1_780_005_015),
+        details: "Order Refunded",
+      },
+      {
+        id: "notification:receipt_partial_refund",
+        type: "notification",
+        status: "skipped",
+        label: "WhatsApp notification Skipped",
+        happenedAt: iso(1_780_006_000),
+        details: "Order Partially Refunded",
       },
     ]);
   });
