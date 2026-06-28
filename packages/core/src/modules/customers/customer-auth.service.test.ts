@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const challengeMocks = vi.hoisted(() => ({
+  buildCustomerAuthOtpStorageKey: vi.fn(),
   persistCustomerAuthOtpChallenge: vi.fn(),
   claimCustomerAuthOtpChallenge: vi.fn(),
   deleteCustomerAuthOtpChallenge: vi.fn(),
@@ -12,6 +13,7 @@ const rateLimitMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./customer-auth-otp-challenges", () => ({
+  buildCustomerAuthOtpStorageKey: challengeMocks.buildCustomerAuthOtpStorageKey,
   persistCustomerAuthOtpChallenge: challengeMocks.persistCustomerAuthOtpChallenge,
   claimCustomerAuthOtpChallenge: challengeMocks.claimCustomerAuthOtpChallenge,
   deleteCustomerAuthOtpChallenge: challengeMocks.deleteCustomerAuthOtpChallenge,
@@ -130,6 +132,10 @@ const readyEmailSettings = [
 const readyEmailEnv = {
   EMAIL: { send: vi.fn() },
 };
+const otpInputSecrets = {
+  encryptionKey: "test-otp-signing-key",
+  credentialEncryptionKey: Buffer.alloc(32, 9).toString("base64"),
+};
 
 function createCustomerRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -173,6 +179,9 @@ function createKv(initialValues: Record<string, string> = {}) {
 describe("customer auth service intent handling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    challengeMocks.buildCustomerAuthOtpStorageKey.mockImplementation(async (channel: string) => (
+      `cust_otp:${channel}:${"a".repeat(64)}`
+    ));
     challengeMocks.persistCustomerAuthOtpChallenge.mockImplementation(async (_db, input) => ({
       otpKey: input.otpKey,
       deliveryKey: input.deliveryKey,
@@ -210,6 +219,7 @@ describe("customer auth service intent handling", () => {
       name: "New Customer",
       ip: "unknown",
       emailEnv: readyEmailEnv,
+      ...otpInputSecrets,
     });
 
     expect(result).toMatchObject({
@@ -219,7 +229,7 @@ describe("customer auth service intent handling", () => {
     expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
       db,
       expect.objectContaining({
-        otpKey: "cust_otp:email:new@example.com",
+        otpKey: expect.stringMatching(/^cust_otp:email:[a-f0-9]{64}$/),
         method: "email",
         channel: "email",
         identifier: "new@example.com",
@@ -259,6 +269,7 @@ describe("customer auth service intent handling", () => {
       name: "Buyer",
       ip: "unknown",
       emailEnv: readyEmailEnv,
+      ...otpInputSecrets,
     });
 
     expect(result.success).toBe(true);
@@ -270,7 +281,7 @@ describe("customer auth service intent handling", () => {
     expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
       db,
       expect.objectContaining({
-        otpKey: "cust_otp:email:buyer@example.com",
+        otpKey: expect.stringMatching(/^cust_otp:email:[a-f0-9]{64}$/),
         method: "email",
         channel: "email",
         identifier: "buyer@example.com",
@@ -299,7 +310,7 @@ describe("customer auth service intent handling", () => {
       name: "Buyer",
       ip: "203.0.113.20",
       emailEnv: readyEmailEnv,
-      encryptionKey: "otp-signing-key",
+      ...otpInputSecrets,
     })).rejects.toThrow("Too many requests from this IP. Please try again later.");
 
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
@@ -307,7 +318,7 @@ describe("customer auth service intent handling", () => {
       db,
       expect.objectContaining({
         ip: "203.0.113.20",
-        hashKey: "otp-signing-key",
+        hashKey: otpInputSecrets.encryptionKey,
       }),
     );
     expect(kv.get).not.toHaveBeenCalled();
@@ -338,6 +349,7 @@ describe("customer auth service intent handling", () => {
       identifier: "+8801712345678",
       name: "Buyer",
       ip: "unknown",
+      ...otpInputSecrets,
     });
 
     expect(result.success).toBe(true);
@@ -349,18 +361,16 @@ describe("customer auth service intent handling", () => {
     expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
       db,
       expect.objectContaining({
-        otpKey: "cust_otp:sms:+8801712345678",
+        otpKey: expect.stringMatching(/^cust_otp:sms:[a-f0-9]{64}$/),
         method: "phone",
         channel: "sms",
         identifier: "+8801712345678",
       }),
     );
-    expect(kv.get).not.toHaveBeenCalledWith("cust_otp:sms:+8801712345678", "text");
-    expect(kv.put).not.toHaveBeenCalledWith(
-      "cust_otp:sms:+8801712345678",
-      expect.any(String),
-      { expirationTtl: 300 },
-    );
+    const persistInput = challengeMocks.persistCustomerAuthOtpChallenge.mock.calls.at(-1)?.[1] as { otpKey: string };
+    expect(persistInput.otpKey).not.toContain("+8801712345678");
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects disallowed primary phone OTP sends before rate limits or challenge mutation", async () => {
@@ -379,6 +389,7 @@ describe("customer auth service intent handling", () => {
       identifier: "+14155552671",
       name: "Buyer",
       ip: "unknown",
+      ...otpInputSecrets,
     })).rejects.toThrow("Phone numbers from US are not accepted");
 
     expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
@@ -405,6 +416,7 @@ describe("customer auth service intent handling", () => {
       name: "Buyer",
       ip: "unknown",
       emailEnv: readyEmailEnv,
+      ...otpInputSecrets,
     })).rejects.toThrow("Phone numbers from US are not accepted");
 
     expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
@@ -429,18 +441,20 @@ describe("customer auth service intent handling", () => {
       email: "Buyer@Example.COM",
       name: "Buyer",
       ip: "unknown",
+      ...otpInputSecrets,
     });
 
     expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
       db,
       expect.objectContaining({
-        otpKey: "cust_otp:sms:+8801712345678",
+        otpKey: expect.stringMatching(/^cust_otp:sms:[a-f0-9]{64}$/),
         method: "phone",
         identifier: "+8801712345678",
         contactEmail: "buyer@example.com",
-        phone: "+8801712345678",
+        phone: undefined,
         intent: "sign_up",
         channel: "sms",
+        contactEncryptionKey: otpInputSecrets.credentialEncryptionKey,
       }),
     );
   });
@@ -460,6 +474,7 @@ describe("customer auth service intent handling", () => {
       identifier: "+8801712345678",
       name: "Buyer",
       ip: "unknown",
+      ...otpInputSecrets,
     })).rejects.toThrow("SMS verification is currently unavailable. Contact store support.");
 
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
@@ -483,6 +498,7 @@ describe("customer auth service intent handling", () => {
       identifier: "buyer@example.com",
       name: "Buyer",
       ip: "203.0.113.20",
+      ...otpInputSecrets,
     })).rejects.toThrow("Email verification is currently unavailable. Contact store support.");
 
     expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();

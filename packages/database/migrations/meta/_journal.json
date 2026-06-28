@@ -484,6 +484,13 @@
       "when": 1782623299000,
       "tag": "0068_abandoned_checkout_cleanup_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1782628400000,
+      "tag": "0069_customer_auth_otp_privacy",
+      "breakpoints": true
     }
   ]
 }

@@ -308,6 +308,7 @@ Notable migrations:
 - `0055` -- SKU-first inventory model: hidden/default simple-product SKUs, `track_inventory`, and untracked historical variantless order items
 - `0057` -- Legacy/demo simple-SKU repair for active products with zero active SKUs or one zero-stock no-option SKU
 - `0063` -- Partial unique live payment-session single-flight index on `(order_id, gateway, payment_type)` for `processing` attempts
+- `0069` -- Rebuilds short-lived `customer_auth_otp_challenges` without raw email/phone/identifier columns; in-flight OTPs are intentionally invalidated and must be re-requested
 
 Validate migration metadata after schema or migration edits:
 

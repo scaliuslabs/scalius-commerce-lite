@@ -199,7 +199,7 @@ Completely separate from Better Auth. OTP verification uses short-lived D1 chall
 
 ### Flow
 
-1. `sendOtp()` -- validates identifier, normalizes phone to E.164, checks site settings/customer-auth policy, validates delivery transport before mutating challenge state, rate limits by trusted client IP through D1 `customer_auth_otp_rate_limits`, generates a 6-digit OTP, stores only an HMAC hash plus pinned contact metadata in `customer_auth_otp_challenges`, and returns queue payload with `deliveryKey` and `otpExpiresAt` for async delivery
+1. `sendOtp()` -- validates identifier, normalizes phone to E.164, checks site settings/customer-auth policy, validates delivery transport before mutating challenge state, rate limits by trusted client IP through D1 `customer_auth_otp_rate_limits`, generates a 6-digit OTP, stores only opaque HMAC lookup material, a code HMAC, masks, and encrypted pinned sign-up contacts in `customer_auth_otp_challenges`, and returns queue payload with `deliveryKey` and `otpExpiresAt` for async delivery
 2. `/send-otp` sends the payload to `AUTH_OTP_QUEUE`; if queue handoff fails, it deletes the exact D1 OTP challenge by `otpKey` + `deliveryKey` and returns retryable `503`
 3. Queue delivery claims `auth_otp_delivery_receipts`, skips terminal/expired attempts, and records provider refs/status for email, SMS, or WhatsApp delivery
 4. `verifyOtp()` -- normalizes identifier to E.164, atomically consumes correct D1 OTP challenges or increments wrong-code attempts, creates/finds customer in DB, creates a D1 session row with only the token HMAC, returns `CustomerSession` with the raw token for the `cs_tok` cookie plus the canonical customer profile projection
