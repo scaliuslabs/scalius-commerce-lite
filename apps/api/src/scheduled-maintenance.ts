@@ -13,6 +13,7 @@ import { reconcileDueRefundAttempts } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { invalidateProductAvailabilityCaches } from "./utils/cache-invalidation";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
+import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;
@@ -28,6 +29,40 @@ export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
+
+async function enqueueReconciledRefundNotifications(
+  db: ReturnType<typeof getDb>,
+  env: Env,
+  notifications: Array<{
+    orderId: string;
+    notificationType: "order_refunded" | "order_partially_refunded";
+    dedupeKey: string;
+    amount: number;
+    refundId?: string;
+  }>,
+): Promise<void> {
+  for (const notification of notifications) {
+    const result = await enqueueOrderRefundNotificationForOrder({
+      db,
+      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      orderId: notification.orderId,
+      notificationType: notification.notificationType,
+      dedupeKey: notification.dedupeKey,
+      source: "refund-reconciliation",
+      data: {
+        amount: notification.amount,
+        ...(notification.refundId ? { refundId: notification.refundId } : {}),
+      },
+    });
+
+    if (!result.enqueued) {
+      console.log(
+        `[scheduled] Reconciled refund notification for order ${notification.orderId} ` +
+          `recorded but not enqueued: ${result.skippedReason}`,
+      );
+    }
+  }
+}
 
 export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionContext): Promise<void> {
   const db = getDb(env);
@@ -114,6 +149,9 @@ export async function runScheduledMaintenance(env: Env, executionCtx: ExecutionC
       { orderIds: refundReconciliation.finalizedOrderIds },
       { env, executionCtx },
     );
+  }
+  if (refundReconciliation.refundNotifications.length > 0) {
+    await enqueueReconciledRefundNotifications(db, env, refundReconciliation.refundNotifications);
   }
   if (
     refundReconciliation.scanned > 0 ||

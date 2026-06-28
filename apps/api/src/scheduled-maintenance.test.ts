@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     cleanupExpiredScannerTokenClaims: vi.fn(),
     reconcileDueRefundAttempts: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
+    enqueueOrderRefundNotificationForOrder: vi.fn(),
     failStaleQueuedPaymentWebhookEvents: vi.fn(),
   };
 });
@@ -55,6 +56,10 @@ vi.mock("@scalius/core/modules/payments", () => ({
 
 vi.mock("./utils/cache-invalidation", () => ({
   invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+}));
+
+vi.mock("./utils/order-notification-queue", () => ({
+  enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
 }));
 
 vi.mock("./utils/webhook-idempotency", () => ({
@@ -162,8 +167,14 @@ describe("runScheduledMaintenance", () => {
       deferred: 0,
       errors: [],
       finalizedOrderIds: [],
+      refundNotifications: [],
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
       hasMore: false,
+    });
+    mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({
+      orderId: "order_refunded",
+      outboxId: "outbox_refund_1",
+      enqueued: true,
     });
     mocks.failStaleQueuedPaymentWebhookEvents.mockResolvedValue({
       scanned: 0,
@@ -223,6 +234,13 @@ describe("runScheduledMaintenance", () => {
       deferred: 0,
       errors: [],
       finalizedOrderIds: ["order_refunded"],
+      refundNotifications: [{
+        orderId: "order_refunded",
+        notificationType: "order_refunded",
+        dedupeKey: "refund-reconcile:order_refunded:rfa_1:full",
+        amount: 100,
+        refundId: "re_1",
+      }],
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
       hasMore: false,
     });
@@ -304,6 +322,18 @@ describe("runScheduledMaintenance", () => {
       encryptionKey: undefined,
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
     });
+    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
+      db: mocks.db,
+      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      orderId: "order_refunded",
+      notificationType: "order_refunded",
+      dedupeKey: "refund-reconcile:order_refunded:rfa_1:full",
+      source: "refund-reconciliation",
+      data: {
+        amount: 100,
+        refundId: "re_1",
+      },
+    });
     expect(mocks.failStaleQueuedPaymentWebhookEvents).toHaveBeenCalledWith(
       mocks.db,
       Math.floor(now.getTime() / 1000) - STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES * 60,
@@ -342,6 +372,7 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalled();
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalled();
     expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalled();
+    expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
     expect(mocks.failStaleQueuedPaymentWebhookEvents).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpRateLimits).toHaveBeenCalled();
