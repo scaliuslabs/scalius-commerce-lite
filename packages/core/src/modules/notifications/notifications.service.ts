@@ -81,6 +81,30 @@ const EMPTY_DISPATCH_RESULT: OrderNotificationDispatchResult = {
     hasRetryableFailure: false,
 };
 
+const NON_RETRYABLE_DISPATCH_ERROR_PATTERNS = [
+    /no configured .*provider/i,
+    /no active .*provider/i,
+    /provider .*not ready/i,
+    /could not be decrypted/i,
+    /credential/i,
+    /auth(?:orization|entication)?\s+(?:required|failed|error)/i,
+    /unauthori[sz]ed/i,
+    /forbidden/i,
+    /invalid\s+(?:api\s*)?(?:key|token|credential)/i,
+    /api\s*(?:key|token)\s+(?:invalid|expired|missing|not configured)/i,
+    /not configured/i,
+    /permission/i,
+    /sender/i,
+    /sender id mismatch/i,
+    /mismatched credential/i,
+    /invalid[_\s-]?grant/i,
+    /private key/i,
+    /service account/i,
+    /insufficient\s+(?:balance|credit)/i,
+    /\bbalance\b/i,
+    /account\s+(?:expired|suspended|inactive|disabled)/i,
+];
+
 function credentialEncryptionKeyFromEnv(env: Env): string | undefined {
     const source = env as unknown as Record<string, unknown>;
     return (source.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
@@ -239,10 +263,43 @@ export async function sendOrderNotification(
             return buildDispatchResult(outcomes);
         }
 
-        const response = await messaging.sendEachForMulticast({
-            ...messagePayload,
-            tokens: claimedTargets.map((entry) => entry.token),
-        });
+        let response: Awaited<ReturnType<typeof messaging.sendEachForMulticast>>;
+        try {
+            response = await messaging.sendEachForMulticast({
+                ...messagePayload,
+                tokens: claimedTargets.map((entry) => entry.token),
+            });
+        } catch (sendError: unknown) {
+            const nonRetryable = isNonRetryableDispatchError(sendError);
+            for (const entry of claimedTargets) {
+                outcomes.push(
+                    nonRetryable
+                        ? await markSkippedOutcome(
+                            db,
+                            entry.target,
+                            entry.receipt,
+                            normalizeError(sendError),
+                            {
+                                provider: "fcm",
+                                providerStatus: normalizeError(sendError),
+                                rawResponse: normalizeError(sendError),
+                            },
+                        )
+                        : await markFailedOutcome(
+                            db,
+                            entry.target,
+                            entry.receipt,
+                            sendError,
+                            {
+                                provider: "fcm",
+                                providerStatus: "messaging/unknown-error",
+                                rawResponse: normalizeError(sendError),
+                            },
+                        ),
+                );
+            }
+            return buildDispatchResult(outcomes);
+        }
         const invalidTokens: string[] = [];
 
         for (let index = 0; index < claimedTargets.length; index += 1) {
@@ -309,15 +366,16 @@ export async function sendOrderNotification(
             ":",
             error instanceof Error ? error.message : error,
         );
+        const nonRetryable = isNonRetryableDispatchError(error);
         return buildDispatchResult([
             ...outcomes,
             {
                 channel: "push",
                 provider: "fcm",
                 recipientMasked: "admin-fcm",
-                status: "failed",
+                status: nonRetryable ? "skipped" : "failed",
                 error: normalizeError(error),
-                retryable: Boolean(options.outboxId),
+                retryable: Boolean(options.outboxId) && !nonRetryable,
             },
         ]);
     }
@@ -516,8 +574,9 @@ export async function sendOrderNotificationEmail(
                                 return {
                                     success: false,
                                     provider: "sms",
-                                    providerStatus: "missing_provider",
+                                    providerStatus: "missing_sms_provider",
                                     rawResponse: "No active SMS provider configured",
+                                    retryable: false,
                                 };
                             }
                             const smsResult = await smsProvider.sendSms({
@@ -797,6 +856,20 @@ async function dispatchWithReceipt(options: {
         }
         return await markAcceptedOutcome(options.db, target, claim.receipt, result);
     } catch (error: unknown) {
+        if (isNonRetryableDispatchError(error)) {
+            const status = normalizeError(error);
+            return await markSkippedOutcome(
+                options.db,
+                target,
+                claim.receipt,
+                status,
+                {
+                    provider: options.provider,
+                    providerStatus: status,
+                    rawResponse: status,
+                },
+            );
+        }
         return await markFailedOutcome(options.db, target, claim.receipt, error);
     }
 }
@@ -933,7 +1006,22 @@ function emailResultToDeliveryResult(result: SendEmailResult): DeliverySendResul
         providerMessageId: result.providerRef,
         providerStatus: result.rawStatus,
         rawResponse: result.rawStatus,
+        retryable: result.success
+            ? false
+            : isNonRetryableDispatchStatus(result.rawStatus)
+                ? false
+                : undefined,
     };
+}
+
+function isNonRetryableDispatchError(error: unknown): boolean {
+    return isNonRetryableDispatchStatus(normalizeError(error));
+}
+
+function isNonRetryableDispatchStatus(value: string | null | undefined): boolean {
+    const status = value?.trim();
+    if (!status) return false;
+    return NON_RETRYABLE_DISPATCH_ERROR_PATTERNS.some((pattern) => pattern.test(status));
 }
 
 function outcomeFromUnclaimedReceipt(

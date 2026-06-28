@@ -1092,6 +1092,9 @@ describe("admin route graph boundaries", () => {
     expect(notificationsSource).toContain("const isHydrated = useHydrated()");
     expect(notificationsSource).toContain("enabled: isHydrated");
     expect(notificationsSource).toContain("!isHydrated || isLoading");
+    expect(notificationsSource).toContain("Stopped retrying");
+    expect(notificationsSource).toContain("Delivery settled");
+    expect(notificationsSource).toContain("recorded attempt");
   });
 
   it("keeps order-detail refund recovery context as the payment-card fallback", () => {

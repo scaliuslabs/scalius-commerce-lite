@@ -46,6 +46,7 @@ Sends FCM push notifications to all active admin devices about a new order.
 - Builds notification payload with order ID, customer name (XSS-escaped via `escapeHtml()`), and deep link to order detail page
 - Calls `FCMMessagingService.sendEachForMulticast()` with bounded concurrency. Response order is preserved, so invalid-token cleanup remains aligned with the original active-token query.
 - Auto-deactivates invalid tokens (unregistered, invalid registration, or Firebase stale-device variants such as `Device unregistered`/`NotRegistered`) in the database. In receipt mode, deactivation happens only after the skipped receipt is successfully terminal.
+- Firebase setup failures are terminal until settings change. Invalid service-account JSON, private-key import failures, OAuth `invalid_grant`, mismatched credentials, sender/project blockers, and other credential/configuration failures become skipped outcomes; if FCM throws after per-token receipt claims, each claimed receipt is marked skipped or failed immediately so no row waits for lease expiry.
 - Returns per-target outcomes; receipt-mode retryable failures keep the parent outbox retryable instead of marking it sent
 - All catch blocks use typed `error: unknown` with `instanceof Error` checks
 
@@ -88,6 +89,7 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification
 - Queue: `ORDER_NOTIFICATIONS_QUEUE`
 - Retry: parent outbox rows with `outboxId` are marked failed with D1 `nextAttemptAt` backoff and the Queue message is acked; scheduled outbox flushing is the durable retry authority. Cloudflare auto-retry remains only for legacy messages that do not carry an `outboxId`.
 - Channel receipts: email, SMS, WhatsApp, and FCM push create one receipt per logical target. Accepted/skipped receipts are terminal; retryable failures keep the parent outbox retryable.
+- Configuration/readiness failures are not retry work. Missing email provider setup, no active SMS provider, undecryptable credentials, invalid keys/tokens, authorization failures, sender/account/balance blockers, and bad Firebase credentials are skipped receipts with merchant-actionable admin copy. Transient provider outages remain failed/retryable.
 - Stale queue recovery: scheduled maintenance replays parent outbox rows that remain `queued` for more than one hour. The replay uses the same `outboxId`, so channel receipts continue to skip already accepted/skipped targets, and the scheduler logs `staleQueued` for alerting.
 
 Delivery notification enqueue is intentionally API-local because it depends on the Cloudflare Queue binding. `updateOrderStatusFromShipment()` remains a pure order/inventory transition helper and does not send queue messages itself.
