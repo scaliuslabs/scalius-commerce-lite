@@ -154,11 +154,6 @@ function createTestApp(options: {
       calls.push(`kv:${key}`);
     }),
   };
-  const queue = {
-    send: vi.fn(async () => {
-      calls.push("queue:send");
-    }),
-  };
   const db = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
@@ -193,7 +188,7 @@ function createTestApp(options: {
   });
   app.route("/orders", orderRoutes);
 
-  return { app, db, kv, queue, calls };
+  return { app, db, kv, calls };
 }
 
 describe("cart validation preflight", () => {
@@ -219,7 +214,7 @@ describe("cart validation preflight", () => {
       subtotal: 0,
       hasFreeDeliveryProduct: false,
     });
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders/cart-validation",
@@ -239,7 +234,7 @@ describe("cart validation preflight", () => {
           ],
         }),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(200);
@@ -264,7 +259,7 @@ describe("cart validation preflight", () => {
   });
 
   it("preflights selected delivery data when cart validation receives city and zone", async () => {
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders/cart-validation",
@@ -288,7 +283,7 @@ describe("cart validation preflight", () => {
           shippingMethodId: "ship_1",
         }),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(200);
@@ -322,7 +317,7 @@ describe("cart validation preflight", () => {
     mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
       new ValidationError("A valid active shipping method is required for this order."),
     );
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders/cart-validation",
@@ -345,7 +340,7 @@ describe("cart validation preflight", () => {
           shippingMethodId: "ship_stale",
         }),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -368,9 +363,9 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_1",
       paymentMethod: "cod",
       totalAmount: 100,
-      queuePayload: { type: "order.ingest", orderData: { id: "order_1" } },
+      commitPayload: { orderData: { id: "order_1" } },
     });
-    const { app, kv, queue, calls } = createTestApp();
+    const { app, kv, calls } = createTestApp();
     mocks.commitStorefrontOrderPayload.mockImplementation(async () => {
       calls.push("commit");
     });
@@ -388,7 +383,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     const responseText = await response.clone().text();
@@ -435,7 +430,6 @@ describe("create order commit/KV ordering", () => {
         }),
       }),
     );
-    expect(queue.send).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
       expect.anything(),
       { orderIds: ["order_1"] },
@@ -463,7 +457,7 @@ describe("create order commit/KV ordering", () => {
       defaultMethod: "stripe",
     });
     mocks.rateLimit.mockResolvedValue({ allowed: false });
-    const { app, kv, queue } = createTestApp({
+    const { app, kv } = createTestApp({
       guestCheckoutEnabled: false,
       checkoutMode: "gateways_only",
       partialPaymentEnabled: true,
@@ -477,7 +471,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     const json = await response.json() as { data: { orderId: string; receiptToken: string } };
@@ -506,7 +500,7 @@ describe("create order commit/KV ordering", () => {
       checkoutToken: "chk_processing",
     });
     mocks.rateLimit.mockResolvedValue({ allowed: false });
-    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -515,7 +509,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     const json = await response.json() as { data: { checkoutToken: string; orderId: string; status: string } };
@@ -549,7 +543,7 @@ describe("create order commit/KV ordering", () => {
         message: "Order created",
       },
     });
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -558,7 +552,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     const json = await response.json() as { data: { orderId: string; receiptToken: string } };
@@ -580,7 +574,7 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_race_processing",
       checkoutToken: "chk_race_processing",
     });
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -589,7 +583,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     const json = await response.json() as { data: { checkoutToken: string; orderId: string; status: string } };
@@ -612,7 +606,7 @@ describe("create order commit/KV ordering", () => {
       new ConflictError("This checkout request was already used for different checkout details. Please refresh checkout and try again."),
     );
     mocks.rateLimit.mockResolvedValue({ allowed: false });
-    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -621,7 +615,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(409);
@@ -659,7 +653,7 @@ describe("create order commit/KV ordering", () => {
       hasFreeDeliveryProduct: false,
     });
     mocks.rateLimit.mockResolvedValue({ allowed: false });
-    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -668,7 +662,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -707,7 +701,7 @@ describe("create order commit/KV ordering", () => {
       new ValidationError("Selected zone is no longer available for the chosen city."),
     );
     mocks.rateLimit.mockResolvedValue({ allowed: false });
-    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -716,7 +710,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -757,10 +751,10 @@ describe("create order commit/KV ordering", () => {
         orderId: "order_cache_failure",
         paymentMethod: "cod",
         totalAmount: 100,
-        queuePayload: { type: "order.ingest", orderData: { id: "order_cache_failure" } },
+        commitPayload: { orderData: { id: "order_cache_failure" } },
       });
       mocks.invalidateProductAvailabilityCaches.mockRejectedValue(new Error("cache unavailable"));
-      const { app, kv, queue } = createTestApp();
+      const { app, kv } = createTestApp();
 
       const response = await app.request(
         "/api/v1/orders",
@@ -769,7 +763,7 @@ describe("create order commit/KV ordering", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(validOrderBody),
         },
-        { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+        { CACHE: kv } as never,
       );
 
       const responseText = await response.clone().text();
@@ -796,9 +790,9 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_2",
       paymentMethod: "cod",
       totalAmount: 100,
-      queuePayload: { type: "order.ingest", orderData: { id: "order_2" } },
+      commitPayload: { orderData: { id: "order_2" } },
     });
-    const { app, kv, queue, calls } = createTestApp();
+    const { app, kv, calls } = createTestApp();
     mocks.commitStorefrontOrderPayload.mockImplementation(async () => {
       calls.push("commit");
       throw new Error("commit unavailable");
@@ -814,7 +808,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(500);
@@ -824,7 +818,6 @@ describe("create order commit/KV ordering", () => {
       "commit",
       "kv:checkout_status:chk_order_2",
     ]);
-    expect(queue.send).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
@@ -847,9 +840,9 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_discount_limit",
       paymentMethod: "cod",
       totalAmount: 100,
-      queuePayload: { type: "order.ingest", orderData: { id: "order_discount_limit" } },
+      commitPayload: { orderData: { id: "order_discount_limit" } },
     });
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
     mocks.commitStorefrontOrderPayload.mockRejectedValue(discountError);
 
     const response = await app.request(
@@ -859,7 +852,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -869,7 +862,6 @@ describe("create order commit/KV ordering", () => {
         message: "Discount code has reached its usage limit",
       },
     });
-    expect(queue.send).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.markCheckoutAttemptFailed).toHaveBeenCalledWith(
@@ -887,7 +879,7 @@ describe("create order commit/KV ordering", () => {
   });
 
   it("rejects phones outside the configured include countries before payment settings, rate limits, or claims", async () => {
-    const { app, kv, queue } = createTestApp({
+    const { app, kv } = createTestApp({
       allowedCountries: ["BD"],
       allowedCountriesMode: "include",
     });
@@ -902,7 +894,7 @@ describe("create order commit/KV ordering", () => {
           customerPhone: "+14155552671",
         }),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -925,7 +917,7 @@ describe("create order commit/KV ordering", () => {
   });
 
   it("rejects phones listed in configured exclude countries before payment settings, rate limits, or claims", async () => {
-    const { app, kv, queue } = createTestApp({
+    const { app, kv } = createTestApp({
       allowedCountries: ["BD"],
       allowedCountriesMode: "exclude",
     });
@@ -937,7 +929,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -957,7 +949,7 @@ describe("create order commit/KV ordering", () => {
   });
 
   it("rejects guest checkout before rate limiting or order creation when merchant disables guests", async () => {
-    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -966,7 +958,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(401);
@@ -993,9 +985,9 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_3",
       paymentMethod: "cod",
       totalAmount: 100,
-      queuePayload: { type: "order.ingest", orderData: { id: "order_3" } },
+      commitPayload: { orderData: { id: "order_3" } },
     });
-    const { app, db, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, db, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1007,7 +999,7 @@ describe("create order commit/KV ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     const responseText = await response.clone().text();
@@ -1026,7 +1018,7 @@ describe("create order commit/KV ordering", () => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 86_400_000,
     });
-    const { app, db, kv, queue } = createTestApp({ guestCheckoutEnabled: true });
+    const { app, db, kv } = createTestApp({ guestCheckoutEnabled: true });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1038,7 +1030,7 @@ describe("create order commit/KV ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -1058,7 +1050,7 @@ describe("create order commit/KV ordering", () => {
 
   it("rejects stale customer sessions with a recoverable code when guest checkout is enabled", async () => {
     mocks.getCustomerBySession.mockResolvedValue(null);
-    const { app, db, kv, queue } = createTestApp({ guestCheckoutEnabled: true });
+    const { app, db, kv } = createTestApp({ guestCheckoutEnabled: true });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1070,7 +1062,7 @@ describe("create order commit/KV ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(401);
@@ -1104,9 +1096,9 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_session_owner",
       paymentMethod: "cod",
       totalAmount: 100,
-      queuePayload: { type: "order.ingest", orderData: { id: "order_session_owner" } },
+      commitPayload: { orderData: { id: "order_session_owner" } },
     });
-    const { app, db, kv, queue } = createTestApp({ guestCheckoutEnabled: true });
+    const { app, db, kv } = createTestApp({ guestCheckoutEnabled: true });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1118,7 +1110,7 @@ describe("create order commit/KV ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     const responseText = await response.clone().text();
@@ -1154,7 +1146,7 @@ describe("create order commit/KV ordering", () => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 86_400_000,
     });
-    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1166,7 +1158,7 @@ describe("create order commit/KV ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -1184,7 +1176,7 @@ describe("create order commit/KV ordering", () => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 86_400_000,
     });
-    const { app, kv, queue } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1196,7 +1188,7 @@ describe("create order commit/KV ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -1205,7 +1197,7 @@ describe("create order commit/KV ordering", () => {
   });
 
   it("rejects COD order creation when checkout mode is gateways only", async () => {
-    const { app, kv, queue } = createTestApp({ checkoutMode: "gateways_only" });
+    const { app, kv } = createTestApp({ checkoutMode: "gateways_only" });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1214,7 +1206,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -1227,7 +1219,7 @@ describe("create order commit/KV ordering", () => {
       enabledMethods: ["stripe"],
       defaultMethod: "stripe",
     });
-    const { app, kv, queue } = createTestApp({ checkoutMode: "guest_cod_only" });
+    const { app, kv } = createTestApp({ checkoutMode: "guest_cod_only" });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1236,7 +1228,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, paymentMethod: "stripe" }),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -1249,7 +1241,7 @@ describe("create order commit/KV ordering", () => {
       enabledMethods: ["stripe"],
       defaultMethod: "stripe",
     });
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1258,7 +1250,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(503);
@@ -1270,7 +1262,7 @@ describe("create order commit/KV ordering", () => {
 
   it("rate limits a new checkout before claim creation or order writes", async () => {
     mocks.rateLimit.mockResolvedValue({ allowed: false });
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1279,7 +1271,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(429);
@@ -1292,7 +1284,7 @@ describe("create order commit/KV ordering", () => {
   });
 
   it("rejects COD before commit when partial payment requires an online deposit", async () => {
-    const { app, kv, queue } = createTestApp({
+    const { app, kv } = createTestApp({
       partialPaymentEnabled: true,
       partialPaymentAmount: 50,
     });
@@ -1304,7 +1296,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(response.status).toBe(400);
@@ -1313,7 +1305,7 @@ describe("create order commit/KV ordering", () => {
   });
 
   it("rejects empty carts and non-integer quantities at the API boundary", async () => {
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const emptyCart = await app.request(
       "/api/v1/orders",
@@ -1322,7 +1314,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, items: [] }),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
     const fractionalQuantity = await app.request(
       "/api/v1/orders",
@@ -1334,7 +1326,7 @@ describe("create order commit/KV ordering", () => {
           items: [{ ...validOrderBody.items[0], quantity: 1.5 }],
         }),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
     const excessiveQuantity = await app.request(
       "/api/v1/orders",
@@ -1346,7 +1338,7 @@ describe("create order commit/KV ordering", () => {
           items: [{ ...validOrderBody.items[0], quantity: 100 }],
         }),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     expect(emptyCart.status).toBe(400);
@@ -1360,7 +1352,7 @@ describe("create order commit/KV ordering", () => {
     mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
       new ValidationError("Selected zone is no longer available for the chosen city."),
     );
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1369,7 +1361,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     const responseText = await response.clone().text();
@@ -1390,7 +1382,7 @@ describe("create order commit/KV ordering", () => {
   it("does not write checkout status or receipt proof when the cart product is unavailable", async () => {
     const unavailableError = new NotFoundError("Product product_1 not found or is inactive.");
     mocks.createStorefrontOrder.mockRejectedValue(unavailableError);
-    const { app, kv, queue } = createTestApp();
+    const { app, kv } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1399,7 +1391,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv, ORDER_INGEST_QUEUE: queue } as never,
+      { CACHE: kv } as never,
     );
 
     const responseText = await response.clone().text();

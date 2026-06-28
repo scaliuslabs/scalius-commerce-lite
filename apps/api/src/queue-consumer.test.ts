@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
   getWhatsAppCloudApiSettings: vi.fn(),
   sendWhatsAppTemplateMessage: vi.fn(),
-  handleOrderIngestBatch: vi.fn(),
   getDecimalPlaces: vi.fn(() => 2),
   getActiveSmsProvider: vi.fn(),
   getEncryptionKey: vi.fn(() => "test-key"),
@@ -79,10 +78,6 @@ vi.mock("@scalius/core/integrations/whatsapp", () => ({
   sendWhatsAppTemplateMessage: mocks.sendWhatsAppTemplateMessage,
 }));
 
-vi.mock("@scalius/core/modules/orders/orders.queue", () => ({
-  handleOrderIngestBatch: mocks.handleOrderIngestBatch,
-}));
-
 vi.mock("@scalius/shared/currency", () => ({
   getDecimalPlaces: mocks.getDecimalPlaces,
 }));
@@ -124,10 +119,8 @@ vi.mock("./utils/webhook-idempotency", () => ({
 }));
 
 import { handleQueueBatch, type PaymentQueueMessage } from "./queue-consumer";
-import type { OrderIngestQueueMessage } from "@scalius/core/modules/orders/orders.queue";
 
 function createMessage(body: PaymentQueueMessage, attempts?: number): Message<PaymentQueueMessage>;
-function createMessage(body: OrderIngestQueueMessage, attempts?: number): Message<OrderIngestQueueMessage>;
 function createMessage<T>(body: T, attempts?: number): Message<T>;
 function createMessage<T>(body: T, attempts = 1): Message<T> {
   const record = body as Record<string, unknown>;
@@ -158,43 +151,6 @@ function createBatch<T>(
     ackAll: vi.fn(),
     retryAll: vi.fn(),
   };
-}
-
-function createOrderMessage(orderId: string): Message<OrderIngestQueueMessage> {
-  const body: OrderIngestQueueMessage = {
-    type: "order.ingest",
-    checkoutToken: `chk_${orderId}`,
-    existingCustomer: null,
-    orderData: {
-      id: orderId,
-      customerName: "Queue Customer",
-      customerPhone: "01700000000",
-      customerEmail: null,
-      shippingAddress: "123 Queue Street",
-      city: "city_1",
-      zone: "zone_1",
-      area: null,
-      cityName: "City",
-      zoneName: "Zone",
-      areaName: null,
-      notes: null,
-      totalAmount: 100,
-      shippingCharge: 0,
-      discountAmount: 0,
-      status: "pending",
-      paymentMethod: "cod",
-      paymentStatus: "unpaid",
-      paidAmount: 0,
-      balanceDue: 100,
-      fulfillmentStatus: "pending",
-      inventoryPool: "regular",
-      inventoryAction: "reserved",
-    },
-    items: [],
-    discountUsage: null,
-    requestUrl: "http://localhost/api/v1/orders",
-  };
-  return createMessage(body);
 }
 
 describe("handleQueueBatch payment confirmation retries", () => {
@@ -884,26 +840,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 
-  it("routes the configured order-ingest queue to the order ingest handler", async () => {
-    const message = createOrderMessage("order_1");
-
-    await handleQueueBatch(
-      createBatch([message], "order-ingest") as never,
-      {} as Env,
-    );
-
-    expect(mocks.handleOrderIngestBatch).toHaveBeenCalledTimes(1);
-    expect(mocks.handleOrderIngestBatch.mock.calls[0]?.[0]).toMatchObject({
-      queue: "order-ingest",
-    });
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      { id: "db" },
-      { orderIds: ["order_1"], variantIds: [] },
-      { env: {}, executionCtx: undefined },
-    );
-  });
-
-  it("does not cast a mixed non-order queue to order ingest", async () => {
+  it("ignores stale order-ingest-shaped messages on non-order queues", async () => {
     mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
     const payment = createMessage({
       type: "payment.stripe.confirmed",
@@ -912,15 +849,20 @@ describe("handleQueueBatch payment confirmation retries", () => {
       amount: 12345,
       currency: "usd",
     });
-    const strayOrder = createOrderMessage("order_stray");
+    const staleOrderIngest = createMessage({
+      type: "order.ingest",
+      orderData: { id: "order_stray" },
+      items: [],
+    } as unknown as PaymentQueueMessage);
 
     await handleQueueBatch(
-      createBatch([payment, strayOrder] as Array<Message<Record<string, unknown>>>) as never,
+      createBatch([payment, staleOrderIngest] as Array<Message<Record<string, unknown>>>) as never,
       {} as Env,
     );
 
-    expect(mocks.handleOrderIngestBatch).not.toHaveBeenCalled();
     expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(1);
+    expect(payment.ack).toHaveBeenCalledTimes(1);
+    expect(staleOrderIngest.ack).toHaveBeenCalledTimes(1);
   });
 
   it("dispatches order notifications without requiring customer email and passes encryption key", async () => {

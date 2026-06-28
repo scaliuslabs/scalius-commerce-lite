@@ -35,7 +35,7 @@ Deep API readiness is exposed at:
 curl -fsS https://api.scalius.com/api/v1/readyz
 ```
 
-Expected healthy result: HTTP `200`, `Cache-Control: no-store`, `success: true`, `status: "ready"`, and `checks` entries for `d1`, `api_cache_kv`, `shared_auth_kv`, `r2`, `widget_design_agent_do`, `payment_events_queue`, `order_notifications_queue`, `auth_otp_queue`, `order_ingest_queue`, and `runtime_config` all reporting `status: "ok"`.
+Expected healthy result: HTTP `200`, `Cache-Control: no-store`, `success: true`, `status: "ready"`, and `checks` entries for `d1`, `api_cache_kv`, `shared_auth_kv`, `r2`, `widget_design_agent_do`, `payment_events_queue`, `order_notifications_queue`, `auth_otp_queue`, and `runtime_config` all reporting `status: "ok"`.
 
 Expected degraded result: HTTP `503`, `success: false`, `status: "degraded"`, and a per-check `status` of `missing`, `error`, or `timeout`. The endpoint must stay read-only: D1 uses `SELECT 1`, KV uses a read probe, R2 uses `list({ limit: 1 })`, and Queue/DO checks are binding-shape checks only.
 
@@ -360,7 +360,7 @@ pnpm --filter @scalius/storefront exec vitest run src/lib/api/client-url-policy.
 pnpm --filter @scalius/storefront typecheck
 pnpm --filter @scalius/api-client typecheck
 pnpm --filter @scalius/api test -- src/routes/orders-create.test.ts
-pnpm --filter @scalius/core test -- src/modules/orders/orders.queue.test.ts
+pnpm --filter @scalius/core test -- src/modules/orders/orders.ingest.test.ts src/modules/orders/orders.storefront.test.ts
 rg -n 'discounts/usage|recordDiscountUsage\(' apps/storefront/src apps/api/src packages/core/src
 ```
 
@@ -420,11 +420,6 @@ pnpm exec vitest run tests/unit/core/orders/update-order-atomicity.test.ts
 pnpm --filter @scalius/core exec vitest run src/modules/orders/orders.fulfillment.test.ts src/modules/delivery/tracking.test.ts src/modules/payments/process-payment.test.ts
 pnpm --filter @scalius/core typecheck
 
-# ORDER-010 coverage
-pnpm --filter @scalius/core test -- src/modules/orders/orders.queue.test.ts
-pnpm exec vitest run tests/unit/core/orders/order-ingest-queue.test.ts
-pnpm --filter @scalius/core typecheck
-
 # ORDER-011 coverage
 pnpm exec vitest run tests/unit/core/orders/update-order-atomicity.test.ts
 pnpm exec vitest run tests/unit/core/inventory/reserve-deduct-release.test.ts
@@ -442,7 +437,7 @@ pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/api lint
 ```
 
-Use the PAY-003/PAY-004 checks to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls, derive gateway URLs from trusted config, reject disabled or mismatched deposit attempts, ignore caller currency for session creation, and force public Stripe manual capture off. Use the PAY-005 SSLCommerz webhook checks to prove canonical validated transaction data is used instead of form metadata. Use the webhook-idempotency checks to prove fresh `processing` claims dedupe, stale `processing` claims are leased/reclaimable by only one retry, `failed` claims are reclaimable, `queued`/`processed` claims stay terminal, and non-duplicate insert failures throw for provider retry. Use the ORDER-006 checks to prove storefront order creation rejects bogus shipping methods and derives shipping from active backend methods. Use the ORDER-007 checks to prove same-status retries repair inventory across admin status changes, fulfillment, COD, delivery webhook/refresh, admin full edits, refunds, and returns while fulfilled refunds do not auto-restock deducted inventory. Use the ORDER-008 checks to prove provider shipment creation owns an order-level shipment claim, active claims block admin/order/refund/payment-session mutations and shipment refresh, queue/webhook paths retry instead of skipping, provider failures clear claims, and provider success plus final local CAS failure leaves reconciliation-required state without inventory side effects. Use the ORDER-009 checks to prove admin full order edits reject failed negative inventory deltas before item replacement, preserve old item context when item replacement fails, compensate pre-write inventory on later write failures, and treat delivered as a stock-deducting status consistently with the central inventory transition helper. Use the ORDER-010 checks to prove order-ingest fallback reuses held reservations, detects ambiguous shared-batch commits before inventory mutation, and never retries into a second reservation unless the first reservation was confirmed released. Use the ORDER-005 checks to prove abandoned-checkout cleanup releases reserved inventory before archiving, does not hard-delete orders, and leaves orders/items retryable when release fails.
+Use the PAY-003/PAY-004 checks to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls, derive gateway URLs from trusted config, reject disabled or mismatched deposit attempts, ignore caller currency for session creation, and force public Stripe manual capture off. Use the PAY-005 SSLCommerz webhook checks to prove canonical validated transaction data is used instead of form metadata. Use the webhook-idempotency checks to prove fresh `processing` claims dedupe, stale `processing` claims are leased/reclaimable by only one retry, `failed` claims are reclaimable, `queued`/`processed` claims stay terminal, and non-duplicate insert failures throw for provider retry. Use the ORDER-006 checks to prove storefront order creation rejects bogus shipping methods and derives shipping from active backend methods. Use the ORDER-007 checks to prove same-status retries repair inventory across admin status changes, fulfillment, COD, delivery webhook/refresh, admin full edits, refunds, and returns while fulfilled refunds do not auto-restock deducted inventory. Use the ORDER-008 checks to prove provider shipment creation owns an order-level shipment claim, active claims block admin/order/refund/payment-session mutations and shipment refresh, queue/webhook paths retry instead of skipping, provider failures clear claims, and provider success plus final local CAS failure leaves reconciliation-required state without inventory side effects. Use the ORDER-009 checks to prove admin full order edits reject failed negative inventory deltas before item replacement, preserve old item context when item replacement fails, compensate pre-write inventory on later write failures, and treat delivered as a stock-deducting status consistently with the central inventory transition helper. Use checkout-attempt/order-ingest retirement checks to prove storefront order creation remains synchronous, same-key retries replay or return duplicate in-flight `202`, stale claims converge on existing committed orders, and reservation failures release stock or return buyer-safe cart issues. Use the ORDER-005 checks to prove abandoned-checkout cleanup releases reserved inventory before archiving, does not hard-delete orders, and leaves orders/items retryable when release fails.
 
 ## Local Dev Commands
 
@@ -703,8 +698,7 @@ Suggested focused commands:
 
 ```bash
 pnpm --filter @scalius/core test -- src/modules/orders/orders.fulfillment.test.ts
-pnpm --filter @scalius/core test -- src/modules/orders/orders.queue.test.ts
-pnpm exec vitest run tests/unit/core/orders/order-ingest-queue.test.ts
+pnpm --filter @scalius/core test -- src/modules/orders/orders.ingest.test.ts src/modules/orders/orders.storefront.test.ts
 pnpm --filter @scalius/core test -- src/modules/inventory/expiry.test.ts
 pnpm --filter @scalius/core test -- src/modules/payments/process-payment.test.ts
 pnpm --filter @scalius/core test -- src/modules/payments/polar.test.ts

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
-import type { OrderIngestQueuePayload } from "./orders.types";
+import type { StorefrontOrderCommitPayload } from "./orders.types";
 
 const mocks = vi.hoisted(() => ({
   safeBatch: vi.fn(),
@@ -21,9 +21,8 @@ vi.mock("../inventory", () => ({
 
 import { commitStorefrontOrderPayload } from "./orders.ingest";
 
-function createPayload(overrides: Partial<OrderIngestQueuePayload> = {}): OrderIngestQueuePayload {
+function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): StorefrontOrderCommitPayload {
   return {
-    type: "order.ingest",
     checkoutToken: "chk_order_discount",
     existingCustomer: { id: "cust_existing" },
     orderData: {

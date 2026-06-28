@@ -25,7 +25,7 @@ interface Env {
     }): Promise<{ messageId: string }>;
   };
 
-  // KV namespace for caching (used by orders.queue, kv-cache, cache-invalidation, etc.)
+  // KV namespace for caching (used by kv-cache, cache-invalidation, etc.)
   CACHE: KVNamespace;
 
   // KV namespace for shared auth token caching (used by firebase/admin.ts)
@@ -35,7 +35,6 @@ interface Env {
   PAYMENT_EVENTS_QUEUE: Queue;
   ORDER_NOTIFICATIONS_QUEUE: Queue;
   AUTH_OTP_QUEUE: Queue;
-  ORDER_INGEST_QUEUE: Queue;
 
   // D1 database binding
   DB: D1Database;

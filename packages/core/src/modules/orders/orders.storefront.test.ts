@@ -202,7 +202,7 @@ describe("createStorefrontOrder product availability verification", () => {
   it("keeps true guest checkout orders detached from customer accounts", async () => {
     const result = await placeOrder();
 
-    expect(result.queuePayload.existingCustomer).toBeNull();
+    expect(result.commitPayload.existingCustomer).toBeNull();
   });
 
   it("binds storefront order payloads only to explicit authenticated customer identity", async () => {
@@ -213,7 +213,7 @@ describe("createStorefrontOrder product availability verification", () => {
       },
     });
 
-    expect(result.queuePayload.existingCustomer).toEqual({ id: "customer_session_owner" });
+    expect(result.commitPayload.existingCustomer).toEqual({ id: "customer_session_owner" });
   });
 
   it("rejects inactive products from stale carts or direct API payloads", async () => {
@@ -399,8 +399,8 @@ describe("createStorefrontOrder product availability verification", () => {
       },
     });
 
-    expect(result.queuePayload.orderData.inventoryAction).toBe("none");
-    expect(result.queuePayload.items[0]).toEqual(
+    expect(result.commitPayload.orderData.inventoryAction).toBe("none");
+    expect(result.commitPayload.items[0]).toEqual(
       expect.objectContaining({
         variantId: "var_standard",
         inventoryTracked: false,
@@ -586,7 +586,7 @@ describe("createStorefrontOrder shipping verification", () => {
       shippingMethods: [createShippingMethod({ fee: 75 })],
     });
 
-    expect(result.queuePayload.orderData.shippingCharge).toBe(75);
+    expect(result.commitPayload.orderData.shippingCharge).toBe(75);
     expect(result.totalAmount).toBe(200);
   });
 
@@ -636,7 +636,7 @@ describe("createStorefrontOrder shipping verification", () => {
       shippingMethods: [],
     });
 
-    expect(result.queuePayload.orderData.shippingCharge).toBe(0);
+    expect(result.commitPayload.orderData.shippingCharge).toBe(0);
     expect(result.totalAmount).toBe(125);
   });
 });
@@ -657,9 +657,9 @@ describe("createStorefrontOrder delivery-location verification", () => {
       ],
     });
 
-    expect(result.queuePayload.orderData.cityName).toBe("Dhaka");
-    expect(result.queuePayload.orderData.zoneName).toBe("Mirpur");
-    expect(result.queuePayload.orderData.areaName).toBe("Section 10");
+    expect(result.commitPayload.orderData.cityName).toBe("Dhaka");
+    expect(result.commitPayload.orderData.zoneName).toBe("Mirpur");
+    expect(result.commitPayload.orderData.areaName).toBe("Section 10");
   });
 
   it("rejects unknown, inactive, or soft-deleted city selections", async () => {
@@ -880,9 +880,9 @@ describe("createStorefrontOrder prevalidated input trust", () => {
       deliveryPreflight,
     );
 
-    expect(result.queuePayload.orderData.cityName).toBe("Dhaka");
-    expect(result.queuePayload.orderData.zoneName).toBe("Mirpur");
-    expect(result.queuePayload.orderData.areaName).toBe("Section 10");
-    expect(result.queuePayload.orderData.shippingCharge).toBe(70);
+    expect(result.commitPayload.orderData.cityName).toBe("Dhaka");
+    expect(result.commitPayload.orderData.zoneName).toBe("Mirpur");
+    expect(result.commitPayload.orderData.areaName).toBe("Section 10");
+    expect(result.commitPayload.orderData.shippingCharge).toBe(70);
   });
 });
