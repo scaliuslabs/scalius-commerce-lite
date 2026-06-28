@@ -51,7 +51,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 ### OTP Authentication (`customer-auth.service.ts`)
 
 **Flow:**
-1. `sendOtp()` -- validates sign-in vs sign-up intent as challenge metadata, validates identifier and secondary contact formats, normalizes phone to E.164, enforces the current include/exclude country policy for primary and secondary phone fields, resolves the advanced customer-auth policy from `settings.customer_auth/policy` with `siteSettings.authVerificationMethod` fallback, requires phone collection for customer identity, resolves/validates the selected transport, verifies Email/SMS/WhatsApp provider readiness with the dedicated credential key before challenge mutation, passes a dedicated WhatsApp migration key so legacy credential cleanup cannot use JWT fallback encryption, enforces IP rate limiting (5 requests/10 min) through D1 `customer_auth_otp_rate_limits`, enforces per-channel identifier cooldown (2 min) through the D1 challenge upsert, generates 6-digit cryptographic OTP, stores only an HMAC code hash plus intent/channel/pinned-contact metadata in `customer_auth_otp_challenges` with 5-min TTL, and returns a generic queue payload with `deliveryKey` + `otpExpiresAt`. It intentionally does not look up account existence before sending, so sign-in/sign-up registration state is disclosed only after a valid OTP proves contact ownership.
+1. `sendOtp()` -- validates sign-in vs sign-up intent as challenge metadata, validates identifier and secondary contact formats, normalizes phone to E.164, enforces the current include/exclude country policy for primary and secondary phone fields, resolves the advanced customer-auth policy from `settings.customer_auth/policy` with `siteSettings.authVerificationMethod` fallback, requires phone collection for customer identity, resolves/validates the selected transport, verifies Email/SMS/WhatsApp provider readiness with the dedicated credential key before challenge mutation, passes a dedicated WhatsApp migration key so legacy credential cleanup cannot use JWT fallback encryption, enforces IP rate limiting (5 requests/10 min) through D1 `customer_auth_otp_rate_limits`, enforces per-channel identifier cooldown (2 min) through the D1 challenge upsert, generates 6-digit cryptographic OTP, stores only an opaque HMAC storage key, keyed identifier hash/mask, HMAC code hash, intent/channel, and encrypted pinned sign-up contact fields in `customer_auth_otp_challenges` with 5-min TTL, and returns a generic queue payload with `deliveryKey` + `otpExpiresAt`. It intentionally does not look up account existence before sending, so sign-in/sign-up registration state is disclosed only after a valid OTP proves contact ownership.
 2. `/send-otp` enqueues `auth.send_otp` to `AUTH_OTP_QUEUE`; if queue handoff fails after challenge creation, it deletes the exact D1 challenge by `otpKey` + `deliveryKey` and returns retryable `503`
 3. Queue consumer (in `apps/api/src/queue-consumer.ts`) claims `auth_otp_delivery_receipts` before provider work, skips terminal/expired receipts, then delivers OTP via the selected transport (email, SMS, WhatsApp)
 4. Delivery success marks the receipt `accepted` with provider refs/status. Retryable failures mark `failed` with bounded error/provider metadata so Cloudflare Queue retries can reclaim the receipt.
@@ -61,7 +61,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 - Email sends pass `deliveryKey` as `idempotencyKey`; Resend forwards it as `Idempotency-Key`, while Cloudflare Email stores the returned `messageId`
 - SMS sends pass `createAuthOtpProviderClientReference()` as deterministic `clientReference`; GenNet maps this to `csms_id`
 - WhatsApp sends parse and store Meta message IDs from successful template-message responses
-- OTP plaintext stays only in the queue payload and provider request body. `customer_auth_otp_challenges` stores an HMAC hash of the code plus pinned contact metadata; the delivery receipt stores recipient hash/mask, status, provider refs, bounded response summaries, and OTP expiry, never the code.
+- OTP plaintext stays only in the queue payload and provider request body. `customer_auth_otp_challenges` stores opaque HMAC lookup material, a code HMAC, contact masks, and encrypted pinned sign-up contacts only; the delivery receipt stores recipient hash/mask, status, provider refs, bounded response summaries, and OTP expiry, never the code.
 
 **Session management:**
 - Cookie name: `cs_tok` (HttpOnly, Secure)
@@ -170,9 +170,9 @@ Customer account order history uses keyset pagination over `(orders.createdAt, o
 - `createdAt`
 
 **`customerAuthOtpChallenges`** table:
-- `otpKey` (PK, channel-scoped `cust_otp:{channel}:{identifier}`), `deliveryKey` (unique queue/provider correlation)
-- `method`, `channel`, `intent`, normalized `identifier`, `identifierHash`, `identifierMasked`
-- Pinned sign-up contacts: `contactEmail`, `phone`
+- `otpKey` (PK, channel-scoped `cust_otp:{channel}:{identifierHmac}`), `deliveryKey` (unique queue/provider correlation)
+- `method`, `channel`, `intent`, keyed `identifierHash`, and buyer-safe `identifierMasked`
+- Pinned sign-up contacts: `contactEmailEncrypted`, `phoneEncrypted` (`enc:` AES-GCM with `CREDENTIAL_ENCRYPTION_KEY`)
 - `codeHash` stores an HMAC-SHA256 hash of `otpKey:code`, not the plaintext OTP
 - `status`: `"pending"`, `"consumed"`, `"locked"`
 - Attempt/cooldown fields: `attempts`, `maxAttempts`, `resendAvailableAt`, `expiresAt`, `consumedAt`

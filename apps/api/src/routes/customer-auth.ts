@@ -379,6 +379,7 @@ app.openapi(verifyOtpRoute, async (c) => {
     phone,
     email,
     encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     sessionHashKey: getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
   });
 

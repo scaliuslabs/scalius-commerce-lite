@@ -2,7 +2,13 @@ import { customerAuthOtpChallenges } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, eq, gt, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
-import { hashOtpIdentifier, maskOtpIdentifier } from "./otp-delivery-receipts";
+import { maskOtpIdentifier } from "./otp-delivery-receipts";
+import {
+    decryptCredentials,
+    encodeEncryptedCredential,
+    ENCRYPTED_CREDENTIAL_PREFIX,
+    encryptCredentials,
+} from "../../utils/credential-encryption";
 
 export type CustomerAuthOtpMethod = "email" | "phone";
 export type CustomerAuthOtpChannel = "email" | "sms" | "whatsapp";
@@ -19,6 +25,7 @@ export interface PersistCustomerAuthOtpChallengeInput {
     phone?: string;
     code: string;
     encryptionKey?: string;
+    contactEncryptionKey?: string;
     ttlSeconds: number;
     resendCooldownSeconds: number;
     maxAttempts: number;
@@ -37,6 +44,7 @@ export interface ClaimCustomerAuthOtpChallengeInput {
     identifier: string;
     code: string;
     encryptionKey?: string;
+    contactEncryptionKey?: string;
 }
 
 export interface ClaimedCustomerAuthOtpChallenge {
@@ -67,8 +75,10 @@ export async function persistCustomerAuthOtpChallenge(
     const expiresAt = now + input.ttlSeconds;
     const resendAvailableAt = now + input.resendCooldownSeconds;
     const codeHash = await hashOtpCode(input.code, input.otpKey, input.encryptionKey);
-    const identifierHash = await hashOtpIdentifier(input.identifier);
+    const identifierHash = await hashCustomerAuthOtpIdentifier(input.identifier, input.encryptionKey);
     const identifierMasked = maskOtpIdentifier(input.identifier);
+    const contactEmailEncrypted = await encryptPinnedContact(input.contactEmail, input.contactEncryptionKey, "Customer OTP email");
+    const phoneEncrypted = await encryptPinnedContact(input.phone, input.contactEncryptionKey, "Customer OTP phone");
 
     const values = {
         otpKey: input.otpKey,
@@ -76,11 +86,10 @@ export async function persistCustomerAuthOtpChallenge(
         method: input.method,
         channel: input.channel,
         intent: input.intent,
-        identifier: input.identifier,
         identifierHash,
         identifierMasked,
-        contactEmail: input.contactEmail ?? null,
-        phone: input.phone ?? null,
+        contactEmailEncrypted,
+        phoneEncrypted,
         codeHash,
         status: "pending" as const,
         attempts: 0,
@@ -101,11 +110,10 @@ export async function persistCustomerAuthOtpChallenge(
                 method: values.method,
                 channel: values.channel,
                 intent: values.intent,
-                identifier: values.identifier,
                 identifierHash: values.identifierHash,
                 identifierMasked: values.identifierMasked,
-                contactEmail: values.contactEmail,
-                phone: values.phone,
+                contactEmailEncrypted: values.contactEmailEncrypted,
+                phoneEncrypted: values.phoneEncrypted,
                 codeHash: values.codeHash,
                 status: "pending",
                 attempts: 0,
@@ -145,6 +153,7 @@ export async function claimCustomerAuthOtpChallenge(
 ): Promise<ClaimedCustomerAuthOtpChallenge> {
     const now = Math.floor(Date.now() / 1000);
     const codeHash = await hashOtpCode(input.code, input.otpKey, input.encryptionKey);
+    const identifierHash = await hashCustomerAuthOtpIdentifier(input.identifier, input.encryptionKey);
 
     const consumedRows = await db.update(customerAuthOtpChallenges)
         .set({
@@ -157,7 +166,7 @@ export async function claimCustomerAuthOtpChallenge(
             eq(customerAuthOtpChallenges.otpKey, input.otpKey),
             eq(customerAuthOtpChallenges.method, input.method),
             eq(customerAuthOtpChallenges.channel, input.channel),
-            eq(customerAuthOtpChallenges.identifier, input.identifier),
+            eq(customerAuthOtpChallenges.identifierHash, identifierHash),
             eq(customerAuthOtpChallenges.status, "pending"),
             gt(customerAuthOtpChallenges.expiresAt, now),
             sql`${customerAuthOtpChallenges.attempts} < ${customerAuthOtpChallenges.maxAttempts}`,
@@ -168,16 +177,15 @@ export async function claimCustomerAuthOtpChallenge(
             method: customerAuthOtpChallenges.method,
             channel: customerAuthOtpChallenges.channel,
             intent: customerAuthOtpChallenges.intent,
-            identifier: customerAuthOtpChallenges.identifier,
-            contactEmail: customerAuthOtpChallenges.contactEmail,
-            phone: customerAuthOtpChallenges.phone,
+            contactEmailEncrypted: customerAuthOtpChallenges.contactEmailEncrypted,
+            phoneEncrypted: customerAuthOtpChallenges.phoneEncrypted,
             expiresAt: customerAuthOtpChallenges.expiresAt,
             attempts: customerAuthOtpChallenges.attempts,
             maxAttempts: customerAuthOtpChallenges.maxAttempts,
         });
 
     const consumed = consumedRows[0];
-    if (consumed) return normalizeClaimedChallenge(consumed);
+    if (consumed) return normalizeClaimedChallenge(consumed, input);
 
     const wrongRows = await db.update(customerAuthOtpChallenges)
         .set({
@@ -189,7 +197,7 @@ export async function claimCustomerAuthOtpChallenge(
             eq(customerAuthOtpChallenges.otpKey, input.otpKey),
             eq(customerAuthOtpChallenges.method, input.method),
             eq(customerAuthOtpChallenges.channel, input.channel),
-            eq(customerAuthOtpChallenges.identifier, input.identifier),
+            eq(customerAuthOtpChallenges.identifierHash, identifierHash),
             eq(customerAuthOtpChallenges.status, "pending"),
             gt(customerAuthOtpChallenges.expiresAt, now),
             sql`${customerAuthOtpChallenges.attempts} < ${customerAuthOtpChallenges.maxAttempts}`,
@@ -222,7 +230,7 @@ export async function claimCustomerAuthOtpChallenge(
     if (
         existing.method !== input.method ||
         existing.channel !== input.channel ||
-        existing.identifier !== input.identifier
+        existing.identifierHash !== identifierHash
     ) {
         throw new ValidationError("Verification code does not match the requested contact. Please request a new code.");
     }
@@ -302,6 +310,33 @@ async function hashOtpCode(code: string, otpKey: string, encryptionKey: string |
         .join("");
 }
 
+export async function buildCustomerAuthOtpStorageKey(
+    channel: CustomerAuthOtpChannel,
+    normalizedIdentifier: string,
+    encryptionKey: string | undefined,
+): Promise<string> {
+    return `cust_otp:${channel}:${await hashCustomerAuthOtpIdentifier(normalizedIdentifier, encryptionKey)}`;
+}
+
+export async function hashCustomerAuthOtpIdentifier(identifier: string, encryptionKey: string | undefined): Promise<string> {
+    const secret = requireOtpHashKey(encryptionKey);
+    const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"],
+    );
+    const signature = await crypto.subtle.sign(
+        "HMAC",
+        key,
+        new TextEncoder().encode(`customer-auth-otp-identifier:${identifier.trim().toLowerCase()}`),
+    );
+    return Array.from(new Uint8Array(signature))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+}
+
 function requireOtpHashKey(encryptionKey: string | undefined): string {
     const key = encryptionKey?.trim();
     if (!key) {
@@ -310,20 +345,59 @@ function requireOtpHashKey(encryptionKey: string | undefined): string {
     return key;
 }
 
-function normalizeClaimedChallenge(
+async function encryptPinnedContact(
+    value: string | undefined,
+    encryptionKey: string | undefined,
+    label: string,
+): Promise<string | null> {
+    const trimmed = value?.trim();
+    if (!trimmed) return null;
+    const key = requirePinnedContactEncryptionKey(encryptionKey, label);
+    return encodeEncryptedCredential(await encryptCredentials(trimmed, key));
+}
+
+async function decryptPinnedContact(
+    value: string | null | undefined,
+    encryptionKey: string | undefined,
+    label: string,
+): Promise<string | undefined> {
+    const trimmed = value?.trim();
+    if (!trimmed) return undefined;
+    const key = requirePinnedContactEncryptionKey(encryptionKey, label);
+    const encrypted = trimmed.startsWith(ENCRYPTED_CREDENTIAL_PREFIX)
+        ? trimmed.slice(ENCRYPTED_CREDENTIAL_PREFIX.length)
+        : trimmed;
+
+    try {
+        return await decryptCredentials(encrypted, key);
+    } catch {
+        throw new ServiceUnavailableError(`${label} could not be decrypted with the configured credential key.`);
+    }
+}
+
+function requirePinnedContactEncryptionKey(encryptionKey: string | undefined, label: string): string {
+    const key = encryptionKey?.trim();
+    if (!key) {
+        throw new ServiceUnavailableError(`${label} encryption key is not configured.`);
+    }
+    return key;
+}
+
+async function normalizeClaimedChallenge(
     row: Pick<
         typeof customerAuthOtpChallenges.$inferSelect,
-        "otpKey" | "method" | "channel" | "intent" | "identifier" | "contactEmail" | "phone" | "expiresAt" | "attempts" | "maxAttempts"
+        "otpKey" | "method" | "channel" | "intent" | "contactEmailEncrypted" | "phoneEncrypted" | "expiresAt" | "attempts" | "maxAttempts"
     >,
-): ClaimedCustomerAuthOtpChallenge {
+    input: ClaimCustomerAuthOtpChallengeInput,
+): Promise<ClaimedCustomerAuthOtpChallenge> {
     return {
         otpKey: row.otpKey,
         method: row.method,
         channel: row.channel,
         intent: row.intent,
-        identifier: row.identifier,
-        contactEmail: row.contactEmail ?? undefined,
-        phone: row.phone ?? undefined,
+        identifier: input.identifier,
+        contactEmail: await decryptPinnedContact(row.contactEmailEncrypted, input.contactEncryptionKey, "Customer OTP email"),
+        phone: await decryptPinnedContact(row.phoneEncrypted, input.contactEncryptionKey, "Customer OTP phone"),
         expiresAt: row.expiresAt,
         attempts: row.attempts,
         maxAttempts: row.maxAttempts,

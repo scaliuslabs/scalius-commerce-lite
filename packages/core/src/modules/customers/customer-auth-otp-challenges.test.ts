@@ -2,11 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 
 import {
+  buildCustomerAuthOtpStorageKey,
   claimCustomerAuthOtpChallenge,
   cleanupExpiredCustomerAuthOtpChallenges,
   deleteCustomerAuthOtpChallenge,
+  hashCustomerAuthOtpIdentifier,
   persistCustomerAuthOtpChallenge,
 } from "./customer-auth-otp-challenges";
+import { encodeEncryptedCredential, encryptCredentials } from "../../utils/credential-encryption";
+
+const otpSigningKey = "test-signing-key";
+const contactEncryptionKey = Buffer.alloc(32, 7).toString("base64");
 
 function createDb(options: {
   insertRows?: unknown[];
@@ -64,46 +70,62 @@ function createDb(options: {
 }
 
 describe("customer auth OTP D1 challenges", () => {
-  it("persists hashed OTP challenge state without storing the plaintext code", async () => {
+  it("builds opaque channel-scoped storage keys without raw contact data", async () => {
+    const key = await buildCustomerAuthOtpStorageKey("email", "buyer@example.com", otpSigningKey);
+
+    expect(key).toMatch(/^cust_otp:email:[a-f0-9]{64}$/);
+    expect(key).not.toContain("buyer@example.com");
+  });
+
+  it("persists hashed OTP challenge state without storing plaintext code or raw contacts", async () => {
     const db = createDb({
       insertRows: [{
-        otpKey: "cust_otp:email:buyer@example.com",
+        otpKey: "cust_otp:email:opaque_hash",
         deliveryKey: "otp_delivery_1",
         expiresAt: 4_102_444_800,
       }],
     });
 
     const result = await persistCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:email:buyer@example.com",
+      otpKey: "cust_otp:email:opaque_hash",
       deliveryKey: "otp_delivery_1",
       method: "email",
       channel: "email",
       intent: "sign_in",
       identifier: "buyer@example.com",
       contactEmail: "buyer@example.com",
+      phone: "+8801712345678",
       code: "123456",
-      encryptionKey: "test-signing-key",
+      encryptionKey: otpSigningKey,
+      contactEncryptionKey,
       ttlSeconds: 300,
       resendCooldownSeconds: 120,
       maxAttempts: 5,
     });
 
     expect(result).toMatchObject({
-      otpKey: "cust_otp:email:buyer@example.com",
+      otpKey: "cust_otp:email:opaque_hash",
       deliveryKey: "otp_delivery_1",
     });
     expect(db.calls.insertValues).toMatchObject({
-      otpKey: "cust_otp:email:buyer@example.com",
+      otpKey: "cust_otp:email:opaque_hash",
       deliveryKey: "otp_delivery_1",
       method: "email",
       channel: "email",
-      identifier: "buyer@example.com",
       status: "pending",
       attempts: 0,
       maxAttempts: 5,
     });
+    expect((db.calls.insertValues as { identifierHash: string }).identifierHash).toMatch(/^[a-f0-9]{64}$/);
+    expect((db.calls.insertValues as { identifierMasked: string }).identifierMasked).toBe("b***@example.com");
+    expect((db.calls.insertValues as { contactEmailEncrypted: string }).contactEmailEncrypted).toMatch(/^enc:/);
+    expect((db.calls.insertValues as { phoneEncrypted: string }).phoneEncrypted).toMatch(/^enc:/);
     expect((db.calls.insertValues as { codeHash: string }).codeHash).not.toBe("123456");
     expect((db.calls.insertValues as { codeHash: string }).codeHash).toMatch(/^[a-f0-9]{64}$/);
+    const persistedJson = JSON.stringify(db.calls.insertValues);
+    expect(persistedJson).not.toContain("buyer@example.com");
+    expect(persistedJson).not.toContain("+8801712345678");
+    expect(persistedJson).not.toContain("123456");
     expect(db.calls.onConflictDoUpdate).toBeDefined();
   });
 
@@ -137,7 +159,7 @@ describe("customer auth OTP D1 challenges", () => {
       intent: "sign_in",
       identifier: "buyer@example.com",
       code: "123456",
-      encryptionKey: "test-signing-key",
+      encryptionKey: otpSigningKey,
       ttlSeconds: 300,
       resendCooldownSeconds: 120,
       maxAttempts: 5,
@@ -145,15 +167,16 @@ describe("customer auth OTP D1 challenges", () => {
   });
 
   it("claims a correct OTP by consuming the challenge in one guarded update", async () => {
+    const contactEmailEncrypted = encodeEncryptedCredential(await encryptCredentials("buyer@example.com", contactEncryptionKey));
+    const phoneEncrypted = encodeEncryptedCredential(await encryptCredentials("+8801712345678", contactEncryptionKey));
     const db = createDb({
       updateRows: [[{
         otpKey: "cust_otp:sms:+8801712345678",
         method: "phone",
         channel: "sms",
         intent: "sign_up",
-        identifier: "+8801712345678",
-        contactEmail: "buyer@example.com",
-        phone: "+8801712345678",
+        contactEmailEncrypted,
+        phoneEncrypted,
         expiresAt: 4_102_444_800,
         attempts: 1,
         maxAttempts: 5,
@@ -166,13 +189,15 @@ describe("customer auth OTP D1 challenges", () => {
       channel: "sms",
       identifier: "+8801712345678",
       code: "123456",
-      encryptionKey: "test-signing-key",
+      encryptionKey: otpSigningKey,
+      contactEncryptionKey,
     });
 
     expect(result).toMatchObject({
       intent: "sign_up",
       identifier: "+8801712345678",
       contactEmail: "buyer@example.com",
+      phone: "+8801712345678",
     });
     expect(db.update).toHaveBeenCalledTimes(1);
     expect(db.calls.updateSets[0]).toMatchObject({ status: "consumed" });
@@ -192,7 +217,7 @@ describe("customer auth OTP D1 challenges", () => {
       channel: "sms",
       identifier: "+8801712345678",
       code: "000000",
-      encryptionKey: "test-signing-key",
+      encryptionKey: otpSigningKey,
     })).rejects.toMatchObject({
       message: "Incorrect code. Please try again.",
       details: { attemptsLeft: 3 },
@@ -215,18 +240,19 @@ describe("customer auth OTP D1 challenges", () => {
       channel: "sms",
       identifier: "+8801712345678",
       code: "000000",
-      encryptionKey: "test-signing-key",
+      encryptionKey: otpSigningKey,
     })).rejects.toBeInstanceOf(RateLimitError);
   });
 
   it("rejects already consumed challenges without touching customer state", async () => {
+    const identifierHash = await hashCustomerAuthOtpIdentifier("+8801712345678", otpSigningKey);
     const db = createDb({
       updateRows: [[], []],
       selectGet: {
         otpKey: "cust_otp:sms:+8801712345678",
         method: "phone",
         channel: "sms",
-        identifier: "+8801712345678",
+        identifierHash,
         status: "consumed",
         attempts: 1,
         maxAttempts: 5,
@@ -240,7 +266,7 @@ describe("customer auth OTP D1 challenges", () => {
       channel: "sms",
       identifier: "+8801712345678",
       code: "123456",
-      encryptionKey: "test-signing-key",
+      encryptionKey: otpSigningKey,
     })).rejects.toBeInstanceOf(ValidationError);
 
     await expect(claimCustomerAuthOtpChallenge(db as never, {
@@ -249,7 +275,7 @@ describe("customer auth OTP D1 challenges", () => {
       channel: "sms",
       identifier: "+8801712345678",
       code: "123456",
-      encryptionKey: "test-signing-key",
+      encryptionKey: otpSigningKey,
     })).rejects.toThrow("Verification code has already been used. Please request a new code.");
   });
 

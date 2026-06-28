@@ -19,6 +19,7 @@ import {
     persistCustomerAuthOtpChallenge,
     deleteCustomerAuthOtpChallenge,
     cleanupExpiredCustomerAuthOtpChallenges,
+    buildCustomerAuthOtpStorageKey,
 } from "./customer-auth-otp-challenges";
 import {
     cleanupExpiredCustomerAuthOtpRateLimits,
@@ -54,10 +55,6 @@ export {
     cleanupExpiredCustomerAuthOtpChallenges,
     cleanupExpiredCustomerAuthOtpRateLimits,
 };
-
-function getOtpStorageKey(channel: CustomerAuthOtpChannel, normalizedIdentifier: string): string {
-    return `${OTP_PREFIX}${channel}:${normalizedIdentifier}`;
-}
 
 function getFallbackOtpChannel(method: "email" | "phone"): CustomerAuthOtpChannel {
     return method === "email" ? "email" : "sms";
@@ -127,6 +124,7 @@ export interface VerifyOtpInput {
     phone?: string;
     email?: string;
     encryptionKey?: string;
+    credentialEncryptionKey?: string;
     sessionHashKey?: string;
 }
 
@@ -632,9 +630,16 @@ export async function sendOtp(
         phone: input.phone,
     }, phoneCountryPolicy);
 
-    const otpKey = getOtpStorageKey(channel, normalizedIdentifier);
+    const otpKey = await buildCustomerAuthOtpStorageKey(channel, normalizedIdentifier, input.encryptionKey);
     const contactEmail = getPrimaryEmail(method, normalizedIdentifier, input.email);
     const contactPhone = getPrimaryPhone(method, normalizedIdentifier, input.phone, phoneCountryPolicy);
+    if (
+        intent === "sign_up" &&
+        ((method === "email" && contactPhone) || (method === "phone" && contactEmail)) &&
+        !input.credentialEncryptionKey?.trim()
+    ) {
+        throw new ServiceUnavailableError("Customer OTP contact encryption key is not configured.");
+    }
 
     // Resolve and validate the delivery transport before mutating rate-limit or OTP challenge state.
     const transport = getOtpTransport(method, policy, channel);
@@ -687,10 +692,11 @@ export async function sendOtp(
         channel,
         intent,
         identifier: normalizedIdentifier,
-        contactEmail,
-        phone: contactPhone,
+        contactEmail: intent === "sign_up" && method === "phone" ? contactEmail : undefined,
+        phone: intent === "sign_up" && method === "email" ? contactPhone : undefined,
         code,
         encryptionKey: input.encryptionKey,
+        contactEncryptionKey: input.credentialEncryptionKey,
         ttlSeconds: OTP_TTL_SECONDS,
         resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
         maxAttempts: OTP_MAX_ATTEMPTS,
@@ -749,7 +755,7 @@ export async function verifyOtp(
     const normalizedIdentifier = normalizePrimaryIdentifier(method, identifier, phoneCountryPolicy);
 
     const channel = input.channel ?? getFallbackOtpChannel(method);
-    const otpKey = getOtpStorageKey(channel, normalizedIdentifier);
+    const otpKey = await buildCustomerAuthOtpStorageKey(channel, normalizedIdentifier, input.encryptionKey);
 
     const challenge = await claimCustomerAuthOtpChallenge(db, {
         otpKey,
@@ -758,6 +764,7 @@ export async function verifyOtp(
         identifier: normalizedIdentifier,
         code,
         encryptionKey: input.encryptionKey,
+        contactEncryptionKey: input.credentialEncryptionKey,
     });
     const intent = normalizeCustomerAuthIntent(challenge.intent ?? input.intent);
     const verifiedEmail = challenge.method === "email" ? challenge.identifier : challenge.contactEmail;

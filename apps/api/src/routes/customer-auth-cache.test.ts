@@ -968,7 +968,7 @@ describe("customer auth private cache policy", () => {
     mocks.sendOtp.mockResolvedValue({
       success: true,
       message: "Verification code sent to your email",
-      otpStorageKey: "cust_otp:email:buyer@example.com",
+      otpStorageKey: "cust_otp:email:opaque_hash",
       deliveryKey: "otp_delivery_1",
       queuePayload: {
         type: "auth.send_otp",
@@ -1008,7 +1008,7 @@ describe("customer auth private cache policy", () => {
     expect(mocks.deleteCustomerAuthOtpChallenge).toHaveBeenCalledWith(
       {},
       {
-        otpKey: "cust_otp:email:buyer@example.com",
+        otpKey: "cust_otp:email:opaque_hash",
         deliveryKey: "otp_delivery_1",
       },
     );
