@@ -26,6 +26,7 @@ import {
   listPolarRefunds,
 } from "./polar";
 import { finalizeAcceptedRefundAttemptIds } from "./refund-service";
+import type { RefundNotificationFact } from "./refund-service";
 
 const REFUND_RECONCILIATION_LEASE_SECONDS = 5 * 60;
 const REFUND_RECONCILIATION_RETRY_SECONDS = 15 * 60;
@@ -87,6 +88,7 @@ export interface RefundReconciliationResult {
   deferred: number;
   errors: Array<{ attemptId: string; message: string }>;
   finalizedOrderIds: string[];
+  refundNotifications: RefundNotificationFact[];
   limit: number;
   hasMore: boolean;
 }
@@ -413,7 +415,11 @@ export async function reconcileRefundAttemptById(
   kv: KVNamespace | undefined,
   attemptId: string,
   options: Omit<RefundReconciliationOptions, "limit"> = {},
-): Promise<{ status: "finalized" | "failed" | "deferred"; orderIds: string[] }> {
+): Promise<{
+  status: "finalized" | "failed" | "deferred";
+  orderIds: string[];
+  refundNotifications: RefundNotificationFact[];
+}> {
   const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
   const attempt = await db
     .select({
@@ -434,7 +440,7 @@ export async function reconcileRefundAttemptById(
     .get() as RefundAttemptProbeRow | undefined;
 
   if (!attempt || !RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(attempt.status as RecoverableRefundAttemptStatus)) {
-    return { status: "deferred", orderIds: [] };
+    return { status: "deferred", orderIds: [], refundNotifications: [] };
   }
 
   if (attempt.status === "pending") {
@@ -443,7 +449,7 @@ export async function reconcileRefundAttemptById(
       providerStatus: "not_dispatched",
       error: "Refund attempt expired before provider dispatch and was released for retry.",
     }, nowSeconds);
-    return { status: "failed", orderIds: [] };
+    return { status: "failed", orderIds: [], refundNotifications: [] };
   }
 
   const outcome = attempt.status === "reconcile_required"
@@ -454,20 +460,24 @@ export async function reconcileRefundAttemptById(
     await markAcceptedBeforeFinalize(db, attempt, outcome, nowSeconds);
     try {
       const result = await finalizeAcceptedRefundAttemptIds(db, [attempt.id]);
-      return { status: "finalized", orderIds: result.orderIds };
+      return {
+        status: "finalized",
+        orderIds: result.orderIds,
+        refundNotifications: result.refundNotifications,
+      };
     } catch (error: unknown) {
       await markAttemptReconcileRequired(db, attempt, error, nowSeconds);
-      return { status: "deferred", orderIds: [] };
+      return { status: "deferred", orderIds: [], refundNotifications: [] };
     }
   }
 
   if (outcome.outcome === "rejected") {
     await markAttemptFailed(db, attempt, outcome, nowSeconds);
-    return { status: "failed", orderIds: [] };
+    return { status: "failed", orderIds: [], refundNotifications: [] };
   }
 
   await markAttemptDeferred(db, attempt, outcome, nowSeconds);
-  return { status: "deferred", orderIds: [] };
+  return { status: "deferred", orderIds: [], refundNotifications: [] };
 }
 
 export async function reconcileDueRefundAttempts(
@@ -496,6 +506,7 @@ export async function reconcileDueRefundAttempts(
     deferred: 0,
     errors: [],
     finalizedOrderIds: [],
+    refundNotifications: [],
     limit,
     hasMore: candidates.length > limit,
   };
@@ -513,6 +524,7 @@ export async function reconcileDueRefundAttempts(
       if (reconciliation.status === "finalized") {
         result.finalized += 1;
         result.finalizedOrderIds.push(...reconciliation.orderIds);
+        result.refundNotifications.push(...reconciliation.refundNotifications);
       } else if (reconciliation.status === "failed") {
         result.failed += 1;
       } else {

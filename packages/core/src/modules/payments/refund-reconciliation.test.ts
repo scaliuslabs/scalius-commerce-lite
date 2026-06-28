@@ -98,6 +98,13 @@ describe("refund attempt reconciliation", () => {
     mocks.finalizeAcceptedRefundAttemptIds.mockResolvedValue({
       orderIds: ["order_1"],
       finalizedAttemptIds: ["rfa_1"],
+      refundNotifications: [{
+        orderId: "order_1",
+        notificationType: "order_partially_refunded",
+        dedupeKey: "refund-reconcile:order_1:rfa_1:partial",
+        amount: 25,
+        refundId: "re_1",
+      }],
     });
   });
 
@@ -119,6 +126,13 @@ describe("refund attempt reconciliation", () => {
       failed: 0,
       deferred: 0,
       finalizedOrderIds: ["order_1"],
+      refundNotifications: [{
+        orderId: "order_1",
+        notificationType: "order_partially_refunded",
+        dedupeKey: "refund-reconcile:order_1:rfa_1:partial",
+        amount: 25,
+        refundId: "re_1",
+      }],
     });
     expect(mocks.retrieveStripeRefund).not.toHaveBeenCalled();
     expect(mocks.finalizeAcceptedRefundAttemptIds).toHaveBeenCalledWith(db, ["rfa_1"]);

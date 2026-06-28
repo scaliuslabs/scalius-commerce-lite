@@ -64,6 +64,8 @@ describe("finalizeAcceptedRefundAttemptIds", () => {
         orderId: "order_1",
         refundPaymentId: "refund_1",
         providerRefundId: "re_1",
+        amount: 100,
+        currency: "BDT",
       }],
       {
         id: "order_1",
@@ -90,6 +92,13 @@ describe("finalizeAcceptedRefundAttemptIds", () => {
     expect(result).toEqual({
       orderIds: ["order_1"],
       finalizedAttemptIds: ["rfa_1"],
+      refundNotifications: [{
+        orderId: "order_1",
+        notificationType: "order_refunded",
+        dedupeKey: "refund-reconcile:order_1:rfa_1:full",
+        amount: 100,
+        refundId: "re_1",
+      }],
     });
     expect(updateSets[0]).toMatchObject({ status: PaymentRecordStatus.REFUNDED });
     expect(updateSets[1]).toMatchObject({

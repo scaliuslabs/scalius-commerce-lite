@@ -66,6 +66,14 @@ export interface RefundResult {
     };
 }
 
+export interface RefundNotificationFact {
+    orderId: string;
+    notificationType: Extract<OrderNotificationType, "order_refunded" | "order_partially_refunded">;
+    dedupeKey: string;
+    amount: number;
+    refundId?: string;
+}
+
 const REFUND_PROVIDER_DEADLINE_MS = 25_000;
 const REFUND_ATTEMPT_LEASE_SECONDS = 5 * 60;
 const MAX_REFUND_ATTEMPT_ERROR_LENGTH = 500;
@@ -159,6 +167,14 @@ function buildFullRefundNotificationDedupeKey(orderId: string, refundGroupId: st
 
 function buildPartialRefundNotificationDedupeKey(orderId: string, refundGroupId: string): string {
     return `refund:${orderId}:${refundGroupId}:partial`;
+}
+
+function buildReconciledRefundNotificationDedupeKey(
+    orderId: string,
+    attemptIds: string[],
+    isFullRefund: boolean,
+): string {
+    return `refund-reconcile:${orderId}:${[...attemptIds].sort().join(",")}:${isFullRefund ? "full" : "partial"}`;
 }
 
 function computeRefundedBySourcePayment(
@@ -355,6 +371,7 @@ async function updateOrderStatusIfVersionMatches(
 export interface FinalizeAcceptedRefundAttemptsResult {
     orderIds: string[];
     finalizedAttemptIds: string[];
+    refundNotifications: RefundNotificationFact[];
 }
 
 function isCapturedPaymentRow(payment: Pick<OrderPayment, "paymentType" | "status">): boolean {
@@ -408,7 +425,7 @@ export async function finalizeAcceptedRefundAttemptIds(
 ): Promise<FinalizeAcceptedRefundAttemptsResult> {
     const uniqueAttemptIds = [...new Set(attemptIds.filter(Boolean))];
     if (uniqueAttemptIds.length === 0) {
-        return { orderIds: [], finalizedAttemptIds: [] };
+        return { orderIds: [], finalizedAttemptIds: [], refundNotifications: [] };
     }
 
     const attempts = await db
@@ -417,6 +434,8 @@ export async function finalizeAcceptedRefundAttemptIds(
             orderId: refundAttempts.orderId,
             refundPaymentId: refundAttempts.refundPaymentId,
             providerRefundId: refundAttempts.providerRefundId,
+            amount: refundAttempts.amount,
+            currency: refundAttempts.currency,
         })
         .from(refundAttempts)
         .where(inArray(refundAttempts.id, uniqueAttemptIds));
@@ -433,8 +452,10 @@ export async function finalizeAcceptedRefundAttemptIds(
 
     const finalizedOrderIds = new Set<string>();
     const finalizedAttemptIds: string[] = [];
+    const refundNotifications: RefundNotificationFact[] = [];
 
     for (const orderId of new Set(attempts.map((attempt) => attempt.orderId))) {
+        const orderAttempts = attempts.filter((attempt) => attempt.orderId === orderId);
         const order = await db
             .select({
                 id: orders.id,
@@ -489,6 +510,21 @@ export async function finalizeAcceptedRefundAttemptIds(
         }
 
         finalizedOrderIds.add(orderId);
+        const notificationAttemptIds = orderAttempts.map((attempt) => attempt.id);
+        const notificationRefundIds = orderAttempts
+            .map((attempt) => attempt.providerRefundId)
+            .filter((refundId): refundId is string => Boolean(refundId));
+        refundNotifications.push({
+            orderId,
+            notificationType: paymentState.isFullRefund ? "order_refunded" : "order_partially_refunded",
+            dedupeKey: buildReconciledRefundNotificationDedupeKey(
+                orderId,
+                notificationAttemptIds,
+                paymentState.isFullRefund,
+            ),
+            amount: roundPrice(orderAttempts.reduce((sum, attempt) => sum + Number(attempt.amount ?? 0), 0)),
+            refundId: notificationRefundIds.join(",") || undefined,
+        });
     }
 
     await db.update(refundAttempts).set({
@@ -504,6 +540,7 @@ export async function finalizeAcceptedRefundAttemptIds(
     return {
         orderIds: [...finalizedOrderIds],
         finalizedAttemptIds,
+        refundNotifications,
     };
 }
 
