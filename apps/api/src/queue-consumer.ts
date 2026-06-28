@@ -36,6 +36,7 @@ import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scali
 import {
   enqueueOrderBalancePaidNotificationForOrder,
   enqueueOrderCreatedNotificationForOrder,
+  enqueueOrderRefundNotificationForOrder,
 } from "./utils/order-notification-queue";
 import {
   claimAuthOtpDeliveryReceipt,
@@ -139,6 +140,37 @@ async function enqueueOrderNotificationAfterPaymentConfirmed(
   if (!result.enqueued) {
     console.warn(
       `[Queue] payment_balance_paid notification for confirmed ${options.gateway} order ${options.orderId} recorded but not enqueued: ${result.skippedReason}`,
+    );
+  }
+}
+
+async function enqueueOrderRefundNotificationAfterPolarWebhook(
+  db: ReturnType<typeof getDb>,
+  env: Env,
+  options: {
+    orderId: string;
+    notification?: {
+      notificationType: "order_refunded" | "order_partially_refunded";
+      dedupeKey: string;
+      data?: Record<string, unknown>;
+    };
+  },
+): Promise<void> {
+  if (!options.notification) return;
+
+  const result = await enqueueOrderRefundNotificationForOrder({
+    db,
+    queue: env.ORDER_NOTIFICATIONS_QUEUE,
+    orderId: options.orderId,
+    notificationType: options.notification.notificationType,
+    dedupeKey: options.notification.dedupeKey,
+    source: "payment-polar-refunded",
+    data: options.notification.data,
+  });
+
+  if (!result.enqueued) {
+    console.warn(
+      `[Queue] Polar refund notification for order ${options.orderId} recorded but not enqueued: ${result.skippedReason}`,
     );
   }
 }
@@ -577,6 +609,10 @@ async function processQueueMessage(
       });
       if (result.success) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
+        await enqueueOrderRefundNotificationAfterPolarWebhook(db, env, {
+          orderId: payload.orderId,
+          notification: result.notification,
+        });
         paymentWebhookStatus = "processed";
         paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
           gateway: "polar",

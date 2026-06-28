@@ -313,7 +313,7 @@ Messages processed independently with `Promise.allSettled`. Successful messages 
 | `payment.sslcommerz.failed` | `processPaymentFailed()` | Mark order failed; scheduled stale cleanup owns later archive/release |
 | `payment.polar.confirmed` | `processPaymentConfirmed()` | Convert smallest-unit->major-unit via `getDecimalPlaces()` |
 | `payment.polar.failed` | `processPaymentFailed()` | Mark order failed; scheduled stale cleanup owns later archive/release |
-| `payment.polar.refunded` | `processPolarWebhookRefund()` | Update payment status, release inventory on full refund (can originate from Polar dashboard) |
+| `payment.polar.refunded` | `processPolarWebhookRefund()` | Update payment status, release inventory on full refund, then enqueue a durable buyer refund notification when local processing succeeds (can originate from Polar dashboard) |
 | `order.notification` | `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM) | Send order status notifications across enabled channels (email, SMS via 4 providers, Meta WhatsApp template message, FCM push). Queue messages with `outboxId` create per-channel delivery receipts so retries skip accepted/skipped targets and keep the parent outbox retryable while any enabled target is retryable. |
 | `auth.send_otp` | Email / WhatsApp / SMS | Claim `auth_otp_delivery_receipts`, skip terminal/expired OTP attempts, then send via email (`sendEmail()` with Cloudflare Email Service default and Resend fallback), WhatsApp (Meta Graph API template), or SMS (`getActiveSmsProvider()` with 4 providers). Resend receives `deliveryKey` as `Idempotency-Key`; GenNet receives a deterministic receipt-derived `csms_id`. |
 

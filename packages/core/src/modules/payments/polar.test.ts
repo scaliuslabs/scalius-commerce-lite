@@ -93,7 +93,21 @@ describe("Polar webhook refund processing", () => {
       polarStatus: "refunded",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({
+      success: true,
+      notification: {
+        notificationType: "order_refunded",
+        dedupeKey: "polar-refund:order_1:full",
+        data: {
+          gateway: "polar",
+          polarStatus: "refunded",
+          amountRefunded: 10_000,
+          totalAmount: 10_000,
+          currency: "usd",
+          localRefundAmount: 100,
+        },
+      },
+    });
     expect(updates).toHaveLength(1);
     expect(updates[0]).toMatchObject({
       paidAmount: 0,
@@ -128,7 +142,21 @@ describe("Polar webhook refund processing", () => {
       polarStatus: "refunded",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({
+      success: true,
+      notification: {
+        notificationType: "order_refunded",
+        dedupeKey: "polar-refund:order_1:full",
+        data: {
+          gateway: "polar",
+          polarStatus: "refunded",
+          amountRefunded: 10_000,
+          totalAmount: 10_000,
+          currency: "usd",
+          localRefundAmount: 100,
+        },
+      },
+    });
     expect(updates[0]).toMatchObject({
       paidAmount: 0,
       balanceDue: 100,
@@ -187,7 +215,21 @@ describe("Polar webhook refund processing", () => {
       polarStatus: "partially_refunded",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({
+      success: true,
+      notification: {
+        notificationType: "order_partially_refunded",
+        dedupeKey: "polar-refund:order_1:partial:2500:10000:usd",
+        data: {
+          gateway: "polar",
+          polarStatus: "partially_refunded",
+          amountRefunded: 2_500,
+          totalAmount: 10_000,
+          currency: "usd",
+          localRefundAmount: 25,
+        },
+      },
+    });
     expect(updates[0]).toMatchObject({
       paidAmount: 75,
       balanceDue: 25,
@@ -216,7 +258,21 @@ describe("Polar webhook refund processing", () => {
       polarStatus: "refunded",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({
+      success: true,
+      notification: {
+        notificationType: "order_refunded",
+        dedupeKey: "polar-refund:order_1:full",
+        data: {
+          gateway: "polar",
+          polarStatus: "refunded",
+          amountRefunded: 10_000,
+          totalAmount: 10_000,
+          currency: "usd",
+          localRefundAmount: 0,
+        },
+      },
+    });
     expect(updates[0]).toMatchObject({
       paymentStatus: PaymentStatus.REFUNDED,
       balanceDue: 100,
@@ -249,7 +305,21 @@ describe("Polar webhook refund processing", () => {
       polarStatus: "refunded",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({
+      success: true,
+      notification: {
+        notificationType: "order_refunded",
+        dedupeKey: "polar-refund:order_1:full",
+        data: {
+          gateway: "polar",
+          polarStatus: "refunded",
+          amountRefunded: 10_000,
+          totalAmount: 10_000,
+          currency: "usd",
+          localRefundAmount: 0,
+        },
+      },
+    });
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
       db,
@@ -279,7 +349,21 @@ describe("Polar webhook refund processing", () => {
       polarStatus: "refunded",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({
+      success: true,
+      notification: {
+        notificationType: "order_refunded",
+        dedupeKey: "polar-refund:order_1:full",
+        data: {
+          gateway: "polar",
+          polarStatus: "refunded",
+          amountRefunded: 10_000,
+          totalAmount: 10_000,
+          currency: "usd",
+          localRefundAmount: 0,
+        },
+      },
+    });
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });

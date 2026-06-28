@@ -141,7 +141,7 @@ Payment webhook handlers attach the source `webhookEventId` to queued payment me
 | `payment.sslcommerz.failed` | `processPaymentFailed()` | Marks order as failed; scheduled stale cleanup handles later archive/release |
 | `payment.polar.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`) |
 | `payment.polar.failed` | `processPaymentFailed()` | Marks order as failed; scheduled stale cleanup handles later archive/release |
-| `payment.polar.refunded` | `processPolarWebhookRefund()` | CAS-updates payment and allowed order status transitions; releases inventory on pre-fulfillment full refund |
+| `payment.polar.refunded` | `processPolarWebhookRefund()` | CAS-updates payment and allowed order status transitions, releases inventory on pre-fulfillment full refund, and returns a post-commit buyer notification fact |
 
 ## Provider Details
 
@@ -265,6 +265,8 @@ COD collection validates against computed outstanding balance when a stored `bal
 8. On pre-fulfillment full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Same-status retries repair already-cancelled, non-deducted orders; fulfilled/deducted refunds do NOT auto-restock inventory.
 
 After local provider acceptance and order/payment finalization succeeds, `processRefund()` returns a private `refundNotification` fact for direct admin refunds. Full refunds use `order_refunded` with `refund:${orderId}:${refundGroupId}:full`; partial refunds use `order_partially_refunded` with `refund:${orderId}:${refundGroupId}:partial`. API routes enqueue those facts through the durable order-notification outbox and strip them from public responses.
+
+Polar dashboard/dispute refund webhooks are handled separately by `processPolarWebhookRefund()`. After the local CAS update or idempotent already-refunded check succeeds, it returns a private notification fact for the payment queue consumer. Full Polar refunds use `order_refunded` with `polar-refund:${orderId}:full`; partial Polar refunds use `order_partially_refunded` with `polar-refund:${orderId}:partial:${amountRefunded}:${totalAmount}:${currency}` so repeated cumulative webhooks dedupe while later larger partial refunds can notify again.
 
 Active refund attempts also block conflicting post-sale order mutations. Status updates, bulk/manual shipment creation, COD collection/return, admin order edits, trash/restore/delete flows, shipment-driven order-status sync, and direct fulfillment-status updates call the shared `refund-attempt-guard.ts` helper before changing order/payment/inventory state. COD failure logging remains allowed because it records delivery evidence only and does not collect money, return stock, or change order status.
 
