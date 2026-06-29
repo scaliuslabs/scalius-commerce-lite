@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   sendWhatsAppTemplateMessage: vi.fn(),
   getDecimalPlaces: vi.fn(() => 2),
   getActiveSmsProvider: vi.fn(),
+  getNotificationProviderBlock: vi.fn(),
+  isNotificationProviderBreakerFailure: vi.fn(),
+  markNotificationProviderBlocked: vi.fn(),
   getEncryptionKey: vi.fn(() => "test-key"),
   getCredentialEncryptionKey: vi.fn(() => "credential-key"),
   invalidateProductAvailabilityCaches: vi.fn(),
@@ -94,6 +97,12 @@ vi.mock("@scalius/shared/currency", () => ({
 
 vi.mock("@scalius/core/integrations/sms", () => ({
   getActiveSmsProvider: mocks.getActiveSmsProvider,
+}));
+
+vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
+  getNotificationProviderBlock: mocks.getNotificationProviderBlock,
+  isNotificationProviderBreakerFailure: mocks.isNotificationProviderBreakerFailure,
+  markNotificationProviderBlocked: mocks.markNotificationProviderBlocked,
 }));
 
 vi.mock("./utils/encryption-key", () => ({
@@ -227,6 +236,17 @@ describe("handleQueueBatch payment confirmation retries", () => {
       rawResponse: JSON.stringify({ messageId: "wamid.otp.1", messageStatus: "accepted" }),
     });
     mocks.getActiveSmsProvider.mockResolvedValue(null);
+    mocks.getNotificationProviderBlock.mockResolvedValue(null);
+    mocks.isNotificationProviderBreakerFailure.mockImplementation((value: string | null | undefined) => {
+      const status = value?.trim() ?? "";
+      return /auth(?:orization|entication)?\s+(?:required|failed|error)/i.test(status)
+        || /unauthori[sz]ed/i.test(status)
+        || /forbidden/i.test(status)
+        || /invalid\s+(?:api\s*)?(?:key|token|credential)/i.test(status)
+        || /could not be decrypted/i.test(status)
+        || /\b(?:http|status|code|error)[^0-9]*(?:401|402|403|405)\b/i.test(status);
+    });
+    mocks.markNotificationProviderBlocked.mockResolvedValue(undefined);
     mocks.getAdminNotificationChannels.mockResolvedValue({});
     mocks.enqueueOrderCreatedNotificationForOrder.mockResolvedValue({
       orderId: "order_1",
@@ -1533,13 +1553,20 @@ describe("handleQueueBatch payment confirmation retries", () => {
     const batchEventLogs = vi.mocked(console.log).mock.calls
       .map(([entry]) => String(entry))
       .filter((entry) => entry.includes("event=queue_batch_"));
+    const allQueueLogs = [
+      ...vi.mocked(console.log).mock.calls,
+      ...vi.mocked(console.warn).mock.calls,
+      ...vi.mocked(console.error).mock.calls,
+    ].map(([entry]) => String(entry)).join("\n");
 
     expect(batchEventLogs.length).toBeGreaterThan(0);
     expect(batchEventLogs.join("\n")).not.toContain("private-buyer@example.com");
     expect(batchEventLogs.join("\n")).not.toContain("987654");
+    expect(allQueueLogs).not.toContain("private-buyer@example.com");
+    expect(allQueueLogs).not.toContain("987654");
   });
 
-  it("retries OTP email when providers fall back to local logging", async () => {
+  it("skips OTP email when providers fall back to local logging", async () => {
     mocks.sendEmail.mockResolvedValue({
       success: false,
       provider: "log",
@@ -1558,18 +1585,27 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     await handleQueueBatch(createBatch([message]), {} as Env);
 
-    expect(mocks.markAuthOtpDeliveryReceiptFailed).toHaveBeenCalledWith(
+    expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(
+      { id: "db" },
+      {
+        channel: "email",
+        provider: "email",
+        reason: "No configured email provider available; email not delivered",
+      },
+    );
+    expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalledWith(
       { id: "db" },
       expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
-      expect.any(Error),
+      "No configured email provider available; email not delivered",
       {
         provider: "log",
         providerMessageId: undefined,
         providerStatus: "No configured email provider available; email not delivered",
       },
     );
-    expect(message.ack).not.toHaveBeenCalled();
-    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(mocks.markAuthOtpDeliveryReceiptFailed).not.toHaveBeenCalled();
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
   it("passes deterministic OTP client references to the active SMS provider", async () => {
@@ -1610,6 +1646,99 @@ describe("handleQueueBatch payment confirmation retries", () => {
         providerStatus: "SUCCESS",
       },
     );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips and blocks SMS OTP when provider credentials are rejected", async () => {
+    const smsProvider = {
+      name: "smsnetbd",
+      validateConfig: vi.fn(() => null),
+      sendSms: vi.fn().mockResolvedValue({
+        success: false,
+        rawStatus: "error=405: Authorization required",
+        retryable: false,
+      }),
+    };
+    mocks.getActiveSmsProvider.mockResolvedValue(smsProvider);
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_sms_bad_creds",
+      otpExpiresAt: 4_102_444_800,
+      method: "phone",
+      allowedMethod: "sms_otp",
+      identifier: "+8801712345678",
+      code: "654321",
+      name: "Buyer",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(smsProvider.sendSms).toHaveBeenCalledTimes(1);
+    expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(
+      { id: "db" },
+      {
+        channel: "sms",
+        provider: "smsnetbd",
+        reason: "error=405: Authorization required",
+      },
+    );
+    expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
+      "error=405: Authorization required",
+      {
+        provider: "smsnetbd",
+        providerMessageId: undefined,
+        providerStatus: "error=405: Authorization required",
+        rawResponse: undefined,
+      },
+    );
+    expect(mocks.markAuthOtpDeliveryReceiptFailed).not.toHaveBeenCalled();
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips SMS OTP provider calls while provider is blocked until settings save", async () => {
+    const smsProvider = {
+      name: "smsnetbd",
+      validateConfig: vi.fn(() => null),
+      sendSms: vi.fn(),
+    };
+    mocks.getActiveSmsProvider.mockResolvedValue(smsProvider);
+    mocks.getNotificationProviderBlock.mockResolvedValueOnce({
+      channel: "sms",
+      provider: "smsnetbd",
+      reason: "error=405: Authorization required",
+      blockedAt: 1_800,
+    });
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_sms_blocked",
+      otpExpiresAt: 4_102_444_800,
+      method: "phone",
+      allowedMethod: "sms_otp",
+      identifier: "+8801712345678",
+      code: "654321",
+      name: "Buyer",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(smsProvider.sendSms).not.toHaveBeenCalled();
+    expect(mocks.markNotificationProviderBlocked).not.toHaveBeenCalled();
+    expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
+      "provider_blocked_until_settings_save: error=405: Authorization required",
+      {
+        provider: "smsnetbd",
+        providerMessageId: undefined,
+        providerStatus: "provider_blocked_until_settings_save",
+        rawResponse: "error=405: Authorization required",
+      },
+    );
+    expect(mocks.markAuthOtpDeliveryReceiptFailed).not.toHaveBeenCalled();
+    expect(message.retry).not.toHaveBeenCalled();
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
