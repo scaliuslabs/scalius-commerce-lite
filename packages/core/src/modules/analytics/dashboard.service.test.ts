@@ -6,6 +6,7 @@ import { getRecentOrders } from "./dashboard.service";
 function createRecentOrdersDb(rows: unknown[]) {
     const chain = {
         from: vi.fn(() => chain),
+        where: vi.fn(() => chain),
         orderBy: vi.fn(() => chain),
         limit: vi.fn(() => chain),
         then: (resolve: (value: unknown[]) => void, reject?: (reason: unknown) => void) =>
@@ -42,6 +43,7 @@ describe("dashboard query observability", () => {
         const result = await getRecentOrders(db, 3);
 
         expect(chain.limit).toHaveBeenCalledWith(3);
+        expect(chain.where).toHaveBeenCalledOnce();
         expect(result).toEqual([
             {
                 id: "ord_1",

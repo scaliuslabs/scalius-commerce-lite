@@ -758,6 +758,10 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "lib", "api-query-options", "dashboard-home.ts"),
       "utf8",
     );
+    const dashboardStatsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "DashboardStats.tsx"),
+      "utf8",
+    );
     const loaderSource = source.slice(
       source.indexOf("loader: async"),
       source.indexOf("head: ()"),
@@ -792,6 +796,8 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("useDashboardActivityEnabled");
     expect(source).toContain("enabled: shouldFetchActivity");
     expect(source).toContain("requestIdleCallback");
+    expect(dashboardStatsSource).not.toContain("requestIdleCallback");
+    expect(dashboardStatsSource).not.toContain("setShouldLoadChart");
     expect(currencyHookSource).toContain(
       "~/lib/api-query-options/currency",
     );

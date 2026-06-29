@@ -262,6 +262,7 @@ export async function getRecentOrders(db: Database, limit = 5) {
             createdAt: sql<string>`datetime(${orders.createdAt}, 'unixepoch')`,
         })
         .from(orders)
+        .where(sql`${orders.deletedAt} is null`)
         .orderBy(desc(orders.createdAt))
         .limit(limit));
 
