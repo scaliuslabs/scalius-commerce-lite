@@ -631,6 +631,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       { id: "db" },
       {
         orderId: "order-polar",
+        polarCheckoutId: "checkout_polar",
         amountRefunded: 10_000,
         totalAmount: 10_000,
         currency: "usd",
