@@ -1061,6 +1061,46 @@ describe("order notification dispatch", () => {
         expect(result.hasRetryableFailure).toBe(false);
     });
 
+    it("records push setup failures before token receipt fanout", async () => {
+        const pushDb = createPushDb([{ token: "fcm_token_1" }]);
+        mocks.getFirebaseAdminMessaging.mockImplementationOnce(() => {
+            throw new Error("Firebase service account JSON is missing required fields");
+        });
+
+        const result = await sendOrderNotification(
+            pushDb.db,
+            {
+                id: "order_push_preflight",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+            "https://api.example.test",
+            { outboxId: "outbox_push_preflight" },
+        );
+
+        expect(mocks.createOrderNotificationDeliveryTarget).toHaveBeenCalledWith(expect.objectContaining({
+            outboxId: "outbox_push_preflight",
+            orderId: "order_push_preflight",
+            channel: "push",
+            provider: "fcm",
+            recipient: "firebase-setup:order_push_preflight:order_created",
+            recipientMasked: "admin-fcm",
+        }));
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            pushDb.db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "Firebase service account JSON is missing required fields",
+            expect.objectContaining({
+                provider: "fcm",
+                providerStatus: "Firebase service account JSON is missing required fields",
+            }),
+        );
+        expect(pushDb.db.select).toHaveBeenCalledTimes(1);
+        expect(mocks.sendEachForMulticast).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
     it("keeps transient FCM failures retryable in receipt mode", async () => {
         const pushDb = createPushDb([{ token: "retryable_fcm_token" }]);
         mocks.sendEachForMulticast.mockResolvedValueOnce({

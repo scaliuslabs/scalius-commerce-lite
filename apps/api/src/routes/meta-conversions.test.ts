@@ -124,6 +124,23 @@ describe("Meta conversions public event route", () => {
     expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
   });
 
+  it("fails closed when the trusted storefront origin is not configured", async () => {
+    const { app } = createTestApp();
+    const response = await app.request(
+      "/api/v1/meta/events",
+      createRequest({
+        eventId: "Purchase:order_1",
+        eventSourceUrl: "https://store.example/order-success",
+      }),
+      {
+        CACHE: { get: vi.fn(), put: vi.fn() },
+      } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
+  });
+
   it("rate limits public browser event ingestion before sending to Meta", async () => {
     mocks.rateLimit.mockResolvedValueOnce({
       allowed: false,

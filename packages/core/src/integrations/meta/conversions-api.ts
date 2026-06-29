@@ -130,10 +130,19 @@ async function prepareUserData(
   if (userData.subscription_id)
     prepared.subscription_id = userData.subscription_id as string;
   if (userData.lead_id) prepared.lead_id = userData.lead_id as number;
-  if (userData.external_id)
-    prepared.external_id = Array.isArray(userData.external_id)
-      ? userData.external_id as string[]
-      : [userData.external_id as string];
+  if (userData.external_id) {
+    const externalIds = Array.isArray(userData.external_id)
+      ? userData.external_id
+      : [userData.external_id];
+    prepared.external_id = await Promise.all(
+      externalIds
+        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        .map((value) => sha256(value.trim().toLowerCase())),
+    );
+    if (prepared.external_id.length === 0) {
+      delete prepared.external_id;
+    }
+  }
 
   // Hash PII fields according to Meta's formatting rules
   if (userData.em) prepared.em = [await hashEmail(userData.em as string)];

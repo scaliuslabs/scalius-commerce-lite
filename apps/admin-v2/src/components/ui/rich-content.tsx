@@ -1,6 +1,5 @@
 import { cn } from "@scalius/shared/utils";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
-import "./rich-content.css";
 
 interface RichContentProps {
   content: string;
