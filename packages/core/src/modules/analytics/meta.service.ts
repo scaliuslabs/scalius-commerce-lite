@@ -51,11 +51,34 @@ export async function logCapiEvent(
 ): Promise<void> {
     try {
         const { eventTime, ...restOfLogData } = logData;
-        await db.insert(metaConversionsLogs).values({
+        const values = {
             id: createId(),
             ...restOfLogData,
             eventTime: new Date(eventTime * 1000),
-        });
+        };
+
+        try {
+            await db.insert(metaConversionsLogs).values(values);
+        } catch (insertError) {
+            const existing = await getCapiEventLog(db, logData.eventId);
+            if (!existing) throw insertError;
+
+            if (existing.status === "success" && logData.status === "failed") {
+                return;
+            }
+
+            await db
+                .update(metaConversionsLogs)
+                .set({
+                    eventName: logData.eventName,
+                    status: logData.status,
+                    requestPayload: logData.requestPayload,
+                    responsePayload: logData.responsePayload,
+                    errorMessage: logData.errorMessage,
+                    eventTime: new Date(eventTime * 1000),
+                })
+                .where(eq(metaConversionsLogs.eventId, logData.eventId));
+        }
 
         // Fire-and-forget: cleanup is best-effort and non-critical.
         // Not awaited intentionally — the caller should not wait for cleanup
@@ -64,6 +87,17 @@ export async function logCapiEvent(
     } catch (error: unknown) {
         console.error("Failed to write to Meta CAPI log:", error);
     }
+}
+
+export async function getCapiEventLog(
+    db: Database,
+    eventId: string,
+): Promise<typeof metaConversionsLogs.$inferSelect | undefined> {
+    return await db
+        .select()
+        .from(metaConversionsLogs)
+        .where(eq(metaConversionsLogs.eventId, eventId))
+        .get();
 }
 
 /**

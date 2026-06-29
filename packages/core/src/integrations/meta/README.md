@@ -1,10 +1,10 @@
 # Meta Conversions API (CAPI)
 
-Server-side event tracking via Meta's Conversions API. Sends e-commerce events (ViewContent, AddToCart, Purchase, etc.) from the storefront to Meta for ad attribution and optimization.
+Server-side event tracking via Meta's Conversions API. Browser storefront events cover product/search/cart/checkout behavior, while Purchase CAPI is backend-owned from committed order/payment state.
 
 ## Connection Status
 
-**Fully connected end-to-end.** The storefront sends events to the API worker, which forwards them to Meta's Graph API.
+**Connected end-to-end with durable Purchase delivery.** The storefront sends broad browser events to the API worker, while completed purchases are recorded in a D1 outbox and sent from backend order/payment authority points.
 
 ```
 Storefront (Browser)              API Worker (Hono)                Core Package
@@ -14,6 +14,10 @@ meta-capi.ts                      meta-conversions.ts              conversions-a
                                                                      prepareUserData()
                                                                      meta.service.ts (settings/logging)
                                                                      crypto-utils.ts (hashing)
+
+order-success.astro               orders/queue/scheduled           purchase-outbox.ts
+  Pixel Purchase only ----------> commit/payment confirmation ----> meta_capi_purchase_outbox
+                                                                     sendCapiEvent()
 ```
 
 ## End-to-End Flow
@@ -21,7 +25,7 @@ meta-capi.ts                      meta-conversions.ts              conversions-a
 1. Storefront browser code calls `sendServerEvent()` from `apps/storefront/src/lib/tracking/meta-capi.ts`
 2. Pixel/CAPI paired events share the same browser-generated `eventId`; Pixel receives it as Meta's `eventID` option and CAPI receives it as `event_id`
 3. The browser dispatcher collects attribution data (`_fbp`, `_fbc`, user agent), strips sensitive checkout/payment query parameters from `eventSourceUrl`, and merges only explicitly supplied event-specific `userData`
-4. Purchase tracking on `/order-success` is guarded by `apps/storefront/src/lib/tracking/meta-purchase-guard.ts` so browser reloads do not replay the same order conversion
+4. Purchase Pixel tracking on `/order-success` is guarded by `apps/storefront/src/lib/tracking/meta-purchase-guard.ts` so browser reloads do not replay the same order conversion; the success page passes `sendCapi: false` because backend Purchase CAPI owns delivery
 5. Dispatches `POST /api/v1/meta/events` via `sendMetaCapiEvent()` from `@/lib/api/tracking`
 6. API route (`apps/api/src/routes/meta-conversions.ts`) validates the payload via Zod schema, requires the event source origin to match `STOREFRONT_URL`, rate-limits the public endpoint through API KV when available, and enriches with IP/user-agent from request headers
 7. Calls `sendCapiEvent()` from this package, which:
@@ -32,6 +36,17 @@ meta-capi.ts                      meta-conversions.ts              conversions-a
    e. Logs success/failure to `metaConversionsLogs` with request payload user data redacted, `test_event_code` redacted, and event source URL queries removed
    f. Log retention configured via `logRetentionDays` from settings (default 30 days)
 8. API route uses a guarded `ctx.waitUntil()` when present and awaits directly in local/test contexts where Hono has no Worker execution context
+
+## Purchase CAPI Outbox
+
+`packages/core/src/integrations/meta/purchase-outbox.ts` owns durable Purchase CAPI delivery:
+- Event id is always `Purchase:{orderId}`, matching the browser Pixel `eventID` for Meta deduplication.
+- COD/final-at-create storefront orders are recorded from `runStorefrontOrderPostCommitSideEffects()`.
+- Stripe, SSLCommerz, and Polar online purchases are recorded only after `processPaymentConfirmed()` succeeds in the payment queue.
+- The D1 table `meta_capi_purchase_outbox` stores `orderId`, `eventId`, status, attempts, leases, retry timing, and terminal send/skip timestamps. It does not store buyer PII payload snapshots.
+- Each send attempt rebuilds the event from committed `orders` and `order_items`, adding purchase-only matching fields from order phone, email, name, city, country, and customer id. `sendCapiEvent()` hashes PII before Meta receives it.
+- Scheduled maintenance calls `flushPendingMetaPurchaseOutbox()` with a small limit so missed/failed attempts are retried without requiring a new Cloudflare Queue binding.
+- Disabled/missing CAPI setup and merchant-actionable provider credential/config HTTP failures are non-retryable skips, not hot retries. Transient 429/5xx/network failures remain retryable with D1 backoff.
 
 ## Supported Events
 
@@ -89,13 +104,14 @@ Event logs are stored in `metaConversionsLogs` table:
 - `eventId` (unique), `eventName`, `status` (success/failed)
 - `requestPayload`, `responsePayload`, `errorMessage`; request payloads are redacted before writes and redacted again on admin reads for legacy rows
 - `eventTime`, `createdAt`
+- Duplicate event ids update the existing diagnostic row instead of inserting noisy duplicates; a successful event is not downgraded by a later failed duplicate
 - Auto-cleaned based on `logRetentionDays` setting via lazy cleanup on each log write
 
 ## Service Layer (`packages/core/src/modules/analytics/meta.service.ts`)
 
 Standalone functions (not a class):
 - `getCapiSettings(db, encryptionKey?)` -- Fetches singleton settings row and gracefully decrypts `accessToken` when possible
-- `logCapiEvent(db, logData, retentionHours)` -- Inserts log entry and triggers lazy cleanup
+- `logCapiEvent(db, logData, retentionHours)` -- Inserts or updates a diagnostic log entry and triggers lazy cleanup
 - Cleanup runs based on retention hours derived from `logRetentionDays * 24`
 
 ## Storefront Client (`apps/storefront/src/lib/tracking/meta-capi.ts`)
@@ -114,5 +130,5 @@ This runs in the browser. The actual CAPI call happens server-side in the API wo
 ## Dependencies
 
 - Web Crypto API (`crypto.subtle`) -- SHA-256 hashing
-- `@scalius/database` -- `metaConversionsSettings`, `metaConversionsLogs` tables
+- `@scalius/database` -- `metaConversionsSettings`, `metaConversionsLogs`, `metaCapiPurchaseOutbox`, `orders`, and `orderItems` tables
 - `@scalius/core/modules/analytics/meta.service` -- `getCapiSettings()` and `logCapiEvent()` functions

@@ -16,6 +16,7 @@ import { nanoid } from "nanoid";
 
 import { ValidationError } from "../../errors";
 import { reserveStockBatch, releaseMultiple } from "../inventory";
+import { ensureAndProcessMetaPurchaseForOrder } from "../../integrations/meta/purchase-outbox";
 import { initCODTracking } from "../payments/cod";
 import {
     buildOrderCreatedNotificationDedupeKey,
@@ -40,6 +41,8 @@ interface MinimalKvNamespace {
 export interface StorefrontOrderCommitRuntime {
     CACHE?: MinimalKvNamespace;
     ORDER_NOTIFICATIONS_QUEUE?: OrderNotificationQueue;
+    STOREFRONT_URL?: string;
+    CREDENTIAL_ENCRYPTION_KEY?: string;
 }
 
 export interface StorefrontOrderCommitResult {
@@ -412,6 +415,16 @@ export async function runStorefrontOrderPostCommitSideEffects(
     if (!shouldCreateOrderCreatedNotification(payload.orderData)) {
         return;
     }
+
+    await ensureAndProcessMetaPurchaseForOrder({
+        db,
+        orderId: payload.orderData.id,
+        source: "storefront-order",
+        storefrontUrl: env?.STOREFRONT_URL,
+        encryptionKey: env?.CREDENTIAL_ENCRYPTION_KEY,
+    }).catch((error: unknown) => {
+        console.error("[orders/commit] Meta Purchase CAPI side effect failed for order", payload.orderData.id, error);
+    });
 
     try {
         const notificationResult = await recordAndEnqueueOrderNotification({

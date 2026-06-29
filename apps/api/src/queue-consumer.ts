@@ -21,6 +21,7 @@
 import { getDb } from "@scalius/database/client";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
 import { processPolarWebhookRefund } from "@scalius/core/modules/payments/polar";
+import { ensureAndProcessMetaPurchaseForOrder } from "@scalius/core/integrations/meta/purchase-outbox";
 import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications";
 import {
@@ -152,6 +153,30 @@ async function enqueueOrderNotificationAfterPaymentConfirmed(
     console.warn(
       `[Queue] payment_balance_paid notification for confirmed ${options.gateway} order ${options.orderId} recorded but not enqueued: ${result.skippedReason}`,
     );
+  }
+}
+
+function scheduleMetaPurchaseAfterPaymentConfirmed(
+  db: ReturnType<typeof getDb>,
+  env: Env,
+  executionCtx: ExecutionContext | undefined,
+  options: {
+    orderId: string;
+    gateway: "stripe" | "sslcommerz" | "polar";
+  },
+): void {
+  const task = ensureAndProcessMetaPurchaseForOrder({
+    db,
+    orderId: options.orderId,
+    source: `payment-${options.gateway}-confirmed`,
+    storefrontUrl: env.STOREFRONT_URL,
+    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+  }).catch((error: unknown) => {
+    console.error(`[Queue] Meta Purchase CAPI side effect failed for confirmed ${options.gateway} order ${options.orderId}:`, error);
+  });
+
+  if (executionCtx && typeof executionCtx.waitUntil === "function") {
+    executionCtx.waitUntil(task);
   }
 }
 
@@ -617,6 +642,10 @@ async function processQueueMessage(
           paymentType,
           amount: amountInMajor,
         });
+        scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, {
+          orderId: payload.orderId,
+          gateway: "stripe",
+        });
       }
       paymentWebhookStatus = completionStatus;
       paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
@@ -694,6 +723,10 @@ async function processQueueMessage(
           paymentType,
           amount: payload.amount,
         });
+        scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, {
+          orderId: payload.orderId,
+          gateway: "sslcommerz",
+        });
       }
       paymentWebhookStatus = completionStatus;
       paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
@@ -758,6 +791,10 @@ async function processQueueMessage(
           gateway: "polar",
           paymentType,
           amount: recordAmount,
+        });
+        scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, {
+          orderId: payload.orderId,
+          gateway: "polar",
         });
       }
       paymentWebhookStatus = completionStatus;

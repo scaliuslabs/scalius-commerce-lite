@@ -34,6 +34,7 @@ interface CapiUserData {
 
 interface MetaEventOptions {
   eventId?: string;
+  sendCapi?: boolean;
 }
 
 function pixelEventOptions(eventId: string) {
@@ -447,15 +448,17 @@ export function trackFbPurchase(
     quantity: data.num_items,
   });
 
-  // CAPI: Server-side Event
-  sendServerEvent({
-    eventId,
-    eventName: "Purchase",
-    userData: userData, // Pass explicit PII for the most important event.
-    customData: {
-      ...data,
-    },
-  });
+  if (options.sendCapi !== false) {
+    // CAPI: Server-side Event
+    sendServerEvent({
+      eventId,
+      eventName: "Purchase",
+      userData: userData, // Pass explicit PII for the most important event.
+      customData: {
+        ...data,
+      },
+    });
+  }
 }
 
 /**

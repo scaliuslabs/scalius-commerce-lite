@@ -136,4 +136,32 @@ describe("storefront analytics", () => {
       }),
     );
   });
+
+  it("can keep browser Purchase Pixel/Zaraz while suppressing browser CAPI", () => {
+    trackFbPurchase(
+      {
+        content_ids: ["sku_1"],
+        content_type: "product",
+        contents: [{ id: "sku_1", quantity: 1, item_price: 1000 }],
+        currency: "BDT",
+        num_items: 1,
+        value: 1000,
+        order_id: "order_1",
+      },
+      {},
+      { eventId: "Purchase:order_1", sendCapi: false },
+    );
+
+    expect(window.fbq).toHaveBeenCalledWith(
+      "track",
+      "Purchase",
+      expect.objectContaining({ order_id: "order_1" }),
+      { eventID: "Purchase:order_1" },
+    );
+    expect(window.zaraz?.ecommerce).toHaveBeenCalledWith(
+      "Order Completed",
+      expect.objectContaining({ order_id: "order_1" }),
+    );
+    expect(sendServerEventMock).not.toHaveBeenCalled();
+  });
 });
