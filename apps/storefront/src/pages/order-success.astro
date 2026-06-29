@@ -415,7 +415,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
             value: order.totalAmount,
           },
           {},
-          { eventId: claim.eventId }
+          { eventId: claim.eventId, sendCapi: false }
         );
         console.log("FB Purchase event tracked for order:", order.id);
       }, 500);

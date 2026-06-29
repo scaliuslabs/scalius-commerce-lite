@@ -111,4 +111,84 @@ describe("Meta Conversions API log redaction", () => {
       await sha256("buyer@example.com"),
     ]);
   });
+
+  it("marks disabled or missing CAPI settings as non-retryable", async () => {
+    mocks.getCapiSettings.mockResolvedValue(null);
+
+    const result = await sendCapiEvent({} as never, {
+      event_name: "Purchase",
+      event_time: 1_800_000_000,
+      event_source_url: "https://store.example/order-success",
+      event_id: "Purchase:order_1",
+      action_source: "website",
+      user_data: {},
+      custom_data: {
+        order_id: "order_1",
+        currency: "BDT",
+        value: 1000,
+      },
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: "CAPI not configured",
+      retryable: false,
+      skipped: true,
+    });
+    expect(mocks.logCapiEvent).toHaveBeenCalledWith(
+      {} as never,
+      expect.objectContaining({
+        eventId: "Purchase:order_1",
+        status: "failed",
+      }),
+      30 * 24,
+    );
+  });
+
+  it("treats Meta credential/configuration HTTP failures as non-retryable", async () => {
+    mocks.getCapiSettings.mockResolvedValue({
+      isEnabled: true,
+      pixelId: "pixel_123",
+      accessToken: "bad_token",
+      testEventCode: null,
+      logRetentionDays: 30,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      error: { message: "Invalid OAuth access token." },
+    }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    })));
+
+    const result = await sendCapiEvent({} as never, {
+      event_name: "Purchase",
+      event_time: 1_800_000_000,
+      event_source_url: "https://store.example/order-success",
+      event_id: "Purchase:order_1",
+      action_source: "website",
+      user_data: {},
+      custom_data: {
+        order_id: "order_1",
+        currency: "BDT",
+        value: 1000,
+      },
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: "Invalid OAuth access token.",
+      retryable: false,
+    });
+    expect(mocks.logCapiEvent).toHaveBeenCalledWith(
+      {} as never,
+      expect.objectContaining({
+        eventId: "Purchase:order_1",
+        status: "failed",
+        responsePayload: JSON.stringify({
+          error: { message: "Invalid OAuth access token." },
+        }, null, 2),
+      }),
+      30 * 24,
+    );
+  });
 });

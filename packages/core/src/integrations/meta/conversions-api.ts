@@ -78,6 +78,19 @@ interface SendCapiEventOptions {
   encryptionKey?: string;
 }
 
+export interface SendCapiEventResult {
+  success: boolean;
+  response?: Record<string, unknown>;
+  error?: string;
+  retryable?: boolean;
+  skipped?: boolean;
+}
+
+type CapiSendError = Error & {
+  responsePayload?: Record<string, unknown>;
+  retryable?: boolean;
+};
+
 function sanitizeEventSourceUrl(url: string): string {
   try {
     const parsed = new URL(url);
@@ -182,7 +195,7 @@ export async function sendCapiEvent(
   db: Database,
   event: Omit<ServerEvent, "user_data"> & { user_data: Record<string, unknown> },
   options: SendCapiEventOptions = {},
-) {
+): Promise<SendCapiEventResult> {
   const settings = await getCapiSettings(db, options.encryptionKey);
   if (!settings || !settings.isEnabled || !settings.pixelId || !settings.accessToken) {
     // FIX: Write a diagnostic log so admin can see skipped events
@@ -208,7 +221,7 @@ export async function sendCapiEvent(
     }, fallbackRetentionHours);
 
     console.log("Meta CAPI is disabled or not configured. Skipping event.", { reason: errorMessage });
-    return { success: false, error: "CAPI not configured" };
+    return { success: false, error: "CAPI not configured", retryable: false, skipped: true };
   }
 
   const retentionHours = settings.logRetentionDays * 24;
@@ -237,7 +250,10 @@ export async function sendCapiEvent(
     if (!response.ok) {
       const errorObj = responseData.error as Record<string, unknown> | undefined;
       const errorMessage = String(errorObj?.message || `HTTP Error: ${response.status}`);
-      throw new Error(errorMessage);
+      const error = new Error(errorMessage) as CapiSendError;
+      error.responsePayload = responseData;
+      error.retryable = response.status === 429 || response.status >= 500;
+      throw error;
     }
     await logCapiEvent(db, {
       ...logPayload,
@@ -247,6 +263,7 @@ export async function sendCapiEvent(
     console.log(`Successfully sent '${event.event_name}' event to Meta CAPI.`);
     return { success: true, response: responseData };
   } catch (error: unknown) {
+    const capiError = error as CapiSendError;
     console.error(
       `Failed to send '${event.event_name}' event to Meta CAPI:`,
       error,
@@ -255,10 +272,14 @@ export async function sendCapiEvent(
       ...logPayload,
       status: "failed",
       errorMessage: error instanceof Error ? error.message : String(error),
-      responsePayload: (error as { response?: Response }).response
-        ? JSON.stringify(await (error as { response: Response }).response.json())
+      responsePayload: capiError.responsePayload
+        ? JSON.stringify(capiError.responsePayload, null, 2)
         : "",
     }, retentionHours);
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      retryable: capiError.retryable ?? true,
+    };
   }
 }

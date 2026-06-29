@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     cleanupStaleAbandonedCheckouts: vi.fn(),
     archiveStaleIncompleteOrders: vi.fn(),
     flushPendingOrderNotificationOutbox: vi.fn(),
+    flushPendingMetaPurchaseOutbox: vi.fn(),
     cleanupExpiredCustomerAuthOtpChallenges: vi.fn(),
     cleanupExpiredCustomerAuthOtpRateLimits: vi.fn(),
     cleanupExpiredCustomerSessions: vi.fn(),
@@ -39,6 +40,10 @@ vi.mock("@scalius/core/modules/orders/stale-incomplete-orders", () => ({
 
 vi.mock("@scalius/core/modules/notifications", () => ({
   flushPendingOrderNotificationOutbox: mocks.flushPendingOrderNotificationOutbox,
+}));
+
+vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
+  flushPendingMetaPurchaseOutbox: mocks.flushPendingMetaPurchaseOutbox,
 }));
 
 vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
@@ -76,6 +81,7 @@ import {
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
   CUSTOMER_SESSION_SWEEP_LIMIT,
+  META_PURCHASE_OUTBOX_SWEEP_LIMIT,
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
   REFUND_ATTEMPT_RECONCILIATION_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
@@ -139,6 +145,13 @@ describe("runScheduledMaintenance", () => {
       failed: 0,
       skipped: 0,
       staleQueued: 0,
+    });
+    mocks.flushPendingMetaPurchaseOutbox.mockResolvedValue({
+      scanned: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      busy: 0,
     });
     mocks.cleanupExpiredCustomerAuthOtpChallenges.mockResolvedValue({
       scanned: 0,
@@ -243,6 +256,13 @@ describe("runScheduledMaintenance", () => {
       failed: 0,
       skipped: 0,
       staleQueued: 1,
+    });
+    mocks.flushPendingMetaPurchaseOutbox.mockResolvedValue({
+      scanned: 2,
+      sent: 1,
+      failed: 0,
+      skipped: 1,
+      busy: 0,
     });
     mocks.reconcileDueRefundAttempts.mockResolvedValue({
       scanned: 1,
@@ -351,12 +371,19 @@ describe("runScheduledMaintenance", () => {
       queue: env.ORDER_NOTIFICATIONS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
     });
+    expect(mocks.flushPendingMetaPurchaseOutbox).toHaveBeenCalledWith({
+      db: mocks.db,
+      storefrontUrl: undefined,
+      encryptionKey: undefined,
+      limit: META_PURCHASE_OUTBOX_SWEEP_LIMIT,
+    });
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_started"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("cron=*/15 * * * *"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("scheduledTime=2026-06-20T12:00:00.000Z"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("operation=inventory_expiry_sweep"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_completed"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("staleQueued=1"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Meta Purchase outbox flush"));
     expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledWith(mocks.db, undefined, {
       encryptionKey: undefined,
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,

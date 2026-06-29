@@ -158,6 +158,32 @@ export const metaConversionsLogs = sqliteTable("meta_conversions_logs", {
         .default(UNIX_NOW),
 });
 
+export const metaCapiPurchaseOutbox = sqliteTable("meta_capi_purchase_outbox", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    eventId: text("event_id").notNull(),
+    source: text("source").notNull(),
+    status: text("status", {
+        enum: ["pending", "processing", "sent", "failed", "skipped"],
+    }).notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    lastError: text("last_error"),
+    sentAt: integer("sent_at"),
+    skippedAt: integer("skipped_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("meta_capi_purchase_outbox_order_id_unique").on(table.orderId),
+    uniqueIndex("meta_capi_purchase_outbox_event_id_unique").on(table.eventId),
+    index("meta_capi_purchase_outbox_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
+    index("meta_capi_purchase_outbox_claim_idx").on(table.status, table.claimExpiresAt),
+]);
+
 export type Discount = InferSelectModel<typeof discounts>;
 export type DiscountProduct = InferSelectModel<typeof discountProducts>;
 export type DiscountCollection = InferSelectModel<typeof discountCollections>;
@@ -165,3 +191,4 @@ export type DiscountUsage = InferSelectModel<typeof discountUsage>;
 export type DiscountCustomerRedemption = InferSelectModel<typeof discountCustomerRedemptions>;
 export type MetaConversionsSettings = InferSelectModel<typeof metaConversionsSettings>;
 export type MetaConversionsLog = InferSelectModel<typeof metaConversionsLogs>;
+export type MetaCapiPurchaseOutbox = InferSelectModel<typeof metaCapiPurchaseOutbox>;

@@ -3,6 +3,7 @@ import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/orders/abandoned-checkout-cleanup";
 import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete-orders";
 import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
+import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
   cleanupExpiredCustomerAuthOtpRateLimits,
@@ -22,6 +23,7 @@ export const ABANDONED_CHECKOUT_SWEEP_LIMIT = 100;
 export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
 export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 10;
+export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 10;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
@@ -238,6 +240,27 @@ async function runScheduledMaintenanceInner(
       `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
         `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, ` +
         `skipped=${notificationOutbox.skipped}, staleQueued=${notificationOutbox.staleQueued}`,
+    );
+  }
+
+  const metaPurchaseOutbox = await timed("meta_purchase_outbox_flush", () =>
+    flushPendingMetaPurchaseOutbox({
+      db,
+      storefrontUrl: env.STOREFRONT_URL,
+      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+      limit: META_PURCHASE_OUTBOX_SWEEP_LIMIT,
+    }),
+  );
+  if (
+    metaPurchaseOutbox.scanned > 0 ||
+    metaPurchaseOutbox.failed > 0 ||
+    metaPurchaseOutbox.skipped > 0 ||
+    metaPurchaseOutbox.busy > 0
+  ) {
+    console.log(
+      `[scheduled] Meta Purchase outbox flush: scanned=${metaPurchaseOutbox.scanned}, ` +
+        `sent=${metaPurchaseOutbox.sent}, failed=${metaPurchaseOutbox.failed}, ` +
+        `skipped=${metaPurchaseOutbox.skipped}, busy=${metaPurchaseOutbox.busy}`,
     );
   }
 
