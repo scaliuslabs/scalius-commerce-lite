@@ -196,6 +196,25 @@ describe("admin route graph boundaries", () => {
     expect(notificationSource).toContain("SMS notifications are locked until an active SMS provider is ready.");
     expect(notificationSource).toContain("smsProviderConfigured");
     expect(notificationSource).toContain('ch.key === "sms" && !isSmsConfigured');
+    expect(notificationSource).toContain("Admin push notifications are locked until Firebase service account credentials are ready.");
+    expect(notificationSource).toContain("pushConfigured");
+    expect(notificationSource).toContain('ch.key === "push" && !isPushConfigured');
+  });
+
+  it("keeps the deferred rich-text editor client render flicker-free", () => {
+    const tiptapSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapEditor.tsx"),
+      "utf8",
+    );
+    const deferredSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "DeferredTiptapEditor.tsx"),
+      "utf8",
+    );
+
+    expect(tiptapSource).toContain("immediatelyRender: false,");
+    expect(deferredSource).toContain("loadTiptapEditorModule().finally");
+    expect(deferredSource).toContain("min-h-[237px]");
+    expect(deferredSource).toContain("h-[200px]");
   });
 
   it("keeps admin route guards off the full Better Auth runtime", () => {
@@ -1121,6 +1140,8 @@ describe("admin route graph boundaries", () => {
 
     expect(routeSource).toContain("const isHydrated = useHydrated()");
     expect(routeSource).toContain("enabled: isHydrated");
+    expect(routeSource).toContain("const hydratedShipments = isHydrated ? shipments : []");
+    expect(routeSource).toContain("isHydrated && Array.isArray(providers)");
     expect(paymentSource).toContain("const isHydrated = useHydrated()");
     expect(paymentSource).toContain("enabled: isHydrated");
     expect(paymentSource).toContain("enabled: isHydrated && isCOD");

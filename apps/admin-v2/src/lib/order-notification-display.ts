@@ -77,6 +77,9 @@ export function describeNotificationIssue(value: string | null | undefined): str
   if (normalized.includes("sender")) {
     return "Provider rejected the sender ID. Use an approved sender or disable this channel.";
   }
+  if (normalized.includes("delivery_attempt_limit_reached")) {
+    return "Delivery stopped after repeated provider failures. Check credentials and settings before sending more notifications.";
+  }
   if (normalized.includes("delivery_receipt_busy")) {
     return "A previous retry is still cooling down; the outbox will not resend before its schedule.";
   }

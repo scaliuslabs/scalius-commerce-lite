@@ -201,8 +201,14 @@ export interface NotificationChannelsPayload {
   smsProviderError?: string | null;
 }
 export type UpdateNotificationChannelsInput = NotificationChannelsPayload;
-export type AdminNotificationChannelsPayload = NotificationChannelsPayload;
-export type UpdateAdminNotificationChannelsInput = NotificationChannelsPayload;
+export interface AdminNotificationChannelsPayload {
+  channels: Record<string, string[]>;
+  pushConfigured?: boolean;
+  pushError?: string | null;
+}
+export interface UpdateAdminNotificationChannelsInput {
+  channels: Record<string, string[]>;
+}
 
 export const getSettingsByCategory = createServerFn({ method: "GET" })
   .validator((data: SettingsByCategoryInput) => data)

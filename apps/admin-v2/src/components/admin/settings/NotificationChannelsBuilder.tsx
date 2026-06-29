@@ -87,6 +87,8 @@ export function NotificationChannelsBuilder() {
   const [isSaving, setIsSaving] = useState(false);
 
   const [adminChannels, setAdminChannels] = useState<AdminChannelConfig>(getDefaultAdminConfig());
+  const [isPushConfigured, setIsPushConfigured] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
   const [isAdminLoading, setIsAdminLoading] = useState(true);
   const [isAdminSaving, setIsAdminSaving] = useState(false);
 
@@ -137,7 +139,14 @@ export function NotificationChannelsBuilder() {
 
     async function loadAdminChannels() {
       try {
-        const data = await getAdminNotificationChannels() as { channels?: Record<string, string[]> };
+        const data = await getAdminNotificationChannels() as {
+          channels?: Record<string, string[]>;
+          pushConfigured?: boolean;
+          pushError?: string | null;
+        };
+        const pushConfigured = Boolean(data?.pushConfigured);
+        setIsPushConfigured(pushConfigured);
+        setPushError(data?.pushError ?? null);
         const channelData = data?.channels;
         if (channelData && typeof channelData === "object") {
           const config = getDefaultAdminConfig();
@@ -145,7 +154,7 @@ export function NotificationChannelsBuilder() {
             const enabledChannels = channelData[status.key];
             if (Array.isArray(enabledChannels)) {
               for (const ch of ADMIN_CHANNELS) {
-                config[status.key][ch.key] = enabledChannels.includes(ch.key);
+                config[status.key][ch.key] = pushConfigured && enabledChannels.includes(ch.key);
               }
             }
           }
@@ -176,6 +185,9 @@ export function NotificationChannelsBuilder() {
   };
 
   const handleAdminToggle = (status: AdminStatusKey, channel: AdminChannelKey) => {
+    if (channel === "push" && !isPushConfigured) {
+      return;
+    }
     setAdminChannels((prev) => ({
       ...prev,
       [status]: {
@@ -388,6 +400,15 @@ export function NotificationChannelsBuilder() {
             </div>
           ) : (
             <>
+              {!isPushConfigured && (
+                <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    Admin push notifications are locked until Firebase service account credentials are ready.
+                    {pushError ? ` ${pushError}` : ""}
+                  </span>
+                </div>
+              )}
               <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
@@ -416,6 +437,7 @@ export function NotificationChannelsBuilder() {
                           <td key={ch.key} className="text-center py-3 px-4">
                             <Checkbox
                               checked={adminChannels[status.key]?.[ch.key] ?? false}
+                              disabled={ch.key === "push" && !isPushConfigured}
                               onCheckedChange={() =>
                                 handleAdminToggle(status.key, ch.key)
                               }
