@@ -232,6 +232,10 @@ function sanitizeAttributes(
     sanitized.rel = [...rel].join(" ");
   }
 
+  if (tagName === "img") {
+    addCloudflareImageDimensions(sanitized);
+  }
+
   return sanitized;
 }
 
@@ -282,6 +286,35 @@ function sanitizeSrcset(value: string): string {
     })
     .filter(Boolean)
     .join(", ");
+}
+
+function addCloudflareImageDimensions(attributes: Record<string, string>): void {
+  const src = attributes.src;
+  if (!src || (attributes.width && attributes.height)) return;
+
+  const dimensions = getCloudflareImageTransformDimensions(src);
+  if (!dimensions) return;
+
+  attributes.width ||= String(dimensions.width);
+  attributes.height ||= String(dimensions.height);
+}
+
+function getCloudflareImageTransformDimensions(src: string): { width: number; height: number } | null {
+  const match = src.match(/\/cdn-cgi\/image\/([^/]+)\//i);
+  if (!match?.[1]) return null;
+
+  let width: number | null = null;
+  let height: number | null = null;
+  for (const option of match[1].split(",")) {
+    const [rawKey, rawValue] = option.split("=");
+    const key = rawKey?.trim().toLowerCase();
+    const value = Number.parseInt(rawValue?.trim() ?? "", 10);
+    if (!Number.isSafeInteger(value) || value <= 0 || value > 10_000) continue;
+    if (key === "width") width = value;
+    if (key === "height") height = value;
+  }
+
+  return width && height ? { width, height } : null;
 }
 
 function sanitizeTokenList(value: string): string {
