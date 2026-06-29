@@ -19,6 +19,10 @@ const TiptapEditor = lazy(() =>
 
 const RICH_CONTENT_BLOCK_RE = /<(img|video|iframe|table|hr)\b/i;
 
+function getDeferredEditorMinHeightClass(compact: boolean) {
+  return compact ? "min-h-[237px]" : "min-h-[257px]";
+}
+
 function hasRenderableContent(content: string) {
   const text = content
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -46,7 +50,13 @@ function EditorLoadingShell({
   compact?: boolean;
 }) {
   return (
-    <div className={cn("overflow-hidden rounded-md border bg-background", className)}>
+    <div
+      className={cn(
+        "overflow-hidden rounded-md border bg-background",
+        getDeferredEditorMinHeightClass(Boolean(compact)),
+        className,
+      )}
+    >
       <div className="h-10 border-b bg-muted/30 p-2">
         <div className="h-4 w-36 animate-pulse rounded bg-muted" />
       </div>
@@ -155,6 +165,7 @@ export function DeferredTiptapEditor({
       ref={containerRef}
       className={cn(
         "overflow-hidden rounded-md border bg-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        getDeferredEditorMinHeightClass(compact),
         className,
       )}
       role="textbox"
