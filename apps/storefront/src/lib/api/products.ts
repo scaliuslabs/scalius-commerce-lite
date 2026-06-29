@@ -15,7 +15,7 @@ import {
   getApiV1ProductsBySlug,
   getApiV1Products,
   getApiV1CategoriesBySlugProducts,
-  getApiV1Search,
+  getApiV1ProductsSearch,
 } from "@scalius/api-client/sdk";
 import { buildCanonicalQueryString } from "@/lib/cache-key";
 import { normalizeSearchQuery } from "@/lib/search-query";
@@ -270,51 +270,43 @@ export async function getAllProducts(
  * Searches for products based on a query, with pagination.
  * Intended for use in order forms or quick product lookups.
  *
- * NOTE: This uses the global /search endpoint which returns products without
- * inline variants. If you need variants, fetch them separately with getProductVariants().
- *
  * @param search The search term.
- * @param _page The page number for pagination (not supported by /search - included for API compatibility).
+ * @param page The page number for pagination.
  * @param limit The number of results per page.
  * @returns A promise resolving to a paginated list of products.
  */
 export async function searchProductsForForm(
   search: string,
-  _page: number = 1,
+  page: number = 1,
   limit: number = 10,
 ): Promise<PaginatedResponse<
   Product & { variants?: ProductVariant[] }
 > | null> {
-  if (!search || !search.trim()) {
+  const normalizedSearch = normalizeSearchQuery(search);
+  if (!normalizedSearch) {
     return {
       data: [],
-      pagination: { page: 1, limit, total: 0, totalPages: 0 },
+      pagination: { page, limit, total: 0, totalPages: 0 },
     };
   }
 
   try {
-    const { data } = await getApiV1Search({
+    const { data } = await getApiV1ProductsSearch({
       client: getConfiguredSdkClient(),
-      query: { q: search, limit } as Record<string, unknown>,
+      query: { search: normalizedSearch, page, limit },
     });
 
-    const d = unwrapEnvelope<{ products: Product[] }>(data);
+    const d = unwrapEnvelope<PaginatedResponse<Product & { variants?: ProductVariant[] }>>(data);
     if (d) {
-      const products = d.products ?? [];
       return {
-        data: products as (Product & { variants?: ProductVariant[] })[],
-        pagination: {
-          page: 1,
-          limit,
-          total: products.length,
-          totalPages: 1,
-        },
+        data: d.data ?? [],
+        pagination: d.pagination,
       };
     }
     return null;
   } catch (error: unknown) {
     console.error(
-      `Error searching for products with query "${search}":`,
+      `Error searching for products with query "${normalizedSearch}":`,
       error,
     );
     return null;
