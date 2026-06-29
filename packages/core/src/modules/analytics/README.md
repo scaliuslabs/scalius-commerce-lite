@@ -54,7 +54,7 @@ Returns the full dashboard metrics contract for legacy/full-summary callers:
 - `totalRevenue` -- lifetime revenue (excludes cancelled/returned)
 
 ### `getRecentOrders(db: Database, limit = 5)`
-Returns N most recent orders with customerName, totalAmount, status, createdAt (converted from unix to Date).
+Returns N most recent non-deleted orders with customerName, totalAmount, status, createdAt (converted from unix to Date).
 
 ### `getDailyActivityData(db: Database, days: number)`
 Returns per-day arrays for the last N days with zero-filling for days with no data:
@@ -65,6 +65,14 @@ Dashboard reads emit generic Worker log events under `[dashboard-query]` with
 Labels are `summary_stats`, `full_stats`, `recent_orders`, and
 `daily_activity_{days}d`; payloads include duration and attempt counts only, not
 order/customer values.
+
+Dashboard SQL/index changes should be evidence-driven. On the current production
+D1 shape, `recent_orders` with `deleted_at IS NULL` uses `orders_dashboard_agg_idx`,
+`daily_activity_90d` uses `orders_dashboard_agg_idx` for orders and
+`customers_dashboard_activity_idx` for customers, and remote query plans were
+sub-millisecond on 2026-06-29. Avoid adding dashboard-specific write-path indexes
+unless `[dashboard-query]` logs or remote `EXPLAIN QUERY PLAN` output show a real
+slow/retry hotspot.
 
 ## Meta Conversions API
 
