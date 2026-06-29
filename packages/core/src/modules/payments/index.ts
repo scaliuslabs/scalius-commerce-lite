@@ -82,7 +82,7 @@ export {
   getStripe,
 } from "./stripe";
 export { initSSLCommerzSession, validateSSLCommerzIPN, validateSSLCommerzPayment, initiateSSLCommerzRefund, querySSLCommerzRefundStatus } from "./sslcommerz";
-export { createPolarCheckout, createPolarRefund, listPolarRefunds, verifyPolarWebhook } from "./polar";
+export { createPolarCheckout, createPolarRefund, findReusablePolarCheckout, listPolarRefunds, verifyPolarWebhook } from "./polar";
 export { initCODTracking, recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
 
 // --- Payment processing ---

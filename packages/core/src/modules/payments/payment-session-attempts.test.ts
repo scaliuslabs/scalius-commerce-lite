@@ -324,6 +324,7 @@ function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[] } {
             return [{
               id: row.id,
               attemptKey: row.attemptKey,
+              attempts: row.attempts,
               providerCorrelationId: row.providerCorrelationId,
             }];
           },
@@ -392,7 +393,12 @@ function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[] } {
               exactConflictAttemptKey = null;
               exactConflictSelectCount = 0;
             }
-            return [{ id: row.id, attemptKey: row.attemptKey, providerCorrelationId: row.providerCorrelationId }];
+            return [{
+              id: row.id,
+              attemptKey: row.attemptKey,
+              attempts: row.attempts,
+              providerCorrelationId: row.providerCorrelationId,
+            }];
           };
           const query = {
             returning: async () => applyUpdate(),

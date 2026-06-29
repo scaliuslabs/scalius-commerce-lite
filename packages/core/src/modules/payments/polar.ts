@@ -8,7 +8,13 @@ import { and, eq, sql } from "drizzle-orm";
 import { orders, OrderStatus, PaymentStatus } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { PolarSettings } from "./gateway-settings";
-import type { CreatePolarCheckoutParams, PolarCheckoutResult, PolarRefundParams, PolarRefundResult } from "./types";
+import type {
+    CreatePolarCheckoutParams,
+    FindReusablePolarCheckoutParams,
+    PolarCheckoutResult,
+    PolarRefundParams,
+    PolarRefundResult,
+} from "./types";
 import type {
   PaymentProvider,
   CreatePaymentParams,
@@ -31,6 +37,8 @@ import { computePaymentStateAfterRefund } from "./payment-state";
 
 let _cachedClient: Polar | null = null;
 let _cachedClientKey: string | null = null;
+const POLAR_CHECKOUT_RECOVERY_LIMIT = 100;
+const POLAR_ATTEMPT_METADATA_KEY = "scaliusPaymentAttemptKey";
 
 function getPolarClient(settings: PolarSettings): Polar {
     const server = settings.sandbox ? "sandbox" : "production";
@@ -99,12 +107,14 @@ export async function createPolarCheckout(
                     ],
                 },
                 successUrl: params.successUrl,
-                ...(params.cancelUrl ? { cancelUrl: params.cancelUrl } : {}),
+                ...(params.cancelUrl ? { returnUrl: params.cancelUrl } : {}),
                 metadata: {
                     orderId: params.orderId,
                     paymentType: params.paymentType,
+                    ...(params.idempotencyKey ? { [POLAR_ATTEMPT_METADATA_KEY]: params.idempotencyKey } : {}),
                     ...(params.metadata ?? {}),
                 },
+                ...(params.customerId ? { externalCustomerId: params.customerId } : {}),
                 ...(params.customerEmail ? { customerEmail: params.customerEmail } : {}),
                 ...(params.customerName ? { customerName: params.customerName } : {}),
             },
@@ -142,6 +152,82 @@ export async function createPolarCheckout(
                 error instanceof Error ? error.message : "Unknown Polar API error",
         };
     }
+}
+
+export async function findReusablePolarCheckout(
+    settings: PolarSettings,
+    params: FindReusablePolarCheckoutParams,
+): Promise<PolarCheckoutResult | null> {
+    try {
+        const client = getPolarClient(settings);
+        const pageIterator = await client.checkouts.list(
+            {
+                productId: params.productId,
+                status: "open",
+                limit: POLAR_CHECKOUT_RECOVERY_LIMIT,
+                sorting: ["-created_at"],
+                ...(params.customerId ? { externalCustomerId: params.customerId } : {}),
+                ...(!params.customerId && params.customerEmail ? { query: params.customerEmail } : {}),
+            },
+            {
+                retries: { strategy: "none" },
+                ...(params.requestTimeoutMs ? { timeoutMs: params.requestTimeoutMs } : {}),
+                ...(params.signal ? { signal: params.signal } : {}),
+            },
+        );
+
+        for await (const page of pageIterator) {
+            for (const checkout of page.result.items) {
+                if (!isReusablePolarCheckout(checkout, params)) continue;
+                return {
+                    success: true,
+                    checkoutUrl: checkout.url,
+                    checkoutId: checkout.id,
+                    recovered: true,
+                };
+            }
+            break;
+        }
+
+        return null;
+    } catch (error: unknown) {
+        if (isProviderTimeoutError(error, params.signal)) {
+            return {
+                success: false,
+                error: "Polar checkout recovery did not respond before the payment timeout. Please try again.",
+                timedOut: true,
+            };
+        }
+        console.error("[Polar] Error looking up reusable checkout session:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown Polar checkout recovery error",
+        };
+    }
+}
+
+function isReusablePolarCheckout(
+    checkout: {
+        id?: string;
+        url?: string;
+        amount?: number;
+        currency?: string;
+        productId?: string | null;
+        metadata?: Record<string, unknown>;
+    },
+    params: FindReusablePolarCheckoutParams,
+): checkout is { id: string; url: string; metadata: Record<string, unknown> } {
+    const metadata = checkout.metadata ?? {};
+    return (
+        Boolean(checkout.id) &&
+        Boolean(checkout.url) &&
+        checkout.productId === params.productId &&
+        checkout.amount === params.amount &&
+        checkout.currency?.toLowerCase() === params.currency.toLowerCase() &&
+        metadata[POLAR_ATTEMPT_METADATA_KEY] === params.idempotencyKey &&
+        metadata.orderId === params.orderId &&
+        metadata.paymentType === params.paymentType
+    );
 }
 
 // ---------------------------------------------------------------------------

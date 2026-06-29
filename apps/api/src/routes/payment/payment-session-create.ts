@@ -7,7 +7,7 @@ import {
   buildSSLCommerzTranId,
   initSSLCommerzSession,
 } from "@scalius/core/modules/payments/sslcommerz";
-import { createPolarCheckout } from "@scalius/core/modules/payments/polar";
+import { createPolarCheckout, findReusablePolarCheckout } from "@scalius/core/modules/payments/polar";
 import {
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
@@ -556,6 +556,77 @@ export async function createPolarPaymentSession(
   }
   if (attemptClaim.status === "processing") return attemptClaim;
 
+  const polarAttemptKey = attemptIdentity.attemptKey;
+  const polarMetadata = {
+    orderId: input.orderId,
+    paymentType: policy.paymentType,
+    originalAmount: String(originalLocalAmount),
+    originalCurrency,
+    exchangeRate: String(exchangeRate),
+  };
+
+  if (attemptClaim.attempt.attempts > 1) {
+    const recovered = await withPaymentProviderDeadline(
+      "Polar",
+      (signal, requestTimeoutMs) => findReusablePolarCheckout(polarSettings, {
+        orderId: input.orderId,
+        amount: amountInCents,
+        currency,
+        productId: polarSettings.productId,
+        paymentType: policy.paymentType,
+        customerId: order.customerId ?? undefined,
+        customerEmail: order.customerEmail ?? undefined,
+        idempotencyKey: polarAttemptKey,
+        requestTimeoutMs,
+        signal,
+      }),
+    );
+
+    if (recovered && !recovered.success) {
+      await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, recovered.error || "Failed to recover Polar checkout")
+        .catch((error: unknown) => console.error("[payments] Failed to mark Polar recovery attempt failed:", error));
+      if (isPaymentProviderTimedOut(recovered)) {
+        throw createPaymentProviderTimeoutError("Polar");
+      }
+      throw new ServiceUnavailableError(
+        "Could not safely verify whether Polar already created this checkout. Please try again shortly.",
+      );
+    }
+
+    if (recovered?.success && recovered.checkoutUrl) {
+      const responsePayload: PolarSessionResponse = {
+        gatewayUrl: recovered.checkoutUrl,
+        checkoutId: recovered.checkoutId,
+      };
+
+      await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
+        providerSessionId: recovered.checkoutId,
+        response: responsePayload,
+      });
+
+      await scheduleOrderRecoveryHint(
+        c,
+        db
+          .update(orders)
+          .set({
+            paymentIntentId: recovered.checkoutId,
+            paymentMethod: PaymentMethod.POLAR,
+            updatedAt: sql`unixepoch()`,
+          })
+          .where(eq(orders.id, input.orderId)),
+        "[payments] Polar session was recovered, but local order recovery hint failed:",
+      );
+
+      return {
+        gateway: "polar",
+        paymentType: policy.paymentType,
+        amount: originalLocalAmount,
+        currency: originalCurrency,
+        hosted: responsePayload,
+      };
+    }
+  }
+
   let result: Awaited<ReturnType<typeof createPolarCheckout>>;
   try {
     result = await withPaymentProviderDeadline(
@@ -568,15 +639,11 @@ export async function createPolarPaymentSession(
         paymentType: policy.paymentType,
         successUrl,
         cancelUrl,
+        customerId: order.customerId ?? undefined,
         customerName: order.customerName,
         customerEmail: order.customerEmail ?? undefined,
-        metadata: {
-          orderId: input.orderId,
-          paymentType: policy.paymentType,
-          originalAmount: String(originalLocalAmount),
-          originalCurrency,
-          exchangeRate: String(exchangeRate),
-        },
+        idempotencyKey: polarAttemptKey,
+        metadata: polarMetadata,
         requestTimeoutMs,
         signal,
       })

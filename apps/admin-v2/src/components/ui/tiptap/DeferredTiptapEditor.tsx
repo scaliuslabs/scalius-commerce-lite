@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { RichContent } from "../rich-content";
+import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 
 let tiptapEditorModulePromise: Promise<{
   default: typeof import("./TiptapEditor").TiptapEditor;
@@ -24,7 +25,7 @@ function getDeferredEditorMinHeightClass(compact: boolean) {
 }
 
 function getDeferredEditorViewportClass(compact: boolean) {
-  return compact ? "h-[200px]" : "max-h-64 min-h-[200px]";
+  return compact ? "h-[200px]" : "h-[300px]";
 }
 
 function hasRenderableContent(content: string) {
@@ -61,12 +62,12 @@ function EditorLoadingShell({
         className,
       )}
     >
-      <div className="h-10 border-b bg-muted/30 p-2">
-        <div className="h-4 w-36 animate-pulse rounded bg-muted" />
-      </div>
-      <div className={cn("p-4", getDeferredEditorViewportClass(Boolean(compact)))}>
-        <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-        <div className="mt-3 h-4 w-1/2 animate-pulse rounded bg-muted" />
+      <TiptapToolbarSkeleton compact={Boolean(compact)} />
+      <div className={cn("overflow-y-auto border-t", getDeferredEditorViewportClass(Boolean(compact)))}>
+        <div className="p-4">
+          <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+          <div className="mt-3 h-4 w-1/2 animate-pulse rounded bg-muted" />
+        </div>
       </div>
     </div>
   );
@@ -110,7 +111,13 @@ export function DeferredTiptapEditor({
     let observer: IntersectionObserver | null = null;
 
     const preloadEditor = () => {
-      void loadTiptapEditorModule();
+      if (mountRequestedRef.current) return;
+      mountRequestedRef.current = true;
+      void loadTiptapEditorModule().finally(() => {
+        if (isAliveRef.current) {
+          setShouldMountEditor(true);
+        }
+      });
     };
 
     const schedulePreload = () => {
@@ -179,11 +186,11 @@ export function DeferredTiptapEditor({
       onFocus={mountEditor}
       onPointerDown={mountEditor}
     >
-      <div className="cursor-text p-4 text-sm">
+      <TiptapToolbarSkeleton compact={compact} />
+      <div className={cn("cursor-text overflow-y-auto border-t text-sm", getDeferredEditorViewportClass(compact))}>
         <div
           className={cn(
-            "overflow-y-auto rounded-sm pr-2 leading-6",
-            getDeferredEditorViewportClass(compact),
+            "min-h-[200px] max-w-none p-4 leading-6",
             hasContent ? "text-foreground" : "text-muted-foreground",
           )}
         >
