@@ -92,6 +92,7 @@ const NON_RETRYABLE_DISPATCH_ERROR_PATTERNS = [
     /forbidden/i,
     /invalid\s+(?:api\s*)?(?:key|token|credential)/i,
     /api\s*(?:key|token)\s+(?:invalid|expired|missing|not configured)/i,
+    /\b(?:http|status|code|error)?\s*(?:400|401|402|403|404|405|422)\b/i,
     /not configured/i,
     /permission/i,
     /sender/i,

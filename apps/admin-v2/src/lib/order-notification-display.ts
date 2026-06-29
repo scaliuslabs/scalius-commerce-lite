@@ -1,0 +1,161 @@
+import type { OrderNotificationReceiptDto } from "./api-functions/orders";
+
+export interface OrderNotificationReceiptDisplayGroup {
+  key: string;
+  receipts: OrderNotificationReceiptDto[];
+  channel: string;
+  provider: string;
+  status: string;
+  count: number;
+  recipientLabel: string;
+  providerStatus: string | null;
+  lastError: string | null;
+  showLastError: boolean;
+  latestTimestamp: string | number | null;
+  totalAttempts: number;
+  maxAttempts: number;
+}
+
+const TERMINAL_DELIVERY_STATUSES = new Set(["accepted", "delivered", "skipped"]);
+
+export function describeNotificationIssue(value: string | null | undefined): string | null {
+  const text = value?.trim();
+  if (!text) return null;
+  const normalized = text.toLowerCase();
+
+  if (normalized.includes("missing_email_recipient") || normalized.includes("missing email")) {
+    return "Customer email was not collected for this order.";
+  }
+  if (normalized.includes("missing_sms_recipient") || normalized.includes("missing sms recipient")) {
+    return "Customer phone was not available for SMS delivery.";
+  }
+  if (normalized.includes("missing_sms_provider")) {
+    return "SMS is enabled, but no active SMS provider is ready.";
+  }
+  if (normalized.includes("missing_whatsapp_credentials")) {
+    return "WhatsApp is enabled, but Meta Cloud API credentials are not ready.";
+  }
+  if (normalized.includes("missing_whatsapp_recipient")) {
+    return "Customer phone was not available for WhatsApp delivery.";
+  }
+  if (normalized.includes("invalid_whatsapp_recipient")) {
+    return "Customer phone could not be formatted for WhatsApp delivery.";
+  }
+  if (normalized.includes("could not be decrypted")) {
+    return "Saved credentials cannot be decrypted. Save the provider credentials again.";
+  }
+  if (
+    normalized.includes("authorization required") ||
+    normalized.includes("unauthorized") ||
+    normalized.includes("authentication failed") ||
+    normalized.includes("forbidden")
+  ) {
+    return "Provider rejected the saved credentials. Save valid credentials or disable this channel.";
+  }
+  if (
+    normalized.includes("invalid api key") ||
+    normalized.includes("invalid token") ||
+    normalized.includes("invalid credential")
+  ) {
+    return "Provider rejected the API key or token. Save valid credentials or disable this channel.";
+  }
+  if (normalized.includes("balance") || normalized.includes("credit")) {
+    return "SMS provider balance or credit is not ready. Recharge it or disable SMS notifications.";
+  }
+  if (normalized.includes("sender")) {
+    return "Provider rejected the sender ID. Use an approved sender or disable this channel.";
+  }
+  if (normalized.includes("delivery_receipt_busy")) {
+    return "A previous retry is still cooling down; the outbox will not resend before its schedule.";
+  }
+
+  return text.length > 160 ? `${text.slice(0, 157)}...` : text;
+}
+
+export function buildReceiptDisplayGroups(
+  receipts: OrderNotificationReceiptDto[],
+): OrderNotificationReceiptDisplayGroup[] {
+  const groups = new Map<string, OrderNotificationReceiptDto[]>();
+
+  for (const receipt of receipts) {
+    const providerStatus = describeNotificationIssue(receipt.providerStatus) ?? "";
+    const lastError = describeNotificationIssue(receipt.lastError) ?? "";
+    const key = [
+      receipt.channel,
+      receipt.provider,
+      receipt.status,
+      providerStatus,
+      lastError,
+    ].join("|");
+    groups.set(key, [...(groups.get(key) ?? []), receipt]);
+  }
+
+  return Array.from(groups.entries()).map(([key, groupedReceipts]) => {
+    const first = groupedReceipts[0] as OrderNotificationReceiptDto;
+    const providerStatus = describeNotificationIssue(first.providerStatus);
+    const lastError = describeNotificationIssue(first.lastError);
+    const latestTimestamp = findLatestReceiptTimestamp(groupedReceipts);
+    const totalAttempts = groupedReceipts.reduce((sum, receipt) => sum + Math.max(0, receipt.attempts), 0);
+    const maxAttempts = groupedReceipts.reduce((max, receipt) => Math.max(max, receipt.attempts), 0);
+
+    return {
+      key,
+      receipts: groupedReceipts,
+      channel: first.channel,
+      provider: first.provider,
+      status: first.status,
+      count: groupedReceipts.length,
+      recipientLabel: getReceiptGroupRecipientLabel(first, groupedReceipts.length),
+      providerStatus,
+      lastError,
+      showLastError: Boolean(lastError && lastError !== providerStatus),
+      latestTimestamp,
+      totalAttempts,
+      maxAttempts,
+    };
+  });
+}
+
+export function deliveryAttemptLabel(group: Pick<
+  OrderNotificationReceiptDisplayGroup,
+  "status" | "count" | "maxAttempts" | "totalAttempts"
+>): string {
+  if (group.status === "skipped") {
+    return group.maxAttempts > 1 ? `Stopped after ${group.maxAttempts} attempts` : "Not sent";
+  }
+  if (TERMINAL_DELIVERY_STATUSES.has(group.status)) {
+    return humanize(group.status);
+  }
+  const attempts = group.count > 1 ? group.totalAttempts : group.maxAttempts;
+  return `${attempts} attempt${attempts === 1 ? "" : "s"}`;
+}
+
+function getReceiptGroupRecipientLabel(receipt: OrderNotificationReceiptDto, count: number): string {
+  if (count <= 1) return receipt.recipientMasked ?? "No recipient";
+  if (receipt.channel === "push") return `${count} admin devices`;
+  return `${count} recipients`;
+}
+
+function findLatestReceiptTimestamp(receipts: OrderNotificationReceiptDto[]): string | number | null {
+  let latest: string | number | null = null;
+  let latestNumber = Number.NEGATIVE_INFINITY;
+  for (const receipt of receipts) {
+    const value =
+      receipt.deliveredAt
+      ?? receipt.acceptedAt
+      ?? receipt.skippedAt
+      ?? receipt.failedAt
+      ?? receipt.lastAttemptAt
+      ?? receipt.createdAt;
+    const numeric = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(numeric) && numeric > latestNumber) {
+      latestNumber = numeric;
+      latest = value;
+    }
+  }
+  return latest;
+}
+
+function humanize(value: string): string {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}

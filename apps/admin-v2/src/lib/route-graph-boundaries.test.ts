@@ -1110,6 +1110,10 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "OrderNotificationsCard.tsx"),
       "utf8",
     );
+    const notificationDisplaySource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "order-notification-display.ts"),
+      "utf8",
+    );
 
     expect(routeSource).toContain("const isHydrated = useHydrated()");
     expect(routeSource).toContain("enabled: isHydrated");
@@ -1120,7 +1124,8 @@ describe("admin route graph boundaries", () => {
     expect(notificationsSource).toContain("const isHydrated = useHydrated()");
     expect(notificationsSource).toContain("enabled: isHydrated");
     expect(notificationsSource).toContain("!isHydrated || isLoading");
-    expect(notificationsSource).toContain("Stopped retrying");
+    expect(notificationsSource).toContain("buildReceiptDisplayGroups");
+    expect(notificationDisplaySource).toContain("Stopped after");
     expect(notificationsSource).toContain("Delivery settled");
     expect(notificationsSource).toContain("recorded attempt");
   });
