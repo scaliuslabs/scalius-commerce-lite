@@ -3,6 +3,7 @@ import type { Database } from "@scalius/database/client";
 import {
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
+  listOrderPaymentSessionAttempts,
   markPaymentSessionAttemptCreated,
   markPaymentSessionAttemptFailed,
 } from "./payment-session-attempts";
@@ -211,6 +212,48 @@ describe("payment session attempts", () => {
     expect(accountIdentity.attemptKey).toBe(repeatedAccountIdentity.attemptKey);
     expect(accountIdentity.attemptKey).not.toBe(receiptIdentity.attemptKey);
   });
+
+  it("lists admin payment-session attempts without private identity or replay payload fields", async () => {
+    const fake = createFakePaymentSessionDb();
+    const identity = await buildIdentity();
+
+    const first = await claimPaymentSessionAttempt<{ paymentIntentId: string }>(fake.db, identity);
+    if (first.status !== "claimed") throw new Error("expected first claim");
+    await markPaymentSessionAttemptCreated(fake.db, first.attempt, {
+      providerSessionId: "pi_1",
+      providerCorrelationId: "corr_1",
+      response: { paymentIntentId: "pi_1", clientSecret: "secret_1" },
+    });
+
+    const attempts = await listOrderPaymentSessionAttempts(fake.db, "order_1");
+
+    expect(attempts).toEqual([
+      expect.objectContaining({
+        id: first.attempt.id,
+        orderId: "order_1",
+        gateway: "stripe",
+        paymentType: "full",
+        amount: 125,
+        currency: "bdt",
+        status: "created",
+        attempts: 1,
+        providerSessionId: "pi_1",
+        providerCorrelationId: "corr_1",
+        lastError: null,
+        claimExpiresAt: null,
+        activeProcessing: false,
+        staleProcessing: false,
+      }),
+    ]);
+    expect(Object.keys(attempts[0] ?? {})).not.toEqual(
+      expect.arrayContaining([
+        "attemptKey",
+        "requestHash",
+        "responsePayload",
+        "claimId",
+      ]),
+    );
+  });
 });
 
 async function buildIdentity(requestContext: Record<string, unknown> = {
@@ -308,6 +351,26 @@ function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[] } {
             }
             return rows[0];
           },
+          orderBy: () => ({
+            all: async () => rows
+              .filter((row) => row.orderId === "order_1")
+              .map((row) => ({
+                id: row.id,
+                orderId: row.orderId,
+                gateway: row.gateway,
+                paymentType: row.paymentType,
+                amount: row.amount,
+                currency: row.currency,
+                status: row.status,
+                attempts: row.attempts,
+                providerSessionId: row.providerSessionId,
+                providerCorrelationId: row.providerCorrelationId,
+                lastError: row.lastError,
+                claimExpiresAt: row.claimExpiresAt,
+                createdAt: row.createdAt,
+                updatedAt: row.updatedAt,
+              })),
+          }),
         }),
       }),
     }),

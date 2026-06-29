@@ -1052,9 +1052,28 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("paymentWebhookIssues");
     expect(source).toContain("Payment webhook needs review");
     expect(source).toContain("Check the gateway dashboard before changing payment-sensitive order state.");
+    expect(source).toContain("paymentSessionAttempts");
+    expect(source).toContain("Payment session attempts");
+    expect(source).toContain("Preparing checkout");
+    expect(source).toContain("Hosted session created");
+    expect(source).toContain("Processing lease expired");
+    expect(source).toContain("refetchInterval: (query)");
     expect(source).toContain("Internal ref:");
     expect(source).toContain("Provider refund:");
     expect(source).toContain("Refund row:");
+  });
+
+  it("normalizes stale hosted-payment archives in incomplete-order UI", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "AbandonedCheckoutsManager.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("parseAbandonedCheckoutDisplay");
+    expect(source).toContain("Archived hosted-payment order");
+    expect(source).toContain("This was a stale online checkout order");
+    expect(source).toContain("View order");
+    expect(source).not.toContain("const parseCheckoutData =");
   });
 
   it("keeps order detail SSR formatting deterministic", () => {

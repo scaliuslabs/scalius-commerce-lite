@@ -97,6 +97,7 @@ interface OrderPaymentsResult {
   refundAttempts?: OrderRefundAttempt[];
   activeRefundOperation?: ActiveRefundOperation | null;
   paymentWebhookIssues?: PaymentWebhookIssue[];
+  paymentSessionAttempts?: PaymentSessionAttempt[];
 }
 
 interface PaymentWebhookIssue {
@@ -109,6 +110,25 @@ interface PaymentWebhookIssue {
   queueType: string | null;
   queueMessageId: string | null;
   processedAt: OrderTimestamp;
+}
+
+interface PaymentSessionAttempt {
+  id: string;
+  orderId: string;
+  gateway: string;
+  paymentType: string;
+  amount: number;
+  currency: string;
+  status: string;
+  attempts: number;
+  providerSessionId: string | null;
+  providerCorrelationId: string | null;
+  lastError: string | null;
+  claimExpiresAt: OrderTimestamp | null;
+  createdAt: OrderTimestamp;
+  updatedAt: OrderTimestamp;
+  activeProcessing: boolean;
+  staleProcessing: boolean;
 }
 
 interface CODTracking {
@@ -151,6 +171,46 @@ const REFUND_SEVERITY_CLASS: Record<string, string> = {
   warning: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100",
   danger: "border-red-200 bg-red-50 text-red-950 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100",
 };
+
+function getSessionAttemptView(attempt: PaymentSessionAttempt): {
+  label: string;
+  message: string;
+  badgeVariant: "default" | "secondary" | "destructive" | "outline";
+} {
+  if (attempt.activeProcessing) {
+    return {
+      label: "Preparing checkout",
+      message: "The gateway session request is still inside its processing window.",
+      badgeVariant: "secondary",
+    };
+  }
+  if (attempt.staleProcessing) {
+    return {
+      label: "Processing lease expired",
+      message: "The last gateway session request did not finish cleanly. A retry can reclaim it.",
+      badgeVariant: "destructive",
+    };
+  }
+  if (attempt.status === "created") {
+    return {
+      label: "Hosted session created",
+      message: "The buyer received or can reuse this hosted payment session.",
+      badgeVariant: "default",
+    };
+  }
+  if (attempt.status === "failed") {
+    return {
+      label: "Session setup failed",
+      message: "The platform stopped before exposing a hosted payment session to the buyer.",
+      badgeVariant: "destructive",
+    };
+  }
+  return {
+    label: attempt.status.replace(/[_-]+/g, " "),
+    message: "Payment session attempt state was recorded by the checkout system.",
+    badgeVariant: "outline",
+  };
+}
 
 function formatTimestamp(value: OrderTimestamp | null | undefined): string | null {
   return formatOrderTimestamp(value);
@@ -235,10 +295,17 @@ export function PaymentCard({ order }: PaymentCardProps) {
     ...orderPaymentsQueryOptions(order.id),
     enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
+    refetchInterval: (query) => {
+      const data = query.state.data as OrderPaymentsResult | undefined;
+      return data?.paymentSessionAttempts?.some((attempt) => attempt.activeProcessing)
+        ? 30_000
+        : false;
+    },
   });
   const paymentsResult = paymentsData as OrderPaymentsResult | null;
   const payments = paymentsResult?.payments ?? [];
   const plan = paymentsResult?.plan ?? null;
+  const paymentSessionAttempts = paymentsResult?.paymentSessionAttempts ?? [];
   const refundAttempts = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
   const activeRefundOperation = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
   const paymentWebhookIssues = paymentsResult?.paymentWebhookIssues ?? [];
@@ -556,6 +623,58 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {paymentSessionAttempts.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Payment session attempts
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => void refetchPayments()}
+                  disabled={paymentsFetching}
+                >
+                  {paymentsFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                  Refresh
+                </Button>
+              </div>
+              {paymentSessionAttempts.map((attempt) => {
+                const view = getSessionAttemptView(attempt);
+                return (
+                  <div key={attempt.id} className="rounded-md border border-border bg-background/60 p-2.5 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{view.label}</span>
+                        <Badge variant={view.badgeVariant} className="text-[10px]">
+                          {attempt.status}
+                        </Badge>
+                      </div>
+                      <span className="font-medium text-foreground">
+                        {attempt.currency} {formatOrderAmount(attempt.amount)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-muted-foreground">{view.message}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+                      <span>{PAYMENT_METHOD_LABELS[attempt.gateway] ?? attempt.gateway}</span>
+                      <span className="capitalize">{attempt.paymentType}</span>
+                      <span>{attempt.attempts} attempt{attempt.attempts === 1 ? "" : "s"}</span>
+                      {formatTimestamp(attempt.createdAt) && <span>Started {formatTimestamp(attempt.createdAt)}</span>}
+                      {formatTimestamp(attempt.claimExpiresAt) && <span>Lease until {formatTimestamp(attempt.claimExpiresAt)}</span>}
+                      {attempt.providerSessionId && <span className="font-mono">Session: {attempt.providerSessionId}</span>}
+                      {attempt.providerCorrelationId && <span className="font-mono">Correlation: {attempt.providerCorrelationId}</span>}
+                    </div>
+                    {attempt.lastError && (
+                      <p className="mt-2 truncate text-destructive">{attempt.lastError}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
