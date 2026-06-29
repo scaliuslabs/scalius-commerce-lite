@@ -194,10 +194,12 @@ const submitLabel = codOnly
   : checkoutUnavailable
     ? "Checkout temporarily unavailable"
   : "Proceed to Payment →";
+const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 ---
 
 <Layout title={lang.languageData.pageTitle} layoutData={layoutData} noindex>
   <!-- Hidden checkout meta for client-side JS -->
+  <script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};`}></script>
   {
     codCartRepairState && (
       <script

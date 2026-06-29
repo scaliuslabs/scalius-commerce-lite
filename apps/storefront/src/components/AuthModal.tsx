@@ -2,9 +2,9 @@
 // Global Authentication Modal replacing inline login forms.
 // Intercepts guest checkouts if disabled, allows choosing WhatsApp/Email.
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { User, Mail, Smartphone, X } from "lucide-react";
-import { sendCustomerOtp, verifyCustomerOtp, getCustomerSession, logoutCustomer, updateCustomerProfile, type CustomerInfo } from "@/lib/api/customer-auth";
+import { sendCustomerOtp, verifyCustomerOtp, getCustomerSession, logoutCustomer, updateCustomerProfile, type AuthState, type CustomerInfo } from "@/lib/api/customer-auth";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/client";
 import type { LocationData } from "@/lib/api";
@@ -44,23 +44,87 @@ async function fetchCheckoutConfigClient(): Promise<CheckoutConfig | null> {
   }
 }
 
+type AuthRuntimeSettings = {
+  authPolicy: CustomerAuthPolicyConfig;
+  otpChannel: CustomerAuthOtpChannel;
+  allowedCountries: string[];
+  allowedCountriesMode: "include" | "exclude";
+  ready: boolean;
+};
+
+const FALLBACK_AUTH_SETTINGS: AuthRuntimeSettings = {
+  authPolicy: normalizeCustomerAuthPolicy("both"),
+  otpChannel: "email",
+  allowedCountries: [],
+  allowedCountriesMode: "include",
+  ready: false,
+};
+
+function hasCustomerAuthMirrorCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.cookie
+    .split(";")
+    .some((cookie) => cookie.trim().startsWith("cs_auth=1"));
+}
+
+function readInjectedCheckoutConfig(): CheckoutConfig | null {
+  if (typeof window === "undefined") return null;
+  const value = window.__CHECKOUT_CONFIG__;
+  if (!value || typeof value !== "object") return null;
+  return value as CheckoutConfig;
+}
+
+function resolveAuthSettingsFromCheckoutConfig(config: CheckoutConfig | null): AuthRuntimeSettings {
+  if (!config) return FALLBACK_AUTH_SETTINGS;
+  const authPolicy = normalizeCustomerAuthPolicy(
+    config.customerAuthPolicy,
+    config.authVerificationMethod,
+  );
+  return {
+    authPolicy,
+    otpChannel: getDefaultCustomerAuthOtpChannel(authPolicy),
+    allowedCountries: Array.isArray(config.allowedCountries) ? config.allowedCountries : [],
+    allowedCountriesMode: config.allowedCountriesMode ?? "include",
+    ready: true,
+  };
+}
+
+function readInitialAuthSettings(): AuthRuntimeSettings {
+  return resolveAuthSettingsFromCheckoutConfig(readInjectedCheckoutConfig());
+}
+
 type Step = "method_select" | "input" | "otp" | "profile_setup" | "authenticated";
 type AuthIntent = "sign_in" | "sign_up";
 
 export default function AuthModal() {
+  const initialSettingsRef = useRef<AuthRuntimeSettings | null>(null);
+  if (!initialSettingsRef.current) {
+    initialSettingsRef.current = readInitialAuthSettings();
+  }
+
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<Step>("input");
   const [authIntent, setAuthIntent] = useState<AuthIntent>("sign_in");
-  const [otpChannel, setOtpChannel] = useState<CustomerAuthOtpChannel>("email");
+  const [otpChannel, setOtpChannel] = useState<CustomerAuthOtpChannel>(
+    initialSettingsRef.current.otpChannel,
+  );
   const [identifier, setIdentifier] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [otp, setOtp] = useState("");
 
   // Settings injected globally
-  const [authPolicy, setAuthPolicy] = useState<CustomerAuthPolicyConfig>(() => normalizeCustomerAuthPolicy("both"));
-  const [allowedCountries, setAllowedCountries] = useState<string[]>([]);
-  const [allowedCountriesMode, setAllowedCountriesMode] = useState<"include" | "exclude">("include");
+  const [authPolicy, setAuthPolicy] = useState<CustomerAuthPolicyConfig>(
+    initialSettingsRef.current.authPolicy,
+  );
+  const [allowedCountries, setAllowedCountries] = useState<string[]>(
+    initialSettingsRef.current.allowedCountries,
+  );
+  const [allowedCountriesMode, setAllowedCountriesMode] = useState<"include" | "exclude">(
+    initialSettingsRef.current.allowedCountriesMode,
+  );
+  const [authPolicyReady, setAuthPolicyReady] = useState(initialSettingsRef.current.ready);
+  const [authPolicyLoading, setAuthPolicyLoading] = useState(false);
 
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
 
@@ -77,6 +141,8 @@ export default function AuthModal() {
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const otpInputRef = useRef<HTMLInputElement>(null);
+  const authSettingsPromiseRef = useRef<Promise<void> | null>(null);
+  const sessionPromiseRef = useRef<Promise<void> | null>(null);
   const authUi = useMemo(
     () => resolveCustomerAuthUi(authPolicy, otpChannel, authIntent),
     [authPolicy, otpChannel, authIntent],
@@ -99,70 +165,118 @@ export default function AuthModal() {
     return "BD" as Country;
   }, [effectiveCountries]);
 
-  // Check session and settings on mount
-  useEffect(() => {
-    let isMounted = true;
+  const hydrateProfileFields = useCallback((customerData: CustomerInfo) => {
+    setProfileName(customerData.name && customerData.name !== "Customer" ? customerData.name : "");
+    setProfileAddress(customerData.address ?? "");
+    setProfileCity(customerData.city ?? "");
+    setProfileZone(customerData.zone ?? "");
+    setProfileCityName(customerData.cityName ?? "");
+    setProfileZoneName(customerData.zoneName ?? "");
+  }, []);
 
-    // Defer network requests until main thread is completely idle to fix Lighthouse chains
-    const fetchInitData = () => {
-      if (!isMounted) return;
-      fetchCheckoutConfigClient().then((config) => {
-        if (!isMounted || !config) return;
-        const nextPolicy = normalizeCustomerAuthPolicy(
-          config.customerAuthPolicy,
-          config.authVerificationMethod,
-        );
-        setAuthPolicy(nextPolicy);
-        setOtpChannel(getDefaultCustomerAuthOtpChannel(nextPolicy));
-        if (Array.isArray(config.allowedCountries) && config.allowedCountries.length > 0) {
-          setAllowedCountries(config.allowedCountries);
-        }
-        if (config.allowedCountriesMode) {
-          setAllowedCountriesMode(config.allowedCountriesMode);
-        }
-      });
+  const applyAuthSettings = useCallback((settings: AuthRuntimeSettings) => {
+    setAuthPolicy(settings.authPolicy);
+    setOtpChannel(settings.otpChannel);
+    setAllowedCountries(settings.allowedCountries);
+    setAllowedCountriesMode(settings.allowedCountriesMode);
+    setAuthPolicyReady(settings.ready);
+  }, []);
 
-      getCustomerSession().then((state) => {
-        if (!isMounted) return;
-        if (state.authenticated && state.customer) {
-          setCustomer(state.customer);
-          if (state.customer.needsProfileCompletion) {
-            hydrateProfileFields(state.customer);
-            setStep("profile_setup");
-            setIsOpen(true);
-          } else {
-            setStep("authenticated");
-          }
-        }
-      });
-    };
+  const ensureAuthSettings = useCallback(() => {
+    if (authPolicyReady) return Promise.resolve();
+    if (authSettingsPromiseRef.current) return authSettingsPromiseRef.current;
 
-    // DEFER DEPENDENCY CHAIN: 
-    // To prevent Lighthouse from flagging these API requests as "Critical Request Chains",
-    // we strictly defer their execution until after the page's "load" event. 
-    // This removes the network requests from the initial render waterfall entirely
-    // while remaining highly predictable for future developers.
-    if (document.readyState === 'complete') {
-      // Yield to the event loop once to avoid blocking the current hydration thread
-      setTimeout(fetchInitData, 1);
-    } else {
-      window.addEventListener('load', fetchInitData, { once: true });
+    const injected = readInjectedCheckoutConfig();
+    if (injected) {
+      applyAuthSettings(resolveAuthSettingsFromCheckoutConfig(injected));
+      return Promise.resolve();
     }
 
+    setAuthPolicyLoading(true);
+    authSettingsPromiseRef.current = fetchCheckoutConfigClient()
+      .then((config) => {
+        applyAuthSettings(
+          config
+            ? resolveAuthSettingsFromCheckoutConfig(config)
+            : { ...FALLBACK_AUTH_SETTINGS, ready: true },
+        );
+      })
+      .finally(() => {
+        setAuthPolicyLoading(false);
+        authSettingsPromiseRef.current = null;
+      });
+
+    return authSettingsPromiseRef.current;
+  }, [applyAuthSettings, authPolicyReady]);
+
+  const applyCustomerSession = useCallback((state: AuthState, openIncompleteProfile: boolean) => {
+    if (state.authenticated && state.customer) {
+      setCustomer(state.customer);
+      if (state.customer.needsProfileCompletion) {
+        hydrateProfileFields(state.customer);
+        setStep("profile_setup");
+        if (openIncompleteProfile) setIsOpen(true);
+      } else {
+        setStep("authenticated");
+      }
+      return;
+    }
+
+    setCustomer(null);
+    setStep("input");
+  }, [hydrateProfileFields]);
+
+  const hydrateExistingCustomerSession = useCallback((openIncompleteProfile: boolean) => {
+    if (!hasCustomerAuthMirrorCookie()) {
+      setCustomer(null);
+      return Promise.resolve();
+    }
+    if (sessionPromiseRef.current) return sessionPromiseRef.current;
+
+    sessionPromiseRef.current = getCustomerSession()
+      .then((state) => {
+        applyCustomerSession(state, openIncompleteProfile);
+      })
+      .finally(() => {
+        sessionPromiseRef.current = null;
+      });
+
+    return sessionPromiseRef.current;
+  }, [applyCustomerSession]);
+
+  const scheduleCustomerSessionResume = useCallback(() => {
+    const run = () => {
+      if (!hasCustomerAuthMirrorCookie()) return;
+      void hydrateExistingCustomerSession(true);
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(run, { timeout: 2500 });
+      return;
+    }
+
+    window.setTimeout(run, 1);
+  }, [hydrateExistingCustomerSession]);
+
+  useEffect(() => {
     const handleOpen = () => {
       delete window.__scaliusAuthModalOpenPending;
       setIsOpen(true);
+      void ensureAuthSettings();
+      if (hasCustomerAuthMirrorCookie()) {
+        void hydrateExistingCustomerSession(true);
+      }
     };
     window.addEventListener("open-auth-modal", handleOpen);
     if (window.__scaliusAuthModalOpenPending) {
       handleOpen();
+    } else if (hasCustomerAuthMirrorCookie()) {
+      scheduleCustomerSessionResume();
     }
     return () => {
-      isMounted = false;
       window.removeEventListener("open-auth-modal", handleOpen);
-      window.removeEventListener('load', fetchInitData);
     };
-  }, []);
+  }, [ensureAuthSettings, hydrateExistingCustomerSession, scheduleCustomerSessionResume]);
 
   useEffect(() => {
     if (authUi.otpChannel !== otpChannel) {
@@ -196,15 +310,6 @@ export default function AuthModal() {
     setProfileCityName(selection.cityName);
     setProfileZoneName(selection.zoneName);
     setError("");
-  };
-
-  const hydrateProfileFields = (customerData: CustomerInfo) => {
-    setProfileName(customerData.name && customerData.name !== "Customer" ? customerData.name : "");
-    setProfileAddress(customerData.address ?? "");
-    setProfileCity(customerData.city ?? "");
-    setProfileZone(customerData.zone ?? "");
-    setProfileCityName(customerData.cityName ?? "");
-    setProfileZoneName(customerData.zoneName ?? "");
   };
 
   const dispatchLoginEvent = (customerData: CustomerInfo) => {
@@ -349,8 +454,6 @@ export default function AuthModal() {
 
   const handleLogout = async () => {
     // Clear the readable host-only auth mirror; the server clears cs_tok.
-    document.cookie = "cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-
     await logoutCustomer();
     setCustomer(null);
     setStep("input");
@@ -424,6 +527,11 @@ export default function AuthModal() {
             <p className="text-sm text-muted-foreground">
               Access your orders, track shipments, and checkout faster.
             </p>
+            {authPolicyLoading && !authPolicyReady && (
+              <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
+                Loading sign-in options...
+              </p>
+            )}
 
             <div className="flex rounded-lg border border-border p-1 bg-muted/50">
               {(["sign_in", "sign_up"] as const).map((intent) => (
@@ -518,10 +626,10 @@ export default function AuthModal() {
 
             <button
               onClick={handleSendOtp}
-              disabled={loading || !identifier.trim()}
+              disabled={authPolicyLoading || loading || !identifier.trim()}
               className="w-full h-11 rounded-lg bg-foreground text-background text-sm font-medium disabled:opacity-50 hover:bg-foreground/90 transition-colors mt-2"
             >
-              {loading ? "Please wait..." : "Continue"}
+              {authPolicyLoading ? "Loading options..." : loading ? "Please wait..." : "Continue"}
             </button>
           </div>
         )}

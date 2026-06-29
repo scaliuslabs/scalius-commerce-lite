@@ -95,6 +95,7 @@ describe("customer auth API helpers", () => {
   });
 
   it("keeps unauthenticated session reads distinct from temporary account-read failures", async () => {
+    vi.stubGlobal("document", { cookie: "cs_auth=1" });
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       success: false,
       error: { message: "Sign in required" },
@@ -106,6 +107,54 @@ describe("customer auth API helpers", () => {
       status: 401,
       error: "Sign in required",
     });
+    expect(document.cookie).toContain("expires=Thu, 01 Jan 1970 00:00:00 UTC");
+  });
+
+  it("dedupes concurrent customer session reads", async () => {
+    let resolveResponse: (response: Response) => void = () => undefined;
+    const responsePromise = new Promise<Response>((resolve) => {
+      resolveResponse = resolve;
+    });
+    const fetchMock = vi.fn(() => responsePromise);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = getCustomerSession();
+    const second = getCustomerSession();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    resolveResponse(new Response(JSON.stringify({
+      success: true,
+      data: {
+        authenticated: true,
+        customer: {
+          customerId: "customer_1",
+          email: "customer@example.com",
+          name: "Customer",
+          phone: "+8801712345678",
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      {
+        authenticated: true,
+        customer: {
+          customerId: "customer_1",
+          email: "customer@example.com",
+          name: "Customer",
+          phone: "+8801712345678",
+        },
+      },
+      {
+        authenticated: true,
+        customer: {
+          customerId: "customer_1",
+          email: "customer@example.com",
+          name: "Customer",
+          phone: "+8801712345678",
+        },
+      },
+    ]);
   });
 
   it("preserves delivery profile and completion flags from session reads", async () => {
