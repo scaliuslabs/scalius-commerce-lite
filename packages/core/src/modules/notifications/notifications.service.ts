@@ -368,6 +368,29 @@ export async function sendOrderNotification(
             error instanceof Error ? error.message : error,
         );
         const nonRetryable = isNonRetryableDispatchError(error);
+        if (options.outboxId && nonRetryable) {
+            try {
+                outcomes.push(await recordSkippedDelivery({
+                    db,
+                    outboxId: options.outboxId,
+                    orderId: order.id,
+                    notificationType,
+                    channel: "push",
+                    provider: "fcm",
+                    recipient: `firebase-setup:${order.id}:${notificationType}`,
+                    recipientMasked: "admin-fcm",
+                    reason: normalizeError(error),
+                }));
+                return buildDispatchResult(outcomes);
+            } catch (receiptError: unknown) {
+                console.error(
+                    "[Notifications] Failed to record push setup receipt for order",
+                    order.id,
+                    ":",
+                    receiptError instanceof Error ? receiptError.message : receiptError,
+                );
+            }
+        }
         return buildDispatchResult([
             ...outcomes,
             {

@@ -60,7 +60,8 @@ Validated by Zod schema in the API route:
   - `ct`/`st` (city/state): lowercase, letters only, SHA-256
   - `zp` (zip): lowercase, alphanumeric only, SHA-256
   - `country`: lowercase, trim, SHA-256
-  - Non-PII fields passed through: `client_ip_address`, `client_user_agent`, `fbc`, `fbp`, `external_id`, `subscription_id`, `lead_id`
+  - `external_id`: lowercase, trim, SHA-256; blank values are dropped
+  - Non-PII fields passed through: `client_ip_address`, `client_user_agent`, `fbc`, `fbp`, `subscription_id`, `lead_id`
 
 Configuration:
 - Graph API version: `META_GRAPH_API_VERSION` from `conversions-api.ts` (currently `v25.0`; keep this aligned with Meta's supported Graph API versions)

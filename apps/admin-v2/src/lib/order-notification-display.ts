@@ -45,19 +45,31 @@ export function describeNotificationIssue(value: string | null | undefined): str
     return "Saved credentials cannot be decrypted. Save the provider credentials again.";
   }
   if (
+    normalized.includes("invalid_grant") ||
+    normalized.includes("service account") ||
+    normalized.includes("private key")
+  ) {
+    return "Firebase credentials are not usable. Save a valid service account or disable admin push notifications.";
+  }
+  if (
     normalized.includes("authorization required") ||
     normalized.includes("unauthorized") ||
     normalized.includes("authentication failed") ||
-    normalized.includes("forbidden")
+    normalized.includes("forbidden") ||
+    /\b(?:resend api error|http|status|code|error)[^0-9]*(?:401|403|405)\b/.test(normalized)
   ) {
     return "Provider rejected the saved credentials. Save valid credentials or disable this channel.";
   }
   if (
     normalized.includes("invalid api key") ||
     normalized.includes("invalid token") ||
-    normalized.includes("invalid credential")
+    normalized.includes("invalid credential") ||
+    normalized.includes("mismatched credential")
   ) {
     return "Provider rejected the API key or token. Save valid credentials or disable this channel.";
+  }
+  if (/\b(?:http|status|code|error)[^0-9]*(?:400|402|404|422)\b/.test(normalized)) {
+    return "Provider rejected the notification setup. Check credentials, template, sender, and channel settings.";
   }
   if (normalized.includes("balance") || normalized.includes("credit")) {
     return "SMS provider balance or credit is not ready. Recharge it or disable SMS notifications.";

@@ -82,12 +82,13 @@ const eventPayloadSchema = z.object({
 });
 
 function isTrustedEventSource(eventSourceUrl: string, storefrontUrl?: string): boolean {
-  if (!storefrontUrl) {
-    return true;
+  const expectedStorefrontUrl = storefrontUrl?.trim();
+  if (!expectedStorefrontUrl) {
+    return false;
   }
 
   try {
-    return new URL(eventSourceUrl).origin === new URL(storefrontUrl).origin;
+    return new URL(eventSourceUrl).origin === new URL(expectedStorefrontUrl).origin;
   } catch {
     return false;
   }

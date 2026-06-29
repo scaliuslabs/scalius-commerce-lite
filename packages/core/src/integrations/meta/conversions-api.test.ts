@@ -1,8 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { redactCapiPayloadForLog } from "./conversions-api";
+const mocks = vi.hoisted(() => ({
+  getCapiSettings: vi.fn(),
+  logCapiEvent: vi.fn(),
+}));
+
+vi.mock("../../modules/analytics/meta.service", () => ({
+  getCapiSettings: mocks.getCapiSettings,
+  logCapiEvent: mocks.logCapiEvent,
+}));
+
+import { redactCapiPayloadForLog, sendCapiEvent } from "./conversions-api";
+import { sha256 } from "./crypto-utils";
 
 describe("Meta Conversions API log redaction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("redacts user data, test event codes, and event source URL queries", () => {
     const redacted = redactCapiPayloadForLog({
       test_event_code: "TEST123",
@@ -43,5 +59,56 @@ describe("Meta Conversions API log redaction", () => {
         },
       ],
     });
+  });
+
+  it("hashes external_id before sending user data to Meta", async () => {
+    mocks.getCapiSettings.mockResolvedValue({
+      isEnabled: true,
+      pixelId: "pixel_123",
+      accessToken: "access_token",
+      testEventCode: null,
+      logRetentionDays: 30,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      events_received: 1,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+
+    await sendCapiEvent({} as never, {
+      event_name: "Purchase",
+      event_time: 1_800_000_000,
+      event_source_url: "https://store.example/order-success",
+      event_id: "Purchase:order_1",
+      action_source: "website",
+      user_data: {
+        external_id: [" Customer_123 ", ""],
+        em: "BUYER@EXAMPLE.COM",
+      },
+      custom_data: {
+        order_id: "order_1",
+        currency: "BDT",
+        value: 1000,
+      },
+    });
+
+    const fetchMock = vi.mocked(fetch);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const payload = JSON.parse(String(init.body)) as {
+      data: Array<{ user_data: { external_id?: string[]; em?: string[] } }>;
+    };
+    const sentEvent = payload.data[0];
+
+    if (!sentEvent) {
+      throw new Error("Expected Meta request payload to include one event.");
+    }
+    expect(sentEvent.user_data.external_id).toEqual([
+      await sha256("customer_123"),
+    ]);
+    expect(sentEvent.user_data.external_id).not.toContain(" Customer_123 ");
+    expect(sentEvent.user_data.em).toEqual([
+      await sha256("buyer@example.com"),
+    ]);
   });
 });

@@ -100,4 +100,19 @@ describe("order notification display", () => {
   it("keeps unknown provider text short enough for the order card", () => {
     expect(describeNotificationIssue("x".repeat(220))).toBe(`${"x".repeat(157)}...`);
   });
+
+  it("translates status-only provider setup failures into merchant actions", () => {
+    expect(describeNotificationIssue("Failed to send email: Resend API error: 401")).toBe(
+      "Provider rejected the saved credentials. Save valid credentials or disable this channel.",
+    );
+    expect(describeNotificationIssue("HTTP 400")).toBe(
+      "Provider rejected the notification setup. Check credentials, template, sender, and channel settings.",
+    );
+    expect(describeNotificationIssue("HTTP 403")).toBe(
+      "Provider rejected the saved credentials. Save valid credentials or disable this channel.",
+    );
+    expect(describeNotificationIssue("Failed to get access token: invalid_grant service account disabled")).toBe(
+      "Firebase credentials are not usable. Save a valid service account or disable admin push notifications.",
+    );
+  });
 });
