@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     getOrderWhatsAppTemplateSettings: vi.fn(),
     updateOrderWhatsAppTemplateSettings: vi.fn(),
     isWhatsAppCloudApiConfigured: vi.fn(),
+    getNotificationProviderBlock: vi.fn(),
     getSmsProviderReadiness: vi.fn(),
     getFirebaseServiceAccountReadiness: vi.fn(),
     clearNotificationProviderBlocks: vi.fn(),
@@ -37,6 +38,9 @@ vi.mock("@scalius/core/integrations/firebase/settings", () => ({
 
 vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
     clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
+    describeNotificationProviderBlock: (block: { channel: string; provider: string; reason: string }) =>
+        `${block.channel}/${block.provider} paused: ${block.reason}`,
+    getNotificationProviderBlock: mocks.getNotificationProviderBlock,
 }));
 
 import { notificationChannelsRoutes } from "./notification-channels";
@@ -89,6 +93,7 @@ describe("notification channel settings routes", () => {
             configured: false,
             error: "No active SMS provider selected",
         });
+        mocks.getNotificationProviderBlock.mockResolvedValue(null);
         mocks.getFirebaseServiceAccountReadiness.mockResolvedValue({
             configured: true,
             error: null,
@@ -122,6 +127,35 @@ describe("notification channel settings routes", () => {
             },
         });
         expect(mocks.getSmsProviderReadiness).toHaveBeenCalledWith({ id: "db" }, "credential-key");
+    });
+
+    it("reports configured SMS providers as unready while delivery is paused", async () => {
+        mocks.getSmsProviderReadiness.mockResolvedValueOnce({
+            activeProvider: "smsnetbd",
+            configured: true,
+            error: null,
+        });
+        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
+            channel: "sms",
+            provider: "smsnetbd",
+            reason: "error=405: Authorization required",
+            blockedAt: 1_782_684_758,
+        });
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/settings/notification-channels", {
+            method: "GET",
+        }, env);
+        const body = await response.json() as {
+            data: {
+                smsProviderConfigured: boolean;
+                smsProviderError: string | null;
+            };
+        };
+
+        expect(response.status).toBe(200);
+        expect(body.data.smsProviderConfigured).toBe(false);
+        expect(body.data.smsProviderError).toBe("sms/smsnetbd paused: error=405: Authorization required");
     });
 
     it("maps unready SMS channel saves to a customer-safe 400", async () => {
@@ -165,6 +199,21 @@ describe("notification channel settings routes", () => {
     });
 
     it("clears paused WhatsApp sends after saving the order template", async () => {
+        mocks.updateNotificationChannels.mockImplementationOnce(async () => {
+            expect(mocks.updateOrderWhatsAppTemplateSettings).toHaveBeenCalledWith(
+                { id: "db" },
+                {
+                    templateName: "order_status_update",
+                    languageCode: "en_US",
+                },
+            );
+            expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+                { id: "db" },
+                { channel: "whatsapp" },
+            );
+            return { order_created: ["whatsapp"] };
+        });
+        mocks.isWhatsAppCloudApiConfigured.mockResolvedValue(true);
         const { app, env } = createTestApp();
 
         const response = await app.request("/api/v1/admin/settings/notification-channels", {
@@ -180,6 +229,11 @@ describe("notification channel settings routes", () => {
         }, env);
 
         expect(response.status).toBe(200);
+        expect(mocks.updateNotificationChannels).toHaveBeenCalledWith(
+            { id: "db" },
+            { order_created: ["whatsapp"] },
+            "credential-key",
+        );
         expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
             { id: "db" },
             { channel: "whatsapp" },
@@ -220,6 +274,30 @@ describe("notification channel settings routes", () => {
             "credential-key",
             env,
         );
+    });
+
+    it("reports configured admin push as unready while FCM delivery is paused", async () => {
+        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
+            channel: "push",
+            provider: "fcm",
+            reason: "invalid_grant service account disabled",
+            blockedAt: 1_782_684_758,
+        });
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
+            method: "GET",
+        }, env);
+        const body = await response.json() as {
+            data: {
+                pushConfigured: boolean;
+                pushError: string | null;
+            };
+        };
+
+        expect(response.status).toBe(200);
+        expect(body.data.pushConfigured).toBe(false);
+        expect(body.data.pushError).toBe("push/fcm paused: invalid_grant service account disabled");
     });
 
     it("rejects admin push saves when Firebase readiness is not configured", async () => {

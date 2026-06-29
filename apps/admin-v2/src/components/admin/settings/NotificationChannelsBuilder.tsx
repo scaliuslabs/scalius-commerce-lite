@@ -81,6 +81,7 @@ export function NotificationChannelsBuilder() {
   const [channels, setChannels] = useState<ChannelConfig>(getDefaultConfig());
   const [whatsAppTemplate, setWhatsAppTemplate] = useState<WhatsAppTemplateConfig>(DEFAULT_WHATSAPP_TEMPLATE);
   const [isWhatsAppConfigured, setIsWhatsAppConfigured] = useState(false);
+  const [whatsAppError, setWhatsAppError] = useState<string | null>(null);
   const [isSmsConfigured, setIsSmsConfigured] = useState(false);
   const [smsProviderError, setSmsProviderError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,12 +100,14 @@ export function NotificationChannelsBuilder() {
           channels?: Record<string, string[]>;
           whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
           whatsappConfigured?: boolean;
+          whatsappError?: string | null;
           smsProviderConfigured?: boolean;
           smsProviderError?: string | null;
         };
         const whatsappConfigured = Boolean(data?.whatsappConfigured);
         const smsConfigured = Boolean(data?.smsProviderConfigured);
         setIsWhatsAppConfigured(whatsappConfigured);
+        setWhatsAppError(data?.whatsappError ?? null);
         setIsSmsConfigured(smsConfigured);
         setSmsProviderError(data?.smsProviderError ?? null);
         const channelData = data?.channels;
@@ -114,11 +117,7 @@ export function NotificationChannelsBuilder() {
             const enabledChannels = channelData[status.key];
             if (Array.isArray(enabledChannels)) {
               for (const ch of CHANNELS) {
-                config[status.key][ch.key] =
-                  (ch.key === "whatsapp" && !whatsappConfigured) ||
-                  (ch.key === "sms" && !smsConfigured)
-                    ? false
-                    : enabledChannels.includes(ch.key);
+                config[status.key][ch.key] = enabledChannels.includes(ch.key);
               }
             }
           }
@@ -154,7 +153,7 @@ export function NotificationChannelsBuilder() {
             const enabledChannels = channelData[status.key];
             if (Array.isArray(enabledChannels)) {
               for (const ch of ADMIN_CHANNELS) {
-                config[status.key][ch.key] = pushConfigured && enabledChannels.includes(ch.key);
+                config[status.key][ch.key] = enabledChannels.includes(ch.key);
               }
             }
           }
@@ -312,15 +311,16 @@ export function NotificationChannelsBuilder() {
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    SMS notifications are locked until an active SMS provider is ready.
-                    {smsProviderError ? ` ${smsProviderError}` : ""}
+                    {smsProviderError ?? "SMS notifications are locked until an active SMS provider is ready."}
                   </span>
                 </div>
               )}
               {!isWhatsAppConfigured && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>WhatsApp notifications are locked until Meta WhatsApp Cloud API credentials are ready.</span>
+                  <span>
+                    {whatsAppError ?? "WhatsApp notifications are locked until Meta WhatsApp Cloud API credentials are ready."}
+                  </span>
                 </div>
               )}
             </div>
@@ -404,8 +404,7 @@ export function NotificationChannelsBuilder() {
                 <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    Admin push notifications are locked until Firebase service account credentials are ready.
-                    {pushError ? ` ${pushError}` : ""}
+                    {pushError ?? "Admin push notifications are locked until Firebase service account credentials are ready."}
                   </span>
                 </div>
               )}

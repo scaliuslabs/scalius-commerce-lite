@@ -82,6 +82,7 @@ export function DeferredTiptapEditor({
 }: DeferredTiptapEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isAliveRef = useRef(true);
+  const preloadRequestedRef = useRef(false);
   const mountRequestedRef = useRef(false);
   const [shouldMountEditor, setShouldMountEditor] = useState(false);
   const [autoFocusEditor, setAutoFocusEditor] = useState(false);
@@ -111,13 +112,9 @@ export function DeferredTiptapEditor({
     let observer: IntersectionObserver | null = null;
 
     const preloadEditor = () => {
-      if (mountRequestedRef.current) return;
-      mountRequestedRef.current = true;
-      void loadTiptapEditorModule().finally(() => {
-        if (isAliveRef.current) {
-          setShouldMountEditor(true);
-        }
-      });
+      if (preloadRequestedRef.current || mountRequestedRef.current) return;
+      preloadRequestedRef.current = true;
+      void loadTiptapEditorModule();
     };
 
     const schedulePreload = () => {

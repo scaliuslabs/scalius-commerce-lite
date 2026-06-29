@@ -794,6 +794,61 @@ describe("order notification dispatch", () => {
         expect(result.hasRetryableFailure).toBe(false);
     });
 
+    it("blocks provider-wide sending when a capped retry still looks like bad credentials", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_confirmed: ["sms"],
+        });
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
+        mocks.claimOrderNotificationDeliveryReceipt.mockResolvedValueOnce({
+            claimed: true,
+            receipt: {
+                id: "receipt_capped_auth",
+                receiptKey: "outbox_sms_capped_auth:sms:recipient_hash",
+                claimId: "claim_capped_auth",
+                attempts: 8,
+            },
+        });
+        mocks.sendSms.mockResolvedValue({
+            success: false,
+            rawStatus: "error=405: Authorization required",
+            retryable: true,
+        });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "smsnetbd",
+            sendSms: mocks.sendSms,
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_sms_capped_auth",
+            "order_confirmed",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_sms_capped_auth",
+            },
+        );
+
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(db, {
+            channel: "sms",
+            provider: "smsnetbd",
+            reason: "error=405: Authorization required",
+        });
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_capped_auth", claimId: "claim_capped_auth" }),
+            "delivery_attempt_limit_reached: error=405: Authorization required",
+            expect.objectContaining({
+                provider: "smsnetbd",
+                providerStatus: "delivery_attempt_limit_reached",
+            }),
+        );
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
     it("records missing SMS provider setup as a skipped receipt", async () => {
         const db = createDb();
         mocks.getNotificationChannels.mockResolvedValue({

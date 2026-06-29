@@ -9,6 +9,10 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
+import {
+    describeNotificationProviderBlock,
+    getNotificationProviderBlock,
+} from "../notifications/notification-provider-health";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 
@@ -313,10 +317,22 @@ export async function updateNotificationChannels(
                 `Configure an active SMS provider before enabling SMS order notifications.${smsReadiness.error ? ` ${smsReadiness.error}` : ""}`,
             );
         }
+        if (smsReadiness.activeProvider) {
+            await assertNotificationProviderNotPaused(db, {
+                channel: "sms",
+                provider: smsReadiness.activeProvider,
+            });
+        }
     }
 
-    if (channelsRequireWhatsApp(channels) && !(await isWhatsAppCloudApiConfigured(db, encryptionKey))) {
-        throw new ValidationError("Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.");
+    if (channelsRequireWhatsApp(channels)) {
+        if (!(await isWhatsAppCloudApiConfigured(db, encryptionKey))) {
+            throw new ValidationError("Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.");
+        }
+        await assertNotificationProviderNotPaused(db, {
+            channel: "whatsapp",
+            provider: "whatsapp",
+        });
     }
 
     // Import upsertSetting from gateway-settings (same pattern used by site-settings.service.ts)
@@ -402,6 +418,18 @@ function channelsRequirePush(channels: Record<string, string[]>): boolean {
     return Object.values(channels).some((statusChannels) =>
         statusChannels.includes("push"),
     );
+}
+
+async function assertNotificationProviderNotPaused(
+    db: Database,
+    options: {
+        channel: "sms" | "whatsapp";
+        provider: string;
+    },
+): Promise<void> {
+    const block = await getNotificationProviderBlock(db, options);
+    if (!block) return;
+    throw new ValidationError(describeNotificationProviderBlock(block));
 }
 
 // ─────────────────────────────────────────

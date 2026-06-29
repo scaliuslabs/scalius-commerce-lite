@@ -23312,6 +23312,7 @@ export type GetApiV1AdminSettingsNotificationChannelsResponses = {
                 languageCode: string;
             };
             whatsappConfigured: boolean;
+            whatsappError: string | null;
             smsProviderConfigured: boolean;
             smsProviderError: string | null;
         };
@@ -23421,6 +23422,7 @@ export type PutApiV1AdminSettingsNotificationChannelsResponses = {
                 languageCode: string;
             };
             whatsappConfigured: boolean;
+            whatsappError: string | null;
             smsProviderConfigured: boolean;
             smsProviderError: string | null;
         };
@@ -23517,6 +23519,8 @@ export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponses = {
             channels: {
                 [key: string]: Array<string>;
             };
+            pushConfigured: boolean;
+            pushError: string | null;
         };
     };
 };
@@ -23615,6 +23619,8 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses = {
             channels: {
                 [key: string]: Array<string>;
             };
+            pushConfigured: boolean;
+            pushError: string | null;
         };
     };
 };

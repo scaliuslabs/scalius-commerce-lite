@@ -93,6 +93,14 @@ export function isNotificationProviderBreakerFailure(value: string | null | unde
     return PROVIDER_BREAKER_PATTERNS.some((pattern) => pattern.test(status));
 }
 
+export function describeNotificationProviderBlock(
+  block: Pick<NotificationProviderBlock, "channel" | "provider" | "reason">,
+): string {
+    const channelLabel = humanizeChannel(block.channel);
+    const providerLabel = block.provider ? ` via ${block.provider}` : "";
+    return `${channelLabel}${providerLabel} sending is paused after a provider setup failure. Save corrected ${channelLabel.toLowerCase()} settings to resume notifications. Last error: ${block.reason}`;
+}
+
 function providerHealthKey(
   channel: NotificationProviderHealthChannel,
   provider: string,
@@ -133,6 +141,13 @@ function parseProviderBlock(value: string): NotificationProviderBlock | null {
     } catch {
         return null;
     }
+}
+
+function humanizeChannel(channel: NotificationProviderHealthChannel): string {
+    if (channel === "sms") return "SMS";
+    if (channel === "whatsapp") return "WhatsApp";
+    if (channel === "push") return "Admin push";
+    return "Email";
 }
 
 const PROVIDER_BREAKER_PATTERNS = [

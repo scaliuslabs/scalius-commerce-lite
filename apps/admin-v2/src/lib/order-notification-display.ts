@@ -14,6 +14,7 @@ export interface OrderNotificationReceiptDisplayGroup {
   latestTimestamp: string | number | null;
   totalAttempts: number;
   maxAttempts: number;
+  setupIssue: boolean;
 }
 
 const TERMINAL_DELIVERY_STATUSES = new Set(["accepted", "delivered", "skipped"]);
@@ -116,6 +117,10 @@ export function buildReceiptDisplayGroups(
     const totalAttempts = groupedReceipts.reduce((sum, receipt) => sum + Math.max(0, receipt.attempts), 0);
     const maxAttempts = groupedReceipts.reduce((max, receipt) => Math.max(max, receipt.attempts), 0);
 
+    const setupIssue =
+      isProviderSetupIssue(first.providerStatus) ||
+      isProviderSetupIssue(first.lastError);
+
     return {
       key,
       receipts: groupedReceipts,
@@ -130,15 +135,17 @@ export function buildReceiptDisplayGroups(
       latestTimestamp,
       totalAttempts,
       maxAttempts,
+      setupIssue,
     };
   });
 }
 
 export function deliveryAttemptLabel(group: Pick<
   OrderNotificationReceiptDisplayGroup,
-  "status" | "count" | "maxAttempts" | "totalAttempts"
+  "status" | "count" | "maxAttempts" | "totalAttempts" | "setupIssue"
 >): string {
   if (group.status === "skipped") {
+    if (group.setupIssue) return "Paused";
     return group.maxAttempts > 1 ? `Stopped after ${group.maxAttempts} attempts` : "Not sent";
   }
   if (TERMINAL_DELIVERY_STATUSES.has(group.status)) {
@@ -176,4 +183,29 @@ function findLatestReceiptTimestamp(receipts: OrderNotificationReceiptDto[]): st
 
 function humanize(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function isProviderSetupIssue(value: string | null | undefined): boolean {
+  const normalized = value?.toLowerCase() ?? "";
+  return (
+    normalized.includes("provider_blocked_until_settings_save") ||
+    normalized.includes("provider sending is paused") ||
+    normalized.includes("provider rejected") ||
+    normalized.includes("setup failure") ||
+    normalized.includes("notification setup") ||
+    normalized.includes("credentials") ||
+    normalized.includes("could not be decrypted") ||
+    normalized.includes("api key") ||
+    normalized.includes("token") ||
+    normalized.includes("invalid_grant") ||
+    normalized.includes("service account") ||
+    normalized.includes("private key") ||
+    normalized.includes("authorization required") ||
+    normalized.includes("authentication failed") ||
+    normalized.includes("unauthorized") ||
+    normalized.includes("forbidden") ||
+    /\b(?:http|status|code|error)[^0-9]*(?:400|401|402|403|404|405|422)\b/.test(normalized) ||
+    normalized.includes("sender id") ||
+    normalized.includes("balance")
+  );
 }
