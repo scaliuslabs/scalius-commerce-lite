@@ -111,7 +111,7 @@ flowchart TB
         D1[(D1 Database<br/>Drizzle schema)]
         KV[(KV Namespaces<br/>cache + sessions + auth)]
         R2[(R2 Bucket<br/>media storage)]
-        Queues["4 Queues<br/>(payment-events, notifications,<br/>auth-otp, storefront-cache)"]
+        Queues["5 Queues<br/>(payment-events, notifications,<br/>auth-otp, auth-otp-dlq,<br/>storefront-cache)"]
     end
 
     subgraph External ["External Services"]
@@ -312,6 +312,7 @@ The generated OpenAPI spec and `packages/api-client/openapi.json` are the source
 | `payment-events` | `payment.stripe.*`, `payment.sslcommerz.*`, `payment.polar.*` | 10 |
 | `order-notifications` | `order.notification` (9 types) | 20 |
 | `auth-otp` | `auth.send_otp` (email, SMS, WhatsApp) | 10 |
+| `auth-otp-dlq` | D1 receipt terminalization for failed OTP queue messages without provider calls | 3 |
 | `storefront-cache` | `storefront.cache_purge`, `storefront.cache_warm` (durable purge/warm retry) | 10 |
 | `storefront-cache-dlq` | D1 archive of terminal storefront cache queue failures for admin replay/ignore | 10 |
 
