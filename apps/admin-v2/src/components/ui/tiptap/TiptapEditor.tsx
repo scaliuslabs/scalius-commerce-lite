@@ -27,6 +27,7 @@ export function TiptapEditor({
   const hasAutoFocusedRef = useRef(false);
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
+  const editorMaxHeight = compact ? "200px" : "300px";
 
   // Handle Escape key and body scroll lock for fullscreen
   useEffect(() => {
@@ -208,7 +209,7 @@ export function TiptapEditor({
           "overflow-y-auto border-t",
           isFullscreen ? "flex-1 bg-muted/30" : "",
         )}
-        style={!isFullscreen ? { maxHeight: "300px" } : undefined}
+        style={!isFullscreen ? { maxHeight: editorMaxHeight } : undefined}
         onClick={() => {
           // Click-to-focus: when user clicks the editing area background, focus the editor
           if (isFullscreen && editorInstance && !editorInstance.isFocused) {

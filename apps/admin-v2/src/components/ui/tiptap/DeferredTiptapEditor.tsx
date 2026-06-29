@@ -23,6 +23,10 @@ function getDeferredEditorMinHeightClass(compact: boolean) {
   return compact ? "min-h-[237px]" : "min-h-[257px]";
 }
 
+function getDeferredEditorViewportClass(compact: boolean) {
+  return compact ? "h-[200px]" : "max-h-64 min-h-[200px]";
+}
+
 function hasRenderableContent(content: string) {
   const text = content
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -60,7 +64,7 @@ function EditorLoadingShell({
       <div className="h-10 border-b bg-muted/30 p-2">
         <div className="h-4 w-36 animate-pulse rounded bg-muted" />
       </div>
-      <div className={cn("p-4", compact ? "min-h-[180px]" : "min-h-[200px]")}>
+      <div className={cn("p-4", getDeferredEditorViewportClass(Boolean(compact)))}>
         <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
         <div className="mt-3 h-4 w-1/2 animate-pulse rounded bg-muted" />
       </div>
@@ -175,15 +179,11 @@ export function DeferredTiptapEditor({
       onFocus={mountEditor}
       onPointerDown={mountEditor}
     >
-      <div
-        className={cn(
-          "cursor-text p-4 text-sm",
-          compact ? "min-h-[180px]" : "min-h-[200px]",
-        )}
-      >
+      <div className="cursor-text p-4 text-sm">
         <div
           className={cn(
-            "max-h-64 overflow-y-auto rounded-sm pr-2 leading-6",
+            "overflow-y-auto rounded-sm pr-2 leading-6",
+            getDeferredEditorViewportClass(compact),
             hasContent ? "text-foreground" : "text-muted-foreground",
           )}
         >

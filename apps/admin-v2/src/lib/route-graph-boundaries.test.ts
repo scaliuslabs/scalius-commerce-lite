@@ -1020,6 +1020,8 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("const TiptapEditor = lazy(");
     expect(source).toContain("loadTiptapEditorModule");
     expect(source).toContain("loadTiptapEditorModule().finally");
+    expect(source).toContain("function getDeferredEditorViewportClass");
+    expect(source).toContain("compact ? \"h-[200px]\" : \"max-h-64 min-h-[200px]\"");
     expect(source).toContain("mountRequestedRef");
     expect(source).toContain("IntersectionObserver");
     expect(source).toContain("requestIdleCallback");
@@ -1033,6 +1035,8 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapEditor.tsx"),
       "utf8",
     );
+    expect(editorSource).toContain("const editorMaxHeight = compact ? \"200px\" : \"300px\"");
+    expect(editorSource).toContain("style={!isFullscreen ? { maxHeight: editorMaxHeight } : undefined}");
     expect(editorSource).not.toContain("setIsMounted");
     expect(editorSource).not.toContain("if (!isMounted)");
   });
