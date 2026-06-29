@@ -1,6 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { CustomerAuthMethod } from "@scalius/shared/customer-auth-policy";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import type {
+  MetaConversionsSettings,
+  MetaConversionsSettingsResponse,
+} from "../../types/api-responses";
 export {
   getStorefrontUrl,
   updateStorefrontUrl,
@@ -142,8 +146,14 @@ export interface SmsSettingsPayload {
   gennetSid?: string;
 }
 export type UpdateSmsSettingsInput = SettingsPayload;
-export type MetaConversionsSettingsPayload = SettingsPayload;
-export type UpdateMetaConversionsSettingsInput = SettingsPayload;
+export type MetaConversionsSettingsPayload = MetaConversionsSettingsResponse;
+export interface UpdateMetaConversionsSettingsInput {
+  pixelId?: string;
+  accessToken?: string;
+  testEventCode?: string;
+  isEnabled: boolean;
+  logRetentionDays: number;
+}
 export type MetaConversionsLogsInput = { page?: number; limit?: number };
 export type MetaConversionsLogsPayload = SettingsPayload;
 export interface AllowedCountriesPayload extends SettingsPayload {
@@ -359,7 +369,7 @@ export const getMetaConversionsSettings = createServerFn({
 export const updateMetaConversionsSettings = createServerFn({ method: "POST" })
   .validator((data: UpdateMetaConversionsSettingsInput) => data)
   .handler(async ({ data }) => {
-    return apiPost<SettingsPayload>("/settings/meta-conversions", data);
+    return apiPost<MetaConversionsSettings>("/settings/meta-conversions", data);
   });
 
 export const getMetaConversionsLogs = createServerFn({ method: "GET" })

@@ -3,6 +3,11 @@ import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
 import { sql, eq, desc, count } from "drizzle-orm";
 import { manualLogCleanup } from "@scalius/core/modules/analytics/meta.service";
+import {
+    buildUnavailableMetaPixelParityDiagnostics,
+    getMetaPixelParityDiagnostics,
+    metaPixelParityStatuses,
+} from "@scalius/core/modules/analytics";
 import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 import { redactCapiPayloadForLog } from "@scalius/core/integrations/meta/conversions-api";
 
@@ -61,13 +66,26 @@ const metaConversionsSettingsResponseSchema = z.object({
     updatedAt: z.number().nullable(),
 }).passthrough();
 
+const metaPixelParityResponseSchema = z.object({
+    status: z.enum(metaPixelParityStatuses),
+    severity: z.enum(["neutral", "success", "warning"]),
+    message: z.string(),
+    capiPixelId: z.string().nullable(),
+    activeBrowserPixelIds: z.array(z.string()),
+    activeFacebookPixelScriptCount: z.number().int().nonnegative(),
+    parseableFacebookPixelScriptCount: z.number().int().nonnegative(),
+});
+
 const getSettingsRoute = createRoute({
     method: "get",
     path: "/",
     tags: ["Admin - Meta Conversions"],
     summary: "Get Meta Conversions API settings",
     responses: {
-        200: { description: "Settings", content: { "application/json": { schema: successEnvelope(z.object({ settings: metaConversionsSettingsResponseSchema.nullable() })) } } },
+        200: { description: "Settings", content: { "application/json": { schema: successEnvelope(z.object({
+            settings: metaConversionsSettingsResponseSchema.nullable(),
+            pixelParity: metaPixelParityResponseSchema,
+        })) } } },
         ...errorResponses,
     }
 });
@@ -76,7 +94,13 @@ app.openapi(getSettingsRoute, (async (c) => {
     const db = c.get("db");
     const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
     const maskedSettings = settings ? { ...settings, accessToken: settings.accessToken ? MASKED_VALUE : null } : null;
-    return ok(c, { settings: maskedSettings });
+    const pixelParity = await getMetaPixelParityDiagnostics(db, settings?.pixelId).catch((error: unknown) => {
+        console.warn("Meta Pixel parity diagnostics unavailable", {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return buildUnavailableMetaPixelParityDiagnostics(settings?.pixelId);
+    });
+    return ok(c, { settings: maskedSettings, pixelParity });
 }) as AppRouteHandler<typeof getSettingsRoute>);
 
 // ── Save Settings ──

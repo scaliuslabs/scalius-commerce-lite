@@ -6,11 +6,12 @@ Third-party analytics script management, Meta Conversions API integration, and a
 
 | File | Purpose |
 |------|---------|
-| `index.ts` | Barrel exports (re-exports dashboard.service, analytics.validation, analytics.service, meta.service) |
+| `index.ts` | Barrel exports (re-exports dashboard.service, analytics.validation, analytics.service, meta.service, meta-pixel-parity) |
 | `analytics.service.ts` | Standalone functions for CRUD on analytics scripts |
 | `analytics.validation.ts` | Zod validation schemas for create/update/toggle |
 | `dashboard.service.ts` | `getDashboardSummaryStats()`, `getDashboardStats()`, `getRecentOrders()`, `getDailyActivityData()` |
 | `meta.service.ts` | Standalone functions for Meta Conversions API settings and log management |
+| `meta-pixel-parity.ts` | Pure parser/diagnostic helpers for comparing CAPI Pixel ID with active browser Pixel snippets |
 
 ## Analytics Scripts
 
@@ -75,6 +76,22 @@ order/customer values.
 | `logCapiEvent` | `(db: Database, logData, retentionHours = 12)` | Insert event log + trigger lazy cleanup via fire-and-forget `void performLogCleanup()`. Callers must pass redacted request payloads; the Meta CAPI route also redacts legacy stored payloads on admin reads. Uses `@paralleldrive/cuid2` for log IDs. |
 | `performLogCleanup` | `(db: Database, retentionHours: number)` | Delete logs older than retention period. |
 | `manualLogCleanup` | `(db: Database, retentionHours: number)` | Admin-triggered cleanup, returns `{ success: boolean; message: string }`. Uses `error instanceof Error` check in catch. |
+
+### Browser Pixel Parity (`meta-pixel-parity.ts`)
+
+`GET /api/v1/admin/settings/meta-conversions` includes a non-persisted
+`pixelParity` diagnostic. It compares the saved Meta CAPI Pixel ID with active
+analytics snippets that clearly initialize a browser Pixel through
+`fbq('init', 'numeric_pixel_id')`. The check is warning-only and must never block
+settings saves: if the analytics read fails, the API returns `status:
+"unavailable"` with the masked settings row.
+
+The parser intentionally does not trust `window.fbq`; storefront layout creates
+analytics queues before merchant snippets run, so a runtime `fbq` function is not
+proof that a browser Pixel is configured. It also ignores placeholder IDs,
+non-numeric IDs, `fbq('track', ...)`, and noscript-only image URLs. Typed
+`facebook_pixel` rows with no readable init become `unreadable_browser_pixel`;
+custom snippets count only when they contain a readable `fbq('init', ...)`.
 
 ## Dependencies
 

@@ -9,9 +9,27 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Settings, Loader2, Eye, EyeOff, Save, RotateCcw } from "lucide-react";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import { Link } from "@tanstack/react-router";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Info,
+  Settings,
+  Loader2,
+  Eye,
+  EyeOff,
+  Save,
+  RotateCcw,
+} from "lucide-react";
 import { useMetaConversionsSettings } from "./hooks/useMetaConversionsSettings";
 import type { RetentionInfo } from "./hooks/useMetaConversionsLogs";
+import type { MetaPixelParityDiagnostics } from "~/types/api-responses";
 
 // Local types replacing @scalius/database/schema imports
 export interface MetaConversionsSettings {
@@ -36,11 +54,98 @@ export interface FormData {
 
 interface MetaConversionsSettingsFormProps {
   initialSettings?: MetaConversionsSettings;
+  initialPixelParity?: MetaPixelParityDiagnostics | null;
   retentionInfo: RetentionInfo | null;
+}
+
+function getParityTitle(pixelParity: MetaPixelParityDiagnostics): string {
+  switch (pixelParity.status) {
+    case "ok":
+      return "Browser Pixel matches CAPI";
+    case "not_configured":
+      return "Pixel match check is waiting";
+    case "invalid_capi_pixel_id":
+      return "CAPI Pixel ID looks invalid";
+    case "no_browser_pixel":
+      return "Browser Pixel is not active";
+    case "unreadable_browser_pixel":
+      return "Browser Pixel ID could not be read";
+    case "multiple_browser_pixels":
+      return "Multiple browser Pixels are active";
+    case "unavailable":
+      return "Pixel match check is unavailable";
+    case "mismatch":
+      return "Browser Pixel does not match CAPI";
+  }
+}
+
+function getParityClassName(pixelParity: MetaPixelParityDiagnostics): string {
+  if (pixelParity.severity === "success") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100 [&_[data-slot=alert-description]]:text-emerald-800 dark:[&_[data-slot=alert-description]]:text-emerald-200";
+  }
+
+  if (pixelParity.severity === "warning") {
+    return "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100 [&_[data-slot=alert-description]]:text-amber-800 dark:[&_[data-slot=alert-description]]:text-amber-200";
+  }
+
+  return "bg-muted/40";
+}
+
+function MetaPixelParityPanel({
+  pixelParity,
+}: {
+  pixelParity: MetaPixelParityDiagnostics | null;
+}) {
+  if (!pixelParity) {
+    return null;
+  }
+
+  const Icon =
+    pixelParity.severity === "success"
+      ? CheckCircle2
+      : pixelParity.severity === "warning"
+        ? AlertTriangle
+        : Info;
+  const hasBrowserPixelIds = pixelParity.activeBrowserPixelIds.length > 0;
+
+  return (
+    <Alert className={getParityClassName(pixelParity)}>
+      <Icon className="h-4 w-4" />
+      <AlertTitle>{getParityTitle(pixelParity)}</AlertTitle>
+      <AlertDescription>
+        <p>{pixelParity.message}</p>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {pixelParity.capiPixelId ? (
+            <span className="rounded-md bg-background/70 px-2 py-1 font-mono">
+              CAPI {pixelParity.capiPixelId}
+            </span>
+          ) : null}
+          {hasBrowserPixelIds ? (
+            <span className="rounded-md bg-background/70 px-2 py-1 font-mono">
+              Browser {pixelParity.activeBrowserPixelIds.join(", ")}
+            </span>
+          ) : (
+            <span className="rounded-md bg-background/70 px-2 py-1">
+              Active Pixel scripts {pixelParity.activeFacebookPixelScriptCount}
+            </span>
+          )}
+        </div>
+        {pixelParity.status !== "ok" ? (
+          <Button asChild variant="outline" size="sm" className="mt-2">
+            <Link to="/admin/analytics">
+              Review browser Pixel
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 export function MetaConversionsSettingsForm({
   initialSettings,
+  initialPixelParity,
   retentionInfo,
 }: MetaConversionsSettingsFormProps) {
   const {
@@ -49,10 +154,11 @@ export function MetaConversionsSettingsForm({
     showAccessToken,
     setShowAccessToken,
     hasUnsavedChanges,
+    pixelParity,
     handleSaveSettings,
     handleResetForm,
     updateFormData,
-  } = useMetaConversionsSettings(initialSettings);
+  } = useMetaConversionsSettings(initialSettings, initialPixelParity);
 
   return (
     <Card>
@@ -100,6 +206,8 @@ export function MetaConversionsSettingsForm({
                 />
               </div>
             </div>
+
+            <MetaPixelParityPanel pixelParity={pixelParity} />
 
             <div className="space-y-2">
               <Label htmlFor="accessToken">Access Token</Label>

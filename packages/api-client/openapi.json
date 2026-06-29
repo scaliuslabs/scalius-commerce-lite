@@ -74179,10 +74179,67 @@
                           "additionalProperties": {
                             "nullable": true
                           }
+                        },
+                        "pixelParity": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "not_configured",
+                                "invalid_capi_pixel_id",
+                                "no_browser_pixel",
+                                "unreadable_browser_pixel",
+                                "ok",
+                                "mismatch",
+                                "multiple_browser_pixels",
+                                "unavailable"
+                              ]
+                            },
+                            "severity": {
+                              "type": "string",
+                              "enum": [
+                                "neutral",
+                                "success",
+                                "warning"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "capiPixelId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "activeBrowserPixelIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "activeFacebookPixelScriptCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "parseableFacebookPixelScriptCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "severity",
+                            "message",
+                            "capiPixelId",
+                            "activeBrowserPixelIds",
+                            "activeFacebookPixelScriptCount",
+                            "parseableFacebookPixelScriptCount"
+                          ]
                         }
                       },
                       "required": [
-                        "settings"
+                        "settings",
+                        "pixelParity"
                       ]
                     }
                   },

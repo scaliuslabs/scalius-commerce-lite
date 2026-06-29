@@ -8,6 +8,10 @@ import {
   createAnalyticsSchema,
   normalizeCloudflareWebAnalyticsConfig,
 } from "./analytics.validation";
+import {
+  buildMetaPixelParityDiagnostics,
+  extractFacebookPixelIdsFromScript,
+} from "./meta-pixel-parity";
 
 describe("analytics validation", () => {
   it("accepts a Cloudflare Web Analytics token", () => {
@@ -46,5 +50,82 @@ describe("analytics validation", () => {
 describe("Meta Graph API version", () => {
   it("uses the current supported Graph API version for Meta integrations", () => {
     expect(META_GRAPH_API_VERSION).toBe("v25.0");
+  });
+});
+
+describe("Meta Pixel parity diagnostics", () => {
+  it("extracts Pixel IDs from fbq init snippets", () => {
+    expect(
+      extractFacebookPixelIdsFromScript(`
+        <script>
+          fbq('init', '1234567890');
+          fbq("init", "9876543210");
+        </script>
+        <noscript><img src="https://www.facebook.com/tr?id=1234567890&ev=PageView" /></noscript>
+      `),
+    ).toEqual(["1234567890", "9876543210"]);
+  });
+
+  it("does not treat noscript image URLs as browser Pixel initialization", () => {
+    expect(
+      extractFacebookPixelIdsFromScript(
+        '<noscript><img src="https://www.facebook.com/tr?id=1234567890&ev=PageView" /></noscript>',
+      ),
+    ).toEqual([]);
+  });
+
+  it("ignores placeholder Pixel IDs", () => {
+    expect(
+      extractFacebookPixelIdsFromScript("fbq('init', 'PIXEL_ID');"),
+    ).toEqual([]);
+  });
+
+  it("reports a matched single browser Pixel as ok", () => {
+    expect(
+      buildMetaPixelParityDiagnostics("1234567890", [
+        { type: "facebook_pixel", config: "fbq('init', '1234567890');" },
+      ]),
+    ).toMatchObject({
+      status: "ok",
+      severity: "success",
+      activeBrowserPixelIds: ["1234567890"],
+    });
+  });
+
+  it("warns when the CAPI Pixel ID does not match active browser Pixels", () => {
+    expect(
+      buildMetaPixelParityDiagnostics("1234567890", [
+        { type: "facebook_pixel", config: "fbq('init', '9876543210');" },
+      ]),
+    ).toMatchObject({
+      status: "mismatch",
+      severity: "warning",
+      activeBrowserPixelIds: ["9876543210"],
+    });
+  });
+
+  it("warns when an active Facebook Pixel script has no readable ID", () => {
+    expect(
+      buildMetaPixelParityDiagnostics("1234567890", [
+        { type: "facebook_pixel", config: "window.fbq && fbq('track', 'PageView');" },
+      ]),
+    ).toMatchObject({
+      status: "unreadable_browser_pixel",
+      activeFacebookPixelScriptCount: 1,
+      parseableFacebookPixelScriptCount: 0,
+    });
+  });
+
+  it("counts custom snippets only when they include a readable fbq init", () => {
+    expect(
+      buildMetaPixelParityDiagnostics("1234567890", [
+        { type: "google_analytics", config: "<script>gtag('config', 'G-1')</script>" },
+        { type: "custom", config: "fbq('init', '1234567890');" },
+      ]),
+    ).toMatchObject({
+      status: "ok",
+      activeFacebookPixelScriptCount: 1,
+      activeBrowserPixelIds: ["1234567890"],
+    });
   });
 });
