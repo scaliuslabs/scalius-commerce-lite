@@ -117,5 +117,8 @@ describe("order notification display", () => {
     expect(describeNotificationIssue("delivery_attempt_limit_reached: temporary gateway timeout")).toBe(
       "Delivery stopped after repeated provider failures. Check credentials and settings before sending more notifications.",
     );
+    expect(describeNotificationIssue("provider_blocked_until_settings_save: error=405: Authorization required")).toBe(
+      "Provider sending is paused after a setup failure. Save corrected provider settings to resume notifications.",
+    );
   });
 });

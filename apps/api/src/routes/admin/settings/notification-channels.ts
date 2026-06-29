@@ -13,6 +13,7 @@ import {
 } from "@scalius/core/modules/settings/settings.service";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import { getFirebaseServiceAccountReadiness } from "@scalius/core/integrations/firebase/settings";
+import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
@@ -107,6 +108,9 @@ app.openapi(updateChannelsRoute, async (c) => {
     const whatsappTemplate = whatsappTemplateInput
         ? await updateOrderWhatsAppTemplateSettings(db, whatsappTemplateInput)
         : await getOrderWhatsAppTemplateSettings(db);
+    if (whatsappTemplateInput) {
+        await clearNotificationProviderBlocks(db, { channel: "whatsapp" });
+    }
     const whatsappConfigured = await isWhatsAppCloudApiConfigured(db, encryptionKey);
     const smsReadiness = await getSmsProviderReadiness(db, encryptionKey);
     return ok(c, {

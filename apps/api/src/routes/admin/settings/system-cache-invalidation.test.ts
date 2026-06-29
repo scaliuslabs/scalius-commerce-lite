@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   getActivePaymentMethods: vi.fn(),
   upsertEncryptedSetting: vi.fn(),
   upsertSetting: vi.fn(),
+  clearNotificationProviderBlocks: vi.fn(),
 }));
 
 vi.mock("../../../utils/kv-cache", () => ({
@@ -70,6 +71,10 @@ vi.mock("@scalius/core/integrations/sms", () => ({
 vi.mock("@scalius/core/integrations/firebase/settings", () => ({
   normalizeFirebaseServiceAccountJson: mocks.normalizeFirebaseServiceAccountJson,
   saveFirebaseServiceAccountJson: mocks.saveFirebaseServiceAccountJson,
+}));
+
+vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
+  clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
 }));
 
 import { systemSettingsRoutes } from "./system";
@@ -120,6 +125,7 @@ function createTestApp() {
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   mocks.upsertEncryptedSetting.mockResolvedValue(undefined);
   mocks.upsertSetting.mockResolvedValue(undefined);
+  mocks.clearNotificationProviderBlocks.mockResolvedValue(undefined);
   mocks.getEmailRuntimeSettings.mockResolvedValue({
     provider: "cloudflare",
     sender: "orders@example.com",
@@ -464,6 +470,10 @@ describe("system settings cache invalidation", () => {
       "credential-key",
       "site_settings_1",
     );
+    expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+      expect.anything(),
+      { channel: "whatsapp" },
+    );
   });
 
   it("does not pass JWT fallback as the WhatsApp read or migration write key", async () => {
@@ -604,6 +614,10 @@ describe("system settings cache invalidation", () => {
       "orders@example.com",
     );
     expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+    expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+      expect.anything(),
+      { channel: "email" },
+    );
   });
 
   it("encrypts a new Resend key before saving it", async () => {
@@ -622,6 +636,10 @@ describe("system settings cache invalidation", () => {
       "resend_api_key",
       "re_secret_key",
       "credential-key",
+    );
+    expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+      expect.anything(),
+      { channel: "email" },
     );
   });
 
@@ -643,6 +661,10 @@ describe("system settings cache invalidation", () => {
       expect.anything(),
       serviceAccount,
       "credential-key",
+    );
+    expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+      expect.anything(),
+      { channel: "push" },
     );
   });
 

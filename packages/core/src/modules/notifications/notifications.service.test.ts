@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
     markOrderNotificationDeliveryReceiptFailed: vi.fn(),
     markOrderNotificationDeliveryReceiptSkipped: vi.fn(),
     createProviderClientReference: vi.fn(),
+    getNotificationProviderBlock: vi.fn(),
+    markNotificationProviderBlocked: vi.fn(),
+    isNotificationProviderBreakerFailure: vi.fn(),
 }));
 
 vi.mock("../settings/settings.service", () => ({
@@ -50,6 +53,12 @@ vi.mock("./order-notification-delivery-receipts", () => ({
     markOrderNotificationDeliveryReceiptFailed: mocks.markOrderNotificationDeliveryReceiptFailed,
     markOrderNotificationDeliveryReceiptSkipped: mocks.markOrderNotificationDeliveryReceiptSkipped,
     createProviderClientReference: mocks.createProviderClientReference,
+}));
+
+vi.mock("./notification-provider-health", () => ({
+    getNotificationProviderBlock: mocks.getNotificationProviderBlock,
+    markNotificationProviderBlocked: mocks.markNotificationProviderBlocked,
+    isNotificationProviderBreakerFailure: mocks.isNotificationProviderBreakerFailure,
 }));
 
 import { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
@@ -173,6 +182,9 @@ describe("order notification dispatch", () => {
         mocks.markOrderNotificationDeliveryReceiptFailed.mockResolvedValue(undefined);
         mocks.markOrderNotificationDeliveryReceiptSkipped.mockResolvedValue(undefined);
         mocks.createProviderClientReference.mockReturnValue("client_ref_1");
+        mocks.getNotificationProviderBlock.mockResolvedValue(null);
+        mocks.markNotificationProviderBlocked.mockResolvedValue(undefined);
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(false);
     });
 
     it("keeps the shared notification type list complete", () => {
@@ -605,6 +617,7 @@ describe("order notification dispatch", () => {
             rawStatus: "error=405: Authorization required",
             retryable: false,
         });
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
         mocks.getActiveSmsProvider.mockResolvedValue({
             name: "smsnetbd",
             sendSms: mocks.sendSms,
@@ -632,6 +645,54 @@ describe("order notification dispatch", () => {
                 providerStatus: "error=405: Authorization required",
             }),
         );
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(db, {
+            channel: "sms",
+            provider: "smsnetbd",
+            reason: "error=405: Authorization required",
+        });
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("skips SMS provider calls while a setup failure is blocked until settings save", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_confirmed: ["sms"],
+        });
+        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
+            channel: "sms",
+            provider: "smsnetbd",
+            reason: "error=405: Authorization required",
+            blockedAt: 1_782_684_758,
+        });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "smsnetbd",
+            sendSms: mocks.sendSms,
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_sms_blocked",
+            "order_confirmed",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_sms_blocked",
+            },
+        );
+
+        expect(mocks.sendSms).not.toHaveBeenCalled();
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "provider_blocked_until_settings_save: error=405: Authorization required",
+            expect.objectContaining({
+                provider: "smsnetbd",
+                providerStatus: "provider_blocked_until_settings_save: error=405: Authorization required",
+            }),
+        );
         expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
         expect(result.hasRetryableFailure).toBe(false);
     });
@@ -645,6 +706,7 @@ describe("order notification dispatch", () => {
             success: false,
             rawStatus: "HTTP 401 unauthorized",
         });
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
         mocks.getActiveSmsProvider.mockResolvedValue({
             name: "smsnetbd",
             sendSms: mocks.sendSms,
@@ -672,6 +734,11 @@ describe("order notification dispatch", () => {
                 providerStatus: "HTTP 401 unauthorized",
             }),
         );
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(db, {
+            channel: "sms",
+            provider: "smsnetbd",
+            reason: "HTTP 401 unauthorized",
+        });
         expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
         expect(result.hasRetryableFailure).toBe(false);
     });
@@ -1169,6 +1236,7 @@ describe("order notification dispatch", () => {
 
     it("marks claimed push receipts skipped when Firebase credentials are not usable", async () => {
         const pushDb = createPushDb([{ token: "fcm_token_1" }]);
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
         mocks.sendEachForMulticast.mockRejectedValueOnce(
             new Error("Failed to get access token: invalid_grant service account disabled"),
         );
@@ -1194,7 +1262,55 @@ describe("order notification dispatch", () => {
                 providerStatus: "Failed to get access token: invalid_grant service account disabled",
             }),
         );
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(pushDb.db, {
+            channel: "push",
+            provider: "fcm",
+            reason: "Failed to get access token: invalid_grant service account disabled",
+        });
         expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("skips FCM provider setup work while Firebase is blocked until settings save", async () => {
+        const pushDb = createPushDb([{ token: "fcm_token_1" }]);
+        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
+            channel: "push",
+            provider: "fcm",
+            reason: "Firebase service account JSON is missing required fields",
+            blockedAt: 1_782_684_758,
+        });
+
+        const result = await sendOrderNotification(
+            pushDb.db,
+            {
+                id: "order_push_blocked",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+            "https://api.example.test",
+            { outboxId: "outbox_push_blocked" },
+        );
+
+        expect(mocks.getFirebaseAdminMessaging).not.toHaveBeenCalled();
+        expect(mocks.sendEachForMulticast).not.toHaveBeenCalled();
+        expect(mocks.createOrderNotificationDeliveryTarget).toHaveBeenCalledWith(expect.objectContaining({
+            outboxId: "outbox_push_blocked",
+            orderId: "order_push_blocked",
+            channel: "push",
+            provider: "fcm",
+            recipient: "firebase-setup:order_push_blocked:order_created",
+            recipientMasked: "admin-fcm",
+        }));
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            pushDb.db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "provider_blocked_until_settings_save: Firebase service account JSON is missing required fields",
+            expect.objectContaining({
+                provider: "fcm",
+                providerStatus: "provider_blocked_until_settings_save: Firebase service account JSON is missing required fields",
+            }),
+        );
         expect(result.hasRetryableFailure).toBe(false);
     });
 
@@ -1246,6 +1362,7 @@ describe("order notification dispatch", () => {
 
     it("records push setup failures before token receipt fanout", async () => {
         const pushDb = createPushDb([{ token: "fcm_token_1" }]);
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
         mocks.getFirebaseAdminMessaging.mockImplementationOnce(() => {
             throw new Error("Firebase service account JSON is missing required fields");
         });
@@ -1279,6 +1396,11 @@ describe("order notification dispatch", () => {
                 providerStatus: "Firebase service account JSON is missing required fields",
             }),
         );
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(pushDb.db, {
+            channel: "push",
+            provider: "fcm",
+            reason: "Firebase service account JSON is missing required fields",
+        });
         expect(pushDb.db.select).toHaveBeenCalledTimes(1);
         expect(mocks.sendEachForMulticast).not.toHaveBeenCalled();
         expect(result.hasRetryableFailure).toBe(false);

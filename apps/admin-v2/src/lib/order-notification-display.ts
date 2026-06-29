@@ -51,6 +51,9 @@ export function describeNotificationIssue(value: string | null | undefined): str
   ) {
     return "Firebase credentials are not usable. Save a valid service account or disable admin push notifications.";
   }
+  if (normalized.includes("provider_blocked_until_settings_save")) {
+    return "Provider sending is paused after a setup failure. Save corrected provider settings to resume notifications.";
+  }
   if (
     normalized.includes("authorization required") ||
     normalized.includes("unauthorized") ||

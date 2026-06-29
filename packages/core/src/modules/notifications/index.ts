@@ -6,6 +6,16 @@ export {
   isOrderNotificationType,
 } from "./notification-types";
 export {
+  clearNotificationProviderBlocks,
+  getNotificationProviderBlock,
+  isNotificationProviderBreakerFailure,
+  markNotificationProviderBlocked,
+} from "./notification-provider-health";
+export type {
+  NotificationProviderBlock,
+  NotificationProviderHealthChannel,
+} from "./notification-provider-health";
+export {
   buildOrderNotificationDeliveryReceiptKey,
   claimOrderNotificationDeliveryReceipt,
   createOrderNotificationDeliveryTarget,
