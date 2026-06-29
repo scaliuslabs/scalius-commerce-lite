@@ -103,6 +103,20 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain("handleOpen();");
   });
 
+  it("keeps global auth hydration free of guest checkout/session network reads", () => {
+    const authModalSource = readStorefrontSource("src/components/AuthModal.tsx");
+    const cartSource = readStorefrontSource("src/pages/cart.astro");
+
+    expect(authModalSource).not.toContain("fetchInitData");
+    expect(authModalSource).toContain("function readInjectedCheckoutConfig()");
+    expect(authModalSource).toContain("void ensureAuthSettings();");
+    expect(authModalSource).toContain("if (hasCustomerAuthMirrorCookie()) {");
+    expect(authModalSource).toContain("scheduleCustomerSessionResume();");
+    expect(authModalSource).toContain("window.__CHECKOUT_CONFIG__");
+    expect(cartSource).toContain("const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);");
+    expect(cartSource).toContain("window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};");
+  });
+
   it("resumes incomplete customer profiles instead of silently authenticating them", () => {
     const source = readStorefrontSource("src/components/AuthModal.tsx");
 

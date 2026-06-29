@@ -97,6 +97,7 @@ function authUrl(subpath: string): string {
 
 const CUSTOMER_AUTH_READ_TIMEOUT_MS = 8_000;
 const CUSTOMER_AUTH_WRITE_TIMEOUT_MS = 12_000;
+let inFlightCustomerSessionRead: Promise<AuthState> | null = null;
 
 async function customerAuthFetch(
   input: string,
@@ -153,6 +154,15 @@ function networkErrorMessage(error: unknown): string {
     return "Account request timed out. Please try again.";
   }
   return "Network error. Please try again.";
+}
+
+function clearInFlightCustomerSessionRead(): void {
+  inFlightCustomerSessionRead = null;
+}
+
+function clearReadableCustomerAuthMirrorCookie(): void {
+  if (typeof document === "undefined") return;
+  document.cookie = "cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 }
 
 export interface CustomerInfo {
@@ -221,6 +231,7 @@ export async function verifyCustomerOtp(
     if (!res.ok || isFailedEnvelope(raw)) {
       return { success: false, error: extractError(raw), attemptsLeft: data.attemptsLeft };
     }
+    clearInFlightCustomerSessionRead();
     return { success: true, customer: data.customer, isNewUser: data.isNewUser };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error) };
@@ -231,29 +242,44 @@ export async function verifyCustomerOtp(
  * Get current customer session info.
  */
 export async function getCustomerSession(): Promise<AuthState> {
-  try {
-    const res = await customerAuthFetch(authUrl("me"), {
-      credentials: "include",
-      cache: "no-store",
-    });
-    const raw = await readEnvelope<SessionData>(res);
-    const data = raw.data ?? (raw as unknown as SessionData);
-    if (!res.ok || isFailedEnvelope(raw) || typeof data.authenticated !== "boolean") {
+  if (inFlightCustomerSessionRead) {
+    return inFlightCustomerSessionRead;
+  }
+
+  inFlightCustomerSessionRead = (async (): Promise<AuthState> => {
+    try {
+      const res = await customerAuthFetch(authUrl("me"), {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const raw = await readEnvelope<SessionData>(res);
+      const data = raw.data ?? (raw as unknown as SessionData);
+      if (!res.ok || isFailedEnvelope(raw) || typeof data.authenticated !== "boolean") {
+        const unavailable = isTemporaryReadFailure(res.status) || res.ok;
+        if (!unavailable) clearReadableCustomerAuthMirrorCookie();
+        return {
+          authenticated: false,
+          unavailable,
+          status: res.status,
+          error: extractError(raw) || "Account status could not be read. Please try again.",
+        };
+      }
+      if (!data.authenticated) clearReadableCustomerAuthMirrorCookie();
+      return data as AuthState;
+    } catch (error: unknown) {
       return {
         authenticated: false,
-        unavailable: isTemporaryReadFailure(res.status) || res.ok,
-        status: res.status,
-        error: extractError(raw) || "Account status could not be read. Please try again.",
+        unavailable: true,
+        status: 0,
+        error: networkErrorMessage(error),
       };
     }
-    return data as AuthState;
-  } catch (error: unknown) {
-    return {
-      authenticated: false,
-      unavailable: true,
-      status: 0,
-      error: networkErrorMessage(error),
-    };
+  })();
+
+  try {
+    return await inFlightCustomerSessionRead;
+  } finally {
+    clearInFlightCustomerSessionRead();
   }
 }
 
@@ -265,6 +291,8 @@ export async function getCustomerSession(): Promise<AuthState> {
  * silently dropped by modern browsers.
  */
 export async function logoutCustomer(): Promise<void> {
+  clearInFlightCustomerSessionRead();
+  clearReadableCustomerAuthMirrorCookie();
   try {
     await fetch("/api/auth/logout", {
       method: "POST",
@@ -532,6 +560,7 @@ export async function updateCustomerProfile(data: ProfileUpdateData): Promise<{
         unavailable: isTemporaryReadFailure(res.status) || res.ok,
       };
     }
+    clearInFlightCustomerSessionRead();
     return { success: true, customer: result.customer };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error), status: 0, unavailable: true };
