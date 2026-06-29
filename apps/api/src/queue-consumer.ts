@@ -47,9 +47,11 @@ import {
   claimAuthOtpDeliveryReceipt,
   createAuthOtpDeliveryTarget,
   createAuthOtpProviderClientReference,
+  getAuthOtpDeliveryRetryDelaySeconds,
   markAuthOtpDeliveryReceiptAccepted,
   markAuthOtpDeliveryReceiptFailed,
   markAuthOtpDeliveryReceiptSkipped,
+  markAuthOtpDeliveryReceiptSkippedByDeliveryKey,
   type AuthOtpDeliveryChannel,
   type AuthOtpDeliveryReceiptResult,
 } from "@scalius/core/modules/customers/otp-delivery-receipts";
@@ -78,6 +80,16 @@ import {
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
 type PaymentWebhookCompletionStatus = "processed" | "manual_reconciliation";
 type ConfirmedPaymentType = "full" | "deposit" | "balance";
+
+class QueueRetryAfterError extends Error {
+  readonly delaySeconds: number;
+
+  constructor(message: string, delaySeconds: number) {
+    super(message);
+    this.name = "QueueRetryAfterError";
+    this.delaySeconds = Math.max(5, Math.min(60 * 60, Math.ceil(delaySeconds)));
+  }
+}
 
 // Mirrors apps/api/wrangler*.jsonc for PAYMENT_EVENTS_QUEUE. Cloudflare delivers
 // the first attempt plus max_retries additional attempts before DLQ/deletion.
@@ -350,6 +362,14 @@ export async function handleQueueBatch(
     return;
   }
 
+  if (batch.queue === "auth-otp-dlq") {
+    await handleAuthOtpDlqBatch(
+      batch as unknown as MessageBatch<AuthOtpQueueMessage>,
+      db,
+    );
+    return;
+  }
+
   const batchContext = createQueueBatchLogContext(batch, QUEUE_BATCH_CONCURRENCY_LIMIT);
   logQueueBatchStarted(batchContext);
   logQueueBatchConcurrency(batchContext);
@@ -383,7 +403,7 @@ export async function handleQueueBatch(
         msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
         result.reason,
       );
-      msg.retry({ delaySeconds: 30 });
+      msg.retry({ delaySeconds: getQueueRetryDelaySeconds(result.reason) });
       retried += 1;
     }
   }
@@ -454,6 +474,43 @@ async function handleStorefrontCacheDlqBatch(
       acked += 1;
     } else {
       console.error(`[Queue] Failed to archive storefront cache DLQ message ${msg.id}:`, result.reason);
+      msg.retry({ delaySeconds: 300 });
+      retried += 1;
+    }
+  }
+
+  logQueueBatchCompleted(batchContext, acked, retried);
+}
+
+async function handleAuthOtpDlqBatch(
+  batch: MessageBatch<AuthOtpQueueMessage>,
+  db: ReturnType<typeof getDb>,
+): Promise<void> {
+  const batchContext = createQueueBatchLogContext(batch, DLQ_BATCH_CONCURRENCY_LIMIT);
+  logQueueBatchStarted(batchContext);
+  logQueueBatchConcurrency(batchContext);
+
+  const results = await runSettledWithConcurrency(
+    batch.messages,
+    DLQ_BATCH_CONCURRENCY_LIMIT,
+    (msg) => archiveAuthOtpDlqMessage(msg, db),
+  );
+
+  let acked = 0;
+  let retried = 0;
+
+  for (let i = 0; i < batch.messages.length; i++) {
+    const result = results[i];
+    const msg = batch.messages[i];
+    if (!result || !msg) continue;
+    if (result.status === "fulfilled") {
+      console.warn(
+        `[Queue] Archived auth OTP DLQ message ${msg.id} as ${result.value.status}`,
+      );
+      msg.ack();
+      acked += 1;
+    } else {
+      console.error(`[Queue] Failed to archive auth OTP DLQ message ${msg.id}:`, result.reason);
       msg.retry({ delaySeconds: 300 });
       retried += 1;
     }
@@ -567,6 +624,11 @@ function toTimestampMs(value: Date | number | string | undefined): number | null
   return Number.isNaN(timestamp) ? null : timestamp;
 }
 
+function getQueueRetryDelaySeconds(error: unknown): number {
+  if (error instanceof QueueRetryAfterError) return error.delaySeconds;
+  return 30;
+}
+
 async function archivePaymentEventsDlqMessage(
   msg: Message<QueueBody>,
   db: ReturnType<typeof getDb>,
@@ -582,6 +644,44 @@ async function archivePaymentEventsDlqMessage(
   console.warn(
     `[Queue] Archived payment DLQ message ${msg.id} for webhook ${result.id} with status=${result.status}`,
   );
+}
+
+async function archiveAuthOtpDlqMessage(
+  msg: Message<AuthOtpQueueMessage>,
+  db: ReturnType<typeof getDb>,
+): Promise<{ status: "skipped" | "already_terminal" | "ignored" }> {
+  const payload = msg.body;
+  if (payload.type !== "auth.send_otp") {
+    console.warn(`[Queue] Ignoring non-auth-otp message in auth-otp-dlq id=${msg.id}`);
+    return { status: "ignored" };
+  }
+
+  const channel = resolveAuthOtpDeliveryChannel(payload);
+  const target = await createAuthOtpDeliveryTarget({
+    deliveryKey: payload.deliveryKey ?? `legacy:${msg.id}`,
+    purpose: payload.purpose ?? "customer_login",
+    method: payload.method,
+    channel,
+    provider: channel,
+    identifier: payload.identifier,
+    otpExpiresAt: payload.otpExpiresAt ?? null,
+  });
+  const status = await markAuthOtpDeliveryReceiptSkippedByDeliveryKey(
+    db,
+    target,
+    "auth_otp_dlq_terminal",
+    {
+      provider: target.provider,
+      providerStatus: "auth_otp_dlq_terminal",
+      rawResponse: `queue=${msg.id}; attempts=${msg.attempts}`,
+    },
+  );
+
+  console.warn(
+    `[Queue] Archived auth OTP DLQ delivery=${target.deliveryKey} channel=${target.channel} ` +
+      `recipientHash=${target.identifierHash} status=${status}`,
+  );
+  return { status };
 }
 
 // ── Single message processor ───────────────────────────────────────────────
@@ -1247,7 +1347,10 @@ async function processAuthOtpQueueMessage(
       console.log(`[Queue] Skipped OTP delivery ${target.deliveryKey}: already ${claim.reason}`);
       return;
     }
-    throw new Error(`OTP delivery receipt ${target.deliveryKey} is ${claim.reason}`);
+    throw new QueueRetryAfterError(
+      `OTP delivery receipt ${target.deliveryKey} is ${claim.reason}`,
+      claim.retryAfterSeconds ?? 30,
+    );
   }
 
   try {
@@ -1292,7 +1395,10 @@ async function processAuthOtpQueueMessage(
     ).catch((markError: unknown) => {
       console.error("[Queue] Failed to mark OTP delivery receipt failure:", markError);
     });
-    throw error;
+    throw new QueueRetryAfterError(
+      error instanceof Error ? error.message : String(error),
+      getAuthOtpDeliveryRetryDelaySeconds(claim.receipt.attempts),
+    );
   }
 }
 

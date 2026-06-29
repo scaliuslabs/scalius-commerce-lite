@@ -33,9 +33,11 @@ const mocks = vi.hoisted(() => ({
   markOrderNotificationOutboxSent: vi.fn(),
   createAuthOtpDeliveryTarget: vi.fn(),
   claimAuthOtpDeliveryReceipt: vi.fn(),
+  getAuthOtpDeliveryRetryDelaySeconds: vi.fn((attempts: number) => Math.min(3600, 30 * 2 ** (Math.max(1, attempts) - 1))),
   markAuthOtpDeliveryReceiptAccepted: vi.fn(),
   markAuthOtpDeliveryReceiptFailed: vi.fn(),
   markAuthOtpDeliveryReceiptSkipped: vi.fn(),
+  markAuthOtpDeliveryReceiptSkippedByDeliveryKey: vi.fn(),
   createAuthOtpProviderClientReference: vi.fn(() => "otpclientref1"),
   markWebhookEventProcessed: vi.fn(),
   markWebhookEventFailed: vi.fn(),
@@ -76,9 +78,11 @@ vi.mock("@scalius/core/modules/notifications", () => ({
 vi.mock("@scalius/core/modules/customers/otp-delivery-receipts", () => ({
   createAuthOtpDeliveryTarget: mocks.createAuthOtpDeliveryTarget,
   claimAuthOtpDeliveryReceipt: mocks.claimAuthOtpDeliveryReceipt,
+  getAuthOtpDeliveryRetryDelaySeconds: mocks.getAuthOtpDeliveryRetryDelaySeconds,
   markAuthOtpDeliveryReceiptAccepted: mocks.markAuthOtpDeliveryReceiptAccepted,
   markAuthOtpDeliveryReceiptFailed: mocks.markAuthOtpDeliveryReceiptFailed,
   markAuthOtpDeliveryReceiptSkipped: mocks.markAuthOtpDeliveryReceiptSkipped,
+  markAuthOtpDeliveryReceiptSkippedByDeliveryKey: mocks.markAuthOtpDeliveryReceiptSkippedByDeliveryKey,
   createAuthOtpProviderClientReference: mocks.createAuthOtpProviderClientReference,
 }));
 
@@ -290,6 +294,10 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.markAuthOtpDeliveryReceiptAccepted.mockResolvedValue(undefined);
     mocks.markAuthOtpDeliveryReceiptFailed.mockResolvedValue(undefined);
     mocks.markAuthOtpDeliveryReceiptSkipped.mockResolvedValue(undefined);
+    mocks.markAuthOtpDeliveryReceiptSkippedByDeliveryKey.mockResolvedValue("skipped");
+    mocks.getAuthOtpDeliveryRetryDelaySeconds.mockImplementation((attempts: number) =>
+      Math.min(3600, 30 * 2 ** (Math.max(1, attempts) - 1)),
+    );
     mocks.createAuthOtpProviderClientReference.mockReturnValue("otpclientref1");
     mocks.markWebhookEventProcessed.mockResolvedValue(undefined);
     mocks.markWebhookEventFailed.mockResolvedValue(undefined);
@@ -1738,6 +1746,72 @@ describe("handleQueueBatch payment confirmation retries", () => {
       },
     );
     expect(mocks.markAuthOtpDeliveryReceiptFailed).not.toHaveBeenCalled();
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries busy OTP receipts using the receipt backoff hint", async () => {
+    mocks.claimAuthOtpDeliveryReceipt.mockResolvedValueOnce({
+      claimed: false,
+      reason: "busy",
+      retryAfterSeconds: 240,
+    });
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_busy",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+    } as const);
+
+    await handleQueueBatch(createBatch([message], "auth-otp"), {} as Env);
+
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 240 });
+  });
+
+  it("archives auth OTP DLQ messages without calling delivery providers", async () => {
+    const message = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_delivery_dlq",
+      otpExpiresAt: 4_102_444_800,
+      method: "phone",
+      allowedMethod: "sms_otp",
+      identifier: "+8801712345678",
+      code: "654321",
+      name: "Buyer",
+    } as const, 6);
+
+    await handleQueueBatch(createBatch([message], "auth-otp-dlq"), {} as Env);
+
+    expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
+    expect(mocks.markAuthOtpDeliveryReceiptSkippedByDeliveryKey).toHaveBeenCalledWith(
+      { id: "db" },
+      expect.objectContaining({
+        deliveryKey: "otp_delivery_dlq",
+        channel: "sms",
+        identifierHash: "recipient_hash_1",
+      }),
+      "auth_otp_dlq_terminal",
+      {
+        provider: "sms",
+        providerStatus: "auth_otp_dlq_terminal",
+        rawResponse: expect.stringContaining("attempts=6"),
+      },
+    );
+    const allQueueLogs = [
+      ...vi.mocked(console.log).mock.calls,
+      ...vi.mocked(console.warn).mock.calls,
+      ...vi.mocked(console.error).mock.calls,
+    ].map(([entry]) => String(entry)).join("\n");
+    expect(allQueueLogs).not.toContain("+8801712345678");
+    expect(allQueueLogs).not.toContain("654321");
     expect(message.retry).not.toHaveBeenCalled();
     expect(message.ack).toHaveBeenCalledTimes(1);
   });

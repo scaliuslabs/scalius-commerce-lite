@@ -100,6 +100,12 @@
         "dead_letter_queue": "auth-otp-dlq"
       },
       {
+        "queue": "auth-otp-dlq",
+        "max_batch_size": 3,
+        "max_batch_timeout": 5,
+        "max_retries": 5
+      },
+      {
         "queue": "storefront-cache",
         "max_batch_size": 3,
         "max_batch_timeout": 5,
