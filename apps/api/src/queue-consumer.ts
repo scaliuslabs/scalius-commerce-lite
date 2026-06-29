@@ -49,6 +49,7 @@ import {
   createAuthOtpProviderClientReference,
   getAuthOtpDeliveryRetryDelaySeconds,
   markAuthOtpDeliveryReceiptAccepted,
+  markAuthOtpDeliveryReceiptAcceptedByDeliveryKey,
   markAuthOtpDeliveryReceiptFailed,
   markAuthOtpDeliveryReceiptSkipped,
   markAuthOtpDeliveryReceiptSkippedByDeliveryKey,
@@ -91,12 +92,24 @@ class QueueRetryAfterError extends Error {
   }
 }
 
+type AuthOtpAcceptedHint = {
+  deliveryKey: string;
+  channel: AuthOtpDeliveryChannel;
+  provider: string;
+  providerMessageId?: string | null;
+  providerStatus?: string | null;
+  rawResponse?: string | null;
+  createdAt: number;
+};
+
 // Mirrors apps/api/wrangler*.jsonc for PAYMENT_EVENTS_QUEUE. Cloudflare delivers
 // the first attempt plus max_retries additional attempts before DLQ/deletion.
 const PAYMENT_EVENTS_MAX_RETRIES = 3;
 const PAYMENT_EVENTS_TERMINAL_DELIVERY_ATTEMPT = PAYMENT_EVENTS_MAX_RETRIES + 1;
 const QUEUE_BATCH_CONCURRENCY_LIMIT = 3;
 const DLQ_BATCH_CONCURRENCY_LIMIT = 2;
+const AUTH_OTP_ACCEPTED_HINT_TTL_SECONDS = 24 * 60 * 60;
+const AUTH_OTP_ACCEPTED_HINT_PREFIX = "auth_otp:accepted:";
 
 function assertPaymentConfirmed(
   result: PaymentConfirmationResult,
@@ -366,6 +379,7 @@ export async function handleQueueBatch(
     await handleAuthOtpDlqBatch(
       batch as unknown as MessageBatch<AuthOtpQueueMessage>,
       db,
+      env,
     );
     return;
   }
@@ -485,6 +499,7 @@ async function handleStorefrontCacheDlqBatch(
 async function handleAuthOtpDlqBatch(
   batch: MessageBatch<AuthOtpQueueMessage>,
   db: ReturnType<typeof getDb>,
+  env: Env,
 ): Promise<void> {
   const batchContext = createQueueBatchLogContext(batch, DLQ_BATCH_CONCURRENCY_LIMIT);
   logQueueBatchStarted(batchContext);
@@ -493,7 +508,7 @@ async function handleAuthOtpDlqBatch(
   const results = await runSettledWithConcurrency(
     batch.messages,
     DLQ_BATCH_CONCURRENCY_LIMIT,
-    (msg) => archiveAuthOtpDlqMessage(msg, db),
+    (msg) => archiveAuthOtpDlqMessage(msg, db, env),
   );
 
   let acked = 0;
@@ -629,6 +644,135 @@ function getQueueRetryDelaySeconds(error: unknown): number {
   return 30;
 }
 
+async function markAuthOtpDeliveryReceiptAcceptedWithRetries(
+  db: ReturnType<typeof getDb>,
+  receipt: Parameters<typeof markAuthOtpDeliveryReceiptAccepted>[1],
+  result: AuthOtpDeliveryReceiptResult,
+): Promise<void> {
+  await retryAuthOtpReceiptWrite(() => markAuthOtpDeliveryReceiptAccepted(db, receipt, result));
+}
+
+async function markAuthOtpDeliveryReceiptSkippedWithRetries(
+  db: ReturnType<typeof getDb>,
+  receipt: Parameters<typeof markAuthOtpDeliveryReceiptSkipped>[1],
+  reason: string,
+  result: AuthOtpDeliveryReceiptResult,
+): Promise<void> {
+  await retryAuthOtpReceiptWrite(() => markAuthOtpDeliveryReceiptSkipped(db, receipt, reason, result));
+}
+
+async function markAuthOtpDeliveryReceiptAcceptedByKeyWithRetries(
+  db: ReturnType<typeof getDb>,
+  target: Parameters<typeof markAuthOtpDeliveryReceiptAcceptedByDeliveryKey>[1],
+  result: AuthOtpDeliveryReceiptResult,
+): Promise<"accepted" | "already_terminal"> {
+  return await retryAuthOtpReceiptWrite(() => markAuthOtpDeliveryReceiptAcceptedByDeliveryKey(db, target, result));
+}
+
+async function retryAuthOtpReceiptWrite<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await sleep(50 * 2 ** attempt);
+      }
+    }
+  }
+  throw lastError;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function storeAuthOtpAcceptedHint(
+  env: Env,
+  target: { deliveryKey: string; channel: AuthOtpDeliveryChannel },
+  result: AuthOtpDeliveryReceiptResult,
+): Promise<void> {
+  if (!env.CACHE) {
+    throw new Error("CACHE binding is required to preserve accepted OTP delivery recovery hints");
+  }
+
+  const hint: AuthOtpAcceptedHint = {
+    deliveryKey: target.deliveryKey,
+    channel: target.channel,
+    provider: result.provider ?? target.channel,
+    providerMessageId: result.providerMessageId ?? null,
+    providerStatus: result.providerStatus ?? "accepted",
+    rawResponse: result.rawResponse ?? null,
+    createdAt: Math.floor(Date.now() / 1000),
+  };
+
+  await env.CACHE.put(
+    authOtpAcceptedHintKey(target.deliveryKey),
+    JSON.stringify(hint),
+    { expirationTtl: AUTH_OTP_ACCEPTED_HINT_TTL_SECONDS },
+  );
+}
+
+async function recoverAuthOtpAcceptedDeliveryFromHint(
+  db: ReturnType<typeof getDb>,
+  env: Env,
+  target: Awaited<ReturnType<typeof createAuthOtpDeliveryTarget>>,
+): Promise<boolean> {
+  const hint = await readAuthOtpAcceptedHint(env, target.deliveryKey);
+  if (!hint) return false;
+
+  try {
+    const result = await markAuthOtpDeliveryReceiptAcceptedByKeyWithRetries(db, target, hint);
+    await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
+    console.warn(
+      `[Queue] Recovered accepted OTP delivery=${target.deliveryKey} channel=${target.channel} ` +
+        `recipientHash=${target.identifierHash} status=${result}`,
+    );
+    return true;
+  } catch (error) {
+    throw new QueueRetryAfterError(
+      error instanceof Error ? error.message : String(error),
+      30,
+    );
+  }
+}
+
+async function readAuthOtpAcceptedHint(
+  env: Env,
+  deliveryKey: string,
+): Promise<AuthOtpAcceptedHint | null> {
+  if (!env.CACHE) return null;
+  const value = await env.CACHE.get(authOtpAcceptedHintKey(deliveryKey), "json");
+  if (!isAuthOtpAcceptedHint(value, deliveryKey)) return null;
+  return value;
+}
+
+async function deleteAuthOtpAcceptedHint(env: Env, deliveryKey: string): Promise<void> {
+  if (!env.CACHE) return;
+  await env.CACHE.delete(authOtpAcceptedHintKey(deliveryKey)).catch((error: unknown) => {
+    console.warn(
+      `[Queue] Failed to delete accepted OTP recovery hint delivery=${deliveryKey}:`,
+      error instanceof Error ? error.message : error,
+    );
+  });
+}
+
+function authOtpAcceptedHintKey(deliveryKey: string): string {
+  return `${AUTH_OTP_ACCEPTED_HINT_PREFIX}${deliveryKey}`;
+}
+
+function isAuthOtpAcceptedHint(value: unknown, deliveryKey: string): value is AuthOtpAcceptedHint {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Partial<AuthOtpAcceptedHint>;
+  if (record.deliveryKey !== deliveryKey) return false;
+  if (record.channel !== "email" && record.channel !== "sms" && record.channel !== "whatsapp") return false;
+  if (!record.provider || typeof record.provider !== "string") return false;
+  return true;
+}
+
 async function archivePaymentEventsDlqMessage(
   msg: Message<QueueBody>,
   db: ReturnType<typeof getDb>,
@@ -649,7 +793,8 @@ async function archivePaymentEventsDlqMessage(
 async function archiveAuthOtpDlqMessage(
   msg: Message<AuthOtpQueueMessage>,
   db: ReturnType<typeof getDb>,
-): Promise<{ status: "skipped" | "already_terminal" | "ignored" }> {
+  env: Env,
+): Promise<{ status: "accepted" | "skipped" | "already_terminal" | "ignored" }> {
   const payload = msg.body;
   if (payload.type !== "auth.send_otp") {
     console.warn(`[Queue] Ignoring non-auth-otp message in auth-otp-dlq id=${msg.id}`);
@@ -666,6 +811,21 @@ async function archiveAuthOtpDlqMessage(
     identifier: payload.identifier,
     otpExpiresAt: payload.otpExpiresAt ?? null,
   });
+  const acceptedHint = await readAuthOtpAcceptedHint(env, target.deliveryKey);
+  if (acceptedHint) {
+    const acceptedStatus = await markAuthOtpDeliveryReceiptAcceptedByKeyWithRetries(
+      db,
+      target,
+      acceptedHint,
+    );
+    await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
+    console.warn(
+      `[Queue] Archived accepted auth OTP DLQ delivery=${target.deliveryKey} channel=${target.channel} ` +
+        `recipientHash=${target.identifierHash} status=${acceptedStatus}`,
+    );
+    return { status: acceptedStatus };
+  }
+
   const status = await markAuthOtpDeliveryReceiptSkippedByDeliveryKey(
     db,
     target,
@@ -1347,6 +1507,9 @@ async function processAuthOtpQueueMessage(
       console.log(`[Queue] Skipped OTP delivery ${target.deliveryKey}: already ${claim.reason}`);
       return;
     }
+    if (await recoverAuthOtpAcceptedDeliveryFromHint(db, env, target)) {
+      return;
+    }
     throw new QueueRetryAfterError(
       `OTP delivery receipt ${target.deliveryKey} is ${claim.reason}`,
       claim.retryAfterSeconds ?? 30,
@@ -1364,13 +1527,31 @@ async function processAuthOtpQueueMessage(
     }
 
     const result = await sendAuthOtpByChannel(payload, target, db, env);
-    await markAuthOtpDeliveryReceiptAccepted(db, claim.receipt, result);
+    try {
+      await markAuthOtpDeliveryReceiptAcceptedWithRetries(db, claim.receipt, result);
+      await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
+    } catch (acceptedMarkError) {
+      await storeAuthOtpAcceptedHint(env, target, result).catch((hintError: unknown) => {
+        console.error(
+          `[Queue] Failed to store accepted OTP recovery hint delivery=${target.deliveryKey}:`,
+          hintError instanceof Error ? hintError.message : hintError,
+        );
+      });
+      throw new QueueRetryAfterError(
+        acceptedMarkError instanceof Error ? acceptedMarkError.message : String(acceptedMarkError),
+        getAuthOtpDeliveryRetryDelaySeconds(claim.receipt.attempts),
+      );
+    }
   } catch (error) {
+    if (error instanceof QueueRetryAfterError) {
+      throw error;
+    }
+
     const failureResult = getAuthOtpDeliveryFailureResult(error);
     if (isAuthOtpTerminalDeliveryFailure(error, failureResult)) {
       const reason = getAuthOtpTerminalDeliveryReason(error, failureResult);
       await blockAuthOtpProviderForMerchantActionableFailure(db, target, error, failureResult);
-      await markAuthOtpDeliveryReceiptSkipped(
+      await markAuthOtpDeliveryReceiptSkippedWithRetries(
         db,
         claim.receipt,
         reason,
@@ -1380,9 +1561,7 @@ async function processAuthOtpQueueMessage(
           providerStatus: failureResult.providerStatus ?? reason,
           rawResponse: failureResult.rawResponse,
         },
-      ).catch((markError: unknown) => {
-        console.error("[Queue] Failed to mark OTP delivery receipt skipped:", markError);
-      });
+      );
       console.warn(`[Queue] Skipped OTP delivery ${target.deliveryKey}: ${redactAuthOtpLogText(reason)}`);
       return;
     }

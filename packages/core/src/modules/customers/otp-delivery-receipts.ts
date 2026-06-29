@@ -178,6 +178,36 @@ export async function markAuthOtpDeliveryReceiptAccepted(
         ));
 }
 
+export async function markAuthOtpDeliveryReceiptAcceptedByDeliveryKey(
+    db: Database,
+    target: AuthOtpDeliveryTarget,
+    result: AuthOtpDeliveryReceiptResult = {},
+): Promise<"accepted" | "already_terminal"> {
+    await ensureAuthOtpDeliveryReceipt(db, target);
+
+    const rows = await db
+        .update(authOtpDeliveryReceipts)
+        .set({
+            status: "accepted",
+            provider: result.provider ?? target.provider,
+            providerMessageId: result.providerMessageId ?? null,
+            providerStatus: normalizeRawResponse(result.providerStatus ?? "accepted"),
+            rawResponse: normalizeRawResponse(result.rawResponse),
+            claimId: null,
+            claimExpiresAt: null,
+            lastError: null,
+            acceptedAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(authOtpDeliveryReceipts.deliveryKey, target.deliveryKey),
+            inArray(authOtpDeliveryReceipts.status, ["pending", "processing", "failed"]),
+        ))
+        .returning({ id: authOtpDeliveryReceipts.id });
+
+    return rows[0]?.id ? "accepted" : "already_terminal";
+}
+
 export async function markAuthOtpDeliveryReceiptFailed(
     db: Database,
     receipt: AuthOtpDeliveryReceiptClaim,
