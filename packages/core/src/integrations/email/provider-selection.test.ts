@@ -144,6 +144,31 @@ describe("email provider selection", () => {
     }));
   });
 
+  it("preserves status-only Resend auth failures for notification classifiers", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: vi.fn().mockResolvedValue({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(sendEmail(
+      {
+        to: "buyer@example.com",
+        subject: "Order received",
+        html: "<p>Thanks</p>",
+      },
+      {
+        settings: {
+          ...baseSettings,
+          provider: "resend",
+          resendApiKey: "bad_key",
+          hasResendApiKey: true,
+        },
+      },
+    )).rejects.toThrow("Resend API error: 401");
+  });
+
   it("fails without logging email bodies when no provider is configured", async () => {
     await expect(sendEmail(
       {

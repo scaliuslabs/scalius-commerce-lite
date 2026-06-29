@@ -524,6 +524,39 @@ describe("order notification dispatch", () => {
         expect(result.hasRetryableFailure).toBe(false);
     });
 
+    it("records status-only email credential failures as skipped receipts", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_created: ["email"],
+        });
+        mocks.sendEmail.mockRejectedValue(new Error("Failed to send email: Resend API error: 401"));
+
+        const result = await sendOrderNotificationEmail(
+            "buyer@example.com",
+            "Email Customer",
+            "order_email_auth",
+            "order_created",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_email_auth",
+            },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "Failed to send email: Resend API error: 401",
+            expect.objectContaining({
+                provider: "email",
+                providerStatus: "Failed to send email: Resend API error: 401",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
     it("passes a deterministic client reference to SMS providers when receipts are enabled", async () => {
         const db = createDb();
         mocks.getNotificationChannels.mockResolvedValue({

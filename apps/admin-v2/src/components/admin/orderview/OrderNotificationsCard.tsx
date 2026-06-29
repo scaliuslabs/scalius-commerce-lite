@@ -24,10 +24,13 @@ import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
 import { orderNotificationsQueryOptions } from "@/lib/api-query-options/orders";
 import { useRetryOrderNotification } from "@/lib/api-mutations/orders";
 import { useHydrated } from "@/hooks/use-hydrated";
-import type {
-  OrderNotificationOutboxDto,
-  OrderNotificationReceiptDto,
-} from "@/lib/api-functions/orders";
+import type { OrderNotificationOutboxDto } from "@/lib/api-functions/orders";
+import {
+  buildReceiptDisplayGroups,
+  deliveryAttemptLabel,
+  describeNotificationIssue,
+  type OrderNotificationReceiptDisplayGroup,
+} from "@/lib/order-notification-display";
 import type { Order, OrderTimestamp } from "./types";
 import { formatOrderTimestamp } from "./formatters";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
@@ -51,41 +54,10 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
   push: Bell,
 };
 
-const TERMINAL_DELIVERY_STATUSES = new Set(["accepted", "delivered", "skipped"]);
 const TERMINAL_OUTBOX_STATUSES = new Set(["sent"]);
 
 function humanize(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function describeNotificationIssue(value: string | null | undefined): string | null {
-  const text = value?.trim();
-  if (!text) return null;
-  const normalized = text.toLowerCase();
-
-  if (normalized.includes("authorization required") || normalized.includes("unauthorized")) {
-    return "Provider rejected the saved credentials. Save valid credentials or disable this channel.";
-  }
-  if (normalized.includes("could not be decrypted")) {
-    return "Saved credentials cannot be decrypted. Save the provider credentials again.";
-  }
-  if (normalized.includes("invalid api key") || normalized.includes("invalid token")) {
-    return "Provider rejected the API key or token. Save valid credentials or disable this channel.";
-  }
-  if (normalized.includes("missing_email_recipient") || normalized.includes("missing email")) {
-    return "Customer email was not collected for this order.";
-  }
-  if (normalized.includes("missing_whatsapp_credentials")) {
-    return "WhatsApp is enabled, but Meta Cloud API credentials are not ready.";
-  }
-  if (normalized.includes("missing_whatsapp_recipient")) {
-    return "Customer phone was not available for WhatsApp delivery.";
-  }
-  if (normalized.includes("delivery_receipt_busy")) {
-    return "A previous retry is still cooling down; the outbox will not resend before its schedule.";
-  }
-
-  return text;
 }
 
 function formatTimestamp(value: OrderTimestamp | null | undefined): string | null {
@@ -96,33 +68,12 @@ function statusClass(status: string): string {
   return STATUS_STYLES[status] ?? "border-border bg-muted/40 text-muted-foreground";
 }
 
-function receiptTimestamp(receipt: OrderNotificationReceiptDto): string | null {
-  return formatTimestamp(
-    receipt.deliveredAt
-      ?? receipt.acceptedAt
-      ?? receipt.skippedAt
-      ?? receipt.failedAt
-      ?? receipt.lastAttemptAt
-      ?? receipt.createdAt,
-  );
-}
-
 function outboxTimestamp(outbox: OrderNotificationOutboxDto): string | null {
   return formatTimestamp(outbox.sentAt ?? outbox.queuedAt ?? outbox.createdAt);
 }
 
 function canRetry(outbox: OrderNotificationOutboxDto): boolean {
   return outbox.status === "failed" || outbox.status === "pending";
-}
-
-function deliveryAttemptLabel(receipt: OrderNotificationReceiptDto): string {
-  if (receipt.status === "skipped") {
-    return receipt.attempts > 1 ? "Stopped retrying" : "Not sent";
-  }
-  if (TERMINAL_DELIVERY_STATUSES.has(receipt.status)) {
-    return humanize(receipt.status);
-  }
-  return `${receipt.attempts} attempt${receipt.attempts === 1 ? "" : "s"}`;
 }
 
 function outboxAttemptLabel(outbox: OrderNotificationOutboxDto): string {
@@ -132,37 +83,34 @@ function outboxAttemptLabel(outbox: OrderNotificationOutboxDto): string {
   return `${outbox.attempts} attempt${outbox.attempts === 1 ? "" : "s"}`;
 }
 
-function ReceiptRow({ receipt }: { receipt: OrderNotificationReceiptDto }) {
-  const Icon = CHANNEL_ICONS[receipt.channel] ?? Send;
-  const timestamp = receiptTimestamp(receipt);
-  const providerStatus = describeNotificationIssue(receipt.providerStatus);
-  const lastError = describeNotificationIssue(receipt.lastError);
-  const showLastError = lastError && lastError !== providerStatus;
+function ReceiptRow({ group }: { group: OrderNotificationReceiptDisplayGroup }) {
+  const Icon = CHANNEL_ICONS[group.channel] ?? Send;
+  const timestamp = formatTimestamp(group.latestTimestamp);
 
   return (
     <div className="grid gap-2 rounded-md border border-border bg-background/50 p-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-medium text-foreground">{humanize(receipt.channel)}</span>
-          <Badge variant="outline" className={statusClass(receipt.status)}>
-            {humanize(receipt.status)}
+          <span className="font-medium text-foreground">{humanize(group.channel)}</span>
+          <Badge variant="outline" className={statusClass(group.status)}>
+            {humanize(group.status)}
           </Badge>
-          <span className="text-muted-foreground">{receipt.provider}</span>
+          <span className="text-muted-foreground">{group.provider}</span>
         </div>
-        <div className="truncate text-muted-foreground" title={receipt.providerStatus ?? undefined}>
-          {receipt.recipientMasked ?? "No recipient"}
-          {providerStatus ? ` • ${providerStatus}` : ""}
+        <div className="truncate text-muted-foreground" title={group.providerStatus ?? undefined}>
+          {group.recipientLabel}
+          {group.providerStatus ? ` • ${group.providerStatus}` : ""}
         </div>
-        {showLastError && (
-          <div className="line-clamp-2 text-red-600 dark:text-red-300" title={receipt.lastError ?? undefined}>
-            {lastError}
+        {group.showLastError && (
+          <div className="line-clamp-2 text-red-600 dark:text-red-300" title={group.lastError ?? undefined}>
+            {group.lastError}
           </div>
         )}
       </div>
       <div className="text-left text-muted-foreground sm:text-right">
-        <div title={`${receipt.attempts} recorded attempt${receipt.attempts === 1 ? "" : "s"}`}>
-          {deliveryAttemptLabel(receipt)}
+        <div title={`${group.totalAttempts} recorded attempt${group.totalAttempts === 1 ? "" : "s"}`}>
+          {deliveryAttemptLabel(group)}
         </div>
         {timestamp && <div>{timestamp}</div>}
       </div>
@@ -182,6 +130,7 @@ function NotificationRow({
   const retryMutation = useRetryOrderNotification();
   const timestamp = outboxTimestamp(notification);
   const lastError = describeNotificationIssue(notification.lastError);
+  const showOutboxError = Boolean(lastError && notification.receipts.length === 0);
   const retrying =
     retryMutation.isPending &&
     retryMutation.variables?.outboxId === notification.id;
@@ -225,10 +174,10 @@ function NotificationRow({
         </div>
       </div>
 
-      {lastError && (
+      {showOutboxError && (
         <div
           className="line-clamp-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200"
-          title={notification.lastError ?? undefined}
+          title={lastError ?? undefined}
         >
           {lastError}
         </div>
@@ -236,8 +185,8 @@ function NotificationRow({
 
       {notification.receipts.length > 0 && (
         <div className="space-y-2">
-          {notification.receipts.map((receipt) => (
-            <ReceiptRow key={receipt.id} receipt={receipt} />
+          {buildReceiptDisplayGroups(notification.receipts).map((group) => (
+            <ReceiptRow key={group.key} group={group} />
           ))}
         </div>
       )}
