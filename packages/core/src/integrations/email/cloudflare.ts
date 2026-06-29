@@ -5,6 +5,15 @@ import { ServiceUnavailableError } from "@scalius/core/errors";
 import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
 import { getEmailRuntimeSettings } from "./settings";
 
+function maskEmailForLog(value: string): string {
+  const [localPart, domain] = value.split("@");
+  if (!localPart || !domain) return "redacted";
+  const visible = localPart.length <= 2
+    ? localPart[0] ?? "*"
+    : `${localPart[0]}${localPart[localPart.length - 1]}`;
+  return `${visible}***@${domain}`;
+}
+
 export class CloudflareEmailProvider implements EmailProvider {
   readonly name = "cloudflare";
 
@@ -27,7 +36,7 @@ export class CloudflareEmailProvider implements EmailProvider {
       text,
     });
 
-    console.log(`[Email] Sent via Cloudflare to ${to} (${result.messageId})`);
+    console.log(`[Email] Sent via Cloudflare to ${maskEmailForLog(to)} (${result.messageId})`);
     return {
       success: true,
       provider: "cloudflare",

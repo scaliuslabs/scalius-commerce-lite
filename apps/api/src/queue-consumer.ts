@@ -34,6 +34,11 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
 import {
+  getNotificationProviderBlock,
+  isNotificationProviderBreakerFailure,
+  markNotificationProviderBlocked,
+} from "@scalius/core/modules/notifications/notification-provider-health";
+import {
   enqueueOrderBalancePaidNotificationForOrder,
   enqueueOrderCreatedNotificationForOrder,
   enqueueOrderRefundNotificationForOrder,
@@ -1258,11 +1263,32 @@ async function processAuthOtpQueueMessage(
     const result = await sendAuthOtpByChannel(payload, target, db, env);
     await markAuthOtpDeliveryReceiptAccepted(db, claim.receipt, result);
   } catch (error) {
+    const failureResult = getAuthOtpDeliveryFailureResult(error);
+    if (isAuthOtpTerminalDeliveryFailure(error, failureResult)) {
+      const reason = getAuthOtpTerminalDeliveryReason(error, failureResult);
+      await blockAuthOtpProviderForMerchantActionableFailure(db, target, error, failureResult);
+      await markAuthOtpDeliveryReceiptSkipped(
+        db,
+        claim.receipt,
+        reason,
+        {
+          provider: failureResult.provider ?? target.provider,
+          providerMessageId: failureResult.providerMessageId,
+          providerStatus: failureResult.providerStatus ?? reason,
+          rawResponse: failureResult.rawResponse,
+        },
+      ).catch((markError: unknown) => {
+        console.error("[Queue] Failed to mark OTP delivery receipt skipped:", markError);
+      });
+      console.warn(`[Queue] Skipped OTP delivery ${target.deliveryKey}: ${redactAuthOtpLogText(reason)}`);
+      return;
+    }
+
     await markAuthOtpDeliveryReceiptFailed(
       db,
       claim.receipt,
       error,
-      getAuthOtpDeliveryFailureResult(error),
+      failureResult,
     ).catch((markError: unknown) => {
       console.error("[Queue] Failed to mark OTP delivery receipt failure:", markError);
     });
@@ -1277,11 +1303,11 @@ async function sendAuthOtpByChannel(
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
   if (payload.method === "email") {
-    return sendAuthOtpEmail(payload, target.deliveryKey, db, env);
+    return sendAuthOtpEmail(payload, target, db, env);
   }
 
   if (payload.channel === "whatsapp" || payload.allowedMethod === "whatsapp_otp") {
-    return sendAuthOtpWhatsApp(payload, db, env);
+    return sendAuthOtpWhatsApp(payload, target, db, env);
   }
 
   return sendAuthOtpSms(payload, target, db, env);
@@ -1289,10 +1315,26 @@ async function sendAuthOtpByChannel(
 
 async function sendAuthOtpEmail(
   payload: AuthOtpQueueMessage,
-  deliveryKey: string,
+  target: { deliveryKey: string; identifierHash: string },
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
+  const block = await getNotificationProviderBlock(db, {
+    channel: "email",
+    provider: "email",
+  });
+  if (block) {
+    throw createAuthOtpDeliveryError(
+      buildAuthOtpProviderBlockedReason(block.reason),
+      {
+        provider: "email",
+        providerStatus: "provider_blocked_until_settings_save",
+        rawResponse: block.reason,
+      },
+      { terminal: true },
+    );
+  }
+
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
   const safeName = escapeHtml(payload.name);
   const safeCode = escapeHtml(payload.code);
@@ -1310,7 +1352,7 @@ async function sendAuthOtpEmail(
       </div>
     `,
     text: `Your login code is: ${payload.code}\n\nExpires in 5 minutes.`,
-    idempotencyKey: deliveryKey,
+    idempotencyKey: target.deliveryKey,
   }, {
     db,
     env: env as unknown as Record<string, unknown>,
@@ -1327,18 +1369,43 @@ async function sendAuthOtpEmail(
     throw createAuthOtpDeliveryError(
       `OTP email delivery unavailable: ${result.rawStatus ?? result.provider}`,
       receiptResult,
+      {
+        terminal: isAuthOtpNonRetryableStatus(result.rawStatus) || result.provider === "log",
+        blockProvider: {
+          channel: "email",
+          provider: "email",
+          reason: result.rawStatus ?? "email_provider_not_configured",
+        },
+      },
     );
   }
 
-  console.log(`[Queue] Sent OTP email to ${payload.identifier}`);
+  console.log(`[Queue] Sent OTP email delivery=${target.deliveryKey} recipientHash=${target.identifierHash}`);
   return receiptResult;
 }
 
 async function sendAuthOtpWhatsApp(
   payload: AuthOtpQueueMessage,
+  target: { deliveryKey: string; identifierHash: string },
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
+  const block = await getNotificationProviderBlock(db, {
+    channel: "whatsapp",
+    provider: "whatsapp",
+  });
+  if (block) {
+    throw createAuthOtpDeliveryError(
+      buildAuthOtpProviderBlockedReason(block.reason),
+      {
+        provider: "whatsapp",
+        providerStatus: "provider_blocked_until_settings_save",
+        rawResponse: block.reason,
+      },
+      { terminal: true },
+    );
+  }
+
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
   const config = await getWhatsAppCloudApiSettings(db, encryptionKey, {
     migrateLegacy: true,
@@ -1348,6 +1415,13 @@ async function sendAuthOtpWhatsApp(
     throw createAuthOtpDeliveryError("WhatsApp credentials are not configured", {
       provider: "whatsapp",
       providerStatus: "missing_credentials",
+    }, {
+      terminal: true,
+      blockProvider: {
+        channel: "whatsapp",
+        provider: "whatsapp",
+        reason: "missing_credentials",
+      },
     });
   }
 
@@ -1374,10 +1448,17 @@ async function sendAuthOtpWhatsApp(
       providerMessageId: result.providerRef,
       providerStatus: result.rawStatus,
       rawResponse: result.rawResponse,
+    }, {
+      terminal: result.retryable === false || isAuthOtpNonRetryableStatus(`${result.rawStatus} ${result.rawResponse ?? ""}`),
+      blockProvider: {
+        channel: "whatsapp",
+        provider: "whatsapp",
+        reason: `${result.rawStatus} ${result.rawResponse ?? ""}`.trim(),
+      },
     });
   }
 
-  console.log(`[Queue] Sent WhatsApp OTP to ${payload.identifier}`);
+  console.log(`[Queue] Sent WhatsApp OTP delivery=${target.deliveryKey} recipientHash=${target.identifierHash}`);
   return receiptResult;
 }
 
@@ -1393,6 +1474,33 @@ async function sendAuthOtpSms(
     throw createAuthOtpDeliveryError(
       "SMS OTP requested but no SMS provider is configured. Configure an SMS provider in Auth & Access settings.",
       { provider: "sms", providerStatus: "not_configured" },
+      {
+        terminal: true,
+        blockProvider: {
+          channel: "sms",
+          provider: "sms",
+          reason: "not_configured",
+        },
+      },
+    );
+  }
+
+  const block = await getNotificationProviderBlock(db, {
+    channel: "sms",
+    provider: smsProvider.name,
+  }) ?? await getNotificationProviderBlock(db, {
+    channel: "sms",
+    provider: "sms",
+  });
+  if (block) {
+    throw createAuthOtpDeliveryError(
+      buildAuthOtpProviderBlockedReason(block.reason),
+      {
+        provider: smsProvider.name,
+        providerStatus: "provider_blocked_until_settings_save",
+        rawResponse: block.reason,
+      },
+      { terminal: true },
     );
   }
 
@@ -1412,10 +1520,20 @@ async function sendAuthOtpSms(
     throw createAuthOtpDeliveryError(
       `SMS OTP delivery failed via ${smsProvider.name}: ${result.rawStatus ?? "unknown provider status"}`,
       receiptResult,
+      {
+        terminal: result.retryable === false || isAuthOtpNonRetryableStatus(result.rawStatus),
+        blockProvider: {
+          channel: "sms",
+          provider: smsProvider.name,
+          reason: result.rawStatus ?? "sms_provider_non_retryable_failure",
+        },
+      },
     );
   }
 
-  console.log(`[Queue] SMS OTP sent via ${smsProvider.name} to ${payload.identifier}, ref=${result.providerRef}`);
+  console.log(
+    `[Queue] SMS OTP sent via ${smsProvider.name} delivery=${target.deliveryKey} recipientHash=${target.identifierHash}, ref=${result.providerRef}`,
+  );
   return receiptResult;
 }
 
@@ -1427,14 +1545,26 @@ function resolveAuthOtpDeliveryChannel(payload: AuthOtpQueueMessage): AuthOtpDel
 
 type AuthOtpDeliveryError = Error & {
   deliveryResult?: AuthOtpDeliveryReceiptResult;
+  terminal?: boolean;
+  blockProvider?: {
+    channel: AuthOtpDeliveryChannel;
+    provider: string;
+    reason: string;
+  };
 };
 
 function createAuthOtpDeliveryError(
   message: string,
   deliveryResult?: AuthOtpDeliveryReceiptResult,
+  options: {
+    terminal?: boolean;
+    blockProvider?: AuthOtpDeliveryError["blockProvider"];
+  } = {},
 ): AuthOtpDeliveryError {
   const error = new Error(message) as AuthOtpDeliveryError;
   error.deliveryResult = deliveryResult;
+  error.terminal = options.terminal;
+  error.blockProvider = options.blockProvider;
   return error;
 }
 
@@ -1444,6 +1574,139 @@ function getAuthOtpDeliveryFailureResult(error: unknown): AuthOtpDeliveryReceipt
   }
   return {};
 }
+
+function isAuthOtpTerminalDeliveryFailure(
+  error: unknown,
+  result: AuthOtpDeliveryReceiptResult,
+): boolean {
+  if (error instanceof Error && "terminal" in error && (error as AuthOtpDeliveryError).terminal) {
+    return true;
+  }
+
+  const status = [result.providerStatus, result.rawResponse, error instanceof Error ? error.message : String(error)]
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+  return isAuthOtpNonRetryableStatus(status);
+}
+
+function getAuthOtpTerminalDeliveryReason(
+  error: unknown,
+  result: AuthOtpDeliveryReceiptResult,
+): string {
+  if (result.providerStatus === "provider_blocked_until_settings_save") {
+    return error instanceof Error
+      ? error.message
+      : buildAuthOtpProviderBlockedReason(result.rawResponse ?? "provider_setup_failure");
+  }
+
+  return result.providerStatus
+    ?? result.rawResponse
+    ?? (error instanceof Error ? error.message : String(error))
+    ?? "provider_non_retryable_failure";
+}
+
+function isAuthOtpNonRetryableStatus(value: string | null | undefined): boolean {
+  const status = value?.trim();
+  if (!status) return false;
+
+  return AUTH_OTP_NON_RETRYABLE_PATTERNS.some((pattern) => pattern.test(status));
+}
+
+async function blockAuthOtpProviderForMerchantActionableFailure(
+  db: ReturnType<typeof getDb>,
+  target: { channel: AuthOtpDeliveryChannel; provider: string },
+  error: unknown,
+  result: AuthOtpDeliveryReceiptResult,
+): Promise<void> {
+  if (result.providerStatus === "provider_blocked_until_settings_save") return;
+
+  const typedError = error instanceof Error ? error as AuthOtpDeliveryError : undefined;
+  const candidate = typedError?.blockProvider ?? {
+    channel: target.channel,
+    provider: result.provider ?? target.provider,
+    reason: getAuthOtpTerminalDeliveryReason(error, result),
+  };
+
+  if (!isAuthOtpProviderSetupFailure(candidate.reason)) return;
+
+  await markNotificationProviderBlocked(db, candidate).catch((blockError: unknown) => {
+    console.error(
+      `[Queue] Failed to block OTP ${candidate.channel}/${candidate.provider} provider after setup failure:`,
+      blockError instanceof Error ? blockError.message : blockError,
+    );
+  });
+}
+
+function isAuthOtpProviderSetupFailure(value: string | null | undefined): boolean {
+  const status = value?.trim();
+  if (!status) return false;
+  return isNotificationProviderBreakerFailure(status)
+    || AUTH_OTP_PROVIDER_SETUP_PATTERNS.some((pattern) => pattern.test(status));
+}
+
+function buildAuthOtpProviderBlockedReason(reason: string): string {
+  return `provider_blocked_until_settings_save: ${reason}`;
+}
+
+function redactAuthOtpLogText(value: string): string {
+  return value
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/\+?\d[\d\s().-]{8,}\d/g, "[phone]")
+    .replace(/\b\d{6}\b/g, "[code]");
+}
+
+const AUTH_OTP_NON_RETRYABLE_PATTERNS = [
+  /no configured .*provider/i,
+  /no active .*provider/i,
+  /provider .*not ready/i,
+  /not configured/i,
+  /missing[_\s-]?credentials/i,
+  /could not be decrypted/i,
+  /credential/i,
+  /auth(?:orization|entication)?\s+(?:required|failed|error)/i,
+  /unauthori[sz]ed/i,
+  /forbidden/i,
+  /invalid\s+(?:api\s*)?(?:key|token|credential)/i,
+  /api\s*(?:key|token)\s+(?:invalid|expired|missing|not configured)/i,
+  /\b(?:http|status|code|error)?\s*(?:400|401|402|403|404|405|422)\b/i,
+  /permission/i,
+  /sender/i,
+  /invalid[_\s-]?grant/i,
+  /private key/i,
+  /service account/i,
+  /insufficient\s+(?:balance|credit)/i,
+  /\bbalance\b/i,
+  /account\s+(?:expired|suspended|inactive|disabled)/i,
+  /invalid\s+(?:number|mobile|recipient|msisdn)/i,
+  /blacklist/i,
+  /message\s+(?:empty|too\s+long|length)/i,
+  /\bpaused\b/i,
+];
+
+const AUTH_OTP_PROVIDER_SETUP_PATTERNS = [
+  /no configured .*provider/i,
+  /no active .*provider/i,
+  /provider .*not ready/i,
+  /not configured/i,
+  /missing[_\s-]?credentials/i,
+  /could not be decrypted/i,
+  /credential/i,
+  /auth(?:orization|entication)?\s+(?:required|failed|error)/i,
+  /unauthori[sz]ed/i,
+  /forbidden/i,
+  /invalid\s+(?:api\s*)?(?:key|token|credential)/i,
+  /api\s*(?:key|token)\s+(?:invalid|expired|missing|not configured)/i,
+  /\b(?:http|status|code|error)?\s*(?:401|402|403|405)\b/i,
+  /permission/i,
+  /sender/i,
+  /invalid[_\s-]?grant/i,
+  /private key/i,
+  /service account/i,
+  /insufficient\s+(?:balance|credit)/i,
+  /\bbalance\b/i,
+  /account\s+(?:expired|suspended|inactive|disabled)/i,
+  /\bpaused\b/i,
+];
 
 function summarizeNotificationFailures(
   outcomes: Array<{ channel: string; provider: string; error?: string; providerStatus?: string | null; retryable: boolean }>,

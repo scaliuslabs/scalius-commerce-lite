@@ -9,6 +9,15 @@ import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailRes
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import { getEmailRuntimeSettings } from "./settings";
 
+function maskEmailForLog(value: string): string {
+  const [localPart, domain] = value.split("@");
+  if (!localPart || !domain) return "redacted";
+  const visible = localPart.length <= 2
+    ? localPart[0] ?? "*"
+    : `${localPart[0]}${localPart[localPart.length - 1]}`;
+  return `${visible}***@${domain}`;
+}
+
 /**
  * Email provider that sends via the Resend API.
  * Falls back to console logging when the API key is not configured.
@@ -51,7 +60,7 @@ export class ResendEmailProvider implements EmailProvider {
       }
 
       const data = await response.json().catch(() => ({})) as { id?: string };
-      console.log(`[Email] Sent via Resend to ${to}${data.id ? ` (${data.id})` : ""}`);
+      console.log(`[Email] Sent via Resend to ${maskEmailForLog(to)}${data.id ? ` (${data.id})` : ""}`);
       return {
         success: true,
         provider: "resend",
