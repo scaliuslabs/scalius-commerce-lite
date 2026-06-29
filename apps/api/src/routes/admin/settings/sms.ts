@@ -3,6 +3,7 @@ import { getSmsSettings, saveSmsSettings, invalidateSmsCache, SMS_PROVIDER_IDS }
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -92,6 +93,7 @@ app.openapi(saveSmsRoute, async (c) => {
         ? requireEncryptionKey(c.env as Record<string, unknown>)
         : getCredentialEncryptionKey(c.env as Record<string, unknown>);
     await saveSmsSettings(db, body, encKey);
+    await clearNotificationProviderBlocks(db, { channel: "sms" });
     invalidateSmsCache();
     return ok(c, { message: "SMS settings saved successfully" });
 });

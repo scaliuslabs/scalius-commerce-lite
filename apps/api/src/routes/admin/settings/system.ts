@@ -36,6 +36,7 @@ import {
     getOptionalExecutionContext,
     invalidateApiAndScheduleStorefrontGroups,
 } from "../../../utils/cache-invalidation";
+import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
 
 import { ok } from "../../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
@@ -195,6 +196,12 @@ app.openapi(saveAuthRoute, async (c) => {
             body.whatsappAccessToken.trim()
                 ? requireEncryptionKey(c.env as Record<string, unknown>)
                 : undefined;
+        const whatsappProviderTouched =
+            (typeof body.whatsappAccessToken === "string" && body.whatsappAccessToken !== MASKED) ||
+            typeof body.whatsappPhoneNumberId === "string" ||
+            body.whatsappPhoneNumberId === null ||
+            typeof body.whatsappTemplateName === "string" ||
+            body.whatsappTemplateName === null;
 
         if (body.customerAuthPolicy) {
             const customerAuthPolicy = normalizeCustomerAuthPolicy(
@@ -313,6 +320,9 @@ app.openapi(saveAuthRoute, async (c) => {
                 credentialWriteKey,
                 existingSettings.id,
             );
+        }
+        if (whatsappProviderTouched) {
+            await clearNotificationProviderBlocks(db, { channel: "whatsapp" });
         }
 
         await invalidateSiteSettingsCache(getKv());
@@ -498,6 +508,9 @@ app.openapi(saveEmailRoute, async (c) => {
         }
 
         await Promise.all(updates);
+        if (updates.length > 0) {
+            await clearNotificationProviderBlocks(db, { channel: "email" });
+        }
         return ok(c, { message: "Email settings saved successfully" });
 });
 
@@ -571,6 +584,9 @@ app.openapi(saveFirebaseRoute, async (c) => {
         }
 
         await Promise.all(updates);
+        if (typeof serviceAccount === "string" && serviceAccount !== MASKED) {
+            await clearNotificationProviderBlocks(db, { channel: "push" });
+        }
 
         const { layoutCache, CACHE_KEYS } = await import("@scalius/shared/layout-cache");
         layoutCache.invalidate(CACHE_KEYS.FIREBASE_CONFIG);

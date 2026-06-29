@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     isWhatsAppCloudApiConfigured: vi.fn(),
     getSmsProviderReadiness: vi.fn(),
     getFirebaseServiceAccountReadiness: vi.fn(),
+    clearNotificationProviderBlocks: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings/settings.service", () => ({
@@ -32,6 +33,10 @@ vi.mock("@scalius/core/integrations/sms", () => ({
 
 vi.mock("@scalius/core/integrations/firebase/settings", () => ({
     getFirebaseServiceAccountReadiness: mocks.getFirebaseServiceAccountReadiness,
+}));
+
+vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
+    clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
 }));
 
 import { notificationChannelsRoutes } from "./notification-channels";
@@ -89,6 +94,7 @@ describe("notification channel settings routes", () => {
             error: null,
             source: "settings",
         });
+        mocks.clearNotificationProviderBlocks.mockResolvedValue(undefined);
     });
 
     it("returns SMS readiness with customer notification channels", async () => {
@@ -156,6 +162,28 @@ describe("notification channel settings routes", () => {
         expect(response.status).toBe(400);
         expect(body.success).toBe(false);
         expect(body.error.message).toContain("Customer push notifications are not implemented yet.");
+    });
+
+    it("clears paused WhatsApp sends after saving the order template", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/settings/notification-channels", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                channels: { order_created: ["whatsapp"] },
+                whatsappTemplate: {
+                    templateName: "order_status_update",
+                    languageCode: "en_US",
+                },
+            }),
+        }, env);
+
+        expect(response.status).toBe(200);
+        expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
+            { id: "db" },
+            { channel: "whatsapp" },
+        );
     });
 
     it("returns Firebase push readiness with admin notification channels", async () => {
