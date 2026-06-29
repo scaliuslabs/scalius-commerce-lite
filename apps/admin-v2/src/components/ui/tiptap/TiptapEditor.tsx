@@ -4,6 +4,7 @@ import { cn } from "@scalius/shared/utils";
 import { Minimize2 } from "lucide-react";
 import { Button } from "../button";
 import { TiptapMenuBar } from "./TiptapMenuBar";
+import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
 
 interface TiptapEditorProps {
@@ -27,7 +28,7 @@ export function TiptapEditor({
   const hasAutoFocusedRef = useRef(false);
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
-  const editorMaxHeight = compact ? "200px" : "300px";
+  const editorViewportHeight = compact ? "200px" : "300px";
 
   // Handle Escape key and body scroll lock for fullscreen
   useEffect(() => {
@@ -186,7 +187,7 @@ export function TiptapEditor({
       )}
 
       {/* Toolbar */}
-      {editorInstance && (
+      {editorInstance ? (
         <TiptapMenuBar
           editor={editorInstance}
           toggleModal={() => {
@@ -200,6 +201,8 @@ export function TiptapEditor({
           compact={isFullscreen ? false : compact}
           isFullscreen={isFullscreen}
         />
+      ) : (
+        <TiptapToolbarSkeleton compact={isFullscreen ? false : compact} isFullscreen={isFullscreen} />
       )}
 
       {/* Editor content -- always mounted, never unmounts */}
@@ -209,7 +212,7 @@ export function TiptapEditor({
           "overflow-y-auto border-t",
           isFullscreen ? "flex-1 bg-muted/30" : "",
         )}
-        style={!isFullscreen ? { maxHeight: editorMaxHeight } : undefined}
+        style={!isFullscreen ? { minHeight: editorViewportHeight, maxHeight: editorViewportHeight } : undefined}
         onClick={() => {
           // Click-to-focus: when user clicks the editing area background, focus the editor
           if (isFullscreen && editorInstance && !editorInstance.isFocused) {

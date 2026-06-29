@@ -39,6 +39,7 @@ export interface ClaimedPaymentSessionAttempt {
   id: string;
   attemptKey: string;
   claimId: string;
+  attempts: number;
   providerCorrelationId?: string | null;
 }
 
@@ -163,6 +164,7 @@ export async function claimPaymentSessionAttempt<TResponse>(
     .returning({
       id: paymentSessionAttempts.id,
       attemptKey: paymentSessionAttempts.attemptKey,
+      attempts: paymentSessionAttempts.attempts,
       providerCorrelationId: paymentSessionAttempts.providerCorrelationId,
     });
 
@@ -173,6 +175,7 @@ export async function claimPaymentSessionAttempt<TResponse>(
         id: inserted[0].id,
         attemptKey: inserted[0].attemptKey,
         claimId,
+        attempts: inserted[0].attempts,
         providerCorrelationId: inserted[0].providerCorrelationId,
       },
     };
@@ -224,6 +227,7 @@ export async function claimPaymentSessionAttempt<TResponse>(
     .returning({
       id: paymentSessionAttempts.id,
       attemptKey: paymentSessionAttempts.attemptKey,
+      attempts: paymentSessionAttempts.attempts,
       providerCorrelationId: paymentSessionAttempts.providerCorrelationId,
     });
 
@@ -234,6 +238,7 @@ export async function claimPaymentSessionAttempt<TResponse>(
         id: reclaimed[0].id,
         attemptKey: reclaimed[0].attemptKey,
         claimId,
+        attempts: reclaimed[0].attempts,
         providerCorrelationId: reclaimed[0].providerCorrelationId,
       },
     };
@@ -407,6 +412,7 @@ async function resolveLivePaymentSessionClaim<TResponse>(
     .returning({
       id: paymentSessionAttempts.id,
       attemptKey: paymentSessionAttempts.attemptKey,
+      attempts: paymentSessionAttempts.attempts,
       providerCorrelationId: paymentSessionAttempts.providerCorrelationId,
     });
 
@@ -417,6 +423,7 @@ async function resolveLivePaymentSessionClaim<TResponse>(
         id: reclaimed[0].id,
         attemptKey: reclaimed[0].attemptKey,
         claimId,
+        attempts: reclaimed[0].attempts,
         providerCorrelationId: reclaimed[0].providerCorrelationId,
       },
     };

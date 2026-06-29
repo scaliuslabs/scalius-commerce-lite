@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   createPaymentIntent: vi.fn(),
   initSSLCommerzSession: vi.fn(),
   createPolarCheckout: vi.fn(),
+  findReusablePolarCheckout: vi.fn(),
   getActivePaymentMethods: vi.fn(),
   getStripeSettings: vi.fn(),
   getSSLCommerzSettings: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("@scalius/core/modules/payments/sslcommerz", async (importOriginal) => (
 
 vi.mock("@scalius/core/modules/payments/polar", () => ({
   createPolarCheckout: mocks.createPolarCheckout,
+  findReusablePolarCheckout: mocks.findReusablePolarCheckout,
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal) => ({
@@ -245,6 +247,7 @@ beforeEach(() => {
     checkoutUrl: "https://polar.example.test/pay",
     checkoutId: "polar_checkout_1",
   });
+  mocks.findReusablePolarCheckout.mockResolvedValue(null);
   mocks.buildPaymentSessionAttemptIdentity.mockImplementation(async (input: {
     orderId: string;
     gateway: string;
@@ -267,6 +270,7 @@ beforeEach(() => {
       id: "psa_1",
       attemptKey: "payment_session:stripe:hash_order_1_full",
       claimId: "psac_1",
+      attempts: 1,
     },
   });
   mocks.markPaymentSessionAttemptCreated.mockResolvedValue(undefined);
@@ -1015,6 +1019,7 @@ describe("payment session receipt-token proof", () => {
         id: "psa_1",
         attemptKey: `payment_session:${paymentMethod}:hash_order_1_full`,
         claimId: "psac_1",
+        attempts: 1,
       },
     });
 
@@ -1052,6 +1057,66 @@ describe("payment session receipt-token proof", () => {
       db,
       expect.objectContaining({ id: "psa_1", claimId: "psac_1" }),
       expect.objectContaining({ response: firstJson.data }),
+    );
+  });
+
+  it("recovers a reclaimed Polar checkout before creating another provider session", async () => {
+    const { app, db, kv } = createTestApp("valid", "polar");
+    mocks.claimPaymentSessionAttempt.mockResolvedValueOnce({
+      status: "claimed",
+      attempt: {
+        id: "psa_1",
+        attemptKey: "payment_session:polar:hash_order_1_full",
+        claimId: "psac_1",
+        attempts: 2,
+      },
+    });
+    mocks.findReusablePolarCheckout.mockResolvedValueOnce({
+      success: true,
+      checkoutUrl: "https://polar.example.test/recovered",
+      checkoutId: "polar_checkout_recovered",
+      recovered: true,
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      success: true,
+      data: {
+        gatewayUrl: "https://polar.example.test/recovered",
+        checkoutId: "polar_checkout_recovered",
+      },
+    });
+    expect(mocks.findReusablePolarCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ productId: "polar_product" }),
+      expect.objectContaining({
+        orderId: "order_1",
+        idempotencyKey: "payment_session:polar:hash_order_1_full",
+        paymentType: "full",
+        productId: "polar_product",
+      }),
+    );
+    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+    expect(mocks.markPaymentSessionAttemptCreated).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ id: "psa_1", claimId: "psac_1", attempts: 2 }),
+      {
+        providerSessionId: "polar_checkout_recovered",
+        response: {
+          gatewayUrl: "https://polar.example.test/recovered",
+          checkoutId: "polar_checkout_recovered",
+        },
+      },
     );
   });
 

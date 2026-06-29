@@ -135,8 +135,11 @@ export interface CreatePolarCheckoutParams {
   paymentType: PaymentType;
   successUrl: string;
   cancelUrl?: string;
+  customerId?: string;
   customerName?: string;
   customerEmail?: string;
+  /** Deterministic local payment-session attempt key stored in Polar metadata for retry recovery. */
+  idempotencyKey?: string;
   metadata?: Record<string, string>;
   /** Per-provider HTTP deadline in milliseconds for checkout/session creation. */
   requestTimeoutMs?: number;
@@ -148,8 +151,22 @@ export interface PolarCheckoutResult {
   success: boolean;
   checkoutUrl?: string; // Redirect customer to this URL
   checkoutId?: string; // Polar checkout session ID
+  recovered?: boolean;
   error?: string;
   timedOut?: boolean;
+}
+
+export interface FindReusablePolarCheckoutParams {
+  orderId: string;
+  amount: number;
+  currency: string;
+  productId: string;
+  paymentType: PaymentType;
+  customerId?: string;
+  customerEmail?: string;
+  idempotencyKey: string;
+  requestTimeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface PolarRefundParams {

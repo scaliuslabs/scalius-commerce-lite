@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
   polarConstructor: vi.fn(),
   polarCheckoutCreate: vi.fn(),
+  polarCheckoutList: vi.fn(),
   polarRefundCreate: vi.fn(),
 }));
 
@@ -12,7 +13,7 @@ vi.mock("@polar-sh/sdk", () => ({
   Polar: vi.fn(function PolarMock(options: unknown) {
     mocks.polarConstructor(options);
     return {
-      checkouts: { create: mocks.polarCheckoutCreate },
+      checkouts: { create: mocks.polarCheckoutCreate, list: mocks.polarCheckoutList },
       refunds: { create: mocks.polarRefundCreate },
     };
   }),
@@ -22,7 +23,7 @@ vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
-import { createPolarCheckout, processPolarWebhookRefund } from "./polar";
+import { createPolarCheckout, findReusablePolarCheckout, processPolarWebhookRefund } from "./polar";
 
 function createDbMock({
   order,
@@ -373,6 +374,7 @@ describe("Polar client cache", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.polarCheckoutCreate.mockResolvedValue({ url: "https://polar.example/checkout", id: "co_1" });
+    mocks.polarCheckoutList.mockResolvedValue(checkoutPages([]));
   });
 
   it("creates a new SDK client when sandbox changes with the same access token", async () => {
@@ -417,4 +419,112 @@ describe("Polar client cache", () => {
       server: "production",
     }));
   });
+
+  it("creates checkout sessions with retry metadata and Polar return URL", async () => {
+    const result = await createPolarCheckout(
+      {
+        enabled: true,
+        accessToken: "polar_token",
+        webhookSecret: "polar_whs_test",
+        productId: "product_1",
+        sandbox: true,
+      },
+      {
+        orderId: "order_1",
+        amount: 1000,
+        currency: "usd",
+        productId: "product_1",
+        paymentType: "full",
+        successUrl: "https://shop.example/success",
+        cancelUrl: "https://shop.example/cancel",
+        customerId: "customer_1",
+        customerEmail: "buyer@example.com",
+        idempotencyKey: "payment_session:polar:hash_1",
+      },
+    );
+
+    expect(result).toEqual({
+      success: true,
+      checkoutUrl: "https://polar.example/checkout",
+      checkoutId: "co_1",
+    });
+    expect(mocks.polarCheckoutCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        successUrl: "https://shop.example/success",
+        returnUrl: "https://shop.example/cancel",
+        externalCustomerId: "customer_1",
+        customerEmail: "buyer@example.com",
+        metadata: expect.objectContaining({
+          orderId: "order_1",
+          paymentType: "full",
+          scaliusPaymentAttemptKey: "payment_session:polar:hash_1",
+        }),
+      }),
+      expect.objectContaining({ retries: { strategy: "none" } }),
+    );
+  });
+
+  it("finds a reusable open checkout by deterministic metadata", async () => {
+    mocks.polarCheckoutList.mockResolvedValueOnce(checkoutPages([
+      {
+        id: "co_wrong",
+        url: "https://polar.example/wrong",
+        productId: "product_1",
+        amount: 1000,
+        currency: "usd",
+        metadata: { orderId: "order_1", paymentType: "full", scaliusPaymentAttemptKey: "different" },
+      },
+      {
+        id: "co_recovered",
+        url: "https://polar.example/recovered",
+        productId: "product_1",
+        amount: 1000,
+        currency: "usd",
+        metadata: {
+          orderId: "order_1",
+          paymentType: "full",
+          scaliusPaymentAttemptKey: "payment_session:polar:hash_1",
+        },
+      },
+    ]));
+
+    const result = await findReusablePolarCheckout(
+      {
+        enabled: true,
+        accessToken: "polar_token",
+        webhookSecret: "polar_whs_test",
+        productId: "product_1",
+        sandbox: true,
+      },
+      {
+        orderId: "order_1",
+        amount: 1000,
+        currency: "usd",
+        productId: "product_1",
+        paymentType: "full",
+        customerId: "customer_1",
+        idempotencyKey: "payment_session:polar:hash_1",
+      },
+    );
+
+    expect(result).toEqual({
+      success: true,
+      checkoutUrl: "https://polar.example/recovered",
+      checkoutId: "co_recovered",
+      recovered: true,
+    });
+    expect(mocks.polarCheckoutList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: "product_1",
+        status: "open",
+        externalCustomerId: "customer_1",
+        limit: 100,
+      }),
+      expect.objectContaining({ retries: { strategy: "none" } }),
+    );
+  });
 });
+
+async function* checkoutPages(items: Array<Record<string, unknown>>) {
+  yield { result: { items } };
+}
