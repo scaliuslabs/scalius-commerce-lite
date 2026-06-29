@@ -1,14 +1,20 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, Activity } from "lucide-react";
-import { MetaConversionsSettingsForm, type MetaConversionsSettings } from "./MetaConversionsSettingsForm";
+import {
+  MetaConversionsSettingsForm,
+  type MetaConversionsSettings,
+} from "./MetaConversionsSettingsForm";
+import type { MetaPixelParityDiagnostics } from "~/types/api-responses";
 import { MetaConversionsLogs } from "./MetaConversionsLogs";
 
 interface MetaConversionsContainerProps {
   initialSettings?: MetaConversionsSettings;
+  initialPixelParity?: MetaPixelParityDiagnostics | null;
 }
 
 export function MetaConversionsContainer({
   initialSettings,
+  initialPixelParity,
 }: MetaConversionsContainerProps) {
   return (
     <div className="space-y-6">
@@ -27,6 +33,7 @@ export function MetaConversionsContainer({
         <TabsContent value="settings" className="space-y-6">
           <MetaConversionsSettingsForm
             initialSettings={initialSettings}
+            initialPixelParity={initialPixelParity}
             retentionInfo={null}
           />
         </TabsContent>

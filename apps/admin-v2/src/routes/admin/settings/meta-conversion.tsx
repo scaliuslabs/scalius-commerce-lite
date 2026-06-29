@@ -29,7 +29,10 @@ function MetaConversionPage() {
           </p>
         </div>
       </div>
-      <MetaConversionsManager initialSettings={r.settings ?? undefined} />
+      <MetaConversionsManager
+        initialSettings={r.settings ?? undefined}
+        initialPixelParity={r.pixelParity}
+      />
     </div>
   );
 }

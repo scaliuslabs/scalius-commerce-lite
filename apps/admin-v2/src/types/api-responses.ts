@@ -635,6 +635,28 @@ export interface MetaConversionsSettings {
   updatedAt: Date;
 }
 
+export type MetaPixelParityStatus =
+  | "not_configured"
+  | "invalid_capi_pixel_id"
+  | "no_browser_pixel"
+  | "unreadable_browser_pixel"
+  | "ok"
+  | "mismatch"
+  | "multiple_browser_pixels"
+  | "unavailable";
+
+export type MetaPixelParitySeverity = "neutral" | "success" | "warning";
+
+export interface MetaPixelParityDiagnostics {
+  status: MetaPixelParityStatus;
+  severity: MetaPixelParitySeverity;
+  message: string;
+  capiPixelId: string | null;
+  activeBrowserPixelIds: string[];
+  activeFacebookPixelScriptCount: number;
+  parseableFacebookPixelScriptCount: number;
+}
+
 export interface MetaConversionsLog {
   id: string;
   eventId: string;
@@ -658,6 +680,7 @@ export interface GeneralSettings {
 
 export interface MetaConversionsSettingsResponse {
   settings: MetaConversionsSettings | null;
+  pixelParity: MetaPixelParityDiagnostics;
 }
 
 export interface FraudCheckerProvider {

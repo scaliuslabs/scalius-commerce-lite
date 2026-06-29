@@ -22777,6 +22777,15 @@ export type GetApiV1AdminSettingsMetaConversionsResponses = {
                 updatedAt: number | null;
                 [key: string]: unknown;
             } | null;
+            pixelParity: {
+                status: 'not_configured' | 'invalid_capi_pixel_id' | 'no_browser_pixel' | 'unreadable_browser_pixel' | 'ok' | 'mismatch' | 'multiple_browser_pixels' | 'unavailable';
+                severity: 'neutral' | 'success' | 'warning';
+                message: string;
+                capiPixelId: string | null;
+                activeBrowserPixelIds: Array<string>;
+                activeFacebookPixelScriptCount: number;
+                parseableFacebookPixelScriptCount: number;
+            };
         };
     };
 };

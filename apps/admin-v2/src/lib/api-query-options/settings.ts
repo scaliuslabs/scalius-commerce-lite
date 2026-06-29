@@ -99,7 +99,8 @@ export const metaConversionsSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.metaConversions(),
     queryFn: () => getMetaConversionsSettings(),
-    staleTime: CONFIG_STALE_TIME_MS,
+    staleTime: MODERATE_STALE_TIME_MS,
+    refetchOnMount: "always",
   });
 
 export const metaConversionsLogsQueryOptions = (params: {
