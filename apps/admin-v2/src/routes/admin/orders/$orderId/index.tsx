@@ -156,11 +156,12 @@ function OrderViewPage() {
 
   const fullOrder = useMemo(() => {
     if (!order) return null;
-    const activeProviders = Array.isArray(providers)
+    const hydratedShipments = isHydrated ? shipments : [];
+    const activeProviders = isHydrated && Array.isArray(providers)
       ? (providers as DeliveryProviderRecord[]).filter((p) => p.isActive)
       : [];
-    return toOrderViewModel(order, shipments, activeProviders);
-  }, [order, shipments, providers]);
+    return toOrderViewModel(order, hydratedShipments, activeProviders);
+  }, [isHydrated, order, shipments, providers]);
 
   // fullOrder is guaranteed non-null — useSuspenseQuery ensures order exists
   return <OrderView order={fullOrder!} />;

@@ -81,6 +81,8 @@ const EMPTY_DISPATCH_RESULT: OrderNotificationDispatchResult = {
     hasRetryableFailure: false,
 };
 
+const MAX_ORDER_NOTIFICATION_DELIVERY_ATTEMPTS = 8;
+
 const NON_RETRYABLE_DISPATCH_ERROR_PATTERNS = [
     /no configured .*provider/i,
     /no active .*provider/i,
@@ -897,12 +899,12 @@ async function dispatchWithReceipt(options: {
     try {
         const result = await options.send(target);
         if (!result.success) {
-            if (result.retryable === false) {
+            if (!isDeliveryFailureRetryable(result)) {
                 return await markSkippedOutcome(
                     options.db,
                     target,
                     claim.receipt,
-                    result.providerStatus ?? "provider_non_retryable_failure",
+                    result.providerStatus ?? result.rawResponse ?? "provider_non_retryable_failure",
                     result,
                 );
             }
@@ -1030,6 +1032,22 @@ async function markFailedOutcome(
     error: unknown,
     result: Omit<DeliverySendResult, "success"> = { provider: target.provider },
 ): Promise<OrderNotificationChannelOutcome> {
+    if (receipt.attempts >= MAX_ORDER_NOTIFICATION_DELIVERY_ATTEMPTS) {
+        const rawResponse = result.rawResponse ?? result.providerStatus ?? normalizeError(error);
+        return await markSkippedOutcome(
+            db,
+            target,
+            receipt,
+            buildAttemptLimitReason(rawResponse),
+            {
+                provider: result.provider,
+                providerMessageId: result.providerMessageId,
+                providerStatus: "delivery_attempt_limit_reached",
+                rawResponse,
+            },
+        );
+    }
+
     try {
         await markOrderNotificationDeliveryReceiptFailed(db, receipt, error, {
             provider: result.provider,
@@ -1066,6 +1084,14 @@ function emailResultToDeliveryResult(result: SendEmailResult): DeliverySendResul
                 ? false
                 : undefined,
     };
+}
+
+function isDeliveryFailureRetryable(result: DeliverySendResult): boolean {
+    if (result.retryable !== undefined) return result.retryable;
+    const providerText = [result.providerStatus, result.rawResponse]
+        .filter((value): value is string => Boolean(value))
+        .join(" ");
+    return !isNonRetryableDispatchStatus(providerText);
 }
 
 function isNonRetryableDispatchError(error: unknown): boolean {
@@ -1108,6 +1134,13 @@ function buildDispatchResult(outcomes: OrderNotificationChannelOutcome[]): Order
         outcomes,
         hasRetryableFailure: outcomes.some((outcome) => outcome.retryable),
     };
+}
+
+function buildAttemptLimitReason(rawResponse: string): string {
+    const detail = rawResponse.trim();
+    return detail
+        ? `delivery_attempt_limit_reached: ${detail}`
+        : "delivery_attempt_limit_reached";
 }
 
 async function deactivateInvalidFcmTokens(

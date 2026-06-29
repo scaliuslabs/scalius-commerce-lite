@@ -19,6 +19,12 @@ interface FirebaseServiceAccount {
   project_id?: unknown;
 }
 
+export interface FirebaseServiceAccountReadiness {
+  configured: boolean;
+  error: string | null;
+  source: "settings" | "env" | "none";
+}
+
 function parseFirebaseServiceAccountJson(value: string): FirebaseServiceAccount {
   try {
     return JSON.parse(value) as FirebaseServiceAccount;
@@ -111,6 +117,62 @@ export async function readFirebaseServiceAccountJson(
     .get();
 
   return readFirebaseServiceAccountJsonFromStoredValue(row?.value, encryptionKey);
+}
+
+export async function getFirebaseServiceAccountReadiness(
+  db: Database,
+  encryptionKey?: string,
+  env?: Record<string, unknown>,
+): Promise<FirebaseServiceAccountReadiness> {
+  const row = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(
+      and(
+        eq(settings.key, FIREBASE_SERVICE_ACCOUNT_KEY),
+        eq(settings.category, FIREBASE_SETTINGS_CATEGORY),
+      ),
+    )
+    .get();
+  const storedValue = row?.value?.trim();
+
+  if (storedValue) {
+    const serviceAccountJson = await readFirebaseServiceAccountJsonFromStoredValue(
+      storedValue,
+      encryptionKey,
+    );
+    return serviceAccountJson
+      ? { configured: true, error: null, source: "settings" }
+      : {
+          configured: false,
+          error:
+            "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
+          source: "settings",
+        };
+  }
+
+  const envValue = typeof env?.FIREBASE_SERVICE_ACCOUNT_CRED_JSON === "string"
+    ? env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON.trim()
+    : "";
+  if (envValue) {
+    try {
+      normalizeFirebaseServiceAccountJson(envValue);
+      return { configured: true, error: null, source: "env" };
+    } catch {
+      return {
+        configured: false,
+        error:
+          "Firebase service account environment variable is not valid. Fix it or disable admin push notifications.",
+        source: "env",
+      };
+    }
+  }
+
+  return {
+    configured: false,
+    error: "Configure Firebase service account credentials before enabling admin push notifications.",
+    source: "none",
+  };
 }
 
 export async function saveFirebaseServiceAccountJson(

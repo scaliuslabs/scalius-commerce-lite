@@ -12,9 +12,11 @@ import {
     isWhatsAppCloudApiConfigured,
 } from "@scalius/core/modules/settings/settings.service";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
+import { getFirebaseServiceAccountReadiness } from "@scalius/core/integrations/firebase/settings";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
+import { ValidationError } from "../../../utils/api-error";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -27,6 +29,12 @@ const whatsappTemplateSchema = z.object({
 
 const wrappedChannelsSchema = z.object({
     channels: channelsSchema,
+});
+
+const adminNotificationSettingsSchema = z.object({
+    channels: channelsSchema,
+    pushConfigured: z.boolean(),
+    pushError: z.string().nullable(),
 });
 
 const customerNotificationSettingsSchema = z.object({
@@ -119,7 +127,7 @@ const getAdminChannelsRoute = createRoute({
     responses: {
         200: {
             description: "Admin notification channel configuration",
-            content: { "application/json": { schema: successEnvelope(wrappedChannelsSchema) } },
+            content: { "application/json": { schema: successEnvelope(adminNotificationSettingsSchema) } },
         },
         ...errorResponses,
     },
@@ -127,8 +135,18 @@ const getAdminChannelsRoute = createRoute({
 
 app.openapi(getAdminChannelsRoute, async (c) => {
     const db = c.get("db");
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const channels = await getAdminNotificationChannels(db);
-    return ok(c, { channels });
+    const pushReadiness = await getFirebaseServiceAccountReadiness(
+        db,
+        encryptionKey,
+        c.env as Record<string, unknown>,
+    );
+    return ok(c, {
+        channels,
+        pushConfigured: pushReadiness.configured,
+        pushError: pushReadiness.error,
+    });
 });
 
 // PUT /notification-channels/admin-channels
@@ -143,7 +161,7 @@ const updateAdminChannelsRoute = createRoute({
     responses: {
         200: {
             description: "Updated admin notification channel configuration",
-            content: { "application/json": { schema: successEnvelope(wrappedChannelsSchema) } },
+            content: { "application/json": { schema: successEnvelope(adminNotificationSettingsSchema) } },
         },
         ...errorResponses,
     },
@@ -151,9 +169,29 @@ const updateAdminChannelsRoute = createRoute({
 
 app.openapi(updateAdminChannelsRoute, async (c) => {
     const db = c.get("db");
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const { channels } = c.req.valid("json");
+    const pushReadiness = await getFirebaseServiceAccountReadiness(
+        db,
+        encryptionKey,
+        c.env as Record<string, unknown>,
+    );
+    if (adminChannelsRequirePush(channels) && !pushReadiness.configured) {
+        throw new ValidationError(
+            pushReadiness.error
+                ?? "Configure Firebase service account credentials before enabling admin push notifications.",
+        );
+    }
     const updated = await updateAdminNotificationChannels(db, channels);
-    return ok(c, { channels: updated });
+    return ok(c, {
+        channels: updated,
+        pushConfigured: pushReadiness.configured,
+        pushError: pushReadiness.error,
+    });
 });
+
+function adminChannelsRequirePush(channels: Record<string, string[]>): boolean {
+    return Object.values(channels).some((enabledChannels) => enabledChannels.includes("push"));
+}
 
 export { app as notificationChannelsRoutes };

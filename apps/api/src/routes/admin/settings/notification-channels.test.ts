@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     updateOrderWhatsAppTemplateSettings: vi.fn(),
     isWhatsAppCloudApiConfigured: vi.fn(),
     getSmsProviderReadiness: vi.fn(),
+    getFirebaseServiceAccountReadiness: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings/settings.service", () => ({
@@ -27,6 +28,10 @@ vi.mock("@scalius/core/modules/settings/settings.service", () => ({
 
 vi.mock("@scalius/core/integrations/sms", () => ({
     getSmsProviderReadiness: mocks.getSmsProviderReadiness,
+}));
+
+vi.mock("@scalius/core/integrations/firebase/settings", () => ({
+    getFirebaseServiceAccountReadiness: mocks.getFirebaseServiceAccountReadiness,
 }));
 
 import { notificationChannelsRoutes } from "./notification-channels";
@@ -78,6 +83,11 @@ describe("notification channel settings routes", () => {
             activeProvider: null,
             configured: false,
             error: "No active SMS provider selected",
+        });
+        mocks.getFirebaseServiceAccountReadiness.mockResolvedValue({
+            configured: true,
+            error: null,
+            source: "settings",
         });
     });
 
@@ -146,5 +156,98 @@ describe("notification channel settings routes", () => {
         expect(response.status).toBe(400);
         expect(body.success).toBe(false);
         expect(body.error.message).toContain("Customer push notifications are not implemented yet.");
+    });
+
+    it("returns Firebase push readiness with admin notification channels", async () => {
+        mocks.getFirebaseServiceAccountReadiness.mockResolvedValueOnce({
+            configured: false,
+            error: "Configure Firebase service account credentials before enabling admin push notifications.",
+            source: "none",
+        });
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
+            method: "GET",
+        }, env);
+        const body = await response.json() as {
+            success: boolean;
+            data: {
+                channels: Record<string, string[]>;
+                pushConfigured: boolean;
+                pushError: string | null;
+            };
+        };
+
+        expect(response.status).toBe(200);
+        expect(body).toMatchObject({
+            success: true,
+            data: {
+                channels: { order_created: ["push"] },
+                pushConfigured: false,
+                pushError: "Configure Firebase service account credentials before enabling admin push notifications.",
+            },
+        });
+        expect(mocks.getFirebaseServiceAccountReadiness).toHaveBeenCalledWith(
+            { id: "db" },
+            "credential-key",
+            env,
+        );
+    });
+
+    it("rejects admin push saves when Firebase readiness is not configured", async () => {
+        mocks.getFirebaseServiceAccountReadiness.mockResolvedValueOnce({
+            configured: false,
+            error: "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
+            source: "settings",
+        });
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                channels: { order_created: ["push"] },
+            }),
+        }, env);
+        const body = await response.json() as { success: boolean; error: { message: string } };
+
+        expect(response.status).toBe(400);
+        expect(body.success).toBe(false);
+        expect(body.error.message).toContain("Saved Firebase service account is not usable.");
+        expect(mocks.updateAdminNotificationChannels).not.toHaveBeenCalled();
+    });
+
+    it("allows disabling admin push even when Firebase is not configured", async () => {
+        mocks.getFirebaseServiceAccountReadiness.mockResolvedValueOnce({
+            configured: false,
+            error: "Configure Firebase service account credentials before enabling admin push notifications.",
+            source: "none",
+        });
+        mocks.updateAdminNotificationChannels.mockResolvedValueOnce({
+            order_created: [],
+        });
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                channels: { order_created: [] },
+            }),
+        }, env);
+        const body = await response.json() as { success: boolean; data: { channels: Record<string, string[]> } };
+
+        expect(response.status).toBe(200);
+        expect(body).toMatchObject({
+            success: true,
+            data: {
+                channels: { order_created: [] },
+                pushConfigured: false,
+            },
+        });
+        expect(mocks.updateAdminNotificationChannels).toHaveBeenCalledWith(
+            { id: "db" },
+            { order_created: [] },
+        );
     });
 });

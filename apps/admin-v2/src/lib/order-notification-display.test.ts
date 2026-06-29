@@ -114,5 +114,8 @@ describe("order notification display", () => {
     expect(describeNotificationIssue("Failed to get access token: invalid_grant service account disabled")).toBe(
       "Firebase credentials are not usable. Save a valid service account or disable admin push notifications.",
     );
+    expect(describeNotificationIssue("delivery_attempt_limit_reached: temporary gateway timeout")).toBe(
+      "Delivery stopped after repeated provider failures. Check credentials and settings before sending more notifications.",
+    );
   });
 });

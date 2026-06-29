@@ -636,6 +636,97 @@ describe("order notification dispatch", () => {
         expect(result.hasRetryableFailure).toBe(false);
     });
 
+    it("records status-only SMS credential failures as skipped receipts", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_confirmed: ["sms"],
+        });
+        mocks.sendSms.mockResolvedValue({
+            success: false,
+            rawStatus: "HTTP 401 unauthorized",
+        });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "smsnetbd",
+            sendSms: mocks.sendSms,
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_sms_status_auth",
+            "order_confirmed",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_sms_status_auth",
+            },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "HTTP 401 unauthorized",
+            expect.objectContaining({
+                provider: "smsnetbd",
+                providerStatus: "HTTP 401 unauthorized",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("stops retryable SMS provider failures at the delivery attempt cap", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_confirmed: ["sms"],
+        });
+        mocks.claimOrderNotificationDeliveryReceipt.mockResolvedValueOnce({
+            claimed: true,
+            receipt: {
+                id: "receipt_capped",
+                receiptKey: "outbox_sms_capped:sms:recipient_hash",
+                claimId: "claim_capped",
+                attempts: 8,
+            },
+        });
+        mocks.sendSms.mockResolvedValue({
+            success: false,
+            rawStatus: "temporary gateway timeout",
+            retryable: true,
+        });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "smsnetbd",
+            sendSms: mocks.sendSms,
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_sms_capped",
+            "order_confirmed",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_sms_capped",
+            },
+        );
+
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_capped", claimId: "claim_capped" }),
+            "delivery_attempt_limit_reached: temporary gateway timeout",
+            expect.objectContaining({
+                provider: "smsnetbd",
+                providerStatus: "delivery_attempt_limit_reached",
+                rawResponse: "temporary gateway timeout",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
     it("records missing SMS provider setup as a skipped receipt", async () => {
         const db = createDb();
         mocks.getNotificationChannels.mockResolvedValue({
