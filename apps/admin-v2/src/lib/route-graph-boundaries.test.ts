@@ -199,6 +199,9 @@ describe("admin route graph boundaries", () => {
     expect(notificationSource).toContain("Admin push notifications are locked until Firebase service account credentials are ready.");
     expect(notificationSource).toContain("pushConfigured");
     expect(notificationSource).toContain('ch.key === "push" && !isPushConfigured');
+    expect(notificationSource.match(/config\[status\.key\]\[ch\.key\] = enabledChannels\.includes\(ch\.key\);/g)).toHaveLength(2);
+    expect(notificationSource).not.toContain("!whatsappConfigured");
+    expect(notificationSource).not.toContain("pushConfigured && enabledChannels.includes");
   });
 
   it("keeps the deferred rich-text editor client render flicker-free", () => {
@@ -214,6 +217,8 @@ describe("admin route graph boundaries", () => {
     expect(tiptapSource).toContain("immediatelyRender: false,");
     expect(tiptapSource).toContain('editorInstance.commands.focus("end", { scrollIntoView: false })');
     expect(deferredSource).toContain("loadTiptapEditorModule().finally");
+    expect(deferredSource).toContain("preloadRequestedRef");
+    expect(deferredSource).toContain("void loadTiptapEditorModule();");
     expect(deferredSource).toContain("min-h-[237px]");
     expect(deferredSource).toContain("h-[200px]");
   });

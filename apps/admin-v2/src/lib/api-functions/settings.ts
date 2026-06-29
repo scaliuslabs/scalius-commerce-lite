@@ -197,6 +197,7 @@ export interface NotificationChannelsPayload {
     languageCode: string;
   };
   whatsappConfigured?: boolean;
+  whatsappError?: string | null;
   smsProviderConfigured?: boolean;
   smsProviderError?: string | null;
 }

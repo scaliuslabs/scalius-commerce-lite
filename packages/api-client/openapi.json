@@ -75922,6 +75922,10 @@
                         "whatsappConfigured": {
                           "type": "boolean"
                         },
+                        "whatsappError": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "smsProviderConfigured": {
                           "type": "boolean"
                         },
@@ -75934,6 +75938,7 @@
                         "channels",
                         "whatsappTemplate",
                         "whatsappConfigured",
+                        "whatsappError",
                         "smsProviderConfigured",
                         "smsProviderError"
                       ]
@@ -76288,6 +76293,10 @@
                         "whatsappConfigured": {
                           "type": "boolean"
                         },
+                        "whatsappError": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "smsProviderConfigured": {
                           "type": "boolean"
                         },
@@ -76300,6 +76309,7 @@
                         "channels",
                         "whatsappTemplate",
                         "whatsappConfigured",
+                        "whatsappError",
                         "smsProviderConfigured",
                         "smsProviderError"
                       ]
@@ -76587,10 +76597,19 @@
                               "type": "string"
                             }
                           }
+                        },
+                        "pushConfigured": {
+                          "type": "boolean"
+                        },
+                        "pushError": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
-                        "channels"
+                        "channels",
+                        "pushConfigured",
+                        "pushError"
                       ]
                     }
                   },
@@ -76897,10 +76916,19 @@
                               "type": "string"
                             }
                           }
+                        },
+                        "pushConfigured": {
+                          "type": "boolean"
+                        },
+                        "pushError": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
-                        "channels"
+                        "channels",
+                        "pushConfigured",
+                        "pushError"
                       ]
                     }
                   },

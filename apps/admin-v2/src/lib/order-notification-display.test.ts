@@ -89,8 +89,9 @@ describe("order notification display", () => {
       channel: "sms",
       providerStatus: "Provider rejected the saved credentials. Save valid credentials or disable this channel.",
       maxAttempts: 56,
+      setupIssue: true,
     });
-    expect(deliveryAttemptLabel(groups[0]!)).toBe("Stopped after 56 attempts");
+    expect(deliveryAttemptLabel(groups[0]!)).toBe("Paused");
     expect(groups[1]).toMatchObject({
       channel: "whatsapp",
       providerStatus: "WhatsApp is enabled, but Meta Cloud API credentials are not ready.",
@@ -99,6 +100,28 @@ describe("order notification display", () => {
 
   it("keeps unknown provider text short enough for the order card", () => {
     expect(describeNotificationIssue("x".repeat(220))).toBe(`${"x".repeat(157)}...`);
+  });
+
+  it("does not label capped transient failures as paused provider setup", () => {
+    const [group] = buildReceiptDisplayGroups([
+      receipt({
+        id: "sms_timeout",
+        channel: "sms",
+        provider: "smsnetbd",
+        status: "skipped",
+        providerStatus: "delivery_attempt_limit_reached",
+        lastError: "delivery_attempt_limit_reached: temporary gateway timeout",
+        attempts: 8,
+        acceptedAt: null,
+        skippedAt: 1_782_684_758,
+      }),
+    ]);
+
+    expect(group).toMatchObject({
+      setupIssue: false,
+      providerStatus: "Delivery stopped after repeated provider failures. Check credentials and settings before sending more notifications.",
+    });
+    expect(deliveryAttemptLabel(group!)).toBe("Stopped after 8 attempts");
   });
 
   it("translates status-only provider setup failures into merchant actions", () => {

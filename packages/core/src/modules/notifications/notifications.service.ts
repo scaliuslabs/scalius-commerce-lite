@@ -1174,6 +1174,11 @@ async function markFailedOutcome(
 ): Promise<OrderNotificationChannelOutcome> {
     if (receipt.attempts >= MAX_ORDER_NOTIFICATION_DELIVERY_ATTEMPTS) {
         const rawResponse = result.rawResponse ?? result.providerStatus ?? normalizeError(error);
+        await blockProviderForMerchantActionableFailure(db, {
+            channel: target.channel,
+            provider: result.provider,
+            reason: rawResponse,
+        });
         return await markSkippedOutcome(
             db,
             target,

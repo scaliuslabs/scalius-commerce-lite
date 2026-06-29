@@ -5,6 +5,7 @@ import { ValidationError } from "@scalius/core/errors";
 const mocks = vi.hoisted(() => ({
     getSmsProviderReadiness: vi.fn(),
     getWhatsAppCloudApiSettings: vi.fn(),
+    getNotificationProviderBlock: vi.fn(),
     upsertSetting: vi.fn(),
 }));
 
@@ -14,6 +15,12 @@ vi.mock("../../integrations/sms", () => ({
 
 vi.mock("../../integrations/whatsapp", () => ({
     getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
+}));
+
+vi.mock("../notifications/notification-provider-health", () => ({
+    describeNotificationProviderBlock: (block: { channel: string; provider: string; reason: string }) =>
+        `${block.channel}/${block.provider} paused: ${block.reason}`,
+    getNotificationProviderBlock: mocks.getNotificationProviderBlock,
 }));
 
 vi.mock("../payments/gateway-settings", () => ({
@@ -46,6 +53,7 @@ describe("notification channel settings", () => {
             accessTokenConfigured: true,
             phoneNumberId: "12345",
         });
+        mocks.getNotificationProviderBlock.mockResolvedValue(null);
         mocks.upsertSetting.mockResolvedValue(undefined);
     });
 
@@ -122,5 +130,41 @@ describe("notification channel settings", () => {
                 order_created: ["email", "sms"],
             },
         });
+    });
+
+    it("rejects SMS notification saves while the active provider is paused", async () => {
+        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
+            channel: "sms",
+            provider: "gennet",
+            reason: "HTTP 401 unauthorized",
+            blockedAt: 1_782_684_758,
+        });
+        const db = createSettingsDb();
+
+        await expect(updateNotificationChannels(db as never, {
+            order_created: ["sms"],
+        }, "credential-key")).rejects.toMatchObject({
+            name: "ValidationError",
+            message: "sms/gennet paused: HTTP 401 unauthorized",
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    });
+
+    it("rejects WhatsApp notification saves while Meta delivery is paused", async () => {
+        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
+            channel: "whatsapp",
+            provider: "whatsapp",
+            reason: "invalid token",
+            blockedAt: 1_782_684_758,
+        });
+        const db = createSettingsDb();
+
+        await expect(updateNotificationChannels(db as never, {
+            order_created: ["whatsapp"],
+        }, "credential-key")).rejects.toMatchObject({
+            name: "ValidationError",
+            message: "whatsapp/whatsapp paused: invalid token",
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
     });
 });
