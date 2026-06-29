@@ -1093,6 +1093,7 @@ async function processQueueMessage(
       // dispute auto-refund system. We must update the DB to reflect the refund.
       const result = await processPolarWebhookRefund(db, {
         orderId: payload.orderId,
+        polarCheckoutId: payload.polarCheckoutId,
         amountRefunded: payload.amountRefunded,
         totalAmount: payload.totalAmount,
         currency: payload.currency,

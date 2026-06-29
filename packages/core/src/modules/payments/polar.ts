@@ -5,7 +5,14 @@
 import { Polar } from "@polar-sh/sdk";
 import { Webhook } from "standardwebhooks";
 import { and, eq, sql } from "drizzle-orm";
-import { orders, OrderStatus, PaymentStatus } from "@scalius/database/schema";
+import {
+    orderPayments,
+    orders,
+    OrderStatus,
+    PaymentRecordStatus,
+    PaymentStatus,
+    type OrderPayment,
+} from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { PolarSettings } from "./gateway-settings";
 import type {
@@ -27,9 +34,8 @@ import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { canTransitionTo } from "../orders/order-state-machine";
 import { hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../orders/shipment-claim";
-import { getDecimalPlaces } from "@scalius/shared/currency";
-import { roundPrice } from "@scalius/shared/price-utils";
-import { computePaymentStateAfterRefund } from "./payment-state";
+import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
+import { computeOrderPaymentState } from "./payment-state";
 
 // ---------------------------------------------------------------------------
 // Client factory (one instance per set of credentials)
@@ -397,6 +403,8 @@ function shouldReleaseInventoryForWebhookRefund(currentStatus: string, nextStatu
 
 export interface PolarWebhookRefundParams {
     orderId: string;
+    /** Polar checkout/order id that maps to the local succeeded Polar payment row. */
+    polarCheckoutId: string;
     /** Cumulative refunded amount from Polar, in smallest currency unit (cents). */
     amountRefunded: number;
     /** Original total amount from Polar, in smallest currency unit (cents). */
@@ -422,6 +430,109 @@ export interface PolarWebhookRefundNotification {
 export type PolarWebhookRefundResult =
     | { success: true; notification?: PolarWebhookRefundNotification }
     | { success: false; error: string };
+
+type PolarPaymentLedgerRow = Pick<
+    OrderPayment,
+    "id" | "amount" | "currency" | "paymentMethod" | "paymentType" | "status" | "polarCheckoutId" | "metadata"
+>;
+
+function parsePaymentMetadata(metadata: string | null): Record<string, unknown> {
+    if (!metadata) return {};
+    try {
+        const parsed = JSON.parse(metadata) as unknown;
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? parsed as Record<string, unknown>
+            : {};
+    } catch {
+        return {};
+    }
+}
+
+function isCapturedPaymentRow(payment: Pick<OrderPayment, "paymentType" | "status">): boolean {
+    return payment.paymentType !== "refund" && payment.status === PaymentRecordStatus.SUCCEEDED;
+}
+
+function isRefundedPaymentRow(payment: Pick<OrderPayment, "paymentType" | "status">): boolean {
+    return payment.paymentType === "refund" && payment.status === PaymentRecordStatus.REFUNDED;
+}
+
+function isRefundForSourcePayment(
+    refund: Pick<OrderPayment, "paymentType" | "status" | "metadata">,
+    sourcePaymentId: string,
+): boolean {
+    if (!isRefundedPaymentRow(refund)) return false;
+    return parsePaymentMetadata(refund.metadata).sourcePaymentId === sourcePaymentId;
+}
+
+function computeLedgerPaymentState(params: {
+    totalAmount: number;
+    payments: Array<Pick<OrderPayment, "paymentType" | "status" | "amount">>;
+    pendingRefundAmount?: number;
+}) {
+    const capturedAmount = roundPrice(params.payments
+        .filter(isCapturedPaymentRow)
+        .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0));
+    const refundedAmount = roundPrice(params.payments
+        .filter(isRefundedPaymentRow)
+        .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0) + (params.pendingRefundAmount ?? 0));
+    const paidAmount = roundPrice(Math.max(0, capturedAmount - refundedAmount));
+    const isFullRefund = capturedAmount > 0 && (pricesEqual(paidAmount, 0) || refundedAmount >= capturedAmount);
+
+    if (isFullRefund) {
+        return {
+            capturedAmount,
+            refundedAmount,
+            isFullRefund,
+            paidAmount: 0,
+            balanceDue: roundPrice(params.totalAmount),
+            paymentStatus: PaymentStatus.REFUNDED,
+        };
+    }
+
+    return {
+        capturedAmount,
+        refundedAmount,
+        isFullRefund,
+        ...computeOrderPaymentState({
+            totalAmount: params.totalAmount,
+            paidAmount,
+            paymentStatus: paidAmount < capturedAmount ? PaymentStatus.PARTIAL : undefined,
+        }),
+    };
+}
+
+function buildPolarExternalRefundPaymentId(params: PolarWebhookRefundParams): string {
+    const safeOrderId = params.orderId.replace(/[^A-Za-z0-9_-]/g, "");
+    const safeCheckoutId = params.polarCheckoutId.replace(/[^A-Za-z0-9_-]/g, "");
+    const safeCurrency = params.currency.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    return `refund_polar_external_${safeOrderId}_${safeCheckoutId}_${params.amountRefunded}_${safeCurrency}`.slice(0, 240);
+}
+
+function buildPolarExternalRefundMetadata(params: {
+    sourcePayment: PolarPaymentLedgerRow;
+    webhook: PolarWebhookRefundParams;
+    localRefundAmount: number;
+}): string {
+    return JSON.stringify({
+        source: "polar_webhook",
+        gateway: "polar",
+        sourcePaymentId: params.sourcePayment.id,
+        sourcePaymentType: params.sourcePayment.paymentType,
+        sourceTransactionId: params.sourcePayment.polarCheckoutId,
+        polarCheckoutId: params.webhook.polarCheckoutId,
+        polarStatus: params.webhook.polarStatus,
+        amountRefunded: params.webhook.amountRefunded,
+        totalAmount: params.webhook.totalAmount,
+        gatewayCurrency: params.webhook.currency.toLowerCase(),
+        localRefundAmount: params.localRefundAmount,
+        providerOutcome: "accepted",
+    });
+}
+
+function isConstraintError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    return /unique|constraint|duplicate/i.test(message);
+}
 
 function buildPolarWebhookRefundNotification(
     params: PolarWebhookRefundParams,
@@ -493,7 +604,53 @@ export async function processPolarWebhookRefund(
             return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE };
         }
 
-        const isFullRefund = params.polarStatus === "refunded";
+        const paymentRows = await db
+            .select({
+                id: orderPayments.id,
+                amount: orderPayments.amount,
+                currency: orderPayments.currency,
+                paymentMethod: orderPayments.paymentMethod,
+                paymentType: orderPayments.paymentType,
+                status: orderPayments.status,
+                polarCheckoutId: orderPayments.polarCheckoutId,
+                metadata: orderPayments.metadata,
+            })
+            .from(orderPayments)
+            .where(eq(orderPayments.orderId, params.orderId));
+
+        const sourcePayment = paymentRows.find((payment) =>
+            payment.paymentMethod === "polar" &&
+            payment.paymentType !== "refund" &&
+            payment.polarCheckoutId === params.polarCheckoutId
+        );
+        if (!sourcePayment) {
+            return { success: false, error: `Polar payment ${params.polarCheckoutId} was not found for order ${params.orderId}` };
+        }
+        if (sourcePayment.status !== PaymentRecordStatus.SUCCEEDED) {
+            return { success: false, error: `Polar payment ${params.polarCheckoutId} is not confirmed yet` };
+        }
+
+        const sourceRefundedAmount = roundPrice(paymentRows
+            .filter((payment) => isRefundForSourcePayment(payment, sourcePayment.id))
+            .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0));
+        const sourcePaymentAmount = roundPrice(Number(sourcePayment.amount ?? 0));
+        const isSourceFullyRefunded = params.polarStatus === "refunded";
+        let sourceTargetRefundedAmount: number;
+        if (isSourceFullyRefunded) {
+            sourceTargetRefundedAmount = sourcePaymentAmount;
+        } else if (params.totalAmount > 0) {
+            sourceTargetRefundedAmount = roundPrice(sourcePaymentAmount * (params.amountRefunded / params.totalAmount));
+        } else {
+            return { success: false, error: "Polar partial refund webhook did not include the original total amount" };
+        }
+        sourceTargetRefundedAmount = Math.min(sourcePaymentAmount, Math.max(0, sourceTargetRefundedAmount));
+        const localRefundAmount = roundPrice(Math.max(0, sourceTargetRefundedAmount - sourceRefundedAmount));
+        const paymentState = computeLedgerPaymentState({
+            totalAmount: order.totalAmount,
+            payments: paymentRows,
+            pendingRefundAmount: localRefundAmount,
+        });
+        const isFullRefund = paymentState.isFullRefund;
         const nextOrderStatus = getOrderStatusAfterWebhookRefund(order.status, isFullRefund);
         const shouldChangeOrderStatus = Boolean(nextOrderStatus && nextOrderStatus !== order.status);
 
@@ -523,34 +680,57 @@ export async function processPolarWebhookRefund(
             };
         }
 
-        // For currency-converted payments (e.g. BDT→USD), the refunded amount from
-        // Polar is in the gateway currency (USD cents), but order.paidAmount is in
-        // store currency (BDT). Use the ratio of refunded/total to calculate the
-        // local-currency refund amount. This works universally regardless of whether
-        // currency conversion happened (ratio is the same in any currency).
-        let localRefundAmount: number;
-        if (isFullRefund) {
-            localRefundAmount = order.paidAmount ?? 0;
-        } else if (params.totalAmount > 0) {
-            const refundRatio = params.amountRefunded / params.totalAmount;
-            localRefundAmount = roundPrice((order.paidAmount ?? 0) * refundRatio);
-        } else {
-            // Fallback: direct conversion (only correct when currencies match)
-            const decimals = getDecimalPlaces(params.currency);
-            localRefundAmount = roundPrice(params.amountRefunded / Math.pow(10, decimals));
+        const refundPaymentId = buildPolarExternalRefundPaymentId(params);
+        const existingRefundPayment = paymentRows.find((payment) => payment.id === refundPaymentId);
+        const pendingSourceRefund = paymentRows.find((payment) =>
+            payment.id !== refundPaymentId &&
+            payment.paymentType === "refund" &&
+            payment.status === PaymentRecordStatus.PENDING &&
+            parsePaymentMetadata(payment.metadata).sourcePaymentId === sourcePayment.id
+        );
+        if (pendingSourceRefund) {
+            return { success: false, error: "A previous Polar external refund is still being reconciled; retry required" };
+        }
+        if (localRefundAmount <= 0 && !shouldChangeOrderStatus) {
+            return { success: true };
+        }
+        if (localRefundAmount > 0) {
+            if (existingRefundPayment) {
+                if (!pricesEqual(Number(existingRefundPayment.amount ?? 0), localRefundAmount)) {
+                    return { success: false, error: "Existing Polar external refund row amount does not match the webhook refund target" };
+                }
+            } else {
+                try {
+                    await db.insert(orderPayments).values({
+                        id: refundPaymentId,
+                        orderId: params.orderId,
+                        amount: localRefundAmount,
+                        currency: sourcePayment.currency,
+                        paymentMethod: "polar",
+                        paymentType: "refund",
+                        status: PaymentRecordStatus.PENDING,
+                        polarCheckoutId: params.polarCheckoutId,
+                        metadata: buildPolarExternalRefundMetadata({
+                            sourcePayment,
+                            webhook: params,
+                            localRefundAmount,
+                        }),
+                        createdAt: sql`unixepoch()`,
+                        updatedAt: sql`unixepoch()`,
+                    });
+                } catch (error: unknown) {
+                    if (isConstraintError(error)) {
+                        return { success: false, error: "Polar external refund is already being reconciled; retry required" };
+                    }
+                    throw error;
+                }
+            }
         }
 
-        const newPaymentState = computePaymentStateAfterRefund({
-            totalAmount: order.totalAmount,
-            currentPaidAmount: order.paidAmount,
-            refundAmount: localRefundAmount,
-            isFullRefund,
-        });
-
         const updateValues = {
-            paidAmount: newPaymentState.paidAmount,
-            balanceDue: newPaymentState.balanceDue,
-            paymentStatus: newPaymentState.paymentStatus,
+            paidAmount: paymentState.paidAmount,
+            balanceDue: paymentState.balanceDue,
+            paymentStatus: paymentState.paymentStatus,
             ...(shouldChangeOrderStatus ? { status: nextOrderStatus } : {}),
             version: sql`${orders.version} + 1`,
             updatedAt: sql`unixepoch()`,
@@ -567,6 +747,20 @@ export async function processPolarWebhookRefund(
 
         if (updateResult.length === 0) {
             return { success: false, error: "Order was modified concurrently while applying Polar refund; retry required" };
+        }
+
+        if (localRefundAmount > 0) {
+            const refundUpdateResult = await db.update(orderPayments).set({
+                status: PaymentRecordStatus.REFUNDED,
+                updatedAt: sql`unixepoch()`,
+            }).where(and(
+                eq(orderPayments.id, refundPaymentId),
+                eq(orderPayments.status, PaymentRecordStatus.PENDING),
+            )).returning({ id: orderPayments.id });
+
+            if (refundUpdateResult.length === 0) {
+                return { success: false, error: "Polar external refund row could not be finalized; retry required" };
+            }
         }
 
         // On pre-fulfillment full refund, release reservations (mirrors refund-service.ts behavior).

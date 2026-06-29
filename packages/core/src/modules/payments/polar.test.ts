@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { OrderStatus, PaymentStatus } from "@scalius/database/schema";
+import { orderPayments, OrderStatus, PaymentRecordStatus, PaymentStatus } from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
@@ -27,19 +27,26 @@ import { createPolarCheckout, findReusablePolarCheckout, processPolarWebhookRefu
 
 function createDbMock({
   order,
+  payments = [],
   updateRows = [{ id: "order_1" }],
 }: {
   order: Record<string, unknown> | null;
+  payments?: Array<Record<string, unknown>>;
   updateRows?: Array<{ id: string }>;
 }) {
   const updates: Array<Record<string, unknown>> = [];
+  const paymentUpdates: Array<Record<string, unknown>> = [];
+  const paymentInserts: Array<Record<string, unknown>> = [];
 
   const db = {
     select() {
       return {
-        from() {
+        from(table: unknown) {
           return {
             where() {
+              if (table === orderPayments) {
+                return payments;
+              }
               return {
                 get: async () => order,
               };
@@ -48,14 +55,28 @@ function createDbMock({
         },
       };
     },
-    update() {
+    insert(table: unknown) {
+      return {
+        values: async (values: Record<string, unknown>) => {
+          if (table === orderPayments) {
+            paymentInserts.push(values);
+            payments.push(values);
+          }
+        },
+      };
+    },
+    update(table: unknown) {
       return {
         set(values: Record<string, unknown>) {
-          updates.push(values);
+          if (table === orderPayments) {
+            paymentUpdates.push(values);
+          } else {
+            updates.push(values);
+          }
           return {
             where() {
               return {
-                returning: async () => updateRows,
+                returning: async () => table === orderPayments ? [{ id: "refund_row" }] : updateRows,
               };
             },
           };
@@ -64,7 +85,39 @@ function createDbMock({
     },
   };
 
-  return { db, updates };
+  return { db, updates, paymentUpdates, paymentInserts };
+}
+
+function polarPayment(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "pay_polar",
+    amount: 100,
+    currency: "BDT",
+    paymentMethod: "polar",
+    paymentType: "full",
+    status: PaymentRecordStatus.SUCCEEDED,
+    polarCheckoutId: "polar_order_1",
+    metadata: null,
+    ...overrides,
+  };
+}
+
+function polarRefundPayment(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "refund_polar_existing",
+    amount: 25,
+    currency: "BDT",
+    paymentMethod: "polar",
+    paymentType: "refund",
+    status: PaymentRecordStatus.REFUNDED,
+    polarCheckoutId: "polar_order_1",
+    metadata: JSON.stringify({
+      source: "polar_webhook",
+      sourcePaymentId: "pay_polar",
+      polarCheckoutId: "polar_order_1",
+    }),
+    ...overrides,
+  };
 }
 
 describe("Polar webhook refund processing", () => {
@@ -84,10 +137,12 @@ describe("Polar webhook refund processing", () => {
         status: OrderStatus.PENDING,
         version: 3,
       },
+      payments: [polarPayment()],
     });
 
     const result = await processPolarWebhookRefund(db as never, {
       orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
       amountRefunded: 10_000,
       totalAmount: 10_000,
       currency: "usd",
@@ -133,10 +188,12 @@ describe("Polar webhook refund processing", () => {
         status: OrderStatus.DELIVERED,
         version: 3,
       },
+      payments: [polarPayment()],
     });
 
     const result = await processPolarWebhookRefund(db as never, {
       orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
       amountRefunded: 10_000,
       totalAmount: 10_000,
       currency: "usd",
@@ -177,11 +234,13 @@ describe("Polar webhook refund processing", () => {
         status: OrderStatus.PENDING,
         version: 3,
       },
+      payments: [polarPayment()],
       updateRows: [],
     });
 
     const result = await processPolarWebhookRefund(db as never, {
       orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
       amountRefunded: 10_000,
       totalAmount: 10_000,
       currency: "usd",
@@ -196,7 +255,7 @@ describe("Polar webhook refund processing", () => {
   });
 
   it("recomputes balance due for partial Polar refunds", async () => {
-    const { db, updates } = createDbMock({
+    const { db, updates, paymentInserts, paymentUpdates } = createDbMock({
       order: {
         id: "order_1",
         paidAmount: 100,
@@ -206,10 +265,12 @@ describe("Polar webhook refund processing", () => {
         status: OrderStatus.DELIVERED,
         version: 3,
       },
+      payments: [polarPayment()],
     });
 
     const result = await processPolarWebhookRefund(db as never, {
       orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
       amountRefunded: 2_500,
       totalAmount: 10_000,
       currency: "usd",
@@ -236,7 +297,164 @@ describe("Polar webhook refund processing", () => {
       balanceDue: 25,
       paymentStatus: PaymentStatus.PARTIAL,
     });
+    expect(paymentInserts[0]).toMatchObject({
+      amount: 25,
+      paymentType: "refund",
+      status: PaymentRecordStatus.PENDING,
+      polarCheckoutId: "polar_order_1",
+    });
+    expect(paymentUpdates[0]).toMatchObject({ status: PaymentRecordStatus.REFUNDED });
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("applies only the delta when Polar sends a larger cumulative partial refund", async () => {
+    const { db, updates, paymentInserts } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 75,
+        balanceDue: 25,
+        paymentStatus: PaymentStatus.PARTIAL,
+        totalAmount: 100,
+        status: OrderStatus.PARTIALLY_REFUNDED,
+        version: 4,
+      },
+      payments: [
+        polarPayment(),
+        polarRefundPayment({ amount: 25 }),
+      ],
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
+      amountRefunded: 5_000,
+      totalAmount: 10_000,
+      currency: "usd",
+      polarStatus: "partially_refunded",
+    });
+
+    expect(result).toEqual({
+      success: true,
+      notification: {
+        notificationType: "order_partially_refunded",
+        dedupeKey: "polar-refund:order_1:partial:5000:10000:usd",
+        data: {
+          gateway: "polar",
+          polarStatus: "partially_refunded",
+          amountRefunded: 5_000,
+          totalAmount: 10_000,
+          currency: "usd",
+          localRefundAmount: 25,
+        },
+      },
+    });
+    expect(updates[0]).toMatchObject({
+      paidAmount: 50,
+      balanceDue: 50,
+      paymentStatus: PaymentStatus.PARTIAL,
+    });
+    expect(paymentInserts[0]).toMatchObject({
+      amount: 25,
+      paymentType: "refund",
+      status: PaymentRecordStatus.PENDING,
+    });
+  });
+
+  it("treats a fully refunded Polar deposit as a partial order refund", async () => {
+    const { db, updates } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 100,
+        balanceDue: 0,
+        paymentStatus: PaymentStatus.PAID,
+        totalAmount: 100,
+        status: OrderStatus.CONFIRMED,
+        version: 3,
+      },
+      payments: [
+        polarPayment({ amount: 30, paymentType: "deposit" }),
+        {
+          id: "pay_ssl",
+          amount: 70,
+          currency: "BDT",
+          paymentMethod: "sslcommerz",
+          paymentType: "balance",
+          status: PaymentRecordStatus.SUCCEEDED,
+          polarCheckoutId: null,
+          metadata: null,
+        },
+      ],
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
+      amountRefunded: 3_000,
+      totalAmount: 3_000,
+      currency: "usd",
+      polarStatus: "refunded",
+    });
+
+    expect(result).toEqual({
+      success: true,
+      notification: {
+        notificationType: "order_partially_refunded",
+        dedupeKey: "polar-refund:order_1:partial:3000:3000:usd",
+        data: {
+          gateway: "polar",
+          polarStatus: "refunded",
+          amountRefunded: 3_000,
+          totalAmount: 3_000,
+          currency: "usd",
+          localRefundAmount: 30,
+        },
+      },
+    });
+    expect(updates[0]).toMatchObject({
+      paidAmount: 70,
+      balanceDue: 30,
+      paymentStatus: PaymentStatus.PARTIAL,
+    });
+    expect(updates[0]).not.toHaveProperty("status");
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("retries a later cumulative refund while an earlier source refund row is pending", async () => {
+    const { db, updates, paymentInserts } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 100,
+        balanceDue: 0,
+        paymentStatus: PaymentStatus.PAID,
+        totalAmount: 100,
+        status: OrderStatus.DELIVERED,
+        version: 3,
+      },
+      payments: [
+        polarPayment(),
+        polarRefundPayment({
+          id: "refund_pending_2500",
+          amount: 25,
+          status: PaymentRecordStatus.PENDING,
+        }),
+      ],
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
+      amountRefunded: 5_000,
+      totalAmount: 10_000,
+      currency: "usd",
+      polarStatus: "partially_refunded",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "A previous Polar external refund is still being reconciled; retry required",
+    });
+    expect(updates).toHaveLength(0);
+    expect(paymentInserts).toHaveLength(0);
   });
 
   it("repairs old fully-refunded payment rows whose order status was never transitioned", async () => {
@@ -249,10 +467,12 @@ describe("Polar webhook refund processing", () => {
         status: OrderStatus.PENDING,
         version: 3,
       },
+      payments: [polarPayment()],
     });
 
     const result = await processPolarWebhookRefund(db as never, {
       orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
       amountRefunded: 10_000,
       totalAmount: 10_000,
       currency: "usd",
@@ -270,7 +490,7 @@ describe("Polar webhook refund processing", () => {
           amountRefunded: 10_000,
           totalAmount: 10_000,
           currency: "usd",
-          localRefundAmount: 0,
+          localRefundAmount: 100,
         },
       },
     });
@@ -296,10 +516,12 @@ describe("Polar webhook refund processing", () => {
         status: OrderStatus.CANCELLED,
         version: 4,
       },
+      payments: [polarPayment()],
     });
 
     const result = await processPolarWebhookRefund(db as never, {
       orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
       amountRefunded: 10_000,
       totalAmount: 10_000,
       currency: "usd",
@@ -340,10 +562,12 @@ describe("Polar webhook refund processing", () => {
         inventoryAction: "deducted",
         version: 4,
       },
+      payments: [polarPayment()],
     });
 
     const result = await processPolarWebhookRefund(db as never, {
       orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
       amountRefunded: 10_000,
       totalAmount: 10_000,
       currency: "usd",
