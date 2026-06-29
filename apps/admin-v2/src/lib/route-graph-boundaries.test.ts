@@ -212,6 +212,7 @@ describe("admin route graph boundaries", () => {
     );
 
     expect(tiptapSource).toContain("immediatelyRender: false,");
+    expect(tiptapSource).toContain('editorInstance.commands.focus("end", { scrollIntoView: false })');
     expect(deferredSource).toContain("loadTiptapEditorModule().finally");
     expect(deferredSource).toContain("min-h-[237px]");
     expect(deferredSource).toContain("h-[200px]");

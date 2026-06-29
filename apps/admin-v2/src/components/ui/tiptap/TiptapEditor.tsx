@@ -146,7 +146,7 @@ export function TiptapEditor({
 
     hasAutoFocusedRef.current = true;
     queueMicrotask(() => {
-      editorInstance.commands.focus("end");
+      editorInstance.commands.focus("end", { scrollIntoView: false });
     });
   }, [autoFocus, editorInstance]);
 
