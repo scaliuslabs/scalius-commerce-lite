@@ -32,4 +32,26 @@ describe("admin orders route boundaries", () => {
         expect(source).toContain("paymentMethod: query.paymentMethod");
         expect(source).toContain("fulfillmentStatus: query.fulfillmentStatus");
     });
+
+    it("exposes sanitized payment-session attempt visibility on order payments", () => {
+        const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
+        const attemptSchema = source.split("const paymentSessionAttemptSchema = z.object")[1]?.split("const getItemsRoute = createRoute")[0] ?? "";
+        const paymentsRoute = source.split("const getPaymentsRoute = createRoute")[1] ?? "";
+
+        expect(source).toContain("listOrderPaymentSessionAttempts");
+        expect(paymentsRoute).toContain("paymentSessionAttempts: z.array(paymentSessionAttemptSchema)");
+        expect(paymentsRoute).toContain("paymentSessionAttempts: paymentSessionAttemptViews");
+        expect(attemptSchema).toContain("providerSessionId: z.string().nullable()");
+        expect(attemptSchema).toContain("providerCorrelationId: z.string().nullable()");
+        expect(attemptSchema).toContain("activeProcessing: z.boolean()");
+        expect(attemptSchema).toContain("staleProcessing: z.boolean()");
+        expect(attemptSchema).not.toContain("attemptKey");
+        expect(attemptSchema).not.toContain("requestHash");
+        expect(attemptSchema).not.toContain("responsePayload");
+        expect(attemptSchema).not.toContain("claimId:");
+        expect(paymentsRoute).not.toContain("attemptKey");
+        expect(paymentsRoute).not.toContain("requestHash");
+        expect(paymentsRoute).not.toContain("responsePayload");
+        expect(paymentsRoute).not.toContain("claimId:");
+    });
 });

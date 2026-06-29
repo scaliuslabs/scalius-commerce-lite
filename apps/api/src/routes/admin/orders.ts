@@ -30,7 +30,7 @@ import {
     orderSummarySchema,
     productVariantSchema,
 } from "../../schemas/entities";
-import { timestampSchema } from "../../schemas/timestamps";
+import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
 import { adminOrdersStatusRoutes } from "./orders-status";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 import { adminOrdersInvoiceRoutes } from "./orders-invoice";
@@ -44,6 +44,7 @@ import {
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
 import {
+    listOrderPaymentSessionAttempts,
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
 } from "@scalius/core/modules/payments";
@@ -164,6 +165,25 @@ const paymentWebhookIssueSchema = z.object({
     queueType: z.string().nullable(),
     queueMessageId: z.string().nullable(),
     processedAt: timestampSchema,
+});
+
+const paymentSessionAttemptSchema = z.object({
+    id: z.string(),
+    orderId: z.string(),
+    gateway: z.string(),
+    paymentType: z.string(),
+    amount: z.number(),
+    currency: z.string(),
+    status: z.string(),
+    attempts: z.number(),
+    providerSessionId: z.string().nullable(),
+    providerCorrelationId: z.string().nullable(),
+    lastError: z.string().nullable(),
+    claimExpiresAt: nullableTimestampSchema,
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    activeProcessing: z.boolean(),
+    staleProcessing: z.boolean(),
 });
 
 const orderFormDataSchema = z.object({
@@ -592,6 +612,7 @@ const getPaymentsRoute = createRoute({
                         refundAttempts: z.array(orderRefundAttemptSchema),
                         activeRefundOperation: activeRefundOperationSchema.nullable(),
                         paymentWebhookIssues: z.array(paymentWebhookIssueSchema),
+                        paymentSessionAttempts: z.array(paymentSessionAttemptSchema),
                     })),
                 },
             },
@@ -603,7 +624,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
-    const [payments, plan, refundAttemptViews, paymentWebhookIssues] = await Promise.all([
+    const [payments, plan, refundAttemptViews, paymentWebhookIssues, paymentSessionAttemptViews] = await Promise.all([
         db.select({
             id: orderPayments.id,
             orderId: orderPayments.orderId,
@@ -627,6 +648,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
         db.select().from(paymentPlans).where(eq(paymentPlans.orderId, orderId)).get(),
         listOrderRefundAttempts(db, orderId, { audience: "admin" }),
         listPaymentWebhookIssuesForOrder(db, orderId),
+        listOrderPaymentSessionAttempts(db, orderId),
     ]);
 
     return ok(c, {
@@ -635,6 +657,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
         refundAttempts: refundAttemptViews,
         activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
         paymentWebhookIssues,
+        paymentSessionAttempts: paymentSessionAttemptViews,
     });
 }) as unknown as AdminRouteHandler<typeof getPaymentsRoute>);
 

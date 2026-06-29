@@ -83435,6 +83435,105 @@
                               "processedAt"
                             ]
                           }
+                        },
+                        "paymentSessionAttempts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "gateway": {
+                                "type": "string"
+                              },
+                              "paymentType": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "attempts": {
+                                "type": "number"
+                              },
+                              "providerSessionId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "providerCorrelationId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "lastError": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "claimExpiresAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "activeProcessing": {
+                                "type": "boolean"
+                              },
+                              "staleProcessing": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "orderId",
+                              "gateway",
+                              "paymentType",
+                              "amount",
+                              "currency",
+                              "status",
+                              "attempts",
+                              "providerSessionId",
+                              "providerCorrelationId",
+                              "lastError",
+                              "claimExpiresAt",
+                              "createdAt",
+                              "updatedAt",
+                              "activeProcessing",
+                              "staleProcessing"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -83442,7 +83541,8 @@
                         "plan",
                         "refundAttempts",
                         "activeRefundOperation",
-                        "paymentWebhookIssues"
+                        "paymentWebhookIssues",
+                        "paymentSessionAttempts"
                       ]
                     }
                   },

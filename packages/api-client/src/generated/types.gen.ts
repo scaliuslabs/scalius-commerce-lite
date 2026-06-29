@@ -25399,6 +25399,24 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 queueMessageId: string | null;
                 processedAt: string | number;
             }>;
+            paymentSessionAttempts: Array<{
+                id: string;
+                orderId: string;
+                gateway: string;
+                paymentType: string;
+                amount: number;
+                currency: string;
+                status: string;
+                attempts: number;
+                providerSessionId: string | null;
+                providerCorrelationId: string | null;
+                lastError: string | null;
+                claimExpiresAt: string | number | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                activeProcessing: boolean;
+                staleProcessing: boolean;
+            }>;
         };
     };
 };

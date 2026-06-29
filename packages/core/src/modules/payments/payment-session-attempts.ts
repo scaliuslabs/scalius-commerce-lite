@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { paymentSessionAttempts } from "@scalius/database/schema";
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import type { PaymentGateway, PaymentType } from "./types";
 
@@ -62,6 +62,25 @@ const PAYMENT_SESSION_PROCESSING_RETRY_AFTER_SECONDS = 2;
 const MAX_ERROR_LENGTH = 500;
 
 type AttemptRow = typeof paymentSessionAttempts.$inferSelect;
+
+export interface AdminPaymentSessionAttemptView {
+  id: string;
+  orderId: string;
+  gateway: string;
+  paymentType: string;
+  amount: number;
+  currency: string;
+  status: string;
+  attempts: number;
+  providerSessionId: string | null;
+  providerCorrelationId: string | null;
+  lastError: string | null;
+  claimExpiresAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  activeProcessing: boolean;
+  staleProcessing: boolean;
+}
 
 export async function buildPaymentSessionAttemptIdentity(
   input: BuildPaymentSessionAttemptIdentityInput,
@@ -289,6 +308,50 @@ export async function markPaymentSessionAttemptFailed(
         eq(paymentSessionAttempts.claimId, attempt.claimId),
       ),
     );
+}
+
+export async function listOrderPaymentSessionAttempts(
+  db: Database,
+  orderId: string,
+): Promise<AdminPaymentSessionAttemptView[]> {
+  const rows = await db
+    .select({
+      id: paymentSessionAttempts.id,
+      orderId: paymentSessionAttempts.orderId,
+      gateway: paymentSessionAttempts.gateway,
+      paymentType: paymentSessionAttempts.paymentType,
+      amount: paymentSessionAttempts.amount,
+      currency: paymentSessionAttempts.currency,
+      status: paymentSessionAttempts.status,
+      attempts: paymentSessionAttempts.attempts,
+      providerSessionId: paymentSessionAttempts.providerSessionId,
+      providerCorrelationId: paymentSessionAttempts.providerCorrelationId,
+      lastError: paymentSessionAttempts.lastError,
+      claimExpiresAt: paymentSessionAttempts.claimExpiresAt,
+      createdAt: paymentSessionAttempts.createdAt,
+      updatedAt: paymentSessionAttempts.updatedAt,
+    })
+    .from(paymentSessionAttempts)
+    .where(eq(paymentSessionAttempts.orderId, orderId))
+    .orderBy(desc(paymentSessionAttempts.createdAt), desc(paymentSessionAttempts.id))
+    .all();
+
+  const now = Math.floor(Date.now() / 1000);
+  return rows.map((row) => {
+    const activeProcessing =
+      row.status === "processing" &&
+      row.claimExpiresAt !== null &&
+      row.claimExpiresAt > now;
+    const staleProcessing =
+      row.status === "processing" &&
+      (row.claimExpiresAt === null || row.claimExpiresAt <= now);
+
+    return {
+      ...row,
+      activeProcessing,
+      staleProcessing,
+    };
+  });
 }
 
 async function selectPaymentSessionAttemptByKey(

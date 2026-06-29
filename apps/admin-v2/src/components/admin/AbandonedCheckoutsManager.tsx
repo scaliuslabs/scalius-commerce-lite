@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useCurrency } from "@/hooks/use-currency";
 import {
   Table,
@@ -55,31 +56,13 @@ import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 import { abandonedCheckoutsQueryOptions } from "@/lib/api-query-options/abandoned-checkouts";
 import { deleteAbandonedCheckouts } from "@/lib/api-functions/abandoned-checkouts";
+import {
+  parseAbandonedCheckoutDisplay,
+  type AbandonedCheckoutCartItem,
+} from "@/lib/abandoned-checkout-display";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 // --- Type Definitions ---
-interface CartItem {
-  id: string;
-  name: string;
-  quantity: number;
-  price: number;
-  [key: string]: unknown; // Allow other properties
-}
-
-interface CustomerInfo {
-  name?: string | null;
-  phone?: string | null;
-  address?: string | null;
-  notes?: string | null;
-  email?: string | null;
-}
-
-interface ParsedCheckoutData {
-  items: CartItem[];
-  customerInfo: CustomerInfo;
-  total: number;
-}
-
 interface Pagination {
   page: number;
   limit: number;
@@ -116,46 +99,6 @@ const timeSince = (date: Date | null): string => {
   return Math.floor(seconds) + "s ago";
 };
 
-const parseCheckoutData = (checkoutDataString: string): ParsedCheckoutData => {
-  try {
-    const data = JSON.parse(checkoutDataString);
-
-    const items: CartItem[] =
-      data.cart && Array.isArray(data.cart.items) ? data.cart.items : [];
-    const total =
-      data.cart && typeof data.cart.totalAmount === "number"
-        ? data.cart.totalAmount
-        : 0;
-
-    const customerInfo: CustomerInfo = {
-      name: data.customerName || null,
-      phone: data.customerPhone || null,
-      address: data.shippingAddress || null,
-      notes: data.notes || null,
-    };
-
-    return { items, customerInfo, total };
-  } catch {
-    return { items: [], customerInfo: {}, total: 0 };
-  }
-};
-
-const getCheckoutStage = (
-  checkout: AbandonedCheckout,
-): { stage: string; variant: "secondary" | "outline" | "default" } => {
-  const { customerInfo } = parseCheckoutData(checkout.checkoutData);
-  const hasCustomerInfo =
-    checkout.customerPhone || Object.values(customerInfo).some((v) => !!v);
-  if (hasCustomerInfo) {
-    return { stage: "Info Captured", variant: "default" };
-  }
-  const { items } = parseCheckoutData(checkout.checkoutData);
-  if (items.length > 0) {
-    return { stage: "Cart Started", variant: "secondary" };
-  }
-  return { stage: "Session Created", variant: "outline" };
-};
-
 // --- Sub-Components ---
 
 const CheckoutRow = React.memo(
@@ -173,11 +116,11 @@ const CheckoutRow = React.memo(
     onDelete: (id: string) => void;
   }) => {
     const { symbol } = useCurrency();
-    const { stage, variant } = getCheckoutStage(checkout);
-    const { items, total } = useMemo(
-      () => parseCheckoutData(checkout.checkoutData),
-      [checkout.checkoutData],
+  const display = useMemo(
+      () => parseAbandonedCheckoutDisplay(checkout),
+      [checkout],
     );
+    const displayId = getCheckoutDisplayId(checkout);
     const updatedAt = useMemo(
       () => (checkout.updatedAt ? new Date(checkout.updatedAt) : null),
       [checkout.updatedAt],
@@ -189,10 +132,11 @@ const CheckoutRow = React.memo(
           <Checkbox
             checked={isSelected}
             onCheckedChange={() => onToggleSelection(checkout.id)}
+            aria-label={`Select incomplete order ${displayId}`}
           />
         </TableCell>
         <TableCell className="font-mono text-xs">
-          {getCheckoutDisplayId(checkout).substring(0, 12)}
+          {displayId.substring(0, 12)}
         </TableCell>
         <TableCell className="font-medium">
           {checkout.customerPhone ? formatPhoneForDisplay(checkout.customerPhone) : (
@@ -200,10 +144,12 @@ const CheckoutRow = React.memo(
           )}
         </TableCell>
         <TableCell>
-          <Badge variant={variant}>{stage}</Badge>
+          <Badge variant={display.variant}>{display.stage}</Badge>
         </TableCell>
         <TableCell>
-          {items.length} item(s) / {formatCurrency(total, symbol)}
+          {display.kind === "stale_hosted_payment_order"
+            ? `${display.paymentMethod?.toUpperCase() ?? "Gateway"} ${display.paymentStatus ?? "unpaid"} / ${formatCurrency(display.total, symbol)}`
+            : `${display.items.length} item(s) / ${formatCurrency(display.total, symbol)}`}
         </TableCell>
         <TableCell className="text-muted-foreground">
           {timeSince(updatedAt)}
@@ -213,6 +159,8 @@ const CheckoutRow = React.memo(
             variant="ghost"
             size="icon"
             onClick={() => onViewDetails(checkout)}
+            aria-label={`View incomplete order ${displayId}`}
+            title="View details"
           >
             <Eye className="h-4 w-4" />
           </Button>
@@ -220,6 +168,8 @@ const CheckoutRow = React.memo(
             variant="ghost"
             size="icon"
             onClick={() => onDelete(checkout.id)}
+            aria-label={`Delete incomplete order ${displayId}`}
+            title="Delete"
           >
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
@@ -239,9 +189,8 @@ const DetailsModal = ({
   const { symbol } = useCurrency();
   if (!checkout) return null;
 
-  const { items, total, customerInfo } = parseCheckoutData(
-    checkout.checkoutData,
-  );
+  const display = parseAbandonedCheckoutDisplay(checkout);
+  const { items, total, customerInfo } = display;
 
   return (
     <Dialog open={!!checkout} onOpenChange={onClose}>
@@ -256,6 +205,31 @@ const DetailsModal = ({
           </DialogDescription>
         </DialogHeader>
         <div className="grid md:grid-cols-2 gap-x-8 gap-y-6 py-4 max-h-[60vh] overflow-y-auto p-2">
+          {display.kind === "stale_hosted_payment_order" && (
+            <div className="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold">Archived hosted-payment order</p>
+                  <p className="mt-1 opacity-90">
+                    This was a stale online checkout order that never received a successful payment.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-80">
+                    {display.paymentMethod && <span>Gateway: {display.paymentMethod.toUpperCase()}</span>}
+                    {display.paymentStatus && <span>Status: {display.paymentStatus}</span>}
+                    {display.paidAmount != null && <span>Paid: {formatCurrency(display.paidAmount, symbol)}</span>}
+                    {display.balanceDue != null && <span>Balance: {formatCurrency(display.balanceDue, symbol)}</span>}
+                  </div>
+                </div>
+                {display.orderId && (
+                  <Button asChild variant="outline" size="sm" className="shrink-0 bg-white/70 dark:bg-black/10">
+                    <Link to={`/admin/orders/${display.orderId}` as string}>
+                      View order
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
           <div className="space-y-4">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <User className="h-5 w-5 text-primary" /> Customer Information
@@ -295,7 +269,7 @@ const DetailsModal = ({
             </h3>
             <div className="space-y-2">
               {items.length > 0 ? (
-                items.map((item: CartItem) => (
+                items.map((item: AbandonedCheckoutCartItem) => (
                   <div
                     key={item.id}
                     className="flex justify-between items-center bg-muted/50 p-3 rounded-lg border"

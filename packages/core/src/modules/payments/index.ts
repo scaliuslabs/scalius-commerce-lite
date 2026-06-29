@@ -147,10 +147,12 @@ export type {
 export {
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
+  listOrderPaymentSessionAttempts,
   markPaymentSessionAttemptCreated,
   markPaymentSessionAttemptFailed,
 } from "./payment-session-attempts";
 export type {
+  AdminPaymentSessionAttemptView,
   PaymentSessionGateway,
   PaymentSessionAttemptIdentity,
   ClaimPaymentSessionAttemptInput,
