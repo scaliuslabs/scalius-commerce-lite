@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getApiV1ProductsBySlug: vi.fn(),
   getApiV1CategoriesBySlugProducts: vi.fn(),
   getApiV1Search: vi.fn(),
+  getApiV1ProductsSearch: vi.fn(),
   getConfiguredSdkClient: vi.fn(() => ({ baseUrl: "https://api.example.test" })),
 }));
 
@@ -13,6 +14,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1ProductsBySlug: mocks.getApiV1ProductsBySlug,
   getApiV1CategoriesBySlugProducts: mocks.getApiV1CategoriesBySlugProducts,
   getApiV1Search: mocks.getApiV1Search,
+  getApiV1ProductsSearch: mocks.getApiV1ProductsSearch,
 }));
 
 vi.mock("./client", () => ({
@@ -27,7 +29,7 @@ vi.mock("@/lib/edge-cache", () => ({
   ): Promise<T | null> => fetcher(),
 }));
 
-import { getAllProducts } from "./products";
+import { getAllProducts, searchProductsForForm } from "./products";
 
 describe("storefront product API helpers", () => {
   afterEach(() => {
@@ -72,5 +74,47 @@ describe("storefront product API helpers", () => {
       data: [],
       pagination,
     });
+  });
+
+  it("uses the product search endpoint for product form lookup", async () => {
+    const pagination = { page: 2, limit: 5, total: 11, totalPages: 3 };
+    const product = {
+      id: "prod_1",
+      name: "Fresh Hilsa",
+      slug: "fresh-hilsa",
+      price: 1200,
+      imageUrl: null,
+      variants: [],
+    };
+    mocks.getApiV1ProductsSearch.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          data: [product],
+          pagination,
+        },
+      },
+    });
+
+    await expect(searchProductsForForm("  Fresh   Hilsa  ", 2, 5)).resolves.toEqual({
+      data: [product],
+      pagination,
+    });
+
+    expect(mocks.getApiV1ProductsSearch).toHaveBeenCalledWith({
+      client: { baseUrl: "https://api.example.test" },
+      query: { search: "Fresh Hilsa", page: 2, limit: 5 },
+    });
+    expect(mocks.getApiV1Search).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty product lookup result without fetching for blank searches", async () => {
+    await expect(searchProductsForForm("   ", 3, 7)).resolves.toEqual({
+      data: [],
+      pagination: { page: 3, limit: 7, total: 0, totalPages: 0 },
+    });
+
+    expect(mocks.getApiV1ProductsSearch).not.toHaveBeenCalled();
+    expect(mocks.getApiV1Search).not.toHaveBeenCalled();
   });
 });

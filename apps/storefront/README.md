@@ -202,6 +202,12 @@ Consolidated accessors for Cloudflare Worker bindings. All delegate to `apiConte
 | `abandoned-checkouts.ts` | Abandoned checkout tracking |
 | `tracking.ts` | Analytics/tracking config |
 
+### Search Client Rules
+
+- Browser search inputs must normalize semantic whitespace with `normalizeSearchQuery()` before building API URLs or `/search?q=` navigation links. This keeps API KV, storefront L2, and HTML cache keys aligned for equivalent queries.
+- Live typeahead/search-palette requests must cancel superseded requests with `AbortController` and ignore stale responses, so slower old searches cannot replace newer results after a user keeps typing or closes the palette.
+- Product-only lookup UI should call `/api/v1/products/search` through `getApiV1ProductsSearch()` so it receives product pagination and variants without using the broader global `/api/v1/search` route.
+
 ## Server-Side Proxy Routes (`src/pages/api/`)
 
 Proxy routes handle operations that require the `API_TOKEN` secret or need to unwrap the API envelope before returning to browser JavaScript.

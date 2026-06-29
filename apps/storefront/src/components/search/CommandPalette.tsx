@@ -15,6 +15,7 @@ import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { createApiUrl } from "@/lib/api/client";
+import { normalizeSearchQuery } from "@/lib/search-query";
 
 interface SearchResultItem {
   id: string;
@@ -47,6 +48,9 @@ export default function CommandPalette() {
   const [hasSearched, setHasSearched] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchRunRef = useRef(0);
+  const normalizedQuery = React.useMemo(() => normalizeSearchQuery(query), [query]);
 
   useEffect(() => {
     setMounted(true);
@@ -93,6 +97,7 @@ export default function CommandPalette() {
         setTimeout(() => inputRef.current?.focus(), 50);
       });
     } else {
+      searchAbortRef.current?.abort();
       document.body.style.overflow = "";
       setTimeout(() => {
         setQuery("");
@@ -104,28 +109,43 @@ export default function CommandPalette() {
   }, [isOpen]);
 
   useEffect(() => {
-    if (!query.trim()) {
+    if (!isOpen) {
+      searchAbortRef.current?.abort();
+      setIsLoading(false);
+      return;
+    }
+
+    if (!normalizedQuery) {
+      searchAbortRef.current?.abort();
       setResults(null);
       setIsLoading(false);
       setHasSearched(false);
       return;
     }
 
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    const runId = searchRunRef.current + 1;
+    searchRunRef.current = runId;
     setIsLoading(true);
 
     const timer = setTimeout(async () => {
       try {
         const params = new URLSearchParams({
-          q: query,
+          q: normalizedQuery,
           limit: "8",
           searchCategories: "true",
           searchPages: "true",
         });
 
-        const res = await fetch(createApiUrl(`/search?${params}`));
+        const res = await fetch(createApiUrl(`/search?${params}`), {
+          signal: controller.signal,
+        });
         if (!res.ok) throw new Error("Search failed");
 
         const json = (await res.json()) as ApiResponse;
+        if (controller.signal.aborted || searchRunRef.current !== runId) return;
 
         if (json.success && json.data) {
           setResults(json.data);
@@ -133,20 +153,26 @@ export default function CommandPalette() {
           setHasSearched(true);
         }
       } catch (error: unknown) {
+        if (isAbortError(error)) return;
         console.error("Search error:", error);
       } finally {
-        setIsLoading(false);
+        if (searchRunRef.current === runId) {
+          setIsLoading(false);
+        }
       }
     }, 300);
 
-    return () => clearTimeout(timer);
-  }, [query]);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isOpen, normalizedQuery]);
 
   const handleNavigation = useCallback(
     (e: React.KeyboardEvent) => {
       if (flatResults.length === 0) {
-        if (e.key === "Enter" && query.trim()) {
-          window.location.href = `/search?q=${encodeURIComponent(query)}`;
+        if (e.key === "Enter" && normalizedQuery) {
+          window.location.href = `/search?q=${encodeURIComponent(normalizedQuery)}`;
         }
         return;
       }
@@ -172,7 +198,7 @@ export default function CommandPalette() {
         navigateToItem(selected);
       }
     },
-    [flatResults, selectedIndex, query],
+    [flatResults, selectedIndex, normalizedQuery],
   );
 
   const navigateToItem = (entry: { type: string; item: SearchResultItem }) => {
@@ -412,9 +438,9 @@ export default function CommandPalette() {
             </span>
           </div>
 
-          {query && (
+          {normalizedQuery && (
             <a
-              href={`/search?q=${encodeURIComponent(query)}`}
+              href={`/search?q=${encodeURIComponent(normalizedQuery)}`}
               className="flex items-center hover:text-primary transition-colors ml-auto font-medium"
             >
               View all results <ArrowRight className="w-3 h-3 ml-1" />
@@ -424,6 +450,15 @@ export default function CommandPalette() {
       </div>
     </div>,
     document.body,
+  );
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "AbortError"
   );
 }
 

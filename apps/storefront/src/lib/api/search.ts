@@ -4,6 +4,7 @@ import { getConfiguredSdkClient } from "./client";
 import type { SearchResults } from "./types";
 import { unwrapData } from "./unwrap";
 import { getApiV1Search } from "@scalius/api-client/sdk";
+import { normalizeSearchQuery } from "@/lib/search-query";
 
 /**
  * Defines the available options for a search query.
@@ -28,7 +29,8 @@ export async function search(
   query: string,
   options: SearchOptions = {},
 ): Promise<SearchResults | null> {
-  if (!query || !query.trim()) {
+  const normalizedQuery = normalizeSearchQuery(query);
+  if (!normalizedQuery) {
     return {
       products: [],
       categories: [],
@@ -42,11 +44,11 @@ export async function search(
   try {
     const { data } = await getApiV1Search({
       client: getConfiguredSdkClient(),
-      query: { q: query, ...options } as Record<string, unknown>,
+      query: { q: normalizedQuery, ...options } as Record<string, unknown>,
     });
     return unwrapData<SearchResults>(data);
   } catch (error: unknown) {
-    console.error(`Error performing search for query "${query}":`, error);
+    console.error(`Error performing search for query "${normalizedQuery}":`, error);
     return null;
   }
 }
