@@ -670,6 +670,52 @@ describe("order notification dispatch", () => {
         expect(result.hasRetryableFailure).toBe(false);
     });
 
+    it("records thrown SMS setup credential failures as skipped receipts", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_confirmed: ["sms"],
+        });
+        mocks.getActiveSmsProvider.mockRejectedValueOnce(
+            new Error("SMS.net.bd API key could not be decrypted with the configured credential key."),
+        );
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_sms_decrypt",
+            "order_confirmed",
+            {},
+            db,
+            {
+                encryptionKey: "wrong-key",
+                outboxId: "outbox_sms_decrypt",
+            },
+        );
+
+        expect(mocks.createOrderNotificationDeliveryTarget).toHaveBeenCalledWith(
+            expect.objectContaining({
+                outboxId: "outbox_sms_decrypt",
+                orderId: "order_sms_decrypt",
+                notificationType: "order_confirmed",
+                channel: "sms",
+                provider: "sms",
+                recipient: "sms-setup:order_sms_decrypt:order_confirmed",
+                recipientMasked: "sms-setup",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "SMS.net.bd API key could not be decrypted with the configured credential key.",
+            expect.objectContaining({
+                provider: "sms",
+                providerStatus: "SMS.net.bd API key could not be decrypted with the configured credential key.",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
     it("sends WhatsApp order templates through durable receipts", async () => {
         const db = createDb();
         mocks.getNotificationChannels.mockResolvedValue({
@@ -1055,6 +1101,52 @@ describe("order notification dispatch", () => {
             expect.objectContaining({
                 provider: "fcm",
                 providerStatus: "Failed to get access token: invalid_grant service account disabled",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("records thrown WhatsApp setup credential failures as skipped receipts", async () => {
+        const db = createDb();
+        mocks.getWhatsAppCloudApiSettings.mockRejectedValueOnce(
+            new Error("WhatsApp access token could not be decrypted with the configured credential key."),
+        );
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_created: ["whatsapp"],
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "WhatsApp Customer",
+            "order_wa_decrypt",
+            "order_created",
+            {},
+            db,
+            {
+                encryptionKey: "wrong-key",
+                outboxId: "outbox_wa_decrypt",
+            },
+        );
+
+        expect(mocks.createOrderNotificationDeliveryTarget).toHaveBeenCalledWith(
+            expect.objectContaining({
+                outboxId: "outbox_wa_decrypt",
+                orderId: "order_wa_decrypt",
+                notificationType: "order_created",
+                channel: "whatsapp",
+                provider: "whatsapp",
+                recipient: "whatsapp-setup:order_wa_decrypt:order_created",
+                recipientMasked: "whatsapp-setup",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "WhatsApp access token could not be decrypted with the configured credential key.",
+            expect.objectContaining({
+                provider: "whatsapp",
+                providerStatus: "WhatsApp access token could not be decrypted with the configured credential key.",
             }),
         );
         expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();

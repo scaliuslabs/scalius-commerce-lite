@@ -637,14 +637,29 @@ export async function sendOrderNotificationEmail(
         } catch (smsError: unknown) {
             console.error(`[Notifications] SMS dispatch failed for ${type} (order ${orderId}):`, smsError);
             if (receiptDb && outboxId) {
-                outcomes.push({
-                    channel: "sms",
-                    provider: "sms",
-                    recipientMasked: "unknown",
-                    status: "failed",
-                    error: normalizeError(smsError),
-                    retryable: true,
-                });
+                const reason = normalizeError(smsError);
+                if (isNonRetryableDispatchStatus(reason)) {
+                    outcomes.push(await recordSkippedDelivery({
+                        db: receiptDb,
+                        outboxId,
+                        orderId,
+                        notificationType: type,
+                        channel: "sms",
+                        provider: "sms",
+                        recipient: `sms-setup:${orderId}:${type}`,
+                        recipientMasked: "sms-setup",
+                        reason,
+                    }));
+                } else {
+                    outcomes.push({
+                        channel: "sms",
+                        provider: "sms",
+                        recipientMasked: "unknown",
+                        status: "failed",
+                        error: reason,
+                        retryable: true,
+                    });
+                }
             }
         }
     }
@@ -748,14 +763,29 @@ export async function sendOrderNotificationEmail(
         } catch (whatsappError: unknown) {
             console.error(`[Notifications] WhatsApp dispatch failed for ${type} (order ${orderId}):`, whatsappError);
             if (receiptDb && outboxId) {
-                outcomes.push({
-                    channel: "whatsapp",
-                    provider: "whatsapp",
-                    recipientMasked: "unknown",
-                    status: "failed",
-                    error: normalizeError(whatsappError),
-                    retryable: true,
-                });
+                const reason = normalizeError(whatsappError);
+                if (isNonRetryableDispatchStatus(reason)) {
+                    outcomes.push(await recordSkippedDelivery({
+                        db: receiptDb,
+                        outboxId,
+                        orderId,
+                        notificationType: type,
+                        channel: "whatsapp",
+                        provider: "whatsapp",
+                        recipient: `whatsapp-setup:${orderId}:${type}`,
+                        recipientMasked: "whatsapp-setup",
+                        reason,
+                    }));
+                } else {
+                    outcomes.push({
+                        channel: "whatsapp",
+                        provider: "whatsapp",
+                        recipientMasked: "unknown",
+                        status: "failed",
+                        error: reason,
+                        retryable: true,
+                    });
+                }
             }
         }
     }
