@@ -1,18 +1,6 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import {
-  generateText,
-  NoObjectGeneratedError,
-  Output,
-  streamText,
-  UnsupportedFunctionalityError,
-  type LanguageModel,
-  type ModelMessage,
-} from 'ai';
-import { createWorkersAI } from 'workers-ai-provider';
+import type { LanguageModel, ModelMessage } from 'ai';
 import { getClientIp, rateLimit } from '@scalius/shared/rate-limit';
 import {
   AI_PROVIDER_IDS,
@@ -57,6 +45,8 @@ const MAX_IMAGES = GENERATION_CONFIG.context.maxImages;
 const MAX_MODEL_ID_CHARS = 200;
 const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 const NO_COMMERCE_FACTS_PROMPT_MARKER = 'FACTUALITY GATE - NO COMMERCE FACTS PROVIDED';
+const AI_NO_OBJECT_GENERATED_MARKER = 'vercel.ai.error.AI_NoObjectGeneratedError';
+const AI_UNSUPPORTED_FUNCTIONALITY_MARKER = 'vercel.ai.error.AI_UnsupportedFunctionalityError';
 
 const providerEnum = z.enum(AI_PROVIDER_IDS);
 const promptTypeEnum = z.enum(['widget', 'landing-page', 'collection']);
@@ -113,8 +103,8 @@ const generateStagedSchema = z.object({
     .optional(),
 });
 
-type GenerateTextOptions = Parameters<typeof generateText>[0];
-type GenerateTextResult = Awaited<ReturnType<typeof generateText>>;
+type GenerateTextOptions = Parameters<typeof import('ai')['generateText']>[0];
+type GenerateTextResult = Awaited<ReturnType<typeof import('ai')['generateText']>>;
 type GenerationUsage = {
   inputTokens?: number;
   outputTokens?: number;
@@ -287,17 +277,18 @@ export async function enforceAiRateLimit(c: ApiContext): Promise<void> {
   }
 }
 
-export function getLanguageModel(
+export async function getLanguageModel(
   provider: WidgetAiProvider,
   modelId: string,
   settings: WidgetAiRuntimeSettings,
   env: Env,
-): LanguageModel {
+): Promise<LanguageModel> {
   if (!providerHasCredentials(settings, provider)) {
     throw new ValidationError(ERROR_MESSAGES.apiKeyMissing);
   }
 
   if (provider === 'openrouter') {
+    const { createOpenRouter } = await import('@openrouter/ai-sdk-provider');
     const openrouter = createOpenRouter({
       apiKey: settings.apiKeys.openrouter,
       baseURL: settings.providers.openrouter.baseUrl,
@@ -309,6 +300,7 @@ export function getLanguageModel(
   }
 
   if (provider === 'openai') {
+    const { createOpenAI } = await import('@ai-sdk/openai');
     const openai = createOpenAI({
       apiKey: settings.apiKeys.openai,
       baseURL: settings.providers.openai.baseUrl,
@@ -317,6 +309,7 @@ export function getLanguageModel(
   }
 
   if (provider === 'gemini') {
+    const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
     const google = createGoogleGenerativeAI({
       apiKey: settings.apiKeys.gemini,
       baseURL: settings.providers.gemini.baseUrl,
@@ -324,6 +317,7 @@ export function getLanguageModel(
     return google(modelId);
   }
 
+  const { createWorkersAI } = await import('workers-ai-provider');
   if (env.AI) {
     const workersai = createWorkersAI({ binding: env.AI as Ai });
     return workersai(modelId);
@@ -465,7 +459,7 @@ function usageFromResult(result: { totalUsage?: GenerationUsage }): GenerationUs
 }
 
 function structuredGenerationFailureDetails(error: unknown): Record<string, unknown> {
-  if (NoObjectGeneratedError.isInstance(error)) {
+  if (isAiNoObjectGeneratedError(error)) {
     return {
       type: 'NoObjectGeneratedError',
       cause: error.cause instanceof Error ? error.cause.message : String(error.cause ?? ''),
@@ -476,7 +470,7 @@ function structuredGenerationFailureDetails(error: unknown): Record<string, unkn
     };
   }
 
-  if (UnsupportedFunctionalityError.isInstance(error)) {
+  if (isAiUnsupportedFunctionalityError(error)) {
     return {
       type: 'UnsupportedFunctionalityError',
       functionality: error.functionality,
@@ -488,6 +482,40 @@ function structuredGenerationFailureDetails(error: unknown): Record<string, unkn
     type: error instanceof Error ? error.name : typeof error,
     message: error instanceof Error ? error.message : String(error),
   };
+}
+
+function hasAiErrorMarker(error: unknown, marker: string): boolean {
+  return Boolean(error && typeof error === 'object' && (error as Record<symbol, unknown>)[Symbol.for(marker)] === true);
+}
+
+function isAiNoObjectGeneratedError(error: unknown): error is {
+  cause?: unknown;
+  finishReason?: unknown;
+  usage?: unknown;
+  response?: unknown;
+  text?: string;
+} {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      (hasAiErrorMarker(error, AI_NO_OBJECT_GENERATED_MARKER) ||
+        (error as { name?: unknown }).name === 'AI_NoObjectGeneratedError' ||
+        (error as { name?: unknown }).name === 'NoObjectGeneratedError' ||
+        (error as { constructor?: { name?: unknown } }).constructor?.name === 'NoObjectGeneratedError'),
+  );
+}
+
+function isAiUnsupportedFunctionalityError(error: unknown): error is {
+  functionality?: unknown;
+  message: string;
+} {
+  return Boolean(
+    error instanceof Error &&
+      (hasAiErrorMarker(error, AI_UNSUPPORTED_FUNCTIONALITY_MARKER) ||
+        error.name === 'AI_UnsupportedFunctionalityError' ||
+        error.name === 'UnsupportedFunctionalityError' ||
+        (error as { constructor?: { name?: unknown } }).constructor?.name === 'UnsupportedFunctionalityError'),
+  );
 }
 
 function getErrorMessage(error: unknown): string {
@@ -543,6 +571,7 @@ async function generateTextWithTransientRetry(
   options: GenerateTextOptions,
   operation: string,
 ): Promise<GenerateTextResult> {
+  const { generateText } = await import('ai');
   try {
     return await generateText(options);
   } catch (error) {
@@ -769,6 +798,7 @@ export async function generateWidgetContent(
   };
 
   if (capabilities.supportsStructuredOutput) {
+    const { generateText, Output } = await import('ai');
     const result = await generateText({
       ...options,
       output: Output.object({
@@ -874,14 +904,15 @@ async function finalizeStreamedWidgetContent(
   }
 }
 
-export function streamWidgetContent(
+export async function streamWidgetContent(
   options: GenerateTextOptions,
   capabilities: { supportsStructuredOutput: boolean },
   promptType: WidgetPromptType = 'widget',
-): {
+): Promise<{
   textStream: AsyncIterable<string>;
   finalize: (rawText: string) => Promise<WidgetGenerationResult>;
-} {
+}> {
+  const { streamText } = await import('ai');
   const result = streamText(options);
 
   return {
@@ -890,8 +921,7 @@ export function streamWidgetContent(
       let completeRawText = rawText;
       if (!completeRawText.trim()) {
         try {
-          const finalText = (result as unknown as { text?: PromiseLike<string> }).text;
-          if (finalText) completeRawText = await finalText;
+          completeRawText = await result.text;
         } catch {
           completeRawText = rawText;
         }
@@ -900,8 +930,7 @@ export function streamWidgetContent(
       const text = await finalizeStreamedWidgetContent(completeRawText, options, capabilities, promptType);
       const usage: GenerationUsage = await (async () => {
         try {
-          const usageResult = (result as unknown as { totalUsage?: PromiseLike<GenerationUsage> }).totalUsage;
-          const totalUsage = usageResult ? await usageResult : undefined;
+          const totalUsage = await result.totalUsage;
           return {
             inputTokens: totalUsage?.inputTokens,
             outputTokens: totalUsage?.outputTokens,
@@ -922,6 +951,7 @@ async function generateStagedPlan(
   capabilities: { supportsStructuredOutput: boolean },
 ): Promise<WidgetGenerationResult> {
   if (capabilities.supportsStructuredOutput) {
+    const { generateText, Output } = await import('ai');
     const result = await generateText({
       ...options,
       output: Output.object({
@@ -1041,7 +1071,7 @@ app.openapi(generateRoute, async (c) => {
   const settings = await runtimeSettings(c);
   const provider = getConfiguredProvider(settings, payload.provider);
   const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
-  const model = getLanguageModel(provider, modelId, settings, c.env);
+  const model = await getLanguageModel(provider, modelId, settings, c.env);
   const capabilities = resolveWidgetAiModelCapabilities(provider, modelId, settings.providers[provider].capabilities);
   const normalizedMessages = payload.messages
     ? normalizeMessages(payload.messages)
@@ -1069,9 +1099,9 @@ app.openapi(generateRoute, async (c) => {
   };
 
   if (payload.stream) {
-    const result = streamText(generationOptions);
+    const result = await streamWidgetContent(generationOptions, capabilities, promptType);
     return openAiCompatibleStream(result.textStream, {
-      finalize: (rawText) => finalizeStreamedWidgetContent(rawText, generationOptions, capabilities, promptType),
+      finalize: async (rawText) => (await result.finalize(rawText)).text,
     });
   }
 
@@ -1107,7 +1137,7 @@ app.openapi(generateStagedRoute, async (c) => {
   const settings = await runtimeSettings(c);
   const provider = getConfiguredProvider(settings, payload.provider);
   const modelId = requireAllowedWidgetAiModel(settings, provider, payload.model);
-  const model = getLanguageModel(provider, modelId, settings, c.env);
+  const model = await getLanguageModel(provider, modelId, settings, c.env);
   const capabilities = resolveWidgetAiModelCapabilities(provider, modelId, settings.providers[provider].capabilities);
   const normalizedMessages = normalizeMessages(payload.messages);
   const promptType = payload.promptType ?? inferPromptTypeFromMessages(normalizedMessages);
