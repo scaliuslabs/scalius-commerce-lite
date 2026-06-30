@@ -4,7 +4,6 @@ import { cn } from "@scalius/shared/utils";
 import { Minimize2 } from "lucide-react";
 import { Button } from "../button";
 import { TiptapMenuBar } from "./TiptapMenuBar";
-import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
 
 interface TiptapEditorProps {
@@ -201,9 +200,7 @@ export function TiptapEditor({
           compact={isFullscreen ? false : compact}
           isFullscreen={isFullscreen}
         />
-      ) : (
-        <TiptapToolbarSkeleton compact={isFullscreen ? false : compact} isFullscreen={isFullscreen} />
-      )}
+      ) : null}
 
       {/* Editor content -- always mounted, never unmounts */}
       <div
