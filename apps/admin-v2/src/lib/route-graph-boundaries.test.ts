@@ -195,11 +195,15 @@ describe("admin route graph boundaries", () => {
     expect(adminChannelBlock).toContain('key: "push"');
     expect(notificationSource).toContain("SMS notifications are locked until an active SMS provider is ready.");
     expect(notificationSource).toContain("smsProviderConfigured");
+    expect(notificationSource).toContain("buildCustomerChannelConfig");
+    expect(notificationSource).toContain("sanitizeCustomerChannelConfig");
+    expect(notificationSource).toContain('channelCanBeEnabled(ch.key, readiness)');
     expect(notificationSource).toContain('ch.key === "sms" && !isSmsConfigured');
     expect(notificationSource).toContain("Admin push notifications are locked until Firebase service account credentials are ready.");
     expect(notificationSource).toContain("pushConfigured");
     expect(notificationSource).toContain('ch.key === "push" && !isPushConfigured');
-    expect(notificationSource.match(/config\[status\.key\]\[ch\.key\] = enabledChannels\.includes\(ch\.key\);/g)).toHaveLength(2);
+    expect(notificationSource).toContain("setChannels(effectiveChannels)");
+    expect(notificationSource).toContain("const statusChannels = effectiveChannels[status.key];");
     expect(notificationSource).not.toContain("!whatsappConfigured");
     expect(notificationSource).not.toContain("pushConfigured && enabledChannels.includes");
   });

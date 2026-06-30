@@ -50,6 +50,10 @@ type StatusKey = OrderNotificationType;
 type ChannelKey = (typeof CHANNELS)[number]["key"];
 type ChannelConfig = Record<StatusKey, Record<ChannelKey, boolean>>;
 type WhatsAppTemplateConfig = typeof DEFAULT_WHATSAPP_TEMPLATE;
+type CustomerChannelReadiness = {
+  sms: boolean;
+  whatsapp: boolean;
+};
 
 type AdminStatusKey = OrderNotificationType;
 type AdminChannelKey = (typeof ADMIN_CHANNELS)[number]["key"];
@@ -65,6 +69,49 @@ function getDefaultConfig(): ChannelConfig {
     };
   }
   return config;
+}
+
+function channelCanBeEnabled(channel: ChannelKey, readiness: CustomerChannelReadiness): boolean {
+  if (channel === "sms") return readiness.sms;
+  if (channel === "whatsapp") return readiness.whatsapp;
+  return true;
+}
+
+function buildCustomerChannelConfig(
+  channelData: Record<string, string[]> | undefined,
+  readiness: CustomerChannelReadiness,
+): ChannelConfig {
+  const config = getDefaultConfig();
+  if (!channelData || typeof channelData !== "object") {
+    return sanitizeCustomerChannelConfig(config, readiness);
+  }
+
+  for (const status of ORDER_STATUSES) {
+    const enabledChannels = channelData[status.key];
+    if (!Array.isArray(enabledChannels)) continue;
+    for (const ch of CHANNELS) {
+      config[status.key][ch.key] =
+        enabledChannels.includes(ch.key) && channelCanBeEnabled(ch.key, readiness);
+    }
+  }
+
+  return sanitizeCustomerChannelConfig(config, readiness);
+}
+
+function sanitizeCustomerChannelConfig(
+  config: ChannelConfig,
+  readiness: CustomerChannelReadiness,
+): ChannelConfig {
+  const sanitized = {} as ChannelConfig;
+  for (const status of ORDER_STATUSES) {
+    sanitized[status.key] = { ...config[status.key] };
+    for (const ch of CHANNELS) {
+      if (!channelCanBeEnabled(ch.key, readiness)) {
+        sanitized[status.key][ch.key] = false;
+      }
+    }
+  }
+  return sanitized;
 }
 
 function getDefaultAdminConfig(): AdminChannelConfig {
@@ -110,19 +157,10 @@ export function NotificationChannelsBuilder() {
         setWhatsAppError(data?.whatsappError ?? null);
         setIsSmsConfigured(smsConfigured);
         setSmsProviderError(data?.smsProviderError ?? null);
-        const channelData = data?.channels;
-        if (channelData && typeof channelData === "object") {
-          const config = getDefaultConfig();
-          for (const status of ORDER_STATUSES) {
-            const enabledChannels = channelData[status.key];
-            if (Array.isArray(enabledChannels)) {
-              for (const ch of CHANNELS) {
-                config[status.key][ch.key] = enabledChannels.includes(ch.key);
-              }
-            }
-          }
-          setChannels(config);
-        }
+        setChannels(buildCustomerChannelConfig(data?.channels, {
+          sms: smsConfigured,
+          whatsapp: whatsappConfigured,
+        }));
         if (data?.whatsappTemplate) {
           setWhatsAppTemplate({
             templateName: data.whatsappTemplate.templateName || DEFAULT_WHATSAPP_TEMPLATE.templateName,
@@ -199,11 +237,16 @@ export function NotificationChannelsBuilder() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const effectiveChannels = sanitizeCustomerChannelConfig(channels, {
+        sms: isSmsConfigured,
+        whatsapp: isWhatsAppConfigured,
+      });
+      setChannels(effectiveChannels);
       // Transform UI format (Record<status, Record<channel, boolean>>)
       // to API format (Record<status, string[]>) -- array of enabled channel keys
       const apiChannels: Record<string, string[]> = {};
       for (const status of ORDER_STATUSES) {
-        const statusChannels = channels[status.key];
+        const statusChannels = effectiveChannels[status.key];
         apiChannels[status.key] = CHANNELS
           .filter((ch) => statusChannels?.[ch.key])
           .map((ch) => ch.key);

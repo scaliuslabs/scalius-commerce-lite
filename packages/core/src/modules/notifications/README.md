@@ -38,6 +38,8 @@ The order email flow is fully connected:
 
 Admin order detail can read the durable outbox plus per-channel receipts for one order and can retry rows that are still `failed` or `pending`. The retry path resets the parent outbox through the existing durable enqueue helper, so accepted/skipped receipts remain terminal and already-sent notifications are not resent.
 
+Admin notification settings must not preserve impossible customer-channel selections. When SMS or WhatsApp readiness says the active provider is missing, paused, undecryptable, or otherwise not ready, the admin channel matrix renders that channel as off and disabled, and save submits it as off. Backend saves still fail closed if a stale client attempts to enable an unready provider.
+
 ## Functions
 
 ### `sendOrderNotification(db, order, env, requestUrl, options?)`
