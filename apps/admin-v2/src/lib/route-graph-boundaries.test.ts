@@ -411,9 +411,14 @@ describe("admin route graph boundaries", () => {
       twoFactorSetupSource,
     ]) {
       expect(source).toContain("useNavigate");
-      expect(source).toContain('navigate({ to: "/admin" })');
+      expect(source).toContain('to: "/admin"');
       expect(source).not.toContain('window.location.href = "/admin"');
     }
+    expect(loginFormSource).not.toContain("callbackURL");
+    expect(loginFormSource).toContain('navigate({ to: "/admin", replace: true })');
+    expect(loginFormSource).toContain(
+      'navigate({ to: "/auth/two-factor", replace: true })',
+    );
     expect(authClientSource).not.toContain("window.location.href");
     expect(setupFormSource).toContain("storePendingTwoFactorMethods");
     expect(setupFormSource).toContain('navigate({ to: "/auth/two-factor" })');
