@@ -1113,6 +1113,19 @@ describe("admin route graph boundaries", () => {
     expect(skeletonSource).toContain("Maximize");
     expect(skeletonSource).not.toContain("animate-pulse");
     expect(skeletonSource).not.toContain("bg-muted/35");
+
+    const toolbarButtonSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "ToolbarButton.tsx"),
+      "utf8",
+    );
+    const menuBarSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapMenuBar.tsx"),
+      "utf8",
+    );
+    expect(toolbarButtonSource).toContain("aria-label={tooltip}");
+    expect(menuBarSource).toContain('aria-label="Insert link"');
+    expect(menuBarSource).toContain('aria-label="Insert image URL"');
+    expect(menuBarSource).toContain('aria-label="Embed video"');
   });
 
   it("keeps order payment history failures local to the payment card", () => {

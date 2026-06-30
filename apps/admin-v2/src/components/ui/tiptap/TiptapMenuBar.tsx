@@ -156,6 +156,7 @@ export const TiptapMenuBar = ({
                   type="button"
                   variant="ghost"
                   size="icon"
+                  aria-label="Insert link"
                   className={cn(buttonSize, editor.isActive("link") && "bg-accent")}
                 >
                   <LinkIcon className={iconSize} />
@@ -192,6 +193,7 @@ export const TiptapMenuBar = ({
                   type="button"
                   variant="ghost"
                   size="icon"
+                  aria-label="Insert image URL"
                   className={buttonSize}
                 >
                   <ImageIcon className={iconSize} />
@@ -250,6 +252,7 @@ export const TiptapMenuBar = ({
                   type="button"
                   variant="ghost"
                   size="icon"
+                  aria-label="Embed video"
                   className={buttonSize}
                 >
                   <VideoIcon className={iconSize} />
