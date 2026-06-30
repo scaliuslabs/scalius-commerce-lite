@@ -15,4 +15,20 @@ describe("route permissions", () => {
       ),
     ).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
   });
+
+  it("gates order support request resolution behind order edit permission", () => {
+    expect(
+      getRoutePermission(
+        "/api/v1/admin/orders/order_1/support-requests/osr_1/status",
+        "PUT",
+      ),
+    ).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
+
+    expect(
+      getRoutePermission(
+        "/api/v1/admin/orders/order_1/support-requests/osr_1/status",
+        "POST",
+      ),
+    ).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
+  });
 });

@@ -7,6 +7,7 @@ import {
   PaymentStatus,
 } from "@scalius/database/schema";
 import {
+  getAdminOrderSupportRequestTransition,
   getCustomerOrderSupportRequestActions,
   type CustomerOrderSupportRequestType,
 } from "./order-support-requests";
@@ -135,5 +136,52 @@ describe("order support request eligibility", () => {
     expect(source).not.toContain("codTracking");
     expect(source).not.toContain("reserveStock");
     expect(source).not.toContain("deductMultiple");
+  });
+});
+
+describe("admin order support request transitions", () => {
+  it("allows the expected review and settle lifecycle", () => {
+    expect(getAdminOrderSupportRequestTransition("submitted", "under_review")).toEqual({
+      changed: true,
+      active: true,
+      terminal: false,
+    });
+    expect(getAdminOrderSupportRequestTransition("submitted", "approved")).toEqual({
+      changed: true,
+      active: true,
+      terminal: false,
+    });
+    expect(getAdminOrderSupportRequestTransition("under_review", "rejected")).toEqual({
+      changed: true,
+      active: false,
+      terminal: true,
+    });
+    expect(getAdminOrderSupportRequestTransition("approved", "completed")).toEqual({
+      changed: true,
+      active: false,
+      terminal: true,
+    });
+  });
+
+  it("makes same-status retries idempotent without inventing another event", () => {
+    expect(getAdminOrderSupportRequestTransition("under_review", "under_review")).toEqual({
+      changed: false,
+      active: true,
+      terminal: false,
+    });
+    expect(getAdminOrderSupportRequestTransition("completed", "completed")).toEqual({
+      changed: false,
+      active: false,
+      terminal: true,
+    });
+  });
+
+  it("blocks reopening or skipping unsupported transitions", () => {
+    expect(() => getAdminOrderSupportRequestTransition("completed", "under_review"))
+      .toThrow("already been settled");
+    expect(() => getAdminOrderSupportRequestTransition("approved", "rejected"))
+      .toThrow("cannot move");
+    expect(() => getAdminOrderSupportRequestTransition("submitted", "submitted"))
+      .toThrow("Unsupported");
   });
 });

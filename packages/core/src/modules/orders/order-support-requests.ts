@@ -37,6 +37,16 @@ export const ORDER_SUPPORT_REQUEST_STATUSES = [
 export type OrderSupportRequestStatus =
   typeof ORDER_SUPPORT_REQUEST_STATUSES[number];
 
+export const ADMIN_ORDER_SUPPORT_REQUEST_STATUSES = [
+  "under_review",
+  "approved",
+  "rejected",
+  "completed",
+] as const;
+
+export type AdminOrderSupportRequestStatus =
+  typeof ADMIN_ORDER_SUPPORT_REQUEST_STATUSES[number];
+
 type SupportRequestSeverity = "info" | "success" | "warning" | "danger";
 
 export interface OrderSupportRequestView {
@@ -69,6 +79,18 @@ export interface CreateCustomerOrderSupportRequestInput {
   type: CustomerOrderSupportRequestType;
   reason: string;
   message?: string | null;
+}
+
+export interface UpdateAdminOrderSupportRequestStatusInput {
+  status: AdminOrderSupportRequestStatus;
+  note?: string | null;
+  actorId?: string | null;
+}
+
+export interface AdminOrderSupportRequestTransition {
+  changed: boolean;
+  active: boolean;
+  terminal: boolean;
 }
 
 interface SupportRequestRow {
@@ -106,7 +128,36 @@ const ACTIVE_SUPPORT_REQUEST_STATUSES = new Set<string>([
   "approved",
 ]);
 
+const TERMINAL_SUPPORT_REQUEST_STATUSES = new Set<string>([
+  "rejected",
+  "withdrawn",
+  "completed",
+]);
+
 const SUPPORT_REQUEST_TYPE_SET = new Set<string>(CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES);
+const ORDER_SUPPORT_REQUEST_STATUS_SET = new Set<string>(ORDER_SUPPORT_REQUEST_STATUSES);
+const ADMIN_ORDER_SUPPORT_REQUEST_STATUS_SET = new Set<string>(ADMIN_ORDER_SUPPORT_REQUEST_STATUSES);
+
+const ADMIN_SUPPORT_REQUEST_TRANSITIONS: Record<string, readonly AdminOrderSupportRequestStatus[]> = {
+  submitted: ["under_review", "approved", "rejected", "completed"],
+  under_review: ["approved", "rejected", "completed"],
+  approved: ["completed"],
+};
+
+const supportRequestSelectFields = {
+  id: orderSupportRequests.id,
+  orderId: orderSupportRequests.orderId,
+  customerId: orderSupportRequests.customerId,
+  type: orderSupportRequests.type,
+  status: orderSupportRequests.status,
+  reason: orderSupportRequests.reason,
+  message: orderSupportRequests.message,
+  activeKey: orderSupportRequests.activeKey,
+  submittedAt: sql<number | null>`CAST(${orderSupportRequests.submittedAt} AS INTEGER)`,
+  resolvedAt: sql<number | null>`CAST(${orderSupportRequests.resolvedAt} AS INTEGER)`,
+  createdAt: sql<number | null>`CAST(${orderSupportRequests.createdAt} AS INTEGER)`,
+  updatedAt: sql<number | null>`CAST(${orderSupportRequests.updatedAt} AS INTEGER)`,
+};
 
 const SUPPORT_REQUEST_COPY: Record<CustomerOrderSupportRequestType, {
   label: string;
@@ -177,6 +228,15 @@ function isSupportRequestType(type: string): type is CustomerOrderSupportRequest
   return SUPPORT_REQUEST_TYPE_SET.has(type);
 }
 
+function normalizeAdminSupportRequestStatus(
+  status: string,
+): AdminOrderSupportRequestStatus {
+  if (ADMIN_ORDER_SUPPORT_REQUEST_STATUS_SET.has(status)) {
+    return status as AdminOrderSupportRequestStatus;
+  }
+  throw new ValidationError("Unsupported support request status.");
+}
+
 function isConstraintError(error: unknown): boolean {
   return error instanceof Error && /constraint|unique|SQLITE_CONSTRAINT/i.test(error.message);
 }
@@ -232,6 +292,39 @@ export function getActiveSupportRequestTypes(
   return new Set(requests.filter((request) => request.active).map((request) => request.type));
 }
 
+export function getAdminOrderSupportRequestTransition(
+  currentStatus: string,
+  targetStatus: string,
+): AdminOrderSupportRequestTransition {
+  const target = normalizeAdminSupportRequestStatus(targetStatus);
+  if (!ORDER_SUPPORT_REQUEST_STATUS_SET.has(currentStatus)) {
+    throw new ConflictError("This support request is in an unknown state. Please refresh.");
+  }
+
+  if (currentStatus === target) {
+    return {
+      changed: false,
+      active: ACTIVE_SUPPORT_REQUEST_STATUSES.has(currentStatus),
+      terminal: TERMINAL_SUPPORT_REQUEST_STATUSES.has(currentStatus),
+    };
+  }
+
+  if (TERMINAL_SUPPORT_REQUEST_STATUSES.has(currentStatus)) {
+    throw new ConflictError("This support request has already been settled.");
+  }
+
+  const allowedTargets = ADMIN_SUPPORT_REQUEST_TRANSITIONS[currentStatus] ?? [];
+  if (!allowedTargets.includes(target)) {
+    throw new ValidationError("This support request cannot move to that status.");
+  }
+
+  return {
+    changed: true,
+    active: ACTIVE_SUPPORT_REQUEST_STATUSES.has(target),
+    terminal: TERMINAL_SUPPORT_REQUEST_STATUSES.has(target),
+  };
+}
+
 export function getCustomerOrderSupportRequestActions(
   order: SupportRequestActionOrderState,
   context: SupportRequestActionContext,
@@ -285,25 +378,97 @@ export async function listOrderSupportRequests(
   orderId: string,
 ): Promise<OrderSupportRequestView[]> {
   const rows = await db
-    .select({
-      id: orderSupportRequests.id,
-      orderId: orderSupportRequests.orderId,
-      customerId: orderSupportRequests.customerId,
-      type: orderSupportRequests.type,
-      status: orderSupportRequests.status,
-      reason: orderSupportRequests.reason,
-      message: orderSupportRequests.message,
-      activeKey: orderSupportRequests.activeKey,
-      submittedAt: sql<number | null>`CAST(${orderSupportRequests.submittedAt} AS INTEGER)`,
-      resolvedAt: sql<number | null>`CAST(${orderSupportRequests.resolvedAt} AS INTEGER)`,
-      createdAt: sql<number | null>`CAST(${orderSupportRequests.createdAt} AS INTEGER)`,
-      updatedAt: sql<number | null>`CAST(${orderSupportRequests.updatedAt} AS INTEGER)`,
-    })
+    .select(supportRequestSelectFields)
     .from(orderSupportRequests)
     .where(eq(orderSupportRequests.orderId, orderId))
     .orderBy(desc(orderSupportRequests.createdAt), desc(orderSupportRequests.id));
 
   return rows.map(formatOrderSupportRequest);
+}
+
+export async function updateAdminOrderSupportRequestStatus(
+  db: Database,
+  orderId: string,
+  requestId: string,
+  input: UpdateAdminOrderSupportRequestStatusInput,
+): Promise<{
+  request: OrderSupportRequestView;
+  supportRequests: OrderSupportRequestView[];
+}> {
+  const targetStatus = normalizeAdminSupportRequestStatus(input.status);
+  const note = input.note?.trim() || null;
+  if (note && note.length > 1000) {
+    throw new ValidationError("Resolution note must be 1000 characters or less.");
+  }
+
+  const current = await db
+    .select(supportRequestSelectFields)
+    .from(orderSupportRequests)
+    .where(and(
+      eq(orderSupportRequests.id, requestId),
+      eq(orderSupportRequests.orderId, orderId),
+    ))
+    .get();
+
+  if (!current) {
+    throw new NotFoundError("Support request not found");
+  }
+
+  const transition = getAdminOrderSupportRequestTransition(current.status, targetStatus);
+  if (!transition.changed) {
+    return {
+      request: formatOrderSupportRequest(current),
+      supportRequests: await listOrderSupportRequests(db, orderId),
+    };
+  }
+
+  const activeKey = transition.active ? `order:${orderId}` : null;
+  let updatedRows: SupportRequestRow[];
+  try {
+    updatedRows = await db
+      .update(orderSupportRequests)
+      .set({
+        status: targetStatus,
+        activeKey,
+        resolvedAt: transition.terminal ? sql`unixepoch()` : null,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(and(
+        eq(orderSupportRequests.id, requestId),
+        eq(orderSupportRequests.orderId, orderId),
+        eq(orderSupportRequests.status, current.status),
+      ))
+      .returning(supportRequestSelectFields);
+  } catch (error) {
+    if (isConstraintError(error)) {
+      throw new ConflictError("Another support request is already open for this order.");
+    }
+    throw error;
+  }
+
+  const updated = updatedRows[0];
+  if (!updated) {
+    throw new ConflictError("Support request changed while you were resolving it. Please refresh.");
+  }
+
+  await db.insert(orderSupportRequestEvents).values({
+    id: `osre_${nanoid(16)}`,
+    requestId,
+    orderId,
+    customerId: current.customerId,
+    actorType: "admin",
+    actorId: input.actorId ?? null,
+    eventType: "status_updated",
+    fromStatus: current.status,
+    toStatus: targetStatus,
+    note,
+    createdAt: sql`unixepoch()`,
+  });
+
+  return {
+    request: formatOrderSupportRequest(updated),
+    supportRequests: await listOrderSupportRequests(db, orderId),
+  };
 }
 
 export async function createCustomerOrderSupportRequest(

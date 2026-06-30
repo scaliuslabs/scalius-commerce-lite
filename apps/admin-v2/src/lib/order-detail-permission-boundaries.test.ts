@@ -28,6 +28,9 @@ describe("order detail permission boundaries", () => {
     const notificationsSource = readRepoFile(
       "apps/admin-v2/src/components/admin/orderview/OrderNotificationsCard.tsx",
     );
+    const supportRequestsSource = readRepoFile(
+      "apps/admin-v2/src/components/admin/orderview/OrderSupportRequestsCard.tsx",
+    );
 
     expect(headerSource).toContain("useOrderActionPermissions");
     expect(headerSource).toContain("orderActions.canManageOrderShipments");
@@ -44,5 +47,7 @@ describe("order detail permission boundaries", () => {
 
     expect(manualFulfillmentSource).toContain("orderActions.canManageOrderShipments");
     expect(notificationsSource).toContain("orderActions.canRetryOrderNotifications");
+    expect(supportRequestsSource).toContain("useOrderActionPermissions");
+    expect(supportRequestsSource).toContain("orderActions.canResolveOrderSupportRequests");
   });
 });

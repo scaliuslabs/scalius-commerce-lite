@@ -11,6 +11,7 @@ export interface OrderActionPermissions {
   canChangeOrderStatus: boolean;
   canManageOrderShipments: boolean;
   canRetryOrderNotifications: boolean;
+  canResolveOrderSupportRequests: boolean;
   canUpdateOrderCod: boolean;
   canRefundOrders: boolean;
   canBulkDeleteOrders: boolean;
@@ -32,6 +33,7 @@ export function getOrderActionPermissions(
     canChangeOrderStatus: hasPermission(PERMISSIONS.ORDERS_CHANGE_STATUS),
     canManageOrderShipments,
     canRetryOrderNotifications: hasPermission(PERMISSIONS.ORDERS_EDIT),
+    canResolveOrderSupportRequests: hasPermission(PERMISSIONS.ORDERS_EDIT),
     canUpdateOrderCod: hasPermission(PERMISSIONS.ORDERS_EDIT),
     canRefundOrders: hasPermission(PERMISSIONS.ORDERS_REFUND),
     canBulkDeleteOrders: canDeleteOrders,
