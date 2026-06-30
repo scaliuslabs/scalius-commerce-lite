@@ -988,7 +988,7 @@ export class WidgetDesignAgent extends Agent<Env, WidgetDesignAgentState> {
             settings.providers[provider].capabilities,
           );
           this.updateRunState({ phase: "hydrating", provider, model: modelId });
-          const model = getLanguageModel(provider, modelId, settings, this.env);
+          const model = await getLanguageModel(provider, modelId, settings, this.env);
 
           const contextData = await tools.run(
             "hydrate_context",
@@ -1116,7 +1116,7 @@ export class WidgetDesignAgent extends Agent<Env, WidgetDesignAgentState> {
                       };
 
                       try {
-                        const generation = streamWidgetContent(generationOptions, capabilities, payload.promptType);
+                        const generation = await streamWidgetContent(generationOptions, capabilities, payload.promptType);
                         let rawText = "";
                         let lastPreviewPatchLength = 0;
                         for await (const delta of generation.textStream) {
@@ -1254,7 +1254,7 @@ export class WidgetDesignAgent extends Agent<Env, WidgetDesignAgentState> {
                 payload.promptType,
                 { compositionMode: true },
               );
-              const generation = streamWidgetContent(
+              const generation = await streamWidgetContent(
                 {
                   model,
                   messages,

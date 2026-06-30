@@ -17,6 +17,8 @@ Admin widget form
 
 System prompts are stored in the `settings` table under category `ai`. The default prompt text lives in `default-prompts.ts`; the API no longer fetches prompts from third-party URLs.
 
+Worker startup budget matters because the API worker exports `WidgetDesignAgent` and mounts `/admin/ai` with the main Hono app. Keep `ai`, `@ai-sdk/*`, `@openrouter/ai-sdk-provider`, and `workers-ai-provider` as request-time dynamic imports inside `apps/api/src/routes/admin/ai.ts`; only type-only imports are allowed at module scope. `apps/api/src/routes/admin/ai-startup-boundaries.test.ts` guards that importing the route does not initialize provider clients.
+
 ## Provider Settings
 
 Canonical settings use:
@@ -49,4 +51,3 @@ Secrets are encrypted with the same credential encryption key used by payment pr
   - `GET /api/v1/admin/ai-prompts?type=widget|landing-page|collection`
 
 The generation routes use the Vercel AI SDK and preserve the OpenAI-style response shape expected by the widget editor parser.
-
