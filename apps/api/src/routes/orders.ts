@@ -20,6 +20,10 @@ import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@s
 import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
 import { getAllowedCountries } from "@scalius/core/modules/settings/site-settings.service";
 import {
+  createReceiptOrderSupportRequest,
+  CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
+  getOrderSupportRequestStatusLabel,
+  getReceiptOrderSupportRequestState,
   buildCheckoutAttemptIdentity,
   claimCheckoutAttempt,
   commitStorefrontOrderPayload,
@@ -48,6 +52,7 @@ import {
 
 import { created, ok } from "../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse, conflictResponse } from "../schemas/responses";
+import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CUSTOMER_SESSION_HEADER = "X-Customer-Session";
 const PAYMENT_METHOD_LABELS: Record<CheckoutPaymentMethodId, string> = {
@@ -318,6 +323,32 @@ app.openapi(getOrderStatusRoute, async (c) => {
 
 // ─── GET /receipt/:id ───────────────────────────────────────────────────────
 
+const receiptSupportRequestSchema = z.object({
+  id: z.string(),
+  orderId: z.string(),
+  customerId: z.string().nullable(),
+  type: z.enum(CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES),
+  status: z.string(),
+  active: z.boolean(),
+  severity: z.enum(["info", "success", "warning", "danger"]),
+  label: z.string(),
+  actionLabel: z.string(),
+  reason: z.string(),
+  message: z.string().nullable(),
+  submittedAt: z.string().nullable(),
+  resolvedAt: z.string().nullable(),
+  createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+});
+
+const receiptSupportRequestActionSchema = z.object({
+  type: z.enum(CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES),
+  label: z.string(),
+  description: z.string(),
+  eligible: z.boolean(),
+  disabledReason: z.string().nullable(),
+});
+
 const orderReceiptSchema = z.object({
   id: z.string(),
   customerName: z.string(),
@@ -349,6 +380,14 @@ const orderReceiptSchema = z.object({
     variantSize: z.string().nullable(),
     variantColor: z.string().nullable(),
   })),
+  supportRequests: z.array(receiptSupportRequestSchema),
+  supportRequestActions: z.array(receiptSupportRequestActionSchema),
+});
+
+const receiptSupportRequestResponseSchema = z.object({
+  request: receiptSupportRequestSchema,
+  supportRequests: z.array(receiptSupportRequestSchema),
+  supportRequestActions: z.array(receiptSupportRequestActionSchema),
 });
 
 const getOrderReceiptRoute = createRoute({
@@ -418,28 +457,31 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     throw new NotFoundError("Order receipt not found");
   }
 
-  const items = await db
-    .select({
-      id: orderItems.id,
-      productId: orderItems.productId,
-      variantId: orderItems.variantId,
-      quantity: orderItems.quantity,
-      price: orderItems.price,
-      productName: products.name,
-      productImage: sql<string>`(
-        SELECT ${productImages.url}
-        FROM ${productImages}
-        WHERE ${productImages.productId} = ${products.id}
-        AND ${productImages.isPrimary} = 1
-        LIMIT 1
-      )`.as("productImage"),
-      variantSize: productVariants.size,
-      variantColor: productVariants.color
-    })
-    .from(orderItems)
-    .leftJoin(products, eq(products.id, orderItems.productId))
-    .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
-    .where(eq(orderItems.orderId, id));
+  const [items, supportState] = await Promise.all([
+    db
+      .select({
+        id: orderItems.id,
+        productId: orderItems.productId,
+        variantId: orderItems.variantId,
+        quantity: orderItems.quantity,
+        price: orderItems.price,
+        productName: products.name,
+        productImage: sql<string>`(
+          SELECT ${productImages.url}
+          FROM ${productImages}
+          WHERE ${productImages.productId} = ${products.id}
+          AND ${productImages.isPrimary} = 1
+          LIMIT 1
+        )`.as("productImage"),
+        variantSize: productVariants.size,
+        variantColor: productVariants.color
+      })
+      .from(orderItems)
+      .leftJoin(products, eq(products.id, orderItems.productId))
+      .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+      .where(eq(orderItems.orderId, id)),
+    getReceiptOrderSupportRequestState(db, id),
+  ]);
 
   return ok(c, {
     order: {
@@ -447,8 +489,81 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
       items,
+      supportRequests: supportState.supportRequests,
+      supportRequestActions: supportState.supportRequestActions,
     },
   });
+});
+
+const createReceiptSupportRequestRoute = createRoute({
+  method: "post",
+  path: "/receipt/{id}/support-requests",
+  tags: ["Orders"],
+  summary: "Create a receipt-token support request for an order",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            token: z.string(),
+            type: z.enum(CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES),
+            reason: z.string().trim().min(3).max(500),
+            message: z.string().trim().max(1000).nullable().optional(),
+          }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Receipt support request created",
+      content: {
+        "application/json": {
+          schema: successEnvelope(receiptSupportRequestResponseSchema),
+        },
+      },
+    },
+    409: conflictResponse,
+    ...errorResponses,
+  },
+});
+
+app.openapi(createReceiptSupportRequestRoute, async (c) => {
+  const db = c.get("db");
+  const id = c.req.valid("param").id;
+  const body = c.req.valid("json");
+
+  c.header("Cache-Control", "no-cache, no-store, must-revalidate");
+  c.header("Pragma", "no-cache");
+  c.header("Expires", "0");
+
+  await validateReceiptToken(c.env.CACHE, id, body.token, db);
+  const result = await createReceiptOrderSupportRequest(db, id, {
+    type: body.type,
+    reason: body.reason,
+    message: body.message,
+  });
+  await enqueueOrderSupportRequestNotificationForOrder({
+    db,
+    queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+    orderId: id,
+    requestId: result.request.id,
+    notificationType: "support_request_submitted",
+    source: "receipt-support-request",
+    status: result.request.status,
+    data: {
+      supportRequestType: result.request.type,
+      supportRequestTypeLabel: result.request.label,
+      supportRequestStatus: result.request.status,
+      supportRequestStatusLabel: getOrderSupportRequestStatusLabel(result.request.status),
+    },
+  });
+
+  return created(c, result);
 });
 
 // ─── POST / ──────────────────────────────────────────────────────────────────

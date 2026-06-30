@@ -71,7 +71,7 @@ export interface ActiveRefundOperation {
 export interface OrderSupportRequest {
   id: string;
   orderId: string;
-  customerId: string;
+  customerId: string | null;
   type: "cancel_pre_shipment" | "return" | "refund";
   status: string;
   active: boolean;

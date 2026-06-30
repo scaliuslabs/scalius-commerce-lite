@@ -117,6 +117,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 | GET | `/orders` | `getCustomerOrders` | Customer's cursor-paginated account orders matched by `customerId` only, with items, product names/images, one latest shipment summary, server-computed customer-visible `balanceDue`, aggregate account `summary`, and `pagination.hasMore`/`nextCursor` |
 | GET | `/orders/{id}` | `getCustomerOrderDetail` + API payment/recovery previews | Customer-scoped order detail, items, shipments, payments, payment plan, COD, notification receipts, buyer-safe refund attempts, refund timeline events, active refund recovery notice, and policy-backed `paymentRecovery` preview |
 | POST | `/orders/{id}/payment-session` | API payment session creation | Create an owned-order Stripe/SSLCommerz/Polar payment session from the customer session and order state; strict empty body; no receipt-token input/output |
+| POST | `/orders/{id}/support-requests` | API support-request creation | Create an account-owned cancellation, return, or refund request through the shared order support-request ledger; strict customer/session ownership; no direct order/payment/shipment mutation |
 
 ## Data Flow
 
@@ -209,7 +210,7 @@ Customer account order history uses keyset pagination over `(orders.createdAt, o
 
 Customer account order history is scoped by `orders.customerId`, not by mutable phone/email contact fields. Storefront checkout attaches `orders.customerId` only when the API has resolved an active `customer_sessions` row and the session phone matches the checkout phone. True guest checkout orders keep `orders.customerId = null`; the submitted phone remains delivery/fraud/contact data, not account ownership proof.
 
-Guest orders are recoverable through the private receipt token/link, not by later matching phone or email. A future guest-to-account claim flow must require the receipt token plus immutable contact proof and an active session; do not attach historical guest orders to accounts by mutable contact matching alone.
+Guest orders are recoverable through the private receipt token/link, not by later matching phone or email. Receipt-token order support uses the public order receipt API plus the shared support-request ledger, stores a nullable `customerId`, and never grants account ownership or direct order/payment/shipment mutation. A future guest-to-account claim flow must require the receipt token plus immutable contact proof and an active session; do not attach historical guest orders to accounts by mutable contact matching alone.
 
 ## Known Gaps
 
@@ -221,6 +222,6 @@ Guest orders are recoverable through the private receipt token/link, not by late
 
 4. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
 
-5. **Guest support-request workflow is partial**: Account-owned order details now expose eligible pre-shipment cancellation, return, and refund request actions through the order support-request ledger. Admins can resolve submitted requests on order detail, submitted requests enqueue merchant/admin notifications, and admin status changes enqueue customer notifications through the order notification outbox. The remaining support-request gap is the receipt-token guest request path for true guest orders.
+5. **Guest support requests are receipt-token-only**: Account-owned and receipt-token guest order details both expose eligible pre-shipment cancellation, return, and refund request actions through the order support-request ledger. Admins resolve submitted requests on order detail, submitted requests enqueue merchant/admin notifications, and admin status changes enqueue customer notifications through the order notification outbox. Guest requests stay tied to the private receipt proof and do not create customer accounts or attach historical orders by mutable phone/email matching.
 
 6. **No guest-order account claim flow yet**: True guest orders remain receipt-token-only and are intentionally absent from account history until a receipt-token-backed claim model exists.

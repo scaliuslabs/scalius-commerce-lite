@@ -3249,7 +3249,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             supportRequests: Array<{
                 id: string;
                 orderId: string;
-                customerId: string;
+                customerId: string | null;
                 type: 'cancel_pre_shipment' | 'return' | 'refund';
                 status: string;
                 active: boolean;
@@ -3438,7 +3438,7 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
             request: {
                 id: string;
                 orderId: string;
-                customerId: string;
+                customerId: string | null;
                 type: 'cancel_pre_shipment' | 'return' | 'refund';
                 status: string;
                 active: boolean;
@@ -3455,7 +3455,7 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
             supportRequests: Array<{
                 id: string;
                 orderId: string;
-                customerId: string;
+                customerId: string | null;
                 type: 'cancel_pre_shipment' | 'return' | 'refund';
                 status: string;
                 active: boolean;
@@ -5630,12 +5630,186 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     variantSize: string | null;
                     variantColor: string | null;
                 }>;
+                supportRequests: Array<{
+                    id: string;
+                    orderId: string;
+                    customerId: string | null;
+                    type: 'cancel_pre_shipment' | 'return' | 'refund';
+                    status: string;
+                    active: boolean;
+                    severity: 'info' | 'success' | 'warning' | 'danger';
+                    label: string;
+                    actionLabel: string;
+                    reason: string;
+                    message: string | null;
+                    submittedAt: string | null;
+                    resolvedAt: string | null;
+                    createdAt: string | null;
+                    updatedAt: string | null;
+                }>;
+                supportRequestActions: Array<{
+                    type: 'cancel_pre_shipment' | 'return' | 'refund';
+                    label: string;
+                    description: string;
+                    eligible: boolean;
+                    disabledReason: string | null;
+                }>;
             };
         };
     };
 };
 
 export type GetApiV1OrdersReceiptByIdResponse = GetApiV1OrdersReceiptByIdResponses[keyof GetApiV1OrdersReceiptByIdResponses];
+
+export type PostApiV1OrdersReceiptByIdSupportRequestsData = {
+    body: {
+        token: string;
+        type: 'cancel_pre_shipment' | 'return' | 'refund';
+        reason: string;
+        message?: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/support-requests';
+};
+
+export type PostApiV1OrdersReceiptByIdSupportRequestsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdSupportRequestsError = PostApiV1OrdersReceiptByIdSupportRequestsErrors[keyof PostApiV1OrdersReceiptByIdSupportRequestsErrors];
+
+export type PostApiV1OrdersReceiptByIdSupportRequestsResponses = {
+    /**
+     * Receipt support request created
+     */
+    201: {
+        success: true;
+        data: {
+            request: {
+                id: string;
+                orderId: string;
+                customerId: string | null;
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                status: string;
+                active: boolean;
+                severity: 'info' | 'success' | 'warning' | 'danger';
+                label: string;
+                actionLabel: string;
+                reason: string;
+                message: string | null;
+                submittedAt: string | null;
+                resolvedAt: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+            };
+            supportRequests: Array<{
+                id: string;
+                orderId: string;
+                customerId: string | null;
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                status: string;
+                active: boolean;
+                severity: 'info' | 'success' | 'warning' | 'danger';
+                label: string;
+                actionLabel: string;
+                reason: string;
+                message: string | null;
+                submittedAt: string | null;
+                resolvedAt: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+            }>;
+            supportRequestActions: Array<{
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                label: string;
+                description: string;
+                eligible: boolean;
+                disabledReason: string | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdSupportRequestsResponse = PostApiV1OrdersReceiptByIdSupportRequestsResponses[keyof PostApiV1OrdersReceiptByIdSupportRequestsResponses];
 
 export type PostApiV1OrdersCartValidationData = {
     body?: {
@@ -25102,7 +25276,7 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
             request: {
                 id: string;
                 orderId: string;
-                customerId: string;
+                customerId: string | null;
                 type: 'cancel_pre_shipment' | 'return' | 'refund';
                 status: string;
                 active: boolean;
@@ -25119,7 +25293,7 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
             supportRequests: Array<{
                 id: string;
                 orderId: string;
-                customerId: string;
+                customerId: string | null;
                 type: 'cancel_pre_shipment' | 'return' | 'refund';
                 status: string;
                 active: boolean;
@@ -25503,7 +25677,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             supportRequests: Array<{
                 id: string;
                 orderId: string;
-                customerId: string;
+                customerId: string | null;
                 type: 'cancel_pre_shipment' | 'return' | 'refund';
                 status: string;
                 active: boolean;

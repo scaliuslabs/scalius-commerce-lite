@@ -254,7 +254,7 @@ export const activeRefundOperationSchema = z.object({
 export const orderSupportRequestSchema = z.object({
   id: z.string(),
   orderId: z.string(),
-  customerId: z.string(),
+  customerId: z.string().nullable(),
   type: z.enum(["cancel_pre_shipment", "return", "refund"]),
   status: z.string(),
   active: z.boolean(),

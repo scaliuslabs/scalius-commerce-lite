@@ -309,6 +309,10 @@ Notable migrations:
 - `0057` -- Legacy/demo simple-SKU repair for active products with zero active SKUs or one zero-stock no-option SKU
 - `0063` -- Partial unique live payment-session single-flight index on `(order_id, gateway, payment_type)` for `processing` attempts
 - `0069` -- Rebuilds short-lived `customer_auth_otp_challenges` without raw email/phone/identifier columns; in-flight OTPs are intentionally invalidated and must be re-requested
+- `0070` -- Customer account-proof columns for claimed/verified/authenticated storefront sessions
+- `0072` -- Order notification delivery receipt provider/status index for provider-health pause recovery
+- `0073` -- Order support-request ledger and event log for customer/admin cancellation, return, and refund request workflows
+- `0074` -- Rebuilds order support-request tables with nullable `customer_id` so receipt-token guest requests use the same ledger without synthetic customer ownership
 
 Validate migration metadata after schema or migration edits:
 

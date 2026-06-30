@@ -1,15 +1,71 @@
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import type {
+  OrderReceiptSupportRequest,
+  OrderReceiptSupportRequestAction,
+  OrderReceiptSupportRequestType,
+} from "@/lib/api/types";
+import { AlertCircle, CheckCircle2, HelpCircle, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 type OrderSuccessButtonsProps = {
   orderId?: string;
+  supportRequests?: OrderReceiptSupportRequest[];
+  supportRequestActions?: OrderReceiptSupportRequestAction[];
 };
 
-export default function OrderSuccessButtons({ orderId }: OrderSuccessButtonsProps) {
+type SubmitState =
+  | { status: "idle"; message: string | null }
+  | { status: "submitting"; message: string | null }
+  | { status: "success"; message: string }
+  | { status: "error"; message: string };
+
+function getReceiptTokenFromUrl() {
+  return new URLSearchParams(window.location.search).get("token")?.trim() || "";
+}
+
+function getSupportToneClass(severity: OrderReceiptSupportRequest["severity"]) {
+  switch (severity) {
+    case "success":
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    case "warning":
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    case "danger":
+      return "border-red-200 bg-red-50 text-red-800";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-800";
+  }
+}
+
+function getApiMessage(payload: unknown, fallback: string) {
+  if (typeof payload !== "object" || payload === null) return fallback;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.error === "string") return record.error;
+  if (
+    typeof record.error === "object" &&
+    record.error !== null &&
+    typeof (record.error as Record<string, unknown>).message === "string"
+  ) {
+    return (record.error as Record<string, string>).message;
+  }
+  return fallback;
+}
+
+export default function OrderSuccessButtons({
+  orderId,
+  supportRequests: initialSupportRequests = [],
+  supportRequestActions: initialSupportRequestActions = [],
+}: OrderSuccessButtonsProps) {
   const [isAnimated, setIsAnimated] = useState(false);
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [receiptCopyState, setReceiptCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const [supportRequests, setSupportRequests] = useState(initialSupportRequests);
+  const [supportRequestActions, setSupportRequestActions] = useState(initialSupportRequestActions);
+  const [selectedSupportType, setSelectedSupportType] = useState<OrderReceiptSupportRequestType | null>(null);
+  const [supportReason, setSupportReason] = useState("");
+  const [supportMessage, setSupportMessage] = useState("");
+  const [supportSubmitState, setSupportSubmitState] = useState<SubmitState>({ status: "idle", message: null });
 
   useEffect(() => {
     setIsCustomerAuthenticated(document.cookie.includes("cs_auth=1"));
@@ -19,6 +75,25 @@ export default function OrderSuccessButtons({ orderId }: OrderSuccessButtonsProp
       setIsAnimated(true);
     }, 300);
   }, []);
+
+  useEffect(() => {
+    setSupportRequests(initialSupportRequests);
+  }, [initialSupportRequests]);
+
+  useEffect(() => {
+    setSupportRequestActions(initialSupportRequestActions);
+  }, [initialSupportRequestActions]);
+
+  const activeSupportRequest = useMemo(
+    () => supportRequests.find((request) => request.active) ?? null,
+    [supportRequests],
+  );
+  const latestSupportRequest = supportRequests[0] ?? null;
+  const eligibleSupportActions = supportRequestActions.filter((action) => action.eligible);
+  const selectedSupportAction = selectedSupportType
+    ? supportRequestActions.find((action) => action.type === selectedSupportType)
+    : null;
+  const firstDisabledReason = supportRequestActions.find((action) => action.disabledReason)?.disabledReason ?? null;
 
   const handleContinueShopping = () => {
     window.location.href = "/";
@@ -50,6 +125,75 @@ export default function OrderSuccessButtons({ orderId }: OrderSuccessButtonsProp
       setReceiptCopyState("copied");
     } catch {
       setReceiptCopyState("failed");
+    }
+  };
+
+  const handleSelectSupportAction = (action: OrderReceiptSupportRequestAction) => {
+    setSelectedSupportType(action.type);
+    setSupportSubmitState({ status: "idle", message: null });
+  };
+
+  const handleSubmitSupportRequest = async () => {
+    const receiptToken = getReceiptTokenFromUrl();
+    const reason = supportReason.trim();
+    const message = supportMessage.trim();
+
+    if (!orderId || !selectedSupportType || !receiptToken) {
+      setSupportSubmitState({
+        status: "error",
+        message: "This private receipt link is missing the proof needed to send a request.",
+      });
+      return;
+    }
+
+    if (reason.length < 3) {
+      setSupportSubmitState({
+        status: "error",
+        message: "Add a short reason before sending the request.",
+      });
+      return;
+    }
+
+    setSupportSubmitState({ status: "submitting", message: null });
+    try {
+      const response = await fetch("/api/order-support/receipt-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId,
+          receiptToken,
+          type: selectedSupportType,
+          reason,
+          message: message || null,
+        }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        success?: boolean;
+        data?: {
+          request?: OrderReceiptSupportRequest;
+          supportRequests?: OrderReceiptSupportRequest[];
+          supportRequestActions?: OrderReceiptSupportRequestAction[];
+        };
+      } | null;
+
+      if (!response.ok || payload?.success === false || !payload?.data?.request) {
+        throw new Error(getApiMessage(payload, "Support request failed. Please try again."));
+      }
+
+      setSupportRequests(payload.data.supportRequests ?? [payload.data.request]);
+      setSupportRequestActions(payload.data.supportRequestActions ?? []);
+      setSelectedSupportType(null);
+      setSupportReason("");
+      setSupportMessage("");
+      setSupportSubmitState({
+        status: "success",
+        message: "Request sent. The store team can now review it from the order.",
+      });
+    } catch (error) {
+      setSupportSubmitState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Support request failed. Please try again.",
+      });
     }
   };
 
@@ -170,6 +314,132 @@ export default function OrderSuccessButtons({ orderId }: OrderSuccessButtonsProp
                 ? "If this order belongs to your account, the account button opens its private timeline."
                 : "Sign in before future orders to keep them in your account history."}
         </p>
+      </div>
+
+      <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            {activeSupportRequest ? <CheckCircle2 className="h-5 w-5" /> : <HelpCircle className="h-5 w-5" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-foreground">Need help with this order?</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Send one request from this private receipt. The store reviews it before changing payment, shipment, or inventory.
+            </p>
+          </div>
+        </div>
+
+        {activeSupportRequest || latestSupportRequest ? (
+          <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${getSupportToneClass((activeSupportRequest ?? latestSupportRequest)!.severity)}`}>
+            <p className="font-medium">{(activeSupportRequest ?? latestSupportRequest)!.label}</p>
+            <p className="mt-1 text-xs opacity-80">
+              {(activeSupportRequest ?? latestSupportRequest)!.active
+                ? "The store team will review this request before making any order changes."
+                : "This request is already settled. Contact the store if you still need help."}
+            </p>
+          </div>
+        ) : eligibleSupportActions.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            <div className="grid gap-2 sm:grid-cols-3">
+              {eligibleSupportActions.map((action) => (
+                <button
+                  key={action.type}
+                  type="button"
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                    selectedSupportType === action.type
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-muted/20 text-foreground hover:border-primary/40"
+                  }`}
+                  onClick={() => handleSelectSupportAction(action)}
+                >
+                  <span className="font-medium">{action.label}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{action.description}</span>
+                </button>
+              ))}
+            </div>
+
+            {selectedSupportAction && (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+                <div>
+                  <label htmlFor="receiptSupportReason" className="text-xs font-medium text-foreground">
+                    Reason
+                  </label>
+                  <Textarea
+                    id="receiptSupportReason"
+                    aria-label="Support request reason"
+                    maxLength={500}
+                    value={supportReason}
+                    onChange={(event) => setSupportReason(event.target.value)}
+                    className="mt-1 min-h-20 bg-background"
+                    placeholder={`Why do you want to ${selectedSupportAction.label.toLowerCase()}?`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="receiptSupportMessage" className="text-xs font-medium text-foreground">
+                    Details
+                  </label>
+                  <Textarea
+                    id="receiptSupportMessage"
+                    aria-label="Support request details"
+                    maxLength={1000}
+                    value={supportMessage}
+                    onChange={(event) => setSupportMessage(event.target.value)}
+                    className="mt-1 min-h-20 bg-background"
+                    placeholder="Add any details the store should know."
+                  />
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="min-h-5 text-sm text-muted-foreground" aria-live="polite">
+                    {supportSubmitState.status === "error" ? (
+                      <span className="inline-flex items-center gap-1 text-destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        {supportSubmitState.message}
+                      </span>
+                    ) : supportSubmitState.status === "success" ? (
+                      <span className="inline-flex items-center gap-1 text-primary">
+                        <CheckCircle2 className="h-4 w-4" />
+                        {supportSubmitState.message}
+                      </span>
+                    ) : null}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-border"
+                      onClick={() => {
+                        setSelectedSupportType(null);
+                        setSupportSubmitState({ status: "idle", message: null });
+                      }}
+                      disabled={supportSubmitState.status === "submitting"}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleSubmitSupportRequest}
+                      disabled={supportSubmitState.status === "submitting"}
+                    >
+                      {supportSubmitState.status === "submitting" && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Send Request
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="mt-4 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+            {firstDisabledReason ?? "Support requests are not available for this order right now."}
+          </p>
+        )}
+
+        {supportSubmitState.status === "success" && !activeSupportRequest && (
+          <p className="mt-3 inline-flex items-center gap-1 text-sm text-primary" aria-live="polite">
+            <CheckCircle2 className="h-4 w-4" />
+            {supportSubmitState.message}
+          </p>
+        )}
       </div>
     </div>
   );

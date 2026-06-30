@@ -52,7 +52,7 @@ type SupportRequestSeverity = "info" | "success" | "warning" | "danger";
 export interface OrderSupportRequestView {
   id: string;
   orderId: string;
-  customerId: string;
+  customerId: string | null;
   type: CustomerOrderSupportRequestType;
   status: string;
   active: boolean;
@@ -96,7 +96,7 @@ export interface AdminOrderSupportRequestTransition {
 interface SupportRequestRow {
   id: string;
   orderId: string;
-  customerId: string;
+  customerId: string | null;
   type: string;
   status: string;
   reason: string;
@@ -110,6 +110,7 @@ interface SupportRequestRow {
 
 type SupportRequestActionOrderState = {
   id: string;
+  customerId?: string | null;
   status: string;
   paymentStatus: string;
   fulfillmentStatus: string;
@@ -498,6 +499,62 @@ export async function createCustomerOrderSupportRequest(
   supportRequests: OrderSupportRequestView[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
 }> {
+  return createVerifiedOrderSupportRequest(db, orderId, input, {
+    actorType: "customer",
+    actorId: customerId,
+    expectedCustomerId: customerId,
+  });
+}
+
+export async function createReceiptOrderSupportRequest(
+  db: Database,
+  orderId: string,
+  input: CreateCustomerOrderSupportRequestInput,
+): Promise<{
+  request: OrderSupportRequestView;
+  supportRequests: OrderSupportRequestView[];
+  supportRequestActions: CustomerOrderSupportRequestAction[];
+}> {
+  return createVerifiedOrderSupportRequest(db, orderId, input, {
+    actorType: "guest_receipt",
+    actorId: null,
+  });
+}
+
+export async function getReceiptOrderSupportRequestState(
+  db: Database,
+  orderId: string,
+): Promise<{
+  supportRequests: OrderSupportRequestView[];
+  supportRequestActions: CustomerOrderSupportRequestAction[];
+}> {
+  const order = await selectSupportRequestOrderState(db, orderId);
+  if (!order) {
+    throw new NotFoundError("Order not found");
+  }
+  const state = await buildOrderSupportRequestState(db, order);
+  return {
+    supportRequests: state.supportRequests,
+    supportRequestActions: state.supportRequestActions,
+  };
+}
+
+type SupportRequestActorContext = {
+  actorType: "customer" | "guest_receipt";
+  actorId: string | null;
+  expectedCustomerId?: string;
+};
+
+async function createVerifiedOrderSupportRequest(
+  db: Database,
+  orderId: string,
+  input: CreateCustomerOrderSupportRequestInput,
+  actor: SupportRequestActorContext,
+): Promise<{
+  request: OrderSupportRequestView;
+  supportRequests: OrderSupportRequestView[];
+  supportRequestActions: CustomerOrderSupportRequestAction[];
+}> {
   if (!isSupportRequestType(input.type)) {
     throw new ValidationError("Unsupported support request type.");
   }
@@ -511,46 +568,19 @@ export async function createCustomerOrderSupportRequest(
     throw new ValidationError("Request details must be 1000 characters or less.");
   }
 
-  const order = await db
-    .select({
-      id: orders.id,
-      status: orders.status,
-      paymentStatus: orders.paymentStatus,
-      fulfillmentStatus: orders.fulfillmentStatus,
-      paidAmount: orders.paidAmount,
-    })
-    .from(orders)
-    .where(and(
-      eq(orders.id, orderId),
-      eq(orders.customerId, customerId),
-      isNull(orders.deletedAt),
-    ))
-    .get();
+  const order = await selectSupportRequestOrderState(db, orderId, actor.expectedCustomerId);
 
   if (!order) {
     throw new NotFoundError("Order not found");
   }
 
-  const [shipmentRows, supportRequests, refundAttemptViews] = await Promise.all([
-    db
-      .select({ id: deliveryShipments.id })
-      .from(deliveryShipments)
-      .where(eq(deliveryShipments.orderId, orderId))
-      .limit(1),
-    listOrderSupportRequests(db, orderId),
-    listOrderRefundAttempts(db, orderId, { audience: "customer" }),
-  ]);
-  const activeRequestTypes = getActiveSupportRequestTypes(supportRequests);
-  const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "customer");
-  const actions = getCustomerOrderSupportRequestActions(order, {
-    hasShipment: shipmentRows.length > 0,
-    hasActiveRefundOperation: Boolean(activeRefundOperation),
-    activeRequestTypes,
-  });
+  const state = await buildOrderSupportRequestState(db, order);
+  const activeRequestTypes = getActiveSupportRequestTypes(state.supportRequests);
+  const actions = state.supportRequestActions;
   const selectedAction = actions.find((action) => action.type === input.type);
   if (!selectedAction?.eligible) {
     const reasonText = selectedAction?.disabledReason ?? "This request is not available for the current order state.";
-    if (activeRequestTypes.size > 0 || activeRefundOperation) {
+    if (activeRequestTypes.size > 0 || state.hasActiveRefundOperation) {
       throw new ConflictError(reasonText);
     }
     throw new ValidationError(reasonText);
@@ -558,13 +588,16 @@ export async function createCustomerOrderSupportRequest(
 
   const requestId = `osr_${nanoid(16)}`;
   const activeKey = `order:${orderId}`;
+  const requestCustomerId = actor.actorType === "customer"
+    ? actor.expectedCustomerId ?? null
+    : order.customerId ?? null;
 
   try {
     await db.batch([
       db.insert(orderSupportRequests).values({
         id: requestId,
         orderId,
-        customerId,
+        customerId: requestCustomerId,
         type: input.type,
         status: "submitted",
         reason,
@@ -578,9 +611,9 @@ export async function createCustomerOrderSupportRequest(
         id: `osre_${nanoid(16)}`,
         requestId,
         orderId,
-        customerId,
-        actorType: "customer",
-        actorId: customerId,
+        customerId: requestCustomerId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
         eventType: "submitted",
         fromStatus: null,
         toStatus: "submitted",
@@ -605,9 +638,69 @@ export async function createCustomerOrderSupportRequest(
     request,
     supportRequests: updatedSupportRequests,
     supportRequestActions: getCustomerOrderSupportRequestActions(order, {
-      hasShipment: shipmentRows.length > 0,
-      hasActiveRefundOperation: Boolean(activeRefundOperation),
+      hasShipment: state.hasShipment,
+      hasActiveRefundOperation: state.hasActiveRefundOperation,
       activeRequestTypes: getActiveSupportRequestTypes(updatedSupportRequests),
     }),
+  };
+}
+
+async function selectSupportRequestOrderState(
+  db: Database,
+  orderId: string,
+  expectedCustomerId?: string,
+): Promise<SupportRequestActionOrderState | undefined> {
+  return db
+    .select({
+      id: orders.id,
+      customerId: orders.customerId,
+      status: orders.status,
+      paymentStatus: orders.paymentStatus,
+      fulfillmentStatus: orders.fulfillmentStatus,
+      paidAmount: orders.paidAmount,
+    })
+    .from(orders)
+    .where(expectedCustomerId
+      ? and(
+        eq(orders.id, orderId),
+        eq(orders.customerId, expectedCustomerId),
+        isNull(orders.deletedAt),
+      )
+      : and(
+        eq(orders.id, orderId),
+        isNull(orders.deletedAt),
+      ))
+    .get();
+}
+
+async function buildOrderSupportRequestState(
+  db: Database,
+  order: SupportRequestActionOrderState,
+): Promise<{
+  supportRequests: OrderSupportRequestView[];
+  supportRequestActions: CustomerOrderSupportRequestAction[];
+  hasShipment: boolean;
+  hasActiveRefundOperation: boolean;
+}> {
+  const [shipmentRows, supportRequests, refundAttemptViews] = await Promise.all([
+    db
+      .select({ id: deliveryShipments.id })
+      .from(deliveryShipments)
+      .where(eq(deliveryShipments.orderId, order.id))
+      .limit(1),
+    listOrderSupportRequests(db, order.id),
+    listOrderRefundAttempts(db, order.id, { audience: "customer" }),
+  ]);
+  const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "customer");
+  const activeRequestTypes = getActiveSupportRequestTypes(supportRequests);
+  return {
+    supportRequests,
+    supportRequestActions: getCustomerOrderSupportRequestActions(order, {
+      hasShipment: shipmentRows.length > 0,
+      hasActiveRefundOperation: Boolean(activeRefundOperation),
+      activeRequestTypes,
+    }),
+    hasShipment: shipmentRows.length > 0,
+    hasActiveRefundOperation: Boolean(activeRefundOperation),
   };
 }
