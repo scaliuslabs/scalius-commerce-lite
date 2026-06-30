@@ -992,6 +992,28 @@ describe("admin route graph boundaries", () => {
     );
   });
 
+  it("keeps the primary product description on the real editor path", () => {
+    const source = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "product-form",
+        "TitleDescriptionSection.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(source).toContain("const TiptapEditor = lazy(");
+    expect(source).toContain('import("@/components/ui/tiptap/TiptapEditor")');
+    expect(source).toContain("<TiptapEditor");
+    expect(source).toContain('placeholder="Describe your product..."');
+    expect(source).not.toContain("DeferredTiptapEditor");
+    expect(source).not.toContain("<RichContent");
+    expect(source).not.toContain("../rich-content");
+    expect(source).not.toContain("TiptapToolbarSkeleton");
+  });
+
   it("keeps edit forms from blocking on secondary label hydration", () => {
     const discountSource = readFileSync(
       join(
