@@ -28,6 +28,7 @@ export function ToolbarButton({
           size="icon"
           onClick={onClick}
           disabled={disabled}
+          aria-label={tooltip}
           className={cn(buttonSize, isActive && "bg-accent")}
         >
           {children}
