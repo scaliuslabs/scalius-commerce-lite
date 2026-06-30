@@ -1100,7 +1100,7 @@ describe("admin route graph boundaries", () => {
     );
     expect(editorSource).toContain("const editorViewportHeight = compact ? \"200px\" : \"300px\"");
     expect(editorSource).toContain("style={!isFullscreen ? { minHeight: editorViewportHeight, maxHeight: editorViewportHeight } : undefined}");
-    expect(editorSource).toContain("<TiptapToolbarSkeleton compact={isFullscreen ? false : compact} isFullscreen={isFullscreen} />");
+    expect(editorSource).not.toContain("TiptapToolbarSkeleton");
     expect(editorSource).not.toContain("setIsMounted");
     expect(editorSource).not.toContain("if (!isMounted)");
 
