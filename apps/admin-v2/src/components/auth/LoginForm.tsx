@@ -53,7 +53,6 @@ export function LoginForm() {
         email,
         password,
         rememberMe,
-        callbackURL: "/admin",
         fetchOptions: { throw: true },
       })) as SignInResponse;
 
@@ -65,11 +64,11 @@ export function LoginForm() {
 
       if (response.twoFactorRedirect) {
         storePendingTwoFactorMethods(response.twoFactorMethods);
-        await navigate({ to: "/auth/two-factor" });
+        await navigate({ to: "/auth/two-factor", replace: true });
         return;
       }
 
-      await navigate({ to: "/admin" });
+      await navigate({ to: "/admin", replace: true });
     } catch (signInError) {
       setPassword("");
       setError(getSignInError(signInError));
