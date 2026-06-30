@@ -12,6 +12,7 @@ Full order lifecycle: storefront checkout, admin CRUD, state machine validation,
 | `orders.storefront.ts` | `createStorefrontOrder()` | Storefront checkout validation and synchronous order payload builder |
 | `cart-validation.ts` | `validateStorefrontCartItems()` | Batched buyer-cart freshness checks for active products, concrete variants, stock availability, and server-authoritative prices |
 | `checkout-attempts.ts` | `buildCheckoutAttemptIdentity()`, `claimCheckoutAttempt()`, `markCheckoutAttemptCommitted()`, `markCheckoutAttemptFailed()` | D1-backed storefront submit idempotency ledger |
+| `order-support-requests.ts` | `getCustomerOrderSupportRequestState()`, `createCustomerOrderSupportRequest()`, `getReceiptOrderSupportRequestState()`, `createReceiptOrderSupportRequest()`, `updateOrderSupportRequestStatus()` | Shared account-owned and receipt-token guest cancellation/return/refund request ledger with admin resolution transitions |
 | `orders.fulfillment.ts` | `bulkShipOrders()`, `processCodAction()`, `getOrderShipments()`, `createFulfillmentShipment()`, `updateOrderStatus()` | Shipment creation, COD actions, status transitions with notification dispatch |
 | `orders.validation.ts` | `createOrderSchema`, `updateOrderSchema`, `bulkDeleteOrderSchema`, `bulkShipOrderSchema`, `CreateOrderInput`, `UpdateOrderInput`, `BulkDeleteOrderInput`, `BulkShipOrderInput` | Zod validation schemas for API routes |
 | `order-state-machine.ts` | `canTransitionTo()`, `validateTransition()`, `getAvailableTransitions()`, `StatusDimension` | Enforces valid order/payment/fulfillment status transitions |
@@ -81,7 +82,7 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 5. **Commit** -- The API writes legacy checkout-status/receipt KV hints, then commits the D1 order synchronously through `commitStorefrontOrderPayload()`. Authenticated payloads fresh-read the active customer row by session customer id before order writes; deleted/missing customers fail before inventory reservation, discounts, or order inserts. Guest payloads commit with `orders.customerId = null`. Discount usage limits are enforced inside the same D1 batch by `discount_usage` triggers; trigger aborts are translated back into checkout `ValidationError`s and any reserved stock is released before the buyer sees the failure. The buyer receives `201` only after the order row exists.
 6. **Attempt finalization** -- After the order commit, the API stores the committed response on `checkout_attempts` and clears the processing claim. If the Worker crashes after the order commit but before finalization, the same request can reclaim the stale attempt with the same reserved IDs and converge on the existing order instead of creating a duplicate.
 7. **Post-commit work** -- COD tracking, durable order-notification enqueue, and product availability cache invalidation run after commit through `executionCtx.waitUntil()` when available. These failures are logged and retried by their own durable paths instead of turning a committed checkout into a false `500`.
-8. **Recovery** -- `GET /orders/status/:token` and receipt validation use KV as the fast path, then fall back to D1 `checkout_attempts` plus the committed `orders` row. KV may be repaired best-effort from D1.
+8. **Recovery and guest support** -- `GET /orders/status/:token` and receipt validation use KV as the fast path, then fall back to D1 `checkout_attempts` plus the committed `orders` row. KV may be repaired best-effort from D1. `GET /orders/receipt/:id` returns buyer-safe receipt facts plus eligible support-request actions. `POST /orders/receipt/:id/support-requests` accepts the private receipt token and creates a cancellation, return, or refund request in the same support-request ledger used by customer accounts, with `customerId = null` unless the order was genuinely account-owned. It never directly mutates payment, shipment, inventory, COD, or order status.
 
 ### Admin Order Creation (synchronous, reserve then deduct)
 
@@ -235,6 +236,8 @@ Bulk provider shipment creation uses a durable order-level shipment claim (`orde
 | Method | Path | Handler | Purpose |
 |--------|------|---------|---------|
 | GET | `/:id` | direct query | Order with items, shipments, delivery providers |
+| GET | `/receipt/:id` | receipt-token validation + support-request state | Buyer-safe private receipt detail with support request history/actions |
+| POST | `/receipt/:id/support-requests` | `createReceiptOrderSupportRequest()` | Receipt-token cancellation, return, or refund request creation; writes the support-request ledger and enqueues merchant/admin notification only after proof validation |
 | GET | `/status/:token` | KV lookup | Poll checkout processing status |
 | POST | `/` | `createStorefrontOrder()` + `commitStorefrontOrderPayload()` | Synchronous idempotent order placement (returns `201` after D1 commit; `202` only for duplicate in-flight submits) |
 
@@ -244,7 +247,7 @@ Bulk provider shipment creation uses a durable order-level shipment claim (`orde
 
 ## Dependencies
 
-- `@scalius/database` -- `orders`, `orderItems`, `customers`, `customerHistory`, `products`, `productVariants`, `productImages`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `discountUsage`, `discountCustomerRedemptions`, `codTracking`
+- `@scalius/database` -- `orders`, `orderItems`, `orderSupportRequests`, `orderSupportRequestEvents`, `customers`, `customerHistory`, `products`, `productVariants`, `productImages`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `discountUsage`, `discountCustomerRedemptions`, `codTracking`
 - `inventory` module -- reservation, deduction, release, transitions
 - `payments` module -- COD collection/return, refund service
 - `delivery` module -- `DeliveryService`, `ShipmentTracker`

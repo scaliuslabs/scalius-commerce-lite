@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   runStorefrontOrderPostCommitSideEffects: vi.fn(),
   validateStorefrontCartItems: vi.fn(),
   validateStorefrontDeliveryPreflight: vi.fn(),
+  createReceiptOrderSupportRequest: vi.fn(),
+  getOrderSupportRequestStatusLabel: vi.fn((status: string) => status),
+  getReceiptOrderSupportRequestState: vi.fn(),
   invalidateProductAvailabilityCaches: vi.fn(),
   rateLimit: vi.fn(async () => ({ allowed: true })),
   getClientIp: vi.fn(() => "127.0.0.1"),
@@ -24,10 +27,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/orders", () => ({
+  CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES: ["cancel_pre_shipment", "return", "refund"],
   buildCheckoutAttemptIdentity: mocks.buildCheckoutAttemptIdentity,
   resolveExistingCheckoutAttempt: mocks.resolveExistingCheckoutAttempt,
   claimCheckoutAttempt: mocks.claimCheckoutAttempt,
+  createReceiptOrderSupportRequest: mocks.createReceiptOrderSupportRequest,
   createStorefrontOrder: mocks.createStorefrontOrder,
+  getOrderSupportRequestStatusLabel: mocks.getOrderSupportRequestStatusLabel,
+  getReceiptOrderSupportRequestState: mocks.getReceiptOrderSupportRequestState,
   markCheckoutAttemptCommitted: mocks.markCheckoutAttemptCommitted,
   markCheckoutAttemptFailed: mocks.markCheckoutAttemptFailed,
   commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,

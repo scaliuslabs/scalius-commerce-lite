@@ -806,7 +806,7 @@ const customerOrderSupportRequestTypeSchema = z.enum(CUSTOMER_ORDER_SUPPORT_REQU
 const customerOrderSupportRequestSchema = z.object({
   id: z.string(),
   orderId: z.string(),
-  customerId: z.string(),
+  customerId: z.string().nullable(),
   type: customerOrderSupportRequestTypeSchema,
   status: z.string(),
   active: z.boolean(),

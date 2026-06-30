@@ -40,7 +40,10 @@ describe("order success side effects", () => {
       "utf8",
     );
 
-    expect(pageSource).toContain("<OrderSuccessButtons orderId={order.id} client:load />");
+    expect(pageSource).toContain("<OrderSuccessButtons");
+    expect(pageSource).toContain("orderId={order.id}");
+    expect(pageSource).toContain("supportRequests={order.supportRequests}");
+    expect(pageSource).toContain("supportRequestActions={order.supportRequestActions}");
     expect(buttonsSource).toContain("Keep this private receipt link");
     expect(buttonsSource).toContain("Guest orders are tracked from this private receipt link.");
     expect(buttonsSource).toContain("Account history only includes orders placed while signed in.");
@@ -48,6 +51,24 @@ describe("order success side effects", () => {
     expect(buttonsSource).toContain("Sign In For Future Orders");
     expect(buttonsSource).toContain("open-auth-modal");
     expect(buttonsSource).toContain("/account/orders/${encodeURIComponent(orderId)}");
+  });
+
+  it("lets guest receipts request support without exposing receipt proof as a component prop", () => {
+    const pageSource = readFileSync(
+      sourcePath("pages", "order-success.astro"),
+      "utf8",
+    );
+    const buttonsSource = readFileSync(
+      sourcePath("components", "OrderSuccessButtons.tsx"),
+      "utf8",
+    );
+
+    expect(buttonsSource).toContain("Need help with this order?");
+    expect(buttonsSource).toContain("getReceiptTokenFromUrl");
+    expect(buttonsSource).toContain("/api/order-support/receipt-request");
+    expect(buttonsSource).toContain("setSupportRequests(payload.data.supportRequests");
+    expect(buttonsSource).toContain("The store reviews it before changing payment, shipment, or inventory.");
+    expect(pageSource).not.toContain("receiptToken={");
   });
 
   it("keeps hosted payment retry outside the finalization side-effect path", () => {

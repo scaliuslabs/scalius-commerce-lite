@@ -73,9 +73,10 @@ describe("customer auth resilience source boundaries", () => {
 
   it("keeps post-sale payment recovery controls out of native forms", () => {
     const orderSuccessSource = readStorefrontSource("src/pages/order-success.astro");
+    const orderSuccessButtonsSource = readStorefrontSource("src/components/OrderSuccessButtons.tsx");
     const accountOrderSource = readStorefrontSource("src/pages/account/orders/[id].astro");
 
-    for (const source of [orderSuccessSource, accountOrderSource]) {
+    for (const source of [orderSuccessSource, orderSuccessButtonsSource, accountOrderSource]) {
       expect(source).not.toMatch(/<form\b/);
       expect(source).not.toMatch(/name="(?:phone|email|otp|code|password|token|receiptToken|orderId)"/);
     }

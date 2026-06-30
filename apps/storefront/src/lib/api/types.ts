@@ -380,6 +380,37 @@ export interface OrderItem {
   variantColor: string | null;
 }
 
+export type OrderReceiptSupportRequestType =
+  | "cancel_pre_shipment"
+  | "return"
+  | "refund";
+
+export interface OrderReceiptSupportRequest {
+  id: string;
+  orderId: string;
+  customerId: string | null;
+  type: OrderReceiptSupportRequestType;
+  status: string;
+  active: boolean;
+  severity: "info" | "success" | "warning" | "danger";
+  label: string;
+  actionLabel: string;
+  reason: string;
+  message: string | null;
+  submittedAt: string | null;
+  resolvedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface OrderReceiptSupportRequestAction {
+  type: OrderReceiptSupportRequestType;
+  label: string;
+  description: string;
+  eligible: boolean;
+  disabledReason: string | null;
+}
+
 export interface OrderReceipt {
   id: string;
   customerName: string;
@@ -401,6 +432,8 @@ export interface OrderReceipt {
   createdAt: string | null;
   updatedAt: string | null;
   items: OrderItem[];
+  supportRequests: OrderReceiptSupportRequest[];
+  supportRequestActions: OrderReceiptSupportRequestAction[];
 }
 
 export type CreateOrderPayload = OrderPostRequest;

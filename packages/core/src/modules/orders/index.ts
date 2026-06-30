@@ -9,3 +9,4 @@ export * from "./orders.validation";
 export * from "./order-state-machine";
 export * from "./checkout-attempts";
 export * from "./cart-validation";
+export * from "./order-support-requests";

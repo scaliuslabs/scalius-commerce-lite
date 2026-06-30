@@ -252,8 +252,7 @@ export const orderSupportRequests = sqliteTable("order_support_requests", {
         .notNull()
         .references(() => orders.id, { onDelete: "cascade" }),
     customerId: text("customer_id")
-        .notNull()
-        .references(() => customers.id, { onDelete: "cascade" }),
+        .references(() => customers.id, { onDelete: "set null" }),
     type: text("type").notNull(),
     status: text("status").notNull().default("submitted"),
     reason: text("reason").notNull(),
@@ -286,8 +285,7 @@ export const orderSupportRequestEvents = sqliteTable("order_support_request_even
         .notNull()
         .references(() => orders.id, { onDelete: "cascade" }),
     customerId: text("customer_id")
-        .notNull()
-        .references(() => customers.id, { onDelete: "cascade" }),
+        .references(() => customers.id, { onDelete: "set null" }),
     actorType: text("actor_type").notNull(),
     actorId: text("actor_id"),
     eventType: text("event_type").notNull(),
