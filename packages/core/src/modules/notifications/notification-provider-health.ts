@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
-import { settings } from "@scalius/database/schema";
-import { and, eq, like, sql } from "drizzle-orm";
+import { orderNotificationDeliveryReceipts, settings } from "@scalius/database/schema";
+import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
 
 export type NotificationProviderHealthChannel = "email" | "sms" | "whatsapp" | "push";
 
@@ -9,10 +9,17 @@ export interface NotificationProviderBlock {
     provider: string;
     reason: string;
     blockedAt: number;
+    source?: "marker" | "receipt";
 }
 
 const PROVIDER_HEALTH_CATEGORY = "notification_provider_health";
 const MAX_REASON_LENGTH = 240;
+const RECENT_RECEIPT_SCAN_LIMIT = 25;
+const RECOVERABLE_SETTINGS_CATEGORIES: Partial<Record<NotificationProviderHealthChannel, string[]>> = {
+    email: ["email"],
+    sms: ["sms"],
+    push: ["firebase"],
+};
 
 export async function getNotificationProviderBlock(
   db: Database,
@@ -30,8 +37,8 @@ export async function getNotificationProviderBlock(
         ))
         .get();
 
-    if (!row?.value) return null;
-    return parseProviderBlock(row.value);
+    if (row?.value) return parseProviderBlock(row.value);
+    return await recoverProviderBlockFromReceipts(db, options);
 }
 
 export async function markNotificationProviderBlocked(
@@ -137,10 +144,102 @@ function parseProviderBlock(value: string): NotificationProviderBlock | null {
             blockedAt: Number.isFinite(Number(parsed.blockedAt))
                 ? Number(parsed.blockedAt)
                 : 0,
+            source: "marker",
         };
     } catch {
         return null;
     }
+}
+
+async function recoverProviderBlockFromReceipts(
+  db: Database,
+  options: {
+    channel: NotificationProviderHealthChannel;
+    provider: string;
+  },
+): Promise<NotificationProviderBlock | null> {
+    const settingsCategories = RECOVERABLE_SETTINGS_CATEGORIES[options.channel];
+    if (!settingsCategories?.length) return null;
+
+    const provider = normalizeProvider(options.provider);
+    const latestSettingsUpdatedAt = await getLatestSettingsUpdateTime(db, settingsCategories);
+    const rows = await db
+        .select({
+            providerStatus: orderNotificationDeliveryReceipts.providerStatus,
+            rawResponse: orderNotificationDeliveryReceipts.rawResponse,
+            lastError: orderNotificationDeliveryReceipts.lastError,
+            skippedAt: orderNotificationDeliveryReceipts.skippedAt,
+            failedAt: orderNotificationDeliveryReceipts.failedAt,
+            updatedAt: orderNotificationDeliveryReceipts.updatedAt,
+        })
+        .from(orderNotificationDeliveryReceipts)
+        .where(and(
+            eq(orderNotificationDeliveryReceipts.channel, options.channel),
+            eq(orderNotificationDeliveryReceipts.provider, provider),
+            inArray(orderNotificationDeliveryReceipts.status, ["skipped", "failed"]),
+        ))
+        .orderBy(desc(orderNotificationDeliveryReceipts.updatedAt))
+        .limit(RECENT_RECEIPT_SCAN_LIMIT)
+        .all();
+
+    for (const row of rows) {
+        const blockedAt = Math.max(
+            timestampSeconds(row.skippedAt),
+            timestampSeconds(row.failedAt),
+            timestampSeconds(row.updatedAt),
+        );
+        if (blockedAt <= latestSettingsUpdatedAt) continue;
+
+        const reason = [
+            row.providerStatus,
+            row.rawResponse,
+            row.lastError,
+        ].find((value): value is string =>
+            typeof value === "string" && isNotificationProviderBreakerFailure(value),
+        );
+        if (!reason) continue;
+
+        return {
+            channel: options.channel,
+            provider,
+            reason: normalizeReason(reason),
+            blockedAt,
+            source: "receipt",
+        };
+    }
+
+    return null;
+}
+
+async function getLatestSettingsUpdateTime(
+  db: Database,
+  categories: string[],
+): Promise<number> {
+    const row = await db
+        .select({ updatedAt: settings.updatedAt })
+        .from(settings)
+        .where(inArray(settings.category, categories))
+        .orderBy(desc(settings.updatedAt))
+        .limit(1)
+        .get();
+
+    return timestampSeconds(row?.updatedAt);
+}
+
+function timestampSeconds(value: unknown): number {
+    if (value instanceof Date) {
+        return Math.floor(value.getTime() / 1000);
+    }
+    if (typeof value === "number") {
+        return Number.isFinite(value) ? Math.floor(value) : 0;
+    }
+    if (typeof value === "string") {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) return Math.floor(numeric);
+        const parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : 0;
+    }
+    return 0;
 }
 
 function humanizeChannel(channel: NotificationProviderHealthChannel): string {

@@ -401,6 +401,12 @@ export const orderNotificationDeliveryReceipts = sqliteTable("order_notification
     index("order_notification_delivery_receipts_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
     index("order_notification_delivery_receipts_claim_idx").on(table.status, table.claimExpiresAt, table.createdAt),
     index("order_notification_delivery_receipts_provider_message_idx").on(table.provider, table.providerMessageId),
+    index("order_notification_delivery_receipts_provider_status_updated_idx").on(
+        table.channel,
+        table.provider,
+        table.status,
+        table.updatedAt,
+    ),
 ]);
 
 export const abandonedCheckouts = sqliteTable(

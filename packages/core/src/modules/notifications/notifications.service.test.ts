@@ -697,6 +697,54 @@ describe("order notification dispatch", () => {
         expect(result.hasRetryableFailure).toBe(false);
     });
 
+    it("restores recovered SMS provider blocks before skipping provider calls", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_confirmed: ["sms"],
+        });
+        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
+            channel: "sms",
+            provider: "smsnetbd",
+            reason: "error=405: Authorization required",
+            blockedAt: 1_782_684_758,
+            source: "receipt",
+        });
+        mocks.getActiveSmsProvider.mockResolvedValue({
+            name: "smsnetbd",
+            sendSms: mocks.sendSms,
+        });
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_sms_recovered_block",
+            "order_confirmed",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_sms_recovered_block",
+            },
+        );
+
+        expect(mocks.sendSms).not.toHaveBeenCalled();
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(db, {
+            channel: "sms",
+            provider: "smsnetbd",
+            reason: "error=405: Authorization required",
+        });
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "provider_blocked_until_settings_save: error=405: Authorization required",
+            expect.objectContaining({
+                provider: "smsnetbd",
+                providerStatus: "provider_blocked_until_settings_save: error=405: Authorization required",
+            }),
+        );
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
     it("records status-only SMS credential failures as skipped receipts", async () => {
         const db = createDb();
         mocks.getNotificationChannels.mockResolvedValue({
