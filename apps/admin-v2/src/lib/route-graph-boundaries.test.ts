@@ -222,7 +222,8 @@ describe("admin route graph boundaries", () => {
     expect(tiptapSource).toContain('editorInstance.commands.focus("end", { scrollIntoView: false })');
     expect(deferredSource).toContain("loadTiptapEditorModule().finally");
     expect(deferredSource).toContain("preloadRequestedRef");
-    expect(deferredSource).toContain("void loadTiptapEditorModule();");
+    expect(deferredSource).toContain("setShouldMountEditor(true)");
+    expect(deferredSource).not.toContain("void loadTiptapEditorModule();");
     expect(deferredSource).toContain("min-h-[237px]");
     expect(deferredSource).toContain("h-[200px]");
   });
@@ -1057,6 +1058,7 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("const TiptapEditor = lazy(");
     expect(source).toContain("loadTiptapEditorModule");
     expect(source).toContain("loadTiptapEditorModule().finally");
+    expect(source).toContain("setShouldMountEditor(true)");
     expect(source).toContain("function getDeferredEditorViewportClass");
     expect(source).toContain("compact ? \"h-[200px]\" : \"h-[300px]\"");
     expect(source).toContain("mountRequestedRef");
@@ -1077,6 +1079,16 @@ describe("admin route graph boundaries", () => {
     expect(editorSource).toContain("<TiptapToolbarSkeleton compact={isFullscreen ? false : compact} isFullscreen={isFullscreen} />");
     expect(editorSource).not.toContain("setIsMounted");
     expect(editorSource).not.toContain("if (!isMounted)");
+
+    const skeletonSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapToolbarSkeleton.tsx"),
+      "utf8",
+    );
+    expect(skeletonSource).toContain("const TOOLBAR_GROUPS");
+    expect(skeletonSource).toContain("Bold");
+    expect(skeletonSource).toContain("Maximize");
+    expect(skeletonSource).not.toContain("animate-pulse");
+    expect(skeletonSource).not.toContain("bg-muted/35");
   });
 
   it("keeps order payment history failures local to the payment card", () => {

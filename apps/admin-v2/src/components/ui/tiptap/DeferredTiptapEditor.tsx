@@ -114,7 +114,11 @@ export function DeferredTiptapEditor({
     const preloadEditor = () => {
       if (preloadRequestedRef.current || mountRequestedRef.current) return;
       preloadRequestedRef.current = true;
-      void loadTiptapEditorModule();
+      void loadTiptapEditorModule().finally(() => {
+        if (isAliveRef.current && !mountRequestedRef.current) {
+          setShouldMountEditor(true);
+        }
+      });
     };
 
     const schedulePreload = () => {

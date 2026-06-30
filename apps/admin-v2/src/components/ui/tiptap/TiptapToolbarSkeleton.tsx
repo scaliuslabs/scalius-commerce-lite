@@ -1,17 +1,50 @@
 import { cn } from "@scalius/shared/utils";
+import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  FolderOpen,
+  Heading1,
+  Heading2,
+  Heading3,
+  Image as ImageIcon,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  Maximize,
+  Redo,
+  Table,
+  TextQuote,
+  Underline as UnderlineIcon,
+  Undo,
+  Video as VideoIcon,
+  type LucideIcon,
+} from "lucide-react";
 
 interface TiptapToolbarSkeletonProps {
   compact?: boolean;
   isFullscreen?: boolean;
 }
 
-const GROUPS = [3, 4, 4, 3, 3, 1, 2];
+const TOOLBAR_GROUPS: LucideIcon[][] = [
+  [Bold, Italic, UnderlineIcon],
+  [LinkIcon, ImageIcon, FolderOpen, VideoIcon],
+  [AlignLeft, AlignCenter, AlignRight, AlignJustify],
+  [Heading1, Heading2, Heading3],
+  [List, ListOrdered, TextQuote],
+  [Table],
+  [Undo, Redo],
+];
 
 export function TiptapToolbarSkeleton({
   compact = false,
   isFullscreen = false,
 }: TiptapToolbarSkeletonProps) {
   const buttonSize = compact ? "h-7 w-7" : "h-9 w-9";
+  const iconSize = compact ? "h-3 w-3" : "h-4 w-4";
   const gapSize = compact ? "gap-0.5" : "gap-1";
   const padding = compact ? "p-0.5" : "p-1";
 
@@ -26,23 +59,32 @@ export function TiptapToolbarSkeleton({
       )}
     >
       <div className={cn("flex flex-wrap items-center", gapSize)}>
-        {GROUPS.map((count, groupIndex) => (
+        {TOOLBAR_GROUPS.map((group, groupIndex) => (
           <div key={groupIndex} className={cn("flex items-center", gapSize)}>
             {groupIndex > 0 ? <div className="w-px h-6 bg-border mx-1" /> : null}
-            {Array.from({ length: count }).map((_, itemIndex) => (
+            {group.map((Icon, itemIndex) => (
               <span
                 key={itemIndex}
                 className={cn(
                   buttonSize,
-                  "inline-flex shrink-0 rounded-md bg-muted/35",
+                  "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground/55",
                 )}
-              />
+              >
+                <Icon className={iconSize} strokeWidth={2} />
+              </span>
             ))}
           </div>
         ))}
       </div>
       {!isFullscreen ? (
-        <span className={cn(buttonSize, "inline-flex shrink-0 rounded-md bg-muted/35")} />
+        <span
+          className={cn(
+            buttonSize,
+            "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground/55",
+          )}
+        >
+          <Maximize className={iconSize} strokeWidth={2} />
+        </span>
       ) : null}
     </div>
   );
