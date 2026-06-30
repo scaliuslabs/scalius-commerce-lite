@@ -63,7 +63,7 @@ function getDefaultConfig(): ChannelConfig {
   const config = {} as ChannelConfig;
   for (const status of ORDER_STATUSES) {
     config[status.key] = {
-      email: true,
+      email: status.key !== "support_request_submitted",
       sms: false,
       whatsapp: false,
     };
@@ -118,7 +118,7 @@ function getDefaultAdminConfig(): AdminChannelConfig {
   const config = {} as AdminChannelConfig;
   for (const status of ADMIN_STATUSES) {
     config[status.key] = {
-      push: status.key === "order_created" || status.key === "order_cancelled",
+      push: status.key === "order_created" || status.key === "order_cancelled" || status.key === "support_request_submitted",
     };
   }
   return config;

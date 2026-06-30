@@ -176,6 +176,15 @@ describe("admin order support request transitions", () => {
     });
   });
 
+  it("exposes stable support request notification labels", async () => {
+    const module = await import("./order-support-requests");
+
+    expect(module.getOrderSupportRequestTypeLabel("refund")).toBe("Refund request");
+    expect(module.getOrderSupportRequestTypeLabel("unknown")).toBe("Support request");
+    expect(module.getOrderSupportRequestStatusLabel("under_review")).toBe("Under review");
+    expect(module.getOrderSupportRequestStatusLabel("custom")).toBe("custom");
+  });
+
   it("blocks reopening or skipping unsupported transitions", () => {
     expect(() => getAdminOrderSupportRequestTransition("completed", "under_review"))
       .toThrow("already been settled");

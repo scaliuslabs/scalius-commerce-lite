@@ -104,6 +104,17 @@ export function buildOrderBalancePaidNotificationDedupeKey(orderId: string): str
     return `payment_balance_paid:${orderId}`;
 }
 
+export function buildSupportRequestSubmittedNotificationDedupeKey(requestId: string): string {
+    return `support_request:${requestId}:submitted`;
+}
+
+export function buildSupportRequestStatusUpdatedNotificationDedupeKey(options: {
+    requestId: string;
+    status: string;
+}): string {
+    return `support_request:${options.requestId}:status:${options.status}`;
+}
+
 export function buildOrderStatusNotificationDedupeKey(options: {
     orderId: string;
     notificationType: OrderNotificationType;

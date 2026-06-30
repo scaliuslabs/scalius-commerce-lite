@@ -202,7 +202,30 @@ describe("order notification dispatch", () => {
             "order_refunded",
             "order_partially_refunded",
             "payment_balance_paid",
+            "support_request_submitted",
+            "support_request_status_updated",
         ]);
+    });
+
+    it("keeps support request submission customer-silent if channel settings cannot load", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockRejectedValueOnce(new Error("settings unavailable"));
+
+        const result = await sendOrderNotificationEmail(
+            "buyer@example.com",
+            "Support Buyer",
+            "order_support",
+            "support_request_submitted",
+            { supportRequestTypeLabel: "refund request" },
+            db,
+            { encryptionKey: "credential-key" },
+        );
+
+        expect(result.outcomes).toEqual([]);
+        expect(result.hasRetryableFailure).toBe(false);
+        expect(mocks.sendEmail).not.toHaveBeenCalled();
+        expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
+        expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
     });
 
     it("passes the credential encryption key when resolving SMS providers", async () => {

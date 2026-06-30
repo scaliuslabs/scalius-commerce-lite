@@ -33,6 +33,7 @@ import { getCustomerOrderDetail, getCustomerOrders } from "@scalius/core/modules
 import {
   createCustomerOrderSupportRequest,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
+  getOrderSupportRequestStatusLabel,
 } from "@scalius/core/modules/orders/order-support-requests";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError, ServiceUnavailableError } from "../utils/api-error";
@@ -57,6 +58,7 @@ import {
   acceptedPaymentSessionProcessing,
   paymentSessionProcessingResponse,
 } from "./payment/payment-session-response";
+import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const customerAuthIntentSchema = z.enum(["sign_in", "sign_up"]);
@@ -1040,6 +1042,21 @@ app.openapi(createCustomerOrderSupportRequestRoute, async (c) => {
   const orderId = c.req.valid("param").id;
   const body = c.req.valid("json");
   const result = await createCustomerOrderSupportRequest(db, session.customerId, orderId, body);
+  await enqueueOrderSupportRequestNotificationForOrder({
+    db,
+    queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+    orderId,
+    requestId: result.request.id,
+    notificationType: "support_request_submitted",
+    source: "customer-support-request",
+    status: result.request.status,
+    data: {
+      supportRequestType: result.request.type,
+      supportRequestTypeLabel: result.request.label,
+      supportRequestStatus: result.request.status,
+      supportRequestStatusLabel: getOrderSupportRequestStatusLabel(result.request.status),
+    },
+  });
 
   return created(c, result);
 });

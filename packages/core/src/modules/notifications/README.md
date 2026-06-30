@@ -62,7 +62,7 @@ Sends transactional order emails to customers. Connected via queue.
 
 **Channel Preference Checking**: When a `db` parameter is provided, the function checks notification channel preferences via `getNotificationChannels()` from the settings service before sending. If the email channel is disabled for the given event, the email is silently skipped. If the check fails, it defaults to sending email.
 
-**Supported order notification types** (13 total):
+**Supported order notification types** (15 total):
 - `order_created` -- "We've received your order"
 - `order_confirmed` -- "Your order has been confirmed"
 - `order_processing` -- "Your order is being processed"
@@ -76,6 +76,10 @@ Sends transactional order emails to customers. Connected via queue.
 - `order_refunded` -- "Your refund has been processed"
 - `order_partially_refunded` -- "A partial refund has been processed"
 - `payment_balance_paid` -- "Your remaining payment has been received"
+- `support_request_submitted` -- "Your support request has been received"
+- `support_request_status_updated` -- "Your support request status changed"
+
+Support-request notification defaults are intentionally sparse to control merchant costs. Customer channels default to no send for `support_request_submitted`, because the customer just submitted the request; admin Push defaults on for that event so merchants can react. Customer email defaults on for `support_request_status_updated`; SMS and WhatsApp remain opt-in and still require provider readiness. Support notification payloads carry only order id, request id, request type label, and status label. Free-form customer reasons, customer messages, and admin notes stay out of provider payloads.
 
 Uses inline HTML templates with basic responsive styling. Customer names and tracking IDs are XSS-escaped via `escapeHtml()` from `@scalius/shared/html-escape`. Sends via the active email provider (Cloudflare Email by default, Resend fallback). Receipt-mode email sends pass the deterministic receipt key to Resend as `Idempotency-Key`; Cloudflare Email returns `messageId`, which is stored on the receipt.
 
@@ -91,7 +95,7 @@ Auth OTP shares the same provider-health marker for merchant-actionable setup fa
 The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification-related message types:
 
 ### `order.notification`
-- Enqueued by: storefront order ingest for new orders, admin order/COD/status routes, payment/refund flows, confirmed balance-payment queue messages, bulk/single provider shipment creation, and delivery webhook/admin refresh status reconciliation when the committed order status maps to an existing notification type
+- Enqueued by: storefront order ingest for new orders, admin order/COD/status routes, payment/refund flows, confirmed balance-payment queue messages, support-request submission/status routes, bulk/single provider shipment creation, and delivery webhook/admin refresh status reconciliation when the committed order status maps to an existing notification type
 - Handler: Calls `sendOrderNotificationEmail()` with `db` for channel checking and delivery receipts, and `sendOrderNotification()` for FCM push to admin devices when push is enabled
 - Queue: `ORDER_NOTIFICATIONS_QUEUE`
 - Retry: parent outbox rows with `outboxId` are marked failed with D1 `nextAttemptAt` backoff and the Queue message is acked; scheduled outbox flushing is the durable retry authority. Cloudflare auto-retry remains only for legacy messages that do not carry an `outboxId`.

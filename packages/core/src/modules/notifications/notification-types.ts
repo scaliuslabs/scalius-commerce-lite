@@ -12,6 +12,8 @@ export const ORDER_NOTIFICATION_TYPES = [
     "order_refunded",
     "order_partially_refunded",
     "payment_balance_paid",
+    "support_request_submitted",
+    "support_request_status_updated",
 ] as const;
 
 export type OrderNotificationType = (typeof ORDER_NOTIFICATION_TYPES)[number];
@@ -30,6 +32,8 @@ export const ORDER_NOTIFICATION_LABELS: Record<OrderNotificationType, string> = 
     order_refunded: "Order Refunded",
     order_partially_refunded: "Partial Refund",
     payment_balance_paid: "Balance Paid",
+    support_request_submitted: "Support Request Submitted",
+    support_request_status_updated: "Support Request Updated",
 };
 
 export function isOrderNotificationType(value: string): value is OrderNotificationType {

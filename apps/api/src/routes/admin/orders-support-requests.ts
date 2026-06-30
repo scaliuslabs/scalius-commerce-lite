@@ -7,8 +7,10 @@ import {
 } from "@hono/zod-openapi";
 import {
     ADMIN_ORDER_SUPPORT_REQUEST_STATUSES,
+    getOrderSupportRequestStatusLabel,
     updateAdminOrderSupportRequestStatus,
 } from "@scalius/core/modules/orders/order-support-requests";
+import { enqueueOrderSupportRequestNotificationForOrder } from "../../utils/order-notification-queue";
 import { ok } from "../../utils/api-response";
 import {
     conflictResponse,
@@ -74,7 +76,29 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
         note: body.note ?? null,
         actorId: user?.id ?? null,
     });
-    return ok(c, result);
+    if (result.statusChanged) {
+        await enqueueOrderSupportRequestNotificationForOrder({
+            db,
+            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            orderId,
+            requestId: result.request.id,
+            notificationType: "support_request_status_updated",
+            source: "admin-support-request-status",
+            status: result.newStatus,
+            data: {
+                supportRequestType: result.request.type,
+                supportRequestTypeLabel: result.request.label,
+                supportRequestStatus: result.newStatus,
+                supportRequestStatusLabel: getOrderSupportRequestStatusLabel(result.newStatus),
+                previousSupportRequestStatus: result.previousStatus,
+            },
+        });
+    }
+
+    return ok(c, {
+        request: result.request,
+        supportRequests: result.supportRequests,
+    });
 };
 
 app.openapi(updateSupportRequestStatusRoute, updateSupportRequestStatusHandler);

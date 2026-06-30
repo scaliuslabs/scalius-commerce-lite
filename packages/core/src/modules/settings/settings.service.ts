@@ -216,8 +216,13 @@ export const DEFAULT_ORDER_WHATSAPP_TEMPLATE_SETTINGS: OrderWhatsAppTemplateSett
     languageCode: "en_US",
 };
 
+function defaultCustomerNotificationChannels(type: string): string[] {
+    if (type === "support_request_submitted") return [];
+    return ["email"];
+}
+
 const DEFAULT_NOTIFICATION_CHANNELS: Record<string, string[]> = Object.fromEntries(
-    ORDER_NOTIFICATION_TYPES.map((type) => [type, ["email"]]),
+    ORDER_NOTIFICATION_TYPES.map((type) => [type, defaultCustomerNotificationChannels(type)]),
 );
 
 /**
@@ -441,7 +446,7 @@ const VALID_ADMIN_CHANNELS = ["push"] as const;
 const DEFAULT_ADMIN_CHANNELS: Record<string, string[]> = Object.fromEntries(
     ORDER_NOTIFICATION_TYPES.map((type) => [
         type,
-        type === "order_created" || type === "order_cancelled" ? ["push"] : [],
+        type === "order_created" || type === "order_cancelled" || type === "support_request_submitted" ? ["push"] : [],
     ]),
 );
 
