@@ -6,6 +6,7 @@ import {
   createOrder,
   createOrderShipment,
   refundOrder,
+  resolveOrderSupportRequest,
   retryOrderNotification,
   restoreOrder,
   returnOrder,
@@ -18,6 +19,7 @@ import {
   type CreateOrderInput,
   type CreateOrderShipmentInput,
   type RefundOrderInput,
+  type ResolveOrderSupportRequestInput,
   type ReturnOrderInput,
   type UpdateFulfillmentStatusInput,
   type UpdateOrderCodInput,
@@ -203,6 +205,22 @@ export function useRetryOrderNotification() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to retry notification")),
+  });
+}
+
+export function useResolveOrderSupportRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ResolveOrderSupportRequestInput) =>
+      resolveOrderSupportRequest({ data }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      toast.success("Customer request updated");
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to update customer request")),
   });
 }
 

@@ -26,6 +26,8 @@ import type {
   PutApiV1AdminOrdersByIdFulfillmentStatusData,
   PutApiV1AdminOrdersByIdFulfillmentStatusResponse,
   PutApiV1AdminOrdersByIdResponse,
+  PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData,
+  PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponse,
   PutApiV1AdminOrdersByIdStatusData,
   PutApiV1AdminOrdersByIdStatusResponse,
   PostApiV1AdminOrdersByIdCodData,
@@ -135,6 +137,16 @@ export interface RetryOrderNotificationPayload {
   enqueued: boolean;
   skippedReason?: string;
 }
+export type ResolveOrderSupportRequestStatus =
+  ApiBody<PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData>["status"];
+export interface ResolveOrderSupportRequestInput {
+  orderId: string;
+  requestId: string;
+  status: ResolveOrderSupportRequestStatus;
+  note?: string | null;
+}
+export type ResolveOrderSupportRequestPayload =
+  ApiData<PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponse>;
 export type OrderCodPayload = ApiData<GetApiV1AdminOrdersByIdCodResponse>;
 export type UpdateOrderCodInput = { orderId: string } &
   ApiBody<PostApiV1AdminOrdersByIdCodData>;
@@ -291,6 +303,18 @@ export const retryOrderNotification = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     return apiPost<RetryOrderNotificationPayload>(
       `/orders/${data.orderId}/notifications/${data.outboxId}/retry`,
+    );
+  });
+
+export const resolveOrderSupportRequest = createServerFn({ method: "POST" })
+  .validator((data: ResolveOrderSupportRequestInput) => data)
+  .handler(async ({ data }) => {
+    return apiPut<ResolveOrderSupportRequestPayload>(
+      `/orders/${data.orderId}/support-requests/${data.requestId}/status`,
+      {
+        status: data.status,
+        note: data.note ?? null,
+      },
     );
   });
 

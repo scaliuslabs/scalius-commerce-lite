@@ -24997,6 +24997,148 @@ export type GetApiV1AdminOrdersIdInvoiceResponses = {
 
 export type GetApiV1AdminOrdersIdInvoiceResponse = GetApiV1AdminOrdersIdInvoiceResponses[keyof GetApiV1AdminOrdersIdInvoiceResponses];
 
+export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData = {
+    body: {
+        status: 'under_review' | 'approved' | 'rejected' | 'completed';
+        note?: string | null;
+    };
+    path: {
+        id: string;
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/support-requests/{requestId}/status';
+};
+
+export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusError = PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusErrors[keyof PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusErrors];
+
+export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
+    /**
+     * Support request updated
+     */
+    200: {
+        success: true;
+        data: {
+            request: {
+                id: string;
+                orderId: string;
+                customerId: string;
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                status: string;
+                active: boolean;
+                severity: 'info' | 'success' | 'warning' | 'danger';
+                label: string;
+                actionLabel: string;
+                reason: string;
+                message: string | null;
+                submittedAt: string | number | null;
+                resolvedAt: string | number | null;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+            };
+            supportRequests: Array<{
+                id: string;
+                orderId: string;
+                customerId: string;
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                status: string;
+                active: boolean;
+                severity: 'info' | 'success' | 'warning' | 'danger';
+                label: string;
+                actionLabel: string;
+                reason: string;
+                message: string | null;
+                submittedAt: string | number | null;
+                resolvedAt: string | number | null;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+            }>;
+        };
+    };
+};
+
+export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponse = PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses[keyof PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses];
+
 export type GetApiV1AdminOrdersData = {
     body?: never;
     path?: never;

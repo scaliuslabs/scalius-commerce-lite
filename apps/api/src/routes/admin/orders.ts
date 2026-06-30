@@ -34,6 +34,7 @@ import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestam
 import { adminOrdersStatusRoutes } from "./orders-status";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 import { adminOrdersInvoiceRoutes } from "./orders-invoice";
+import { adminOrdersSupportRequestRoutes } from "./orders-support-requests";
 import { getEncryptionKey } from "../../utils/encryption-key";
 import {
     invalidateProductAvailabilityCacheSubjects,
@@ -102,6 +103,7 @@ function isNewShipmentResult(result: unknown): result is {
 app.route("/", adminOrdersStatusRoutes);
 app.route("/", adminOrdersRefundRoutes);
 app.route("/", adminOrdersInvoiceRoutes);
+app.route("/", adminOrdersSupportRequestRoutes);
 
 // ─── Inline response schemas (route-specific, not reusable enough for entities) ──
 
