@@ -56,6 +56,7 @@ import {
     summarizeActiveRefundOperation,
 } from "../payments/refund-attempt-visibility";
 import { resolveActiveDeliveryLocationNames } from "./delivery-location-validation";
+import { listOrderSupportRequests } from "./order-support-requests";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -677,7 +678,7 @@ export async function getOrderDetails(
 
     if (!order) return null;
 
-    const [items, refundAttemptViews] = await Promise.all([
+    const [items, refundAttemptViews, supportRequests] = await Promise.all([
         db
             .select({
                 id: orderItems.id,
@@ -703,6 +704,7 @@ export async function getOrderDetails(
             )
             .where(eq(orderItems.orderId, id)),
         listOrderRefundAttempts(db, id, { audience: "admin" }),
+        listOrderSupportRequests(db, id),
     ]);
 
     const formattedItems = items.map((item) => ({
@@ -727,6 +729,7 @@ export async function getOrderDetails(
         latestShipment: null,
         refundAttempts: refundAttemptViews,
         activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
+        supportRequests,
     };
 }
 

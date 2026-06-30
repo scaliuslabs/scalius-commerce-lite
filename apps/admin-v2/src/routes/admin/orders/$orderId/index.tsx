@@ -115,6 +115,7 @@ function toOrderViewModel(
     fulfillmentStatus: order.fulfillmentStatus,
     refundAttempts: order.refundAttempts,
     activeRefundOperation: order.activeRefundOperation,
+    supportRequests: order.supportRequests ?? [],
   };
 }
 

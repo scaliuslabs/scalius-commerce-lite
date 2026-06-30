@@ -1,0 +1,431 @@
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import type { Database } from "@scalius/database/client";
+import {
+  deliveryShipments,
+  FulfillmentStatus,
+  OrderStatus,
+  orderSupportRequestEvents,
+  orderSupportRequests,
+  orders,
+  PaymentStatus,
+} from "@scalius/database/schema";
+import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import {
+  listOrderRefundAttempts,
+  summarizeActiveRefundOperation,
+} from "../payments/refund-attempt-visibility";
+
+export const CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES = [
+  "cancel_pre_shipment",
+  "return",
+  "refund",
+] as const;
+
+export type CustomerOrderSupportRequestType =
+  typeof CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES[number];
+
+export const ORDER_SUPPORT_REQUEST_STATUSES = [
+  "submitted",
+  "under_review",
+  "approved",
+  "rejected",
+  "withdrawn",
+  "completed",
+] as const;
+
+export type OrderSupportRequestStatus =
+  typeof ORDER_SUPPORT_REQUEST_STATUSES[number];
+
+type SupportRequestSeverity = "info" | "success" | "warning" | "danger";
+
+export interface OrderSupportRequestView {
+  id: string;
+  orderId: string;
+  customerId: string;
+  type: CustomerOrderSupportRequestType;
+  status: string;
+  active: boolean;
+  severity: SupportRequestSeverity;
+  label: string;
+  actionLabel: string;
+  reason: string;
+  message: string | null;
+  submittedAt: string | null;
+  resolvedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CustomerOrderSupportRequestAction {
+  type: CustomerOrderSupportRequestType;
+  label: string;
+  description: string;
+  eligible: boolean;
+  disabledReason: string | null;
+}
+
+export interface CreateCustomerOrderSupportRequestInput {
+  type: CustomerOrderSupportRequestType;
+  reason: string;
+  message?: string | null;
+}
+
+interface SupportRequestRow {
+  id: string;
+  orderId: string;
+  customerId: string;
+  type: string;
+  status: string;
+  reason: string;
+  message: string | null;
+  activeKey: string | null;
+  submittedAt: number | null;
+  resolvedAt: number | null;
+  createdAt: number | null;
+  updatedAt: number | null;
+}
+
+type SupportRequestActionOrderState = {
+  id: string;
+  status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  paidAmount: number | null | undefined;
+};
+
+type SupportRequestActionContext = {
+  hasShipment: boolean;
+  hasActiveRefundOperation: boolean;
+  activeRequestTypes: ReadonlySet<string>;
+};
+
+const ACTIVE_SUPPORT_REQUEST_STATUSES = new Set<string>([
+  "submitted",
+  "under_review",
+  "approved",
+]);
+
+const SUPPORT_REQUEST_TYPE_SET = new Set<string>(CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES);
+
+const SUPPORT_REQUEST_COPY: Record<CustomerOrderSupportRequestType, {
+  label: string;
+  actionLabel: string;
+  description: string;
+}> = {
+  cancel_pre_shipment: {
+    label: "Cancellation request",
+    actionLabel: "Request cancellation",
+    description: "Ask the merchant to review this order before it ships.",
+  },
+  return: {
+    label: "Return request",
+    actionLabel: "Request return",
+    description: "Ask the merchant to review a return for this order.",
+  },
+  refund: {
+    label: "Refund request",
+    actionLabel: "Request refund",
+    description: "Ask the merchant to review a payment refund.",
+  },
+};
+
+const STATUS_COPY: Record<string, { label: string; severity: SupportRequestSeverity }> = {
+  submitted: { label: "Submitted", severity: "info" },
+  under_review: { label: "Under review", severity: "warning" },
+  approved: { label: "Approved", severity: "success" },
+  rejected: { label: "Rejected", severity: "danger" },
+  withdrawn: { label: "Withdrawn", severity: "info" },
+  completed: { label: "Completed", severity: "success" },
+};
+
+const PRE_SHIPMENT_CANCEL_STATUSES = new Set<string>([
+  OrderStatus.PENDING,
+  OrderStatus.PROCESSING,
+  OrderStatus.CONFIRMED,
+]);
+
+const RETURN_REQUEST_STATUSES = new Set<string>([
+  OrderStatus.SHIPPED,
+  OrderStatus.DELIVERED,
+  OrderStatus.COMPLETED,
+]);
+
+const REFUND_REQUEST_STATUSES = new Set<string>([
+  OrderStatus.SHIPPED,
+  OrderStatus.DELIVERED,
+  OrderStatus.COMPLETED,
+  OrderStatus.RETURNED,
+  OrderStatus.PARTIALLY_REFUNDED,
+]);
+const REFUNDABLE_PAYMENT_STATUSES = new Set<string>([
+  PaymentStatus.PAID,
+  PaymentStatus.PARTIAL,
+]);
+
+function timestampToIso(timestamp: number | null | undefined): string | null {
+  if (!timestamp) return null;
+  return new Date(timestamp * 1000).toISOString();
+}
+
+function normalizeSupportRequestType(type: string): CustomerOrderSupportRequestType {
+  if (SUPPORT_REQUEST_TYPE_SET.has(type)) return type as CustomerOrderSupportRequestType;
+  return "refund";
+}
+
+function isSupportRequestType(type: string): type is CustomerOrderSupportRequestType {
+  return SUPPORT_REQUEST_TYPE_SET.has(type);
+}
+
+function isConstraintError(error: unknown): boolean {
+  return error instanceof Error && /constraint|unique|SQLITE_CONSTRAINT/i.test(error.message);
+}
+
+function openRequestReason(activeRequestTypes: ReadonlySet<string>): string {
+  const [type] = [...activeRequestTypes];
+  const copy = type && isSupportRequestType(type) ? SUPPORT_REQUEST_COPY[type] : null;
+  return copy
+    ? `${copy.label} is already open for this order.`
+    : "A support request is already open for this order.";
+}
+
+function createAction(
+  type: CustomerOrderSupportRequestType,
+  eligible: boolean,
+  disabledReason: string | null = null,
+): CustomerOrderSupportRequestAction {
+  const copy = SUPPORT_REQUEST_COPY[type];
+  return {
+    type,
+    label: copy.actionLabel,
+    description: copy.description,
+    eligible,
+    disabledReason,
+  };
+}
+
+export function formatOrderSupportRequest(row: SupportRequestRow): OrderSupportRequestView {
+  const type = normalizeSupportRequestType(row.type);
+  const status = STATUS_COPY[row.status] ?? { label: row.status, severity: "info" as const };
+  return {
+    id: row.id,
+    orderId: row.orderId,
+    customerId: row.customerId,
+    type,
+    status: row.status,
+    active: Boolean(row.activeKey) && ACTIVE_SUPPORT_REQUEST_STATUSES.has(row.status),
+    severity: status.severity,
+    label: `${SUPPORT_REQUEST_COPY[type].label} ${status.label.toLowerCase()}`,
+    actionLabel: SUPPORT_REQUEST_COPY[type].actionLabel,
+    reason: row.reason,
+    message: row.message,
+    submittedAt: timestampToIso(row.submittedAt),
+    resolvedAt: timestampToIso(row.resolvedAt),
+    createdAt: timestampToIso(row.createdAt),
+    updatedAt: timestampToIso(row.updatedAt),
+  };
+}
+
+export function getActiveSupportRequestTypes(
+  requests: OrderSupportRequestView[],
+): ReadonlySet<CustomerOrderSupportRequestType> {
+  return new Set(requests.filter((request) => request.active).map((request) => request.type));
+}
+
+export function getCustomerOrderSupportRequestActions(
+  order: SupportRequestActionOrderState,
+  context: SupportRequestActionContext,
+): CustomerOrderSupportRequestAction[] {
+  const openRequestCount = context.activeRequestTypes.size;
+  if (openRequestCount > 0) {
+    const reason = openRequestReason(context.activeRequestTypes);
+    return CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES.map((type) => createAction(type, false, reason));
+  }
+
+  if (context.hasActiveRefundOperation) {
+    const reason = "A refund is already being processed for this order.";
+    return CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES.map((type) => createAction(type, false, reason));
+  }
+
+  const canCancel =
+    PRE_SHIPMENT_CANCEL_STATUSES.has(order.status) &&
+    order.fulfillmentStatus === FulfillmentStatus.PENDING &&
+    !context.hasShipment;
+  const paidAmount = Number(order.paidAmount ?? 0);
+  const canRequestRefund =
+    paidAmount > 0 &&
+    REFUNDABLE_PAYMENT_STATUSES.has(order.paymentStatus) &&
+    REFUND_REQUEST_STATUSES.has(order.status);
+
+  return [
+    createAction(
+      "cancel_pre_shipment",
+      canCancel,
+      canCancel ? null : "Cancellation requests are available before shipment starts.",
+    ),
+    createAction(
+      "return",
+      RETURN_REQUEST_STATUSES.has(order.status),
+      RETURN_REQUEST_STATUSES.has(order.status)
+        ? null
+        : "Return requests are available after the order ships.",
+    ),
+    createAction(
+      "refund",
+      canRequestRefund,
+      canRequestRefund
+        ? null
+        : "Refund requests are available for paid orders after fulfillment starts.",
+    ),
+  ];
+}
+
+export async function listOrderSupportRequests(
+  db: Database,
+  orderId: string,
+): Promise<OrderSupportRequestView[]> {
+  const rows = await db
+    .select({
+      id: orderSupportRequests.id,
+      orderId: orderSupportRequests.orderId,
+      customerId: orderSupportRequests.customerId,
+      type: orderSupportRequests.type,
+      status: orderSupportRequests.status,
+      reason: orderSupportRequests.reason,
+      message: orderSupportRequests.message,
+      activeKey: orderSupportRequests.activeKey,
+      submittedAt: sql<number | null>`CAST(${orderSupportRequests.submittedAt} AS INTEGER)`,
+      resolvedAt: sql<number | null>`CAST(${orderSupportRequests.resolvedAt} AS INTEGER)`,
+      createdAt: sql<number | null>`CAST(${orderSupportRequests.createdAt} AS INTEGER)`,
+      updatedAt: sql<number | null>`CAST(${orderSupportRequests.updatedAt} AS INTEGER)`,
+    })
+    .from(orderSupportRequests)
+    .where(eq(orderSupportRequests.orderId, orderId))
+    .orderBy(desc(orderSupportRequests.createdAt), desc(orderSupportRequests.id));
+
+  return rows.map(formatOrderSupportRequest);
+}
+
+export async function createCustomerOrderSupportRequest(
+  db: Database,
+  customerId: string,
+  orderId: string,
+  input: CreateCustomerOrderSupportRequestInput,
+): Promise<{
+  request: OrderSupportRequestView;
+  supportRequests: OrderSupportRequestView[];
+  supportRequestActions: CustomerOrderSupportRequestAction[];
+}> {
+  if (!isSupportRequestType(input.type)) {
+    throw new ValidationError("Unsupported support request type.");
+  }
+
+  const reason = input.reason.trim();
+  const message = input.message?.trim() || null;
+  if (reason.length < 3 || reason.length > 500) {
+    throw new ValidationError("Please enter a reason between 3 and 500 characters.");
+  }
+  if (message && message.length > 1000) {
+    throw new ValidationError("Request details must be 1000 characters or less.");
+  }
+
+  const order = await db
+    .select({
+      id: orders.id,
+      status: orders.status,
+      paymentStatus: orders.paymentStatus,
+      fulfillmentStatus: orders.fulfillmentStatus,
+      paidAmount: orders.paidAmount,
+    })
+    .from(orders)
+    .where(and(
+      eq(orders.id, orderId),
+      eq(orders.customerId, customerId),
+      isNull(orders.deletedAt),
+    ))
+    .get();
+
+  if (!order) {
+    throw new NotFoundError("Order not found");
+  }
+
+  const [shipmentRows, supportRequests, refundAttemptViews] = await Promise.all([
+    db
+      .select({ id: deliveryShipments.id })
+      .from(deliveryShipments)
+      .where(eq(deliveryShipments.orderId, orderId))
+      .limit(1),
+    listOrderSupportRequests(db, orderId),
+    listOrderRefundAttempts(db, orderId, { audience: "customer" }),
+  ]);
+  const activeRequestTypes = getActiveSupportRequestTypes(supportRequests);
+  const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "customer");
+  const actions = getCustomerOrderSupportRequestActions(order, {
+    hasShipment: shipmentRows.length > 0,
+    hasActiveRefundOperation: Boolean(activeRefundOperation),
+    activeRequestTypes,
+  });
+  const selectedAction = actions.find((action) => action.type === input.type);
+  if (!selectedAction?.eligible) {
+    const reasonText = selectedAction?.disabledReason ?? "This request is not available for the current order state.";
+    if (activeRequestTypes.size > 0 || activeRefundOperation) {
+      throw new ConflictError(reasonText);
+    }
+    throw new ValidationError(reasonText);
+  }
+
+  const requestId = `osr_${nanoid(16)}`;
+  const activeKey = `order:${orderId}`;
+
+  try {
+    await db.batch([
+      db.insert(orderSupportRequests).values({
+        id: requestId,
+        orderId,
+        customerId,
+        type: input.type,
+        status: "submitted",
+        reason,
+        message,
+        activeKey,
+        submittedAt: sql`unixepoch()`,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      }),
+      db.insert(orderSupportRequestEvents).values({
+        id: `osre_${nanoid(16)}`,
+        requestId,
+        orderId,
+        customerId,
+        actorType: "customer",
+        actorId: customerId,
+        eventType: "submitted",
+        fromStatus: null,
+        toStatus: "submitted",
+        note: reason,
+        createdAt: sql`unixepoch()`,
+      }),
+    ] as Parameters<Database["batch"]>[0]);
+  } catch (error) {
+    if (isConstraintError(error)) {
+      throw new ConflictError("A support request is already open for this order.");
+    }
+    throw error;
+  }
+
+  const updatedSupportRequests = await listOrderSupportRequests(db, orderId);
+  const request = updatedSupportRequests.find((item) => item.id === requestId);
+  if (!request) {
+    throw new ConflictError("Support request was recorded, but could not be read back. Please refresh.");
+  }
+
+  return {
+    request,
+    supportRequests: updatedSupportRequests,
+    supportRequestActions: getCustomerOrderSupportRequestActions(order, {
+      hasShipment: shipmentRows.length > 0,
+      hasActiveRefundOperation: Boolean(activeRefundOperation),
+      activeRequestTypes: getActiveSupportRequestTypes(updatedSupportRequests),
+    }),
+  };
+}

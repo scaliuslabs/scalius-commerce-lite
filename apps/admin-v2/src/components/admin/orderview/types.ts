@@ -68,6 +68,24 @@ export interface ActiveRefundOperation {
   lastError?: string | null;
 }
 
+export interface OrderSupportRequest {
+  id: string;
+  orderId: string;
+  customerId: string;
+  type: "cancel_pre_shipment" | "return" | "refund";
+  status: string;
+  active: boolean;
+  severity: "info" | "success" | "warning" | "danger";
+  label: string;
+  actionLabel: string;
+  reason: string;
+  message: string | null;
+  submittedAt: OrderTimestamp | null;
+  resolvedAt: OrderTimestamp | null;
+  createdAt: OrderTimestamp | null;
+  updatedAt: OrderTimestamp | null;
+}
+
 export interface Order {
   id: string;
   customerName: string;
@@ -100,6 +118,7 @@ export interface Order {
   inventoryPool?: string | null;
   refundAttempts?: OrderRefundAttempt[];
   activeRefundOperation?: ActiveRefundOperation | null;
+  supportRequests?: OrderSupportRequest[];
 }
 
 export interface OrderShipment {

@@ -251,6 +251,24 @@ export const activeRefundOperationSchema = z.object({
   lastError: z.string().nullable().optional(),
 });
 
+export const orderSupportRequestSchema = z.object({
+  id: z.string(),
+  orderId: z.string(),
+  customerId: z.string(),
+  type: z.enum(["cancel_pre_shipment", "return", "refund"]),
+  status: z.string(),
+  active: z.boolean(),
+  severity: z.enum(["info", "success", "warning", "danger"]),
+  label: z.string(),
+  actionLabel: z.string(),
+  reason: z.string(),
+  message: z.string().nullable(),
+  submittedAt: nullableTimestampSchema,
+  resolvedAt: nullableTimestampSchema,
+  createdAt: nullableTimestampSchema,
+  updatedAt: nullableTimestampSchema,
+});
+
 /** Order detail — returned by getOrderDetails (admin). */
 export const orderDetailSchema = z
   .object({
@@ -284,6 +302,7 @@ export const orderDetailSchema = z
     latestShipment: orderShipmentSummarySchema.nullable(),
     refundAttempts: z.array(orderRefundAttemptSchema),
     activeRefundOperation: activeRefundOperationSchema.nullable(),
+    supportRequests: z.array(orderSupportRequestSchema),
   })
 
 // ─────────────────────────────────────────

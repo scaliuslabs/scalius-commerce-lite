@@ -512,6 +512,13 @@
       "when": 1782794915000,
       "tag": "0072_notification_receipt_provider_status_index",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1782880000000,
+      "tag": "0073_order_support_requests",
+      "breakpoints": true
     }
   ]
 }

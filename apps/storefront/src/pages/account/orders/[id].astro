@@ -68,6 +68,29 @@ const orderId = Astro.params.id ?? "";
         </div>
       </div>
 
+      <section id="orderSupportSection" class="rounded-xl border border-border bg-card p-5">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-foreground">Order Help</h2>
+            <p class="mt-1 text-sm text-muted-foreground">Request help with cancellation, return, or refund review.</p>
+          </div>
+          <div id="orderSupportActions" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div id="orderSupportRequests" class="mt-4 space-y-3"></div>
+        <div id="orderSupportForm" class="mt-4 hidden rounded-xl border border-border bg-muted/20 p-4">
+          <h3 id="orderSupportFormTitle" class="font-semibold text-foreground">Submit request</h3>
+          <label class="mt-3 block text-sm font-medium text-foreground" for="orderSupportReason">Reason</label>
+          <textarea id="orderSupportReason" class="mt-2 min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" maxlength="500" required></textarea>
+          <label class="mt-3 block text-sm font-medium text-foreground" for="orderSupportMessage">Details</label>
+          <textarea id="orderSupportMessage" class="mt-2 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" maxlength="1000"></textarea>
+          <p id="orderSupportFormError" class="mt-2 hidden text-sm text-destructive"></p>
+          <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button type="button" id="orderSupportCancel" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Cancel</button>
+            <button type="button" id="orderSupportSubmit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60">Submit request</button>
+          </div>
+        </div>
+      </section>
+
       <section class="space-y-3">
         <h2 class="text-xl font-bold text-foreground">Timeline</h2>
         <div id="orderTimeline" class="space-y-3"></div>
@@ -119,16 +142,18 @@ const orderId = Astro.params.id ?? "";
       </section>
     </section>
   </section>
-</Layout>
 
 <script>
   import {
+    createCustomerOrderSupportRequest,
     createCustomerOrderPaymentSession,
     getCustomerOrderDetail,
     getCustomerSession,
     type CustomerOrderDetail,
     type CustomerOrderPaymentSession,
     type CustomerOrderShipment,
+    type CustomerOrderSupportRequestAction,
+    type CustomerOrderSupportRequestType,
   } from "@/lib/api/customer-auth";
   import {
     getAccountPaymentRecoveryAction,
@@ -176,6 +201,8 @@ const orderId = Astro.params.id ?? "";
   let currentDetail: CustomerOrderDetail | null = null;
   let recoveryAction: AccountPaymentRecoveryAction | null = null;
   let recoveryLoading = false;
+  let supportRequestLoading = false;
+  let selectedSupportRequestType: CustomerOrderSupportRequestType | null = null;
   let accountStripeInstance: StripeInstance | null = null;
   let accountStripeCard: StripeCardElement | null = null;
   let accountStripeClientSecret: string | null = null;
@@ -197,13 +224,18 @@ const orderId = Astro.params.id ?? "";
     return new Date(value).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   }
 
-  function formatMoney(amount: number): string {
+  function formatMoney(amount: unknown): string {
     const symbol = detailWindow.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
-    return `${symbol}${amount.toFixed(0)}`;
+    const numeric = typeof amount === "number" ? amount : Number(amount);
+    return `${symbol}${Number.isFinite(numeric) ? numeric.toFixed(0) : "0"}`;
   }
 
   function label(value: string): string {
     return value.replace(/_/g, " ");
+  }
+
+  function isSupportRequestType(value: string | undefined): value is CustomerOrderSupportRequestType {
+    return value === "cancel_pre_shipment" || value === "return" || value === "refund";
   }
 
   function badge(value: string): string {
@@ -323,6 +355,155 @@ const orderId = Astro.params.id ?? "";
     if (!accountStripeClientSecret) {
       setRecoveryMessage(null);
       setRecoveryButton(recoveryAction.buttonLabel, recoveryLoading);
+    }
+  }
+
+  function supportRequestTone(severity: string): string {
+    if (severity === "success") return "border-primary/30 bg-primary/10 text-primary";
+    if (severity === "warning") return "border-amber-500/30 bg-amber-500/10 text-amber-900";
+    if (severity === "danger") return "border-destructive/30 bg-destructive/10 text-destructive";
+    return "border-border bg-muted/30 text-foreground";
+  }
+
+  function setSupportFormError(message: string | null): void {
+    const el = document.getElementById("orderSupportFormError");
+    if (!el) return;
+    if (!message) {
+      el.textContent = "";
+      el.classList.add("hidden");
+      return;
+    }
+    el.textContent = message;
+    el.classList.remove("hidden");
+  }
+
+  function setSupportSubmitButton(labelText: string, disabled = false): void {
+    const button = document.getElementById("orderSupportSubmit") as HTMLButtonElement | null;
+    if (!button) return;
+    button.textContent = labelText;
+    button.disabled = disabled;
+  }
+
+  function hideSupportRequestForm(): void {
+    selectedSupportRequestType = null;
+    supportRequestLoading = false;
+    setSupportFormError(null);
+    setSupportSubmitButton("Submit request");
+    const panel = document.getElementById("orderSupportForm");
+    const reason = document.getElementById("orderSupportReason") as HTMLTextAreaElement | null;
+    const message = document.getElementById("orderSupportMessage") as HTMLTextAreaElement | null;
+    if (reason) reason.value = "";
+    if (message) message.value = "";
+    panel?.classList.add("hidden");
+  }
+
+  function selectedSupportAction(): CustomerOrderSupportRequestAction | null {
+    if (!currentDetail || !selectedSupportRequestType) return null;
+    return currentDetail.supportRequestActions.find((action) => action.type === selectedSupportRequestType) ?? null;
+  }
+
+  function selectSupportRequestAction(type: CustomerOrderSupportRequestType): void {
+    if (!currentDetail || supportRequestLoading) return;
+    const action = currentDetail.supportRequestActions.find((item) => item.type === type);
+    if (!action?.eligible) return;
+
+    selectedSupportRequestType = type;
+    setSupportFormError(null);
+    setSupportSubmitButton("Submit request");
+    const title = document.getElementById("orderSupportFormTitle");
+    const reason = document.getElementById("orderSupportReason") as HTMLTextAreaElement | null;
+    const message = document.getElementById("orderSupportMessage") as HTMLTextAreaElement | null;
+    if (title) title.textContent = action.label;
+    if (reason) reason.value = "";
+    if (message) message.value = "";
+    const panel = document.getElementById("orderSupportForm");
+    panel?.classList.remove("hidden");
+    reason?.focus();
+  }
+
+  function renderSupportRequests(detail: CustomerOrderDetail): void {
+    const requestsEl = document.getElementById("orderSupportRequests");
+    const actionsEl = document.getElementById("orderSupportActions");
+    const requests = detail.supportRequests || [];
+    const actions = detail.supportRequestActions || [];
+    const eligibleActions = actions.filter((action) => action.eligible);
+    const activeRequest = requests.find((request) => request.active);
+
+    if (requestsEl) {
+      if (requests.length > 0) {
+        requestsEl.innerHTML = requests.map((request) => `
+          <article class="rounded-xl border p-4 text-sm ${supportRequestTone(request.severity)}">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 class="font-semibold">${escapeHtml(request.label)}</h3>
+                <p class="mt-1">${escapeHtml(request.reason)}</p>
+                ${request.message ? `<p class="mt-2 text-xs opacity-80">${escapeHtml(request.message)}</p>` : ""}
+              </div>
+              <time class="text-xs opacity-75" datetime="${escapeHtml(request.submittedAt || request.createdAt || "")}">${escapeHtml(formatDateTime(request.submittedAt || request.createdAt))}</time>
+            </div>
+          </article>
+        `).join("");
+      } else if (eligibleActions.length > 0) {
+        requestsEl.innerHTML = `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">No support requests submitted for this order.</p>`;
+      } else {
+        requestsEl.innerHTML = `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">No request actions are available for this order right now.</p>`;
+      }
+    }
+
+    if (actionsEl) {
+      actionsEl.innerHTML = eligibleActions.map((action) => `
+        <button type="button" data-support-request-type="${escapeHtml(action.type)}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+          ${escapeHtml(action.label)}
+        </button>
+      `).join("");
+    }
+
+    if (activeRequest || !selectedSupportAction()?.eligible) {
+      hideSupportRequestForm();
+    }
+  }
+
+  async function submitSupportRequest(event?: Event): Promise<void> {
+    event?.preventDefault();
+    if (!currentDetail || supportRequestLoading) return;
+    const action = selectedSupportAction();
+    if (!action?.eligible || !selectedSupportRequestType) {
+      setSupportFormError("Select a request action first.");
+      return;
+    }
+
+    const reasonEl = document.getElementById("orderSupportReason") as HTMLTextAreaElement | null;
+    const messageEl = document.getElementById("orderSupportMessage") as HTMLTextAreaElement | null;
+    const reason = reasonEl?.value.trim() || "";
+    const message = messageEl?.value.trim() || null;
+
+    if (reason.length < 3) {
+      setSupportFormError("Add a short reason before submitting.");
+      reasonEl?.focus();
+      return;
+    }
+
+    supportRequestLoading = true;
+    setSupportFormError(null);
+    setSupportSubmitButton("Submitting...", true);
+
+    try {
+      const result = await createCustomerOrderSupportRequest(currentDetail.order.id, {
+        type: selectedSupportRequestType,
+        reason,
+        message,
+      });
+      if (!result.success) {
+        throw new Error(result.error || "Request could not be submitted.");
+      }
+      hideSupportRequestForm();
+      setSupportSubmitButton("Refreshing...", true);
+      await detailWindow.__scaliusLoadOrderDetail?.();
+    } catch (error: unknown) {
+      setSupportFormError(error instanceof Error ? error.message : "Request could not be submitted.");
+      setSupportSubmitButton("Submit request");
+    } finally {
+      supportRequestLoading = false;
     }
   }
 
@@ -520,6 +701,8 @@ const orderId = Astro.params.id ?? "";
       }
     }
 
+    renderSupportRequests(detail);
+
     const timeline = document.getElementById("orderTimeline");
     if (timeline) {
       timeline.innerHTML = detail.timeline.length
@@ -706,8 +889,20 @@ const orderId = Astro.params.id ?? "";
       return;
     }
 
-    renderDetail(result.detail);
-    showOnly("content");
+    try {
+      renderDetail(result.detail);
+      showOnly("content");
+    } catch (error) {
+      console.error("[customer-order-detail] render failed", error);
+      currentDetail = null;
+      recoveryAction = null;
+      resetAccountStripeState();
+      const title = document.getElementById("orderErrorTitle");
+      const message = document.getElementById("orderErrorMessage");
+      if (title) title.textContent = "Order details temporarily unavailable";
+      if (message) message.textContent = "We could not render this order right now. Please try again.";
+      showOnly("error");
+    }
   }
 
   detailWindow.__scaliusLoadOrderDetail = loadOrder;
@@ -725,9 +920,31 @@ const orderId = Astro.params.id ?? "";
     (recoveryButton as HTMLButtonElement).onclick = () => void startAccountPaymentRecovery();
   }
 
+  const supportActions = document.getElementById("orderSupportActions");
+  if (supportActions) {
+    supportActions.onclick = (event) => {
+      const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-support-request-type]");
+      const type = button?.dataset.supportRequestType;
+      if (isSupportRequestType(type)) {
+        selectSupportRequestAction(type);
+      }
+    };
+  }
+
+  const supportCancel = document.getElementById("orderSupportCancel");
+  if (supportCancel) {
+    (supportCancel as HTMLButtonElement).onclick = () => hideSupportRequestForm();
+  }
+
+  const supportSubmit = document.getElementById("orderSupportSubmit");
+  if (supportSubmit) {
+    (supportSubmit as HTMLButtonElement).onclick = () => void submitSupportRequest();
+  }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => void detailWindow.__scaliusLoadOrderDetail?.(), { once: true });
   } else {
     void detailWindow.__scaliusLoadOrderDetail?.();
   }
 </script>
+</Layout>

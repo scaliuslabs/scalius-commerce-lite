@@ -3246,6 +3246,30 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 lastProbeAt: string | number | null;
                 providerStatus: string | null;
             } | null;
+            supportRequests: Array<{
+                id: string;
+                orderId: string;
+                customerId: string;
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                status: string;
+                active: boolean;
+                severity: 'info' | 'success' | 'warning' | 'danger';
+                label: string;
+                actionLabel: string;
+                reason: string;
+                message: string | null;
+                submittedAt: string | number | null;
+                resolvedAt: string | number | null;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+            }>;
+            supportRequestActions: Array<{
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                label: string;
+                description: string;
+                eligible: boolean;
+                disabledReason: string | null;
+            }>;
             paymentPlan: {
                 totalAmount: number;
                 depositAmount: number;
@@ -3286,7 +3310,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             }>;
             timeline: Array<{
                 id: string;
-                type: 'order' | 'payment' | 'refund' | 'shipment' | 'notification';
+                type: 'order' | 'payment' | 'refund' | 'request' | 'shipment' | 'notification';
                 status: string;
                 label: string;
                 happenedAt: string | number | null;
@@ -3308,6 +3332,155 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
 };
 
 export type GetApiV1CustomerAuthOrdersByIdResponse = GetApiV1CustomerAuthOrdersByIdResponses[keyof GetApiV1CustomerAuthOrdersByIdResponses];
+
+export type PostApiV1CustomerAuthOrdersByIdSupportRequestsData = {
+    body?: {
+        type: 'cancel_pre_shipment' | 'return' | 'refund';
+        reason: string;
+        message?: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/orders/{id}/support-requests';
+};
+
+export type PostApiV1CustomerAuthOrdersByIdSupportRequestsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthOrdersByIdSupportRequestsError = PostApiV1CustomerAuthOrdersByIdSupportRequestsErrors[keyof PostApiV1CustomerAuthOrdersByIdSupportRequestsErrors];
+
+export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
+    /**
+     * Customer support request created
+     */
+    201: {
+        success: true;
+        data: {
+            request: {
+                id: string;
+                orderId: string;
+                customerId: string;
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                status: string;
+                active: boolean;
+                severity: 'info' | 'success' | 'warning' | 'danger';
+                label: string;
+                actionLabel: string;
+                reason: string;
+                message: string | null;
+                submittedAt: string | number | null;
+                resolvedAt: string | number | null;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+            };
+            supportRequests: Array<{
+                id: string;
+                orderId: string;
+                customerId: string;
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                status: string;
+                active: boolean;
+                severity: 'info' | 'success' | 'warning' | 'danger';
+                label: string;
+                actionLabel: string;
+                reason: string;
+                message: string | null;
+                submittedAt: string | number | null;
+                resolvedAt: string | number | null;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+            }>;
+            supportRequestActions: Array<{
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                label: string;
+                description: string;
+                eligible: boolean;
+                disabledReason: string | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponse = PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses[keyof PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses];
 
 export type PostApiV1CustomerAuthOrdersByIdPaymentSessionData = {
     body?: {
@@ -25185,6 +25358,23 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 refundReference?: string | null;
                 lastError?: string | null;
             } | null;
+            supportRequests: Array<{
+                id: string;
+                orderId: string;
+                customerId: string;
+                type: 'cancel_pre_shipment' | 'return' | 'refund';
+                status: string;
+                active: boolean;
+                severity: 'info' | 'success' | 'warning' | 'danger';
+                label: string;
+                actionLabel: string;
+                reason: string;
+                message: string | null;
+                submittedAt: string | number | null;
+                resolvedAt: string | number | null;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+            }>;
         };
     };
 };
