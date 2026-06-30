@@ -80,24 +80,27 @@ export function DeferredTiptapEditor({
   className,
   compact = false,
 }: DeferredTiptapEditorProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const isAliveRef = useRef(true);
-  const preloadRequestedRef = useRef(false);
   const mountRequestedRef = useRef(false);
   const [shouldMountEditor, setShouldMountEditor] = useState(false);
   const [autoFocusEditor, setAutoFocusEditor] = useState(false);
   const hasContent = hasRenderableContent(content);
 
-  const mountEditor = useCallback(() => {
-    setAutoFocusEditor(true);
+  const loadAndMountEditor = useCallback((autoFocus: boolean) => {
+    if (autoFocus) setAutoFocusEditor(true);
     if (shouldMountEditor || mountRequestedRef.current) return;
 
     mountRequestedRef.current = true;
-    void loadTiptapEditorModule().finally(() => {
-      if (isAliveRef.current) {
-        setShouldMountEditor(true);
-      }
-    });
+    void loadTiptapEditorModule()
+      .then(() => {
+        if (isAliveRef.current) {
+          setShouldMountEditor(true);
+        }
+      })
+      .catch((error) => {
+        mountRequestedRef.current = false;
+        console.error("Failed to load rich text editor", error);
+      });
   }, [shouldMountEditor]);
 
   useEffect(() => () => {
@@ -105,53 +108,8 @@ export function DeferredTiptapEditor({
   }, []);
 
   useEffect(() => {
-    if (shouldMountEditor || typeof window === "undefined") return undefined;
-
-    let idleHandle: number | null = null;
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-    let observer: IntersectionObserver | null = null;
-
-    const preloadEditor = () => {
-      if (preloadRequestedRef.current || mountRequestedRef.current) return;
-      preloadRequestedRef.current = true;
-      void loadTiptapEditorModule().finally(() => {
-        if (isAliveRef.current && !mountRequestedRef.current) {
-          setShouldMountEditor(true);
-        }
-      });
-    };
-
-    const schedulePreload = () => {
-      if ("requestIdleCallback" in window) {
-        idleHandle = window.requestIdleCallback(preloadEditor, { timeout: 1200 });
-        return;
-      }
-      timeoutHandle = setTimeout(preloadEditor, 250);
-    };
-
-    if ("IntersectionObserver" in window && containerRef.current) {
-      observer = new IntersectionObserver(
-        (entries) => {
-          if (entries.some((entry) => entry.isIntersecting)) {
-            observer?.disconnect();
-            schedulePreload();
-          }
-        },
-        { rootMargin: "180px" },
-      );
-      observer.observe(containerRef.current);
-    } else {
-      schedulePreload();
-    }
-
-    return () => {
-      observer?.disconnect();
-      if (idleHandle !== null && "cancelIdleCallback" in window) {
-        window.cancelIdleCallback(idleHandle);
-      }
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-    };
-  }, [shouldMountEditor]);
+    loadAndMountEditor(false);
+  }, [loadAndMountEditor]);
 
   if (shouldMountEditor) {
     return (
@@ -174,7 +132,6 @@ export function DeferredTiptapEditor({
 
   return (
     <div
-      ref={containerRef}
       className={cn(
         "overflow-hidden rounded-md border bg-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         getDeferredEditorMinHeightClass(compact),
@@ -184,8 +141,8 @@ export function DeferredTiptapEditor({
       tabIndex={0}
       aria-multiline="true"
       aria-label="Rich text editor"
-      onFocus={mountEditor}
-      onPointerDown={mountEditor}
+      onFocus={() => loadAndMountEditor(true)}
+      onPointerDown={() => loadAndMountEditor(true)}
     >
       <TiptapToolbarSkeleton compact={compact} />
       <div className={cn("cursor-text overflow-y-auto border-t text-sm", getDeferredEditorViewportClass(compact))}>
