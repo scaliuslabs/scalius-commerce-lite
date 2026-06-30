@@ -35,6 +35,7 @@ The order email flow is fully connected:
 6. When the queue message carries `outboxId`, customer email/SMS/WhatsApp targets create deterministic delivery receipts before provider work. Accepted/skipped receipts are terminal and are not resent on queue/outbox retry.
 7. Merchant-actionable provider setup failures, such as invalid API keys, unauthorized responses, undecryptable credentials, rejected senders/templates, disabled accounts, or invalid Firebase service accounts, also create a `notification_provider_health` settings marker for that channel/provider. Future order-notification sends skip external provider calls for the same active provider until the merchant saves the relevant provider settings.
 8. If a retryable receipt reaches the delivery-attempt cap with evidence that still looks like a setup failure, the same provider-health marker is written before the receipt is made terminal. This prevents dummy or wrong credentials from burning Queue/D1/provider work after the cap settles the historical receipt.
+9. If an explicit provider-health marker is missing, `notification-provider-health.ts` can recover a pause from terminal email/SMS/FCM delivery receipts whose setup-failure evidence is newer than the relevant provider settings. Runtime sends backfill the marker before recording the blocked skip, while settings saves still clear the pause because older receipt evidence is ignored after a newer settings `updated_at`.
 
 Admin order detail can read the durable outbox plus per-channel receipts for one order and can retry rows that are still `failed` or `pending`. The retry path resets the parent outbox through the existing durable enqueue helper, so accepted/skipped receipts remain terminal and already-sent notifications are not resent.
 
@@ -119,7 +120,7 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 
 - `index.ts` -- barrel exports: `sendOrderNotification`, `sendOrderNotificationEmail`
 - `notifications.service.ts` -- both functions
-- `notification-provider-health.ts` -- D1-backed provider pause markers for merchant-actionable setup failures
+- `notification-provider-health.ts` -- D1-backed provider pause markers and receipt-derived recovery for merchant-actionable setup failures
 - `order-notification-outbox.ts` -- parent queue handoff/replay state
 - `order-notification-delivery-receipts.ts` -- per-channel receipt claims and accepted/failed/skipped marks
 - `../customers/otp-delivery-receipts.ts` -- customer OTP receipt claims and provider idempotency helper

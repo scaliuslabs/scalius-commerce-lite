@@ -1035,6 +1035,19 @@ async function recordProviderBlockedDeliveryIfNeeded(options: {
     });
     if (!block) return null;
 
+    if (block.source === "receipt") {
+        await markNotificationProviderBlocked(options.db, {
+            channel: block.channel,
+            provider: block.provider,
+            reason: block.reason,
+        }).catch((error: unknown) => {
+            console.error(
+                `[Notifications] Failed to restore ${block.channel}/${block.provider} provider block from delivery history:`,
+                error instanceof Error ? error.message : error,
+            );
+        });
+    }
+
     return await recordSkippedDelivery({
         db: options.db,
         outboxId: options.outboxId,
