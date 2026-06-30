@@ -23,6 +23,9 @@ const REFUND_ATTEMPTS_MIGRATION = fileURLToPath(
 const ABANDONED_CHECKOUT_CLEANUP_INDEXES_MIGRATION = fileURLToPath(
     new URL("../migrations/0068_abandoned_checkout_cleanup_indexes.sql", import.meta.url),
 );
+const ORDER_SUPPORT_REQUESTS_MIGRATION = fileURLToPath(
+    new URL("../migrations/0073_order_support_requests.sql", import.meta.url),
+);
 
 describe("order schema boundaries", () => {
     it("keeps admin order search and default list indexes aligned", () => {
@@ -111,5 +114,24 @@ describe("order schema boundaries", () => {
         expect(migrationSource).toContain(
             "CREATE INDEX `abandoned_checkouts_empty_candidate_idx` ON `abandoned_checkouts` (`customer_phone`, `updated_at`, `id`)",
         );
+    });
+
+    it("keeps customer order support request ledger aligned", () => {
+        const schemaSource = readFileSync(ORDERS_SCHEMA_SOURCE, "utf8");
+        const migrationSource = readFileSync(ORDER_SUPPORT_REQUESTS_MIGRATION, "utf8");
+
+        expect(schemaSource).toContain('export const orderSupportRequests = sqliteTable("order_support_requests"');
+        expect(schemaSource).toContain('export const orderSupportRequestEvents = sqliteTable("order_support_request_events"');
+        expect(schemaSource).toContain('uniqueIndex("order_support_requests_active_key_unique").on(table.activeKey)');
+        expect(schemaSource).toContain('index("order_support_requests_order_created_idx").on(table.orderId, table.createdAt)');
+        expect(schemaSource).toContain('export type OrderSupportRequest = InferSelectModel<typeof orderSupportRequests>');
+
+        expect(migrationSource).toContain("CREATE TABLE `order_support_requests`");
+        expect(migrationSource).toContain("FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`)");
+        expect(migrationSource).toContain("FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`)");
+        expect(migrationSource).toContain("CREATE UNIQUE INDEX `order_support_requests_active_key_unique` ON `order_support_requests` (`active_key`)");
+        expect(migrationSource).toContain("CREATE TABLE `order_support_request_events`");
+        expect(migrationSource).toContain("FOREIGN KEY (`request_id`) REFERENCES `order_support_requests`(`id`)");
+        expect(migrationSource).toContain("CREATE INDEX `order_support_request_events_order_created_idx` ON `order_support_request_events` (`order_id`,`created_at`)");
     });
 });

@@ -417,7 +417,7 @@ export interface CustomerOrderDetailNotification {
 
 export interface CustomerOrderTimelineEvent {
   id: string;
-  type: "order" | "payment" | "refund" | "shipment" | "notification";
+  type: "order" | "payment" | "refund" | "request" | "shipment" | "notification";
   status: string;
   label: string;
   happenedAt: string | null;
@@ -470,6 +470,46 @@ export interface CustomerPaymentRecovery {
   hostedRedirect: boolean;
 }
 
+export type CustomerOrderSupportRequestType = "cancel_pre_shipment" | "return" | "refund";
+
+export interface CustomerOrderSupportRequest {
+  id: string;
+  orderId: string;
+  customerId: string;
+  type: CustomerOrderSupportRequestType;
+  status: string;
+  active: boolean;
+  severity: "info" | "success" | "warning" | "danger";
+  label: string;
+  actionLabel: string;
+  reason: string;
+  message: string | null;
+  submittedAt: string | null;
+  resolvedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CustomerOrderSupportRequestAction {
+  type: CustomerOrderSupportRequestType;
+  label: string;
+  description: string;
+  eligible: boolean;
+  disabledReason: string | null;
+}
+
+export interface CreateCustomerOrderSupportRequestInput {
+  type: CustomerOrderSupportRequestType;
+  reason: string;
+  message?: string | null;
+}
+
+interface CustomerOrderSupportRequestData {
+  request: CustomerOrderSupportRequest;
+  supportRequests: CustomerOrderSupportRequest[];
+  supportRequestActions: CustomerOrderSupportRequestAction[];
+}
+
 export type CustomerOrderPaymentSession = CustomerOrderPaymentSessionData;
 
 export interface CustomerOrderDetailOrder {
@@ -515,6 +555,8 @@ export interface CustomerOrderDetail {
   payments: CustomerOrderDetailPayment[];
   refundAttempts: CustomerOrderRefundAttempt[];
   activeRefundOperation: CustomerActiveRefundOperation | null;
+  supportRequests: CustomerOrderSupportRequest[];
+  supportRequestActions: CustomerOrderSupportRequestAction[];
   paymentPlan: CustomerOrderDetailPaymentPlan | null;
   cod: CustomerOrderDetailCod | null;
   notifications: CustomerOrderDetailNotification[];
@@ -653,6 +695,46 @@ export async function getCustomerOrderDetail(orderId: string): Promise<{
     return { success: true, detail };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error), status: 0, unavailable: true };
+  }
+}
+
+/**
+ * Create a support request for an order owned by the signed-in customer.
+ * This records buyer intent only; it never changes order, shipment, or payment state.
+ */
+export async function createCustomerOrderSupportRequest(
+  orderId: string,
+  input: CreateCustomerOrderSupportRequestInput,
+): Promise<{
+  success: boolean;
+  data?: CustomerOrderSupportRequestData;
+  error?: string;
+  status?: number;
+}> {
+  if (!orderId) {
+    return { success: false, error: "Order ID is required", status: 400 };
+  }
+
+  try {
+    const res = await customerAuthFetch(authUrl(`orders/${encodeURIComponent(orderId)}/support-requests`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      cache: "no-store",
+      body: JSON.stringify(input),
+    }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
+    const raw = await readEnvelope<CustomerOrderSupportRequestData>(res);
+    const data = raw.data ?? (raw as unknown as CustomerOrderSupportRequestData);
+    if (!res.ok || isFailedEnvelope(raw) || !data.request) {
+      return {
+        success: false,
+        error: extractError(raw) || "Request could not be submitted. Please try again.",
+        status: res.status,
+      };
+    }
+    return { success: true, data };
+  } catch (error: unknown) {
+    return { success: false, error: networkErrorMessage(error), status: 0 };
   }
 }
 

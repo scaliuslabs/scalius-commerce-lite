@@ -30,6 +30,11 @@ import {
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
 } from "../payments/refund-attempt-visibility";
+import {
+    getActiveSupportRequestTypes,
+    getCustomerOrderSupportRequestActions,
+    listOrderSupportRequests,
+} from "../orders/order-support-requests";
 
 // Re-export schemas from the canonical validation module
 export {
@@ -78,7 +83,7 @@ type CustomerOrderListItem = {
 
 export interface CustomerOrderDetailTimelineEvent {
     id: string;
-    type: "order" | "payment" | "refund" | "shipment" | "notification";
+    type: "order" | "payment" | "refund" | "request" | "shipment" | "notification";
     status: string;
     label: string;
     happenedAt: string | null;
@@ -937,7 +942,7 @@ export async function getCustomerOrderDetail(
         throw new NotFoundError("Order not found");
     }
 
-    const [batchedRows, refundAttemptViews] = await Promise.all([
+    const [batchedRows, refundAttemptViews, supportRequests] = await Promise.all([
         db.batch([
         db
             .select({
@@ -1054,6 +1059,7 @@ export async function getCustomerOrderDetail(
             .orderBy(desc(orderNotificationDeliveryReceipts.createdAt)),
         ] as Parameters<Database["batch"]>[0]),
         listOrderRefundAttempts(db, orderId, { audience: "customer" }),
+        listOrderSupportRequests(db, orderId),
     ]);
 
     const [items, shipments, payments, plans, codRows, notificationReceipts] = batchedRows as [
@@ -1162,6 +1168,12 @@ export async function getCustomerOrderDetail(
         : null;
 
     const notifications = projectCustomerOrderNotifications(notificationReceipts);
+    const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "customer");
+    const supportRequestActions = getCustomerOrderSupportRequestActions(order, {
+        hasShipment: formattedShipments.length > 0,
+        hasActiveRefundOperation: Boolean(activeRefundOperation),
+        activeRequestTypes: getActiveSupportRequestTypes(supportRequests),
+    });
 
     const timeline: CustomerOrderDetailTimelineEvent[] = buildCustomerOrderBaseTimelineEvents(order);
 
@@ -1184,6 +1196,17 @@ export async function getCustomerOrderDetail(
             label: refund.label,
             happenedAt: refund.refundedAt ?? refund.failedAt ?? refund.lastProbeAt ?? refund.updatedAt ?? refund.createdAt,
             details: refund.message,
+        });
+    }
+
+    for (const request of supportRequests) {
+        timeline.push({
+            id: `request:${request.id}`,
+            type: "request",
+            status: request.status,
+            label: request.label,
+            happenedAt: request.submittedAt ?? request.updatedAt ?? request.createdAt,
+            details: request.reason,
         });
     }
 
@@ -1218,7 +1241,9 @@ export async function getCustomerOrderDetail(
         shipments: formattedShipments,
         payments: formattedPayments,
         refundAttempts: refundAttemptViews,
-        activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "customer"),
+        activeRefundOperation,
+        supportRequests,
+        supportRequestActions,
         paymentPlan,
         cod,
         notifications,

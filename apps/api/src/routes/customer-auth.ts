@@ -30,6 +30,10 @@ import {
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import { getCustomerOrderDetail, getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
+import {
+  createCustomerOrderSupportRequest,
+  CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
+} from "@scalius/core/modules/orders/order-support-requests";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError, ServiceUnavailableError } from "../utils/api-error";
 import {
@@ -40,7 +44,7 @@ import {
   successEnvelope,
 } from "../schemas/responses";
 import { nullableTimestampSchema } from "../schemas/timestamps";
-import { ok } from "../utils/api-response";
+import { created, ok } from "../utils/api-response";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
 import {
   createPolarPaymentSession,
@@ -795,6 +799,34 @@ const customerActiveRefundOperationSchema = z.object({
   providerStatus: z.string().nullable(),
 });
 
+const customerOrderSupportRequestTypeSchema = z.enum(CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES);
+
+const customerOrderSupportRequestSchema = z.object({
+  id: z.string(),
+  orderId: z.string(),
+  customerId: z.string(),
+  type: customerOrderSupportRequestTypeSchema,
+  status: z.string(),
+  active: z.boolean(),
+  severity: z.enum(["info", "success", "warning", "danger"]),
+  label: z.string(),
+  actionLabel: z.string(),
+  reason: z.string(),
+  message: z.string().nullable(),
+  submittedAt: nullableTimestampSchema,
+  resolvedAt: nullableTimestampSchema,
+  createdAt: nullableTimestampSchema,
+  updatedAt: nullableTimestampSchema,
+});
+
+const customerOrderSupportRequestActionSchema = z.object({
+  type: customerOrderSupportRequestTypeSchema,
+  label: z.string(),
+  description: z.string(),
+  eligible: z.boolean(),
+  disabledReason: z.string().nullable(),
+});
+
 const customerOrderDetailSchema = z.object({
   order: z.object({
     id: z.string(),
@@ -865,6 +897,8 @@ const customerOrderDetailSchema = z.object({
   }).passthrough()),
   refundAttempts: z.array(customerRefundAttemptSchema),
   activeRefundOperation: customerActiveRefundOperationSchema.nullable(),
+  supportRequests: z.array(customerOrderSupportRequestSchema),
+  supportRequestActions: z.array(customerOrderSupportRequestActionSchema),
   paymentPlan: z.object({
     totalAmount: z.number(),
     depositAmount: z.number(),
@@ -902,7 +936,7 @@ const customerOrderDetailSchema = z.object({
   }).passthrough()),
   timeline: z.array(z.object({
     id: z.string(),
-    type: z.enum(["order", "payment", "refund", "shipment", "notification"]),
+    type: z.enum(["order", "payment", "refund", "request", "shipment", "notification"]),
     status: z.string(),
     label: z.string(),
     happenedAt: nullableTimestampSchema,
@@ -953,6 +987,61 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
   ]);
 
   return ok(c, { ...detail, paymentRecovery });
+});
+
+const createCustomerOrderSupportRequestRoute = createRoute({
+  method: "post",
+  path: "/orders/{id}/support-requests",
+  tags: ["Customer Auth"],
+  summary: "Create an authenticated customer support request for an owned order",
+  request: {
+    params: z.object({
+      id: z.string(),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            type: customerOrderSupportRequestTypeSchema,
+            reason: z.string().trim().min(3).max(500),
+            message: z.string().trim().max(1000).nullable().optional(),
+          }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Customer support request created",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            request: customerOrderSupportRequestSchema,
+            supportRequests: z.array(customerOrderSupportRequestSchema),
+            supportRequestActions: z.array(customerOrderSupportRequestActionSchema),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+    409: conflictResponse,
+  },
+});
+
+app.openapi(createCustomerOrderSupportRequestRoute, async (c) => {
+  setPrivateNoStoreHeaders(c);
+
+  const { session } = await requireCustomerSession(c);
+  if (!session.customerId) {
+    throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
+  }
+
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  const body = c.req.valid("json");
+  const result = await createCustomerOrderSupportRequest(db, session.customerId, orderId, body);
+
+  return created(c, result);
 });
 
 const paymentSessionBaseSchema = z.object({

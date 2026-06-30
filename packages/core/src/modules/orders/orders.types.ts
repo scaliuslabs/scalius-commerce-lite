@@ -6,6 +6,7 @@ import type {
     ActiveRefundOperationView,
     OrderRefundAttemptView,
 } from "../payments/refund-attempt-visibility";
+import type { OrderSupportRequestView } from "./order-support-requests";
 
 // ─────────────────────────────────────────
 // Admin types
@@ -71,6 +72,7 @@ export interface OrderDetails extends OrderListItem {
     }[];
     refundAttempts: OrderRefundAttemptView[];
     activeRefundOperation: ActiveRefundOperationView | null;
+    supportRequests: OrderSupportRequestView[];
 }
 
 // ─────────────────────────────────────────

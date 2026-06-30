@@ -1,0 +1,139 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import {
+  FulfillmentStatus,
+  OrderStatus,
+  PaymentStatus,
+} from "@scalius/database/schema";
+import {
+  getCustomerOrderSupportRequestActions,
+  type CustomerOrderSupportRequestType,
+} from "./order-support-requests";
+
+const SUPPORT_REQUEST_SOURCE = fileURLToPath(
+  new URL("./order-support-requests.ts", import.meta.url),
+);
+
+function actionState(overrides: Partial<{
+  status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  paidAmount: number;
+}> = {}) {
+  return {
+    id: "order_1",
+    status: overrides.status ?? OrderStatus.PENDING,
+    paymentStatus: overrides.paymentStatus ?? PaymentStatus.UNPAID,
+    fulfillmentStatus: overrides.fulfillmentStatus ?? FulfillmentStatus.PENDING,
+    paidAmount: overrides.paidAmount ?? 0,
+  };
+}
+
+function context(overrides: Partial<{
+  hasShipment: boolean;
+  hasActiveRefundOperation: boolean;
+  activeRequestTypes: ReadonlySet<CustomerOrderSupportRequestType>;
+}> = {}) {
+  return {
+    hasShipment: overrides.hasShipment ?? false,
+    hasActiveRefundOperation: overrides.hasActiveRefundOperation ?? false,
+    activeRequestTypes: overrides.activeRequestTypes ?? new Set<CustomerOrderSupportRequestType>(),
+  };
+}
+
+function actionByType(type: CustomerOrderSupportRequestType, actions = getCustomerOrderSupportRequestActions(actionState(), context())) {
+  const action = actions.find((item) => item.type === type);
+  if (!action) throw new Error(`Missing ${type} action`);
+  return action;
+}
+
+describe("order support request eligibility", () => {
+  it("allows cancellation only before shipment starts", () => {
+    expect(actionByType("cancel_pre_shipment").eligible).toBe(true);
+
+    expect(actionByType(
+      "cancel_pre_shipment",
+      getCustomerOrderSupportRequestActions(actionState(), context({ hasShipment: true })),
+    ).eligible).toBe(false);
+    expect(actionByType(
+      "cancel_pre_shipment",
+      getCustomerOrderSupportRequestActions(actionState({ fulfillmentStatus: FulfillmentStatus.PARTIAL }), context()),
+    ).eligible).toBe(false);
+    expect(actionByType(
+      "cancel_pre_shipment",
+      getCustomerOrderSupportRequestActions(actionState({ status: OrderStatus.SHIPPED }), context()),
+    ).eligible).toBe(false);
+  });
+
+  it("allows returns after shipment or delivery states", () => {
+    for (const status of [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED]) {
+      expect(actionByType(
+        "return",
+        getCustomerOrderSupportRequestActions(actionState({ status }), context()),
+      ).eligible).toBe(true);
+    }
+
+    expect(actionByType(
+      "return",
+      getCustomerOrderSupportRequestActions(actionState({ status: OrderStatus.CONFIRMED }), context()),
+    ).eligible).toBe(false);
+  });
+
+  it("allows refund requests only for paid post-shipment states", () => {
+    expect(actionByType(
+      "refund",
+      getCustomerOrderSupportRequestActions(actionState({
+        status: OrderStatus.DELIVERED,
+        paymentStatus: PaymentStatus.PAID,
+        paidAmount: 1200,
+      }), context()),
+    ).eligible).toBe(true);
+
+    expect(actionByType(
+      "refund",
+      getCustomerOrderSupportRequestActions(actionState({
+        status: OrderStatus.DELIVERED,
+        paymentStatus: PaymentStatus.UNPAID,
+        paidAmount: 0,
+      }), context()),
+    ).eligible).toBe(false);
+    expect(actionByType(
+      "refund",
+      getCustomerOrderSupportRequestActions(actionState({
+        status: OrderStatus.CONFIRMED,
+        paymentStatus: PaymentStatus.PAID,
+        paidAmount: 1200,
+      }), context()),
+    ).eligible).toBe(false);
+  });
+
+  it("blocks every request while another request or refund operation is active", () => {
+    const openRequestActions = getCustomerOrderSupportRequestActions(actionState(), context({
+      activeRequestTypes: new Set<CustomerOrderSupportRequestType>(["return"]),
+    }));
+    expect(openRequestActions.every((action) => !action.eligible)).toBe(true);
+    expect(openRequestActions.every((action) => action.disabledReason?.includes("already open"))).toBe(true);
+
+    const activeRefundActions = getCustomerOrderSupportRequestActions(actionState({
+      status: OrderStatus.DELIVERED,
+      paymentStatus: PaymentStatus.PAID,
+      paidAmount: 1200,
+    }), context({ hasActiveRefundOperation: true }));
+    expect(activeRefundActions.every((action) => !action.eligible)).toBe(true);
+    expect(activeRefundActions.every((action) => action.disabledReason?.includes("refund is already being processed"))).toBe(true);
+  });
+
+  it("does not import order, payment, shipment, COD, or inventory mutators", () => {
+    const source = readFileSync(SUPPORT_REQUEST_SOURCE, "utf8");
+
+    expect(source).not.toContain("processRefund");
+    expect(source).not.toContain("refund-service");
+    expect(source).not.toContain("updateOrderStatus");
+    expect(source).not.toContain("./orders.fulfillment");
+    expect(source).not.toContain('from "./orders.fulfillment"');
+    expect(source).not.toContain("codTracking");
+    expect(source).not.toContain("reserveStock");
+    expect(source).not.toContain("deductMultiple");
+  });
+});

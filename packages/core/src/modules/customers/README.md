@@ -221,6 +221,6 @@ Guest orders are recoverable through the private receipt token/link, not by late
 
 4. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
 
-5. **No customer self-service cancellation/return requests yet**: Account order history/detail can show payment, shipment, refund, notification, and recovery state, but customer-facing return/cancel/refund-request eligibility and workflow remain tracked outside this module.
+5. **Customer support-request workflow is partial**: Account-owned order details now expose eligible pre-shipment cancellation, return, and refund request actions through the order support-request ledger. Admins can see submitted requests on order detail, but the admin approval/resolve workflow, customer notifications, and receipt-token guest request path remain separate follow-up work.
 
 6. **No guest-order account claim flow yet**: True guest orders remain receipt-token-only and are intentionally absent from account history until a receipt-token-backed claim model exists.

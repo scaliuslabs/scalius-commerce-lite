@@ -1,5 +1,6 @@
 // src/db/schema/orders.ts
-// Order domain tables: orders, checkoutAttempts, orderItems, orderPayments, refundAttempts, paymentPlans,
+// Order domain tables: orders, checkoutAttempts, orderItems, orderPayments, refundAttempts,
+// orderSupportRequests, orderSupportRequestEvents, paymentPlans,
 // codTracking, webhookEvents, orderNotificationOutbox,
 // orderNotificationDeliveryReceipts, abandonedCheckouts.
 
@@ -245,6 +246,62 @@ export const refundAttempts = sqliteTable("refund_attempts", {
     // refund_attempts_live_source_payment_singleflight ON (source_payment_id) WHERE status IN ('pending','processing','provider_unknown','reconcile_required')
 ]);
 
+export const orderSupportRequests = sqliteTable("order_support_requests", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    customerId: text("customer_id")
+        .notNull()
+        .references(() => customers.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    status: text("status").notNull().default("submitted"),
+    reason: text("reason").notNull(),
+    message: text("message"),
+    activeKey: text("active_key"),
+    submittedAt: integer("submitted_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_support_requests_active_key_unique").on(table.activeKey),
+    index("order_support_requests_order_created_idx").on(table.orderId, table.createdAt),
+    index("order_support_requests_customer_created_idx").on(table.customerId, table.createdAt),
+    index("order_support_requests_status_created_idx").on(table.status, table.createdAt),
+    index("order_support_requests_type_status_idx").on(table.type, table.status),
+]);
+
+export const orderSupportRequestEvents = sqliteTable("order_support_request_events", {
+    id: text("id").primaryKey(),
+    requestId: text("request_id")
+        .notNull()
+        .references(() => orderSupportRequests.id, { onDelete: "cascade" }),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    customerId: text("customer_id")
+        .notNull()
+        .references(() => customers.id, { onDelete: "cascade" }),
+    actorType: text("actor_type").notNull(),
+    actorId: text("actor_id"),
+    eventType: text("event_type").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status"),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    index("order_support_request_events_request_created_idx").on(table.requestId, table.createdAt),
+    index("order_support_request_events_order_created_idx").on(table.orderId, table.createdAt),
+]);
+
 export const paymentSessionAttempts = sqliteTable("payment_session_attempts", {
     id: text("id").primaryKey(),
     attemptKey: text("attempt_key").notNull(),
@@ -435,6 +492,8 @@ export type CheckoutAttempt = InferSelectModel<typeof checkoutAttempts>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
 export type OrderPayment = InferSelectModel<typeof orderPayments>;
 export type RefundAttempt = InferSelectModel<typeof refundAttempts>;
+export type OrderSupportRequest = InferSelectModel<typeof orderSupportRequests>;
+export type OrderSupportRequestEvent = InferSelectModel<typeof orderSupportRequestEvents>;
 export type PaymentSessionAttempt = InferSelectModel<typeof paymentSessionAttempts>;
 export type PaymentPlan = InferSelectModel<typeof paymentPlans>;
 export type CodTracking = InferSelectModel<typeof codTracking>;

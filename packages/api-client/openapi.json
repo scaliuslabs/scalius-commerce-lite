@@ -10542,6 +10542,156 @@
                             "providerStatus"
                           ]
                         },
+                        "supportRequests": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "customerId": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "cancel_pre_shipment",
+                                  "return",
+                                  "refund"
+                                ]
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "active": {
+                                "type": "boolean"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "info",
+                                  "success",
+                                  "warning",
+                                  "danger"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "actionLabel": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "submittedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "resolvedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "orderId",
+                              "customerId",
+                              "type",
+                              "status",
+                              "active",
+                              "severity",
+                              "label",
+                              "actionLabel",
+                              "reason",
+                              "message",
+                              "submittedAt",
+                              "resolvedAt",
+                              "createdAt",
+                              "updatedAt"
+                            ]
+                          }
+                        },
+                        "supportRequestActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "cancel_pre_shipment",
+                                  "return",
+                                  "refund"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "eligible": {
+                                "type": "boolean"
+                              },
+                              "disabledReason": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "label",
+                              "description",
+                              "eligible",
+                              "disabledReason"
+                            ]
+                          }
+                        },
                         "paymentPlan": {
                           "type": "object",
                           "nullable": true,
@@ -10816,6 +10966,7 @@
                                   "order",
                                   "payment",
                                   "refund",
+                                  "request",
                                   "shipment",
                                   "notification"
                                 ]
@@ -10921,6 +11072,8 @@
                         "payments",
                         "refundAttempts",
                         "activeRefundOperation",
+                        "supportRequests",
+                        "supportRequestActions",
                         "paymentPlan",
                         "cod",
                         "notifications",
@@ -11059,6 +11212,633 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customer-auth/orders/{id}/support-requests": {
+      "post": {
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Create an authenticated customer support request for an owned order",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "cancel_pre_shipment",
+                      "return",
+                      "refund"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  },
+                  "message": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "type",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Customer support request created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "request": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "orderId": {
+                              "type": "string"
+                            },
+                            "customerId": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "cancel_pre_shipment",
+                                "return",
+                                "refund"
+                              ]
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "active": {
+                              "type": "boolean"
+                            },
+                            "severity": {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "success",
+                                "warning",
+                                "danger"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "actionLabel": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "submittedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "resolvedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "orderId",
+                            "customerId",
+                            "type",
+                            "status",
+                            "active",
+                            "severity",
+                            "label",
+                            "actionLabel",
+                            "reason",
+                            "message",
+                            "submittedAt",
+                            "resolvedAt",
+                            "createdAt",
+                            "updatedAt"
+                          ]
+                        },
+                        "supportRequests": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "customerId": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "cancel_pre_shipment",
+                                  "return",
+                                  "refund"
+                                ]
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "active": {
+                                "type": "boolean"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "info",
+                                  "success",
+                                  "warning",
+                                  "danger"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "actionLabel": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "submittedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "resolvedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "orderId",
+                              "customerId",
+                              "type",
+                              "status",
+                              "active",
+                              "severity",
+                              "label",
+                              "actionLabel",
+                              "reason",
+                              "message",
+                              "submittedAt",
+                              "resolvedAt",
+                              "createdAt",
+                              "updatedAt"
+                            ]
+                          }
+                        },
+                        "supportRequestActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "cancel_pre_shipment",
+                                  "return",
+                                  "refund"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "eligible": {
+                                "type": "boolean"
+                              },
+                              "disabledReason": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "label",
+                              "description",
+                              "eligible",
+                              "disabledReason"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "request",
+                        "supportRequests",
+                        "supportRequestActions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -82536,6 +83316,120 @@
                             "lastProbeAt",
                             "providerStatus"
                           ]
+                        },
+                        "supportRequests": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "customerId": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "cancel_pre_shipment",
+                                  "return",
+                                  "refund"
+                                ]
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "active": {
+                                "type": "boolean"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "info",
+                                  "success",
+                                  "warning",
+                                  "danger"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "actionLabel": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "submittedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "resolvedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "orderId",
+                              "customerId",
+                              "type",
+                              "status",
+                              "active",
+                              "severity",
+                              "label",
+                              "actionLabel",
+                              "reason",
+                              "message",
+                              "submittedAt",
+                              "resolvedAt",
+                              "createdAt",
+                              "updatedAt"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -82568,7 +83462,8 @@
                         "items",
                         "latestShipment",
                         "refundAttempts",
-                        "activeRefundOperation"
+                        "activeRefundOperation",
+                        "supportRequests"
                       ]
                     }
                   },
