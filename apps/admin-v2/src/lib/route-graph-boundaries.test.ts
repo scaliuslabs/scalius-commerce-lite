@@ -1108,11 +1108,13 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapToolbarSkeleton.tsx"),
       "utf8",
     );
-    expect(skeletonSource).toContain("const TOOLBAR_GROUPS");
-    expect(skeletonSource).toContain("Bold");
-    expect(skeletonSource).toContain("Maximize");
+    expect(skeletonSource).toContain("primaryWidth");
+    expect(skeletonSource).toContain("secondaryWidth");
+    expect(skeletonSource).not.toContain("lucide-react");
+    expect(skeletonSource).not.toContain("TOOLBAR_GROUPS");
+    expect(skeletonSource).not.toContain("Maximize");
     expect(skeletonSource).not.toContain("animate-pulse");
-    expect(skeletonSource).not.toContain("bg-muted/35");
+    expect(skeletonSource).not.toContain("buttonSize");
 
     const toolbarButtonSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "ToolbarButton.tsx"),
