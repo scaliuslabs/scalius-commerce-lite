@@ -220,10 +220,12 @@ describe("admin route graph boundaries", () => {
 
     expect(tiptapSource).toContain("immediatelyRender: false,");
     expect(tiptapSource).toContain('editorInstance.commands.focus("end", { scrollIntoView: false })');
-    expect(deferredSource).toContain("loadTiptapEditorModule().finally");
-    expect(deferredSource).toContain("preloadRequestedRef");
+    expect(deferredSource).toContain("loadAndMountEditor(false);");
+    expect(deferredSource).toContain("onPointerDown={() => loadAndMountEditor(true)}");
     expect(deferredSource).toContain("setShouldMountEditor(true)");
     expect(deferredSource).not.toContain("void loadTiptapEditorModule();");
+    expect(deferredSource).not.toContain("requestIdleCallback");
+    expect(deferredSource).not.toContain("IntersectionObserver");
     expect(deferredSource).toContain("min-h-[237px]");
     expect(deferredSource).toContain("h-[200px]");
   });
@@ -1057,13 +1059,13 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("<TiptapToolbarSkeleton compact={compact} />");
     expect(source).toContain("const TiptapEditor = lazy(");
     expect(source).toContain("loadTiptapEditorModule");
-    expect(source).toContain("loadTiptapEditorModule().finally");
+    expect(source).toContain("loadAndMountEditor(false);");
     expect(source).toContain("setShouldMountEditor(true)");
     expect(source).toContain("function getDeferredEditorViewportClass");
     expect(source).toContain("compact ? \"h-[200px]\" : \"h-[300px]\"");
     expect(source).toContain("mountRequestedRef");
-    expect(source).toContain("IntersectionObserver");
-    expect(source).toContain("requestIdleCallback");
+    expect(source).not.toContain("IntersectionObserver");
+    expect(source).not.toContain("requestIdleCallback");
     expect(source).not.toContain("from \"./TiptapEditor\"");
     expect(source).not.toContain("toPlainTextPreview");
     expect(source).not.toContain("PencilLine");
