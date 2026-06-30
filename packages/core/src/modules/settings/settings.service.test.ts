@@ -27,7 +27,11 @@ vi.mock("../payments/gateway-settings", () => ({
     upsertSetting: mocks.upsertSetting,
 }));
 
-import { getNotificationChannels, updateNotificationChannels } from "./settings.service";
+import {
+    getAdminNotificationChannels,
+    getNotificationChannels,
+    updateNotificationChannels,
+} from "./settings.service";
 
 function createSettingsDb(rowValue?: string) {
     return {
@@ -78,6 +82,20 @@ describe("notification channel settings", () => {
             refund_failed: ["email"],
             order_partially_refunded: ["email"],
             payment_balance_paid: ["email"],
+            support_request_submitted: [],
+            support_request_status_updated: ["email"],
+        });
+    });
+
+    it("defaults admin push to new order, cancellation, and support request submissions only", async () => {
+        const db = createSettingsDb();
+
+        await expect(getAdminNotificationChannels(db as never)).resolves.toMatchObject({
+            order_created: ["push"],
+            order_cancelled: ["push"],
+            support_request_submitted: ["push"],
+            support_request_status_updated: [],
+            order_delivered: [],
         });
     });
 

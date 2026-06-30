@@ -28,6 +28,8 @@ export {
   buildOrderBalancePaidNotificationDedupeKey,
   buildOrderCreatedNotificationDedupeKey,
   buildOrderStatusNotificationDedupeKey,
+  buildSupportRequestStatusUpdatedNotificationDedupeKey,
+  buildSupportRequestSubmittedNotificationDedupeKey,
   claimOrderNotificationOutboxForProcessing,
   createOrderNotificationOutboxInsertValues,
   enqueueOrderNotificationOutboxById,

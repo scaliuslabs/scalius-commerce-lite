@@ -81,6 +81,11 @@ interface DeliverySendResult {
     retryable?: boolean;
 }
 
+function defaultCustomerChannelsForNotification(type: OrderNotificationType): string[] {
+    if (type === "support_request_submitted") return [];
+    return ["email"];
+}
+
 const EMPTY_DISPATCH_RESULT: OrderNotificationDispatchResult = {
     outcomes: [],
     hasRetryableFailure: false,
@@ -458,20 +463,32 @@ export async function sendOrderNotificationEmail(
     options: OrderNotificationOptions = {},
 ): Promise<OrderNotificationDispatchResult> {
     const outcomes: OrderNotificationChannelOutcome[] = [];
-    let enabledChannels: string[] = ["email"];
+    let enabledChannels = defaultCustomerChannelsForNotification(type);
 
     if (db) {
         try {
             const { getNotificationChannels } = await import("../settings/settings.service");
             const channels = await getNotificationChannels(db);
-            enabledChannels = channels[type] || ["email"];
+            enabledChannels = channels[type] ?? defaultCustomerChannelsForNotification(type);
         } catch (channelError: unknown) {
-            console.warn("[Notifications] Failed to check channel preferences, defaulting to email:", channelError);
+            console.warn("[Notifications] Failed to check channel preferences, defaulting to safe channels:", channelError);
         }
     }
 
     const safeName = escapeHtml(name);
     const safeTrackingId = data?.trackingId ? escapeHtml(String(data.trackingId)) : "";
+    const safeSupportRequestTypeLabel = data?.supportRequestTypeLabel
+        ? escapeHtml(String(data.supportRequestTypeLabel))
+        : "support request";
+    const safeSupportRequestStatusLabel = data?.supportRequestStatusLabel
+        ? escapeHtml(String(data.supportRequestStatusLabel))
+        : "updated";
+    const supportRequestTypeLabel = data?.supportRequestTypeLabel
+        ? String(data.supportRequestTypeLabel)
+        : "support request";
+    const supportRequestStatusLabel = data?.supportRequestStatusLabel
+        ? String(data.supportRequestStatusLabel)
+        : "updated";
 
     const subjects: Record<OrderNotificationType, string> = {
         order_created: `Order #${orderId} Received`,
@@ -487,6 +504,8 @@ export async function sendOrderNotificationEmail(
         order_refunded: `Order #${orderId} Refunded`,
         order_partially_refunded: `Order #${orderId} Partially Refunded`,
         payment_balance_paid: `Order #${orderId} Balance Paid`,
+        support_request_submitted: `Order #${orderId} Support Request Submitted`,
+        support_request_status_updated: `Order #${orderId} Support Request Updated`,
     };
 
     const htmlMessages: Record<OrderNotificationType, string> = {
@@ -503,6 +522,8 @@ export async function sendOrderNotificationEmail(
         order_refunded: `Your order <strong>#${orderId}</strong> has been refunded, ${safeName}. The refund will be processed to your original payment method. If you have questions, please contact our support team.`,
         order_partially_refunded: `A partial refund has been processed for your order <strong>#${orderId}</strong>, ${safeName}. If you have questions, please contact our support team.`,
         payment_balance_paid: `We've received the remaining payment for your order <strong>#${orderId}</strong>, ${safeName}. Your order is now fully paid.`,
+        support_request_submitted: `We've received your ${safeSupportRequestTypeLabel} for order <strong>#${orderId}</strong>, ${safeName}. The merchant will review it and update you soon.`,
+        support_request_status_updated: `Your ${safeSupportRequestTypeLabel} for order <strong>#${orderId}</strong> is now <strong>${safeSupportRequestStatusLabel}</strong>, ${safeName}.`,
     };
 
     const smsMessages: Record<OrderNotificationType, string> = {
@@ -519,6 +540,8 @@ export async function sendOrderNotificationEmail(
         order_refunded: `Hi ${name}, your order #${orderId} has been refunded. Contact us if you have questions.`,
         order_partially_refunded: `Hi ${name}, a partial refund has been processed for order #${orderId}. Contact us if you have questions.`,
         payment_balance_paid: `Hi ${name}, we received the remaining payment for order #${orderId}. Your order is now fully paid.`,
+        support_request_submitted: `Hi ${name}, we received your ${supportRequestTypeLabel} for order #${orderId}. We'll update you soon.`,
+        support_request_status_updated: `Hi ${name}, your ${supportRequestTypeLabel} for order #${orderId} is now ${supportRequestStatusLabel}.`,
     };
 
     const receiptEnabled = Boolean(db && options.outboxId);

@@ -10,12 +10,19 @@ const mocks = vi.hoisted(() => ({
         newStatus: string;
         version?: number | null;
     }) => `order_status:${options.orderId}:v${options.version ?? "none"}:${options.previousStatus ?? "unknown"}->${options.newStatus}`),
+    buildSupportRequestSubmittedNotificationDedupeKey: vi.fn((requestId: string) => `support_request:${requestId}:submitted`),
+    buildSupportRequestStatusUpdatedNotificationDedupeKey: vi.fn((options: {
+        requestId: string;
+        status: string;
+    }) => `support_request:${options.requestId}:status:${options.status}`),
 }));
 
 vi.mock("@scalius/core/modules/notifications", () => ({
     buildOrderBalancePaidNotificationDedupeKey: mocks.buildOrderBalancePaidNotificationDedupeKey,
     buildOrderCreatedNotificationDedupeKey: mocks.buildOrderCreatedNotificationDedupeKey,
     buildOrderStatusNotificationDedupeKey: mocks.buildOrderStatusNotificationDedupeKey,
+    buildSupportRequestSubmittedNotificationDedupeKey: mocks.buildSupportRequestSubmittedNotificationDedupeKey,
+    buildSupportRequestStatusUpdatedNotificationDedupeKey: mocks.buildSupportRequestStatusUpdatedNotificationDedupeKey,
     recordAndEnqueueOrderNotification: mocks.recordAndEnqueueOrderNotification,
 }));
 
@@ -24,6 +31,7 @@ import {
     enqueueOrderCreatedNotificationForOrder,
     enqueueOrderNotificationsForStatus,
     enqueueOrderRefundNotificationForOrder,
+    enqueueOrderSupportRequestNotificationForOrder,
     enqueueOrderStatusChangeNotification,
     getOrderNotificationTypeForStatus,
 } from "./order-notification-queue";
@@ -330,6 +338,100 @@ describe("order notification queue helpers", () => {
                 dedupeKey: "payment_balance_paid:order_1",
                 notificationType: "payment_balance_paid",
                 source: "payment-sslcommerz-balance-paid",
+            }),
+        }));
+    });
+
+    it("enqueues support request submissions with request-level dedupe and safe metadata", async () => {
+        const { db } = createDbMock([
+            { id: "order_1", customerEmail: "buyer@example.com", customerName: "Buyer" },
+        ]);
+        const queue = { send: vi.fn(async () => undefined) };
+
+        const result = await enqueueOrderSupportRequestNotificationForOrder({
+            db: db as never,
+            queue,
+            orderId: "order_1",
+            requestId: "osr_1",
+            notificationType: "support_request_submitted",
+            source: "customer-support-request",
+            status: "submitted",
+            data: {
+                supportRequestType: "refund",
+                supportRequestTypeLabel: "Refund request",
+                supportRequestStatus: "submitted",
+                supportRequestStatusLabel: "Submitted",
+            },
+        });
+
+        expect(result).toEqual({ orderId: "order_1", outboxId: "outbox_order_1", enqueued: true });
+        expect(queue.send).toHaveBeenCalledWith({
+            type: "order.notification",
+            orderId: "order_1",
+            customerEmail: "buyer@example.com",
+            customerName: "Buyer",
+            notificationType: "support_request_submitted",
+            data: {
+                supportRequestId: "osr_1",
+                supportRequestType: "refund",
+                supportRequestTypeLabel: "Refund request",
+                supportRequestStatus: "submitted",
+                supportRequestStatusLabel: "Submitted",
+            },
+        });
+        expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenCalledWith(expect.objectContaining({
+            notification: expect.objectContaining({
+                dedupeKey: "support_request:osr_1:submitted",
+                notificationType: "support_request_submitted",
+                source: "customer-support-request",
+            }),
+        }));
+    });
+
+    it("enqueues support request status updates without customer reason or admin note payloads", async () => {
+        const { db } = createDbMock([
+            { id: "order_1", customerEmail: "buyer@example.com", customerName: "Buyer" },
+        ]);
+        const queue = { send: vi.fn(async () => undefined) };
+
+        await enqueueOrderSupportRequestNotificationForOrder({
+            db: db as never,
+            queue,
+            orderId: "order_1",
+            requestId: "osr_1",
+            notificationType: "support_request_status_updated",
+            source: "admin-support-request-status",
+            status: "approved",
+            data: {
+                supportRequestType: "return",
+                supportRequestTypeLabel: "Return request",
+                supportRequestStatus: "approved",
+                supportRequestStatusLabel: "Approved",
+                previousSupportRequestStatus: "under_review",
+            },
+        });
+
+        expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+            notificationType: "support_request_status_updated",
+            data: {
+                supportRequestId: "osr_1",
+                supportRequestType: "return",
+                supportRequestTypeLabel: "Return request",
+                supportRequestStatus: "approved",
+                supportRequestStatusLabel: "Approved",
+                previousSupportRequestStatus: "under_review",
+            },
+        }));
+        const sendMock = queue.send as unknown as { mock: { calls: Array<[{ data: Record<string, unknown> }]> } };
+        const sentMessage = sendMock.mock.calls[0]![0];
+        expect(sentMessage.data).not.toHaveProperty("reason");
+        expect(sentMessage.data).not.toHaveProperty("message");
+        expect(sentMessage.data).not.toHaveProperty("note");
+        expect(mocks.recordAndEnqueueOrderNotification).toHaveBeenCalledWith(expect.objectContaining({
+            notification: expect.objectContaining({
+                dedupeKey: "support_request:osr_1:status:approved",
+                notificationType: "support_request_status_updated",
+                source: "admin-support-request-status",
             }),
         }));
     });

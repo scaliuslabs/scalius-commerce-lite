@@ -4,6 +4,8 @@ import {
     buildOrderBalancePaidNotificationDedupeKey,
     buildOrderCreatedNotificationDedupeKey,
     buildOrderStatusNotificationDedupeKey,
+    buildSupportRequestStatusUpdatedNotificationDedupeKey,
+    buildSupportRequestSubmittedNotificationDedupeKey,
     recordAndEnqueueOrderNotification,
     type OrderNotificationQueue,
     type OrderNotificationQueueMessage,
@@ -147,6 +149,11 @@ type RefundNotificationType = Extract<
     "refund_processing" | "refund_failed" | "order_refunded" | "order_partially_refunded"
 >;
 
+type SupportRequestNotificationType = Extract<
+    OrderNotificationType,
+    "support_request_submitted" | "support_request_status_updated"
+>;
+
 export async function enqueueOrderRefundNotificationForOrder(options: {
     db: Database;
     queue: OrderNotificationQueue | undefined;
@@ -179,6 +186,53 @@ export async function enqueueOrderRefundNotificationForOrder(options: {
             data: options.data,
         },
         dedupeKey: options.dedupeKey,
+        source: options.source,
+    });
+}
+
+export async function enqueueOrderSupportRequestNotificationForOrder(options: {
+    db: Database;
+    queue: OrderNotificationQueue | undefined;
+    orderId: string;
+    requestId: string;
+    notificationType: SupportRequestNotificationType;
+    source: string;
+    status?: string | null;
+    data?: Record<string, unknown>;
+}): Promise<EnqueueOrderNotificationResult> {
+    const orderRows = await selectSingleOrder(options.db, options.orderId);
+    const order = orderRows[0];
+    if (!order) {
+        console.warn(`[${options.source}] Skipped ${options.notificationType} notification for missing order ${options.orderId}`);
+        return {
+            orderId: options.orderId,
+            enqueued: false,
+            skippedReason: "order_missing",
+        };
+    }
+
+    const dedupeKey = options.notificationType === "support_request_submitted"
+        ? buildSupportRequestSubmittedNotificationDedupeKey(options.requestId)
+        : buildSupportRequestStatusUpdatedNotificationDedupeKey({
+            requestId: options.requestId,
+            status: options.status ?? String(options.data?.supportRequestStatus ?? "updated"),
+        });
+
+    return enqueueOrderNotificationMessage({
+        db: options.db,
+        queue: options.queue,
+        message: {
+            type: "order.notification",
+            orderId: options.orderId,
+            customerEmail: order.customerEmail ?? undefined,
+            customerName: order.customerName || "Customer",
+            notificationType: options.notificationType,
+            data: {
+                supportRequestId: options.requestId,
+                ...(options.data ?? {}),
+            },
+        },
+        dedupeKey,
         source: options.source,
     });
 }

@@ -241,6 +241,14 @@ function isConstraintError(error: unknown): boolean {
   return error instanceof Error && /constraint|unique|SQLITE_CONSTRAINT/i.test(error.message);
 }
 
+export function getOrderSupportRequestTypeLabel(type: string): string {
+  return isSupportRequestType(type) ? SUPPORT_REQUEST_COPY[type].label : "Support request";
+}
+
+export function getOrderSupportRequestStatusLabel(status: string): string {
+  return STATUS_COPY[status]?.label ?? status;
+}
+
 function openRequestReason(activeRequestTypes: ReadonlySet<string>): string {
   const [type] = [...activeRequestTypes];
   const copy = type && isSupportRequestType(type) ? SUPPORT_REQUEST_COPY[type] : null;
@@ -394,6 +402,9 @@ export async function updateAdminOrderSupportRequestStatus(
 ): Promise<{
   request: OrderSupportRequestView;
   supportRequests: OrderSupportRequestView[];
+  statusChanged: boolean;
+  previousStatus: string | null;
+  newStatus: string;
 }> {
   const targetStatus = normalizeAdminSupportRequestStatus(input.status);
   const note = input.note?.trim() || null;
@@ -419,6 +430,9 @@ export async function updateAdminOrderSupportRequestStatus(
     return {
       request: formatOrderSupportRequest(current),
       supportRequests: await listOrderSupportRequests(db, orderId),
+      statusChanged: false,
+      previousStatus: current.status,
+      newStatus: current.status,
     };
   }
 
@@ -468,6 +482,9 @@ export async function updateAdminOrderSupportRequestStatus(
   return {
     request: formatOrderSupportRequest(updated),
     supportRequests: await listOrderSupportRequests(db, orderId),
+    statusChanged: true,
+    previousStatus: current.status,
+    newStatus: targetStatus,
   };
 }
 
