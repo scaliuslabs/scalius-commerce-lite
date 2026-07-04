@@ -19,6 +19,8 @@ describe("attribute route query boundaries", () => {
     expect(cacheIndex).toBeGreaterThan(-1);
     expect(cacheIndex).toBeLessThan(routeIndex);
     expect(distinctCategoryIndex).toBeGreaterThan(routeIndex);
+    expect(source).toContain("queryNormalizers: { q: normalizePublicFtsSearchCacheValue }");
+    expect(source).toContain("const query = normalizePublicFtsSearchQuery(q);");
     expect(source).not.toContain(".limit(100)");
   });
 

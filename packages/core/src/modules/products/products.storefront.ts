@@ -87,7 +87,7 @@ function buildStorefrontProductConditions(params: StorefrontProductFilterInput):
     if (category) conditions.push(eq(products.categoryId, category));
     if (search) {
         const cond = ftsMatch("products_fts", "products", search);
-        if (cond) conditions.push(cond);
+        conditions.push(cond ?? sql`0 = 1`);
     }
     if (minPrice !== undefined) conditions.push(sql`${products.price} >= ${minPrice}`);
     if (maxPrice !== undefined) conditions.push(sql`${products.price} <= ${maxPrice}`);
@@ -611,7 +611,9 @@ export async function searchStorefrontProducts(
 
     const conditions: SQL[] = publicProductBaseConditions();
     const searchCondition = search ? ftsMatch("products_fts", "products", search) : null;
-    if (searchCondition) conditions.push(searchCondition);
+    if (search) {
+        conditions.push(searchCondition ?? sql`0 = 1`);
+    }
 
     const [results, countResults] = await Promise.all([
         db

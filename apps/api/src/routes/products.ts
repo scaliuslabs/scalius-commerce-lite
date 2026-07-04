@@ -13,6 +13,14 @@ import { successEnvelope, paginationSchema, errorResponses } from "../schemas/re
 
 import { ok } from "../utils/api-response";
 import { CACHE_TTLS } from "../utils/cache-ttls";
+import {
+  isPublicProductListCacheable,
+  isPublicProductSearchCacheable,
+  normalizePublicFtsSearchCacheValue,
+  normalizePublicIntegerCacheValue,
+  normalizePublicListingSearchParam,
+  normalizePublicNumberCacheValue,
+} from "../utils/public-search-query";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use(
@@ -31,6 +39,23 @@ app.use(
       }
       return {};
     },
+    queryNormalizers: {
+      search: normalizePublicFtsSearchCacheValue,
+      page: normalizePublicIntegerCacheValue,
+      limit: normalizePublicIntegerCacheValue,
+      minPrice: normalizePublicNumberCacheValue,
+      maxPrice: normalizePublicNumberCacheValue,
+    },
+    cacheCondition: (c) => {
+      const normalizedPath = c.req.path.replace(/\/$/, "");
+      if (normalizedPath.endsWith("/products/search")) {
+        return isPublicProductSearchCacheable(c.req.url);
+      }
+      if (normalizedPath.endsWith("/products")) {
+        return isPublicProductListCacheable(c.req.url);
+      }
+      return true;
+    },
     methods: ["GET"]
   }),
 );
@@ -38,8 +63,8 @@ app.use(
 const productFilterSchema = z.object({
   category: z.string().optional().openapi({ description: "Category slug filter" }),
   search: z.string().optional().openapi({ description: "Search query" }),
-  page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),
-  limit: z.coerce.number().optional().default(20).openapi({ description: "Items per page" }),
+  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
   sort: z
     .enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"])
     .optional()
@@ -54,7 +79,7 @@ const productFilterSchema = z.object({
 
 const productSearchSchema = z.object({
   search: z.string().optional().default("").openapi({ description: "Search query" }),
-  page: z.coerce.number().int().min(1).optional().default(1).openapi({ description: "Page number" }),
+  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(10).openapi({ description: "Items per page" })
 });
 
@@ -104,6 +129,7 @@ const listProductsRoute = createRoute({
         pagination: paginationSchema,
       })) } },
     },
+    400: errorResponses[400],
     500: errorResponses[500],
   }
 });
@@ -112,6 +138,7 @@ app.openapi(listProductsRoute, async (c) => {
   const db = c.get("db");
   const params = c.req.valid("query");
   const queryParams = c.req.query();
+  const search = normalizePublicListingSearchParam(params.search);
 
   const attributeFilters = await resolvePublicAttributeFilters(
     db,
@@ -119,7 +146,7 @@ app.openapi(listProductsRoute, async (c) => {
     Object.keys(params),
   );
 
-  const result = await getStorefrontProducts(db, { ...params, attributeFilters });
+  const result = await getStorefrontProducts(db, { ...params, search, attributeFilters });
   return ok(c, result);
 });
 
@@ -147,6 +174,7 @@ const searchProductsRoute = createRoute({
         pagination: paginationSchema.extend({ hasNextPage: z.boolean(), hasPrevPage: z.boolean() }),
       })) } },
     },
+    400: errorResponses[400],
     500: errorResponses[500],
   }
 });
@@ -154,7 +182,8 @@ const searchProductsRoute = createRoute({
 app.openapi(searchProductsRoute, async (c) => {
   const db = c.get("db");
   const { search, page, limit } = c.req.valid("query");
-  const result = await searchStorefrontProducts(db, { search, page, limit });
+  const normalizedSearch = normalizePublicListingSearchParam(search) ?? "";
+  const result = await searchStorefrontProducts(db, { search: normalizedSearch, page, limit });
   return ok(c, result);
 });
 
