@@ -26,22 +26,26 @@ const mocks = vi.hoisted(() => ({
   getActivePaymentMethods: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/orders", () => ({
-  CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES: ["cancel_pre_shipment", "return", "refund"],
-  buildCheckoutAttemptIdentity: mocks.buildCheckoutAttemptIdentity,
-  resolveExistingCheckoutAttempt: mocks.resolveExistingCheckoutAttempt,
-  claimCheckoutAttempt: mocks.claimCheckoutAttempt,
-  createReceiptOrderSupportRequest: mocks.createReceiptOrderSupportRequest,
-  createStorefrontOrder: mocks.createStorefrontOrder,
-  getOrderSupportRequestStatusLabel: mocks.getOrderSupportRequestStatusLabel,
-  getReceiptOrderSupportRequestState: mocks.getReceiptOrderSupportRequestState,
-  markCheckoutAttemptCommitted: mocks.markCheckoutAttemptCommitted,
-  markCheckoutAttemptFailed: mocks.markCheckoutAttemptFailed,
-  commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
-  runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
-  validateStorefrontCartItems: mocks.validateStorefrontCartItems,
-  validateStorefrontDeliveryPreflight: mocks.validateStorefrontDeliveryPreflight,
-}));
+vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@scalius/core/modules/orders")>();
+  return {
+    ...actual,
+    CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES: ["cancel_pre_shipment", "return", "refund"],
+    buildCheckoutAttemptIdentity: mocks.buildCheckoutAttemptIdentity,
+    resolveExistingCheckoutAttempt: mocks.resolveExistingCheckoutAttempt,
+    claimCheckoutAttempt: mocks.claimCheckoutAttempt,
+    createReceiptOrderSupportRequest: mocks.createReceiptOrderSupportRequest,
+    createStorefrontOrder: mocks.createStorefrontOrder,
+    getOrderSupportRequestStatusLabel: mocks.getOrderSupportRequestStatusLabel,
+    getReceiptOrderSupportRequestState: mocks.getReceiptOrderSupportRequestState,
+    markCheckoutAttemptCommitted: mocks.markCheckoutAttemptCommitted,
+    markCheckoutAttemptFailed: mocks.markCheckoutAttemptFailed,
+    commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
+    runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
+    validateStorefrontCartItems: mocks.validateStorefrontCartItems,
+    validateStorefrontDeliveryPreflight: mocks.validateStorefrontDeliveryPreflight,
+  };
+});
 
 vi.mock("../utils/cache-invalidation", () => ({
   getOptionalExecutionContext: (c: { executionCtx?: unknown }) => {

@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { checkoutAttempts, orderItems, orderReceipts, orders } from "@scalius/database/schema";
 
 import { errorResponseFromError } from "../utils/api-response";
 import { orderRoutes } from "./orders";
@@ -106,48 +107,43 @@ const supportRequestActions = [
 
 function createDbMock(options: {
   attemptRow?: { orderId: string; status: string } | null;
+  receiptOrderId?: string | null;
 } = {}) {
-  let selectCount = 0;
+  const inserts: unknown[] = [];
   return {
+    __inserts: inserts,
     select: vi.fn(() => {
-      selectCount += 1;
-      if (options.attemptRow && selectCount === 1) {
-        return {
-          from: () => ({
-            where: () => ({
-              get: async () => options.attemptRow,
-            }),
-          }),
-        };
-      }
-
-      if (selectCount === 1) {
-        return {
-          from: () => ({
-            where: () => ({
-              get: async () => orderRow,
-            }),
-          }),
-        };
-      }
-
-      if (options.attemptRow && selectCount === 2) {
-        return {
-          from: () => ({
-            where: () => ({
-              get: async () => orderRow,
-            }),
-          }),
-        };
-      }
-
-      const itemQuery = {
-        from: () => itemQuery,
-        leftJoin: () => itemQuery,
-        where: async () => itemRows,
+      let selectedTable: unknown;
+      const query = {
+        from: (table: unknown) => {
+          selectedTable = table;
+          return query;
+        },
+        leftJoin: () => query,
+        where: () => {
+          if (selectedTable === orderItems) return Promise.resolve(itemRows);
+          return query;
+        },
+        get: async () => {
+          if (selectedTable === orderReceipts) {
+            return options.receiptOrderId
+              ? { orderId: options.receiptOrderId, status: "active", expiresAt: Math.floor(Date.now() / 1000) + 600 }
+              : null;
+          }
+          if (selectedTable === checkoutAttempts) return options.attemptRow ?? null;
+          if (selectedTable === orders) return orderRow;
+          return null;
+        },
       };
-      return itemQuery;
+      return query;
     }),
+    insert: vi.fn(() => ({
+      values: (values: unknown) => ({
+        onConflictDoUpdate: async () => {
+          inserts.push(values);
+        },
+      }),
+    })),
   };
 }
 
@@ -155,7 +151,10 @@ function createTestApp(options: {
   tokenOrderId?: string | null;
   attemptRow?: { orderId: string; status: string } | null;
 }) {
-  const db = createDbMock({ attemptRow: options.attemptRow });
+  const db = createDbMock({
+    attemptRow: options.attemptRow,
+    receiptOrderId: options.tokenOrderId,
+  });
   const kv = {
     get: vi.fn().mockResolvedValue(
       options.tokenOrderId
@@ -239,8 +238,9 @@ describe("order receipt route", () => {
     );
 
     expect(response.status).toBe(404);
-    expect(kv.get).toHaveBeenCalledWith("order_receipt:chk_wrong");
-    expect(db.select).not.toHaveBeenCalled();
+    expect(db.select).toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("returns a minimal receipt DTO for a valid token", async () => {
@@ -288,8 +288,8 @@ describe("order receipt route", () => {
     );
   });
 
-  it("falls back to D1 checkout attempts and repairs KV when receipt KV is missing", async () => {
-    const { app, kv } = createTestApp({
+  it("falls back to D1 checkout attempts, records receipt proof, and repairs KV when receipt row is missing", async () => {
+    const { app, db, kv } = createTestApp({
       tokenOrderId: null,
       attemptRow: { orderId: "order_1", status: "committed" },
     });
@@ -306,7 +306,10 @@ describe("order receipt route", () => {
     expect(response.status).toBe(200);
     expect(body.data?.order?.id).toBe("order_1");
     expect(body.data?.order?.supportRequests).toEqual([supportRequest]);
-    expect(kv.get).toHaveBeenCalledWith("order_receipt:chk_valid");
+    expect(kv.get).not.toHaveBeenCalled();
+    expect((db as unknown as { __inserts: unknown[] }).__inserts).toHaveLength(1);
+    expect(JSON.stringify((db as unknown as { __inserts: unknown[] }).__inserts[0]))
+      .not.toContain("chk_valid");
     expect(kv.put).toHaveBeenCalledWith(
       "order_receipt:chk_valid",
       JSON.stringify({ orderId: "order_1" }),
@@ -331,7 +334,7 @@ describe("order receipt route", () => {
 
     expect(response.status).toBe(200);
     expect(body.data?.order?.id).toBe("order_1");
-    expect(kv.get).toHaveBeenCalledWith("order_receipt:chk_valid");
+    expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 
@@ -353,8 +356,9 @@ describe("order receipt route", () => {
     );
 
     expect(response.status).toBe(404);
-    expect(kv.get).toHaveBeenCalledWith("order_receipt:chk_wrong");
-    expect(db.select).not.toHaveBeenCalled();
+    expect(db.select).toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
     expect(orderSupportMocks.createReceiptOrderSupportRequest).not.toHaveBeenCalled();
     expect(notificationMocks.enqueueOrderSupportRequestNotificationForOrder).not.toHaveBeenCalled();
   });

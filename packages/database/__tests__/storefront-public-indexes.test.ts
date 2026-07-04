@@ -46,10 +46,10 @@ describe("storefront public listing indexes", () => {
         const journal = JSON.parse(readFileSync(journalPath, "utf8"));
 
         expect(metadataCheck).toContain('"0075"');
-        expect(journal.entries.at(-1)).toMatchObject({
+        expect(journal.entries).toContainEqual(expect.objectContaining({
             idx: 75,
             tag: "0075_storefront_listing_indexes",
             breakpoints: true,
-        });
+        }));
     });
 });

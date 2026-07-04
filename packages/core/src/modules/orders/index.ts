@@ -8,5 +8,6 @@ export * from "./orders.ingest";
 export * from "./orders.validation";
 export * from "./order-state-machine";
 export * from "./checkout-attempts";
+export * from "./order-receipts";
 export * from "./cart-validation";
 export * from "./order-support-requests";

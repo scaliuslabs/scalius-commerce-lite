@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
+import { orderReceipts } from "@scalius/database/schema";
 import { ConflictError } from "@scalius/core/errors";
 import {
   buildCheckoutAttemptIdentity,
@@ -8,6 +9,7 @@ import {
   markCheckoutAttemptFailed,
   resolveExistingCheckoutAttempt,
 } from "./checkout-attempts";
+import { hashOrderReceiptToken } from "./order-receipts";
 import type { CreateStorefrontOrderInput } from "./orders.types";
 
 type AttemptRow = {
@@ -24,6 +26,16 @@ type AttemptRow = {
   claimId: string | null;
   claimExpiresAt: number | null;
   lastError: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type ReceiptRow = {
+  tokenHash: string;
+  orderId: string;
+  source: string;
+  status: string;
+  expiresAt: number;
   createdAt: number;
   updatedAt: number;
 };
@@ -51,6 +63,29 @@ describe("checkout attempts", () => {
     });
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]?.attempts).toBe(1);
+  });
+
+  it("records a hash-backed order receipt proof when a checkout attempt commits", async () => {
+    const fake = createFakeCheckoutAttemptDb();
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+
+    const claim = await claimCheckoutAttempt<{ orderId: string }>(fake.db, identity);
+    if (claim.status !== "claimed") throw new Error("expected claim");
+
+    await markCheckoutAttemptCommitted(fake.db, claim.attempt, {
+      paymentMethod: "sslcommerz",
+      totalAmount: 120,
+      response: { orderId: claim.attempt.orderId },
+    });
+
+    expect(fake.receipts).toHaveLength(1);
+    expect(fake.receipts[0]).toMatchObject({
+      tokenHash: await hashOrderReceiptToken(claim.attempt.checkoutToken),
+      orderId: claim.attempt.orderId,
+      source: "checkout_attempt",
+      status: "active",
+    });
+    expect(JSON.stringify(fake.receipts[0])).not.toContain(claim.attempt.checkoutToken);
   });
 
   it("resolves a committed checkout submit through the read-only precheck", async () => {
@@ -197,14 +232,39 @@ function buildInput(overrides: Partial<CreateStorefrontOrderInput> = {}): Create
   };
 }
 
-function createFakeCheckoutAttemptDb(): { db: Database; rows: AttemptRow[]; stats: { selects: number; updates: number } } {
+function createFakeCheckoutAttemptDb(): {
+  db: Database;
+  rows: AttemptRow[];
+  receipts: ReceiptRow[];
+  stats: { selects: number; updates: number };
+} {
   const rows: AttemptRow[] = [];
+  const receipts: ReceiptRow[] = [];
   const now = () => Math.floor(Date.now() / 1000);
   const stats = { selects: 0, updates: 0 };
 
   const db = {
-    insert: () => ({
+    insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => ({
+        onConflictDoUpdate: async () => {
+          if (table !== orderReceipts) return;
+          const current = now();
+          const row: ReceiptRow = {
+            tokenHash: String(values.tokenHash),
+            orderId: String(values.orderId),
+            source: String(values.source),
+            status: String(values.status),
+            expiresAt: Number(values.expiresAt),
+            createdAt: current,
+            updatedAt: current,
+          };
+          const index = receipts.findIndex((receipt) => receipt.tokenHash === row.tokenHash);
+          if (index >= 0) {
+            receipts[index] = { ...receipts[index]!, ...row, createdAt: receipts[index]!.createdAt };
+          } else {
+            receipts.push(row);
+          }
+        },
         onConflictDoNothing: () => ({
           returning: async () => {
             if (rows.some((row) => row.requestKey === values.requestKey)) return [];
@@ -276,7 +336,7 @@ function createFakeCheckoutAttemptDb(): { db: Database; rows: AttemptRow[]; stat
     }),
   } as unknown as Database;
 
-  return { db, rows, stats };
+  return { db, rows, receipts, stats };
 }
 
 function materializeUpdate(values: Record<string, unknown>, row: AttemptRow): Partial<AttemptRow> {

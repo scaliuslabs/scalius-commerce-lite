@@ -1,10 +1,14 @@
 import { NotFoundError } from "./api-error";
 import type { Database } from "@scalius/database/client";
-import { checkoutAttempts } from "@scalius/database/schema";
-import { and, eq, or } from "drizzle-orm";
+import {
+  ORDER_RECEIPT_TOKEN_PREFIX,
+  ORDER_RECEIPT_TOKEN_TTL_SECONDS,
+  isOrderReceiptToken,
+  validateOrderReceiptProof,
+} from "@scalius/core/modules/orders";
 
-export const RECEIPT_TOKEN_PREFIX = "order_receipt:";
-export const RECEIPT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+export const RECEIPT_TOKEN_PREFIX = ORDER_RECEIPT_TOKEN_PREFIX;
+export const RECEIPT_TOKEN_TTL_SECONDS = ORDER_RECEIPT_TOKEN_TTL_SECONDS;
 
 export async function validateReceiptToken(
   kv: KVNamespace | undefined,
@@ -12,62 +16,55 @@ export async function validateReceiptToken(
   token: string | undefined,
   db?: Database,
 ): Promise<void> {
-  if (!token || !token.startsWith("chk_")) {
+  if (!isOrderReceiptToken(token)) {
     throw new NotFoundError("Order receipt not found");
+  }
+
+  if (db) {
+    const result = await validateOrderReceiptProof(db, { orderId, token });
+    if (!result) {
+      throw new NotFoundError("Order receipt not found");
+    }
+
+    if (result.shouldRepairKv) {
+      await repairReceiptKv(kv, token, orderId, result.tokenHash);
+    }
+    return;
   }
 
   const raw = kv ? await kv.get(`${RECEIPT_TOKEN_PREFIX}${token}`) : null;
+  if (!raw) {
+    throw new NotFoundError("Order receipt not found");
+  }
 
-  if (raw) {
-    try {
-      const data = JSON.parse(raw) as { orderId?: unknown };
-      if (data.orderId !== orderId) {
-        throw new NotFoundError("Order receipt not found");
-      }
-      return;
-    } catch (error) {
-      if (error instanceof NotFoundError) throw error;
+  try {
+    const data = JSON.parse(raw) as { orderId?: unknown };
+    if (data.orderId !== orderId) {
       throw new NotFoundError("Order receipt not found");
     }
-  }
-
-  if (!db) {
+  } catch (error) {
+    if (error instanceof NotFoundError) throw error;
     throw new NotFoundError("Order receipt not found");
   }
+}
 
-  const attempt = await db
-    .select({
-      orderId: checkoutAttempts.orderId,
-      status: checkoutAttempts.status,
-    })
-    .from(checkoutAttempts)
-    .where(
-      and(
-        eq(checkoutAttempts.checkoutToken, token),
-        eq(checkoutAttempts.orderId, orderId),
-        or(
-          eq(checkoutAttempts.status, "committed"),
-          eq(checkoutAttempts.status, "processing"),
-        ),
-      ),
-    )
-    .get();
+async function repairReceiptKv(
+  kv: KVNamespace | undefined,
+  token: string,
+  orderId: string,
+  tokenHash: string,
+): Promise<void> {
+  if (!kv) return;
 
-  if (!attempt) {
-    throw new NotFoundError("Order receipt not found");
-  }
-
-  if (attempt.status === "committed") {
-    await kv?.put(
-      `${RECEIPT_TOKEN_PREFIX}${token}`,
-      JSON.stringify({ orderId }),
-      { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
-    ).catch((error: unknown) => {
-      console.error("[Orders] Failed to repair receipt token KV from D1:", {
-        orderId,
-        token,
-        error,
-      });
+  await kv.put(
+    `${RECEIPT_TOKEN_PREFIX}${token}`,
+    JSON.stringify({ orderId }),
+    { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
+  ).catch((error: unknown) => {
+    console.error("[Orders] Failed to repair receipt token KV from D1:", {
+      orderId,
+      tokenHash: tokenHash.slice(0, 12),
+      error,
     });
-  }
+  });
 }

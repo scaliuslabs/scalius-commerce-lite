@@ -64,7 +64,9 @@ import {
   OrderStatus,
   PaymentPlanStatus,
   PaymentStatus,
+  checkoutAttempts as checkoutAttemptsTable,
   orders as ordersTable,
+  orderReceipts as orderReceiptsTable,
   paymentPlans as paymentPlansTable,
   siteSettings as siteSettingsTable,
 } from "@scalius/database/schema";
@@ -97,6 +99,7 @@ interface DbMockOptions {
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;
   paymentPlan?: { depositAmount?: number; balanceDue: number; status: string } | null;
+  receiptOrderId?: string | null;
   insertError?: unknown;
   updateResult?: unknown;
   updateError?: unknown;
@@ -137,6 +140,14 @@ function createDbMock(options: string | DbMockOptions = "stripe") {
         }),
         where: () => query,
         get: vi.fn(async () => {
+          if (selectedTable === orderReceiptsTable) {
+            return opts.receiptOrderId
+              ? { orderId: opts.receiptOrderId, status: "active", expiresAt: Math.floor(Date.now() / 1000) + 600 }
+              : null;
+          }
+          if (selectedTable === checkoutAttemptsTable) {
+            return null;
+          }
           if (selectedTable === siteSettingsTable) {
             return {
               checkoutMode: opts.checkoutMode ?? "all",
@@ -166,11 +177,16 @@ function createKvMock(mode: TokenMode) {
         orderId: mode === "valid" ? "order_1" : "other_order",
       });
     }),
+    put: vi.fn(async () => undefined),
   };
 }
 
 function createTestApp(mode: TokenMode = "valid", dbOptions: string | DbMockOptions = "stripe") {
-  const db = createDbMock(dbOptions);
+  const baseOptions: DbMockOptions = typeof dbOptions === "string" ? { paymentMethod: dbOptions } : dbOptions;
+  const db = createDbMock({
+    ...baseOptions,
+    receiptOrderId: mode === "valid" ? "order_1" : mode === "wrong" ? "other_order" : null,
+  });
   const kv = createKvMock(mode);
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
@@ -320,7 +336,7 @@ describe("payment session receipt-token proof", () => {
   });
 
   it("rejects SSLCommerz session creation when the token belongs to another order", async () => {
-    const { app, kv } = createTestApp("wrong", "sslcommerz");
+    const { app, db, kv } = createTestApp("wrong", "sslcommerz");
 
     const response = await app.request(
       "/api/v1/payment/sslcommerz/session",
@@ -333,7 +349,9 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(404);
-    expect(kv.get).toHaveBeenCalledWith("order_receipt:chk_valid");
+    expect(db.select).toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
     expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
     expect(mocks.initSSLCommerzSession).not.toHaveBeenCalled();
   });

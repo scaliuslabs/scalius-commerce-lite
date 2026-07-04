@@ -1,5 +1,5 @@
 // src/db/schema/orders.ts
-// Order domain tables: orders, checkoutAttempts, orderItems, orderPayments, refundAttempts,
+// Order domain tables: orders, checkoutAttempts, orderReceipts, orderItems, orderPayments, refundAttempts,
 // orderSupportRequests, orderSupportRequestEvents, paymentPlans,
 // codTracking, webhookEvents, orderNotificationOutbox,
 // orderNotificationDeliveryReceipts, abandonedCheckouts.
@@ -123,6 +123,21 @@ export const checkoutAttempts = sqliteTable("checkout_attempts", {
     uniqueIndex("checkout_attempts_checkout_token_unique").on(table.checkoutToken),
     index("checkout_attempts_order_id_idx").on(table.orderId),
     index("checkout_attempts_status_claim_idx").on(table.status, table.claimExpiresAt),
+]);
+
+export const orderReceipts = sqliteTable("order_receipts", {
+    tokenHash: text("token_hash").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    source: text("source").notNull().default("checkout"),
+    status: text("status").notNull().default("active"),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("order_receipts_order_id_idx").on(table.orderId),
+    index("order_receipts_status_expires_idx").on(table.status, table.expiresAt),
 ]);
 
 export const orderItems = sqliteTable("order_items", {
