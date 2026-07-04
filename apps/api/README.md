@@ -279,6 +279,8 @@ It returns `200` with `status: "ready"` only when required platform dependencies
 
 It returns `503` with `status: "degraded"` when a required dependency is missing, errors, or times out. Deployment and smoke scripts should keep `/health` as a shallow liveness check and use `/readyz` for platform readiness; do not call `/readyz` as a hot-path app health check.
 
+`scripts/deploy.mjs` verifies API deploys by proving the latest Worker deployment is at `100%`, checking `/api/v1/health`, then sampling `/api/v1/readyz` four times. A transient degraded KV/R2/D1 sample is recorded as a warning only if the window recovers with a final ready sample and at least two ready samples total; persistent degraded readiness fails the deploy verification.
+
 ## Queue Consumer
 
 `src/queue-consumer.ts` dispatches payment, notification, OTP, storefront cache purge, and storefront cache warm messages by type. Queue-driven purges call the storefront purge endpoint with `warm:false`; after the purge succeeds, a separate `storefront.cache_warm` message warms `/` and/or bounded exact HTML paths so warm retries never repeat the purge/version bump. Storefront cache queue batches are intentionally small, and warm messages fetch exact paths in tiny batches so rewarming does not stampede storefront SSR/API/D1 work. Terminal `auth-otp-dlq` messages are archived by marking the D1 OTP delivery receipt skipped without calling providers. Terminal `storefront-cache-dlq` messages are archived to D1 (`storefront_cache_queue_failures`) and can be listed, replayed, or ignored through the admin-protected cache API. Storefront order creation is not queue-backed; `POST /orders` commits through D1 before returning `201`, then schedules post-commit side effects.

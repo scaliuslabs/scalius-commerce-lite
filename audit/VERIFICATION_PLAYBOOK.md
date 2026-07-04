@@ -39,10 +39,19 @@ Expected healthy result: HTTP `200`, `Cache-Control: no-store`, `success: true`,
 
 Expected degraded result: HTTP `503`, `success: false`, `status: "degraded"`, and a per-check `status` of `missing`, `error`, or `timeout`. The endpoint must stay read-only: D1 uses `SELECT 1`, KV uses a read probe, R2 uses `list({ limit: 1 })`, and Queue/DO checks are binding-shape checks only.
 
+API deploy verification:
+
+```bash
+pnpm run deploy:api
+```
+
+Expected deploy proof after the Worker upload: latest API deployment serves one version at `100%`, `/api/v1/health` returns `200`, and the deploy script samples `/api/v1/readyz` four times. A single transient dependency timeout can pass only when the recovery window ends ready and at least two samples are ready; persistent degraded readiness must fail the deploy verification.
+
 Focused local test:
 
 ```bash
 pnpm --filter @scalius/api exec vitest run src/routes/readiness.test.ts --passWithNoTests
+pnpm exec vitest run scripts/deploy.test.mjs
 ```
 
 ## Storefront Listing Query Plans
