@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { PaymentStatus } from "@scalius/database/schema";
-import { ValidationError } from "@scalius/core/errors";
+import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import type { CreateOrderInput } from "./orders.validation";
 
 const inventoryMocks = vi.hoisted(() => ({
     reserveStockBatch: vi.fn(),
     deductMultiple: vi.fn(),
     releaseMultiple: vi.fn(),
+    releaseReservedStockBatch: vi.fn(),
     restoreDeductedMultiple: vi.fn(),
     validateStockBatchAvailability: vi.fn(),
 }));
@@ -16,11 +17,22 @@ vi.mock("../inventory", () => ({
     reserveStockBatch: inventoryMocks.reserveStockBatch,
     deductMultiple: inventoryMocks.deductMultiple,
     releaseMultiple: inventoryMocks.releaseMultiple,
+    releaseReservedStockBatch: inventoryMocks.releaseReservedStockBatch,
     restoreDeductedMultiple: inventoryMocks.restoreDeductedMultiple,
     validateStockBatchAvailability: inventoryMocks.validateStockBatchAvailability,
 }));
 
 import { createOrder, resolveAdminOrderItemInventory } from "./orders.admin";
+
+beforeEach(() => {
+    vi.clearAllMocks();
+    inventoryMocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
+    inventoryMocks.deductMultiple.mockResolvedValue({ success: true, results: [] });
+    inventoryMocks.releaseMultiple.mockResolvedValue({ success: true, results: [] });
+    inventoryMocks.releaseReservedStockBatch.mockResolvedValue({ success: true, results: [] });
+    inventoryMocks.restoreDeductedMultiple.mockResolvedValue({ success: true, results: [] });
+    inventoryMocks.validateStockBatchAvailability.mockResolvedValue({ success: true, results: [] });
+});
 
 interface SkuRow {
     id: string;
@@ -431,5 +443,91 @@ describe("resolveAdminOrderItemInventory", () => {
             balanceDue: 260,
             paymentStatus: PaymentStatus.UNPAID,
         });
+    });
+
+    it("uses strict release when a manual order write fails after reserving tracked stock", async () => {
+        const { db, batch } = createOrderDbWithSkuRows([
+            {
+                id: "var_tracked",
+                productId: "prod_active",
+                trackInventory: true,
+                variantDeletedAt: null,
+                productActive: true,
+                productDeletedAt: null,
+            },
+        ]);
+        const batchError = new Error("D1 write failed");
+        batch.mockRejectedValueOnce(batchError);
+
+        await expect(createOrder(db, createOrderInput({
+            items: [
+                {
+                    productId: "prod_active",
+                    variantId: "var_tracked",
+                    quantity: 2,
+                    price: 100,
+                },
+            ],
+        }))).rejects.toBe(batchError);
+
+        expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
+            db,
+            [{ variantId: "var_tracked", quantity: 2, orderId: expect.any(String) }],
+            "regular",
+        );
+        expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
+            db,
+            [{ variantId: "var_tracked", quantity: 2, pool: "regular" }],
+            expect.any(String),
+            { releaseKey: "admin-order-create-rollback:v1" },
+        );
+        expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
+        expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
+    });
+
+    it("fails closed when manual order reservation cleanup cannot be proven", async () => {
+        const { db, batch } = createOrderDbWithSkuRows([
+            {
+                id: "var_tracked",
+                productId: "prod_active",
+                trackInventory: true,
+                variantDeletedAt: null,
+                productActive: true,
+                productDeletedAt: null,
+            },
+        ]);
+        batch.mockRejectedValueOnce(new Error("D1 write failed"));
+        inventoryMocks.releaseReservedStockBatch.mockResolvedValueOnce({
+            success: false,
+            results: [{
+                success: false,
+                variantId: "var_tracked",
+                previousStock: 0,
+                newStock: 0,
+                error: "Reservation release batch failed",
+            }],
+            error: "Reservation release batch failed",
+            manualReconciliationRequired: true,
+        });
+
+        const failure = createOrder(db, createOrderInput({
+            items: [
+                {
+                    productId: "prod_active",
+                    variantId: "var_tracked",
+                    quantity: 2,
+                    price: 100,
+                },
+            ],
+        }));
+
+        await expect(failure).rejects.toMatchObject({
+            name: "ServiceUnavailableError",
+            message: "Manual order inventory cleanup is temporarily unavailable. Please try again.",
+        });
+        await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableError);
+
+        expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+        expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
     });
 });

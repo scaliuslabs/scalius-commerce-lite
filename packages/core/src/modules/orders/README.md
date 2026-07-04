@@ -90,7 +90,7 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 2. **SKU authority**: `resolveAdminOrderItemInventory()` requires every manual order item to use a concrete SKU, joins the SKU to its parent product, and rejects missing/deleted SKUs, product/SKU mismatches, inactive products, and soft-deleted products before any inventory or order write starts. The returned `inventoryTracked` flag is trusted only after this validation.
 3. **Reserve stock**: Calls `reserveStockBatch()` only for validated tracked SKUs. If any SKU has insufficient stock, throws `ValidationError` immediately -- order is never created.
 4. **Atomic DB write**: Inserts customer (new or update), order, and items in a single `db.batch()` call with `inventoryAction: "reserved"` when tracked reservations exist, otherwise `"none"`.
-5. **On batch failure**: Calls `releaseMultiple()` to release all reservations made in step 3.
+5. **On batch failure**: Calls `releaseReservedStockBatch()` to prove all reservations made in step 3 were released with deterministic movement claims. If cleanup cannot be proven, the admin create request fails closed with a temporary-unavailable error.
 6. **Convert to deduction**: Calls `deductMultiple()` to permanently deduct stock (decrements `stock`, clears `reservedStock`). On success, updates `inventoryAction` to `"deducted"`.
 7. **On deduction failure**: Stock remains reserved (no overselling risk). Error is logged but the order itself succeeds.
 
