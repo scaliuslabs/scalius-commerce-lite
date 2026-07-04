@@ -111,6 +111,15 @@ the schema declarations are the source of truth.
 | `mediaFolders` | Media folder hierarchy. Self-referential `parentId` FK |
 | `media` | Uploaded media files. `filename`, `url`, `size`, `mimeType`, `folderId` FK, media metadata |
 
+Public storefront listing indexes are intentionally measured and narrow:
+`products_public_newest_idx` supports the default `/products` newest path,
+`products_public_category_newest_idx` supports default category newest reads and
+related-product category scans, and `product_attribute_values_attr_value_product_idx`
+is a covering lookup for resolved attribute filters. The common single-attribute
+storefront filter path intentionally avoids the grouped intersection query so the
+covering attribute index can satisfy the lookup directly. Do not remove or reshape
+these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
+
 ### `customers.ts` -- Customer Domain
 
 | Table | Purpose |

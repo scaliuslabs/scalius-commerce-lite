@@ -84,7 +84,31 @@ describe("storefront product query boundaries", () => {
         const conditionsHelperIndex = source.indexOf("function buildStorefrontProductConditions");
         const sortHelperIndex = source.indexOf("function getStorefrontProductOrderBy");
         const attributeHelperIndex = source.indexOf("function buildAttributeProductSubquery");
+        const singleFilterBranchIndex = source.indexOf(
+            "if (attributeFilters.length === 1) {",
+            attributeHelperIndex,
+        );
+        const singleFilterAliasIndex = source.indexOf(
+            ".as(alias);",
+            singleFilterBranchIndex,
+        );
+        const multiFilterGroupIndex = source.indexOf(
+            ".groupBy(productAttributeValues.productId)",
+            singleFilterAliasIndex,
+        );
+        const attributeInnerJoinIndex = source.indexOf(
+            ".innerJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))",
+            attributeHelperIndex,
+        );
+        const attributeLeftJoinIndex = source.indexOf(
+            ".leftJoin(productAttributes",
+            attributeHelperIndex,
+        );
         const categoryHelperIndex = source.indexOf("export async function getStorefrontCategoryProducts");
+        const newestSortIndex = source.indexOf(
+            "return desc(products.createdAt);",
+            sortHelperIndex,
+        );
         const categoryConditionsIndex = source.indexOf(
             "const conditions = buildStorefrontProductConditions({",
             categoryHelperIndex,
@@ -105,10 +129,16 @@ describe("storefront product query boundaries", () => {
         expect(conditionsHelperIndex).toBeGreaterThan(-1);
         expect(sortHelperIndex).toBeGreaterThan(conditionsHelperIndex);
         expect(attributeHelperIndex).toBeGreaterThan(sortHelperIndex);
+        expect(singleFilterBranchIndex).toBeGreaterThan(attributeHelperIndex);
+        expect(singleFilterAliasIndex).toBeGreaterThan(singleFilterBranchIndex);
+        expect(multiFilterGroupIndex).toBeGreaterThan(singleFilterAliasIndex);
+        expect(attributeInnerJoinIndex).toBeGreaterThan(attributeHelperIndex);
+        expect(attributeLeftJoinIndex).toBe(-1);
         expect(categoryHelperIndex).toBeGreaterThan(attributeHelperIndex);
         expect(categoryConditionsIndex).toBeGreaterThan(categoryHelperIndex);
         expect(categorySortIndex).toBeGreaterThan(categoryHelperIndex);
         expect(categoryAttributeIndex).toBeGreaterThan(categoryHelperIndex);
         expect(guardedDiscountSortIndex).toBeGreaterThan(sortHelperIndex);
+        expect(newestSortIndex).toBeGreaterThan(sortHelperIndex);
     });
 });
