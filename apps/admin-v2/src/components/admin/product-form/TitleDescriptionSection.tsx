@@ -11,13 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
+import { TiptapEditor } from "@/components/ui/tiptap/TiptapEditor";
 import type { ProductFormValues } from "./types";
-
-const TiptapEditor = lazy(() =>
-  import("@/components/ui/tiptap/TiptapEditor").then((module) => ({
-    default: module.TiptapEditor,
-  })),
-);
 
 const AdditionalInfoManager = lazy(() =>
   import("./AdditionalInfoManager").then((module) => ({
@@ -88,14 +83,12 @@ export function TitleDescriptionSection({
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    <Suspense fallback={<LoadingFallback height="h-[237px]" />}>
-                      <TiptapEditor
-                        content={field.value || ""}
-                        onChange={field.onChange}
-                        placeholder="Describe your product..."
-                        compact={true}
-                      />
-                    </Suspense>
+                    <TiptapEditor
+                      content={field.value || ""}
+                      onChange={field.onChange}
+                      placeholder="Describe your product..."
+                      compact={true}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -3,7 +3,9 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
 import { Minimize2 } from "lucide-react";
 import { Button } from "../button";
+import { RichContent } from "../rich-content";
 import { TiptapMenuBar } from "./TiptapMenuBar";
+import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
 
 interface TiptapEditorProps {
@@ -13,6 +15,19 @@ interface TiptapEditorProps {
   className?: string;
   compact?: boolean;
   autoFocus?: boolean;
+}
+
+const RICH_CONTENT_BLOCK_RE = /<(img|video|iframe|table|hr)\b/i;
+
+function hasRenderableContent(content: string) {
+  const text = content
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .trim();
+
+  return text.length > 0 || RICH_CONTENT_BLOCK_RE.test(content);
 }
 
 export function TiptapEditor({
@@ -28,6 +43,7 @@ export function TiptapEditor({
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const editorViewportHeight = compact ? "200px" : "300px";
+  const hasInitialContent = hasRenderableContent(content);
 
   // Handle Escape key and body scroll lock for fullscreen
   useEffect(() => {
@@ -200,7 +216,12 @@ export function TiptapEditor({
           compact={isFullscreen ? false : compact}
           isFullscreen={isFullscreen}
         />
-      ) : null}
+      ) : (
+        <TiptapToolbarSkeleton
+          compact={isFullscreen ? false : compact}
+          isFullscreen={isFullscreen}
+        />
+      )}
 
       {/* Editor content -- always mounted, never unmounts */}
       <div
@@ -222,7 +243,22 @@ export function TiptapEditor({
             ? "max-w-4xl mx-auto px-8 py-6 min-h-full bg-background shadow-sm border-x border-border/40"
             : ""
         )}>
-          <EditorContent editor={editorInstance} className="max-w-none" />
+          {editorInstance ? (
+            <EditorContent editor={editorInstance} className="max-w-none" />
+          ) : (
+            <div
+              className={cn(
+                "max-w-none p-4 min-h-[200px] text-sm leading-6",
+                hasInitialContent ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {hasInitialContent ? (
+                <RichContent content={content} variant="compact" />
+              ) : (
+                placeholder
+              )}
+            </div>
+          )}
         </div>
       </div>
       {/* CSS to ensure layout elements like sticky headers/sidebars are pushed below the fullscreen editor */}

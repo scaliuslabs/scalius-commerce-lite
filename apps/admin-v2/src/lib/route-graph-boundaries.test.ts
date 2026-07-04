@@ -1009,10 +1009,11 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
 
-    expect(source).toContain("const TiptapEditor = lazy(");
-    expect(source).toContain('import("@/components/ui/tiptap/TiptapEditor")');
+    expect(source).toContain('import { TiptapEditor } from "@/components/ui/tiptap/TiptapEditor"');
     expect(source).toContain("<TiptapEditor");
     expect(source).toContain('placeholder="Describe your product..."');
+    expect(source).not.toContain('import("@/components/ui/tiptap/TiptapEditor")');
+    expect(source).not.toContain('fallback={<LoadingFallback height="h-[237px]" />}');
     expect(source).not.toContain("DeferredTiptapEditor");
     expect(source).not.toContain("<RichContent");
     expect(source).not.toContain("../rich-content");
@@ -1105,7 +1106,9 @@ describe("admin route graph boundaries", () => {
     );
     expect(editorSource).toContain("const editorViewportHeight = compact ? \"200px\" : \"300px\"");
     expect(editorSource).toContain("style={!isFullscreen ? { minHeight: editorViewportHeight, maxHeight: editorViewportHeight } : undefined}");
-    expect(editorSource).not.toContain("TiptapToolbarSkeleton");
+    expect(editorSource).toContain("import { TiptapToolbarSkeleton } from \"./TiptapToolbarSkeleton\"");
+    expect(editorSource).toContain("<TiptapToolbarSkeleton");
+    expect(editorSource).toContain("<RichContent content={content} variant=\"compact\" />");
     expect(editorSource).not.toContain("setIsMounted");
     expect(editorSource).not.toContain("if (!isMounted)");
 
@@ -1113,13 +1116,12 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapToolbarSkeleton.tsx"),
       "utf8",
     );
-    expect(skeletonSource).toContain("primaryWidth");
-    expect(skeletonSource).toContain("secondaryWidth");
-    expect(skeletonSource).not.toContain("lucide-react");
-    expect(skeletonSource).not.toContain("TOOLBAR_GROUPS");
-    expect(skeletonSource).not.toContain("Maximize");
+    expect(skeletonSource).toContain("TOOLBAR_GROUPS");
+    expect(skeletonSource).toContain("lucide-react");
+    expect(skeletonSource).toContain("Maximize");
+    expect(skeletonSource).not.toContain("primaryWidth");
+    expect(skeletonSource).not.toContain("secondaryWidth");
     expect(skeletonSource).not.toContain("animate-pulse");
-    expect(skeletonSource).not.toContain("buttonSize");
 
     const toolbarButtonSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "ToolbarButton.tsx"),

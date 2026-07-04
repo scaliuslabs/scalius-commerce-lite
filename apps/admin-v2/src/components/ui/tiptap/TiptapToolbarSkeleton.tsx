@@ -1,40 +1,91 @@
 import { cn } from "@scalius/shared/utils";
+import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  FolderOpen,
+  Heading1,
+  Heading2,
+  Heading3,
+  Image as ImageIcon,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  Maximize,
+  Redo,
+  Table,
+  TextQuote,
+  Underline as UnderlineIcon,
+  Undo,
+  Video as VideoIcon,
+  type LucideIcon,
+} from "lucide-react";
 
 interface TiptapToolbarSkeletonProps {
   compact?: boolean;
   isFullscreen?: boolean;
 }
 
+const TOOLBAR_GROUPS: LucideIcon[][] = [
+  [Bold, Italic, UnderlineIcon],
+  [LinkIcon, ImageIcon, FolderOpen, VideoIcon],
+  [AlignLeft, AlignCenter, AlignRight, AlignJustify],
+  [Heading1, Heading2, Heading3],
+  [List, ListOrdered, TextQuote],
+  [Table],
+  [Undo, Redo],
+];
+
 export function TiptapToolbarSkeleton({
   compact = false,
   isFullscreen = false,
 }: TiptapToolbarSkeletonProps) {
-  const railHeight = compact ? "h-7" : "h-9";
-  const primaryWidth = compact ? "w-28" : "w-36";
-  const secondaryWidth = compact ? "w-12" : "w-16";
+  const buttonSize = compact ? "h-7 w-7" : "h-9 w-9";
+  const iconSize = compact ? "h-3 w-3" : "h-4 w-4";
+  const gapSize = compact ? "gap-0.5" : "gap-1";
   const padding = compact ? "p-0.5" : "p-1";
 
   return (
     <div
       aria-hidden="true"
       className={cn(
-        "rounded-t-md border border-input bg-background",
+        "border border-input rounded-t-md bg-background flex flex-wrap items-center text-muted-foreground/70",
+        isFullscreen ? "justify-center" : "justify-between",
         padding,
+        gapSize,
       )}
     >
-      <div
-        className={cn(
-          "flex items-center gap-2 px-2",
-          railHeight,
-          isFullscreen ? "justify-center" : "",
-        )}
-      >
-        <span className={cn("h-1.5 rounded-full bg-muted", primaryWidth)} />
-        <span className={cn("h-1.5 rounded-full bg-muted/80", secondaryWidth)} />
-        {!isFullscreen ? (
-          <span className="ml-auto h-1.5 w-8 rounded-full bg-muted/70" />
-        ) : null}
+      <div className={cn("flex flex-wrap items-center", gapSize)}>
+        {TOOLBAR_GROUPS.map((group, groupIndex) => (
+          <div key={groupIndex} className={cn("flex items-center", gapSize)}>
+            {groupIndex > 0 ? <div className="w-px h-6 bg-border mx-1" /> : null}
+            {group.map((Icon, itemIndex) => (
+              <span
+                key={itemIndex}
+                className={cn(
+                  buttonSize,
+                  "inline-flex shrink-0 items-center justify-center rounded-md",
+                )}
+              >
+                <Icon className={iconSize} strokeWidth={2} />
+              </span>
+            ))}
+          </div>
+        ))}
       </div>
+      {!isFullscreen ? (
+        <span
+          className={cn(
+            buttonSize,
+            "inline-flex shrink-0 items-center justify-center rounded-md",
+          )}
+        >
+          <Maximize className={iconSize} strokeWidth={2} />
+        </span>
+      ) : null}
     </div>
   );
 }
