@@ -4,6 +4,7 @@
 
 import { sqliteTable, text, integer, real, unique, index, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
 export const products = sqliteTable(
@@ -35,6 +36,13 @@ export const products = sqliteTable(
         uniqueIndex("products_slug_idx").on(table.slug),
         index("products_category_id_idx").on(table.categoryId),
         index("products_active_idx").on(table.isActive, table.deletedAt),
+        index("products_public_newest_idx").on(table.isActive, table.deletedAt, sql`${table.createdAt} DESC`),
+        index("products_public_category_newest_idx").on(
+            table.categoryId,
+            table.isActive,
+            table.deletedAt,
+            sql`${table.createdAt} DESC`,
+        ),
         index("products_deleted_at_idx").on(table.deletedAt),
     ],
 );
@@ -182,6 +190,11 @@ export const productAttributeValues = sqliteTable(
         unique().on(table.productId, table.attributeId),
         index("product_attribute_values_product_id_idx").on(table.productId),
         index("product_attribute_values_attribute_id_idx").on(table.attributeId),
+        index("product_attribute_values_attr_value_product_idx").on(
+            table.attributeId,
+            table.value,
+            table.productId,
+        ),
     ],
 );
 

@@ -526,6 +526,13 @@
       "when": 1782881000000,
       "tag": "0074_order_support_requests_nullable_customer",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1783166541306,
+      "tag": "0075_storefront_listing_indexes",
+      "breakpoints": true
     }
   ]
 }

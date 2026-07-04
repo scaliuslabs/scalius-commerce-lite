@@ -142,10 +142,25 @@ function buildAttributeProductSubquery(
 ) {
     if (attributeFilters.length === 0) return null;
 
+    if (attributeFilters.length === 1) {
+        const filter = attributeFilters[0]!;
+        return db
+            .select({ productId: productAttributeValues.productId })
+            .from(productAttributeValues)
+            .innerJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))
+            .where(
+                and(
+                    eq(productAttributes.slug, filter.slug),
+                    eq(productAttributeValues.value, filter.value),
+                ),
+            )
+            .as(alias);
+    }
+
     return db
         .select({ productId: productAttributeValues.productId })
         .from(productAttributeValues)
-        .leftJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))
+        .innerJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))
         .where(
             or(
                 ...attributeFilters.map((filter) =>

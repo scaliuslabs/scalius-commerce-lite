@@ -45,6 +45,22 @@ Focused local test:
 pnpm --filter @scalius/api exec vitest run src/routes/readiness.test.ts --passWithNoTests
 ```
 
+## Storefront Listing Query Plans
+
+Use this after changing product listing SQL, product/category/attribute indexes, or storefront filter handling:
+
+```bash
+pnpm --filter @scalius/api exec wrangler d1 execute scalius-commerce --remote --command "EXPLAIN QUERY PLAN SELECT p.id FROM products p WHERE p.is_active = 1 AND p.deleted_at IS NULL ORDER BY p.created_at DESC LIMIT 20;"
+pnpm --filter @scalius/api exec wrangler d1 execute scalius-commerce --remote --command "EXPLAIN QUERY PLAN SELECT p.id FROM products p WHERE p.category_id = 'cat_jt08vpZjE-s8YMyCK2Vzp' AND p.is_active = 1 AND p.deleted_at IS NULL ORDER BY p.created_at DESC LIMIT 20;"
+pnpm --filter @scalius/api exec wrangler d1 execute scalius-commerce --remote --command "EXPLAIN QUERY PLAN SELECT pav.product_id FROM product_attribute_values pav INNER JOIN product_attributes pa ON pav.attribute_id = pa.id WHERE pa.slug = 'brand' AND pav.value = 'Apple';"
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/products?page=1&limit=20&sort=newest'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/products?page=1&limit=20&sort=newest&brand=Apple'
+curl -sS -o /tmp/scalius-storefront-search.html -w 'HTTP %{http_code} time %{time_total} size %{size_download}\n' 'https://storefront.scalius.com/search?sortBy=newest'
+curl -sS -o /tmp/scalius-storefront-search-brand-apple.html -w 'HTTP %{http_code} time %{time_total} size %{size_download}\n' 'https://storefront.scalius.com/search?brand=Apple'
+```
+
+Expected D1 plan shape: global newest uses `products_public_newest_idx` without `USE TEMP B-TREE FOR ORDER BY`; category newest uses `products_public_category_newest_idx` without a temp sort; a single attribute filter uses `product_attributes_slug_idx` plus covering `product_attribute_values_attr_value_product_idx` without a temp group. Re-run with a fresh production category/filter pair if demo data changes.
+
 ## Focused Typecheck Commands
 
 ```bash
