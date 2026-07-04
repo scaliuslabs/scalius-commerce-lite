@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import type { CreateStorefrontOrderInput } from "./orders.types";
+import { recordOrderReceipt } from "./order-receipts";
 
 export interface CheckoutAttemptIdentity {
   requestKey: string;
@@ -216,6 +217,17 @@ export async function markCheckoutAttemptCommitted<TResponse>(
   if (rows.length === 0) {
     throw new ConflictError("Checkout attempt claim was lost before the committed order response was stored.");
   }
+
+  await recordOrderReceipt(db, {
+    orderId: attempt.orderId,
+    token: attempt.checkoutToken,
+    source: "checkout_attempt",
+  }).catch((error: unknown) => {
+    console.error("[checkout-attempts] Failed to record durable order receipt proof:", {
+      orderId: attempt.orderId,
+      error,
+    });
+  });
 }
 
 export async function markCheckoutAttemptFailed(
