@@ -170,6 +170,21 @@ export const orderPaymentRecoverySchema = z
     updatedAt: nullableTimestampSchema,
   })
 
+export const orderShipmentRecoverySchema = z
+  .object({
+    state: z.enum(["none", "creating", "needs_attention", "failed"]),
+    severity: z.enum(["info", "warning", "danger"]),
+    activeLock: z.boolean(),
+    label: z.string(),
+    message: z.string().nullable(),
+    shipmentId: z.string().nullable(),
+    status: z.string().nullable(),
+    providerType: z.string().nullable(),
+    canRefresh: z.boolean(),
+    canRetryCreate: z.boolean(),
+    updatedAt: nullableTimestampSchema,
+  })
+
 export const orderListActiveRefundOperationSchema = z.object({
   active: z.literal(true),
   status: z.string(),
@@ -211,6 +226,7 @@ export const orderSummarySchema = z
     itemCount: z.number(),
     totalQuantity: z.number(),
     latestShipment: orderShipmentSummarySchema.nullable(),
+    shipmentRecovery: orderShipmentRecoverySchema,
     paymentRecovery: orderPaymentRecoverySchema,
     activeRefundOperation: orderListActiveRefundOperationSchema.nullable(),
   })
@@ -331,6 +347,7 @@ export const orderDetailSchema = z
     itemCount: z.number(),
     items: z.array(orderItemSchema),
     latestShipment: orderShipmentSummarySchema.nullable(),
+    shipmentRecovery: orderShipmentRecoverySchema,
     paymentRecovery: orderPaymentRecoverySchema,
     refundAttempts: z.array(orderRefundAttemptSchema),
     activeRefundOperation: activeRefundOperationSchema.nullable(),

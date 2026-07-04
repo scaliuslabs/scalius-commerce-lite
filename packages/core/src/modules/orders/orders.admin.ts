@@ -18,6 +18,7 @@ import {
     PaymentMethod,
     PaymentStatus,
     ItemFulfillmentStatus,
+    ShipmentStatus,
 } from "@scalius/database/schema";
 import {
     applyInventoryForStatusChange,
@@ -50,6 +51,7 @@ import type {
     OrderDetails,
     OrderPaymentRecoveryFilter,
     OrderPaymentRecoverySummary,
+    OrderShipmentRecoverySummary,
     OrderShipmentSummary,
 } from "./orders.types";
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
@@ -107,6 +109,8 @@ type OrderRecoverySourceRow = {
     status: string;
     paymentStatus: string;
     paymentMethod: string | null;
+    shipmentClaimId?: string | null;
+    shipmentClaimExpiresAt?: Date | number | string | null;
 };
 type AdminOrderSkuItem = { productId: string; variantId: string | null };
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
@@ -143,6 +147,20 @@ const DEFAULT_PAYMENT_RECOVERY_SUMMARY: OrderPaymentRecoverySummary = {
     attempts: 0,
     activeProcessing: false,
     staleProcessing: false,
+    updatedAt: null,
+};
+
+const DEFAULT_SHIPMENT_RECOVERY_SUMMARY: OrderShipmentRecoverySummary = {
+    state: "none",
+    severity: "info",
+    activeLock: false,
+    label: "No shipment recovery",
+    message: null,
+    shipmentId: null,
+    status: null,
+    providerType: null,
+    canRefresh: false,
+    canRetryCreate: false,
     updatedAt: null,
 };
 
@@ -303,6 +321,105 @@ function buildPaymentRecoverySummary(
     }
 
     return { ...DEFAULT_PAYMENT_RECOVERY_SUMMARY };
+}
+
+function buildShipmentRecoverySummary(
+    order: OrderRecoverySourceRow,
+    latestShipment: OrderShipmentSummary | null,
+    nowSeconds: number,
+): OrderShipmentRecoverySummary {
+    const hasActiveClaim = hasActiveShipmentClaim(order, nowSeconds);
+    const hasClaim = Boolean(order.shipmentClaimId);
+    const status = latestShipment?.status?.toLowerCase() ?? null;
+    const shipmentId = latestShipment?.id ?? null;
+    const providerType = latestShipment?.providerType ?? null;
+    const canProviderRefresh = Boolean(latestShipment?.providerId && latestShipment.externalId);
+
+    if (status === ShipmentStatus.RECONCILE_REQUIRED) {
+        return {
+            state: "needs_attention",
+            severity: "danger",
+            activeLock: true,
+            label: "Shipment needs reconciliation",
+            message: "A courier request may have reached the provider, but local order finalization did not settle. Open the shipment history before changing this order.",
+            shipmentId,
+            status,
+            providerType,
+            canRefresh: canProviderRefresh && !hasActiveClaim,
+            canRetryCreate: false,
+            updatedAt: latestShipment?.updatedAt ?? null,
+        };
+    }
+
+    if (hasActiveClaim) {
+        return {
+            state: "creating",
+            severity: "warning",
+            activeLock: true,
+            label: "Shipment creation running",
+            message: "A shipment is being created or recovered. Wait for it to finish before editing, deleting, or shipping this order again.",
+            shipmentId,
+            status,
+            providerType,
+            canRefresh: false,
+            canRetryCreate: false,
+            updatedAt: latestShipment?.updatedAt ?? null,
+        };
+    }
+
+    if (hasClaim && status && ![ShipmentStatus.FAILED, ShipmentStatus.CANCELLED].includes(status as typeof ShipmentStatus.FAILED | typeof ShipmentStatus.CANCELLED)) {
+        return {
+            state: "needs_attention",
+            severity: "danger",
+            activeLock: true,
+            label: "Shipment recovery required",
+            message: "A previous shipment attempt expired without a clean finish. Open the order and resolve the shipment before retrying bulk actions.",
+            shipmentId,
+            status,
+            providerType,
+            canRefresh: canProviderRefresh,
+            canRetryCreate: false,
+            updatedAt: latestShipment?.updatedAt ?? null,
+        };
+    }
+
+    if (status === ShipmentStatus.CREATING) {
+        return {
+            state: "creating",
+            severity: "warning",
+            activeLock: true,
+            label: "Shipment creation running",
+            message: "The courier shipment row is still being created. Wait for it to settle before retrying.",
+            shipmentId,
+            status,
+            providerType,
+            canRefresh: false,
+            canRetryCreate: false,
+            updatedAt: latestShipment?.updatedAt ?? null,
+        };
+    }
+
+    if (
+        status === ShipmentStatus.FAILED ||
+        status === ShipmentStatus.PICKUP_FAILED ||
+        status === ShipmentStatus.DELIVERY_FAILED
+    ) {
+        return {
+            state: "failed",
+            severity: "warning",
+            activeLock: false,
+            label: "Shipment failed",
+            message: "Fix the delivery provider setup or address issue, then create a new shipment.",
+            shipmentId,
+            status,
+            providerType,
+            canRefresh: canProviderRefresh,
+            canRetryCreate: true,
+            updatedAt: latestShipment?.updatedAt ?? null,
+        };
+    }
+
+    return { ...DEFAULT_SHIPMENT_RECOVERY_SUMMARY };
 }
 
 function orderEditReadyCondition(orderId: string, expectedVersion: number) {
@@ -710,6 +827,8 @@ export async function listOrders(db: Database, options: {
             cityName: orders.cityName,
             zoneName: orders.zoneName,
             areaName: orders.areaName,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         })
         .from(orders)
         .where(whereClause)
@@ -728,6 +847,7 @@ export async function listOrders(db: Database, options: {
         createdAt: number; updatedAt: number;
         city: string | null; zone: string | null; area: string | null;
         cityName: string | null; zoneName: string | null; areaName: string | null;
+        shipmentClaimId: string | null; shipmentClaimExpiresAt: Date | number | string | null;
     }[];
     const count = countArr[0]?.count ?? 0;
 
@@ -850,20 +970,24 @@ export async function listOrders(db: Database, options: {
     }
     const nowSeconds = Math.floor(Date.now() / 1000);
 
-    const formattedResults = results.map((order) => ({
-        ...order,
-        createdAt: new Date(order.createdAt * 1000),
-        updatedAt: new Date(order.updatedAt * 1000),
-        itemCount: itemCountMap.get(order.id)?.count || 0,
-        totalQuantity: itemCountMap.get(order.id)?.quantity || 0,
-        latestShipment: shipmentMap.get(order.id) || null,
-        paymentRecovery: buildPaymentRecoverySummary(
-            order,
-            attemptsByOrderId.get(order.id) ?? [],
-            nowSeconds,
-        ),
-        activeRefundOperation: activeRefundOperations.get(order.id) ?? null,
-    }));
+    const formattedResults = results.map((order) => {
+        const latestShipment = shipmentMap.get(order.id) || null;
+        return {
+            ...order,
+            createdAt: new Date(order.createdAt * 1000),
+            updatedAt: new Date(order.updatedAt * 1000),
+            itemCount: itemCountMap.get(order.id)?.count || 0,
+            totalQuantity: itemCountMap.get(order.id)?.quantity || 0,
+            latestShipment,
+            shipmentRecovery: buildShipmentRecoverySummary(order, latestShipment, nowSeconds),
+            paymentRecovery: buildPaymentRecoverySummary(
+                order,
+                attemptsByOrderId.get(order.id) ?? [],
+                nowSeconds,
+            ),
+            activeRefundOperation: activeRefundOperations.get(order.id) ?? null,
+        };
+    });
 
     return {
         orders: formattedResults,
@@ -911,6 +1035,8 @@ export async function getOrderDetails(
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${orders.deletedAt} AS INTEGER)`,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             itemCount: sql<number>`(
         SELECT COUNT(*)
         FROM ${orderItems}
@@ -923,7 +1049,7 @@ export async function getOrderDetails(
 
     if (!order) return null;
 
-    const [items, refundAttemptViews, supportRequests] = await Promise.all([
+    const [items, latestShipments, refundAttemptViews, supportRequests] = await Promise.all([
         db
             .select({
                 id: orderItems.id,
@@ -948,6 +1074,29 @@ export async function getOrderDetails(
                 ),
             )
             .where(eq(orderItems.orderId, id)),
+        db
+            .select({
+                orderId: deliveryShipments.orderId,
+                id: deliveryShipments.id,
+                providerId: deliveryShipments.providerId,
+                providerType: deliveryShipments.providerType,
+                status: deliveryShipments.status,
+                rawStatus: deliveryShipments.rawStatus,
+                externalId: deliveryShipments.externalId,
+                trackingId: deliveryShipments.trackingId,
+                lastChecked: deliveryShipments.lastChecked,
+                updatedAt: deliveryShipments.updatedAt,
+                createdAt: deliveryShipments.createdAt,
+                providerName: deliveryProviders.name,
+            })
+            .from(deliveryShipments)
+            .leftJoin(
+                deliveryProviders,
+                eq(deliveryShipments.providerId, deliveryProviders.id),
+            )
+            .where(eq(deliveryShipments.orderId, id))
+            .orderBy(desc(deliveryShipments.createdAt))
+            .limit(1),
         listOrderRefundAttempts(db, id, { audience: "admin" }),
         listOrderSupportRequests(db, id),
     ]);
@@ -965,17 +1114,36 @@ export async function getOrderDetails(
         fulfillmentStatus: item.fulfillmentStatus,
     }));
 
+    const latestShipmentRow = latestShipments[0] ?? null;
+    const latestShipment: OrderShipmentSummary | null = latestShipmentRow
+        ? {
+            id: latestShipmentRow.id,
+            providerId: latestShipmentRow.providerId,
+            providerType: latestShipmentRow.providerType,
+            providerName: latestShipmentRow.providerName,
+            status: latestShipmentRow.status,
+            rawStatus: latestShipmentRow.rawStatus,
+            externalId: latestShipmentRow.externalId,
+            trackingId: latestShipmentRow.trackingId,
+            lastChecked: unixToDate(latestShipmentRow.lastChecked),
+            updatedAt: unixToDate(latestShipmentRow.updatedAt) ?? new Date(),
+            createdAt: unixToDate(latestShipmentRow.createdAt) ?? new Date(),
+        }
+        : null;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
     return {
         ...order,
         createdAt: new Date(order.createdAt * 1000),
         updatedAt: new Date(order.updatedAt * 1000),
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,
         items: formattedItems,
-        latestShipment: null,
+        latestShipment,
+        shipmentRecovery: buildShipmentRecoverySummary(order, latestShipment, nowSeconds),
         refundAttempts: refundAttemptViews,
         activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
         supportRequests,
-        paymentRecovery: buildPaymentRecoverySummary(order, [], Math.floor(Date.now() / 1000)),
+        paymentRecovery: buildPaymentRecoverySummary(order, [], nowSeconds),
     };
 }
 
@@ -1640,6 +1808,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 eq(orders.id, id),
                 eq(orders.version, existingOrder.version),
                 noActiveRefundAttemptForOrderIdCondition(id),
+                noActivePaymentSessionAttemptForOrderIdCondition(id),
             )).returning({ id: orders.id }),
         );
 

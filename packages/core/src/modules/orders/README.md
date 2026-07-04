@@ -224,6 +224,8 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 
 Bulk provider shipment creation uses a durable order-level shipment claim (`orders.shipmentClaimId` / `orders.shipmentClaimExpiresAt`) linked to the insert-first `delivery_shipments` row. Admin order mutations, status changes, manual fulfillment, COD actions, refunds, returns, public payment-session creation, shipment refresh/deletion, and cleanup must reject or skip active claims. Queue/webhook paths must surface retryable failures so external payment or delivery truth is not acknowledged while shipment creation is being finalized. Provider success with failed local finalization leaves the shipment in `reconcile_required` and keeps the order claim active until reconciliation.
 
+Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/delete/refresh/bulk delete/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true.
+
 ### Admin Shipments (`/api/v1/admin/shipments`)
 
 | Method | Path | Handler | Purpose |

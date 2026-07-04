@@ -53,6 +53,9 @@ describe("manual fulfillment boundaries", () => {
     expect(shipmentCardSource).toContain(
       "Shipment refresh is locked while refund recovery is active.",
     );
+    expect(shipmentCardSource).toContain("ShipmentRecoveryNotice");
+    expect(shipmentCardSource).toContain("order.shipmentRecovery?.activeLock === true");
+    expect(shipmentCardSource).toContain("Shipment recovery active");
     expect(shipmentCardSource).toContain("refreshDisabledReason");
     expect(statusIndicatorSource).toContain("canRefresh");
     expect(statusIndicatorSource).toContain("refreshDisabledReason");

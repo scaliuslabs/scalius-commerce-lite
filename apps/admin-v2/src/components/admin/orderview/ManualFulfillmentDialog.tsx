@@ -66,6 +66,7 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
   const [note, setNote] = useState("");
   const mutation = useCreateFulfillmentShipment();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
+  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
 
   const fulfillableItems = useMemo(
     () => order.items.filter(isFulfillableItem),
@@ -80,7 +81,8 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
     orderActions.canManageOrderShipments &&
     FULFILLMENT_READY_ORDER_STATUSES.has(orderStatus) &&
     fulfillableItemIds.length > 0 &&
-    !refundLocked;
+    !refundLocked &&
+    !shipmentLocked;
   const allFulfillableSelected =
     fulfillableItemIds.length > 0 &&
     fulfillableItemIds.every((id) => selectedItemIds.includes(id));
@@ -117,6 +119,12 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
     }
     if (refundLocked) {
       toast.error("Order locked", { description: "Complete or reconcile the active refund before creating fulfillments." });
+      return;
+    }
+    if (shipmentLocked) {
+      toast.error("Shipment recovery active", {
+        description: order.shipmentRecovery?.message ?? "Resolve the active shipment recovery before creating fulfillments.",
+      });
       return;
     }
     if (selectedItemIds.length === 0) {
@@ -157,6 +165,8 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
       ? "Requires shipment management permission"
       : refundLocked
       ? "Refund recovery is active"
+      : shipmentLocked
+      ? "Shipment recovery is active"
       : "Confirm the order before fulfillment";
 
   return (

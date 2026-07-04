@@ -68,6 +68,20 @@ export interface ActiveRefundOperation {
   lastError?: string | null;
 }
 
+export interface ShipmentRecovery {
+  state: "none" | "creating" | "needs_attention" | "failed";
+  severity: "info" | "warning" | "danger";
+  activeLock: boolean;
+  label: string;
+  message: string | null;
+  shipmentId: string | null;
+  status: string | null;
+  providerType: string | null;
+  canRefresh: boolean;
+  canRetryCreate: boolean;
+  updatedAt: OrderTimestamp | null;
+}
+
 export interface OrderSupportRequest {
   id: string;
   orderId: string;
@@ -118,6 +132,7 @@ export interface Order {
   inventoryPool?: string | null;
   refundAttempts?: OrderRefundAttempt[];
   activeRefundOperation?: ActiveRefundOperation | null;
+  shipmentRecovery?: ShipmentRecovery;
   supportRequests?: OrderSupportRequest[];
 }
 

@@ -44,13 +44,20 @@ describe("admin orders route boundaries", () => {
         );
         const summarySchema = entitiesSource.split("export const orderSummarySchema")[1]?.split("/** Order item")[0] ?? "";
         const listActiveRefundSchema = entitiesSource.split("export const orderListActiveRefundOperationSchema")[1]?.split("/** Order summary")[0] ?? "";
+        const shipmentRecoverySchema = entitiesSource.split("export const orderShipmentRecoverySchema")[1]?.split("export const orderListActiveRefundOperationSchema")[0] ?? "";
 
         expect(summarySchema).toContain("activeRefundOperation: orderListActiveRefundOperationSchema.nullable()");
+        expect(summarySchema).toContain("shipmentRecovery: orderShipmentRecoverySchema");
         expect(summarySchema).not.toContain("refundAttempts: z.array(orderRefundAttemptSchema)");
         expect(listActiveRefundSchema).toContain("attemptCount: z.number()");
         expect(listActiveRefundSchema).toContain("providerStatus: z.string().nullable()");
         expect(listActiveRefundSchema).not.toContain("providerRefundId");
         expect(listActiveRefundSchema).not.toContain("lastError");
+        expect(shipmentRecoverySchema).toContain('state: z.enum(["none", "creating", "needs_attention", "failed"])');
+        expect(shipmentRecoverySchema).toContain("activeLock: z.boolean()");
+        expect(shipmentRecoverySchema).toContain("canRetryCreate: z.boolean()");
+        expect(shipmentRecoverySchema).not.toContain("shipmentClaimId");
+        expect(shipmentRecoverySchema).not.toContain("metadata");
         expect(source).toContain("orderSummarySchema");
     });
 

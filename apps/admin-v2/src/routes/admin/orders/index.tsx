@@ -189,6 +189,10 @@ function hasActiveRefundOperation(order: OrderListItem) {
   return order.activeRefundOperation?.active === true;
 }
 
+function hasActiveShipmentLock(order: OrderListItem) {
+  return order.shipmentRecovery?.activeLock === true;
+}
+
 function buildRecoveryExportSearchParams(search: SearchParams) {
   if (!search.paymentRecovery) return null;
   const params = new URLSearchParams();
@@ -631,6 +635,16 @@ function OrdersPage() {
     },
     [selectedIds, table],
   );
+  const selectedShipmentLockedOrders = useMemo(
+    () => {
+      const selectedOrderIds = new Set(selectedIds);
+      return table
+        .getRowModel()
+        .rows.map((row) => row.original)
+        .filter((order) => selectedOrderIds.has(order.id) && hasActiveShipmentLock(order));
+    },
+    [selectedIds, table],
+  );
   const deletePaymentRecoveryCount = isBulkDeleteOpen
     ? selectedPaymentRecoveryOrders.length
     : orderToDelete
@@ -655,6 +669,15 @@ function OrdersPage() {
       ? table
           .getRowModel()
           .rows.some((row) => row.original.id === orderToDelete && hasActiveRefundOperation(row.original))
+        ? 1
+        : 0
+      : 0;
+  const deleteShipmentLockCount = isBulkDeleteOpen
+    ? selectedShipmentLockedOrders.length
+    : orderToDelete
+      ? table
+          .getRowModel()
+          .rows.some((row) => row.original.id === orderToDelete && hasActiveShipmentLock(row.original))
         ? 1
         : 0
       : 0;
@@ -803,6 +826,8 @@ function OrdersPage() {
       "Recovery Gateway",
       "Recovery Status",
       "Recovery Attempts",
+      "Shipment Recovery",
+      "Shipment Recovery Status",
       "Fulfillment Status",
       "Total Amount",
       "Discount",
@@ -824,6 +849,8 @@ function OrdersPage() {
       order.paymentRecovery?.gateway ?? "",
       order.paymentRecovery?.status ?? "",
       order.paymentRecovery?.attempts ?? 0,
+      order.shipmentRecovery?.state === "none" ? "" : (order.shipmentRecovery?.label ?? ""),
+      order.shipmentRecovery?.status ?? "",
       order.fulfillmentStatus,
       order.totalAmount,
       order.discountAmount || 0,
@@ -865,6 +892,12 @@ function OrdersPage() {
       });
       return;
     }
+    if (selectedShipmentLockedOrders.length > 0) {
+      toast.error("Resolve shipment recovery first", {
+        description: `${selectedShipmentLockedOrders.length} selected order(s) still have active shipment recovery.`,
+      });
+      return;
+    }
     if (selectedActivePaymentSetupOrders.length > 0) {
       toast.error("Wait for payment setup first", {
         description: `${selectedActivePaymentSetupOrders.length} selected order(s) still have active hosted payment setup.`,
@@ -890,6 +923,7 @@ function OrdersPage() {
     clearSelection,
     orderActions.canBulkDeleteOrders,
     selectedActiveRefundOrders,
+    selectedShipmentLockedOrders,
     selectedActivePaymentSetupOrders,
   ]);
 
@@ -912,6 +946,12 @@ function OrdersPage() {
       if (selectedActiveRefundOrders.length > 0) {
         toast.error("Resolve refund recovery first", {
           description: `${selectedActiveRefundOrders.length} selected order(s) still have active refund recovery.`,
+        });
+        return;
+      }
+      if (selectedShipmentLockedOrders.length > 0) {
+        toast.error("Resolve shipment recovery first", {
+          description: `${selectedShipmentLockedOrders.length} selected order(s) still have active shipment recovery.`,
         });
         return;
       }
@@ -942,10 +982,11 @@ function OrdersPage() {
       } else {
         toast.error("Shipment failed");
       }
-      if (shippedOrderIds.length > 0) {
+      const touchedOrderIds = [...new Set([...shippedOrderIds, ...failedOrderIds])];
+      if (touchedOrderIds.length > 0) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
         void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
-        for (const orderId of shippedOrderIds) {
+        for (const orderId of touchedOrderIds) {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.orders.detail(orderId),
           });
@@ -972,6 +1013,7 @@ function OrdersPage() {
       orderActions.canBulkShipOrders,
       selectedPaymentRecoveryOrders,
       selectedActiveRefundOrders,
+      selectedShipmentLockedOrders,
     ],
   );
 
@@ -1073,12 +1115,19 @@ function OrdersPage() {
           });
           return;
         }
+        if (selectedShipmentLockedOrders.length > 0) {
+          toast.error("Resolve shipment recovery first", {
+            description: `${selectedShipmentLockedOrders.length} selected order(s) still have active shipment recovery.`,
+          });
+          return;
+        }
         setIsShippingDialogOpen(true);
       }}
       isBulkActionBusy={isShipping || bulkDeleteMut.isPending}
       selectedPaymentRecoveryCount={selectedPaymentRecoveryOrders.length}
       selectedActivePaymentSetupCount={selectedActivePaymentSetupOrders.length}
       selectedActiveRefundCount={selectedActiveRefundOrders.length}
+      selectedShipmentLockCount={selectedShipmentLockedOrders.length}
       onExportCSV={handleExportCSV}
       autoRefreshEnabled={autoRefreshEnabled}
       onToggleAutoRefresh={toggleAutoRefresh}
@@ -1155,6 +1204,7 @@ function OrdersPage() {
             paymentRecoveryCount={deletePaymentRecoveryCount}
             activePaymentSetupCount={deleteActivePaymentSetupCount}
             activeRefundCount={deleteActiveRefundCount}
+            shipmentLockCount={deleteShipmentLockCount}
           />
         </Suspense>
       )}

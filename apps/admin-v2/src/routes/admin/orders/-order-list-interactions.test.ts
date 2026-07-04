@@ -57,17 +57,24 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("hasActiveRefundOperation(order)");
     expect(routeSource).toContain("selectedActiveRefundOrders.length > 0");
     expect(routeSource).toContain("Resolve refund recovery first");
+    expect(routeSource).toContain("const selectedShipmentLockedOrders = useMemo");
+    expect(routeSource).toContain("hasActiveShipmentLock(order)");
+    expect(routeSource).toContain("selectedShipmentLockedOrders.length > 0");
+    expect(routeSource).toContain("Resolve shipment recovery first");
+    expect(routeSource).toContain("const touchedOrderIds = [...new Set([...shippedOrderIds, ...failedOrderIds])]");
 
     expect(toolbarSource).toContain("isBulkActionBusy?: boolean");
     expect(toolbarSource).toContain("selectedPaymentRecoveryCount?: number");
     expect(toolbarSource).toContain("selectedActivePaymentSetupCount?: number");
     expect(toolbarSource).toContain("selectedActiveRefundCount?: number");
-    expect(toolbarSource).toContain("const bulkDeleteBlockedByRecovery = selectedActiveRefundCount > 0 || selectedActivePaymentSetupCount > 0");
-    expect(toolbarSource).toContain("const bulkShipBlockedByRecovery = selectedPaymentRecoveryCount > 0 || selectedActiveRefundCount > 0");
+    expect(toolbarSource).toContain("selectedShipmentLockCount?: number");
+    expect(toolbarSource).toContain("selectedShipmentLockCount > 0");
     expect(toolbarSource).toContain("disabled={isBulkActionBusy || bulkShipBlockedByRecovery}");
     expect(toolbarSource).toContain("disabled={isBulkActionBusy || bulkDeleteBlockedByRecovery}");
     expect(toolbarSource).toContain("Resolve active refund recovery before changing these orders.");
+    expect(toolbarSource).toContain("Resolve active shipment recovery before changing these orders.");
     expect(toolbarSource).toContain("`Resolve Refund (${selectedActiveRefundCount})`");
+    expect(toolbarSource).toContain("`Resolve Shipment (${selectedShipmentLockCount})`");
 
     expect(dialogSource).toContain("if (isShipping) return");
     expect(dialogSource).toContain("if (isShipping && !nextOpen) return");
@@ -244,23 +251,36 @@ describe("order list interactions", () => {
     );
 
     expect(columnsSource).toContain("RefundRecoveryBadge");
+    expect(columnsSource).toContain("ShipmentRecoveryBadge");
     expect(columnsSource).toContain("operation={order.activeRefundOperation}");
+    expect(columnsSource).toContain("recovery={order.shipmentRecovery}");
     expect(columnsSource).toContain("order.activeRefundOperation?.active !== true");
+    expect(columnsSource).toContain("order.shipmentRecovery?.activeLock !== true");
     expect(columnsSource).toContain("Complete or reconcile the refund before changing this order.");
     expect(columnsSource).toContain("Resolve refund recovery before deleting");
+    expect(columnsSource).toContain("Resolve shipment recovery before deleting");
 
     expect(mobileSource).toContain("RefundRecoveryBadge");
+    expect(mobileSource).toContain("ShipmentRecoveryBadge");
     expect(mobileSource).toContain("operation={order.activeRefundOperation} compact");
-    expect(mobileSource).toContain("orderActions.canChangeOrderStatus && !hasActiveRefundOperation");
+    expect(mobileSource).toContain("recovery={order.shipmentRecovery} compact");
+    expect(mobileSource).toContain("orderActions.canChangeOrderStatus &&");
+    expect(mobileSource).toContain("!hasActiveRefundOperation &&");
+    expect(mobileSource).toContain("!shipmentLocked");
     expect(mobileSource).toContain("Resolve refund recovery before deleting");
+    expect(mobileSource).toContain("Resolve shipment recovery before deleting");
 
     expect(dialogSource).toContain("activeRefundCount?: number");
-    expect(dialogSource).toContain("const isBlocked = activeRefundCount > 0 || activePaymentSetupCount > 0");
+    expect(dialogSource).toContain("shipmentLockCount?: number");
+    expect(dialogSource).toContain("shipmentLockCount > 0");
     expect(dialogSource).toContain("disabled={isDeleting || isBlocked}");
     expect(dialogSource).toContain("active refund recovery. Complete or reconcile");
+    expect(dialogSource).toContain("active shipment recovery. Resolve the shipment");
 
     expect(routeSource).toContain("const deleteActiveRefundCount = isBulkDeleteOpen");
+    expect(routeSource).toContain("const deleteShipmentLockCount = isBulkDeleteOpen");
     expect(routeSource).toContain("activeRefundCount={deleteActiveRefundCount}");
+    expect(routeSource).toContain("shipmentLockCount={deleteShipmentLockCount}");
     expect(statusSelectorSource).toContain("disabledReason?: string");
     expect(statusSelectorSource).toContain("disabledReason: disabledReasonOverride");
   });

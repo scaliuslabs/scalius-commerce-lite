@@ -35,6 +35,7 @@ import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
 import {
   PaymentRecoveryBadge,
   RefundRecoveryBadge,
+  ShipmentRecoveryBadge,
 } from "./PaymentRecoveryBadge";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
@@ -101,7 +102,11 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
   const hasPaymentRecovery =
     order.paymentRecovery != null && order.paymentRecovery.state !== "none";
   const hasActiveRefundOperation = order.activeRefundOperation?.active === true;
-  const hasRecoveryLock = hasPaymentRecovery || hasActiveRefundOperation;
+  const hasShipmentRecovery =
+    order.shipmentRecovery != null && order.shipmentRecovery.state !== "none";
+  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
+  const hasRecoveryLock =
+    hasPaymentRecovery || hasActiveRefundOperation || hasShipmentRecovery;
   const customerRoute = orderActions.canEditOrders
     ? hasRecoveryLock
       ? `/admin/orders/${order.id}`
@@ -176,6 +181,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <PaymentMethodLabel method={order.paymentMethod} />
               <PaymentRecoveryBadge recovery={order.paymentRecovery} compact />
               <RefundRecoveryBadge operation={order.activeRefundOperation} compact />
+              <ShipmentRecoveryBadge recovery={order.shipmentRecovery} compact />
             </div>
           </div>
         </div>
@@ -213,10 +219,16 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
             orderId={order.id}
             isLoading={isUpdatingStatus}
             showTrashed={showTrashed}
-            canChangeStatus={orderActions.canChangeOrderStatus && !hasActiveRefundOperation}
+            canChangeStatus={
+              orderActions.canChangeOrderStatus &&
+              !hasActiveRefundOperation &&
+              !shipmentLocked
+            }
             disabledReason={
               hasActiveRefundOperation
                 ? "Complete or reconcile the refund before changing this order."
+                : shipmentLocked
+                  ? order.shipmentRecovery?.message ?? "Resolve shipment recovery before changing this order."
                 : undefined
             }
             onStatusUpdate={onStatusUpdate}
@@ -236,7 +248,12 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                         : undefined,
                 }}
                 onStatusUpdated={onShipmentStatusUpdated}
-                canRefresh={orderActions.canManageOrderShipments}
+                canRefresh={orderActions.canManageOrderShipments && !shipmentLocked}
+                refreshDisabledReason={
+                  shipmentLocked
+                    ? order.shipmentRecovery?.message ?? "Resolve shipment recovery before refreshing status."
+                    : undefined
+                }
               />
             </div>
           ) : (
@@ -261,7 +278,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <Eye className="h-4 w-4" />
             </Button>
 
-            {!showTrashed && orderActions.canEditOrders && !hasActiveRefundOperation && (
+            {!showTrashed && orderActions.canEditOrders && !hasActiveRefundOperation && !shipmentLocked && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -284,7 +301,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                     <Undo className="h-4 w-4" />
                   </Button>
                 )}
-                {orderActions.canDeleteOrders && !hasActiveRefundOperation && (
+                {orderActions.canDeleteOrders && !hasActiveRefundOperation && !shipmentLocked && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -295,12 +312,16 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                   </Button>
                 )}
               </>
-            ) : orderActions.canDeleteOrders && hasActiveRefundOperation ? (
+            ) : orderActions.canDeleteOrders && (hasActiveRefundOperation || shipmentLocked) ? (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 cursor-not-allowed p-0 text-[var(--muted-foreground)]"
-                title="Resolve refund recovery before deleting"
+                title={
+                  hasActiveRefundOperation
+                    ? "Resolve refund recovery before deleting"
+                    : "Resolve shipment recovery before deleting"
+                }
                 disabled
               >
                 <Trash2 className="h-4 w-4" />

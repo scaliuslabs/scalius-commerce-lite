@@ -25526,6 +25526,19 @@ export type GetApiV1AdminOrdersResponses = {
                     updatedAt: string | number;
                     createdAt: string | number;
                 } | null;
+                shipmentRecovery: {
+                    state: 'none' | 'creating' | 'needs_attention' | 'failed';
+                    severity: 'info' | 'warning' | 'danger';
+                    activeLock: boolean;
+                    label: string;
+                    message: string | null;
+                    shipmentId: string | null;
+                    status: string | null;
+                    providerType: string | null;
+                    canRefresh: boolean;
+                    canRetryCreate: boolean;
+                    updatedAt: string | number | null;
+                };
                 paymentRecovery: {
                     state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
                     label: string;
@@ -25764,6 +25777,19 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     updatedAt: string | number;
                     createdAt: string | number;
                 } | null;
+                shipmentRecovery: {
+                    state: 'none' | 'creating' | 'needs_attention' | 'failed';
+                    severity: 'info' | 'warning' | 'danger';
+                    activeLock: boolean;
+                    label: string;
+                    message: string | null;
+                    shipmentId: string | null;
+                    status: string | null;
+                    providerType: string | null;
+                    canRefresh: boolean;
+                    canRetryCreate: boolean;
+                    updatedAt: string | number | null;
+                };
                 paymentRecovery: {
                     state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
                     label: string;
@@ -26081,6 +26107,19 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 updatedAt: string | number;
                 createdAt: string | number;
             } | null;
+            shipmentRecovery: {
+                state: 'none' | 'creating' | 'needs_attention' | 'failed';
+                severity: 'info' | 'warning' | 'danger';
+                activeLock: boolean;
+                label: string;
+                message: string | null;
+                shipmentId: string | null;
+                status: string | null;
+                providerType: string | null;
+                canRefresh: boolean;
+                canRetryCreate: boolean;
+                updatedAt: string | number | null;
+            };
             paymentRecovery: {
                 state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
                 label: string;

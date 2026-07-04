@@ -32,6 +32,7 @@ import { LazyOrderItemsPopover } from "~/components/admin/order-list/LazyOrderIt
 import {
   PaymentRecoveryBadge,
   RefundRecoveryBadge,
+  ShipmentRecoveryBadge,
 } from "~/components/admin/order-list/PaymentRecoveryBadge";
 import { OrderStatusSelector } from "~/components/admin/order-list/OrderStatusSelector";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
@@ -104,7 +105,9 @@ export function getOrderColumns(
         const hasPaymentRecovery =
           order.paymentRecovery != null && order.paymentRecovery.state !== "none";
         const hasActiveRefundOperation = order.activeRefundOperation?.active === true;
-        const hasRecoveryLock = hasPaymentRecovery || hasActiveRefundOperation;
+        const hasShipmentRecovery =
+          order.shipmentRecovery != null && order.shipmentRecovery.state !== "none";
+        const hasRecoveryLock = hasPaymentRecovery || hasActiveRefundOperation || hasShipmentRecovery;
         const customerRoute = opts.orderActions.canEditOrders
           ? hasRecoveryLock
             ? `/admin/orders/${order.id}`
@@ -216,6 +219,7 @@ export function getOrderColumns(
               <PaymentMethodLabel method={order.paymentMethod} />
               <PaymentRecoveryBadge recovery={order.paymentRecovery} />
               <RefundRecoveryBadge operation={order.activeRefundOperation} />
+              <ShipmentRecoveryBadge recovery={order.shipmentRecovery} />
             </div>
           </div>
         );
@@ -230,6 +234,7 @@ export function getOrderColumns(
       ),
       cell: ({ row }) => {
         const order = row.original;
+        const shipmentLocked = order.shipmentRecovery?.activeLock === true;
         return (
           <OrderStatusSelector
             status={order.status}
@@ -237,11 +242,15 @@ export function getOrderColumns(
             isLoading={opts.updatingStatusIds.has(order.id)}
             showTrashed={opts.showTrashed}
             canChangeStatus={
-              opts.orderActions.canChangeOrderStatus && order.activeRefundOperation?.active !== true
+              opts.orderActions.canChangeOrderStatus &&
+              order.activeRefundOperation?.active !== true &&
+              !shipmentLocked
             }
             disabledReason={
               order.activeRefundOperation?.active
                 ? "Complete or reconcile the refund before changing this order."
+                : shipmentLocked
+                  ? order.shipmentRecovery?.message ?? "Resolve shipment recovery before changing this order."
                 : undefined
             }
             onStatusUpdate={opts.onStatusUpdate}
@@ -290,7 +299,15 @@ export function getOrderColumns(
                       : undefined,
               }}
               onStatusUpdated={opts.onShipmentStatusUpdated}
-              canRefresh={opts.orderActions.canManageOrderShipments}
+              canRefresh={
+                opts.orderActions.canManageOrderShipments &&
+                order.shipmentRecovery?.activeLock !== true
+              }
+              refreshDisabledReason={
+                order.shipmentRecovery?.activeLock
+                  ? order.shipmentRecovery.message ?? "Resolve shipment recovery before refreshing status."
+                  : undefined
+              }
             />
             {trkId && trackingUrl && (
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-1">
@@ -358,6 +375,7 @@ export function getOrderColumns(
       cell: ({ row }) => {
         const order = row.original;
         const hasActiveRefundOperation = order.activeRefundOperation?.active === true;
+        const shipmentLocked = order.shipmentRecovery?.activeLock === true;
         return (
           <div className="flex items-center justify-end gap-1">
             <TooltipProvider>
@@ -374,7 +392,7 @@ export function getOrderColumns(
               </Tooltip>
             </TooltipProvider>
 
-            {!opts.showTrashed && opts.orderActions.canEditOrders && !hasActiveRefundOperation && (
+            {!opts.showTrashed && opts.orderActions.canEditOrders && !hasActiveRefundOperation && !shipmentLocked && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -427,7 +445,7 @@ export function getOrderColumns(
                   </TooltipProvider>
                 )}
               </>
-            ) : opts.orderActions.canDeleteOrders && hasActiveRefundOperation ? (
+            ) : opts.orderActions.canDeleteOrders && (hasActiveRefundOperation || shipmentLocked) ? (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -439,7 +457,11 @@ export function getOrderColumns(
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>Resolve refund recovery before deleting</TooltipContent>
+                  <TooltipContent>
+                    {hasActiveRefundOperation
+                      ? "Resolve refund recovery before deleting"
+                      : "Resolve shipment recovery before deleting"}
+                  </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ) : opts.orderActions.canDeleteOrders ? (

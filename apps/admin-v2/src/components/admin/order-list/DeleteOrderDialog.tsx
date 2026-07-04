@@ -21,6 +21,7 @@ interface DeleteOrderDialogProps {
   paymentRecoveryCount?: number;
   activePaymentSetupCount?: number;
   activeRefundCount?: number;
+  shipmentLockCount?: number;
 }
 
 export function DeleteOrderDialog({
@@ -34,8 +35,12 @@ export function DeleteOrderDialog({
   paymentRecoveryCount = 0,
   activePaymentSetupCount = 0,
   activeRefundCount = 0,
+  shipmentLockCount = 0,
 }: DeleteOrderDialogProps) {
-  const isBlocked = activeRefundCount > 0 || activePaymentSetupCount > 0;
+  const isBlocked =
+    activeRefundCount > 0 ||
+    activePaymentSetupCount > 0 ||
+    shipmentLockCount > 0;
   const title = showTrashed
     ? `Delete Order${isBulk ? "s" : ""} Permanently`
     : `Delete Order${isBulk ? "s" : ""}`;
@@ -75,6 +80,13 @@ export function DeleteOrderDialog({
                 {activeRefundCount} selected order{activeRefundCount === 1 ? "" : "s"} still
                 {activeRefundCount === 1 ? " has" : " have"} active refund recovery. Complete or reconcile
                 the refund before deleting.
+              </span>
+            )}
+            {shipmentLockCount > 0 && (
+              <span className="mt-3 block rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                {shipmentLockCount} selected order{shipmentLockCount === 1 ? "" : "s"} still
+                {shipmentLockCount === 1 ? " has" : " have"} active shipment recovery. Resolve the shipment
+                before deleting.
               </span>
             )}
           </AlertDialogDescription>

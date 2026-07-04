@@ -98,6 +98,7 @@ interface OrderToolbarProps {
   selectedPaymentRecoveryCount?: number;
   selectedActivePaymentSetupCount?: number;
   selectedActiveRefundCount?: number;
+  selectedShipmentLockCount?: number;
   // Export & refresh
   onExportCSV: () => void;
   // Auto-refresh
@@ -243,6 +244,7 @@ export function OrderToolbar({
   selectedPaymentRecoveryCount = 0,
   selectedActivePaymentSetupCount = 0,
   selectedActiveRefundCount = 0,
+  selectedShipmentLockCount = 0,
   onExportCSV,
   autoRefreshEnabled,
   onToggleAutoRefresh,
@@ -252,17 +254,27 @@ export function OrderToolbar({
   const showBulkDelete = selectedCount > 0 && orderActions.canBulkDeleteOrders;
   const showBulkShip =
     selectedCount > 0 && !showTrashed && orderActions.canBulkShipOrders;
-  const bulkDeleteBlockedByRecovery = selectedActiveRefundCount > 0 || selectedActivePaymentSetupCount > 0;
-  const bulkShipBlockedByRecovery = selectedPaymentRecoveryCount > 0 || selectedActiveRefundCount > 0;
+  const bulkDeleteBlockedByRecovery =
+    selectedActiveRefundCount > 0 ||
+    selectedActivePaymentSetupCount > 0 ||
+    selectedShipmentLockCount > 0;
+  const bulkShipBlockedByRecovery =
+    selectedPaymentRecoveryCount > 0 ||
+    selectedActiveRefundCount > 0 ||
+    selectedShipmentLockCount > 0;
   const recoveryBlockTitle = selectedActiveRefundCount > 0
     ? "Resolve active refund recovery before changing these orders."
     : selectedActivePaymentSetupCount > 0
       ? "Wait for active hosted payment setup before deleting these orders."
+      : selectedShipmentLockCount > 0
+        ? "Resolve active shipment recovery before changing these orders."
       : "Resolve hosted payment recovery before creating shipments.";
   const recoveryBlockLabel = selectedActiveRefundCount > 0
     ? `Resolve Refund (${selectedActiveRefundCount})`
     : selectedActivePaymentSetupCount > 0
       ? `Payment Running (${selectedActivePaymentSetupCount})`
+      : selectedShipmentLockCount > 0
+        ? `Resolve Shipment (${selectedShipmentLockCount})`
       : `Resolve Payment (${selectedPaymentRecoveryCount})`;
   const bulkActions: ReactNode =
     showBulkDelete || showBulkShip ? (

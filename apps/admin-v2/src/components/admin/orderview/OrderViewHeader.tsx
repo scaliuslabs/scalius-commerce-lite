@@ -75,6 +75,8 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   const fulfillmentMutation = useUpdateFulfillmentStatus();
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
+  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
+  const editLocked = refundLocked || shipmentLocked;
   const getStatusBadge = (status: string) => {
     const { badgeClass } = getStatusBadgeClass(status);
     return (
@@ -212,7 +214,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                 <Select
                   value={order.fulfillmentStatus}
                   onValueChange={(value) => {
-                    if (refundLocked || !orderActions.canManageOrderShipments) return;
+                    if (refundLocked || shipmentLocked || !orderActions.canManageOrderShipments) return;
                     if (
                       value !== order.fulfillmentStatus &&
                       isFulfillmentStatus(value)
@@ -223,6 +225,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                   disabled={
                     fulfillmentMutation.isPending ||
                     refundLocked ||
+                    shipmentLocked ||
                     !orderActions.canManageOrderShipments
                   }
                 >
@@ -258,11 +261,17 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
               variant="outline"
               size="sm"
               className="h-9 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
-              asChild={!refundLocked}
-              disabled={refundLocked}
-              title={refundLocked ? "Complete or reconcile the active refund before editing this order." : undefined}
+              asChild={!editLocked}
+              disabled={editLocked}
+              title={
+                refundLocked
+                  ? "Complete or reconcile the active refund before editing this order."
+                  : shipmentLocked
+                    ? order.shipmentRecovery?.message ?? "Resolve shipment recovery before editing this order."
+                    : undefined
+              }
             >
-              {refundLocked ? (
+              {editLocked ? (
                 <>
                   <Pencil className="h-4 w-4" />
                   Edit locked
