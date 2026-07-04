@@ -771,6 +771,7 @@ Suggested focused commands:
 ```bash
 pnpm --filter @scalius/core test -- src/modules/orders/orders.fulfillment.test.ts
 pnpm --filter @scalius/core test -- src/modules/orders/orders.ingest.test.ts src/modules/orders/orders.storefront.test.ts
+pnpm --filter @scalius/core test -- src/modules/inventory/release.test.ts
 pnpm --filter @scalius/core test -- src/modules/inventory/expiry.test.ts
 pnpm --filter @scalius/core test -- src/modules/payments/process-payment.test.ts
 pnpm --filter @scalius/core test -- src/modules/payments/polar.test.ts
