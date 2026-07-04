@@ -256,6 +256,10 @@ describe("initCartFunctionality", () => {
     expect(clearIndex).toBeLessThan(initIndex);
     expect(cartPage).not.toContain('onclick="window.removeDiscountCode()"');
     expect(cartPage).toContain("window.__scaliusCartPageAbortController?.abort();");
+    expect(cartPage).toContain("writeCheckoutTransferSession(");
+    expect(cartPage).toContain("showCheckoutTransferError(transferWrite.message);");
+    expect(cartPage).not.toContain('sessionStorage.setItem("scalius_checkout_data"');
+    expect(cartPage).toContain('quickBuyStorage") === "blocked"');
     expect(cartPage).toContain(
       'document.addEventListener("cart-updated", updateCheckoutButtonState',
     );

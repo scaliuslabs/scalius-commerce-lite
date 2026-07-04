@@ -231,6 +231,63 @@ describe("checkout cart freshness", () => {
 });
 
 describe("initCheckoutPage", () => {
+  it("shows a clear cart recovery message instead of redirecting when checkout transfer data is missing", async () => {
+    window.history.replaceState(null, "", "/checkout");
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+      <div id="stripeSection" class="hidden"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: "cod",
+      gateways: [{ id: "cod", name: "Cash on Delivery" }],
+    };
+
+    await initCheckoutPage();
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(document.getElementById("errorMsg")?.textContent).toContain(
+      "Checkout details were not found",
+    );
+    expect(document.getElementById("errorMsg")?.classList.contains("hidden")).toBe(false);
+    expect(document.querySelector('[data-method="cod"]')).toBeNull();
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+    expect(document.getElementById("payButtonText")?.textContent).toBe("Return to cart");
+    expect(window.location.pathname).toBe("/checkout");
+  });
+
+  it("clears unreadable checkout transfer data without redirecting", async () => {
+    window.history.replaceState(null, "", "/checkout");
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", "{not-json");
+    sessionStorage.setItem("scalius_checkout_gateways", '[{"id":"cod"}]');
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: "cod",
+      gateways: [{ id: "cod", name: "Cash on Delivery" }],
+    };
+
+    await initCheckoutPage();
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(document.getElementById("errorMsg")?.textContent).toContain(
+      "Checkout details could not be read",
+    );
+    expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
+    expect(sessionStorage.getItem("scalius_checkout_gateways")).toBeNull();
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+    expect(document.getElementById("payButtonText")?.textContent).toBe("Return to cart");
+    expect(window.location.pathname).toBe("/checkout");
+  });
+
   it("preselects the merchant's active default payment method when it renders", async () => {
     document.body.innerHTML = `
       <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>

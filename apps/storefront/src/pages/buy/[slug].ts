@@ -254,13 +254,23 @@ export const GET: APIRoute = async ({ params, url }) => {
         </div>
 
         <script>
+          const quickBuyData = ${quickBuyStorageValue};
           try {
-            sessionStorage.setItem('quickBuyData', ${quickBuyStorageValue});
-          } catch (e) {
-            console.error('Could not save quick-buy data to session storage.', e);
-          } finally {
+            sessionStorage.setItem('quickBuyData', quickBuyData);
+            if (sessionStorage.getItem('quickBuyData') !== quickBuyData) {
+              throw new Error('Quick-buy storage was not persisted.');
+            }
             setTimeout(() => {
               window.location.href = '/cart';
+            }, 400);
+          } catch (e) {
+            console.error('Could not save quick-buy data to session storage.', e);
+            const statusText = document.getElementById('status-text');
+            if (statusText) {
+              statusText.textContent = 'Could not prepare quick buy. Returning to cart...';
+            }
+            setTimeout(() => {
+              window.location.href = '/cart?quickBuyStorage=blocked';
             }, 400);
           }
         </script>

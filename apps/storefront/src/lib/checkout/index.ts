@@ -6,7 +6,11 @@ import { sslcommerzHandler } from "./handlers/sslcommerz";
 import { polarHandler } from "./handlers/polar";
 import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import type { PaymentResult } from "./types";
-import { clearCheckoutSession } from "./session-state";
+import {
+  CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE,
+  clearCheckoutSession,
+  clearCheckoutTransferSession,
+} from "./session-state";
 import { isDepositPaymentRequired } from "./payment-mode";
 import type { CartValidationIssue, CartValidationRequestItem } from "../api/orders";
 import { writeCartRepairState } from "../cart/repair-state";
@@ -34,7 +38,7 @@ function showError(msg: string): void {
   if (!el) return;
   el.textContent = msg;
   el.classList.remove("hidden");
-  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.scrollIntoView?.({ behavior: "smooth", block: "center" });
 }
 
 function hideError(): void {
@@ -51,6 +55,17 @@ function setPayButton(text: string, disabled = false): void {
   const span = document.getElementById("payButtonText");
   if (btn) btn.disabled = disabled || isProcessing;
   if (span) span.textContent = text;
+}
+
+function setReturnToCartButton(): void {
+  const btn = document.getElementById("payButton") as HTMLButtonElement | null;
+  const span = document.getElementById("payButtonText");
+  if (!btn) return;
+  btn.disabled = false;
+  btn.onclick = () => {
+    window.location.href = "/cart";
+  };
+  if (span) span.textContent = "Return to cart";
 }
 
 function applySelectedMethodStyles(methodId: string | null): void {
@@ -225,13 +240,29 @@ function redirectToCartForRepair(result: CheckoutCartFreshnessResult): void {
 // ── Load checkout data ────────────────────────────────────────────────────────
 
 function loadCheckoutData(): boolean {
+  const fail = (message: string) => {
+    showError(message);
+    setReturnToCartButton();
+    clearCheckoutTransferSession();
+    return false;
+  };
+
+  let raw: string | null;
+  let gwRaw: string | null;
   try {
-    const raw = sessionStorage.getItem("scalius_checkout_data");
-    const gwRaw = sessionStorage.getItem("scalius_checkout_gateways");
-    if (!raw) {
-      window.location.href = "/cart";
-      return false;
-    }
+    raw = sessionStorage.getItem("scalius_checkout_data");
+    gwRaw = sessionStorage.getItem("scalius_checkout_gateways");
+  } catch {
+    return fail(CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE);
+  }
+
+  if (!raw) {
+    return fail(
+      "Checkout details were not found. Please return to cart and try again.",
+    );
+  }
+
+  try {
     checkoutData = JSON.parse(raw);
     const transferGateways = gwRaw ? JSON.parse(gwRaw) : checkoutConfig!.gateways;
     const freshGatewayMap = new Map(
@@ -251,8 +282,9 @@ function loadCheckoutData(): boolean {
     }
     return true;
   } catch {
-    window.location.href = "/cart";
-    return false;
+    return fail(
+      "Checkout details could not be read. Please return to cart and try again.",
+    );
   }
 }
 
