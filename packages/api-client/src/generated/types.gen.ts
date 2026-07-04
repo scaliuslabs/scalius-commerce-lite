@@ -25427,6 +25427,10 @@ export type GetApiV1AdminOrdersData = {
          */
         fulfillmentStatus?: 'pending' | 'partial' | 'complete';
         /**
+         * Filter by hosted-payment recovery state
+         */
+        paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
+        /**
          * Show trashed orders
          */
         trashed?: 'true' | 'false';
@@ -25493,6 +25497,18 @@ export type GetApiV1AdminOrdersResponses = {
                     updatedAt: string | number;
                     createdAt: string | number;
                 } | null;
+                paymentRecovery: {
+                    state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
+                    label: string;
+                    message: string | null;
+                    gateway: string | null;
+                    paymentType: string | null;
+                    status: string | null;
+                    attempts: number;
+                    activeProcessing: boolean;
+                    staleProcessing: boolean;
+                    updatedAt: string | number | null;
+                };
             }>;
             pagination: {
                 page: number;
@@ -25705,6 +25721,18 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 updatedAt: string | number;
                 createdAt: string | number;
             } | null;
+            paymentRecovery: {
+                state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
+                label: string;
+                message: string | null;
+                gateway: string | null;
+                paymentType: string | null;
+                status: string | null;
+                attempts: number;
+                activeProcessing: boolean;
+                staleProcessing: boolean;
+                updatedAt: string | number | null;
+            };
             refundAttempts: Array<{
                 id: string;
                 orderId: string;

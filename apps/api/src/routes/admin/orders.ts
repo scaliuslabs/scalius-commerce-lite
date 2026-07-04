@@ -82,6 +82,13 @@ const fulfillmentStatusQuerySchema = z.enum([
     FulfillmentStatus.COMPLETE,
 ]);
 
+const paymentRecoveryQuerySchema = z.enum([
+    "recoverable",
+    "awaiting_payment",
+    "processing",
+    "needs_attention",
+]);
+
 function isSuccessfulOrderResult(result: unknown): result is { success: true; orderId: string } {
     return typeof result === "object"
         && result !== null
@@ -238,6 +245,7 @@ const listOrdersRoute = createRoute({
             paymentStatus: paymentStatusQuerySchema.optional().openapi({ description: "Filter by payment status" }),
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment method" }),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
+            paymentRecovery: paymentRecoveryQuerySchema.optional().openapi({ description: "Filter by hosted-payment recovery state" }),
             trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed orders" }),
             sort: z.enum([
                 "relevance",
@@ -281,6 +289,7 @@ app.openapi(listOrdersRoute, async (c) => {
         paymentStatus: query.paymentStatus,
         paymentMethod: query.paymentMethod,
         fulfillmentStatus: query.fulfillmentStatus,
+        paymentRecovery: query.paymentRecovery,
         showTrashed: query.trashed === "true",
         sort: effectiveSort,
         order: query.order as "asc" | "desc",

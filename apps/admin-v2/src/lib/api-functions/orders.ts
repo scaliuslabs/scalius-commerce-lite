@@ -63,6 +63,11 @@ export interface OrdersQueryInput extends Omit<OrderListQuery, "trashed"> {
   [key: string]: string | number | boolean | null | undefined;
   showTrashed?: boolean;
   trashed?: boolean;
+  paymentRecovery?:
+    | "recoverable"
+    | "awaiting_payment"
+    | "processing"
+    | "needs_attention";
 }
 
 export type OrdersListPayload = ApiData<GetApiV1AdminOrdersResponse>;
@@ -197,6 +202,7 @@ function buildOrdersParams(data: OrdersQueryInput): Record<string, string> {
   if (data.paymentStatus) params.paymentStatus = data.paymentStatus;
   if (data.paymentMethod) params.paymentMethod = data.paymentMethod;
   if (data.fulfillmentStatus) params.fulfillmentStatus = data.fulfillmentStatus;
+  if (data.paymentRecovery) params.paymentRecovery = data.paymentRecovery;
   if (data.sort) params.sort = data.sort;
   if (data.order) params.order = data.order;
   if (data.showTrashed || data.trashed) params.trashed = "true";

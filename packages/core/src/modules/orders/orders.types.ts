@@ -26,6 +26,29 @@ export interface OrderShipmentSummary {
     createdAt: Date;
 }
 
+export type OrderPaymentRecoveryState =
+    | "none"
+    | "awaiting_payment"
+    | "processing"
+    | "needs_attention";
+
+export type OrderPaymentRecoveryFilter =
+    | "recoverable"
+    | Exclude<OrderPaymentRecoveryState, "none">;
+
+export interface OrderPaymentRecoverySummary {
+    state: OrderPaymentRecoveryState;
+    label: string;
+    message: string | null;
+    gateway: string | null;
+    paymentType: string | null;
+    status: string | null;
+    attempts: number;
+    activeProcessing: boolean;
+    staleProcessing: boolean;
+    updatedAt: Date | null;
+}
+
 export interface OrderListItem {
     id: string;
     customerName: string;
@@ -49,6 +72,7 @@ export interface OrderListItem {
     zoneName: string | null;
     areaName: string | null;
     latestShipment: OrderShipmentSummary | null;
+    paymentRecovery: OrderPaymentRecoverySummary;
 }
 
 export interface OrderDetails extends OrderListItem {

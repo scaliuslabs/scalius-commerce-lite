@@ -350,7 +350,7 @@ pnpm --filter @scalius/storefront exec vitest run src/lib/tracking/meta-capi.tes
 pnpm --filter @scalius/storefront typecheck
 ```
 
-For `PRIV-002`, broad Meta CAPI events must not inherit checkout/customer PII from `sessionStorage`; legacy `scalius_user_*` keys must be removed by checkout cleanup; SSLCommerz/Polar external redirects should clear raw checkout transfer state after gateway session creation without clearing the cart.
+For `PRIV-002`, broad Meta CAPI events must not inherit checkout/customer PII from `sessionStorage`; legacy `scalius_user_*` keys must be removed by checkout cleanup. Historical SSLCommerz/Polar checks that preserved cart contents after gateway session creation are superseded by `CHECKOUT-011`: after a durable hosted order commit, recovery continues through the receipt/order path and the short-lived empty-cart recovery marker.
 
 Payment settings and checkout-cache checks:
 

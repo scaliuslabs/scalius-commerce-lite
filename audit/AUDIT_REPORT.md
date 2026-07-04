@@ -590,7 +590,7 @@ SSLCommerz and Polar handlers return redirect URLs immediately. Checkout clears 
 
 Fix direction: preserve a recoverable checkout session until webhook/return confirmation.
 
-Status: Verified on 2026-06-13. Redirect gateways now preserve cart/session state unless the handler explicitly marks the redirect as a completed-order path; the protected order-success page clears the cart after a valid receipt loads.
+Status: Verified on 2026-06-13, then superseded for SSLCommerz/Polar by the 2026-07-05 `CHECKOUT-011` cart-consumption and empty-cart recovery slices. Redirect hosted-payment flows now clear stale cart data after a durable order commit and recover through the receipt/order path plus `scalius_hosted_payment_recovery`, instead of relying on resurrecting cart checkout state.
 
 ### STORE-004: Cart location prefill does not match rendered controls
 
@@ -622,7 +622,7 @@ Cart saved standalone `scalius_user_*` sessionStorage keys for Meta CAPI matchin
 
 Fix direction: keep browser-default CAPI data to non-PII attribution signals, remove standalone PII capture, clear legacy keys, and scope any CAPI PII to explicit narrow conversion events.
 
-Status: Verified on 2026-06-14. Cart no longer writes standalone `scalius_user_*` analytics keys, `sendServerEvent()` defaults to `_fbp`, `_fbc`, and user agent plus explicit caller-provided `userData`, and `clearCheckoutSession()` removes both checkout transfer keys and legacy PII keys. SSLCommerz and Polar external redirects now clear raw checkout transfer state after order/session creation while preserving cart contents for cancel/failure recovery. Verification included focused Meta CAPI/session/redirect tests, storefront typecheck/build/lint, root `pnpm test`, deployed asset scans, live HTTP checks, browser smoke with no console errors, and storefront deploy version `4391b4cd-7a08-438c-be2e-193d8df7a79e`.
+Status: Verified on 2026-06-14, with the SSLCommerz/Polar cart-preservation note superseded on 2026-07-05 by `CHECKOUT-011`. Cart no longer writes standalone `scalius_user_*` analytics keys, `sendServerEvent()` defaults to `_fbp`, `_fbc`, and user agent plus explicit caller-provided `userData`, and `clearCheckoutSession()` removes both checkout transfer keys and legacy PII keys. Hosted SSLCommerz/Polar recovery now continues from the receipt/order path after durable order creation. Verification included focused Meta CAPI/session/redirect tests, storefront typecheck/build/lint, root `pnpm test`, deployed asset scans, live HTTP checks, browser smoke with no console errors, and storefront deploy version `4391b4cd-7a08-438c-be2e-193d8df7a79e`.
 
 ### CACHE-001: Payment settings saves leave checkout caches stale
 

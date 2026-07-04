@@ -84894,6 +84894,22 @@
             "schema": {
               "type": "string",
               "enum": [
+                "recoverable",
+                "awaiting_payment",
+                "processing",
+                "needs_attention"
+              ],
+              "description": "Filter by hosted-payment recovery state"
+            },
+            "required": false,
+            "description": "Filter by hosted-payment recovery state",
+            "name": "paymentRecovery",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
                 "true",
                 "false"
               ],
@@ -85152,6 +85168,71 @@
                                   "updatedAt",
                                   "createdAt"
                                 ]
+                              },
+                              "paymentRecovery": {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "awaiting_payment",
+                                      "processing",
+                                      "needs_attention"
+                                    ]
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "gateway": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "paymentType": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "attempts": {
+                                    "type": "number"
+                                  },
+                                  "activeProcessing": {
+                                    "type": "boolean"
+                                  },
+                                  "staleProcessing": {
+                                    "type": "boolean"
+                                  },
+                                  "updatedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "label",
+                                  "message",
+                                  "gateway",
+                                  "paymentType",
+                                  "status",
+                                  "attempts",
+                                  "activeProcessing",
+                                  "staleProcessing",
+                                  "updatedAt"
+                                ]
                               }
                             },
                             "required": [
@@ -85177,7 +85258,8 @@
                               "areaName",
                               "itemCount",
                               "totalQuantity",
-                              "latestShipment"
+                              "latestShipment",
+                              "paymentRecovery"
                             ]
                           }
                         },
@@ -85834,6 +85916,71 @@
                             "createdAt"
                           ]
                         },
+                        "paymentRecovery": {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "awaiting_payment",
+                                "processing",
+                                "needs_attention"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "gateway": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "paymentType": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "attempts": {
+                              "type": "number"
+                            },
+                            "activeProcessing": {
+                              "type": "boolean"
+                            },
+                            "staleProcessing": {
+                              "type": "boolean"
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "label",
+                            "message",
+                            "gateway",
+                            "paymentType",
+                            "status",
+                            "attempts",
+                            "activeProcessing",
+                            "staleProcessing",
+                            "updatedAt"
+                          ]
+                        },
                         "refundAttempts": {
                           "type": "array",
                           "items": {
@@ -86255,6 +86402,7 @@
                         "itemCount",
                         "items",
                         "latestShipment",
+                        "paymentRecovery",
                         "refundAttempts",
                         "activeRefundOperation",
                         "supportRequests"

@@ -100,11 +100,19 @@ const FULFILLMENT_STATUS_FILTERS = [
   "complete",
 ] as const;
 
+const PAYMENT_RECOVERY_FILTERS = [
+  "recoverable",
+  "awaiting_payment",
+  "processing",
+  "needs_attention",
+] as const;
+
 type SearchParams = ListSearchParams<OrderSort> & {
   status?: string;
   paymentStatus?: (typeof PAYMENT_STATUS_FILTERS)[number];
   paymentMethod?: (typeof PAYMENT_METHOD_FILTERS)[number];
   fulfillmentStatus?: (typeof FULFILLMENT_STATUS_FILTERS)[number];
+  paymentRecovery?: (typeof PAYMENT_RECOVERY_FILTERS)[number];
   startDate?: string;
   endDate?: string;
 };
@@ -125,6 +133,10 @@ function validateOrderSearch(search: SearchValidatorInput<SearchParams>): Search
       search.fulfillmentStatus,
       FULFILLMENT_STATUS_FILTERS,
     ),
+    paymentRecovery: normalizeOptionalEnumSearchParam(
+      search.paymentRecovery,
+      PAYMENT_RECOVERY_FILTERS,
+    ),
     startDate: normalizeDateSearchParam(search.startDate),
     endDate: normalizeDateSearchParam(search.endDate),
   };
@@ -141,6 +153,7 @@ function mapParams(deps: SearchParams) {
     paymentStatus: deps.paymentStatus,
     paymentMethod: deps.paymentMethod,
     fulfillmentStatus: deps.fulfillmentStatus,
+    paymentRecovery: deps.paymentRecovery,
     sort: deps.sort,
     order: deps.order,
     showTrashed: deps.trashed,
@@ -162,6 +175,10 @@ const ORDER_AUTO_REFRESH_DEBOUNCE_MS = 5_000;
 
 function isDocumentHidden() {
   return typeof document !== "undefined" && document.hidden;
+}
+
+function hasPaymentRecoveryState(order: OrderListItem) {
+  return order.paymentRecovery != null && order.paymentRecovery.state !== "none";
 }
 
 // ── Route definition ──────────────────────────────────────────────
@@ -210,12 +227,14 @@ function OrdersPage() {
   const activePaymentStatus = search.paymentStatus ?? null;
   const activePaymentMethod = search.paymentMethod ?? null;
   const activeFulfillmentStatus = search.fulfillmentStatus ?? null;
+  const activePaymentRecovery = search.paymentRecovery ?? null;
   const hasActiveFilters = Boolean(
     search.search.trim()
       || activeStatus
       || activePaymentStatus
       || activePaymentMethod
       || activeFulfillmentStatus
+      || activePaymentRecovery
       || search.startDate
       || search.endDate,
   );
@@ -345,6 +364,19 @@ function OrdersPage() {
         fulfillmentStatus: normalizeOptionalEnumSearchParam(
           fulfillmentStatus,
           FULFILLMENT_STATUS_FILTERS,
+        ),
+        page: 1,
+      });
+    },
+    [handleNavigate],
+  );
+
+  const onPaymentRecoveryFilterChange = useCallback(
+    (paymentRecovery: string | null) => {
+      handleNavigate({
+        paymentRecovery: normalizeOptionalEnumSearchParam(
+          paymentRecovery,
+          PAYMENT_RECOVERY_FILTERS,
         ),
         page: 1,
       });
@@ -548,6 +580,25 @@ function OrdersPage() {
     defaultPageSize: 10,
   });
   const ordersError = isOrdersError ? rawOrdersError : null;
+  const selectedPaymentRecoveryOrders = useMemo(
+    () => {
+      const selectedOrderIds = new Set(selectedIds);
+      return table
+        .getRowModel()
+        .rows.map((row) => row.original)
+        .filter((order) => selectedOrderIds.has(order.id) && hasPaymentRecoveryState(order));
+    },
+    [selectedIds, table],
+  );
+  const deletePaymentRecoveryCount = isBulkDeleteOpen
+    ? selectedPaymentRecoveryOrders.length
+    : orderToDelete
+      ? table
+          .getRowModel()
+          .rows.some((row) => row.original.id === orderToDelete && hasPaymentRecoveryState(row.original))
+        ? 1
+        : 0
+      : 0;
 
   // ── Active-query refresh ──────────────────────────────────────
 
@@ -653,6 +704,10 @@ function OrdersPage() {
       "Status",
       "Payment Status",
       "Payment Method",
+      "Payment Recovery",
+      "Recovery Gateway",
+      "Recovery Status",
+      "Recovery Attempts",
       "Fulfillment Status",
       "Total Amount",
       "Discount",
@@ -670,6 +725,10 @@ function OrdersPage() {
       order.status,
       order.paymentStatus,
       order.paymentMethod,
+      order.paymentRecovery?.state === "none" ? "" : (order.paymentRecovery?.label ?? ""),
+      order.paymentRecovery?.gateway ?? "",
+      order.paymentRecovery?.status ?? "",
+      order.paymentRecovery?.attempts ?? 0,
       order.fulfillmentStatus,
       order.totalAmount,
       order.discountAmount || 0,
@@ -678,7 +737,9 @@ function OrdersPage() {
     ]);
     const csvContent = [
       csvHeaders.join(","),
-      ...csvRows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+      ...csvRows.map((row) =>
+        row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","),
+      ),
     ].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -724,6 +785,12 @@ function OrdersPage() {
       if (!orderActions.canBulkShipOrders) {
         toast.error("Shipping unavailable", {
           description: "Your role can view orders but cannot manage shipments.",
+        });
+        return;
+      }
+      if (selectedPaymentRecoveryOrders.length > 0) {
+        toast.error("Resolve payment recovery first", {
+          description: `${selectedPaymentRecoveryOrders.length} selected order(s) still have hosted payment state.`,
         });
         return;
       }
@@ -782,6 +849,7 @@ function OrdersPage() {
       deselectIds,
       isShipping,
       orderActions.canBulkShipOrders,
+      selectedPaymentRecoveryOrders,
     ],
   );
 
@@ -858,6 +926,8 @@ function OrdersPage() {
       onPaymentMethodFilterChange={onPaymentMethodFilterChange}
       activeFulfillmentStatus={activeFulfillmentStatus}
       onFulfillmentStatusFilterChange={onFulfillmentStatusFilterChange}
+      activePaymentRecovery={activePaymentRecovery}
+      onPaymentRecoveryFilterChange={onPaymentRecoveryFilterChange}
       dateRange={dateRange}
       onDateRangeChange={onDateRangeChange}
       onBulkDelete={handleBulkDeleteClick}
@@ -866,6 +936,12 @@ function OrdersPage() {
         if (!orderActions.canBulkShipOrders) {
           toast.error("Shipping unavailable", {
             description: "Your role can view orders but cannot manage shipments.",
+          });
+          return;
+        }
+        if (selectedPaymentRecoveryOrders.length > 0) {
+          toast.error("Resolve payment recovery first", {
+            description: `${selectedPaymentRecoveryOrders.length} selected order(s) still have hosted payment state.`,
           });
           return;
         }
@@ -945,6 +1021,7 @@ function OrdersPage() {
             showTrashed={showTrashed}
             isBulk={isBulkDeleteOpen}
             itemCount={selectedIds.length}
+            paymentRecoveryCount={deletePaymentRecoveryCount}
           />
         </Suspense>
       )}
