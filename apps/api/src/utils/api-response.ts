@@ -76,6 +76,31 @@ export function errorResponseFromError(err: unknown): {
   };
 }
 
+export function logApiError(
+  err: unknown,
+  request?: { method?: string; path?: string },
+): void {
+  if (err instanceof ApiError) {
+    if (err.status < 500) return;
+
+    const event = JSON.stringify({
+      status: err.status,
+      code: err.code,
+      message: err.message,
+      method: request?.method,
+      path: request?.path,
+    });
+    if (err.status === 503) {
+      console.warn("[api-error]", event);
+      return;
+    }
+    console.error("[api-error]", event);
+    return;
+  }
+
+  console.error("API Error (onError):", err);
+}
+
 /**
  * Return a standard success response: { success: true, data: T }
  *

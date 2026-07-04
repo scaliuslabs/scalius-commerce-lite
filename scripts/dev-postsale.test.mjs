@@ -3,6 +3,7 @@ import {
   buildCartValidationPayload,
   buildCheckoutPayload,
   buildFixtureSql,
+  buildPaymentReadinessFixtureSql,
   getPostsaleConfig,
 } from "./dev-postsale.mjs";
 
@@ -48,6 +49,13 @@ describe("local post-sale smoke CLI", () => {
     );
   });
 
+  it("accepts the local payment readiness smoke command", () => {
+    const config = getPostsaleConfig(["payment-readiness", "--api", "http://localhost:8787"], {});
+
+    expect(config.command).toBe("payment-readiness");
+    expect(config.paymentMethod).toBe("cod");
+  });
+
   it("builds a SKU-first checkout payload and matching cart-validation payload", () => {
     const payload = buildCheckoutPayload({ sequence: 42, checkoutRequestId: "ops006_fixed_checkout" });
     const cartPayload = buildCartValidationPayload(payload);
@@ -85,5 +93,24 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("'ops006_variant_default'");
     expect(sql).toContain("is_default = 1");
     expect(sql).toContain("track_inventory = 0");
+  });
+
+  it("seeds committed online orders while clearing gateway side-effect rows", () => {
+    const sql = buildPaymentReadinessFixtureSql();
+
+    expect(sql).toContain("DELETE FROM payment_session_attempts");
+    expect(sql).toContain("DELETE FROM payment_plans");
+    expect(sql).toContain("DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz', 'polar')");
+    expect(sql).toContain("partial_payment_enabled = 1");
+    expect(sql).toContain("partial_payment_amount = 150");
+    expect(sql).toContain("'ops006_order_stripe'");
+    expect(sql).toContain("'ops006_order_sslcommerz'");
+    expect(sql).toContain("'ops006_order_polar'");
+    expect(sql).toContain("'chk_ops006_stripe'");
+    expect(sql).toContain("'committed'");
+    expect(sql).toContain("'payment_methods'");
+    expect(sql).toContain("stripe");
+    expect(sql).toContain("sslcommerz");
+    expect(sql).toContain("polar");
   });
 });

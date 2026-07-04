@@ -42,6 +42,7 @@ packages/
 | `pnpm dev:post-sale:smoke` | Run the local-only COD cart/order/replay/receipt/support smoke |
 | `pnpm dev:post-sale:load` | Run a bounded local-only disposable COD order load smoke |
 | `pnpm dev:post-sale:otp` | Run the local-only customer OTP readiness smoke |
+| `pnpm dev:post-sale:payment-readiness` | Run the local-only online gateway readiness fail-closed smoke |
 | `pnpm dev:doctor` | Non-mutating local readiness check for env files, shared secrets, ports, services, and Wrangler state |
 | `pnpm dev:doctor:api` | Require local API to be live |
 | `pnpm dev:doctor:admin` | Require local API + admin to be live |

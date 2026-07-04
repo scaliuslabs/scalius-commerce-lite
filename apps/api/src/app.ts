@@ -44,7 +44,7 @@ import { storefrontRoutes } from "./routes/storefront";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { readinessRoutes } from "./routes/readiness";
-import { errorResponseFromError } from "./utils/api-response";
+import { errorResponseFromError, logApiError } from "./utils/api-response";
 import { serveMediaRoute } from "./routes/media-server";
 import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 import { finalizeOpenApiContract } from "./openapi-contract";
@@ -110,7 +110,10 @@ function getR2PublicUrl(env: Env, requestUrl: string): string {
 // SyntaxError when the browser tries to JSON.parse() it. This handler mirrors the
 // middleware-based handler below but acts as Hono's registered onError fallback.
 app.onError((err, c) => {
-  console.error("API Error (onError):", err);
+  logApiError(err, {
+    method: c.req.method,
+    path: new URL(c.req.url).pathname,
+  });
 
   const { body, status } = errorResponseFromError(err);
   return c.json(body, status);
