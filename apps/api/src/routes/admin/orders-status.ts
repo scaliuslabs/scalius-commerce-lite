@@ -102,7 +102,7 @@ app.openapi(updateStatusRoute, async (c) => {
                 customerEmail: result.notification.customerEmail,
                 customerName: result.notification.customerName,
                 notificationType: result.notification.notificationType,
-                data: data.status === "shipped" && result.notification.trackingId
+                data: result.notification.newStatus === "shipped" && result.notification.trackingId
                     ? { trackingId: result.notification.trackingId }
                     : undefined,
             },

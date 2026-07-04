@@ -40,6 +40,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
+import { normalizeOrderStatus } from "@scalius/shared/order-state";
 import { unixToDate } from "@scalius/shared/utils";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "./orders.validation";
@@ -1473,20 +1474,28 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         .get();
 
     if (!existingOrder) throw new NotFoundError("Order not found");
+    const currentStatus = normalizeOrderStatus(existingOrder.status);
+    if (!currentStatus) {
+        throw new ValidationError("Order has an unknown current status.");
+    }
+    const nextStatus = normalizeOrderStatus(data.status);
+    if (!nextStatus) {
+        throw new ValidationError("Unknown order status.");
+    }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, id);
 
     // Validate status transition if status is changing
-    if (data.status !== existingOrder.status) {
-        validateTransition("order", existingOrder.status, data.status);
+    if (nextStatus !== currentStatus) {
+        validateTransition("order", currentStatus, nextStatus);
     }
 
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
     const trackedNewItems = await resolveAdminOrderItemInventory(db, data.items);
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
     const existingInventoryAction = existingOrder.inventoryAction as string;
-    const targetRestoresStock = isStockRestoreStatus(data.status);
-    const targetDeductsStock = isStockDeductStatus(data.status);
+    const targetRestoresStock = isStockRestoreStatus(nextStatus);
+    const targetDeductsStock = isStockDeductStatus(nextStatus);
     const oldEntries = buildInventoryEntries(existingItems, pool);
     const newEntries = buildInventoryEntries(trackedNewItems, pool);
     const { positiveEntries, negativeEntries } = computeInventoryDeltas(oldEntries, newEntries, pool);
@@ -1641,7 +1650,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 paidAmount: nextPaymentState.paidAmount,
                 balanceDue: nextPaymentState.balanceDue,
                 paymentStatus: nextPaymentState.paymentStatus,
-                status: data.status,
+                status: nextStatus,
                 customerId,
                 version: committedOrderVersion,
                 updatedAt: sql`unixepoch()`,
@@ -1670,7 +1679,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         writesCommitted = true;
 
         if (!statusTransitionHandled) {
-            inventoryActionOverride = await applyInventoryForStatusChange(db, id, data.status);
+            inventoryActionOverride = await applyInventoryForStatusChange(db, id, nextStatus);
         }
 
         if (inventoryActionOverride) {

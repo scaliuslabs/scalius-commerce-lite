@@ -966,6 +966,39 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
   });
 
+  it("canonicalizes direct admin status updates before persistence and notifications", async () => {
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CONFIRMED,
+        inventoryAction: "reserved",
+        version: 8,
+        customerName: "Customer",
+        customerEmail: "customer@example.com",
+        paymentMethod: PaymentMethod.STRIPE,
+        paymentStatus: PaymentStatus.PAID,
+      },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    const result = await updateOrderStatus(db as never, "order_1", " SHIPPED ", { trackingId: "TRK-1" });
+
+    expect(result.notification).toMatchObject({
+      notificationType: "order_shipped",
+      previousStatus: OrderStatus.CONFIRMED,
+      newStatus: OrderStatus.SHIPPED,
+      trackingId: "TRK-1",
+    });
+    expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 9 });
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
+  });
+
+  it("rejects unknown direct admin status updates before database work", async () => {
+    await expect(updateOrderStatus({} as never, "order_1", "DELIVERED_NOW"))
+      .rejects.toThrow("Unknown order status.");
+
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
   it("rolls back the visible admin status when inventory reconciliation fails before inventoryAction changes", async () => {
     const inventoryError = new Error("inventory transition failed");
     mocks.applyInventoryForStatusChange.mockRejectedValueOnce(inventoryError);
