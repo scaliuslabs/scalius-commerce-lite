@@ -13,6 +13,7 @@ import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 
 type ProcessOrderOptions = {
   customerSessionToken?: string | null;
+  waitUntil?: (promise: Promise<unknown>) => void;
 };
 
 export async function getCities(): Promise<LocationData[]> {
@@ -306,20 +307,21 @@ export async function processOrder(
     });
 
     if (result.success && result.orderId) {
-      // If the order was successful, await the deletion of the abandoned checkout record.
       if (checkoutId) {
-        try {
-          // By adding 'await', we ensure this request completes before the function terminates.
-          await deleteAbandonedCheckout(checkoutId);
-          console.log(
-            `Successfully deleted abandoned checkout record: ${checkoutId}`,
-          );
-        } catch {
-          // The try/catch ensures that even if this cleanup fails, the user journey is not interrupted.
-          // The error is already logged inside the deleteAbandonedCheckout function.
-          console.warn(
-            `[Non-critical] Failed to delete abandoned checkout record ${checkoutId} after successful order.`,
-          );
+        const cleanupTask = Promise.resolve(deleteAbandonedCheckout(checkoutId))
+          .then(() => {
+            console.log(`Successfully deleted abandoned checkout record: ${checkoutId}`);
+          })
+          .catch(() => {
+            console.warn(
+              `[Non-critical] Failed to delete abandoned checkout record ${checkoutId} after successful order.`,
+            );
+          });
+
+        if (options.waitUntil) {
+          options.waitUntil(cleanupTask);
+        } else {
+          void cleanupTask;
         }
       }
     }

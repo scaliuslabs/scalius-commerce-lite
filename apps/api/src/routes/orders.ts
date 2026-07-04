@@ -55,6 +55,7 @@ import { successEnvelope, errorResponses, serviceUnavailableResponse, conflictRe
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CUSTOMER_SESSION_HEADER = "X-Customer-Session";
+const CHECKOUT_STATUS_TTL_SECONDS = 86400;
 const PAYMENT_METHOD_LABELS: Record<CheckoutPaymentMethodId, string> = {
   cod: "Cash on delivery",
   stripe: "Stripe",
@@ -83,6 +84,84 @@ async function invalidateStorefrontOrderAvailabilityCaches(
       orderId,
       error,
     });
+  }
+}
+
+function scheduleCheckoutRecoveryHint(
+  task: Promise<unknown>,
+  executionCtx: WaitUntilExecutionContext | undefined,
+): void {
+  const guardedTask = task.catch((error: unknown) => {
+    console.error("[Orders] Failed to write checkout recovery hint:", error);
+  });
+
+  if (executionCtx && typeof executionCtx.waitUntil === "function") {
+    executionCtx.waitUntil(guardedTask);
+    return;
+  }
+
+  void guardedTask;
+}
+
+function scheduleCheckoutSuccessRecoveryHints(
+  env: Env,
+  token: string,
+  orderId: string,
+  executionCtx: WaitUntilExecutionContext | undefined,
+): void {
+  if (!env.CACHE) return;
+
+  try {
+    scheduleCheckoutRecoveryHint(
+      Promise.all([
+        env.CACHE.put(
+          `checkout_status:${token}`,
+          JSON.stringify({
+            status: "completed",
+            orderId,
+            receiptToken: token,
+            updatedAt: Date.now(),
+          }),
+          { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
+        ),
+        env.CACHE.put(
+          `${RECEIPT_TOKEN_PREFIX}${token}`,
+          JSON.stringify({ orderId }),
+          { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
+        ),
+      ]),
+      executionCtx,
+    );
+  } catch (error) {
+    console.error("[Orders] Failed to schedule checkout success recovery hint:", error);
+  }
+}
+
+function scheduleCheckoutFailureStatusHint(
+  env: Env,
+  token: string,
+  orderId: string,
+  errorMessage: string,
+  executionCtx: WaitUntilExecutionContext | undefined,
+): void {
+  if (!env.CACHE) return;
+
+  try {
+    scheduleCheckoutRecoveryHint(
+      env.CACHE.put(
+        `checkout_status:${token}`,
+        JSON.stringify({
+          status: "failed",
+          orderId,
+          error: errorMessage,
+          updatedAt: Date.now(),
+        }),
+        { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
+      ),
+      executionCtx,
+    );
+  } catch (error) {
+    console.error("[Orders] Failed to schedule checkout failure recovery hint:", error);
   }
 }
 
@@ -921,33 +1000,20 @@ app.openapi(createOrderRoute, async (c) => {
       checkoutCustomerIdentity ?? undefined,
     );
 
-    const kvKey = `checkout_status:${result.checkoutToken}`;
-    await c.env.CACHE.put(
-      kvKey,
-      JSON.stringify({ status: "processing", orderId: result.orderId }),
-      { expirationTtl: 300 },
-    );
-    await c.env.CACHE.put(
-      `${RECEIPT_TOKEN_PREFIX}${result.checkoutToken}`,
-      JSON.stringify({ orderId: result.orderId }),
-      { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
-    );
+    const executionCtx = getOptionalExecutionContext(c);
 
     try {
-      await commitStorefrontOrderPayload(db, c.env, result.commitPayload);
+      await commitStorefrontOrderPayload(db, result.commitPayload);
       orderCommitted = true;
     } catch (commitError) {
-      await c.env.CACHE.put(
-        kvKey,
-        JSON.stringify({
-          status: "failed",
-          orderId: result.orderId,
-          error: commitError instanceof ValidationError
-            ? commitError.message
-            : "Order creation failed. Please try again.",
-          updatedAt: Date.now(),
-        }),
-        { expirationTtl: 86400 },
+      scheduleCheckoutFailureStatusHint(
+        c.env,
+        result.checkoutToken,
+        result.orderId,
+        commitError instanceof ValidationError
+          ? commitError.message
+          : "Order creation failed. Please try again.",
+        executionCtx,
       );
       throw commitError;
     }
@@ -975,7 +1041,8 @@ app.openapi(createOrderRoute, async (c) => {
       });
     }
 
-    const executionCtx = getOptionalExecutionContext(c);
+    scheduleCheckoutSuccessRecoveryHints(c.env, result.checkoutToken, result.orderId, executionCtx);
+
     const sideEffects = Promise.all([
       runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
       invalidateStorefrontOrderAvailabilityCaches(db, c.env, result.orderId, executionCtx),

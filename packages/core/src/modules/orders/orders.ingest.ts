@@ -30,16 +30,9 @@ import type { StorefrontOrderCommitPayload } from "./orders.types";
 import type { StorefrontCartItemIssue } from "./cart-validation";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
-type CheckoutStatus = "processing" | "completed" | "failed";
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
-interface MinimalKvNamespace {
-    get(key: string): Promise<string | null>;
-    put(key: string, value: string, options?: { expirationTtl?: number }): Promise<unknown>;
-}
-
 export interface StorefrontOrderCommitRuntime {
-    CACHE?: MinimalKvNamespace;
     ORDER_NOTIFICATIONS_QUEUE?: OrderNotificationQueue;
     STOREFRONT_URL?: string;
     CREDENTIAL_ENCRYPTION_KEY?: string;
@@ -58,40 +51,10 @@ type ReservationEntry = {
     orderId: string;
 };
 
-const CHECKOUT_STATUS_TTL_SECONDS = 86400;
 // Durable reservation identity from the old queued checkout path. Keep the
 // value stable so crash retries can recognize reservations created before this
 // source-level queue retirement.
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
-
-export async function setStorefrontCheckoutStatus(
-    env: StorefrontOrderCommitRuntime | undefined,
-    token: string,
-    status: CheckoutStatus,
-    orderId: string,
-    error?: string,
-): Promise<void> {
-    if (!env?.CACHE) return;
-
-    const kvKey = `checkout_status:${token}`;
-    try {
-        const existingRaw = await env.CACHE.get(kvKey);
-        const existing = existingRaw ? JSON.parse(existingRaw) as Record<string, unknown> : {};
-        await env.CACHE.put(
-            kvKey,
-            JSON.stringify({
-                ...existing,
-                status,
-                orderId,
-                error,
-                updatedAt: Date.now(),
-            }),
-            { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
-        );
-    } catch (error) {
-        console.error(`[orders/commit] Failed to write checkout status ${status}:`, error);
-    }
-}
 
 async function loadExistingCommittedOrder(db: Database, orderId: string) {
     return db
@@ -367,12 +330,10 @@ function buildOrderWriteBatch(
 
 export async function commitStorefrontOrderPayload(
     db: Database,
-    env: StorefrontOrderCommitRuntime | undefined,
     payload: StorefrontOrderCommitPayload,
 ): Promise<StorefrontOrderCommitResult> {
     const existing = await loadExistingCommittedOrder(db, payload.orderData.id);
     if (existing) {
-        await setStorefrontCheckoutStatus(env, payload.checkoutToken, "completed", payload.orderData.id);
         return {
             orderId: existing.id,
             customerId: existing.customerId,
@@ -393,7 +354,6 @@ export async function commitStorefrontOrderPayload(
         throw discountConstraintError ?? error;
     }
 
-    await setStorefrontCheckoutStatus(env, payload.checkoutToken, "completed", payload.orderData.id);
     return {
         orderId: payload.orderData.id,
         customerId: customer?.id ?? null,

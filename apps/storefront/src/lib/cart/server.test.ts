@@ -163,6 +163,32 @@ describe("cart server order processing", () => {
     );
   });
 
+  it("does not wait for abandoned checkout cleanup after successful COD order creation", async () => {
+    mocks.deleteAbandonedCheckout.mockReturnValueOnce(new Promise<void>(() => undefined));
+
+    const result = await Promise.race([
+      processOrder(buildCodFormData()),
+      new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 20)),
+    ]);
+
+    expect(result).toMatchObject({ success: true, orderId: "order_1" });
+    expect(mocks.deleteAbandonedCheckout).toHaveBeenCalledWith("chk_session_test_123456");
+  });
+
+  it("uses waitUntil for abandoned checkout cleanup when a Worker context is provided", async () => {
+    const waitUntil = vi.fn();
+    mocks.deleteAbandonedCheckout.mockReturnValueOnce(new Promise<void>(() => undefined));
+
+    const result = await Promise.race([
+      processOrder(buildCodFormData(), { waitUntil }),
+      new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 20)),
+    ]);
+
+    expect(result).toMatchObject({ success: true, orderId: "order_1" });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
+  });
+
   it("resolves legacy simple-product cart lines through cart validation before COD order creation", async () => {
     const formData = buildCodFormData();
     formData.set("cartItems", JSON.stringify({

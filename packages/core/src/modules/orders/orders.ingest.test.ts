@@ -117,7 +117,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     const db = createDbMock();
     mocks.safeBatch.mockRejectedValue(new Error("D1_ERROR: DISCOUNT_MAX_USES_EXCEEDED"));
 
-    const result = commitStorefrontOrderPayload(db, undefined, createPayload());
+    const result = commitStorefrontOrderPayload(db, createPayload());
     await expect(result).rejects.toBeInstanceOf(ValidationError);
     await expect(result).rejects.toMatchObject({
       name: "ValidationError",
@@ -136,7 +136,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
 
     const result = await commitStorefrontOrderPayload(
       db,
-      undefined,
       createPayload({
         existingCustomer: null,
         discountUsage: null,
@@ -156,7 +155,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
   it("rejects authenticated checkout payloads when the customer account is no longer active", async () => {
     const db = createDbMock({ activeCustomer: null });
 
-    await expect(commitStorefrontOrderPayload(db, undefined, createPayload()))
+    await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toMatchObject({
         name: "ValidationError",
         message: "Customer account is no longer active. Please sign in again.",
@@ -171,7 +170,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     const cause = new Error("SQLITE_CONSTRAINT_TRIGGER: DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED");
     mocks.safeBatch.mockRejectedValue(Object.assign(new Error("D1 batch failed"), { cause }));
 
-    await expect(commitStorefrontOrderPayload(db, undefined, createPayload()))
+    await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toMatchObject({
         name: "ValidationError",
         message: "Discount already used by this customer",
@@ -184,7 +183,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     const db = createDbMock();
     mocks.safeBatch.mockRejectedValue(new Error("D1_ERROR: DISCOUNT_CUSTOMER_KEY_REQUIRED"));
 
-    await expect(commitStorefrontOrderPayload(db, undefined, createPayload()))
+    await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toThrow("A valid phone number is required to use this discount");
 
     expect(mocks.releaseMultiple).toHaveBeenCalledOnce();
@@ -195,7 +194,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     const rawError = new Error("D1 batch unavailable");
     mocks.safeBatch.mockRejectedValue(rawError);
 
-    await expect(commitStorefrontOrderPayload(db, undefined, createPayload()))
+    await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toBe(rawError);
 
     expect(mocks.releaseMultiple).toHaveBeenCalledOnce();
@@ -217,7 +216,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       ],
     });
 
-    const result = commitStorefrontOrderPayload(db, undefined, createPayload());
+    const result = commitStorefrontOrderPayload(db, createPayload());
     await expect(result).rejects.toMatchObject({
       name: "ValidationError",
       message: "Some items in your cart need attention.",
@@ -233,7 +232,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         ],
       },
     });
-    await expect(commitStorefrontOrderPayload(db, undefined, createPayload()))
+    await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.not.toThrow("variant_1");
     expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
