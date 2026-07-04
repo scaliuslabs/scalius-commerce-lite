@@ -83661,6 +83661,106 @@
         ]
       }
     },
+    "/api/v1/admin/orders/{id}/refund-attempts/{attemptId}/reconcile": {
+      "post": {
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Check refund recovery",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "attemptId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Refund recovery check completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "attemptId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "finalized",
+                            "failed",
+                            "deferred"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "not_recoverable",
+                            "leased",
+                            "pending_not_due",
+                            "claim_unavailable",
+                            "reconciliation_error"
+                          ]
+                        },
+                        "orderIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "notificationCount": {
+                          "type": "number"
+                        },
+                        "sideEffectErrors": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "attemptId",
+                        "status",
+                        "orderIds",
+                        "notificationCount",
+                        "sideEffectErrors"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/orders/:id/invoice": {
       "get": {
         "tags": [

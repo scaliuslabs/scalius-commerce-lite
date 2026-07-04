@@ -24,6 +24,15 @@ describe("route permissions", () => {
     ).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
   });
 
+  it("gates manual refund recovery behind refund permission", () => {
+    expect(
+      getRoutePermission(
+        "/api/v1/admin/orders/order_1/refund-attempts/rfa_1/reconcile",
+        "POST",
+      ),
+    ).toEqual({ permission: PERMISSIONS.ORDERS_REFUND });
+  });
+
   it("gates order support request resolution behind order edit permission", () => {
     expect(
       getRoutePermission(

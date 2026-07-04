@@ -16,6 +16,7 @@ const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
   info: vi.fn(),
   success: vi.fn(),
+  warning: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -32,6 +33,7 @@ vi.mock("../api-functions/orders", () => ({
   createFulfillmentShipment: vi.fn(),
   createOrder: vi.fn(),
   createOrderShipment: vi.fn(),
+  reconcileRefundAttempt: vi.fn(),
   refundOrder: vi.fn(),
   retryOrderNotification: vi.fn(),
   restoreOrder: vi.fn(),
@@ -43,7 +45,11 @@ vi.mock("../api-functions/orders", () => ({
 }));
 
 import { queryKeys } from "../query-keys";
-import { useRetryOrderNotification, useUpdateOrderCod } from "./orders";
+import {
+  useReconcileRefundAttempt,
+  useRetryOrderNotification,
+  useUpdateOrderCod,
+} from "./orders";
 
 type MutationOptions = {
   onSuccess?: (data: unknown, variables: { orderId: string }) => void;
@@ -83,5 +89,30 @@ describe("order notification mutations", () => {
       queryKey: queryKeys.orders.notifications("ord_123"),
     });
     expect(toastMocks.success).toHaveBeenCalledWith("Notification retry queued");
+  });
+});
+
+describe("order refund recovery mutations", () => {
+  it("invalidates order state and payments after a manual recovery check", () => {
+    const mutation = useReconcileRefundAttempt() as MutationOptions;
+
+    mutation.onSuccess?.(
+      {
+        status: "finalized",
+        sideEffectErrors: 0,
+      },
+      { orderId: "ord_123", attemptId: "rfa_1" } as never,
+    );
+
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.list(),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail("ord_123"),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.payments("ord_123"),
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith("Refund recovery finalized");
   });
 });

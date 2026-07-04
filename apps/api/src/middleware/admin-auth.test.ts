@@ -545,7 +545,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("requires the dedicated refund permission for direct refund endpoints", async () => {
+  it("requires the dedicated refund permission for direct refund and recovery endpoints", async () => {
     mocks.getUserPermissions.mockResolvedValue(
       new Set([PERMISSIONS.ORDERS_EDIT]),
     );
@@ -561,6 +561,19 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       code: "FORBIDDEN",
       message: "You do not have permission to perform this action",
     });
+    await expect(
+      adminAuthMiddleware(
+        createContext(
+          "/api/v1/admin/orders/order_1/refund-attempts/rfa_1/reconcile",
+          "POST",
+        ) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "You do not have permission to perform this action",
+    });
 
     mocks.getUserPermissions.mockResolvedValue(
       new Set([PERMISSIONS.ORDERS_REFUND]),
@@ -569,7 +582,14 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       createContext("/api/v1/admin/orders/order_1/refund", "POST") as never,
       next,
     );
-    expect(next).toHaveBeenCalledTimes(1);
+    await adminAuthMiddleware(
+      createContext(
+        "/api/v1/admin/orders/order_1/refund-attempts/rfa_1/reconcile",
+        "POST",
+      ) as never,
+      next,
+    );
+    expect(next).toHaveBeenCalledTimes(2);
   });
 
   it("requires product view permission for navigation product previews", async () => {

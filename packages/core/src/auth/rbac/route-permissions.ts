@@ -279,6 +279,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/orders/*/refund": {
     POST: { permission: PERMISSIONS.ORDERS_REFUND },
   },
+  "/api/v1/admin/orders/*/refund-attempts/*/reconcile": {
+    POST: { permission: PERMISSIONS.ORDERS_REFUND },
+  },
   "/api/v1/admin/orders/*/fulfillment-status": {
     PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
     PATCH: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
