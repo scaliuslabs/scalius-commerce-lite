@@ -98,8 +98,16 @@ export function useCreateOrderShipment() {
       });
       toast.success("Shipment created");
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create shipment")),
+    onError: (err, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.shipments(variables.orderId),
+      });
+      toast.error(getServerFnError(err, "Failed to create shipment"));
+    },
   });
 }
 

@@ -48,6 +48,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   const returnMutation = useReturnOrder();
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
+  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
 
   const handleStatusChange = (newStatus: string) => {
     if (!canChangeStatus) {
@@ -58,6 +59,12 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
     }
     if (refundLocked) {
       toast.error("Order locked", { description: "Complete or reconcile the active refund before changing order status." });
+      return;
+    }
+    if (shipmentLocked) {
+      toast.error("Shipment recovery active", {
+        description: order.shipmentRecovery?.message ?? "Resolve the active shipment recovery before changing order status.",
+      });
       return;
     }
     statusMutation.mutate({ orderId: order.id, status: newStatus });
@@ -76,6 +83,12 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
     }
     if (refundLocked) {
       toast.error("Order locked", { description: "Complete or reconcile the active refund before returning this order." });
+      return;
+    }
+    if (shipmentLocked) {
+      toast.error("Shipment recovery active", {
+        description: order.shipmentRecovery?.message ?? "Resolve the active shipment recovery before returning this order.",
+      });
       return;
     }
 
@@ -108,7 +121,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
           <Select
             defaultValue={order.status.toLowerCase()}
             onValueChange={handleStatusChange}
-            disabled={statusMutation.isPending || refundLocked || !canChangeStatus}
+            disabled={statusMutation.isPending || refundLocked || shipmentLocked || !canChangeStatus}
           >
             <SelectTrigger className="h-9 text-sm border-border bg-background text-foreground">
               {statusMutation.isPending ? (
@@ -159,10 +172,22 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
           </div>
         )}
 
+        {shipmentLocked && order.shipmentRecovery && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <div>
+                <p className="font-medium">{order.shipmentRecovery.label}</p>
+                {order.shipmentRecovery.message && <p className="mt-1">{order.shipmentRecovery.message}</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
         {isReturnable && canChangeStatus && (
           <Dialog open={isReturnDialogOpen} onOpenChange={setIsReturnDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="w-full mt-2" size="sm" disabled={refundLocked}>
+              <Button variant="outline" className="w-full mt-2" size="sm" disabled={refundLocked || shipmentLocked}>
                 <Undo2 className="h-4 w-4 md:mr-2" />
                 <span className="hidden md:inline">Return Order</span>
                 <span className="md:hidden">Return</span>
@@ -202,6 +227,8 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                     <p className="text-xs text-muted-foreground">
                       {refundLocked
                         ? "Locked while refund recovery is active"
+                        : shipmentLocked
+                        ? "Locked while shipment recovery is active"
                         : order.paymentStatus === "unpaid" || order.paymentStatus === "refunded"
                         ? "Not available (no refundable payment)"
                         : !canRefund
@@ -215,7 +242,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                 <Button variant="outline" onClick={() => setIsReturnDialogOpen(false)} disabled={returnMutation.isPending}>
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={handleReturnOrder} disabled={returnMutation.isPending || refundLocked}>
+                <Button variant="destructive" onClick={handleReturnOrder} disabled={returnMutation.isPending || refundLocked || shipmentLocked}>
                   {returnMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Confirm Return
                 </Button>

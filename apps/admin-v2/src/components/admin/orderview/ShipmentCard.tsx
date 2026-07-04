@@ -37,10 +37,15 @@ const CreateShipmentForm = ({
   const [selectedProviderId, setSelectedProviderId] = React.useState("");
   const shipmentMutation = useCreateOrderShipment();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
+  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
 
   const handleCreateShipment = () => {
     if (refundLocked) {
       toast.error("Order locked", { description: "Complete or reconcile the active refund before creating shipments." });
+      return;
+    }
+    if (shipmentLocked) {
+      toast.error("Shipment recovery active", { description: order.shipmentRecovery?.message ?? "Resolve the active shipment recovery before creating another shipment." });
       return;
     }
     if (!selectedProviderId) {
@@ -80,7 +85,7 @@ const CreateShipmentForm = ({
                 <Select
                   value={selectedProviderId}
                   onValueChange={setSelectedProviderId}
-                  disabled={shipmentMutation.isPending || refundLocked}
+                  disabled={shipmentMutation.isPending || refundLocked || shipmentLocked}
                 >
                   <SelectTrigger className="h-9 text-sm border-border bg-background text-foreground">
                     <SelectValue placeholder="Select provider" />
@@ -100,7 +105,7 @@ const CreateShipmentForm = ({
               </div>
               <Button
                 className="w-full"
-                disabled={shipmentMutation.isPending || !selectedProviderId || refundLocked}
+                disabled={shipmentMutation.isPending || !selectedProviderId || refundLocked || shipmentLocked}
                 onClick={handleCreateShipment}
               >
                 {shipmentMutation.isPending && (
@@ -116,6 +121,35 @@ const CreateShipmentForm = ({
     </Card>
   );
 };
+
+const SHIPMENT_RECOVERY_CLASS = {
+  info: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200",
+  warning: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200",
+  danger: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200",
+} as const;
+
+function ShipmentRecoveryNotice({ order }: { order: Order }) {
+  const recovery = order.shipmentRecovery;
+  if (!recovery || recovery.state === "none") return null;
+
+  return (
+    <div className={`mt-6 rounded-lg border p-3 text-sm ${SHIPMENT_RECOVERY_CLASS[recovery.severity]}`}>
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="min-w-0">
+          <p className="font-medium">{recovery.label}</p>
+          {recovery.message && <p className="mt-1 text-xs opacity-90">{recovery.message}</p>}
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs opacity-80">
+            {recovery.status && <span>Status: {recovery.status.replaceAll("_", " ")}</span>}
+            {recovery.providerType && <span>Provider: {recovery.providerType}</span>}
+            {recovery.canRetryCreate && <span>Retry: create a new shipment after fixing setup.</span>}
+            {recovery.canRefresh && <span>Refresh can retry provider status sync.</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const ShipmentHistoryItem = ({
   shipment,
@@ -239,6 +273,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
   const queryClient = useQueryClient();
   const orderActions = useOrderActionPermissions();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
+  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
     queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(order.id) });
@@ -249,10 +284,14 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
   const hasShipments = order.shipments && order.shipments.length > 0;
   const shipmentRefreshDisabledReason = refundLocked
     ? "Shipment refresh is locked while refund recovery is active."
+    : shipmentLocked
+      ? order.shipmentRecovery?.message ?? "Shipment refresh is locked while shipment recovery is active."
     : undefined;
 
   return (
     <>
+      <ShipmentRecoveryNotice order={order} />
+
       {hasCreateShipmentActions && (
         <CreateShipmentForm order={order} />
       )}

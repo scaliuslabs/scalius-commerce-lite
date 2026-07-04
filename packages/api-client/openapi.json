@@ -85269,6 +85269,80 @@
                                   "createdAt"
                                 ]
                               },
+                              "shipmentRecovery": {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "creating",
+                                      "needs_attention",
+                                      "failed"
+                                    ]
+                                  },
+                                  "severity": {
+                                    "type": "string",
+                                    "enum": [
+                                      "info",
+                                      "warning",
+                                      "danger"
+                                    ]
+                                  },
+                                  "activeLock": {
+                                    "type": "boolean"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "shipmentId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "providerType": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "canRefresh": {
+                                    "type": "boolean"
+                                  },
+                                  "canRetryCreate": {
+                                    "type": "boolean"
+                                  },
+                                  "updatedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "severity",
+                                  "activeLock",
+                                  "label",
+                                  "message",
+                                  "shipmentId",
+                                  "status",
+                                  "providerType",
+                                  "canRefresh",
+                                  "canRetryCreate",
+                                  "updatedAt"
+                                ]
+                              },
                               "paymentRecovery": {
                                 "type": "object",
                                 "properties": {
@@ -85441,6 +85515,7 @@
                               "itemCount",
                               "totalQuantity",
                               "latestShipment",
+                              "shipmentRecovery",
                               "paymentRecovery",
                               "activeRefundOperation"
                             ]
@@ -85972,6 +86047,80 @@
                                   "createdAt"
                                 ]
                               },
+                              "shipmentRecovery": {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "creating",
+                                      "needs_attention",
+                                      "failed"
+                                    ]
+                                  },
+                                  "severity": {
+                                    "type": "string",
+                                    "enum": [
+                                      "info",
+                                      "warning",
+                                      "danger"
+                                    ]
+                                  },
+                                  "activeLock": {
+                                    "type": "boolean"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "shipmentId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "providerType": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "canRefresh": {
+                                    "type": "boolean"
+                                  },
+                                  "canRetryCreate": {
+                                    "type": "boolean"
+                                  },
+                                  "updatedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "severity",
+                                  "activeLock",
+                                  "label",
+                                  "message",
+                                  "shipmentId",
+                                  "status",
+                                  "providerType",
+                                  "canRefresh",
+                                  "canRetryCreate",
+                                  "updatedAt"
+                                ]
+                              },
                               "paymentRecovery": {
                                 "type": "object",
                                 "properties": {
@@ -86144,6 +86293,7 @@
                               "itemCount",
                               "totalQuantity",
                               "latestShipment",
+                              "shipmentRecovery",
                               "paymentRecovery",
                               "activeRefundOperation"
                             ]
@@ -87264,6 +87414,80 @@
                             "createdAt"
                           ]
                         },
+                        "shipmentRecovery": {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "creating",
+                                "needs_attention",
+                                "failed"
+                              ]
+                            },
+                            "severity": {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "warning",
+                                "danger"
+                              ]
+                            },
+                            "activeLock": {
+                              "type": "boolean"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shipmentId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "providerType": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "canRefresh": {
+                              "type": "boolean"
+                            },
+                            "canRetryCreate": {
+                              "type": "boolean"
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "severity",
+                            "activeLock",
+                            "label",
+                            "message",
+                            "shipmentId",
+                            "status",
+                            "providerType",
+                            "canRefresh",
+                            "canRetryCreate",
+                            "updatedAt"
+                          ]
+                        },
                         "paymentRecovery": {
                           "type": "object",
                           "properties": {
@@ -87750,6 +87974,7 @@
                         "itemCount",
                         "items",
                         "latestShipment",
+                        "shipmentRecovery",
                         "paymentRecovery",
                         "refundAttempts",
                         "activeRefundOperation",

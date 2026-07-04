@@ -86,6 +86,7 @@ describe("admin order list boundaries", () => {
     expect(source).toContain("await assertNoActivePaymentSessionAttemptsForOrders(db, affectedOrders.map((order) => order.id))");
     expect(source).toContain("noActivePaymentSessionAttemptForOrderIdCondition(orderId)");
     expect(source).toContain("noActivePaymentSessionAttemptForOrderIdCondition(id)");
+    expect(source).toContain("noActivePaymentSessionAttemptForOrderIdCondition(id),");
   });
 
   it("adds active refund operation summaries to order list rows", () => {
@@ -94,6 +95,17 @@ describe("admin order list boundaries", () => {
     expect(source).toContain("listActiveRefundOperationsForOrders");
     expect(source).toContain("const activeRefundOperations = await listActiveRefundOperationsForOrders(db, orderIds)");
     expect(source).toContain("activeRefundOperation: activeRefundOperations.get(order.id) ?? null");
+  });
+
+  it("adds sanitized shipment recovery summaries to order list and detail rows", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain("OrderShipmentRecoverySummary");
+    expect(source).toContain("function buildShipmentRecoverySummary");
+    expect(source).toContain("shipmentRecovery: buildShipmentRecoverySummary(order, latestShipment, nowSeconds)");
+    expect(source).toContain("ShipmentStatus.RECONCILE_REQUIRED");
+    expect(source).toContain("Shipment creation running");
+    expect(source).toContain("canRetryCreate: true");
   });
 
   it("validates manual order SKUs before create/update inventory work", () => {
