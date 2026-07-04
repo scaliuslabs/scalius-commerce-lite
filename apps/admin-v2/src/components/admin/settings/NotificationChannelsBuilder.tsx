@@ -51,6 +51,7 @@ type ChannelKey = (typeof CHANNELS)[number]["key"];
 type ChannelConfig = Record<StatusKey, Record<ChannelKey, boolean>>;
 type WhatsAppTemplateConfig = typeof DEFAULT_WHATSAPP_TEMPLATE;
 type CustomerChannelReadiness = {
+  email: boolean;
   sms: boolean;
   whatsapp: boolean;
 };
@@ -72,6 +73,7 @@ function getDefaultConfig(): ChannelConfig {
 }
 
 function channelCanBeEnabled(channel: ChannelKey, readiness: CustomerChannelReadiness): boolean {
+  if (channel === "email") return readiness.email;
   if (channel === "sms") return readiness.sms;
   if (channel === "whatsapp") return readiness.whatsapp;
   return true;
@@ -124,9 +126,42 @@ function getDefaultAdminConfig(): AdminChannelConfig {
   return config;
 }
 
+function buildAdminChannelConfig(
+  channelData: Record<string, string[]> | undefined,
+  pushReady: boolean,
+): AdminChannelConfig {
+  const config = getDefaultAdminConfig();
+  if (channelData && typeof channelData === "object") {
+    for (const status of ADMIN_STATUSES) {
+      const enabledChannels = channelData[status.key];
+      if (!Array.isArray(enabledChannels)) continue;
+      for (const ch of ADMIN_CHANNELS) {
+        config[status.key][ch.key] = enabledChannels.includes(ch.key);
+      }
+    }
+  }
+  return sanitizeAdminChannelConfig(config, pushReady);
+}
+
+function sanitizeAdminChannelConfig(
+  config: AdminChannelConfig,
+  pushReady: boolean,
+): AdminChannelConfig {
+  const sanitized = {} as AdminChannelConfig;
+  for (const status of ADMIN_STATUSES) {
+    sanitized[status.key] = { ...config[status.key] };
+    if (!pushReady) {
+      sanitized[status.key].push = false;
+    }
+  }
+  return sanitized;
+}
+
 export function NotificationChannelsBuilder() {
   const [channels, setChannels] = useState<ChannelConfig>(getDefaultConfig());
   const [whatsAppTemplate, setWhatsAppTemplate] = useState<WhatsAppTemplateConfig>(DEFAULT_WHATSAPP_TEMPLATE);
+  const [isEmailConfigured, setIsEmailConfigured] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [isWhatsAppConfigured, setIsWhatsAppConfigured] = useState(false);
   const [whatsAppError, setWhatsAppError] = useState<string | null>(null);
   const [isSmsConfigured, setIsSmsConfigured] = useState(false);
@@ -146,18 +181,24 @@ export function NotificationChannelsBuilder() {
         const data = await getNotificationChannels() as {
           channels?: Record<string, string[]>;
           whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
+          emailConfigured?: boolean;
+          emailError?: string | null;
           whatsappConfigured?: boolean;
           whatsappError?: string | null;
           smsProviderConfigured?: boolean;
           smsProviderError?: string | null;
         };
+        const emailConfigured = Boolean(data?.emailConfigured);
         const whatsappConfigured = Boolean(data?.whatsappConfigured);
         const smsConfigured = Boolean(data?.smsProviderConfigured);
+        setIsEmailConfigured(emailConfigured);
+        setEmailError(data?.emailError ?? null);
         setIsWhatsAppConfigured(whatsappConfigured);
         setWhatsAppError(data?.whatsappError ?? null);
         setIsSmsConfigured(smsConfigured);
         setSmsProviderError(data?.smsProviderError ?? null);
         setChannels(buildCustomerChannelConfig(data?.channels, {
+          email: emailConfigured,
           sms: smsConfigured,
           whatsapp: whatsappConfigured,
         }));
@@ -184,19 +225,7 @@ export function NotificationChannelsBuilder() {
         const pushConfigured = Boolean(data?.pushConfigured);
         setIsPushConfigured(pushConfigured);
         setPushError(data?.pushError ?? null);
-        const channelData = data?.channels;
-        if (channelData && typeof channelData === "object") {
-          const config = getDefaultAdminConfig();
-          for (const status of ADMIN_STATUSES) {
-            const enabledChannels = channelData[status.key];
-            if (Array.isArray(enabledChannels)) {
-              for (const ch of ADMIN_CHANNELS) {
-                config[status.key][ch.key] = enabledChannels.includes(ch.key);
-              }
-            }
-          }
-          setAdminChannels(config);
-        }
+        setAdminChannels(buildAdminChannelConfig(data?.channels, pushConfigured));
       } catch {
         // Use defaults on error
       } finally {
@@ -209,7 +238,11 @@ export function NotificationChannelsBuilder() {
   }, []);
 
   const handleToggle = (status: StatusKey, channel: ChannelKey) => {
-    if ((channel === "whatsapp" && !isWhatsAppConfigured) || (channel === "sms" && !isSmsConfigured)) {
+    if (!channelCanBeEnabled(channel, {
+      email: isEmailConfigured,
+      sms: isSmsConfigured,
+      whatsapp: isWhatsAppConfigured,
+    })) {
       return;
     }
     setChannels((prev) => ({
@@ -238,6 +271,7 @@ export function NotificationChannelsBuilder() {
     setIsSaving(true);
     try {
       const effectiveChannels = sanitizeCustomerChannelConfig(channels, {
+        email: isEmailConfigured,
         sms: isSmsConfigured,
         whatsapp: isWhatsAppConfigured,
       });
@@ -273,9 +307,11 @@ export function NotificationChannelsBuilder() {
   const handleAdminSave = async () => {
     setIsAdminSaving(true);
     try {
+      const effectiveAdminChannels = sanitizeAdminChannelConfig(adminChannels, isPushConfigured);
+      setAdminChannels(effectiveAdminChannels);
       const apiChannels: Record<string, string[]> = {};
       for (const status of ADMIN_STATUSES) {
-        const statusChannels = adminChannels[status.key];
+        const statusChannels = effectiveAdminChannels[status.key];
         apiChannels[status.key] = ADMIN_CHANNELS
           .filter((ch) => statusChannels?.[ch.key])
           .map((ch) => ch.key);
@@ -348,8 +384,16 @@ export function NotificationChannelsBuilder() {
             </div>
           </div>
 
-          {(!isSmsConfigured || !isWhatsAppConfigured) && (
+          {(!isEmailConfigured || !isSmsConfigured || !isWhatsAppConfigured) && (
             <div className="mb-4 grid gap-2">
+              {!isEmailConfigured && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    {emailError ?? "Email notifications are locked until a transactional email provider is ready."}
+                  </span>
+                </div>
+              )}
               {!isSmsConfigured && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -397,7 +441,11 @@ export function NotificationChannelsBuilder() {
                       <td key={ch.key} className="text-center py-3 px-4">
                         <Checkbox
                           checked={channels[status.key]?.[ch.key] ?? false}
-                          disabled={(ch.key === "whatsapp" && !isWhatsAppConfigured) || (ch.key === "sms" && !isSmsConfigured)}
+                          disabled={!channelCanBeEnabled(ch.key, {
+                            email: isEmailConfigured,
+                            sms: isSmsConfigured,
+                            whatsapp: isWhatsAppConfigured,
+                          })}
                           onCheckedChange={() =>
                             handleToggle(status.key, ch.key)
                           }

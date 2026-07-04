@@ -84,6 +84,12 @@ export function describeNotificationIssue(value: string | null | undefined): str
   if (normalized.includes("delivery_attempt_limit_reached")) {
     return "Delivery stopped after repeated provider failures. Check credentials and settings before sending more notifications.";
   }
+  if (normalized.includes("order_notification_attempt_limit_reached")) {
+    return "Notification retry stopped after repeated failures before delivery could settle. Check provider settings before retrying.";
+  }
+  if (normalized.includes("order_notification_dlq_terminal")) {
+    return "Notification queue delivery exhausted its safety retries. Check provider settings before retrying.";
+  }
   if (normalized.includes("delivery_receipt_busy")) {
     return "A previous retry is still cooling down; the outbox will not resend before its schedule.";
   }

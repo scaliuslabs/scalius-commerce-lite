@@ -12,9 +12,11 @@ import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
 import {
     describeNotificationProviderBlock,
     getNotificationProviderBlock,
+    type NotificationProviderHealthChannel,
 } from "../notifications/notification-provider-health";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { getSmsProviderReadiness } from "../../integrations/sms";
+import { getEmailProviderReadiness } from "../../integrations/email";
 
 // ─────────────────────────────────────────
 // Types
@@ -300,6 +302,7 @@ export async function updateNotificationChannels(
     db: Database,
     input: Record<string, unknown>,
     encryptionKey?: string,
+    env?: Record<string, unknown>,
 ): Promise<Record<string, string[]>> {
     // Normalize from whatever format the UI sends
     const requestedChannels = normalizeParsedChannels(input, { allowUnsupported: true });
@@ -313,6 +316,23 @@ export async function updateNotificationChannels(
     // Validate channel values against the known set
     for (const [status, statusChannels] of Object.entries(channels)) {
         channels[status] = statusChannels.filter(isValidNotificationChannel);
+    }
+
+    if (channelsRequireEmail(channels)) {
+        const emailReadiness = await getEmailProviderReadiness({ db, encryptionKey, env });
+        if (!emailReadiness.configured) {
+            throw new ValidationError(
+                emailReadiness.error ?? "Configure a transactional email provider before enabling email order notifications.",
+            );
+        }
+        await assertNotificationProviderNotPaused(db, {
+            channel: "email",
+            provider: emailReadiness.provider,
+        });
+        await assertNotificationProviderNotPaused(db, {
+            channel: "email",
+            provider: "email",
+        });
     }
 
     if (channelsRequireSms(channels)) {
@@ -413,6 +433,12 @@ function channelsRequireWhatsApp(channels: Record<string, string[]>): boolean {
     );
 }
 
+function channelsRequireEmail(channels: Record<string, string[]>): boolean {
+    return Object.values(channels).some((statusChannels) =>
+        statusChannels.includes("email"),
+    );
+}
+
 function channelsRequireSms(channels: Record<string, string[]>): boolean {
     return Object.values(channels).some((statusChannels) =>
         statusChannels.includes("sms"),
@@ -428,7 +454,7 @@ function channelsRequirePush(channels: Record<string, string[]>): boolean {
 async function assertNotificationProviderNotPaused(
     db: Database,
     options: {
-        channel: "sms" | "whatsapp";
+        channel: NotificationProviderHealthChannel;
         provider: string;
     },
 ): Promise<void> {

@@ -3,10 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ValidationError } from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
+    getEmailProviderReadiness: vi.fn(),
     getSmsProviderReadiness: vi.fn(),
     getWhatsAppCloudApiSettings: vi.fn(),
     getNotificationProviderBlock: vi.fn(),
     upsertSetting: vi.fn(),
+}));
+
+vi.mock("../../integrations/email", () => ({
+    getEmailProviderReadiness: mocks.getEmailProviderReadiness,
 }));
 
 vi.mock("../../integrations/sms", () => ({
@@ -19,7 +24,7 @@ vi.mock("../../integrations/whatsapp", () => ({
 
 vi.mock("../notifications/notification-provider-health", () => ({
     describeNotificationProviderBlock: (block: { channel: string; provider: string; reason: string }) =>
-        `${block.channel}/${block.provider} paused: ${block.reason}`,
+        `${block.channel}/${block.provider} paused`,
     getNotificationProviderBlock: mocks.getNotificationProviderBlock,
 }));
 
@@ -51,6 +56,11 @@ describe("notification channel settings", () => {
         mocks.getSmsProviderReadiness.mockResolvedValue({
             activeProvider: "gennet",
             configured: true,
+            error: null,
+        });
+        mocks.getEmailProviderReadiness.mockResolvedValue({
+            configured: true,
+            provider: "cloudflare",
             error: null,
         });
         mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
@@ -131,6 +141,23 @@ describe("notification channel settings", () => {
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
     });
 
+    it("rejects email notification saves before the email provider is ready", async () => {
+        mocks.getEmailProviderReadiness.mockResolvedValueOnce({
+            configured: false,
+            provider: "cloudflare",
+            error: "Configure Cloudflare Email or save a Resend API key before enabling email order notifications.",
+        });
+        const db = createSettingsDb();
+
+        const promise = updateNotificationChannels(db as never, {
+            order_created: ["email"],
+        }, "credential-key");
+
+        await expect(promise).rejects.toBeInstanceOf(ValidationError);
+        await expect(promise).rejects.toThrow("Configure Cloudflare Email or save a Resend API key before enabling email order notifications.");
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    });
+
     it("saves SMS notifications when the active provider is ready", async () => {
         const db = createSettingsDb();
 
@@ -151,37 +178,45 @@ describe("notification channel settings", () => {
     });
 
     it("rejects SMS notification saves while the active provider is paused", async () => {
-        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
-            channel: "sms",
-            provider: "gennet",
-            reason: "HTTP 401 unauthorized",
-            blockedAt: 1_782_684_758,
-        });
+        mocks.getNotificationProviderBlock.mockImplementation(async (_db, options: { channel: string; provider: string }) =>
+            options.channel === "sms" && options.provider === "gennet"
+                ? {
+                    channel: "sms",
+                    provider: "gennet",
+                    reason: "HTTP 401 unauthorized",
+                    blockedAt: 1_782_684_758,
+                }
+                : null,
+        );
         const db = createSettingsDb();
 
         await expect(updateNotificationChannels(db as never, {
             order_created: ["sms"],
         }, "credential-key")).rejects.toMatchObject({
             name: "ValidationError",
-            message: "sms/gennet paused: HTTP 401 unauthorized",
+            message: "sms/gennet paused",
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
     });
 
     it("rejects WhatsApp notification saves while Meta delivery is paused", async () => {
-        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
-            channel: "whatsapp",
-            provider: "whatsapp",
-            reason: "invalid token",
-            blockedAt: 1_782_684_758,
-        });
+        mocks.getNotificationProviderBlock.mockImplementation(async (_db, options: { channel: string; provider: string }) =>
+            options.channel === "whatsapp" && options.provider === "whatsapp"
+                ? {
+                    channel: "whatsapp",
+                    provider: "whatsapp",
+                    reason: "invalid token",
+                    blockedAt: 1_782_684_758,
+                }
+                : null,
+        );
         const db = createSettingsDb();
 
         await expect(updateNotificationChannels(db as never, {
             order_created: ["whatsapp"],
         }, "credential-key")).rejects.toMatchObject({
             name: "ValidationError",
-            message: "whatsapp/whatsapp paused: invalid token",
+            message: "whatsapp/whatsapp paused",
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
     });

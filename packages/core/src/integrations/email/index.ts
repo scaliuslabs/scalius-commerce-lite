@@ -18,6 +18,7 @@ export {
 export { CloudflareEmailProvider } from "./cloudflare";
 export { ResendEmailProvider } from "./resend";
 export { getEmailProviderReadiness, getEmailRuntimeSettings, readEmailSetting } from "./settings";
+export type { EmailProviderReadiness } from "./settings";
 
 // ── Register built-in providers ─────────────────────────────────────
 

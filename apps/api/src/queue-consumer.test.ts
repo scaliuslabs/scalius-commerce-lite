@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   enqueueOrderRefundNotificationForOrder: vi.fn(),
   getAdminNotificationChannels: vi.fn(),
   claimOrderNotificationOutboxForProcessing: vi.fn(),
+  markOrderNotificationOutboxDeadLettered: vi.fn(),
   markOrderNotificationOutboxProcessingFailed: vi.fn(),
   markOrderNotificationOutboxSent: vi.fn(),
   createAuthOtpDeliveryTarget: vi.fn(),
@@ -72,6 +73,7 @@ vi.mock("@scalius/core/modules/notifications/notifications.service", () => ({
 
 vi.mock("@scalius/core/modules/notifications", () => ({
   claimOrderNotificationOutboxForProcessing: mocks.claimOrderNotificationOutboxForProcessing,
+  markOrderNotificationOutboxDeadLettered: mocks.markOrderNotificationOutboxDeadLettered,
   markOrderNotificationOutboxProcessingFailed: mocks.markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent: mocks.markOrderNotificationOutboxSent,
 }));
@@ -276,6 +278,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       attempts: 2,
     });
     mocks.markOrderNotificationOutboxProcessingFailed.mockResolvedValue(undefined);
+    mocks.markOrderNotificationOutboxDeadLettered.mockResolvedValue({ marked: true });
     mocks.markOrderNotificationOutboxSent.mockResolvedValue(undefined);
     mocks.createAuthOtpDeliveryTarget.mockImplementation(async (input) => ({
       ...input,
@@ -1415,6 +1418,43 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.markOrderNotificationOutboxProcessingFailed).not.toHaveBeenCalled();
     expect(message.ack).not.toHaveBeenCalled();
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  });
+
+  it("archives order notification DLQ messages back to the durable outbox", async () => {
+    const message = createMessage({
+      type: "order.notification",
+      outboxId: "outbox_dlq",
+      orderId: "order-dlq",
+      customerName: "DLQ Customer",
+      notificationType: "order_created",
+    }, 4);
+
+    await handleQueueBatch(createBatch([message], "order-notifications-dlq") as never, {} as Env);
+
+    expect(mocks.markOrderNotificationOutboxDeadLettered).toHaveBeenCalledWith({
+      db: { id: "db" },
+      outboxId: "outbox_dlq",
+      error: expect.stringContaining("order_notification_dlq_terminal"),
+    });
+    expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("acks legacy order notification DLQ messages without provider work", async () => {
+    const message = createMessage({
+      type: "order.notification",
+      orderId: "order-legacy-dlq",
+      customerName: "Legacy DLQ Customer",
+      notificationType: "order_cancelled",
+    }, 4);
+
+    await handleQueueBatch(createBatch([message], "order-notifications-dlq") as never, {} as Env);
+
+    expect(mocks.markOrderNotificationOutboxDeadLettered).not.toHaveBeenCalled();
+    expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
   });
 
   it("passes notification type to admin push dispatch when push is enabled", async () => {

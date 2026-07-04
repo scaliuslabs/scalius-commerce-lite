@@ -12,6 +12,7 @@ import {
     isWhatsAppCloudApiConfigured,
 } from "@scalius/core/modules/settings/settings.service";
 import { getSmsProviderReadiness, type SmsProviderReadiness } from "@scalius/core/integrations/sms";
+import { getEmailProviderReadiness, type EmailProviderReadiness } from "@scalius/core/integrations/email";
 import { getFirebaseServiceAccountReadiness } from "@scalius/core/integrations/firebase/settings";
 import {
     clearNotificationProviderBlocks,
@@ -48,6 +49,8 @@ const customerNotificationSettingsSchema = z.object({
     whatsappTemplate: whatsappTemplateSchema,
     whatsappConfigured: z.boolean(),
     whatsappError: z.string().nullable(),
+    emailConfigured: z.boolean(),
+    emailError: z.string().nullable(),
     smsProviderConfigured: z.boolean(),
     smsProviderError: z.string().nullable(),
 });
@@ -78,6 +81,8 @@ app.openapi(getChannelsRoute, async (c) => {
     const channels = await getNotificationChannels(db);
     const whatsappTemplate = await getOrderWhatsAppTemplateSettings(db);
     const whatsappReadiness = await getWhatsAppNotificationReadiness(db, encryptionKey);
+    const emailReadiness = await getEmailProviderReadiness({ db, encryptionKey, env: c.env as Record<string, unknown> });
+    const emailNotificationReadiness = await getEmailNotificationReadiness(db, emailReadiness);
     const smsReadiness = await getSmsProviderReadiness(db, encryptionKey);
     const smsNotificationReadiness = await getSmsNotificationReadiness(db, smsReadiness);
     return ok(c, {
@@ -85,6 +90,8 @@ app.openapi(getChannelsRoute, async (c) => {
         whatsappTemplate,
         whatsappConfigured: whatsappReadiness.configured,
         whatsappError: whatsappReadiness.error,
+        emailConfigured: emailNotificationReadiness.configured,
+        emailError: emailNotificationReadiness.error,
         smsProviderConfigured: smsNotificationReadiness.configured,
         smsProviderError: smsNotificationReadiness.error,
     });
@@ -118,8 +125,10 @@ app.openapi(updateChannelsRoute, async (c) => {
     if (whatsappTemplateInput) {
         await clearNotificationProviderBlocks(db, { channel: "whatsapp" });
     }
-    const updated = await updateNotificationChannels(db, channels, encryptionKey);
+    const updated = await updateNotificationChannels(db, channels, encryptionKey, c.env as Record<string, unknown>);
     const whatsappReadiness = await getWhatsAppNotificationReadiness(db, encryptionKey);
+    const emailReadiness = await getEmailProviderReadiness({ db, encryptionKey, env: c.env as Record<string, unknown> });
+    const emailNotificationReadiness = await getEmailNotificationReadiness(db, emailReadiness);
     const smsReadiness = await getSmsProviderReadiness(db, encryptionKey);
     const smsNotificationReadiness = await getSmsNotificationReadiness(db, smsReadiness);
     return ok(c, {
@@ -127,6 +136,8 @@ app.openapi(updateChannelsRoute, async (c) => {
         whatsappTemplate,
         whatsappConfigured: whatsappReadiness.configured,
         whatsappError: whatsappReadiness.error,
+        emailConfigured: emailNotificationReadiness.configured,
+        emailError: emailNotificationReadiness.error,
         smsProviderConfigured: smsNotificationReadiness.configured,
         smsProviderError: smsNotificationReadiness.error,
     });
@@ -208,6 +219,28 @@ app.openapi(updateAdminChannelsRoute, async (c) => {
 
 function adminChannelsRequirePush(channels: Record<string, string[]>): boolean {
     return Object.values(channels).some((enabledChannels) => enabledChannels.includes("push"));
+}
+
+async function getEmailNotificationReadiness(
+    db: Database,
+    readiness: EmailProviderReadiness,
+): Promise<{ configured: boolean; error: string | null }> {
+    if (!readiness.configured) {
+        return { configured: false, error: readiness.error };
+    }
+    const providerBlock = await getNotificationProviderBlock(db, {
+        channel: "email",
+        provider: readiness.provider,
+    });
+    if (providerBlock) return { configured: false, error: describeNotificationProviderBlock(providerBlock) };
+
+    const genericBlock = await getNotificationProviderBlock(db, {
+        channel: "email",
+        provider: "email",
+    });
+    if (genericBlock) return { configured: false, error: describeNotificationProviderBlock(genericBlock) };
+
+    return { configured: true, error: null };
 }
 
 async function getSmsNotificationReadiness(

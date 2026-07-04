@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     updateOrderWhatsAppTemplateSettings: vi.fn(),
     isWhatsAppCloudApiConfigured: vi.fn(),
     getNotificationProviderBlock: vi.fn(),
+    getEmailProviderReadiness: vi.fn(),
     getSmsProviderReadiness: vi.fn(),
     getFirebaseServiceAccountReadiness: vi.fn(),
     clearNotificationProviderBlocks: vi.fn(),
@@ -32,6 +33,10 @@ vi.mock("@scalius/core/integrations/sms", () => ({
     getSmsProviderReadiness: mocks.getSmsProviderReadiness,
 }));
 
+vi.mock("@scalius/core/integrations/email", () => ({
+    getEmailProviderReadiness: mocks.getEmailProviderReadiness,
+}));
+
 vi.mock("@scalius/core/integrations/firebase/settings", () => ({
     getFirebaseServiceAccountReadiness: mocks.getFirebaseServiceAccountReadiness,
 }));
@@ -39,7 +44,7 @@ vi.mock("@scalius/core/integrations/firebase/settings", () => ({
 vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
     clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
     describeNotificationProviderBlock: (block: { channel: string; provider: string; reason: string }) =>
-        `${block.channel}/${block.provider} paused: ${block.reason}`,
+        `${block.channel}/${block.provider} paused`,
     getNotificationProviderBlock: mocks.getNotificationProviderBlock,
 }));
 
@@ -88,6 +93,11 @@ describe("notification channel settings routes", () => {
             languageCode: "en_US",
         });
         mocks.isWhatsAppCloudApiConfigured.mockResolvedValue(false);
+        mocks.getEmailProviderReadiness.mockResolvedValue({
+            configured: true,
+            provider: "cloudflare",
+            error: null,
+        });
         mocks.getSmsProviderReadiness.mockResolvedValue({
             activeProvider: null,
             configured: false,
@@ -113,6 +123,8 @@ describe("notification channel settings routes", () => {
             data: {
                 smsProviderConfigured: boolean;
                 smsProviderError: string | null;
+                emailConfigured: boolean;
+                emailError: string | null;
                 whatsappConfigured: boolean;
             };
         };
@@ -123,8 +135,15 @@ describe("notification channel settings routes", () => {
             data: {
                 smsProviderConfigured: false,
                 smsProviderError: "No active SMS provider selected",
+                emailConfigured: true,
+                emailError: null,
                 whatsappConfigured: false,
             },
+        });
+        expect(mocks.getEmailProviderReadiness).toHaveBeenCalledWith({
+            db: { id: "db" },
+            encryptionKey: "credential-key",
+            env,
         });
         expect(mocks.getSmsProviderReadiness).toHaveBeenCalledWith({ id: "db" }, "credential-key");
     });
@@ -135,12 +154,16 @@ describe("notification channel settings routes", () => {
             configured: true,
             error: null,
         });
-        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
-            channel: "sms",
-            provider: "smsnetbd",
-            reason: "error=405: Authorization required",
-            blockedAt: 1_782_684_758,
-        });
+        mocks.getNotificationProviderBlock.mockImplementation(async (_db, options: { channel: string; provider: string }) =>
+            options.channel === "sms" && options.provider === "smsnetbd"
+                ? {
+                    channel: "sms",
+                    provider: "smsnetbd",
+                    reason: "error=405: Authorization required",
+                    blockedAt: 1_782_684_758,
+                }
+                : null,
+        );
         const { app, env } = createTestApp();
 
         const response = await app.request("/api/v1/admin/settings/notification-channels", {
@@ -155,7 +178,35 @@ describe("notification channel settings routes", () => {
 
         expect(response.status).toBe(200);
         expect(body.data.smsProviderConfigured).toBe(false);
-        expect(body.data.smsProviderError).toBe("sms/smsnetbd paused: error=405: Authorization required");
+        expect(body.data.smsProviderError).toBe("sms/smsnetbd paused");
+    });
+
+    it("reports email notifications as unready while provider delivery is paused", async () => {
+        mocks.getNotificationProviderBlock.mockImplementation(async (_db, options: { channel: string; provider: string }) =>
+            options.channel === "email" && options.provider === "cloudflare"
+                ? {
+                    channel: "email",
+                    provider: "cloudflare",
+                    reason: "Resend API error 401",
+                    blockedAt: 1_782_684_758,
+                }
+                : null,
+        );
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/settings/notification-channels", {
+            method: "GET",
+        }, env);
+        const body = await response.json() as {
+            data: {
+                emailConfigured: boolean;
+                emailError: string | null;
+            };
+        };
+
+        expect(response.status).toBe(200);
+        expect(body.data.emailConfigured).toBe(false);
+        expect(body.data.emailError).toBe("email/cloudflare paused");
     });
 
     it("maps unready SMS channel saves to a customer-safe 400", async () => {
@@ -233,6 +284,7 @@ describe("notification channel settings routes", () => {
             { id: "db" },
             { order_created: ["whatsapp"] },
             "credential-key",
+            env,
         );
         expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
             { id: "db" },
@@ -297,7 +349,7 @@ describe("notification channel settings routes", () => {
 
         expect(response.status).toBe(200);
         expect(body.data.pushConfigured).toBe(false);
-        expect(body.data.pushError).toBe("push/fcm paused: invalid_grant service account disabled");
+        expect(body.data.pushError).toBe("push/fcm paused");
     });
 
     it("rejects admin push saves when Firebase readiness is not configured", async () => {

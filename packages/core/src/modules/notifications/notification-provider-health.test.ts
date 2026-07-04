@@ -70,6 +70,36 @@ describe("notification provider health", () => {
         expect(db.calls.receiptReads).toBe(1);
     });
 
+    it("recovers WhatsApp provider pauses from receipt evidence", async () => {
+        const db = createProviderHealthDb({
+            latestSettingsUpdatedAt: 100,
+            receipts: [
+                {
+                    providerStatus: "Invalid token",
+                    rawResponse: null,
+                    lastError: null,
+                    skippedAt: 180,
+                    failedAt: null,
+                    updatedAt: 180,
+                },
+            ],
+        });
+
+        const block = await getNotificationProviderBlock(db, {
+            channel: "whatsapp",
+            provider: "whatsapp",
+        });
+
+        expect(block).toMatchObject({
+            channel: "whatsapp",
+            provider: "whatsapp",
+            reason: "Invalid token",
+            blockedAt: 180,
+            source: "receipt",
+        });
+        expect(db.calls.receiptReads).toBe(1);
+    });
+
     it("does not recover stale receipt failures after settings were saved", async () => {
         const db = createProviderHealthDb({
             latestSettingsUpdatedAt: 200,

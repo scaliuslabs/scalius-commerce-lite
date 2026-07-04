@@ -196,12 +196,20 @@ export interface NotificationChannelsPayload {
     templateName: string;
     languageCode: string;
   };
+  emailConfigured?: boolean;
+  emailError?: string | null;
   whatsappConfigured?: boolean;
   whatsappError?: string | null;
   smsProviderConfigured?: boolean;
   smsProviderError?: string | null;
 }
-export type UpdateNotificationChannelsInput = NotificationChannelsPayload;
+export interface UpdateNotificationChannelsInput {
+  channels: Record<string, string[]>;
+  whatsappTemplate?: {
+    templateName: string;
+    languageCode: string;
+  };
+}
 export interface AdminNotificationChannelsPayload {
   channels: Record<string, string[]>;
   pushConfigured?: boolean;

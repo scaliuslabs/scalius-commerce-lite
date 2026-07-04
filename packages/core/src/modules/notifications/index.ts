@@ -35,6 +35,7 @@ export {
   enqueueOrderNotificationOutboxById,
   flushPendingOrderNotificationOutbox,
   listOrderNotificationOutboxForOrder,
+  markOrderNotificationOutboxDeadLettered,
   markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent,
   recordAndEnqueueOrderNotification,

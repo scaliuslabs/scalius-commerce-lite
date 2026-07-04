@@ -18,6 +18,7 @@ const RECENT_RECEIPT_SCAN_LIMIT = 25;
 const RECOVERABLE_SETTINGS_CATEGORIES: Partial<Record<NotificationProviderHealthChannel, string[]>> = {
     email: ["email"],
     sms: ["sms"],
+    whatsapp: ["whatsapp"],
     push: ["firebase"],
 };
 
@@ -105,7 +106,7 @@ export function describeNotificationProviderBlock(
 ): string {
     const channelLabel = humanizeChannel(block.channel);
     const providerLabel = block.provider ? ` via ${block.provider}` : "";
-    return `${channelLabel}${providerLabel} sending is paused after a provider setup failure. Save corrected ${channelLabel.toLowerCase()} settings to resume notifications. Last error: ${block.reason}`;
+    return `${channelLabel}${providerLabel} sending is paused after a provider setup failure. Save corrected ${channelLabel.toLowerCase()} settings to resume notifications.`;
 }
 
 function providerHealthKey(

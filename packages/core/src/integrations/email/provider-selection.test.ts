@@ -278,7 +278,7 @@ describe("email provider selection", () => {
     })).resolves.toMatchObject({
       configured: false,
       senderConfigured: false,
-      error: "Sender email is required before enabling Email OTP.",
+      error: "Sender email is required before enabling email order notifications.",
     });
   });
 });

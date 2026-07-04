@@ -77412,6 +77412,13 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "emailConfigured": {
+                          "type": "boolean"
+                        },
+                        "emailError": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "smsProviderConfigured": {
                           "type": "boolean"
                         },
@@ -77425,6 +77432,8 @@
                         "whatsappTemplate",
                         "whatsappConfigured",
                         "whatsappError",
+                        "emailConfigured",
+                        "emailError",
                         "smsProviderConfigured",
                         "smsProviderError"
                       ]
@@ -77783,6 +77792,13 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "emailConfigured": {
+                          "type": "boolean"
+                        },
+                        "emailError": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "smsProviderConfigured": {
                           "type": "boolean"
                         },
@@ -77796,6 +77812,8 @@
                         "whatsappTemplate",
                         "whatsappConfigured",
                         "whatsappError",
+                        "emailConfigured",
+                        "emailError",
                         "smsProviderConfigured",
                         "smsProviderError"
                       ]

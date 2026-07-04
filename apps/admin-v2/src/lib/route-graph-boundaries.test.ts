@@ -198,7 +198,9 @@ describe("admin route graph boundaries", () => {
     expect(notificationSource).toContain("buildCustomerChannelConfig");
     expect(notificationSource).toContain("sanitizeCustomerChannelConfig");
     expect(notificationSource).toContain('channelCanBeEnabled(ch.key, readiness)');
-    expect(notificationSource).toContain('ch.key === "sms" && !isSmsConfigured');
+    expect(notificationSource).toContain('if (channel === "email") return readiness.email;');
+    expect(notificationSource).toContain('if (channel === "sms") return readiness.sms;');
+    expect(notificationSource).toContain('if (channel === "whatsapp") return readiness.whatsapp;');
     expect(notificationSource).toContain("Admin push notifications are locked until Firebase service account credentials are ready.");
     expect(notificationSource).toContain("pushConfigured");
     expect(notificationSource).toContain('ch.key === "push" && !isPushConfigured');

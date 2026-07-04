@@ -23,9 +23,10 @@ import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } 
 import { processPolarWebhookRefund } from "@scalius/core/modules/payments/polar";
 import { ensureAndProcessMetaPurchaseForOrder } from "@scalius/core/integrations/meta/purchase-outbox";
 import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
-import type { OrderNotificationType } from "@scalius/core/modules/notifications";
+import type { OrderNotificationQueueMessage, OrderNotificationType } from "@scalius/core/modules/notifications";
 import {
   claimOrderNotificationOutboxForProcessing,
+  markOrderNotificationOutboxDeadLettered,
   markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent,
 } from "@scalius/core/modules/notifications";
@@ -356,7 +357,7 @@ export type StorefrontCacheQueueMessage = CacheQueueMessage;
  * Each message is processed independently; failures are retried by Cloudflare.
  */
 export async function handleQueueBatch(
-  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
+  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage>,
   env: Env,
   executionCtx?: ExecutionContext,
 ): Promise<void> {
@@ -384,6 +385,14 @@ export async function handleQueueBatch(
     return;
   }
 
+  if (batch.queue === "order-notifications-dlq") {
+    await handleOrderNotificationsDlqBatch(
+      batch as unknown as MessageBatch<OrderNotificationQueueMessage>,
+      db,
+    );
+    return;
+  }
+
   const batchContext = createQueueBatchLogContext(batch, QUEUE_BATCH_CONCURRENCY_LIMIT);
   logQueueBatchStarted(batchContext);
   logQueueBatchConcurrency(batchContext);
@@ -392,7 +401,7 @@ export async function handleQueueBatch(
     batch.messages,
     QUEUE_BATCH_CONCURRENCY_LIMIT,
     (msg) => processQueueMessage(
-      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
+      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage>,
       db,
       env,
       executionCtx,
@@ -414,10 +423,47 @@ export async function handleQueueBatch(
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
       await markPaymentWebhookEventFailedOnTerminalAttempt(
         db,
-        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
+        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage>,
         result.reason,
       );
       msg.retry({ delaySeconds: getQueueRetryDelaySeconds(result.reason) });
+      retried += 1;
+    }
+  }
+
+  logQueueBatchCompleted(batchContext, acked, retried);
+}
+
+async function handleOrderNotificationsDlqBatch(
+  batch: MessageBatch<OrderNotificationQueueMessage>,
+  db: ReturnType<typeof getDb>,
+): Promise<void> {
+  const batchContext = createQueueBatchLogContext(batch, DLQ_BATCH_CONCURRENCY_LIMIT);
+  logQueueBatchStarted(batchContext);
+  logQueueBatchConcurrency(batchContext);
+
+  const results = await runSettledWithConcurrency(
+    batch.messages,
+    DLQ_BATCH_CONCURRENCY_LIMIT,
+    (msg) => archiveOrderNotificationDlqMessage(msg, db),
+  );
+
+  let acked = 0;
+  let retried = 0;
+
+  for (let i = 0; i < batch.messages.length; i++) {
+    const result = results[i];
+    const msg = batch.messages[i];
+    if (!result || !msg) continue;
+    if (result.status === "fulfilled") {
+      console.warn(
+        `[Queue] Archived order notification DLQ message ${msg.id} as ${result.value.status}`,
+      );
+      msg.ack();
+      acked += 1;
+    } else {
+      console.error(`[Queue] Failed to archive order notification DLQ message ${msg.id}:`, result.reason);
+      msg.retry({ delaySeconds: 300 });
       retried += 1;
     }
   }
@@ -790,6 +836,37 @@ async function archivePaymentEventsDlqMessage(
   );
 }
 
+async function archiveOrderNotificationDlqMessage(
+  msg: Message<OrderNotificationQueueMessage>,
+  db: ReturnType<typeof getDb>,
+): Promise<{ status: "outbox_failed" | "outbox_missing" | "legacy_ignored" | "ignored"; outboxId?: string }> {
+  const payload = msg.body;
+  if (!isOrderNotificationQueuePayload(payload)) {
+    console.warn(`[Queue] Ignoring non-order-notification message in order-notifications-dlq id=${msg.id}`);
+    return { status: "ignored" };
+  }
+
+  if (!payload.outboxId) {
+    console.warn(
+      `[Queue] Ignoring legacy order notification DLQ message ${msg.id} for order ${payload.orderId}; no durable outbox id was present.`,
+    );
+    return { status: "legacy_ignored" };
+  }
+
+  const result = await markOrderNotificationOutboxDeadLettered({
+    db,
+    outboxId: payload.outboxId,
+    error: `order_notification_dlq_terminal: Cloudflare queue message ${msg.id} exhausted after ${msg.attempts} attempts`,
+  });
+
+  if (!result.marked) {
+    console.warn(`[Queue] Order notification DLQ message ${msg.id} referenced missing outbox ${payload.outboxId}`);
+    return { status: "outbox_missing", outboxId: payload.outboxId };
+  }
+
+  return { status: "outbox_failed", outboxId: payload.outboxId };
+}
+
 async function archiveAuthOtpDlqMessage(
   msg: Message<AuthOtpQueueMessage>,
   db: ReturnType<typeof getDb>,
@@ -850,7 +927,7 @@ async function archiveAuthOtpDlqMessage(
  * Process a single payment, notification, or OTP queue message.
  */
 async function processQueueMessage(
-  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage>,
+  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage>,
   db: ReturnType<typeof getDb>,
   env: Env,
   executionCtx?: ExecutionContext,
@@ -1212,11 +1289,15 @@ async function processQueueMessage(
   }
 }
 
-type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | StorefrontCacheQueueMessage;
+type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | StorefrontCacheQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {
   return typeof payload.type === "string" && payload.type.startsWith("payment.");
+}
+
+function isOrderNotificationQueuePayload(payload: QueueBody): payload is OrderNotificationQueueMessage {
+  return payload.type === "order.notification";
 }
 
 async function processStorefrontCachePurgeQueueMessage(

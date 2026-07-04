@@ -23660,6 +23660,8 @@ export type GetApiV1AdminSettingsNotificationChannelsResponses = {
             };
             whatsappConfigured: boolean;
             whatsappError: string | null;
+            emailConfigured: boolean;
+            emailError: string | null;
             smsProviderConfigured: boolean;
             smsProviderError: string | null;
         };
@@ -23770,6 +23772,8 @@ export type PutApiV1AdminSettingsNotificationChannelsResponses = {
             };
             whatsappConfigured: boolean;
             whatsappError: string | null;
+            emailConfigured: boolean;
+            emailError: string | null;
             smsProviderConfigured: boolean;
             smsProviderError: string | null;
         };
