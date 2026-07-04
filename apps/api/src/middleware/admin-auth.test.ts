@@ -78,11 +78,19 @@ function createDbMock(liveUser: Record<string, unknown> = {}) {
 function createContext(
   pathname: string,
   method = "GET",
-  options: { headers?: HeadersInit; env?: Record<string, unknown>; db?: unknown; liveUser?: Record<string, unknown> } = {},
+  options: {
+    headers?: HeadersInit;
+    env?: Record<string, unknown>;
+    db?: unknown;
+    liveUser?: Record<string, unknown>;
+  } = {},
 ) {
+  const headers = options.headers ?? {
+    Cookie: "better-auth.session_token=test_session",
+  };
   const request = new Request(`https://api.scalius.test${pathname}`, {
     method,
-    headers: options.headers,
+    headers,
   });
   const db = options.db ?? createDbMock(options.liveUser);
 
@@ -109,16 +117,23 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("allows a mapped admin route when the user has the required permission", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
-    await adminAuthMiddleware(createContext("/api/v1/admin/products") as never, next);
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/products") as never,
+      next,
+    );
 
     expect(next).toHaveBeenCalledTimes(1);
   });
 
   it("allows checkout readiness reads for settings viewers", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.SETTINGS_GENERAL_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.SETTINGS_GENERAL_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await adminAuthMiddleware(
@@ -130,12 +145,16 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("passes the runtime KV binding into permission resolution", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
     const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
 
     await adminAuthMiddleware(
-      createContext("/api/v1/admin/products", "GET", { env: { CACHE: cache } }) as never,
+      createContext("/api/v1/admin/products", "GET", {
+        env: { CACHE: cache },
+      }) as never,
       next,
     );
 
@@ -148,7 +167,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("allows own-account endpoints for any verified admin with admin access", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await adminAuthMiddleware(
@@ -160,7 +181,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("allows team viewing separately from team mutation", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.TEAM_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.TEAM_VIEW]),
+    );
 
     const listNext = vi.fn().mockResolvedValue(undefined);
     await adminAuthMiddleware(
@@ -182,7 +205,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     });
     expect(createNext).not.toHaveBeenCalled();
 
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.TEAM_MANAGE]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.TEAM_MANAGE]),
+    );
     await adminAuthMiddleware(
       createContext("/api/v1/admin/auth/users", "POST") as never,
       createNext,
@@ -191,7 +216,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("stores the Better Auth session on the Hono context", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createContext("/api/v1/admin/products");
 
@@ -213,18 +240,44 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       headers: { Authorization: "Bearer valid-looking-admin-jwt" },
     });
 
-    await expect(adminAuthMiddleware(context as never, next)).rejects.toMatchObject({
+    await expect(
+      adminAuthMiddleware(context as never, next),
+    ).rejects.toMatchObject({
       status: 401,
       code: "UNAUTHORIZED",
       message: "Admin access requires a valid dashboard session cookie.",
     });
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
-    expect(context.header).not.toHaveBeenCalledWith("X-New-Token", expect.any(String));
+    expect(mocks.getAuth).not.toHaveBeenCalled();
+    expect(context.header).not.toHaveBeenCalledWith(
+      "X-New-Token",
+      expect.any(String),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects no-cookie admin API requests before Better Auth or RBAC work", async () => {
+    const next = vi.fn().mockResolvedValue(undefined);
+    const context = createContext("/api/v1/admin/orders", "GET", {
+      headers: {},
+    });
+
+    await expect(
+      adminAuthMiddleware(context as never, next),
+    ).rejects.toMatchObject({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "Admin access requires a valid dashboard session cookie.",
+    });
+    expect(mocks.getAuth).not.toHaveBeenCalled();
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
   });
 
   it("rejects password-onboarding admins before RBAC", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
@@ -245,7 +298,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("allows only the password-change endpoint while password onboarding is pending", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.DASHBOARD_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await adminAuthMiddleware(
@@ -259,7 +314,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("rejects 2FA-onboarding admins before RBAC except setup endpoints", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.DASHBOARD_VIEW]),
+    );
     const blockedNext = vi.fn().mockResolvedValue(undefined);
 
     await expect(
@@ -281,7 +338,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ["/api/v1/admin/auth/2fa/info", "GET"],
       ["/api/v1/admin/auth/2fa/method", "POST"],
     ] as const) {
-      mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+      mocks.getUserPermissions.mockResolvedValue(
+        new Set([PERMISSIONS.DASHBOARD_VIEW]),
+      );
       const next = vi.fn().mockResolvedValue(undefined);
       await adminAuthMiddleware(
         createContext(pathname, method, {
@@ -298,11 +357,16 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       user: { twoFactorEnabled: true },
       session: { twoFactorVerified: false },
     });
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      adminAuthMiddleware(createContext("/api/v1/admin/products") as never, next),
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/products") as never,
+        next,
+      ),
     ).rejects.toMatchObject({
       status: 403,
       code: "FORBIDDEN",
@@ -317,10 +381,15 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       user: { twoFactorEnabled: true },
       session: { twoFactorVerified: true },
     });
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
-    await adminAuthMiddleware(createContext("/api/v1/admin/products") as never, next);
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/products") as never,
+      next,
+    );
 
     expect(next).toHaveBeenCalledTimes(1);
   });
@@ -330,7 +399,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       user: { twoFactorEnabled: true },
       session: { twoFactorVerified: false },
     });
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.DASHBOARD_VIEW]),
+    );
 
     for (const [pathname, method] of [
       ["/api/v1/admin/auth/2fa/info", "GET"],
@@ -349,11 +420,16 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       user: { twoFactorEnabled: true },
       session: { twoFactorVerified: false },
     });
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.DASHBOARD_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      adminAuthMiddleware(createContext("/api/v1/admin/auth/2fa/mark-verified", "POST") as never, next),
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/auth/2fa/mark-verified", "POST") as never,
+        next,
+      ),
     ).rejects.toMatchObject({
       status: 403,
       code: "FORBIDDEN",
@@ -368,11 +444,16 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       user: { twoFactorEnabled: true },
       session: { twoFactorVerified: false },
     });
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.DASHBOARD_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      adminAuthMiddleware(createContext("/api/v1/admin/auth/account-security", "GET") as never, next),
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/auth/account-security", "GET") as never,
+        next,
+      ),
     ).rejects.toMatchObject({
       status: 403,
       code: "FORBIDDEN",
@@ -382,11 +463,16 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("fails closed for an unmapped admin route even when the user has admin permissions", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.DASHBOARD_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      adminAuthMiddleware(createContext("/api/v1/admin/not-a-real-route") as never, next),
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/not-a-real-route") as never,
+        next,
+      ),
     ).rejects.toMatchObject({
       status: 403,
       code: "FORBIDDEN",
@@ -396,11 +482,16 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("still rejects mapped routes when the user lacks the required permission", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.DASHBOARD_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.DASHBOARD_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      adminAuthMiddleware(createContext("/api/v1/admin/products") as never, next),
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/products") as never,
+        next,
+      ),
     ).rejects.toMatchObject({
       status: 403,
       code: "FORBIDDEN",
@@ -410,29 +501,14 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("requires the dedicated refund permission for direct refund endpoints", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.ORDERS_EDIT]));
-    const next = vi.fn().mockResolvedValue(undefined);
-
-    await expect(
-      adminAuthMiddleware(createContext("/api/v1/admin/orders/order_1/refund", "POST") as never, next),
-    ).rejects.toMatchObject({
-      status: 403,
-      code: "FORBIDDEN",
-      message: "You do not have permission to perform this action",
-    });
-
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.ORDERS_REFUND]));
-    await adminAuthMiddleware(createContext("/api/v1/admin/orders/order_1/refund", "POST") as never, next);
-    expect(next).toHaveBeenCalledTimes(1);
-  });
-
-  it("requires product view permission for navigation product previews", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.SETTINGS_HEADER_EDIT]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.ORDERS_EDIT]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
       adminAuthMiddleware(
-        createContext("/api/v1/admin/navigation/preview-products", "GET") as never,
+        createContext("/api/v1/admin/orders/order_1/refund", "POST") as never,
         next,
       ),
     ).rejects.toMatchObject({
@@ -441,9 +517,44 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       message: "You do not have permission to perform this action",
     });
 
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.ORDERS_REFUND]),
+    );
     await adminAuthMiddleware(
-      createContext("/api/v1/admin/navigation/preview-products", "GET") as never,
+      createContext("/api/v1/admin/orders/order_1/refund", "POST") as never,
+      next,
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires product view permission for navigation product previews", async () => {
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.SETTINGS_HEADER_EDIT]),
+    );
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext(
+          "/api/v1/admin/navigation/preview-products",
+          "GET",
+        ) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+      message: "You do not have permission to perform this action",
+    });
+
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
+    await adminAuthMiddleware(
+      createContext(
+        "/api/v1/admin/navigation/preview-products",
+        "GET",
+      ) as never,
       next,
     );
     expect(next).toHaveBeenCalledTimes(1);
@@ -483,7 +594,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("maps widget generation session status to widget edit permission", async () => {
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.WIDGETS_VIEW]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.WIDGETS_VIEW]),
+    );
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
@@ -500,7 +613,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       message: "You do not have permission to perform this action",
     });
 
-    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.WIDGETS_EDIT]));
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.WIDGETS_EDIT]),
+    );
     await adminAuthMiddleware(
       createContext(
         "/api/v1/admin/widget-generation-runs/sessions/session_1/status",
@@ -523,15 +638,19 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     };
     const sessionKey = await getScannerSessionKey(sessionId);
     const kv = {
-      get: vi.fn().mockImplementation((key: string) =>
-        Promise.resolve(key === sessionKey ? JSON.stringify(session) : null),
-      ),
+      get: vi
+        .fn()
+        .mockImplementation((key: string) =>
+          Promise.resolve(key === sessionKey ? JSON.stringify(session) : null),
+        ),
     };
     const next = vi.fn().mockResolvedValue(undefined);
 
     await adminAuthMiddleware(
       createContext("/api/v1/admin/inventory/scanner/lookup?code=ABC", "GET", {
-        headers: { Cookie: `${SCANNER_COOKIE_NAME}=${encodeURIComponent(sessionId)}` },
+        headers: {
+          Cookie: `${SCANNER_COOKIE_NAME}=${encodeURIComponent(sessionId)}`,
+        },
         env: { CACHE: kv },
       }) as never,
       next,
@@ -561,7 +680,9 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     await expect(
       adminAuthMiddleware(
         createContext("/api/v1/admin/inventory/variant_1/adjust", "POST", {
-          headers: { Cookie: `${SCANNER_COOKIE_NAME}=${encodeURIComponent(sessionId)}` },
+          headers: {
+            Cookie: `${SCANNER_COOKIE_NAME}=${encodeURIComponent(sessionId)}`,
+          },
           env: { CACHE: kv },
         }) as never,
         next,
@@ -583,10 +704,14 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
 
     await expect(
       adminAuthMiddleware(
-        createContext("/api/v1/admin/inventory/scanner/lookup?code=ABC", "GET", {
-          headers: { "X-Scanner-Token": "raw-qr-token" },
-          env: { CACHE: { get: vi.fn().mockResolvedValue(null) } },
-        }) as never,
+        createContext(
+          "/api/v1/admin/inventory/scanner/lookup?code=ABC",
+          "GET",
+          {
+            headers: { "X-Scanner-Token": "raw-qr-token" },
+            env: { CACHE: { get: vi.fn().mockResolvedValue(null) } },
+          },
+        ) as never,
         next,
       ),
     ).rejects.toMatchObject({
