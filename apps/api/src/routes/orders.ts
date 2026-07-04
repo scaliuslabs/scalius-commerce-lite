@@ -13,7 +13,7 @@ import {
   siteSettings
 } from "@scalius/database/schema";
 import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
 import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@scalius/core/modules/payments/gateway-settings";
@@ -23,7 +23,7 @@ import {
   createReceiptOrderSupportRequest,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
   getOrderSupportRequestStatusLabel,
-  getReceiptOrderSupportRequestState,
+  getReceiptOrderSupportRequestStateForOrder,
   buildCheckoutAttemptIdentity,
   claimCheckoutAttempt,
   commitStorefrontOrderPayload,
@@ -534,6 +534,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   const order = await db
     .select({
       id: orders.id,
+      customerId: orders.customerId,
       customerName: orders.customerName,
       shippingAddress: orders.shippingAddress,
       totalAmount: orders.totalAmount,
@@ -550,11 +551,12 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       paymentStatus: orders.paymentStatus,
       paidAmount: orders.paidAmount,
       balanceDue: orders.balanceDue,
+      fulfillmentStatus: orders.fulfillmentStatus,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`
     })
     .from(orders)
-    .where(eq(orders.id, id))
+    .where(and(eq(orders.id, id), isNull(orders.deletedAt)))
     .get();
 
   if (!order) {
@@ -584,12 +586,28 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       .leftJoin(products, eq(products.id, orderItems.productId))
       .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
       .where(eq(orderItems.orderId, id)),
-    getReceiptOrderSupportRequestState(db, id),
+    getReceiptOrderSupportRequestStateForOrder(db, order),
   ]);
 
   return ok(c, {
     order: {
-      ...order,
+      id: order.id,
+      customerName: order.customerName,
+      shippingAddress: order.shippingAddress,
+      totalAmount: order.totalAmount,
+      shippingCharge: order.shippingCharge,
+      discountAmount: order.discountAmount,
+      city: order.city,
+      zone: order.zone,
+      area: order.area,
+      cityName: order.cityName,
+      zoneName: order.zoneName,
+      areaName: order.areaName,
+      status: order.status,
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
+      paidAmount: order.paidAmount,
+      balanceDue: order.balanceDue,
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
       items,

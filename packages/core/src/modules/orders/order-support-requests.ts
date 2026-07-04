@@ -108,7 +108,7 @@ interface SupportRequestRow {
   updatedAt: number | null;
 }
 
-type SupportRequestActionOrderState = {
+export type SupportRequestActionOrderState = {
   id: string;
   customerId?: string | null;
   status: string;
@@ -532,6 +532,16 @@ export async function getReceiptOrderSupportRequestState(
   if (!order) {
     throw new NotFoundError("Order not found");
   }
+  return getReceiptOrderSupportRequestStateForOrder(db, order);
+}
+
+export async function getReceiptOrderSupportRequestStateForOrder(
+  db: Database,
+  order: SupportRequestActionOrderState,
+): Promise<{
+  supportRequests: OrderSupportRequestView[];
+  supportRequestActions: CustomerOrderSupportRequestAction[];
+}> {
   const state = await buildOrderSupportRequestState(db, order);
   return {
     supportRequests: state.supportRequests,
