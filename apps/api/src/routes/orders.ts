@@ -335,6 +335,12 @@ app.openapi(getOrderStatusRoute, async (c) => {
       .get();
 
     if (attempt?.status === "committed") {
+      scheduleCheckoutSuccessRecoveryHints(
+        c.env,
+        attempt.checkoutToken,
+        attempt.orderId,
+        getOptionalExecutionContext(c),
+      );
       return ok(c, {
         status: "completed",
         orderId: attempt.orderId,
@@ -343,6 +349,13 @@ app.openapi(getOrderStatusRoute, async (c) => {
     }
 
     if (attempt?.status === "failed") {
+      scheduleCheckoutFailureStatusHint(
+        c.env,
+        attempt.checkoutToken,
+        attempt.orderId,
+        attempt.lastError || "Order creation failed. Please try again.",
+        getOptionalExecutionContext(c),
+      );
       return ok(c, {
         status: "failed",
         orderId: attempt.orderId,
@@ -358,6 +371,12 @@ app.openapi(getOrderStatusRoute, async (c) => {
         .get();
 
       if (orderExists) {
+        scheduleCheckoutSuccessRecoveryHints(
+          c.env,
+          attempt.checkoutToken,
+          attempt.orderId,
+          getOptionalExecutionContext(c),
+        );
         return ok(c, {
           status: "completed",
           orderId: attempt.orderId,
@@ -389,6 +408,12 @@ app.openapi(getOrderStatusRoute, async (c) => {
       .limit(1);
 
     if (orderExists.length > 0) {
+      scheduleCheckoutSuccessRecoveryHints(
+        c.env,
+        token,
+        statusData.orderId,
+        getOptionalExecutionContext(c),
+      );
       return ok(c, {
         status: "completed",
         orderId: statusData.orderId,

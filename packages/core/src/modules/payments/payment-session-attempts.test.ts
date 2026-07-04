@@ -59,6 +59,8 @@ describe("payment session attempts", () => {
 
     await claimPaymentSessionAttempt(fake.db, identity);
 
+    fake.stats.selects = 0;
+    fake.stats.updates = 0;
     await expect(claimPaymentSessionAttempt(fake.db, identity)).resolves.toEqual({
       status: "processing",
       retryable: true,
@@ -70,6 +72,8 @@ describe("payment session attempts", () => {
     });
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]?.attempts).toBe(1);
+    expect(fake.stats.selects).toBe(1);
+    expect(fake.stats.updates).toBe(0);
   });
 
   it("returns a processing state for the same order/gateway/payment type even when the attempt key differs", async () => {
@@ -271,9 +275,10 @@ async function buildIdentity(requestContext: Record<string, unknown> = {
   });
 }
 
-function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[] } {
+function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[]; stats: { selects: number; updates: number } } {
   const rows: AttemptRow[] = [];
   const now = () => Math.floor(Date.now() / 1000);
+  const stats = { selects: 0, updates: 0 };
   let exactReadsToSkipAfterLiveConflict = 0;
   let exactUpdatesToSkipAfterLiveConflict = 0;
   let exactConflictAttemptKey: string | null = null;
@@ -335,6 +340,7 @@ function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[] } {
       from: () => ({
         where: () => ({
           get: async () => {
+            stats.selects += 1;
             if (exactReadsToSkipAfterLiveConflict > 0) {
               exactReadsToSkipAfterLiveConflict -= 1;
               return undefined;
@@ -379,6 +385,7 @@ function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[] } {
       set: (values: Record<string, unknown>) => ({
         where: (condition: unknown) => {
           const applyUpdate = () => {
+            stats.updates += 1;
             const row = resolveUpdateTarget(rows, values, exactConflictAttemptKey);
             if (!row) return [];
             if (exactUpdatesToSkipAfterLiveConflict > 0 && !Object.hasOwn(values, "attemptKey")) {
@@ -410,7 +417,7 @@ function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[] } {
     }),
   } as unknown as Database;
 
-  return { db, rows };
+  return { db, rows, stats };
 }
 
 function resolveUpdateTarget(

@@ -184,6 +184,7 @@ export async function claimPaymentSessionAttempt<TResponse>(
   const existing = await selectPaymentSessionAttemptByKey(db, input.attemptKey);
   const replay = replayPaymentSessionAttempt<TResponse>(existing);
   if (replay) return replay;
+  if (existing && isFreshProcessingAttempt(existing)) return processingResultFromAttempt(existing);
 
   if (existing) {
     const competingLive = await selectLivePaymentSessionAttemptForOrder(db, input);

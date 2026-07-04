@@ -1230,7 +1230,7 @@ describe("admin route graph boundaries", () => {
     expect(notificationsSource).toContain("!isHydrated || isLoading");
     expect(notificationsSource).toContain("buildReceiptDisplayGroups");
     expect(notificationDisplaySource).toContain("Stopped after");
-    expect(notificationsSource).toContain("Delivery settled");
+    expect(notificationDisplaySource).toContain("Delivery settled");
     expect(notificationsSource).toContain("recorded attempt");
   });
 
