@@ -12,6 +12,8 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `queue(batch)` | Queues -- payment events, OTP, notifications, storefront cache purge/warm, and cache DLQ evidence |
 | `scheduled(controller)` | Cron -- releases orphaned reservation movements, archives stale hosted-payment orders, prunes old/empty abandoned-checkout rows, expired customer OTP challenges, expired/old customer sessions, and expired/old scanner QR claims, and flushes notification outbox records every 15 minutes |
 
+The Worker entrypoint and named Durable Object exports are startup-sensitive. `src/worker.ts` lazy-loads the HTTP, queue, and scheduled graphs inside their matching handlers, and `src/agents/widget-design-agent.ts` is intentionally a thin `WidgetDesignAgent` shell. Keep AI SDK/provider imports and generation logic in `src/agents/widget-design-agent-runtime.ts`, which the shell loads only for POST generation requests. `src/worker-startup-boundaries.test.ts` and `src/agents/widget-design-agent-boundaries.test.ts` guard these boundaries.
+
 ## Route Organization
 
 `src/app.ts` creates an `OpenAPIHono` app with base path `/api/v1` and mounts all routes. The file is organized into four sections:

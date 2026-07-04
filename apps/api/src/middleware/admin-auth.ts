@@ -35,25 +35,55 @@ interface ScannerKv {
     get(key: string): Promise<string | null>;
 }
 
+const BETTER_AUTH_SESSION_COOKIE_NAMES = [
+    "better-auth.session_token",
+    "__Secure-better-auth.session_token",
+] as const;
+
 function normalizeAdminPath(url: string): string {
     const pathname = new URL(url).pathname;
     return pathname.startsWith("/api/v1") ? pathname : `/api/v1${pathname}`;
 }
 
-function isTwoFactorCompletionRequest(pathname: string, method: string): boolean {
+function hasNamedCookie(
+    cookieHeader: string | undefined,
+    name: string,
+): boolean {
+    return Boolean(parseCookie(cookieHeader, name));
+}
+
+function hasBetterAuthSessionCookie(cookieHeader: string | undefined): boolean {
+    return BETTER_AUTH_SESSION_COOKIE_NAMES.some((name) =>
+        hasNamedCookie(cookieHeader, name),
+    );
+}
+
+function isTwoFactorCompletionRequest(
+    pathname: string,
+    method: string,
+): boolean {
     return (
         (method === "GET" && pathname === "/api/v1/admin/auth/2fa/info") ||
         (method === "POST" && pathname === "/api/v1/admin/auth/2fa/verify") ||
-        (method === "POST" && pathname === "/api/v1/admin/auth/2fa/complete-verification") ||
+        (method === "POST" &&
+            pathname === "/api/v1/admin/auth/2fa/complete-verification") ||
         (method === "POST" && pathname === "/api/v1/admin/auth/2fa/method")
     );
 }
 
-function isPasswordOnboardingRequest(pathname: string, method: string): boolean {
-    return method === "POST" && pathname === "/api/v1/admin/auth/change-password";
+function isPasswordOnboardingRequest(
+    pathname: string,
+    method: string,
+): boolean {
+    return (
+        method === "POST" && pathname === "/api/v1/admin/auth/change-password"
+    );
 }
 
-function isTwoFactorOnboardingRequest(pathname: string, method: string): boolean {
+function isTwoFactorOnboardingRequest(
+    pathname: string,
+    method: string,
+): boolean {
     return (
         (method === "GET" && pathname === "/api/v1/admin/auth/2fa/info") ||
         (method === "POST" && pathname === "/api/v1/admin/auth/2fa/method")
@@ -71,27 +101,36 @@ function isTwoFactorOnboardingRequest(pathname: string, method: string): boolean
 export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     let user: User | null = null;
     let session: Session | null = null;
+    const cookieHeader = c.req.header("Cookie");
+    const hasBetterAuthCookie = hasBetterAuthSessionCookie(cookieHeader);
+    const hasScannerCookie = hasNamedCookie(cookieHeader, SCANNER_COOKIE_NAME);
 
     // 1. Try Better Auth Session Cookie
-    try {
-        const auth = getAuth(c.env);
-        const sessionResult = await auth.api.getSession({
-            headers: c.req.raw.headers,
-            query: { disableCookieCache: true },
-        });
-        if (sessionResult?.user) {
-            user = sessionResult.user as User;
-            session = (sessionResult.session ?? null) as Session | null;
+    if (hasBetterAuthCookie) {
+        try {
+            const auth = getAuth(c.env);
+            const sessionResult = await auth.api.getSession({
+                headers: c.req.raw.headers,
+                query: { disableCookieCache: true },
+            });
+            if (sessionResult?.user) {
+                user = sessionResult.user as User;
+                session = (sessionResult.session ?? null) as Session | null;
+            }
+        } catch (error: unknown) {
+            console.warn(
+                "[AdminAuth] Session verification failed:",
+                error instanceof Error ? error.message : "Unknown error",
+            );
         }
-    } catch (error: unknown) {
-        console.warn("[AdminAuth] Session verification failed:", error instanceof Error ? error.message : "Unknown error");
     }
 
     // 2. Try Scanner Session Cookie (for warehouse scanner app)
-    if (!user) {
+    if (!user && hasScannerCookie) {
         try {
-            const sessionId = parseCookie(c.req.header("Cookie"), SCANNER_COOKIE_NAME);
-            const kv = (c.env as Record<string, unknown>).CACHE as ScannerKv | undefined;
+            const sessionId = parseCookie(cookieHeader, SCANNER_COOKIE_NAME);
+            const kv = (c.env as Record<string, unknown>).CACHE as
+                ScannerKv | undefined;
             if (sessionId && kv) {
                 const raw = await kv.get(await getScannerSessionKey(sessionId));
                 if (raw) {
@@ -108,14 +147,25 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                 }
             }
         } catch (error: unknown) {
-            console.warn("[AdminAuth] Scanner session verification failed:", error instanceof Error ? error.message : "Unknown error");
+            console.warn(
+                "[AdminAuth] Scanner session verification failed:",
+                error instanceof Error ? error.message : "Unknown error",
+            );
         }
     }
 
-    // If all methods fail, log and return 401
+    // If all methods fail, keep ordinary no-cookie probes quiet but preserve
+    // a warning when a presented admin/scanner cookie could not authenticate.
     if (!user) {
-        console.warn("[AdminAuth] All auth methods failed for:", c.req.path);
-        throw new UnauthorizedError("Admin access requires a valid dashboard session cookie.");
+        if (hasBetterAuthCookie || hasScannerCookie) {
+            console.warn(
+                "[AdminAuth] All auth methods failed for:",
+                c.req.path,
+            );
+        }
+        throw new UnauthorizedError(
+            "Admin access requires a valid dashboard session cookie.",
+        );
     }
 
     const pathname = normalizeAdminPath(c.req.url);
@@ -125,7 +175,9 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     if ((user as Record<string, unknown>)._isScannerSession) {
         c.set("user", user);
         if (!isAllowedScannerApiRequest(pathname, c.req.method)) {
-            throw new ForbiddenError("Scanner sessions can only access scanner inventory endpoints");
+            throw new ForbiddenError(
+                "Scanner sessions can only access scanner inventory endpoints",
+            );
         }
         // Skip full RBAC check — scanner has implicit permission only for the allowlisted endpoints.
         await next();
@@ -171,7 +223,10 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         c.set("session", session);
     }
 
-    if (user.mustChangePassword === true && !isPasswordOnboardingRequest(pathname, method)) {
+    if (
+        user.mustChangePassword === true &&
+        !isPasswordOnboardingRequest(pathname, method)
+    ) {
         throw new ForbiddenError("Password setup required before admin access");
     }
 
@@ -180,7 +235,9 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         user.twoFactorEnabled !== true &&
         !isTwoFactorOnboardingRequest(pathname, method)
     ) {
-        throw new ForbiddenError("Two-factor setup required before admin access");
+        throw new ForbiddenError(
+            "Two-factor setup required before admin access",
+        );
     }
 
     if (
@@ -209,8 +266,14 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     const routePermission = getRoutePermission(pathname, method);
 
     if (!routePermission) {
-        console.warn("[AdminAuth] Missing RBAC route mapping:", method, pathname);
-        throw new ForbiddenError("This admin endpoint is not configured for RBAC");
+        console.warn(
+            "[AdminAuth] Missing RBAC route mapping:",
+            method,
+            pathname,
+        );
+        throw new ForbiddenError(
+            "This admin endpoint is not configured for RBAC",
+        );
     }
 
     let hasRequiredPermission = false;
@@ -220,13 +283,19 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     } else if (routePermission.permission) {
         hasRequiredPermission = userPerms.has(routePermission.permission);
     } else if (routePermission.anyOf) {
-        hasRequiredPermission = routePermission.anyOf.some((p: string) => userPerms.has(p));
+        hasRequiredPermission = routePermission.anyOf.some((p: string) =>
+            userPerms.has(p),
+        );
     } else if (routePermission.allOf) {
-        hasRequiredPermission = routePermission.allOf.every((p: string) => userPerms.has(p));
+        hasRequiredPermission = routePermission.allOf.every((p: string) =>
+            userPerms.has(p),
+        );
     }
 
     if (!hasRequiredPermission) {
-        throw new ForbiddenError("You do not have permission to perform this action");
+        throw new ForbiddenError(
+            "You do not have permission to perform this action",
+        );
     }
 
     // Passed all authentication and authorization checks

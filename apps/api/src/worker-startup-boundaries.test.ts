@@ -15,21 +15,44 @@ vi.mock("cloudflare:workers", () => ({
 
     constructor(ctx?: ExecutionContext, env?: Env) {
       this.env = env ?? ({} as Env);
-      this.ctx = ctx ?? ({
-        waitUntil: vi.fn(),
-        passThroughOnException: vi.fn(),
-      } as unknown as ExecutionContext);
+      this.ctx =
+        ctx ??
+        ({
+          waitUntil: vi.fn(),
+          passThroughOnException: vi.fn(),
+        } as unknown as ExecutionContext);
     }
   },
 }));
 
-vi.mock("./agents/widget-design-agent", () => ({
-  WidgetDesignAgent: class WidgetDesignAgent {},
+vi.mock("agents", () => ({
+  Agent: class {
+    env: Env;
+    initialState: unknown;
+    private currentState: unknown;
+
+    constructor(_ctx?: unknown, env?: Env) {
+      this.env = env ?? ({} as Env);
+    }
+
+    get state(): unknown {
+      return this.currentState ?? this.initialState;
+    }
+
+    setState(next: unknown): void {
+      this.currentState = next;
+    }
+
+    sql(): never[] {
+      return [];
+    }
+  },
 }));
 
 describe("API Worker startup boundaries", () => {
   afterEach(() => {
     vi.doUnmock("./app");
+    vi.doUnmock("./agents/widget-design-agent-runtime");
     vi.doUnmock("./queue-consumer");
     vi.doUnmock("./scheduled-maintenance");
     vi.resetModules();
@@ -40,6 +63,7 @@ describe("API Worker startup boundaries", () => {
       app: false,
       queue: false,
       scheduled: false,
+      widgetRuntime: false,
     };
 
     vi.doMock("./app", () => {
@@ -62,6 +86,12 @@ describe("API Worker startup boundaries", () => {
         runScheduledMaintenance: vi.fn(),
       };
     });
+    vi.doMock("./agents/widget-design-agent-runtime", () => {
+      loaded.widgetRuntime = true;
+      return {
+        streamWidgetDesignAgentRun: vi.fn(),
+      };
+    });
 
     await import("./worker");
 
@@ -69,6 +99,7 @@ describe("API Worker startup boundaries", () => {
       app: false,
       queue: false,
       scheduled: false,
+      widgetRuntime: false,
     });
   });
 
@@ -94,8 +125,13 @@ describe("API Worker startup boundaries", () => {
     });
 
     const { default: ApiWorker } = await import("./worker");
-    const worker = new ApiWorker(undefined as never, undefined as never) as unknown as TestApiWorker;
-    const response = await worker.fetch(new Request("https://api.example.test/api/v1/health"));
+    const worker = new ApiWorker(
+      undefined as never,
+      undefined as never,
+    ) as unknown as TestApiWorker;
+    const response = await worker.fetch(
+      new Request("https://api.example.test/api/v1/health"),
+    );
 
     expect(await response.text()).toBe("ok");
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -128,12 +164,21 @@ describe("API Worker startup boundaries", () => {
     });
 
     const { default: ApiWorker } = await import("./worker");
-    const worker = new ApiWorker(undefined as never, undefined as never) as unknown as TestApiWorker;
-    const batch = { messages: [] } as unknown as MessageBatch<Record<string, unknown>>;
+    const worker = new ApiWorker(
+      undefined as never,
+      undefined as never,
+    ) as unknown as TestApiWorker;
+    const batch = { messages: [] } as unknown as MessageBatch<
+      Record<string, unknown>
+    >;
 
     await worker.queue(batch);
 
-    expect(handleQueueBatch).toHaveBeenCalledWith(batch, worker.env, worker.ctx);
+    expect(handleQueueBatch).toHaveBeenCalledWith(
+      batch,
+      worker.env,
+      worker.ctx,
+    );
     expect(loaded).toEqual({
       app: false,
       queue: true,
@@ -163,7 +208,10 @@ describe("API Worker startup boundaries", () => {
     });
 
     const { default: ApiWorker } = await import("./worker");
-    const worker = new ApiWorker(undefined as never, undefined as never) as unknown as TestApiWorker;
+    const worker = new ApiWorker(
+      undefined as never,
+      undefined as never,
+    ) as unknown as TestApiWorker;
     const controller = {
       cron: "*/15 * * * *",
       scheduledTime: 1783166400000,
@@ -172,10 +220,14 @@ describe("API Worker startup boundaries", () => {
 
     await worker.scheduled(controller);
 
-    expect(runScheduledMaintenance).toHaveBeenCalledWith(worker.env, worker.ctx, {
-      cron: "*/15 * * * *",
-      scheduledTime: 1783166400000,
-    });
+    expect(runScheduledMaintenance).toHaveBeenCalledWith(
+      worker.env,
+      worker.ctx,
+      {
+        cron: "*/15 * * * *",
+        scheduledTime: 1783166400000,
+      },
+    );
     expect(loaded).toEqual({
       app: false,
       queue: false,
