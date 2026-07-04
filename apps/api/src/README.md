@@ -4,13 +4,13 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 
 ## Entry Point
 
-`src/worker.ts` exports an `ApiWorker` class extending `WorkerEntrypoint<Env>` with three handlers:
+`src/worker.ts` exports an `ApiWorker` class extending `WorkerEntrypoint<Env>` with three handlers. Keep this entrypoint thin: HTTP, queue, and cron implementation modules are loaded inside their matching handlers so queue/cron invocations do not eagerly evaluate the Hono app and HTTP invocations do not eagerly evaluate queue or scheduled-maintenance graphs. `WidgetDesignAgent` remains a stable named Durable Object export because Wrangler migrations bind to that class name.
 
 | Handler | Purpose |
 |---------|---------|
-| `fetch(request)` | HTTP -- delegates to the Hono app (`src/app.ts`) |
-| `queue(batch)` | Queues -- payment events, OTP, notifications, storefront cache purge/warm, and cache DLQ evidence |
-| `scheduled(controller)` | Cron -- delegates to `src/scheduled-maintenance.ts`; logs a run id plus per-operation durations; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, prunes stale abandoned checkouts through timestamp-indexed oldest-first passes, prunes expired customer OTP challenges, expired OTP rate-limit windows, expired/old customer sessions, and expired/old scanner QR claims, reconciles stale refund attempts with buyer-safe refund processing/failed/final notification facts, invalidates affected availability caches, and flushes the order notification outbox |
+| `fetch(request)` | HTTP -- lazy-loads and delegates to the Hono app (`src/app.ts`) |
+| `queue(batch)` | Queues -- lazy-loads `src/queue-consumer.ts` for payment events, OTP, notifications, storefront cache purge/warm, and cache DLQ evidence |
+| `scheduled(controller)` | Cron -- lazy-loads `src/scheduled-maintenance.ts`; logs a run id plus per-operation durations; releases at most 50 orphaned reservation movement groups, archives at most 25 stale incomplete hosted-payment orders after a 60-minute grace period, prunes stale abandoned checkouts through timestamp-indexed oldest-first passes, prunes expired customer OTP challenges, expired OTP rate-limit windows, expired/old customer sessions, and expired/old scanner QR claims, reconciles stale refund attempts with buyer-safe refund processing/failed/final notification facts, invalidates affected availability caches, and flushes the order notification outbox |
 
 ## Route Organization
 
