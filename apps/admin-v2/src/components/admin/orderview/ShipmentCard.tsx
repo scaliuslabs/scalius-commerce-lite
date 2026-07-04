@@ -122,13 +122,18 @@ const ShipmentHistoryItem = ({
   orderId,
   onStatusUpdated,
   canManageShipments,
+  refreshDisabledReason,
 }: {
   shipment: OrderShipment;
   orderId: string;
   onStatusUpdated: () => void;
   canManageShipments: boolean;
+  refreshDisabledReason?: string;
 }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
+  const hasRefreshableProvider = Boolean(shipment.providerId);
+  const canRefreshShipment =
+    canManageShipments && hasRefreshableProvider && !refreshDisabledReason;
 
   return (
     <div key={shipment.id} className="p-4">
@@ -152,7 +157,12 @@ const ShipmentHistoryItem = ({
                     : undefined,
             }}
             onStatusUpdated={onStatusUpdated}
-            canRefresh={canManageShipments && Boolean(shipment.providerId)}
+            canRefresh={canRefreshShipment}
+            refreshDisabledReason={
+              canManageShipments && hasRefreshableProvider
+                ? refreshDisabledReason
+                : undefined
+            }
           />
         </div>
         <Button
@@ -228,6 +238,7 @@ const ShipmentHistoryItem = ({
 export function ShipmentCard({ order }: ShipmentCardProps) {
   const queryClient = useQueryClient();
   const orderActions = useOrderActionPermissions();
+  const refundLocked = Boolean(order.activeRefundOperation?.active);
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
     queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(order.id) });
@@ -236,6 +247,9 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
   const hasCreateShipmentActions =
     orderActions.canManageOrderShipments && order.items.length > 0;
   const hasShipments = order.shipments && order.shipments.length > 0;
+  const shipmentRefreshDisabledReason = refundLocked
+    ? "Shipment refresh is locked while refund recovery is active."
+    : undefined;
 
   return (
     <>
@@ -260,6 +274,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
                   orderId={order.id}
                   onStatusUpdated={handleRefresh}
                   canManageShipments={orderActions.canManageOrderShipments}
+                  refreshDisabledReason={shipmentRefreshDisabledReason}
                 />
               ))}
             </div>

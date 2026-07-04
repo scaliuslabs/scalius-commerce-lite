@@ -50,7 +50,12 @@ describe("manual fulfillment boundaries", () => {
     expect(dialogSource).toContain("FULFILLABLE_ITEM_STATUSES");
     expect(dialogSource).toContain("isFinalShipment");
     expect(shipmentCardSource).toContain("ManualFulfillmentDialog");
+    expect(shipmentCardSource).toContain(
+      "Shipment refresh is locked while refund recovery is active.",
+    );
+    expect(shipmentCardSource).toContain("refreshDisabledReason");
     expect(statusIndicatorSource).toContain("canRefresh");
+    expect(statusIndicatorSource).toContain("refreshDisabledReason");
     expect(apiFunctionsSource).toContain("`/orders/${orderId}/fulfill`");
     expect(apiMutationsSource).toContain("useCreateFulfillmentShipment");
   });

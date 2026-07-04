@@ -14,14 +14,18 @@ interface ShipmentStatusIndicatorProps {
   };
   onStatusUpdated?: (updatedShipment: { id: string; orderId: string; status: string; lastChecked: string | null; [key: string]: unknown }) => void;
   canRefresh?: boolean;
+  refreshDisabledReason?: string;
 }
 
 export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   shipment,
   onStatusUpdated,
   canRefresh = true,
+  refreshDisabledReason,
 }) => {
   const { isRefreshing, refreshShipmentStatus } = useShipmentStatus();
+  const showRefreshControl = canRefresh || Boolean(refreshDisabledReason);
+  const refreshTitle = refreshDisabledReason ?? "Refresh shipment status";
 
   // Get status color based on status
   const getStatusColor = (status: string) => {
@@ -96,19 +100,21 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
           </TooltipContent>
         </Tooltip>
 
-        {canRefresh && (
-          <Button
-            onClick={handleRefresh}
-            disabled={isRefreshing[shipment.id]}
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 hover:bg-[var(--muted)]"
-            title="Refresh shipment status"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${isRefreshing[shipment.id] ? "animate-spin" : ""}`}
-            />
-          </Button>
+        {showRefreshControl && (
+          <span title={refreshTitle}>
+            <Button
+              aria-label={refreshTitle}
+              onClick={handleRefresh}
+              disabled={!canRefresh || isRefreshing[shipment.id]}
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-[var(--muted)]"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${isRefreshing[shipment.id] ? "animate-spin" : ""}`}
+              />
+            </Button>
+          </span>
         )}
       </div>
     </div>
