@@ -3,6 +3,7 @@ import { splitSetCookieHeader } from "better-auth/cookies";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../utils/api-response";
+import { ServiceUnavailableError, ValidationError } from "../utils/api-error";
 
 const mocks = vi.hoisted(() => ({
   sendOtp: vi.fn(),
@@ -12,10 +13,14 @@ const mocks = vi.hoisted(() => ({
   updateCustomerProfile: vi.fn(),
   getCustomerOrders: vi.fn(),
   getCustomerOrderDetail: vi.fn(),
+  getCustomerOwnedOrderForDetail: vi.fn(),
+  getCustomerOrderDetailForOrder: vi.fn(),
+  getCustomerPaymentSessionOrderForDetail: vi.fn(),
   resolveCustomerPaymentSessionRecovery: vi.fn(),
   getSessionCookie: vi.fn(),
   getCookieConfig: vi.fn(),
   buildSetCookieHeader: vi.fn(),
+  createCustomerAccountPaymentSession: vi.fn(),
   createStripePaymentSession: vi.fn(),
   createSSLCommerzPaymentSession: vi.fn(),
   createPolarPaymentSession: vi.fn(),
@@ -38,9 +43,13 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
 vi.mock("@scalius/core/modules/customers/customers.service", () => ({
   getCustomerOrders: mocks.getCustomerOrders,
   getCustomerOrderDetail: mocks.getCustomerOrderDetail,
+  getCustomerOwnedOrderForDetail: mocks.getCustomerOwnedOrderForDetail,
+  getCustomerOrderDetailForOrder: mocks.getCustomerOrderDetailForOrder,
+  getCustomerPaymentSessionOrderForDetail: mocks.getCustomerPaymentSessionOrderForDetail,
 }));
 
 vi.mock("./payment/payment-session-create", () => ({
+  createCustomerAccountPaymentSession: mocks.createCustomerAccountPaymentSession,
   createStripePaymentSession: mocks.createStripePaymentSession,
   createSSLCommerzPaymentSession: mocks.createSSLCommerzPaymentSession,
   createPolarPaymentSession: mocks.createPolarPaymentSession,
@@ -188,7 +197,48 @@ describe("customer auth private cache policy", () => {
         phone: "+8801712345678",
       },
     });
-    mocks.getCustomerOrderDetail.mockResolvedValue({
+    const ownedOrder = {
+      id: "order_1",
+      invoiceNumber: 12,
+      status: "shipped",
+      totalAmount: 100,
+      paidAmount: 100,
+      balanceDue: 0,
+      shippingCharge: 60,
+      discountAmount: 0,
+      paymentStatus: "paid",
+      paymentMethod: "sslcommerz",
+      deletedAt: null,
+      shipmentClaimId: null,
+      shipmentClaimExpiresAt: null,
+      fulfillmentStatus: "partial",
+      expectedDelivery: "2026-06-22",
+      shippingAddress: "Dhaka",
+      city: "dhaka",
+      zone: "mirpur",
+      area: null,
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: null,
+      notes: null,
+      createdAt: 1_781_726_400,
+      updatedAt: 1_781_730_000,
+    };
+    const paymentSessionOrder = {
+      id: "order_1",
+      totalAmount: 100,
+      status: "shipped",
+      paymentMethod: "sslcommerz",
+      paymentStatus: "paid",
+      paidAmount: 100,
+      balanceDue: 0,
+      deletedAt: null,
+      shipmentClaimId: null,
+      shipmentClaimExpiresAt: null,
+    };
+    mocks.getCustomerOwnedOrderForDetail.mockResolvedValue(ownedOrder);
+    mocks.getCustomerPaymentSessionOrderForDetail.mockReturnValue(paymentSessionOrder);
+    const orderDetail = {
       order: {
         id: "order_1",
         invoiceNumber: 12,
@@ -296,7 +346,9 @@ describe("customer auth private cache policy", () => {
           happenedAt: "2026-06-18T01:00:00.000Z",
         },
       ],
-    });
+    };
+    mocks.getCustomerOrderDetail.mockResolvedValue(orderDetail);
+    mocks.getCustomerOrderDetailForOrder.mockResolvedValue(orderDetail);
     mocks.resolveCustomerPaymentSessionRecovery.mockResolvedValue({
       eligible: true,
       gateway: "sslcommerz",
@@ -338,6 +390,16 @@ describe("customer auth private cache policy", () => {
       hosted: {
         gatewayUrl: "https://polar.example.test/pay",
         checkoutId: "polar_checkout_1",
+      },
+    });
+    mocks.createCustomerAccountPaymentSession.mockResolvedValue({
+      gateway: "sslcommerz",
+      paymentType: "balance",
+      amount: 900,
+      currency: "BDT",
+      hosted: {
+        gatewayUrl: "https://ssl.example.test/pay",
+        sessionKey: "ssl_session_1",
       },
     });
   });
@@ -708,19 +770,38 @@ describe("customer auth private cache policy", () => {
     expect(response.headers.get("Cache-Control")).toBe(
       "private, no-cache, no-store, must-revalidate",
     );
-    expect(mocks.getCustomerOrderDetail).toHaveBeenCalledWith(
+    expect(mocks.getCustomerOwnedOrderForDetail).toHaveBeenCalledWith(
       expect.anything(),
       "customer_1",
       "order_1",
+    );
+    expect(mocks.getCustomerOrderDetailForOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: "order_1", paymentMethod: "sslcommerz" }),
+    );
+    expect(mocks.getCustomerPaymentSessionOrderForDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "order_1", paymentMethod: "sslcommerz" }),
     );
     expect(mocks.resolveCustomerPaymentSessionRecovery).toHaveBeenCalledWith(
       expect.anything(),
       {
         orderId: "order_1",
         expectedCustomerId: "customer_1",
+        order: expect.objectContaining({
+          id: "order_1",
+          paymentMethod: "sslcommerz",
+          paymentStatus: "paid",
+        }),
       },
     );
-    await expect(response.json()).resolves.toMatchObject({
+    const json = await response.json() as {
+      success: boolean;
+      data: {
+        order: Record<string, unknown>;
+        [key: string]: unknown;
+      };
+    };
+    expect(json).toMatchObject({
       success: true,
       data: {
         order: {
@@ -759,6 +840,9 @@ describe("customer auth private cache policy", () => {
         },
       },
     });
+    expect(json.data).not.toHaveProperty("paymentSessionOrder");
+    expect(json.data.order).not.toHaveProperty("deletedAt");
+    expect(json.data.order).not.toHaveProperty("shipmentClaimId");
   });
 
   it("rejects customer order detail reads when the session has no customer id", async () => {
@@ -777,7 +861,8 @@ describe("customer auth private cache policy", () => {
     );
 
     expect(response.status).toBe(401);
-    expect(mocks.getCustomerOrderDetail).not.toHaveBeenCalled();
+    expect(mocks.getCustomerOwnedOrderForDetail).not.toHaveBeenCalled();
+    expect(mocks.getCustomerOrderDetailForOrder).not.toHaveBeenCalled();
   });
 
   it("creates customer-owned hosted payment sessions without exposing receipt tokens", async () => {
@@ -797,23 +882,15 @@ describe("customer auth private cache policy", () => {
     expect(response.headers.get("Cache-Control")).toBe(
       "private, no-cache, no-store, must-revalidate",
     );
-    expect(mocks.resolveCustomerPaymentSessionRecovery).toHaveBeenCalledWith(
+    expect(mocks.resolveCustomerPaymentSessionRecovery).not.toHaveBeenCalled();
+    expect(mocks.createCustomerAccountPaymentSession).toHaveBeenCalledWith(
       expect.anything(),
       {
         orderId: "order_1",
-        expectedCustomerId: "customer_1",
+        customerId: "customer_1",
       },
     );
-    expect(mocks.createSSLCommerzPaymentSession).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        orderId: "order_1",
-        paymentType: "balance",
-        proof: { kind: "customer_account", customerId: "customer_1" },
-        returnTarget: { kind: "customer_account" },
-        expectedCustomerId: "customer_1",
-      }),
-    );
+    expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
     const text = await response.text();
     expect(text).toContain("https://ssl.example.test/pay");
     expect(text).not.toContain("receiptToken");
@@ -822,7 +899,7 @@ describe("customer auth private cache policy", () => {
 
   it("returns accepted processing state for customer-owned payment sessions already in flight", async () => {
     const app = createTestApp();
-    mocks.createSSLCommerzPaymentSession.mockResolvedValueOnce({
+    mocks.createCustomerAccountPaymentSession.mockResolvedValueOnce({
       status: "processing",
       retryable: true,
       retryAfterSeconds: 2,
@@ -881,6 +958,7 @@ describe("customer auth private cache policy", () => {
 
     expect(response.status).toBe(401);
     expect(mocks.resolveCustomerPaymentSessionRecovery).not.toHaveBeenCalled();
+    expect(mocks.createCustomerAccountPaymentSession).not.toHaveBeenCalled();
     expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
   });
 
@@ -902,22 +980,15 @@ describe("customer auth private cache policy", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(mocks.createCustomerAccountPaymentSession).not.toHaveBeenCalled();
     expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
   });
 
   it("rejects customer payment sessions when recovery state is not eligible", async () => {
     const app = createTestApp();
-    mocks.resolveCustomerPaymentSessionRecovery.mockResolvedValueOnce({
-      eligible: false,
-      gateway: null,
-      paymentType: null,
-      amountDue: 0,
-      label: null,
-      reason: "This order is not waiting for an online payment.",
-      blockType: "validation",
-      requiresCardForm: false,
-      hostedRedirect: false,
-    });
+    mocks.createCustomerAccountPaymentSession.mockRejectedValueOnce(
+      new ValidationError("This order is not waiting for an online payment."),
+    );
 
     const response = await app.request(
       "/api/v1/customer-auth/orders/order_1/payment-session",
@@ -930,22 +1001,22 @@ describe("customer auth private cache policy", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(mocks.resolveCustomerPaymentSessionRecovery).not.toHaveBeenCalled();
+    expect(mocks.createCustomerAccountPaymentSession).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        orderId: "order_1",
+        customerId: "customer_1",
+      },
+    );
     expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
   });
 
   it("returns service unavailable when the account recovery gateway is not ready", async () => {
     const app = createTestApp();
-    mocks.resolveCustomerPaymentSessionRecovery.mockResolvedValueOnce({
-      eligible: false,
-      gateway: "sslcommerz",
-      paymentType: null,
-      amountDue: 0,
-      label: null,
-      reason: "SSLCommerz gateway is not enabled for checkout.",
-      blockType: "unavailable",
-      requiresCardForm: false,
-      hostedRedirect: false,
-    });
+    mocks.createCustomerAccountPaymentSession.mockRejectedValueOnce(
+      new ServiceUnavailableError("SSLCommerz gateway is not enabled for checkout."),
+    );
 
     const response = await app.request(
       "/api/v1/customer-auth/orders/order_1/payment-session",
@@ -958,6 +1029,14 @@ describe("customer auth private cache policy", () => {
     );
 
     expect(response.status).toBe(503);
+    expect(mocks.resolveCustomerPaymentSessionRecovery).not.toHaveBeenCalled();
+    expect(mocks.createCustomerAccountPaymentSession).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        orderId: "order_1",
+        customerId: "customer_1",
+      },
+    );
     expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
   });
 

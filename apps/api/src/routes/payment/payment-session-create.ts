@@ -60,6 +60,11 @@ export interface CreatePaymentSessionInput {
   expectedCustomerId?: string;
 }
 
+export interface CreateCustomerAccountPaymentSessionInput {
+  orderId: string;
+  customerId: string;
+}
+
 export interface CustomerPaymentSessionRecovery {
   eligible: boolean;
   gateway: PaymentGateway | null;
@@ -140,6 +145,34 @@ type PaymentSessionOrderRow = {
   shipmentClaimExpiresAt: Date | null;
 };
 
+type GatewayPayableOrder = Pick<
+  PaymentSessionOrderRow,
+  | "id"
+  | "totalAmount"
+  | "status"
+  | "paymentMethod"
+  | "paymentStatus"
+  | "paidAmount"
+  | "balanceDue"
+  | "deletedAt"
+  | "shipmentClaimId"
+  | "shipmentClaimExpiresAt"
+>;
+
+export type CustomerPaymentSessionRecoveryOrder = Pick<
+  PaymentSessionOrderRow,
+  | "id"
+  | "totalAmount"
+  | "status"
+  | "paymentMethod"
+  | "paymentStatus"
+  | "paidAmount"
+  | "balanceDue"
+  | "deletedAt"
+  | "shipmentClaimId"
+  | "shipmentClaimExpiresAt"
+>;
+
 const POLAR_SUPPORTED_CURRENCIES = new Set([
   "aed", "ars", "aud", "brl", "cad", "chf", "clp", "cny", "cop", "czk",
   "dkk", "eur", "gbp", "hkd", "huf", "idr", "ils", "inr", "jpy", "krw",
@@ -153,6 +186,15 @@ export async function createStripePaymentSession(
 ): Promise<(CreatedCustomerPaymentSession & { gateway: "stripe" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
   const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
+  return createStripePaymentSessionForOrder(c, input, order);
+}
+
+async function createStripePaymentSessionForOrder(
+  c: PaymentRouteContext,
+  input: CreatePaymentSessionInput,
+  order: PaymentSessionOrderRow,
+): Promise<(CreatedCustomerPaymentSession & { gateway: "stripe" }) | PaymentSessionProcessingResponse> {
+  const db = c.get("db");
   assertOrderCanUseGateway(order, PaymentMethod.STRIPE, "Stripe");
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
@@ -258,15 +300,43 @@ export async function createStripePaymentSession(
   };
 }
 
+export async function createCustomerAccountPaymentSession(
+  c: PaymentRouteContext,
+  input: CreateCustomerAccountPaymentSessionInput,
+): Promise<CreatedCustomerPaymentSession | PaymentSessionProcessingResponse> {
+  const db = c.get("db");
+  const order = await loadPaymentSessionOrder(db, input.orderId, input.customerId);
+  const gateway = getOrderPaymentGateway(order);
+  if (!gateway) {
+    throw new ValidationError("This order does not use an online payment gateway.");
+  }
+
+  const sessionInput: CreatePaymentSessionInput = {
+    orderId: input.orderId,
+    paymentType: shouldRequestBalancePayment(order) ? "balance" : undefined,
+    proof: { kind: "customer_account", customerId: input.customerId },
+    returnTarget: { kind: "customer_account" },
+    expectedCustomerId: input.customerId,
+  };
+
+  if (gateway === "stripe") return createStripePaymentSessionForOrder(c, sessionInput, order);
+  if (gateway === "sslcommerz") return createSSLCommerzPaymentSessionForOrder(c, sessionInput, order);
+  return createPolarPaymentSessionForOrder(c, sessionInput, order);
+}
+
 export async function resolveCustomerPaymentSessionRecovery(
   c: PaymentRouteContext,
   input: {
     orderId: string;
     expectedCustomerId: string;
+    order?: CustomerPaymentSessionRecoveryOrder;
   },
 ): Promise<CustomerPaymentSessionRecovery> {
   const db = c.get("db");
-  const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
+  const order = input.order ?? await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
+  if (order.id !== input.orderId) {
+    throw new ValidationError("Payment recovery order does not match the requested order");
+  }
   const gateway = getOrderPaymentGateway(order);
   if (!gateway) {
     return inactiveRecovery("This order does not use an online payment gateway.");
@@ -302,6 +372,15 @@ export async function createSSLCommerzPaymentSession(
 ): Promise<(CreatedCustomerPaymentSession & { gateway: "sslcommerz" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
   const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
+  return createSSLCommerzPaymentSessionForOrder(c, input, order);
+}
+
+async function createSSLCommerzPaymentSessionForOrder(
+  c: PaymentRouteContext,
+  input: CreatePaymentSessionInput,
+  order: PaymentSessionOrderRow,
+): Promise<(CreatedCustomerPaymentSession & { gateway: "sslcommerz" }) | PaymentSessionProcessingResponse> {
+  const db = c.get("db");
   assertOrderCanUseGateway(order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
@@ -440,8 +519,17 @@ export async function createPolarPaymentSession(
   input: CreatePaymentSessionInput,
 ): Promise<(CreatedCustomerPaymentSession & { gateway: "polar" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
-  const kv = c.env.CACHE;
   const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
+  return createPolarPaymentSessionForOrder(c, input, order);
+}
+
+async function createPolarPaymentSessionForOrder(
+  c: PaymentRouteContext,
+  input: CreatePaymentSessionInput,
+  order: PaymentSessionOrderRow,
+): Promise<(CreatedCustomerPaymentSession & { gateway: "polar" }) | PaymentSessionProcessingResponse> {
+  const db = c.get("db");
+  const kv = c.env.CACHE;
   assertOrderCanUseGateway(order, PaymentMethod.POLAR, "Polar");
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
@@ -695,7 +783,7 @@ async function loadPaymentSessionOrder(
 }
 
 function assertOrderCanUseGateway(
-  order: PaymentSessionOrderRow,
+  order: GatewayPayableOrder,
   expectedGateway: string,
   label: string,
 ): void {

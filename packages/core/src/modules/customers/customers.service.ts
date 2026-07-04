@@ -900,7 +900,7 @@ export async function getCustomerOrders(
     };
 }
 
-export async function getCustomerOrderDetail(
+export async function getCustomerOwnedOrderForDetail(
     db: Database,
     customerId: string,
     orderId: string,
@@ -917,6 +917,9 @@ export async function getCustomerOrderDetail(
             discountAmount: orders.discountAmount,
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
+            deletedAt: orders.deletedAt,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             fulfillmentStatus: orders.fulfillmentStatus,
             expectedDelivery: orders.expectedDelivery,
             shippingAddress: orders.shippingAddress,
@@ -941,6 +944,41 @@ export async function getCustomerOrderDetail(
     if (!order) {
         throw new NotFoundError("Order not found");
     }
+
+    return order;
+}
+
+export type CustomerOwnedOrderForDetail = Awaited<ReturnType<typeof getCustomerOwnedOrderForDetail>>;
+
+export function getCustomerPaymentSessionOrderForDetail(order: CustomerOwnedOrderForDetail) {
+    return {
+        id: order.id,
+        totalAmount: order.totalAmount,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        paidAmount: order.paidAmount,
+        balanceDue: order.balanceDue,
+        deletedAt: order.deletedAt,
+        paymentMethod: order.paymentMethod,
+        shipmentClaimId: order.shipmentClaimId,
+        shipmentClaimExpiresAt: order.shipmentClaimExpiresAt,
+    };
+}
+
+export async function getCustomerOrderDetail(
+    db: Database,
+    customerId: string,
+    orderId: string,
+) {
+    const order = await getCustomerOwnedOrderForDetail(db, customerId, orderId);
+    return getCustomerOrderDetailForOrder(db, order);
+}
+
+export async function getCustomerOrderDetailForOrder(
+    db: Database,
+    order: CustomerOwnedOrderForDetail,
+) {
+    const orderId = order.id;
 
     const [batchedRows, refundAttemptViews, supportRequests] = await Promise.all([
         db.batch([
@@ -1232,8 +1270,26 @@ export async function getCustomerOrderDetail(
 
     return {
         order: {
-            ...order,
+            id: order.id,
+            invoiceNumber: order.invoiceNumber,
+            status: order.status,
+            totalAmount: order.totalAmount,
+            paidAmount: order.paidAmount,
             balanceDue: getCustomerVisibleBalanceDue(order),
+            shippingCharge: order.shippingCharge,
+            discountAmount: order.discountAmount,
+            paymentStatus: order.paymentStatus,
+            paymentMethod: order.paymentMethod,
+            fulfillmentStatus: order.fulfillmentStatus,
+            expectedDelivery: order.expectedDelivery,
+            shippingAddress: order.shippingAddress,
+            city: order.city,
+            zone: order.zone,
+            area: order.area,
+            cityName: order.cityName,
+            zoneName: order.zoneName,
+            areaName: order.areaName,
+            notes: order.notes,
             createdAt: timestampToIso(order.createdAt),
             updatedAt: timestampToIso(order.updatedAt),
         },

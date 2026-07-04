@@ -138,15 +138,16 @@ The storefront proxy rewrites cookies (strips `Domain=`, changes `SameSite=None`
 ```
 Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE customers SET totalOrders, totalSpent, lastOrderAt
 Customer account order history -> getCustomerOrders() -> live aggregate summary over all non-deleted customer orders + keyset-paginated order page + orderItems/product images + latest deliveryShipments/deliveryProviders summary
-Customer account order detail -> getCustomerOrderDetail() -> order + items + shipments + payments + paymentPlan/COD + notification receipts + timeline
-Customer account payment recovery -> API customer-auth route -> shared payment-session policy/gateway readiness/attempt helpers -> gateway
+Customer account order detail -> getCustomerOwnedOrderForDetail() -> getCustomerOrderDetailForOrder() -> order + items + shipments + payments + paymentPlan/COD + notification receipts + timeline
+Customer account payment recovery preview -> API customer-auth route reuses the customer-owned order header -> shared payment-session policy/gateway readiness helpers
+Customer account payment session creation -> API customer-auth route -> createCustomerAccountPaymentSession() -> shared provider-session policy/gateway readiness/attempt helpers -> gateway
 ```
 
 Customer account money display deliberately does not reuse `customers.totalSpent`, because that denormalized admin/customer-row counter is maintained by order writers and has historical gross-order semantics. `getCustomerOrders()` computes account `summary.totalSpent` from active paid amounts across all non-deleted owned orders, returns zero customer-visible due for cancelled/refunded/returned/partially-refunded/failed-payment orders, and returns stored `orders.balanceDue` only for active payable order states. `getCustomerOrderDetail()` applies the same customer-visible balance projection so refunded orders never look like unpaid debts to buyers.
 
 Customer account order history uses keyset pagination over `(orders.createdAt, orders.id)` with a default/max page size of 50. The account `summary` is intentionally computed across all non-deleted owned orders, not the current page. Detail timelines start with an immutable `Order placed` event using the order creation timestamp and add a separate `Current status: ...` event so delivered/refunded/cancelled orders do not rewrite the original placement milestone.
 
-`paymentRecovery` is intentionally assembled in `apps/api/src/routes/customer-auth.ts` via `routes/payment/payment-session-create.ts`, not in this core customer module. The preview depends on fresh checkout-flow settings, gateway credential readiness, and public payment-session policy; duplicating that in core without the API route context would invite stale or inconsistent buyer copy.
+`paymentRecovery` is intentionally assembled in `apps/api/src/routes/customer-auth.ts` via `routes/payment/payment-session-create.ts`, not in this core customer module. The preview depends on fresh checkout-flow settings, gateway credential readiness, and public payment-session policy; duplicating that in core without the API route context would invite stale or inconsistent buyer copy. `getCustomerOwnedOrderForDetail()` exposes the customer-scoped order header used by both the detail builder and the API recovery preview; private payment-session fields must stay out of the public `order` response because the API detail schema permits passthrough fields. Account-owned payment-session POSTs still revalidate through `createCustomerAccountPaymentSession()` before provider work instead of trusting a previously rendered preview.
 
 ## Dependencies
 
