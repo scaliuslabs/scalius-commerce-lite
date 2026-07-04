@@ -29,6 +29,7 @@ import {
   buildReceiptDisplayGroups,
   deliveryAttemptLabel,
   describeNotificationIssue,
+  outboxAttemptLabel,
   type OrderNotificationReceiptDisplayGroup,
 } from "@/lib/order-notification-display";
 import type { Order, OrderTimestamp } from "./types";
@@ -55,8 +56,6 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
   push: Bell,
 };
 
-const TERMINAL_OUTBOX_STATUSES = new Set(["sent"]);
-
 function humanize(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -75,13 +74,6 @@ function outboxTimestamp(outbox: OrderNotificationOutboxDto): string | null {
 
 function canRetry(outbox: OrderNotificationOutboxDto): boolean {
   return outbox.status === "failed" || outbox.status === "pending" || outbox.status === "dead_lettered";
-}
-
-function outboxAttemptLabel(outbox: OrderNotificationOutboxDto): string {
-  if (TERMINAL_OUTBOX_STATUSES.has(outbox.status)) {
-    return "Delivery settled";
-  }
-  return `${outbox.attempts} attempt${outbox.attempts === 1 ? "" : "s"}`;
 }
 
 function ReceiptRow({ group }: { group: OrderNotificationReceiptDisplayGroup }) {

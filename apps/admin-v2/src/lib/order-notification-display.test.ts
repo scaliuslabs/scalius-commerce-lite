@@ -4,6 +4,7 @@ import {
   buildReceiptDisplayGroups,
   deliveryAttemptLabel,
   describeNotificationIssue,
+  outboxAttemptLabel,
 } from "./order-notification-display";
 
 function receipt(overrides: Partial<OrderNotificationReceiptDto>): OrderNotificationReceiptDto {
@@ -98,8 +99,59 @@ describe("order notification display", () => {
     });
   });
 
+  it("collapses repeated provider setup failures into one paused row", () => {
+    const groups = buildReceiptDisplayGroups([
+      receipt({
+        id: "sms_initial_failure",
+        receiptKey: "outbox_1:sms:hash_1",
+        channel: "sms",
+        provider: "smsnetbd",
+        recipientMasked: "***4433",
+        status: "skipped",
+        providerStatus: "error=405: Authorization required",
+        lastError: "error=405: Authorization required",
+        attempts: 1,
+        acceptedAt: null,
+        skippedAt: 1_782_684_758,
+      }),
+      receipt({
+        id: "sms_blocked_failure",
+        receiptKey: "outbox_1:sms:hash_2",
+        channel: "sms",
+        provider: "smsnetbd",
+        recipientMasked: "***7788",
+        status: "skipped",
+        providerStatus: "provider_blocked_until_settings_save: error=405: Authorization required",
+        lastError: "Provider rejected the API key or token. Save valid credentials or disable this channel.",
+        attempts: 1,
+        acceptedAt: null,
+        skippedAt: 1_782_684_760,
+      }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      channel: "sms",
+      provider: "smsnetbd",
+      status: "skipped",
+      count: 2,
+      recipientLabel: "2 recipients",
+      providerStatus: "Provider sending is paused after a setup failure. Save corrected provider settings to resume notifications.",
+      showLastError: false,
+      setupIssue: true,
+    });
+    expect(deliveryAttemptLabel(groups[0]!)).toBe("Paused");
+  });
+
   it("keeps unknown provider text short enough for the order card", () => {
     expect(describeNotificationIssue("x".repeat(220))).toBe(`${"x".repeat(157)}...`);
+  });
+
+  it("does not surface alarming historical parent retry counts as the primary label", () => {
+    expect(outboxAttemptLabel({ status: "dead_lettered", attempts: 275 })).toBe("Retry stopped");
+    expect(outboxAttemptLabel({ status: "sent", attempts: 275 })).toBe("Delivery settled");
+    expect(outboxAttemptLabel({ status: "failed", attempts: 8 })).toBe("Needs attention");
+    expect(outboxAttemptLabel({ status: "failed", attempts: 2 })).toBe("2 attempts");
   });
 
   it("does not label capped transient failures as paused provider setup", () => {
