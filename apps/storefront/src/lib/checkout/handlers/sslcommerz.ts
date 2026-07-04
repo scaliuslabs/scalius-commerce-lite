@@ -65,7 +65,7 @@ export const sslcommerzHandler: GatewayHandler = {
       return {
         success: true,
         redirectUrl: gatewayUrl,
-        clearCheckoutSessionOnRedirect: true,
+        clearCartOnRedirect: true,
       };
     } catch (err: unknown) {
       if (createdOrder) {
@@ -78,7 +78,7 @@ export const sslcommerzHandler: GatewayHandler = {
             paymentType: paymentRequest?.paymentType,
             depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,
           }),
-          clearCheckoutSessionOnRedirect: true,
+          clearCartOnRedirect: true,
         };
       }
       if (err instanceof CheckoutOrderError) {
