@@ -6,7 +6,7 @@ import { deliveryShipments, codTracking, orders } from "@scalius/database/schema
 import { eq, sql } from "drizzle-orm";
 import { validateTransition } from "@scalius/core/modules/orders/order-state-machine";
 import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
-import { assertNoActiveRefundAttempt } from "@scalius/core/modules/payments";
+import { assertNoActivePaymentSessionAttempt, assertNoActiveRefundAttempt } from "@scalius/core/modules/payments";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
@@ -318,6 +318,7 @@ app.openapi(updateFulfillmentStatusRoute, async (c) => {
     if (!order) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(order);
     await assertNoActiveRefundAttempt(db, orderId);
+    await assertNoActivePaymentSessionAttempt(db, orderId);
 
     if (order.fulfillmentStatus !== status) {
         validateTransition("fulfillment", order.fulfillmentStatus, status);

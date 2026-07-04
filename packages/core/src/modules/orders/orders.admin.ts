@@ -65,6 +65,12 @@ import {
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
 } from "../payments/refund-attempt-visibility";
+import {
+    activePaymentSessionAttemptExistsCondition,
+    assertNoActivePaymentSessionAttempt,
+    assertNoActivePaymentSessionAttemptsForOrders,
+    noActivePaymentSessionAttemptForOrderIdCondition,
+} from "../payments/payment-session-attempts";
 import { resolveActiveDeliveryLocationNames } from "./delivery-location-validation";
 import { listOrderSupportRequests } from "./order-support-requests";
 
@@ -162,16 +168,6 @@ function addAdminOrderSkuIssue(
 
 function isHostedPaymentMethod(method: string | null | undefined): method is (typeof HOSTED_PAYMENT_METHODS)[number] {
     return typeof method === "string" && (HOSTED_PAYMENT_METHODS as readonly string[]).includes(method);
-}
-
-function activePaymentSessionAttemptExistsCondition(orderIdSql: SQL) {
-    return sql`EXISTS (
-        SELECT 1 FROM ${paymentSessionAttempts}
-        WHERE ${paymentSessionAttempts.orderId} = ${orderIdSql}
-          AND ${paymentSessionAttempts.status} = 'processing'
-          AND ${paymentSessionAttempts.claimExpiresAt} IS NOT NULL
-          AND ${paymentSessionAttempts.claimExpiresAt} > unixepoch()
-    )`;
 }
 
 function staleOrFailedPaymentSessionAttemptExistsCondition(orderIdSql: SQL) {
@@ -309,25 +305,6 @@ function buildPaymentRecoverySummary(
     return { ...DEFAULT_PAYMENT_RECOVERY_SUMMARY };
 }
 
-async function assertNoActivePaymentSessionAttemptsForOrders(db: Database, orderIds: string[]) {
-    if (orderIds.length === 0) return;
-    const rows = await db
-        .select({ orderId: paymentSessionAttempts.orderId })
-        .from(paymentSessionAttempts)
-        .where(and(
-            inArray(paymentSessionAttempts.orderId, orderIds),
-            eq(paymentSessionAttempts.status, "processing"),
-            sql`${paymentSessionAttempts.claimExpiresAt} IS NOT NULL`,
-            sql`${paymentSessionAttempts.claimExpiresAt} > unixepoch()`,
-        ))
-        .groupBy(paymentSessionAttempts.orderId)
-        .all();
-
-    if (rows.length > 0) {
-        throw new ConflictError(`Orders have active payment setup in progress: ${rows.map((row) => row.orderId).join(", ")}`);
-    }
-}
-
 function orderEditReadyCondition(orderId: string, expectedVersion: number) {
     return sql`EXISTS (
         SELECT 1 FROM ${orders}
@@ -335,6 +312,7 @@ function orderEditReadyCondition(orderId: string, expectedVersion: number) {
           AND ${orders.version} = ${expectedVersion}
           AND ${orders.deletedAt} IS NULL
           AND ${noActiveRefundAttemptForOrderIdCondition(orderId)}
+          AND ${noActivePaymentSessionAttemptForOrderIdCondition(orderId)}
     )`;
 }
 
@@ -1487,6 +1465,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, id);
+    await assertNoActivePaymentSessionAttempt(db, id);
 
     // Validate status transition if status is changing
     if (nextStatus !== currentStatus) {
@@ -1768,6 +1747,7 @@ export async function restoreOrder(db: Database, id: string) {
     assertNoActiveShipmentClaim(order);
     if (!order.deletedAt) throw new ValidationError("Order is not deleted");
     await assertNoActiveRefundAttempt(db, id);
+    await assertNoActivePaymentSessionAttempt(db, id);
 
     let nextInventoryAction = order.inventoryAction as "none" | "reserved" | "deducted" | "restored";
     let reservedEntries: ReservationEntry[] = [];
@@ -1820,6 +1800,7 @@ export async function restoreOrder(db: Database, id: string) {
             eq(orders.version, order.version),
             isNotNull(orders.deletedAt),
             noActiveRefundAttemptForOrderIdCondition(id),
+            noActivePaymentSessionAttemptForOrderIdCondition(id),
         ))
         .returning({ id: orders.id });
 

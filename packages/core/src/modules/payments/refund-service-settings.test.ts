@@ -34,7 +34,15 @@ vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
-import { PaymentRecordStatus, PaymentStatus, OrderStatus } from "@scalius/database/schema";
+import {
+  orderPayments,
+  orders,
+  paymentSessionAttempts,
+  PaymentRecordStatus,
+  PaymentStatus,
+  refundAttempts,
+  OrderStatus,
+} from "@scalius/database/schema";
 import { processRefund } from "./refund-service";
 
 type Gateway = "stripe" | "sslcommerz" | "polar";
@@ -79,7 +87,8 @@ function createDbMock(gateway: Gateway) {
     },
   };
 
-  let selectCall = 0;
+  let paymentSelectCall = 0;
+  let refundAttemptSelectCall = 0;
   const updateSets: Array<Record<string, unknown>> = [];
   const insertValues: Array<Record<string, unknown>> = [];
   const batch = vi.fn(async () => [undefined, [{ id: "order_1", version: 4 }]]);
@@ -98,27 +107,32 @@ function createDbMock(gateway: Gateway) {
     batch,
     update,
     select: vi.fn(() => {
-      selectCall += 1;
-      const result = selectCall === 1
-        ? order
-        : selectCall === 2
-          ? null
-          : selectCall === 3
-            ? null
-            : selectCall === 4
-              ? [payment]
-              : selectCall === 5
-                ? []
-                : selectCall === 6
-                  ? [refundAttempt]
-                  : selectCall === 7
-                    ? order
-                    : [payment, refundPayment];
+      let result: unknown = null;
       const chain = {
-        from: vi.fn(() => chain),
+        from: vi.fn((table: unknown) => {
+          if (table === orders) {
+            result = order;
+          } else if (table === paymentSessionAttempts) {
+            result = [];
+          } else if (table === refundAttempts) {
+            refundAttemptSelectCall += 1;
+            result = refundAttemptSelectCall === 1 ? null : refundAttempt;
+          } else if (table === orderPayments) {
+            paymentSelectCall += 1;
+            result = paymentSelectCall === 1
+              ? null
+              : paymentSelectCall === 2
+                ? [payment]
+                : paymentSelectCall === 3
+                  ? []
+                  : [payment, refundPayment];
+          }
+          return chain;
+        }),
         where: vi.fn(() => chain),
         orderBy: vi.fn(() => chain),
         get: vi.fn(async () => result ?? null),
+        all: vi.fn(async () => Array.isArray(result) ? result : result ? [result] : []),
         then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
           Promise.resolve(Array.isArray(result) ? result : result ? [result] : []).then(resolve, reject),
       };

@@ -3,6 +3,7 @@ import {
   codTracking,
   deliveryShipments,
   orderPayments,
+  paymentSessionAttempts,
   refundAttempts,
   CodStatus,
   OrderStatus,
@@ -47,6 +48,7 @@ function createDbMock({
   selectedCodTracking,
   selectedShipment,
   selectedRefundAttempt,
+  selectedPaymentSessionAttemptRows,
   updateResults,
   batchError,
 }: {
@@ -57,6 +59,7 @@ function createDbMock({
   selectedCodTracking?: Record<string, unknown> | null;
   selectedShipment?: Record<string, unknown> | null;
   selectedRefundAttempt?: Record<string, unknown> | null;
+  selectedPaymentSessionAttemptRows?: Array<Record<string, unknown>>;
   updateResults: Array<Array<{ id: string }>>;
   batchError?: Error;
 }) {
@@ -70,7 +73,8 @@ function createDbMock({
         from(table: unknown) {
           return {
             where() {
-              return {
+              const chain = {
+                groupBy: () => chain,
                 get: async () => {
                   if (table === orderPayments) {
                     orderPaymentSelectCount += 1;
@@ -78,13 +82,18 @@ function createDbMock({
                       ? selectedLegacyPendingRefund ?? null
                       : selectedPayment ?? null;
                   }
+                  if (table === paymentSessionAttempts) return selectedPaymentSessionAttemptRows?.[0] ?? null;
                   if (table === codTracking) return selectedCodTracking ?? null;
                   if (table === deliveryShipments) return selectedShipment ?? null;
                   if (table === refundAttempts) return selectedRefundAttempt ?? null;
                   return selectedOrder;
                 },
-                all: async () => selectedRows ?? [],
+                all: async () => {
+                  if (table === paymentSessionAttempts) return selectedPaymentSessionAttemptRows ?? [];
+                  return selectedRows ?? [];
+                },
               };
+              return chain;
             },
           };
         },
@@ -337,7 +346,7 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
-  it("allows COD failure notes while a refund attempt is active", async () => {
+  it("does not record COD failure notes while a refund attempt is active", async () => {
     const { db } = createDbMock({
       selectedOrder: {
         status: OrderStatus.SHIPPED,
@@ -350,12 +359,12 @@ describe("orders fulfillment side-effect ordering", () => {
       updateResults: [],
     });
 
-    await processCodAction(db as never, "order_1", {
+    await expect(processCodAction(db as never, "order_1", {
       action: "failed",
       reason: "not_home",
-    });
+    })).rejects.toThrow("active refund operation");
 
-    expect(mocks.recordCODFailure).toHaveBeenCalled();
+    expect(mocks.recordCODFailure).not.toHaveBeenCalled();
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
@@ -1061,6 +1070,27 @@ describe("orders fulfillment side-effect ordering", () => {
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
       .rejects.toThrow("active refund operation");
+
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("rejects admin status updates while hosted payment setup is active", async () => {
+    const { db } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CONFIRMED,
+        inventoryAction: "reserved",
+        version: 8,
+        customerName: "Customer",
+        customerEmail: "customer@example.com",
+        paymentMethod: PaymentMethod.STRIPE,
+        paymentStatus: PaymentStatus.UNPAID,
+      },
+      selectedPaymentSessionAttemptRows: [{ orderId: "order_1" }],
+      updateResults: [],
+    });
+
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
+      .rejects.toThrow("active hosted payment setup");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });

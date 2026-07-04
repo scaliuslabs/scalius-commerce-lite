@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deliveryShipments, orderPayments, orders, refundAttempts, OrderStatus, ShipmentStatus } from "@scalius/database/schema";
+import {
+  deliveryShipments,
+  orderPayments,
+  orders,
+  paymentSessionAttempts,
+  refundAttempts,
+  OrderStatus,
+  ShipmentStatus,
+} from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
@@ -24,6 +32,7 @@ function createDbMock({
   updateRows = [{ id: "order_1" }],
   activeRefundAttempt = null,
   legacyPendingRefund = null,
+  activePaymentSessionAttemptRows = [],
 }: {
   shipmentStatus: string;
   shipmentOverrides?: Record<string, unknown>;
@@ -32,6 +41,7 @@ function createDbMock({
   updateRows?: Array<{ id: string }>;
   activeRefundAttempt?: Record<string, unknown> | null;
   legacyPendingRefund?: Record<string, unknown> | null;
+  activePaymentSessionAttemptRows?: Array<Record<string, unknown>>;
 }) {
   const updates: Array<Record<string, unknown>> = [];
   const updateTables: unknown[] = [];
@@ -48,7 +58,9 @@ function createDbMock({
   const chainFor = (result: unknown) => {
     const chain = {
       where: vi.fn(() => chain),
+      groupBy: vi.fn(() => chain),
       get: vi.fn(async () => result ?? null),
+      all: vi.fn(async () => Array.isArray(result) ? result : result ? [result] : []),
       then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
         Promise.resolve(Array.isArray(result) ? result : result ? [result] : []).then(resolve, reject),
     };
@@ -63,6 +75,7 @@ function createDbMock({
           if (table === orders) return chainFor([orderRow]);
           if (table === refundAttempts) return chainFor(activeRefundAttempt);
           if (table === orderPayments) return chainFor(legacyPendingRefund);
+          if (table === paymentSessionAttempts) return chainFor(activePaymentSessionAttemptRows);
           return chainFor([]);
         },
       };
@@ -205,6 +218,20 @@ describe("delivery shipment to order status mapping", () => {
 
     await expect(updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery"))
       .rejects.toThrow("active refund operation");
+
+    expect(updates).toHaveLength(0);
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("throws during active hosted payment setup so delivery webhooks can retry", async () => {
+    const { db, updates } = createDbMock({
+      shipmentStatus: "out_for_delivery",
+      orderStatus: OrderStatus.CONFIRMED,
+      activePaymentSessionAttemptRows: [{ orderId: "order_1" }],
+    });
+
+    await expect(updateOrderStatusFromShipment(db as never, "shipment_1", "out_for_delivery"))
+      .rejects.toThrow("active hosted payment setup");
 
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();

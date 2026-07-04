@@ -23,6 +23,13 @@ describe("admin shipment status route boundaries", () => {
     expect(source).toContain("await assertNoActiveRefundAttempt(db, orderId)");
   });
 
+  it("keeps direct fulfillment-status updates blocked during active hosted payment setup", () => {
+    const source = readFileSync(ORDERS_STATUS_SOURCE, "utf8");
+
+    expect(source).toContain("assertNoActivePaymentSessionAttempt");
+    expect(source).toContain("await assertNoActivePaymentSessionAttempt(db, orderId)");
+  });
+
   it("keeps standalone shipment checks on the same sync helper and boolean response contract", () => {
     const source = readFileSync(SHIPMENTS_SOURCE, "utf8");
 

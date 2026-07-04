@@ -145,11 +145,17 @@ export type {
 
 // --- Public payment session attempts ---
 export {
+  ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE,
+  activePaymentSessionAttemptExistsCondition,
+  assertNoActivePaymentSessionAttempt,
+  assertNoActivePaymentSessionAttemptsForOrders,
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
   listOrderPaymentSessionAttempts,
   markPaymentSessionAttemptCreated,
   markPaymentSessionAttemptFailed,
+  noActivePaymentSessionAttemptForOrderIdCondition,
+  noActivePaymentSessionAttemptForOrderSqlCondition,
 } from "./payment-session-attempts";
 export type {
   AdminPaymentSessionAttemptView,

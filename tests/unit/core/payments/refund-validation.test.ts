@@ -87,6 +87,7 @@ type MockChain = {
   orderBy: ReturnType<typeof vi.fn>;
   returning: ReturnType<typeof vi.fn>;
   get: ReturnType<typeof vi.fn>;
+  all: ReturnType<typeof vi.fn>;
   then: (resolve: (value: unknown) => void, reject?: (reason: unknown) => void) => Promise<void>;
 };
 
@@ -284,6 +285,7 @@ function createChain(result: unknown): MockChain {
   chain.orderBy = vi.fn(() => chain);
   chain.returning = vi.fn(() => result);
   chain.get = vi.fn(async () => result ?? null);
+  chain.all = vi.fn(async () => Array.isArray(result) ? result : result ? [result] : []);
   chain.then = (resolve, reject) => {
     const value = Array.isArray(result) ? result : result ? [result] : [];
     return Promise.resolve(value).then(resolve, reject);
@@ -320,7 +322,7 @@ function createReturnDbWithLostStatusCas() {
     version: 4,
   };
 
-  const selectResults = [order, null, null];
+  const selectResults = [order, null, null, []];
   let selectIndex = 0;
 
   return {
@@ -338,7 +340,7 @@ function createReturnDbWithInventoryFailureAfterStatusCas() {
     version: 4,
   };
 
-  const selectResults = [order, null, null];
+  const selectResults = [order, null, null, []];
   let selectIndex = 0;
   const updates: Array<Record<string, unknown>> = [];
 
@@ -389,7 +391,7 @@ function createRefundDbWithLostStatusCas() {
     status: "refunded",
     amount: 100,
   };
-  const selectResults = [order, null, null, [payment], [], [refundAttempt], order, [payment, refundPayment]];
+  const selectResults = [order, [], null, null, [payment], [], [refundAttempt], order, [payment, refundPayment]];
   let selectIndex = 0;
   let updateIndex = 0;
 
@@ -417,7 +419,7 @@ function createAlreadyReturnedDb() {
     version: 5,
   };
 
-  const selectResults = [order, null, null];
+  const selectResults = [order, null, null, []];
   let selectIndex = 0;
 
   return {
@@ -436,9 +438,11 @@ function createAlreadyRefundedCancelledDb() {
     status: OrderStatus.CANCELLED,
     version: 9,
   };
+  const selectResults = [order, [], null, null];
+  let selectIndex = 0;
 
   return {
-    select: vi.fn(() => createChain(order)),
+    select: vi.fn(() => createChain(selectResults[selectIndex++])),
     update: vi.fn(() => createChain([{ id: order.id }])),
   };
 }
@@ -454,9 +458,11 @@ function createAlreadyRefundedCancelledDeductedDb() {
     inventoryAction: "deducted",
     version: 9,
   };
+  const selectResults = [order, [], null, null];
+  let selectIndex = 0;
 
   return {
-    select: vi.fn(() => createChain(order)),
+    select: vi.fn(() => createChain(selectResults[selectIndex++])),
     update: vi.fn(() => createChain([{ id: order.id }])),
   };
 }

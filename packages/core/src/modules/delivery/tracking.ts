@@ -8,6 +8,10 @@ import {
   assertNoActiveRefundAttempt,
   noActiveRefundAttemptForOrderIdCondition,
 } from "../payments/refund-attempt-guard";
+import {
+  assertNoActivePaymentSessionAttempt,
+  noActivePaymentSessionAttemptForOrderIdCondition,
+} from "../payments/payment-session-attempts";
 import { markShipmentReconciliationRequired } from "./delivery.service";
 
 function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {
@@ -149,6 +153,7 @@ export async function updateOrderStatusFromShipment(
     }
     assertNoActiveShipmentClaim(order);
     await assertNoActiveRefundAttempt(db, order.id);
+    await assertNoActivePaymentSessionAttempt(db, order.id);
 
     // Map shipment status to order status
     let newOrderStatus = order.status;
@@ -231,6 +236,7 @@ export async function updateOrderStatusFromShipment(
           eq(orders.id, order.id),
           eq(orders.version, order.version),
           noActiveRefundAttemptForOrderIdCondition(order.id),
+          noActivePaymentSessionAttemptForOrderIdCondition(order.id),
         ))
         .returning({ id: orders.id });
 

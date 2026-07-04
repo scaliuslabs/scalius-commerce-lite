@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   checkShipmentStatus: vi.fn(),
   getDeliveryProvider: vi.fn(),
   getShipment: vi.fn(),
+  assertNoActiveRefundAttempt: vi.fn(),
+  assertNoActivePaymentSessionAttempt: vi.fn(),
   updateOrderStatusFromShipment: vi.fn(),
   invalidateProductAvailabilityCaches: vi.fn(),
   enqueueOrderStatusChangeNotification: vi.fn(),
@@ -18,6 +20,11 @@ vi.mock("@scalius/core/modules/delivery/delivery.service", () => ({
 
 vi.mock("@scalius/core/modules/delivery/tracking", () => ({
   updateOrderStatusFromShipment: mocks.updateOrderStatusFromShipment,
+}));
+
+vi.mock("@scalius/core/modules/payments", () => ({
+  assertNoActiveRefundAttempt: mocks.assertNoActiveRefundAttempt,
+  assertNoActivePaymentSessionAttempt: mocks.assertNoActivePaymentSessionAttempt,
 }));
 
 vi.mock("../../utils/cache-invalidation", () => ({
@@ -65,6 +72,8 @@ describe("admin shipment status sync helper", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getDeliveryProvider.mockResolvedValue({ id: "provider_1", name: "Steadfast" });
+    mocks.assertNoActiveRefundAttempt.mockResolvedValue(undefined);
+    mocks.assertNoActivePaymentSessionAttempt.mockResolvedValue(undefined);
     mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
     mocks.enqueueOrderStatusChangeNotification.mockResolvedValue({ enqueued: true });
   });
@@ -137,5 +146,23 @@ describe("admin shipment status sync helper", () => {
       providerType: "steadfast",
       lastChecked: expect.any(String),
     });
+  });
+
+  it("stops before provider work when a refund operation is active", async () => {
+    const { db } = createDbMock();
+    const error = new Error("active refund operation");
+    mocks.assertNoActiveRefundAttempt.mockRejectedValueOnce(error);
+
+    await expect(checkAndSyncShipmentStatus({
+      db: db as never,
+      shipment: shipment(),
+      c: { env: { ORDER_NOTIFICATIONS_QUEUE: { send: vi.fn() } } as unknown as Env },
+      source: "orders-shipment-status",
+    })).rejects.toThrow("active refund operation");
+
+    expect(mocks.checkShipmentStatus).not.toHaveBeenCalled();
+    expect(mocks.updateOrderStatusFromShipment).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderStatusChangeNotification).not.toHaveBeenCalled();
   });
 });
