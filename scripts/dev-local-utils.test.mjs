@@ -4,6 +4,8 @@ import { dirname, join } from "path";
 import { tmpdir } from "os";
 import {
   assertLocalSecretSync,
+  assertSafeLocalMutationUrl,
+  classifyMutationTarget,
   collectLocalUrlConfigIssues,
   collectLocalSecretSyncIssues,
   getArgValue,
@@ -108,6 +110,27 @@ describe("local dev script helpers", () => {
       { label: "apps/storefront/.env.development", key: "PUBLIC_API_URL", value: "", port: 8787, pathname: "/api/v1" },
       { label: "apps/storefront/.env.development", key: "PUBLIC_API_BASE_URL", value: undefined, port: 8787, pathname: "" },
     ])).toEqual([]);
+  });
+
+  it("classifies mutation targets without treating production as safe", () => {
+    expect(classifyMutationTarget("http://localhost:8787/api/v1")).toMatchObject({
+      origin: "http://localhost:8787",
+      hostname: "localhost",
+      isLocal: true,
+      isKnownProduction: false,
+    });
+    expect(classifyMutationTarget("https://api.scalius.com/api/v1")).toMatchObject({
+      origin: "https://api.scalius.com",
+      hostname: "api.scalius.com",
+      isLocal: false,
+      isKnownProduction: true,
+    });
+  });
+
+  it("allows mutation helpers only on loopback URLs", () => {
+    expect(() => assertSafeLocalMutationUrl("http://127.0.0.1:8787")).not.toThrow();
+    expect(() => assertSafeLocalMutationUrl("https://api.scalius.com")).toThrow(/known production/);
+    expect(() => assertSafeLocalMutationUrl("https://staging.example.com")).toThrow(/non-local/);
   });
 
   it("resolves pnpm from the current Node Corepack shim when PATH is bare", () => {

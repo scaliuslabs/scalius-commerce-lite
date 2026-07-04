@@ -98,14 +98,14 @@ export async function getEmailProviderReadiness(
   const hasProvider = settings.cloudflareBindingConfigured || settings.hasResendApiKey;
 
   if (!settings.senderConfigured) {
-    blockers.push("Sender email is required before enabling email order notifications.");
+    blockers.push("Sender email is required before enabling email delivery.");
   }
 
   if (!hasProvider) {
     blockers.push(
       settings.resendCredentialError
         ? settings.resendCredentialError
-        : "Configure Cloudflare Email or save a Resend API key before enabling email order notifications.",
+        : "Configure Cloudflare Email or save a Resend API key before enabling email delivery.",
     );
   }
 

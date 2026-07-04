@@ -105,6 +105,38 @@ export function assertLocalUrl(value) {
   }
 }
 
+const SCALIUS_PRODUCTION_HOSTNAMES = new Set([
+  "api.scalius.com",
+  "dashboard.scalius.com",
+  "storefront.scalius.com",
+  "scalius.com",
+  "www.scalius.com",
+]);
+
+export function classifyMutationTarget(value) {
+  const url = new URL(value);
+  const hostname = normalizeHostname(url.hostname);
+  return {
+    origin: url.origin,
+    hostname,
+    isLocal: isLocalHostname(hostname),
+    isKnownProduction: SCALIUS_PRODUCTION_HOSTNAMES.has(hostname),
+  };
+}
+
+export function assertSafeLocalMutationUrl(value, label = "API URL") {
+  const target = classifyMutationTarget(value);
+  if (target.isKnownProduction) {
+    throw new Error(`Refusing to run mutating smoke against known production ${label}: ${target.origin}`);
+  }
+  if (!target.isLocal) {
+    throw new Error(
+      `Refusing to run mutating smoke against non-local ${label}: ${target.origin}. ` +
+      "Production smokes must be read-only; staging mutation smokes need an explicit test-store policy.",
+    );
+  }
+}
+
 export function collectLocalUrlConfigIssues(entries) {
   const issues = [];
 
@@ -358,8 +390,12 @@ function isUsableSecret(value) {
 }
 
 function isLocalHostname(hostname) {
-  const normalized = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  const normalized = normalizeHostname(hostname);
   return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
+}
+
+function normalizeHostname(hostname) {
+  return hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
 }
 
 function getUrlPort(url) {

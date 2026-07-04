@@ -537,6 +537,27 @@ Expected result:
 - Admin order detail should render without a payment-card waterfall: visit an order detail page such as `http://localhost:4323/admin/orders/{id}` and confirm the initial route load warms `/orders/{id}/payments`; COD orders should also warm `/orders/{id}/cod`. Optional delivery-provider/payment/COD/currency warmup failures should log a warning and keep the order detail page loadable.
 - Admin checkout settings should render the checkout-flow tab after preloading only auth settings; payment gateway and shipping method API calls should not happen until their tabs are opened.
 
+Local post-sale mutation smoke:
+
+```bash
+rm -rf /tmp/scalius-commerce-ops006-state
+node scripts/dev-postsale.mjs checkout-smoke --state /tmp/scalius-commerce-ops006-state
+node scripts/dev-postsale.mjs load --state /tmp/scalius-commerce-ops006-state --skip-migrations --orders 10 --concurrency 3
+node scripts/dev-postsale.mjs otp-smoke --state /tmp/scalius-commerce-ops006-state --skip-migrations
+```
+
+Expected result:
+
+- The helper refuses production and non-local API targets before creating any orders, support requests, OTP sends, or fixture rows.
+- `checkout-smoke` seeds one active shipping method, one active city/zone/area, COD settings, email notification settings, and one published SKU-backed product, then validates cart state, creates a COD order, replays the same checkout request id, fetches the receipt, and submits one support request.
+- `load` creates only disposable local COD orders and reports `201` counts plus min/p50/p95/max/avg latency. Start with `--orders 10 --concurrency 3`; raise the numbers only when investigating measured local bottlenecks.
+- `otp-smoke` passes when a local delivery provider is configured, or when the runtime fails closed with `503` and leaves no pending OTP challenge for dummy/unconfigured delivery.
+
+Production and staging mutation policy:
+
+- Production/live smokes are read-only only: health, readyz, checkout config, OpenAPI shape, protected-route redirects, and consented receipt-token reads. Do not create disposable production orders, support requests, OTP sends, payment sessions, provider webhooks, refunds, or delivery shipments.
+- Mutating staging smokes require an explicit test-store origin, sandbox payment/delivery/notification credentials, isolated customer identifiers, and a fresh confirmation in the tool that is about to mutate. The local `dev-postsale` helper intentionally does not implement staging mutation yet.
+
 ## Turbo And Deploy Checks
 
 Inspect the actual task graph before trusting root scripts:
