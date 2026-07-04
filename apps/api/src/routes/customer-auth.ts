@@ -29,7 +29,12 @@ import {
   SESSION_TTL_SECONDS
 } from "@scalius/core/modules/customers/customer-auth.service";
 import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
-import { getCustomerOrderDetail, getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
+import {
+  getCustomerOrderDetailForOrder,
+  getCustomerOrders,
+  getCustomerOwnedOrderForDetail,
+  getCustomerPaymentSessionOrderForDetail,
+} from "@scalius/core/modules/customers/customers.service";
 import {
   createCustomerOrderSupportRequest,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
@@ -48,9 +53,7 @@ import { nullableTimestampSchema } from "../schemas/timestamps";
 import { created, ok } from "../utils/api-response";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
 import {
-  createPolarPaymentSession,
-  createSSLCommerzPaymentSession,
-  createStripePaymentSession,
+  createCustomerAccountPaymentSession,
   isPaymentSessionProcessingResult,
   resolveCustomerPaymentSessionRecovery,
 } from "./payment/payment-session-create";
@@ -978,13 +981,14 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
   }
 
-  const db = c.get("db");
   const orderId = c.req.valid("param").id;
+  const order = await getCustomerOwnedOrderForDetail(c.get("db"), session.customerId, orderId);
   const [detail, paymentRecovery] = await Promise.all([
-    getCustomerOrderDetail(db, session.customerId, orderId),
+    getCustomerOrderDetailForOrder(c.get("db"), order),
     resolveCustomerPaymentSessionRecovery(c, {
       orderId,
       expectedCustomerId: session.customerId,
+      order: getCustomerPaymentSessionOrderForDetail(order),
     }),
   ]);
 
@@ -1136,31 +1140,15 @@ app.openapi(createCustomerOrderPaymentSessionRoute, async (c) => {
   }
 
   const orderId = c.req.valid("param").id;
-  const paymentRecovery = await resolveCustomerPaymentSessionRecovery(c, {
+  const result = await createCustomerAccountPaymentSession(c, {
     orderId,
-    expectedCustomerId: session.customerId,
+    customerId: session.customerId,
   });
-
-  if (!paymentRecovery.eligible || !paymentRecovery.gateway || !paymentRecovery.paymentType) {
-    if (paymentRecovery.blockType === "unavailable") {
-      throw new ServiceUnavailableError(paymentRecovery.reason || "Payment gateway is not available right now.");
-    }
-    throw new ValidationError(paymentRecovery.reason || "This order is not ready for customer payment recovery.");
+  if (isPaymentSessionProcessingResult(result)) {
+    return acceptedPaymentSessionProcessing(c, result);
   }
 
-  const input = {
-    orderId,
-    paymentType: paymentRecovery.paymentType,
-    proof: { kind: "customer_account" as const, customerId: session.customerId },
-    returnTarget: { kind: "customer_account" as const },
-    expectedCustomerId: session.customerId,
-  };
-
-  if (paymentRecovery.gateway === "stripe") {
-    const result = await createStripePaymentSession(c, input);
-    if (isPaymentSessionProcessingResult(result)) {
-      return acceptedPaymentSessionProcessing(c, result);
-    }
+  if (result.gateway === "stripe") {
     return ok(c, {
       gateway: result.gateway,
       paymentType: result.paymentType,
@@ -1170,24 +1158,6 @@ app.openapi(createCustomerOrderPaymentSessionRoute, async (c) => {
     });
   }
 
-  if (paymentRecovery.gateway === "sslcommerz") {
-    const result = await createSSLCommerzPaymentSession(c, input);
-    if (isPaymentSessionProcessingResult(result)) {
-      return acceptedPaymentSessionProcessing(c, result);
-    }
-    return ok(c, {
-      gateway: result.gateway,
-      paymentType: result.paymentType,
-      amount: result.amount,
-      currency: result.currency,
-      hosted: result.hosted,
-    });
-  }
-
-  const result = await createPolarPaymentSession(c, input);
-  if (isPaymentSessionProcessingResult(result)) {
-    return acceptedPaymentSessionProcessing(c, result);
-  }
   return ok(c, {
     gateway: result.gateway,
     paymentType: result.paymentType,

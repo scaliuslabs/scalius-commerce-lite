@@ -58,6 +58,7 @@ vi.mock("@scalius/core/modules/payments/payment-session-attempts", () => ({
 import { polarPaymentRoutes } from "./polar-routes";
 import { sslcommerzPaymentRoutes } from "./sslcommerz-routes";
 import { stripePaymentRoutes } from "./stripe-routes";
+import { createCustomerAccountPaymentSession } from "./payment-session-create";
 import { PAYMENT_SESSION_PROVIDER_REQUEST_TIMEOUT_MS } from "./payment-provider-deadline";
 import {
   OrderStatus,
@@ -71,6 +72,7 @@ import {
 const orderRow = {
   id: "order_1",
   totalAmount: 125,
+  customerId: "customer_1" as string | null,
   customerName: "Payment Customer",
   customerPhone: "+8801712345678",
   customerEmail: "buyer@example.com",
@@ -191,6 +193,19 @@ function envFor(kv: ReturnType<typeof createKvMock>) {
     CACHE: kv,
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://shop.example.test",
+  } as never;
+}
+
+function createPaymentRouteContext(db: ReturnType<typeof createDbMock>, kv: ReturnType<typeof createKvMock>) {
+  return {
+    get: vi.fn((key: string) => {
+      if (key === "db") return db;
+      return undefined;
+    }),
+    env: envFor(kv),
+    req: {
+      url: "https://api.example.test/api/v1/customer-auth/orders/order_1/payment-session",
+    },
   } as never;
 }
 
@@ -695,6 +710,66 @@ describe("payment session receipt-token proof", () => {
         successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
         failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
         cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
+      }),
+    );
+  });
+
+  it("creates customer-account SSLCommerz balance sessions through one target-gateway context", async () => {
+    const db = createDbMock({
+      paymentMethod: "sslcommerz",
+      order: {
+        paymentStatus: PaymentStatus.PARTIAL,
+        paidAmount: 60,
+        balanceDue: 65,
+      },
+      paymentPlan: {
+        depositAmount: 60,
+        balanceDue: 65,
+        status: PaymentPlanStatus.DEPOSIT_PAID,
+      },
+    });
+    const kv = createKvMock("valid");
+    const context = createPaymentRouteContext(db, kv);
+
+    const result = await createCustomerAccountPaymentSession(context, {
+      orderId: "order_1",
+      customerId: "customer_1",
+    });
+
+    expect(result).toMatchObject({
+      gateway: "sslcommerz",
+      paymentType: "balance",
+      amount: 65,
+      currency: "BDT",
+      hosted: {
+        gatewayUrl: "https://ssl.example.test/pay",
+        sessionKey: "ssl_session_1",
+      },
+    });
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getPaymentMethodPreferences).toHaveBeenCalledTimes(1);
+    expect(mocks.getPaymentMethodPreferences).toHaveBeenCalledWith(db);
+    expect(mocks.getStripeSettings).not.toHaveBeenCalled();
+    expect(mocks.getSSLCommerzSettings).toHaveBeenCalledTimes(1);
+    expect(mocks.getSSLCommerzSettings).toHaveBeenCalledWith(
+      db,
+      kv,
+      undefined,
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
+    expect(mocks.getPolarSettings).not.toHaveBeenCalled();
+    expect(mocks.initSSLCommerzSession).toHaveBeenCalledTimes(1);
+    expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
+      "store",
+      "password",
+      true,
+      expect.objectContaining({
+        orderId: "order_1",
+        totalAmount: 65,
+        paymentType: "balance",
+        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&return_to=account&payment_type=balance",
+        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1&return_to=account&payment_type=balance",
+        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&return_to=account&payment_type=balance",
       }),
     );
   });
