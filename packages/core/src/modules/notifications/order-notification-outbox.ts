@@ -9,7 +9,8 @@ export type OrderNotificationOutboxStatus =
     | "queued"
     | "processing"
     | "sent"
-    | "failed";
+    | "failed"
+    | "dead_lettered";
 
 export interface OrderNotificationQueueMessage {
     type: "order.notification";
@@ -93,8 +94,10 @@ type OutboxInsert = typeof orderNotificationOutbox.$inferInsert;
 const ENQUEUE_LEASE_SECONDS = 5 * 60;
 const PROCESSING_LEASE_SECONDS = 15 * 60;
 export const STALE_QUEUED_REPLAY_SECONDS = 60 * 60;
+const MAX_ORDER_NOTIFICATION_OUTBOX_ATTEMPTS = 8;
 const MAX_FLUSH_LIMIT = 25;
 const MAX_ERROR_LENGTH = 500;
+const DEAD_LETTER_NEXT_ATTEMPT_AT = 253_402_300_799;
 
 export function buildOrderCreatedNotificationDedupeKey(orderId: string): string {
     return `order_created:${orderId}`;
@@ -205,6 +208,7 @@ export async function enqueueOrderNotificationOutboxById(options: {
             claim.row.claimId,
             error,
             getRetryDelaySeconds(claim.row.attempts),
+            claim.row.attempts,
         ).catch((markError: unknown) => {
             console.error("[notifications-outbox] Failed to mark queue send failure:", markError);
         });
@@ -399,7 +403,7 @@ export async function retryFailedOrderNotificationOutboxById(options: {
             skippedReason: "already_sent",
         };
     }
-    if (existing.status !== "failed" && existing.status !== "pending") {
+    if (existing.status !== "failed" && existing.status !== "pending" && existing.status !== "dead_lettered") {
         return {
             outboxId: existing.id,
             dedupeKey: existing.dedupeKey,
@@ -409,6 +413,7 @@ export async function retryFailedOrderNotificationOutboxById(options: {
         };
     }
     if (!options.queue) {
+        await resetRetryableOrderNotificationDeliveryReceipts(options.db, existing.id);
         await options.db
             .update(orderNotificationOutbox)
             .set({
@@ -420,7 +425,7 @@ export async function retryFailedOrderNotificationOutboxById(options: {
             .where(and(
                 eq(orderNotificationOutbox.id, existing.id),
                 eq(orderNotificationOutbox.orderId, options.orderId),
-                inArray(orderNotificationOutbox.status, ["pending", "failed"]),
+                inArray(orderNotificationOutbox.status, ["pending", "failed", "dead_lettered"]),
             ));
         return {
             outboxId: existing.id,
@@ -430,6 +435,8 @@ export async function retryFailedOrderNotificationOutboxById(options: {
             skippedReason: "no_queue",
         };
     }
+
+    await resetRetryableOrderNotificationDeliveryReceipts(options.db, existing.id);
 
     await options.db
         .update(orderNotificationOutbox)
@@ -444,7 +451,7 @@ export async function retryFailedOrderNotificationOutboxById(options: {
         .where(and(
             eq(orderNotificationOutbox.id, existing.id),
             eq(orderNotificationOutbox.orderId, options.orderId),
-            inArray(orderNotificationOutbox.status, ["pending", "failed"]),
+            inArray(orderNotificationOutbox.status, ["pending", "failed", "dead_lettered"]),
         ));
 
     const result = await enqueueOrderNotificationOutboxById({
@@ -458,6 +465,27 @@ export async function retryFailedOrderNotificationOutboxById(options: {
         dedupeKey: existing.dedupeKey,
         created: false,
     };
+}
+
+export async function markOrderNotificationOutboxDeadLettered(options: {
+    db: Database;
+    outboxId: string;
+    error: unknown;
+}): Promise<{ marked: boolean }> {
+    const rows = await options.db
+        .update(orderNotificationOutbox)
+        .set({
+            status: "dead_lettered",
+            claimId: null,
+            claimExpiresAt: null,
+            lastError: normalizeError(options.error),
+            nextAttemptAt: DEAD_LETTER_NEXT_ATTEMPT_AT,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(orderNotificationOutbox.id, options.outboxId))
+        .returning({ id: orderNotificationOutbox.id });
+
+    return { marked: rows.length > 0 };
 }
 
 export async function claimOrderNotificationOutboxForProcessing(
@@ -544,7 +572,26 @@ export async function markOrderNotificationOutboxProcessingFailed(
         claimId,
         error,
         getRetryDelaySeconds(attempts),
+        attempts,
     );
+}
+
+async function resetRetryableOrderNotificationDeliveryReceipts(
+    db: Database,
+    outboxId: string,
+): Promise<void> {
+    await db
+        .update(orderNotificationDeliveryReceipts)
+        .set({
+            nextAttemptAt: sql`unixepoch()`,
+            claimId: null,
+            claimExpiresAt: null,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(orderNotificationDeliveryReceipts.outboxId, outboxId),
+            inArray(orderNotificationDeliveryReceipts.status, ["pending", "failed"]),
+        ));
 }
 
 async function recordOrderNotificationOutbox(
@@ -666,15 +713,18 @@ async function markOrderNotificationOutboxFailed(
     claimId: string,
     error: unknown,
     retryDelaySeconds: number,
+    attempts: number,
 ): Promise<void> {
+    const hitAttemptLimit = attempts >= MAX_ORDER_NOTIFICATION_OUTBOX_ATTEMPTS;
+    const normalizedError = normalizeError(error);
     await db
         .update(orderNotificationOutbox)
         .set({
-            status: "failed",
+            status: hitAttemptLimit ? "dead_lettered" : "failed",
             claimId: null,
             claimExpiresAt: null,
-            lastError: normalizeError(error),
-            nextAttemptAt: sql`unixepoch() + ${retryDelaySeconds}`,
+            lastError: hitAttemptLimit ? buildOutboxAttemptLimitReason(normalizedError) : normalizedError,
+            nextAttemptAt: hitAttemptLimit ? DEAD_LETTER_NEXT_ATTEMPT_AT : sql`unixepoch() + ${retryDelaySeconds}`,
             updatedAt: sql`unixepoch()`,
         })
         .where(and(
@@ -767,4 +817,11 @@ function getRetryDelaySeconds(attempts: number): number {
 function normalizeError(error: unknown): string {
     const message = error instanceof Error ? error.message : String(error);
     return message.length > MAX_ERROR_LENGTH ? `${message.slice(0, MAX_ERROR_LENGTH)}...` : message;
+}
+
+function buildOutboxAttemptLimitReason(error: string): string {
+    const detail = error.trim();
+    return detail
+        ? `order_notification_attempt_limit_reached: ${detail}`
+        : "order_notification_attempt_limit_reached";
 }

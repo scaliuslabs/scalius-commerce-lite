@@ -44,6 +44,7 @@ const STATUS_STYLES: Record<string, string> = {
   processing: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-100",
   pending: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100",
   failed: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100",
+  dead_lettered: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100",
   skipped: "border-muted bg-muted/40 text-muted-foreground",
 };
 
@@ -73,7 +74,7 @@ function outboxTimestamp(outbox: OrderNotificationOutboxDto): string | null {
 }
 
 function canRetry(outbox: OrderNotificationOutboxDto): boolean {
-  return outbox.status === "failed" || outbox.status === "pending";
+  return outbox.status === "failed" || outbox.status === "pending" || outbox.status === "dead_lettered";
 }
 
 function outboxAttemptLabel(outbox: OrderNotificationOutboxDto): string {
@@ -208,7 +209,7 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
   const notifications = data?.notifications ?? [];
-  const failedCount = notifications.filter((item) => item.status === "failed").length;
+  const failedCount = notifications.filter((item) => item.status === "failed" || item.status === "dead_lettered").length;
   const pendingCount = notifications.filter((item) =>
     item.status === "pending" || item.status === "queued" || item.status === "processing" || item.status === "enqueueing",
   ).length;

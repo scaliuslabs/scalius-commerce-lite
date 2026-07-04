@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
+import { orderNotificationDeliveryReceipts } from "@scalius/database/schema";
 import {
   claimOrderNotificationOutboxForProcessing,
   enqueueOrderNotificationOutboxById,
   listOrderNotificationOutboxForOrder,
+  markOrderNotificationOutboxProcessingFailed,
   recordAndEnqueueOrderNotification,
   retryFailedOrderNotificationOutboxById,
   flushPendingOrderNotificationOutbox,
@@ -71,7 +73,7 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
     );
   };
 
-  const applyUpdate = (values: Record<string, unknown>, returning: boolean) => {
+  const applyOutboxUpdate = (values: Record<string, unknown>, returning: boolean) => {
     const row = firstRow();
     if (!row) return [];
 
@@ -94,7 +96,7 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
       }
     }
 
-    if ((values.status === "queued" || values.status === "sent" || values.status === "failed") && !row.claimId) {
+    if ((values.status === "queued" || values.status === "sent" || values.status === "failed" || values.status === "dead_lettered") && !row.claimId) {
       return [];
     }
 
@@ -113,7 +115,9 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
         ? now + 60
         : values.status === "pending"
           ? now
-          : row.nextAttemptAt,
+          : typeof values.nextAttemptAt === "number"
+            ? values.nextAttemptAt
+            : row.nextAttemptAt,
       queuedAt: values.status === "queued" ? now : row.queuedAt,
       sentAt: values.status === "sent" ? now : row.sentAt,
       updatedAt: now,
@@ -121,6 +125,24 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
 
     rows.set(row.id, next);
     return returning ? [project(next, { id: true, payload: true, claimId: true, attempts: true })] : [];
+  };
+
+  const applyReceiptUpdate = (values: Record<string, unknown>, returning: boolean) => {
+    const updated: StoredReceiptRow[] = [];
+    for (const receipt of receipts.values()) {
+      if (receipt.outboxId !== "outbox_1") continue;
+      if (!["pending", "failed"].includes(receipt.status)) continue;
+      const next: StoredReceiptRow = {
+        ...receipt,
+        nextAttemptAt: values.nextAttemptAt == null ? receipt.nextAttemptAt : now,
+        claimId: values.claimId === null ? null : receipt.claimId,
+        claimExpiresAt: values.claimExpiresAt === null ? null : receipt.claimExpiresAt,
+        updatedAt: now,
+      };
+      receipts.set(receipt.id, next);
+      updated.push(next);
+    }
+    return returning ? updated.map((row) => ({ id: row.id })) : [];
   };
 
   const db = {
@@ -169,18 +191,22 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
       };
       },
     }),
-    update: () => ({
+    update: (table?: unknown) => ({
       set: (values: Record<string, unknown>) => ({
         where: () => ({
-          returning: async () => applyUpdate(values, true),
+          returning: async () => table === orderNotificationDeliveryReceipts
+            ? applyReceiptUpdate(values, true)
+            : applyOutboxUpdate(values, true),
           then: (resolve: (value: unknown[]) => void, reject: (reason?: unknown) => void) =>
-            Promise.resolve(applyUpdate(values, false)).then(resolve, reject),
+            Promise.resolve(table === orderNotificationDeliveryReceipts
+              ? applyReceiptUpdate(values, false)
+              : applyOutboxUpdate(values, false)).then(resolve, reject),
         }),
       }),
     }),
   } as unknown as Database;
 
-  return { db, rows };
+  return { db, rows, receipts };
 }
 
 function createRow(overrides: Partial<StoredOutboxRow> = {}): StoredOutboxRow {
@@ -430,6 +456,67 @@ describe("order notification outbox", () => {
       status: "queued",
       lastError: null,
       claimId: null,
+    });
+  });
+
+  it("makes retryable child receipts due when manually retrying a failed outbox", async () => {
+    const { db, receipts } = createOutboxDb(
+      [createRow({
+        status: "failed",
+        attempts: 2,
+        lastError: "delivery failed",
+        nextAttemptAt: now + 3_600,
+      })],
+      [createReceipt({
+        status: "failed",
+        attempts: 3,
+        nextAttemptAt: now + 3_600,
+        claimId: "stale-claim",
+        claimExpiresAt: now + 600,
+      })],
+    );
+    const queue = { send: vi.fn(async () => undefined) };
+
+    const result = await retryFailedOrderNotificationOutboxById({
+      db,
+      queue,
+      orderId: "order_1",
+      outboxId: "outbox_1",
+    });
+
+    expect(result.enqueued).toBe(true);
+    expect(receipts.get("receipt_1")).toMatchObject({
+      status: "failed",
+      attempts: 3,
+      nextAttemptAt: now,
+      claimId: null,
+      claimExpiresAt: null,
+    });
+  });
+
+  it("dead-letters parent outbox rows after the automatic attempt cap", async () => {
+    const { db, rows } = createOutboxDb([createRow({
+      status: "processing",
+      attempts: 8,
+      claimId: "claim_1",
+      claimExpiresAt: now + 600,
+      lastError: null,
+    })]);
+
+    await markOrderNotificationOutboxProcessingFailed(
+      db,
+      "outbox_1",
+      "claim_1",
+      8,
+      new Error("provider still down"),
+    );
+
+    expect(rows.get("outbox_1")).toMatchObject({
+      status: "dead_lettered",
+      claimId: null,
+      claimExpiresAt: null,
+      lastError: "order_notification_attempt_limit_reached: provider still down",
+      nextAttemptAt: 253_402_300_799,
     });
   });
 

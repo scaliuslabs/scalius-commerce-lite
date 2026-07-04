@@ -102,6 +102,12 @@
         "dead_letter_queue": "order-notifications-dlq"
       },
       {
+        "queue": "order-notifications-dlq",
+        "max_batch_size": 5,
+        "max_batch_timeout": 5,
+        "max_retries": 5
+      },
+      {
         "queue": "auth-otp",
         "max_batch_size": 10,
         "max_batch_timeout": 2,

@@ -11,6 +11,7 @@ export type {
   SendEmailOptions,
   SendEmailResult,
   EmailProvider,
+  EmailProviderReadiness,
   EmailRuntimeContext,
   EmailRuntimeSettings,
   CloudflareEmailBinding,
