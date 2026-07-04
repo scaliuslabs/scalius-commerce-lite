@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { OrderStatus, PaymentRecordStatus, PaymentStatus } from "@scalius/database/schema";
+import {
+  orderPayments,
+  orders,
+  paymentSessionAttempts,
+  refundAttempts,
+  OrderStatus,
+  PaymentRecordStatus,
+  PaymentStatus,
+} from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
   getStripeSettings: vi.fn(),
@@ -35,7 +43,7 @@ vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
-import { PartialRefundProcessedError, processRefund } from "./refund-service";
+import { PartialRefundProcessedError, processRefund, processReturn } from "./refund-service";
 
 type PaymentRow = {
   id: string;
@@ -50,7 +58,21 @@ type PaymentRow = {
   metadata: string | null;
 };
 
-const order = {
+type OrderRow = {
+  id: string;
+  totalAmount: number;
+  paidAmount: number;
+  balanceDue: number;
+  paymentStatus: string;
+  paymentMethod: string;
+  status: string;
+  inventoryAction: string;
+  version: number;
+  shipmentClaimId: string | null;
+  shipmentClaimExpiresAt: number | null;
+};
+
+const order: OrderRow = {
   id: "order_1",
   totalAmount: 100,
   paidAmount: 100,
@@ -113,20 +135,26 @@ function refundRow(overrides: Partial<PaymentRow>): PaymentRow {
 }
 
 function createDbMock({
+  orderOverrides = {},
   payments,
   refunds = [],
   activeAttempt = null,
   pendingRefund = null,
+  activePaymentSessionAttemptRows = [],
 }: {
+  orderOverrides?: Partial<OrderRow>;
   payments: PaymentRow[];
   refunds?: PaymentRow[];
   activeAttempt?: Record<string, unknown> | null;
   pendingRefund?: Record<string, unknown> | null;
+  activePaymentSessionAttemptRows?: Array<Record<string, unknown>>;
 }) {
-  let selectCall = 0;
+  let orderPaymentSelectCount = 0;
+  let refundAttemptSelectCount = 0;
   const insertValues: Array<Record<string, unknown>> = [];
   const refundAttemptInsertValues: Array<Record<string, unknown>> = [];
   const updateValues: Array<Record<string, unknown>> = [];
+  const selectedOrder = { ...order, ...orderOverrides };
 
   const batch = vi.fn(async (statements: unknown[]) => [
     ...statements.slice(0, -1).map((_, index) => [{ id: `refund_row_${index + 1}` }]),
@@ -137,8 +165,10 @@ function createDbMock({
     const chain = {
       from: vi.fn(() => chain),
       where: vi.fn(() => chain),
+      groupBy: vi.fn(() => chain),
       orderBy: vi.fn(() => chain),
       get: vi.fn(async () => result ?? null),
+      all: vi.fn(async () => Array.isArray(result) ? result : result ? [result] : []),
       then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
         Promise.resolve(Array.isArray(result) ? result : result ? [result] : []).then(resolve, reject),
     };
@@ -191,23 +221,25 @@ function createDbMock({
       where: vi.fn(async () => undefined),
     })),
     select: vi.fn(() => {
-      selectCall += 1;
-      const result = selectCall === 1
-        ? order
-        : selectCall === 2
-          ? activeAttempt
-          : selectCall === 3
-            ? pendingRefund
-            : selectCall === 4
-              ? payments
-              : selectCall === 5
-                ? refunds
-                : selectCall === 6
-                  ? finalizerAttemptRows()
-                  : selectCall === 7
-                    ? order
-                    : finalizerPaymentRows();
-      return chainFor(result);
+      const chain = {
+        from: vi.fn((table: unknown) => {
+          if (table === orders) return chainFor(selectedOrder);
+          if (table === paymentSessionAttempts) return chainFor(activePaymentSessionAttemptRows);
+          if (table === refundAttempts) {
+            refundAttemptSelectCount += 1;
+            return chainFor(refundAttemptSelectCount === 1 ? activeAttempt : finalizerAttemptRows());
+          }
+          if (table === orderPayments) {
+            orderPaymentSelectCount += 1;
+            if (orderPaymentSelectCount === 1) return chainFor(pendingRefund);
+            if (orderPaymentSelectCount === 2) return chainFor(payments);
+            if (orderPaymentSelectCount === 3) return chainFor(refunds);
+            return chainFor(finalizerPaymentRows());
+          }
+          return chainFor([]);
+        }),
+      };
+      return chain;
     }),
     insertValues,
     refundAttemptInsertValues,
@@ -498,6 +530,71 @@ describe("refund allocation", () => {
 
     expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
     expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("blocks already-refunded repair while a durable refund attempt is active", async () => {
+    const db = createDbMock({
+      orderOverrides: {
+        paymentStatus: PaymentStatus.REFUNDED,
+        status: OrderStatus.CANCELLED,
+        inventoryAction: "reserved",
+      },
+      payments: [
+        stripePayment({ id: "pay_1", amount: 100, stripeChargeId: "ch_1" }),
+      ],
+      activeAttempt: { id: "rfa_active", status: "reconcile_required" },
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      reason: "repair",
+      gateway: "stripe",
+    })).rejects.toThrow("A refund is already in progress");
+
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("blocks a new refund while hosted payment setup is active", async () => {
+    const db = createDbMock({
+      payments: [
+        stripePayment({ id: "pay_1", amount: 100, stripeChargeId: "ch_1" }),
+      ],
+      activePaymentSessionAttemptRows: [{ orderId: "order_1" }],
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      amount: 40,
+      reason: "customer_request",
+      gateway: "stripe",
+    })).rejects.toThrow("active hosted payment setup");
+
+    expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("blocks returns while hosted payment setup is active", async () => {
+    const db = createDbMock({
+      orderOverrides: {
+        status: OrderStatus.DELIVERED,
+        paymentStatus: PaymentStatus.PAID,
+      },
+      payments: [
+        stripePayment({ id: "pay_1", amount: 100, stripeChargeId: "ch_1" }),
+      ],
+      activePaymentSessionAttemptRows: [{ orderId: "order_1" }],
+    });
+
+    await expect(processReturn(db as never, undefined, {
+      orderId: "order_1",
+      reason: "customer_request",
+      autoRefund: false,
+    })).rejects.toThrow("active hosted payment setup");
+
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    expect(db.updateValues).toHaveLength(0);
   });
 
   it("blocks a new refund while a legacy pending refund row exists", async () => {

@@ -41,6 +41,7 @@ type MockChain = {
   values: ReturnType<typeof vi.fn>;
   returning: ReturnType<typeof vi.fn>;
   get: ReturnType<typeof vi.fn>;
+  all: ReturnType<typeof vi.fn>;
   then: (resolve: (value: unknown) => void, reject?: (reason: unknown) => void) => Promise<void>;
 };
 
@@ -167,6 +168,7 @@ function createChain(result: unknown): MockChain {
   chain.values = vi.fn(() => chain);
   chain.returning = vi.fn(() => result);
   chain.get = vi.fn(async () => result ?? null);
+  chain.all = vi.fn(async () => Array.isArray(result) ? result : result ? [result] : []);
   chain.then = (resolve, reject) => {
     const value = Array.isArray(result) ? result : result ? [result] : [];
     return Promise.resolve(value).then(resolve, reject);
@@ -179,6 +181,7 @@ function createUpdateOrderDb(options: {
   existingItems: ReturnType<typeof seedOrderItem>[];
   activeRefundAttempt?: Record<string, unknown> | null;
   legacyPendingRefund?: Record<string, unknown> | null;
+  activePaymentSessionAttemptRows?: Array<Record<string, unknown>>;
   orderUpdateResult?: unknown[];
   itemReplacementError?: Error;
   locationRows?: ReturnType<typeof activeLocationRows>;
@@ -207,6 +210,7 @@ function createUpdateOrderDb(options: {
     options.existingOrder,
     options.activeRefundAttempt ?? null,
     options.legacyPendingRefund ?? null,
+    options.activePaymentSessionAttemptRows ?? [],
     options.existingItems,
     liveSkuRows,
   ];
@@ -246,12 +250,14 @@ function createRestoreOrderDb(options: {
   orderUpdateResult?: unknown[];
   activeRefundAttempt?: Record<string, unknown> | null;
   legacyPendingRefund?: Record<string, unknown> | null;
+  activePaymentSessionAttemptRows?: Array<Record<string, unknown>>;
 }) {
   let selectIndex = 0;
   const selectResults = [
     options.order,
     options.activeRefundAttempt ?? null,
     options.legacyPendingRefund ?? null,
+    options.activePaymentSessionAttemptRows ?? [],
     options.items ?? [item(1)],
   ];
   const updateSets: unknown[] = [];
@@ -775,7 +781,7 @@ describe("restoreOrder trash inventory safety", () => {
     await expect(restoreOrder(db as never, ORDER_ID)).resolves.toBeUndefined();
 
     expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(db.select).toHaveBeenCalledTimes(3);
+    expect(db.select).toHaveBeenCalledTimes(4);
     expect(updateSets.at(-1)).toMatchObject({
       deletedAt: null,
       inventoryAction: "restored",
@@ -791,7 +797,7 @@ describe("restoreOrder trash inventory safety", () => {
     await expect(restoreOrder(db as never, ORDER_ID)).resolves.toBeUndefined();
 
     expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(db.select).toHaveBeenCalledTimes(4);
+    expect(db.select).toHaveBeenCalledTimes(5);
     expect(updateSets.at(-1)).toMatchObject({
       deletedAt: null,
       inventoryAction: "none",
@@ -850,7 +856,7 @@ describe("restoreOrder trash inventory safety", () => {
       });
 
       expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-      expect(db.select).toHaveBeenCalledTimes(3);
+      expect(db.select).toHaveBeenCalledTimes(4);
       expect(db.update).not.toHaveBeenCalled();
     },
   );

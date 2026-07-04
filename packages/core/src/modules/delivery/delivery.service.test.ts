@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { ShipmentStatus } from "@scalius/database/schema";
+import {
+  deliveryShipments,
+  orderPayments,
+  orders,
+  paymentSessionAttempts,
+  refundAttempts,
+  ShipmentStatus,
+} from "@scalius/database/schema";
 import {
   checkShipmentStatus,
   createShipment,
@@ -10,25 +17,39 @@ import {
 function createDeleteShipmentDb({
   shipment,
   orderClaim,
+  activeRefundAttempt = null,
+  legacyPendingRefund = null,
+  activePaymentSessionAttemptRows = [],
 }: {
   shipment?: Record<string, unknown> | null;
   orderClaim?: Record<string, unknown> | null;
+  activeRefundAttempt?: Record<string, unknown> | null;
+  legacyPendingRefund?: Record<string, unknown> | null;
+  activePaymentSessionAttemptRows?: Array<Record<string, unknown>>;
 }) {
-  const selectResults = [shipment ?? null, orderClaim ?? null];
   const updates: Array<Record<string, unknown>> = [];
   const deletes: string[] = [];
+
+  const chainFor = (result: unknown) => {
+    const chain = {
+      where: vi.fn(() => chain),
+      groupBy: vi.fn(() => chain),
+      get: vi.fn(async () => result ?? null),
+      all: vi.fn(async () => Array.isArray(result) ? result : result ? [result] : []),
+    };
+    return chain;
+  };
 
   const db = {
     select() {
       return {
-        from() {
-          return {
-            where() {
-              return {
-                get: async () => selectResults.shift() ?? null,
-              };
-            },
-          };
+        from(table: unknown) {
+          if (table === deliveryShipments) return chainFor(shipment ?? null);
+          if (table === refundAttempts) return chainFor(activeRefundAttempt);
+          if (table === orderPayments) return chainFor(legacyPendingRefund);
+          if (table === paymentSessionAttempts) return chainFor(activePaymentSessionAttemptRows);
+          if (table === orders) return chainFor(orderClaim ?? null);
+          return chainFor(null);
         },
       };
     },
@@ -92,6 +113,7 @@ function createSaveProviderDb(existingProvider: Record<string, unknown> | null =
 function thenableRows(rows: unknown[]) {
   return Object.assign(Promise.resolve(rows), {
     get: vi.fn(async () => rows[0] ?? null),
+    all: vi.fn(async () => rows),
   });
 }
 
@@ -131,6 +153,30 @@ describe("deleteShipmentRecord claim safety", () => {
 
     await expect(deleteShipmentRecord(db as never, "shp_1"))
       .rejects.toThrow("provider creation is in progress");
+    expect(deletes).toHaveLength(0);
+  });
+
+  it("rejects active refund operations before shipment-status delete checks", async () => {
+    const { db, updates, deletes } = createDeleteShipmentDb({
+      shipment: shipment(ShipmentStatus.CREATING),
+      activeRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "provider_unknown" },
+    });
+
+    await expect(deleteShipmentRecord(db as never, "shp_1"))
+      .rejects.toThrow("active refund operation");
+    expect(updates).toHaveLength(0);
+    expect(deletes).toHaveLength(0);
+  });
+
+  it("rejects legacy pending refunds before deleting shipments", async () => {
+    const { db, updates, deletes } = createDeleteShipmentDb({
+      shipment: shipment(ShipmentStatus.FAILED),
+      legacyPendingRefund: { id: "refund_pending" },
+    });
+
+    await expect(deleteShipmentRecord(db as never, "shp_1"))
+      .rejects.toThrow("active refund operation");
+    expect(updates).toHaveLength(0);
     expect(deletes).toHaveLength(0);
   });
 
@@ -304,6 +350,9 @@ describe("delivery provider active-state authority", () => {
         providerId: "provider_steadfast",
         externalId: "consignment_1",
       }],
+      [],
+      [],
+      [],
       [{ shipmentClaimId: null, shipmentClaimExpiresAt: null }],
       [{
         id: "provider_steadfast",
@@ -318,6 +367,25 @@ describe("delivery provider active-state authority", () => {
       db as never,
       "shipment_1",
     )).rejects.toThrow("Provider with ID provider_steadfast is not active");
+
+    expect(updates).toHaveLength(0);
+  });
+
+  it("does not poll shipment status while a refund attempt is active", async () => {
+    const { db, updates } = createSequentialSelectDb([
+      [{
+        id: "shipment_1",
+        orderId: "order_1",
+        providerId: "provider_steadfast",
+        externalId: "consignment_1",
+      }],
+      [{ id: "rfa_1", orderId: "order_1", status: "provider_unknown" }],
+    ]);
+
+    await expect(checkShipmentStatus(
+      db as never,
+      "shipment_1",
+    )).rejects.toThrow("active refund operation");
 
     expect(updates).toHaveLength(0);
   });

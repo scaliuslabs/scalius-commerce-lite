@@ -3,6 +3,7 @@ import type { DeliveryShipment } from "@scalius/database/schema";
 import { deliveryShipments } from "@scalius/database/schema";
 import { checkShipmentStatus, getDeliveryProvider, getShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
+import { assertNoActiveRefundAttempt, assertNoActivePaymentSessionAttempt } from "@scalius/core/modules/payments";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
@@ -41,6 +42,9 @@ export async function checkAndSyncShipmentStatus(options: {
 }): Promise<SyncedShipmentStatusResult> {
   const { db, shipment, encryptionKey, c, source } = options;
   const previousStatus = shipment.status;
+
+  await assertNoActiveRefundAttempt(db, shipment.orderId);
+  await assertNoActivePaymentSessionAttempt(db, shipment.orderId);
 
   const checkedShipment = await checkShipmentStatus(db, shipment.id, encryptionKey);
   const now = new Date();

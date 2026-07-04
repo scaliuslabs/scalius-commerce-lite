@@ -61,7 +61,7 @@ describe("admin order list boundaries", () => {
 
   it("summarizes hosted payment recovery without exposing private attempt identity", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
-    const summarySource = source.split("function buildPaymentRecoverySummary")[1]?.split("async function assertNoActivePaymentSessionAttemptsForOrders")[0] ?? "";
+    const summarySource = source.split("function buildPaymentRecoverySummary")[1]?.split("function orderEditReadyCondition")[0] ?? "";
 
     expect(source).toContain("paymentSessionAttempts");
     expect(source).toContain("paymentRecovery: buildPaymentRecoverySummary(");
@@ -75,6 +75,17 @@ describe("admin order list boundaries", () => {
     expect(summarySource).not.toContain("requestHash");
     expect(summarySource).not.toContain("responsePayload");
     expect(summarySource).not.toContain("claimId");
+  });
+
+  it("blocks active hosted payment setup before admin order mutations", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain('from "../payments/payment-session-attempts"');
+    expect(source).toContain("await assertNoActivePaymentSessionAttempt(db, id)");
+    expect(source).toContain("await assertNoActivePaymentSessionAttemptsForOrders(db, [id])");
+    expect(source).toContain("await assertNoActivePaymentSessionAttemptsForOrders(db, affectedOrders.map((order) => order.id))");
+    expect(source).toContain("noActivePaymentSessionAttemptForOrderIdCondition(orderId)");
+    expect(source).toContain("noActivePaymentSessionAttemptForOrderIdCondition(id)");
   });
 
   it("adds active refund operation summaries to order list rows", () => {

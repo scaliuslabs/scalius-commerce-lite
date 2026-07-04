@@ -8,6 +8,8 @@ import { and, eq, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "../orders/shipment-claim";
+import { assertNoActiveRefundAttempt } from "../payments/refund-attempt-guard";
+import { assertNoActivePaymentSessionAttempt } from "../payments/payment-session-attempts";
 import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "./locations";
 
 type ShipmentInternalOptions = {
@@ -451,6 +453,9 @@ export async function checkShipmentStatus(db: Database, shipmentId: string, encr
   if (!shipment) {
     throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
   }
+  await assertNoActiveRefundAttempt(db, shipment.orderId);
+  await assertNoActivePaymentSessionAttempt(db, shipment.orderId);
+
   const orderClaim = await db
     .select({
       shipmentClaimId: orders.shipmentClaimId,
@@ -530,6 +535,9 @@ export async function deleteShipmentRecord(db: Database, id: string) {
     .where(eq(deliveryShipments.id, id))
     .get();
   if (!shipment) return true;
+
+  await assertNoActiveRefundAttempt(db, shipment.orderId);
+  await assertNoActivePaymentSessionAttempt(db, shipment.orderId);
 
   if (shipment?.status === ShipmentStatus.CREATING) {
     throw new ValidationError("Cannot delete a shipment while provider creation is in progress");

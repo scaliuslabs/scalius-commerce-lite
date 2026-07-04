@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { paymentSessionAttempts } from "@scalius/database/schema";
-import { and, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import type { PaymentGateway, PaymentType } from "./types";
 
@@ -61,8 +61,61 @@ export type PaymentSessionAttemptClaimResult<TResponse> =
 const PAYMENT_SESSION_ATTEMPT_LEASE_SECONDS = 5 * 60;
 const PAYMENT_SESSION_PROCESSING_RETRY_AFTER_SECONDS = 2;
 const MAX_ERROR_LENGTH = 500;
+export const ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE =
+  "Order has an active hosted payment setup in progress. Wait for payment setup to finish before changing this order.";
 
 type AttemptRow = typeof paymentSessionAttempts.$inferSelect;
+
+export function activePaymentSessionAttemptExistsCondition(orderIdSql: SQL): SQL {
+  return sql`EXISTS (
+    SELECT 1 FROM ${paymentSessionAttempts}
+    WHERE ${paymentSessionAttempts.orderId} = ${orderIdSql}
+      AND ${paymentSessionAttempts.status} = 'processing'
+      AND ${paymentSessionAttempts.claimExpiresAt} IS NOT NULL
+      AND ${paymentSessionAttempts.claimExpiresAt} > unixepoch()
+  )`;
+}
+
+export function noActivePaymentSessionAttemptForOrderSqlCondition(orderIdSql: SQL): SQL {
+  return sql`NOT ${activePaymentSessionAttemptExistsCondition(orderIdSql)}`;
+}
+
+export function noActivePaymentSessionAttemptForOrderIdCondition(orderId: string): SQL {
+  return noActivePaymentSessionAttemptForOrderSqlCondition(sql`${orderId}`);
+}
+
+export async function assertNoActivePaymentSessionAttemptsForOrders(
+  db: Database,
+  orderIds: string[],
+  message = ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE,
+): Promise<void> {
+  const uniqueOrderIds = [...new Set(orderIds)].filter(Boolean);
+  if (uniqueOrderIds.length === 0) return;
+
+  const rows = await db
+    .select({ orderId: paymentSessionAttempts.orderId })
+    .from(paymentSessionAttempts)
+    .where(and(
+      inArray(paymentSessionAttempts.orderId, uniqueOrderIds),
+      eq(paymentSessionAttempts.status, "processing"),
+      sql`${paymentSessionAttempts.claimExpiresAt} IS NOT NULL`,
+      sql`${paymentSessionAttempts.claimExpiresAt} > unixepoch()`,
+    ))
+    .all();
+
+  const affectedOrderIds = [...new Set(rows.map((row) => row.orderId).filter(Boolean))];
+  if (affectedOrderIds.length > 0) {
+    throw new ConflictError(`${message} Affected orders: ${affectedOrderIds.join(", ")}.`);
+  }
+}
+
+export async function assertNoActivePaymentSessionAttempt(
+  db: Database,
+  orderId: string,
+  message = ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE,
+): Promise<void> {
+  await assertNoActivePaymentSessionAttemptsForOrders(db, [orderId], message);
+}
 
 export interface AdminPaymentSessionAttemptView {
   id: string;

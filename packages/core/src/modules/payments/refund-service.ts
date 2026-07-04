@@ -34,7 +34,12 @@ import { computeOrderPaymentState } from "./payment-state";
 import {
     REFUND_IN_PROGRESS_MESSAGE,
     assertNoActiveRefundAttempt,
+    noActiveRefundAttemptForOrderIdCondition,
 } from "./refund-attempt-guard";
+import {
+    assertNoActivePaymentSessionAttempt,
+    noActivePaymentSessionAttemptForOrderIdCondition,
+} from "./payment-session-attempts";
 import type { OrderNotificationType } from "../notifications/notification-types";
 import type {
     PaymentProvider,
@@ -412,6 +417,8 @@ async function updateOrderStatusIfVersionMatches(
         .where(and(
             eq(orders.id, params.orderId),
             eq(orders.version, params.expectedVersion),
+            noActiveRefundAttemptForOrderIdCondition(params.orderId),
+            noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
         ))
         .returning({ id: orders.id });
 
@@ -1097,6 +1104,8 @@ export async function processRefund(
         throw new NotFoundError(`Order ${params.orderId} not found`);
     }
     assertNoActiveShipmentClaim(order);
+    await assertNoActivePaymentSessionAttempt(db, params.orderId);
+    await assertNoActiveRefundAttempt(db, params.orderId, { message: REFUND_IN_PROGRESS_MESSAGE });
 
     if (order.paymentStatus === PaymentStatus.UNPAID || order.paymentStatus === PaymentStatus.FAILED) {
         throw new ValidationError("Order has no payments to refund");
@@ -1119,8 +1128,6 @@ export async function processRefund(
     if (order.paymentStatus === PaymentStatus.REFUNDED) {
         throw new ConflictError("Order is already fully refunded");
     }
-
-    await assertNoActiveRefundAttempt(db, params.orderId, { message: REFUND_IN_PROGRESS_MESSAGE });
 
     // Determine and validate refund amount before any gateway calls
     const paidAmount = order.paidAmount ?? 0;
@@ -1237,6 +1244,8 @@ export async function processRefund(
                 eq(orders.id, params.orderId),
                 eq(orders.version, order.version),
                 sql`${orders.paidAmount} >= ${refundAmount}`,
+                noActiveRefundAttemptForOrderIdCondition(params.orderId),
+                noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
             )).returning({ id: orders.id, version: orders.version }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
         ] as any) as any;
@@ -1456,6 +1465,7 @@ export async function processReturn(
     }
     assertNoActiveShipmentClaim(order);
     await assertNoActiveRefundAttempt(db, params.orderId);
+    await assertNoActivePaymentSessionAttempt(db, params.orderId);
 
     const returnableStatuses: string[] = [OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.SHIPPED];
     if (order.status !== OrderStatus.RETURNED && !returnableStatuses.includes(order.status)) {

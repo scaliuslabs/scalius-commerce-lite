@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import {
+  assertNoActivePaymentSessionAttempt,
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
   listOrderPaymentSessionAttempts,
@@ -96,6 +97,28 @@ describe("payment session attempts", () => {
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]?.attemptKey).toBe(firstIdentity.attemptKey);
     expect(fake.rows[0]?.attempts).toBe(1);
+  });
+
+  it("blocks admin mutations only while a hosted payment setup lease is active", async () => {
+    const fake = createFakePaymentSessionDb();
+    const identity = await buildIdentity();
+
+    const claim = await claimPaymentSessionAttempt(fake.db, identity);
+    if (claim.status !== "claimed") throw new Error("expected first claim");
+
+    await expect(assertNoActivePaymentSessionAttempt(fake.db, "order_1"))
+      .rejects.toThrow("active hosted payment setup");
+
+    if (!fake.rows[0]) throw new Error("expected attempt row");
+    fake.rows[0].claimExpiresAt = Math.floor(Date.now() / 1000) - 1;
+    await expect(assertNoActivePaymentSessionAttempt(fake.db, "order_1")).resolves.toBeUndefined();
+
+    fake.rows[0].claimExpiresAt = Math.floor(Date.now() / 1000) + 300;
+    await markPaymentSessionAttemptCreated(fake.db, claim.attempt, {
+      providerSessionId: "pi_1",
+      response: { paymentIntentId: "pi_1" },
+    });
+    await expect(assertNoActivePaymentSessionAttempt(fake.db, "order_1")).resolves.toBeUndefined();
   });
 
   it("reclaims failed attempts with the same canonical attempt key", async () => {
@@ -377,6 +400,30 @@ function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[]; stats
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
               })),
+          }),
+          all: async () => {
+            stats.selects += 1;
+            return [...new Set(rows
+              .filter((row) =>
+                row.status === "processing" &&
+                row.claimExpiresAt !== null &&
+                row.claimExpiresAt > now()
+              )
+              .map((row) => row.orderId))]
+              .map((orderId) => ({ orderId }));
+          },
+          groupBy: () => ({
+            all: async () => {
+              stats.selects += 1;
+              return [...new Set(rows
+                .filter((row) =>
+                  row.status === "processing" &&
+                  row.claimExpiresAt !== null &&
+                  row.claimExpiresAt > now()
+                )
+                .map((row) => row.orderId))]
+                .map((orderId) => ({ orderId }));
+            },
           }),
         }),
       }),

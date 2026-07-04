@@ -24,6 +24,10 @@ import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
 } from "../payments/refund-attempt-guard";
+import {
+    assertNoActivePaymentSessionAttempt,
+    noActivePaymentSessionAttemptForOrderIdCondition,
+} from "../payments/payment-session-attempts";
 
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
@@ -178,6 +182,7 @@ export async function bulkShipOrders(
             await assertNoActiveRefundAttempt(db, orderId, {
                 message: "Order has an active refund operation. Complete or reconcile the refund before shipping this order.",
             });
+            await assertNoActivePaymentSessionAttempt(db, orderId);
             if (order.status === OrderStatus.SHIPPED) {
                 if (order.shipmentClaimId) {
                     await clearShipmentClaim(db, orderId, order.shipmentClaimId);
@@ -211,6 +216,7 @@ export async function bulkShipOrders(
                 eq(orders.status, order.status),
                 noActiveShipmentClaimCondition(),
                 noActiveRefundAttemptForOrderIdCondition(orderId),
+                noActivePaymentSessionAttemptForOrderIdCondition(orderId),
             )).returning({ id: orders.id });
 
             if (claimResult.length === 0) {
@@ -289,10 +295,11 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(order);
+    await assertNoActiveRefundAttempt(db, orderId);
+    await assertNoActivePaymentSessionAttempt(db, orderId);
 
     switch (body.action) {
         case "collected": {
-            await assertNoActiveRefundAttempt(db, orderId);
             const existingCodCollection = await getRecordedCodCollection(db, orderId);
             const collection = existingCodCollection
                 ? null
@@ -337,6 +344,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     eq(orders.id, orderId),
                     eq(orders.version, currentVersion),
                     noActiveRefundAttemptForOrderIdCondition(orderId),
+                    noActivePaymentSessionAttemptForOrderIdCondition(orderId),
                 )).returning({ id: orders.id });
                 if (shipResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
                 currentVersion += 1;
@@ -349,6 +357,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     eq(orders.id, orderId),
                     eq(orders.version, currentVersion),
                     noActiveRefundAttemptForOrderIdCondition(orderId),
+                    noActivePaymentSessionAttemptForOrderIdCondition(orderId),
                 )).returning({ id: orders.id });
                 if (delResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
                 deliveredClaim = {
@@ -379,7 +388,6 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             return { message: "COD failure recorded" };
         }
         case "returned": {
-            await assertNoActiveRefundAttempt(db, orderId);
             let returnClaim: { previousStatus: string; claimedVersion: number } | null = null;
             const rollbackReturnClaim = async () => {
                 if (!returnClaim) return;
@@ -397,6 +405,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     eq(orders.id, orderId),
                     eq(orders.version, order.version),
                     noActiveRefundAttemptForOrderIdCondition(orderId),
+                    noActivePaymentSessionAttemptForOrderIdCondition(orderId),
                 )).returning({ id: orders.id });
                 if (retCasResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
                 returnClaim = {
@@ -440,6 +449,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
     if (!order) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(order);
     await assertNoActiveRefundAttempt(db, orderId);
+    await assertNoActivePaymentSessionAttempt(db, orderId);
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
         throw new ValidationError("Cannot fulfill a cancelled/returned order");
     }
@@ -492,6 +502,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         eq(orders.fulfillmentStatus, order.fulfillmentStatus),
         noActiveShipmentClaimCondition(),
         noActiveRefundAttemptForOrderIdCondition(orderId),
+        noActivePaymentSessionAttemptForOrderIdCondition(orderId),
     )).returning({ id: orders.id });
 
     if (claimResult.length === 0) {
@@ -613,6 +624,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, orderId);
+    await assertNoActivePaymentSessionAttempt(db, orderId);
     if (currentStatus === nextStatus) {
         await reconcileInventoryForStatus(db, orderId, nextStatus);
         return { message: "Status unchanged; inventory reconciled" };
@@ -647,6 +659,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         eq(orders.id, orderId),
         eq(orders.version, existingOrder.version),
         noActiveRefundAttemptForOrderIdCondition(orderId),
+        noActivePaymentSessionAttemptForOrderIdCondition(orderId),
     )).returning({ id: orders.id });
 
     if (result.length === 0) {
