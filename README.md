@@ -378,6 +378,10 @@ pnpm dev:reset          # Wipe local state, migrate, recreate local admin
 pnpm dev:admin:create   # Create local admin if none exists
 pnpm dev:admin:reset    # Reset local auth/admin credentials only
 pnpm dev:admin:status   # Check whether a local admin exists
+pnpm dev:post-sale:seed   # Seed the local disposable checkout/order fixture
+pnpm dev:post-sale:smoke  # Local-only COD cart/order/replay/receipt/support smoke
+pnpm dev:post-sale:load   # Local-only bounded disposable COD order load smoke
+pnpm dev:post-sale:otp    # Local-only customer OTP readiness smoke
 pnpm dev:doctor         # Diagnose local env, state, ports, and service readiness
 pnpm dev:doctor:api     # Require API :8787 to be running
 pnpm dev:doctor:admin   # Require API :8787 + admin-v2 :4323 to be running

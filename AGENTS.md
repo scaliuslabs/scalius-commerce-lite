@@ -38,6 +38,10 @@ packages/
 | `pnpm dev:admin:create` | Create default local admin if none exists |
 | `pnpm dev:admin:reset` | Reset local auth/admin credentials without wiping catalog/order data |
 | `pnpm dev:admin:status` | Check whether a local admin exists |
+| `pnpm dev:post-sale:seed` | Seed the local D1 post-sale fixture for disposable checkout/order smokes |
+| `pnpm dev:post-sale:smoke` | Run the local-only COD cart/order/replay/receipt/support smoke |
+| `pnpm dev:post-sale:load` | Run a bounded local-only disposable COD order load smoke |
+| `pnpm dev:post-sale:otp` | Run the local-only customer OTP readiness smoke |
 | `pnpm dev:doctor` | Non-mutating local readiness check for env files, shared secrets, ports, services, and Wrangler state |
 | `pnpm dev:doctor:api` | Require local API to be live |
 | `pnpm dev:doctor:admin` | Require local API + admin to be live |

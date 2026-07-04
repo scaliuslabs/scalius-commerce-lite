@@ -145,7 +145,7 @@ describe("notification channel settings", () => {
         mocks.getEmailProviderReadiness.mockResolvedValueOnce({
             configured: false,
             provider: "cloudflare",
-            error: "Configure Cloudflare Email or save a Resend API key before enabling email order notifications.",
+            error: "Configure Cloudflare Email or save a Resend API key before enabling email delivery.",
         });
         const db = createSettingsDb();
 
@@ -154,7 +154,7 @@ describe("notification channel settings", () => {
         }, "credential-key");
 
         await expect(promise).rejects.toBeInstanceOf(ValidationError);
-        await expect(promise).rejects.toThrow("Configure Cloudflare Email or save a Resend API key before enabling email order notifications.");
+        await expect(promise).rejects.toThrow("Configure Cloudflare Email or save a Resend API key before enabling email delivery.");
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
     });
 
