@@ -36,6 +36,11 @@ import {
   type BulkCartRepairAction,
 } from "./bulk-repair-actions";
 import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
+import {
+  clearHostedPaymentRecoverySession,
+  readHostedPaymentRecoverySession,
+  type HostedPaymentRecoverySession,
+} from "../checkout/session-state";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -62,6 +67,7 @@ let cartValidationSummaryMessage = "";
 let preserveCartValidationSummaryOnce = false;
 let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
+let hostedPaymentRecoverySession: HostedPaymentRecoverySession | null = null;
 
 // --- Abandoned Checkout ---
 let abandonedCheckoutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -603,8 +609,24 @@ export async function renderCartItems() {
     Object.keys(items).length > 0 ? JSON.stringify(items) : "{}";
 
   if (Object.keys(items).length === 0) {
-    renderEmptyCartState(cartItemsContainer, lang);
+    renderEmptyCartState(
+      cartItemsContainer,
+      lang,
+      hostedPaymentRecoverySession
+        ? {
+            href: hostedPaymentRecoverySession.href,
+            onClick: () => {
+              hostedPaymentRecoverySession = null;
+              clearHostedPaymentRecoverySession();
+            },
+          }
+        : null,
+    );
     return;
+  }
+  if (hostedPaymentRecoverySession) {
+    hostedPaymentRecoverySession = null;
+    clearHostedPaymentRecoverySession();
   }
 
   const csym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
@@ -795,6 +817,7 @@ function handleRemoveDiscount() {
 export async function initCartFunctionality() {
   const runtimeSignal = resetCartRuntimeListeners();
   hydrateCartFromStorage();
+  hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
 
   // ── Read server-rendered shipping defaults ────────────────────────────────
   // Eliminates the race condition: this runs before React hydration, ensuring

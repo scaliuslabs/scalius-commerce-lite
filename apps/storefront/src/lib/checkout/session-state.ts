@@ -4,6 +4,15 @@ const CHECKOUT_TRANSFER_KEYS = [
 ] as const;
 
 const CHECKOUT_RUNTIME_KEYS = ["checkoutId"] as const;
+const HOSTED_PAYMENT_RECOVERY_STORAGE_KEY = "scalius_hosted_payment_recovery";
+const HOSTED_PAYMENT_RECOVERY_TTL_MS = 30 * 60 * 1000;
+const HOSTED_PAYMENT_GATEWAYS = new Set(["sslcommerz", "polar"]);
+
+export interface HostedPaymentRecoverySession {
+  href: string;
+  gateway: "sslcommerz" | "polar";
+  createdAt: number;
+}
 
 export const CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE =
   "We could not open payment because this browser blocked checkout storage. Please allow site storage for this store, then try again.";
@@ -78,5 +87,88 @@ export function clearCheckoutSession(): void {
     removeSessionKeys(CHECKOUT_RUNTIME_KEYS);
   } catch {
     // ignore storage access errors
+  }
+}
+
+function checkoutRecoveryBaseOrigin(): string {
+  return typeof window !== "undefined" && window.location?.origin
+    ? window.location.origin
+    : "https://storefront.local";
+}
+
+function normalizeHostedPaymentRecoveryHref(href: string): HostedPaymentRecoverySession | null {
+  try {
+    const baseOrigin = checkoutRecoveryBaseOrigin();
+    const url = new URL(href, baseOrigin);
+    if (url.origin !== baseOrigin) return null;
+    if (url.pathname !== "/order-success") return null;
+
+    const gateway = url.searchParams.get("payment");
+    if (!gateway || !HOSTED_PAYMENT_GATEWAYS.has(gateway)) return null;
+    if (!url.searchParams.get("orderId") || !url.searchParams.get("token")) return null;
+
+    return {
+      href: `${url.pathname}${url.search}`,
+      gateway: gateway as HostedPaymentRecoverySession["gateway"],
+      createdAt: Date.now(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writeHostedPaymentRecoverySession(href: string | undefined): boolean {
+  if (!href) return false;
+  const recovery = normalizeHostedPaymentRecoveryHref(href);
+  if (!recovery) return false;
+
+  try {
+    sessionStorage.setItem(
+      HOSTED_PAYMENT_RECOVERY_STORAGE_KEY,
+      JSON.stringify(recovery),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearHostedPaymentRecoverySession(): void {
+  try {
+    sessionStorage.removeItem(HOSTED_PAYMENT_RECOVERY_STORAGE_KEY);
+  } catch {
+    // ignore storage access errors
+  }
+}
+
+export function readHostedPaymentRecoverySession(
+  now = Date.now(),
+): HostedPaymentRecoverySession | null {
+  try {
+    const raw = sessionStorage.getItem(HOSTED_PAYMENT_RECOVERY_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<HostedPaymentRecoverySession>;
+    if (
+      typeof parsed.href !== "string" ||
+      typeof parsed.createdAt !== "number" ||
+      now - parsed.createdAt > HOSTED_PAYMENT_RECOVERY_TTL_MS
+    ) {
+      clearHostedPaymentRecoverySession();
+      return null;
+    }
+
+    const normalized = normalizeHostedPaymentRecoveryHref(parsed.href);
+    if (!normalized || normalized.gateway !== parsed.gateway) {
+      clearHostedPaymentRecoverySession();
+      return null;
+    }
+
+    return {
+      ...normalized,
+      createdAt: parsed.createdAt,
+    };
+  } catch {
+    clearHostedPaymentRecoverySession();
+    return null;
   }
 }

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { cartStore } from "../../store/cart";
 import type { CheckoutLanguageData } from "../api/types";
@@ -109,6 +109,32 @@ describe("renderEmptyCartState", () => {
     expect(
       (window as typeof window & { __continuePwned?: boolean }).__continuePwned,
     ).toBeUndefined();
+  });
+
+  it("renders hosted payment recovery as an explicit receipt action", () => {
+    const cartItemsContainer = document.getElementById("cartItems");
+    if (!cartItemsContainer) {
+      throw new Error("Missing cartItems container");
+    }
+    const onClick = vi.fn();
+
+    renderEmptyCartState(
+      cartItemsContainer,
+      checkoutLanguage(),
+      {
+        href: "/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz",
+        onClick,
+      },
+    );
+
+    const links = [...cartItemsContainer.querySelectorAll("a")];
+    expect(cartItemsContainer.textContent).toContain("Your order was created before payment handoff");
+    expect(links[0]?.getAttribute("href")).toBe(
+      "/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz",
+    );
+    expect(links[0]?.textContent).toBe("View payment status");
+    links[0]?.dispatchEvent(new Event("click"));
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });
 

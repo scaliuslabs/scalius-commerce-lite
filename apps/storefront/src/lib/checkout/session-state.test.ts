@@ -4,8 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE,
+  clearHostedPaymentRecoverySession,
   clearCheckoutSession,
   clearCheckoutTransferSession,
+  readHostedPaymentRecoverySession,
+  writeHostedPaymentRecoverySession,
   writeCheckoutTransferSession,
 } from "./session-state";
 
@@ -182,5 +185,38 @@ describe("checkout session state", () => {
     expect(result).toEqual({ ok: true });
     expect(sessionStorage.getItem("scalius_checkout_data")).toContain("Buyer");
     expect(sessionStorage.getItem("scalius_checkout_gateways")).toBeNull();
+  });
+
+  it("stores only same-origin hosted payment receipt recovery URLs", () => {
+    expect(
+      writeHostedPaymentRecoverySession(
+        "/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz",
+      ),
+    ).toBe(true);
+    expect(readHostedPaymentRecoverySession()).toMatchObject({
+      href: "/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz",
+      gateway: "sslcommerz",
+    });
+
+    clearHostedPaymentRecoverySession();
+    expect(writeHostedPaymentRecoverySession("https://evil.test/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz")).toBe(false);
+    expect(writeHostedPaymentRecoverySession("/order-success?orderId=order_1&payment=sslcommerz")).toBe(false);
+    expect(writeHostedPaymentRecoverySession("/order-success?orderId=order_1&token=receipt_1&payment=stripe")).toBe(false);
+    expect(readHostedPaymentRecoverySession()).toBeNull();
+  });
+
+  it("expires stale hosted payment receipt recovery URLs", () => {
+    const createdAt = Date.now() - (31 * 60 * 1000);
+    sessionStorage.setItem(
+      "scalius_hosted_payment_recovery",
+      JSON.stringify({
+        href: "/order-success?orderId=order_1&token=receipt_1&payment=polar",
+        gateway: "polar",
+        createdAt,
+      }),
+    );
+
+    expect(readHostedPaymentRecoverySession(Date.now())).toBeNull();
+    expect(sessionStorage.getItem("scalius_hosted_payment_recovery")).toBeNull();
   });
 });
