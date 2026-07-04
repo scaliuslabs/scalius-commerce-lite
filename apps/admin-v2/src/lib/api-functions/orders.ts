@@ -32,6 +32,7 @@ import type {
   PutApiV1AdminOrdersByIdStatusResponse,
   PostApiV1AdminOrdersByIdCodData,
   PostApiV1AdminOrdersByIdCodResponse,
+  PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponse,
 } from "@scalius/api-client/types";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 
@@ -92,6 +93,12 @@ export type ReturnOrderPayload = ApiData<PostApiV1AdminOrdersByIdReturnResponse>
 export type RefundOrderInput = { orderId: string } &
   ApiBody<PostApiV1AdminOrdersByIdRefundData>;
 export type RefundOrderPayload = ApiData<PostApiV1AdminOrdersByIdRefundResponse>;
+export interface ReconcileRefundAttemptInput {
+  orderId: string;
+  attemptId: string;
+}
+export type ReconcileRefundAttemptPayload =
+  ApiData<PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponse>;
 export type BulkDeleteOrdersInput =
   ApiBody<PostApiV1AdminOrdersBulkDeleteData>;
 export type OrderPaymentsPayload =
@@ -345,6 +352,14 @@ export const refundOrder = createServerFn({ method: "POST" })
       reason: data.reason,
       gateway: data.gateway,
     });
+  });
+
+export const reconcileRefundAttempt = createServerFn({ method: "POST" })
+  .validator((data: ReconcileRefundAttemptInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<ReconcileRefundAttemptPayload>(
+      `/orders/${data.orderId}/refund-attempts/${data.attemptId}/reconcile`,
+    );
   });
 
 export const getOrderShipments = createServerFn({ method: "GET" })

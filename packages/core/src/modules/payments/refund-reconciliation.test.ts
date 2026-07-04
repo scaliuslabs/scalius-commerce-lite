@@ -36,7 +36,11 @@ vi.mock("./refund-service", () => ({
   finalizeAcceptedRefundAttemptIds: mocks.finalizeAcceptedRefundAttemptIds,
 }));
 
-import { reconcileDueRefundAttempts, reconcileStripeExternalRefundWebhooks } from "./refund-reconciliation";
+import {
+  reconcileDueRefundAttempts,
+  reconcileRefundAttemptForOrder,
+  reconcileStripeExternalRefundWebhooks,
+} from "./refund-reconciliation";
 
 type SelectResult = unknown[] | Record<string, unknown> | undefined;
 
@@ -293,6 +297,106 @@ describe("refund attempt reconciliation", () => {
       providerStatus: "failed",
       providerRefundId: "re_failed",
     });
+  });
+
+  it("lets an admin force-check a provider-unknown attempt before its next scheduled probe", async () => {
+    mocks.retrieveStripeRefund.mockResolvedValue({
+      success: true,
+      refund: {
+        id: "re_1",
+        status: "succeeded",
+        amount: 2500,
+        currency: "bdt",
+        charge: "ch_1",
+      },
+    });
+    const { db, updateSets } = createDbMock([
+      {
+        id: "rfa_1",
+        orderId: "order_1",
+        status: "provider_unknown",
+        claimExpiresAt: null,
+        nextProbeAt: 1_765_000_900,
+      },
+      attemptRow({ nextProbeAt: 1_765_000_900 }),
+    ]);
+
+    const result = await reconcileRefundAttemptForOrder(
+      db,
+      undefined,
+      "order_1",
+      "rfa_1",
+      {
+        encryptionKey: "cred_key",
+        nowSeconds: 1_765_000_000,
+      },
+    );
+
+    expect(result).toMatchObject({
+      found: true,
+      status: "finalized",
+      orderIds: ["order_1"],
+    });
+    expect(updateSets[0]).toMatchObject({
+      claimId: "refund_reconcile:rfa_1:1765000000",
+      claimExpiresAt: 1_765_000_300,
+    });
+    expect(mocks.retrieveStripeRefund).toHaveBeenCalledWith("sk_test", "re_1");
+  });
+
+  it("does not manually fail a fresh pending attempt before it is due", async () => {
+    const { db, rawDb } = createDbMock([
+      {
+        id: "rfa_1",
+        orderId: "order_1",
+        status: "pending",
+        claimExpiresAt: null,
+        nextProbeAt: 1_765_000_900,
+      },
+    ]);
+
+    const result = await reconcileRefundAttemptForOrder(
+      db,
+      undefined,
+      "order_1",
+      "rfa_1",
+      { nowSeconds: 1_765_000_000 },
+    );
+
+    expect(result).toMatchObject({
+      found: true,
+      status: "deferred",
+      reason: "pending_not_due",
+    });
+    expect(rawDb.update).not.toHaveBeenCalled();
+    expect(mocks.finalizeAcceptedRefundAttemptIds).not.toHaveBeenCalled();
+  });
+
+  it("honors an active reconciliation lease for manual checks", async () => {
+    const { db, rawDb } = createDbMock([
+      {
+        id: "rfa_1",
+        orderId: "order_1",
+        status: "provider_unknown",
+        claimExpiresAt: 1_765_000_100,
+        nextProbeAt: 1_765_000_000,
+      },
+    ]);
+
+    const result = await reconcileRefundAttemptForOrder(
+      db,
+      undefined,
+      "order_1",
+      "rfa_1",
+      { nowSeconds: 1_765_000_000 },
+    );
+
+    expect(result).toMatchObject({
+      found: true,
+      status: "deferred",
+      reason: "leased",
+    });
+    expect(rawDb.update).not.toHaveBeenCalled();
   });
 
   it("imports succeeded Stripe dashboard refunds through the local refund finalizer", async () => {

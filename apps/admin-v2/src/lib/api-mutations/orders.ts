@@ -5,6 +5,7 @@ import {
   createFulfillmentShipment,
   createOrder,
   createOrderShipment,
+  reconcileRefundAttempt,
   refundOrder,
   resolveOrderSupportRequest,
   retryOrderNotification,
@@ -19,6 +20,7 @@ import {
   type CreateOrderInput,
   type CreateOrderShipmentInput,
   type RefundOrderInput,
+  type ReconcileRefundAttemptInput,
   type ResolveOrderSupportRequestInput,
   type ReturnOrderInput,
   type UpdateFulfillmentStatusInput,
@@ -158,6 +160,42 @@ export function useRefundOrder() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to process refund")),
+  });
+}
+
+export function useReconcileRefundAttempt() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ReconcileRefundAttemptInput) =>
+      reconcileRefundAttempt({ data }),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.payments(variables.orderId),
+      });
+      if (result.status === "finalized") {
+        toast.success("Refund recovery finalized");
+      } else if (result.status === "failed") {
+        toast.warning("Refund attempt marked failed");
+      } else {
+        toast.info("Refund recovery checked", {
+          description: result.reason
+            ? `Current state: ${result.reason.replace(/_/g, " ")}`
+            : "The attempt is still waiting for a final outcome.",
+        });
+      }
+      if (result.sideEffectErrors > 0) {
+        toast.warning("Recovery side effects need another refresh", {
+          description: "Order data was updated, but cache or notification follow-up needs another check.",
+        });
+      }
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to check refund recovery")),
   });
 }
 

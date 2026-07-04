@@ -25104,6 +25104,35 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
 
 export type PostApiV1AdminOrdersByIdRefundResponse = PostApiV1AdminOrdersByIdRefundResponses[keyof PostApiV1AdminOrdersByIdRefundResponses];
 
+export type PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileData = {
+    body?: never;
+    path: {
+        id: string;
+        attemptId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/refund-attempts/{attemptId}/reconcile';
+};
+
+export type PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses = {
+    /**
+     * Refund recovery check completed
+     */
+    200: {
+        success: true;
+        data: {
+            attemptId: string;
+            status: 'finalized' | 'failed' | 'deferred';
+            reason?: 'not_recoverable' | 'leased' | 'pending_not_due' | 'claim_unavailable' | 'reconciliation_error';
+            orderIds: Array<string>;
+            notificationCount: number;
+            sideEffectErrors: number;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponse = PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses[keyof PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses];
+
 export type GetApiV1AdminOrdersIdInvoiceData = {
     body?: never;
     path: {

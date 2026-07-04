@@ -6,9 +6,10 @@ import {
     processRefund,
     type RefundNotificationFact,
 } from "@scalius/core/modules/payments/refund-service";
+import { reconcileRefundAttemptForOrder } from "@scalius/core/modules/payments/refund-reconciliation";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { ForbiddenError, ValidationError } from "../../utils/api-error";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope } from "../../schemas/responses";
@@ -33,6 +34,21 @@ const refundResultSchema = z.object({
 
 const returnResultSchema = successEnvelope(z.object({
     refundResult: refundResultSchema.optional(),
+}));
+
+const reconcileRefundAttemptResultSchema = successEnvelope(z.object({
+    attemptId: z.string(),
+    status: z.enum(["finalized", "failed", "deferred"]),
+    reason: z.enum([
+        "not_recoverable",
+        "leased",
+        "pending_not_due",
+        "claim_unavailable",
+        "reconciliation_error",
+    ]).optional(),
+    orderIds: z.array(z.string()),
+    notificationCount: z.number(),
+    sideEffectErrors: z.number(),
 }));
 
 async function enqueueRefundNotification(options: {
@@ -126,6 +142,48 @@ async function recordPartialRefundProcessedSideEffects(options: {
     } catch (sideEffectError: unknown) {
         console.error("[orders-refund] Partial refund side effects failed after local commit:", sideEffectError);
     }
+}
+
+async function recordReconciledRefundAttemptSideEffects(options: {
+    db: Database;
+    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    orderIds: string[];
+    notifications: RefundNotificationFact[];
+    context: Parameters<typeof invalidateProductAvailabilityCaches>[2];
+}): Promise<{ notificationCount: number; sideEffectErrors: number }> {
+    let notificationCount = 0;
+    let sideEffectErrors = 0;
+
+    if (options.orderIds.length > 0) {
+        try {
+            await invalidateProductAvailabilityCaches(
+                options.db,
+                { orderIds: options.orderIds },
+                options.context,
+            );
+        } catch (error: unknown) {
+            sideEffectErrors += 1;
+            console.error("[orders-refund] Refund reconciliation cache invalidation failed after local commit:", error);
+        }
+    }
+
+    for (const notification of options.notifications) {
+        try {
+            await enqueueRefundNotificationFact({
+                db: options.db,
+                queue: options.queue,
+                orderId: notification.orderId,
+                notification,
+                source: "orders-refund-reconciliation",
+            });
+            notificationCount += 1;
+        } catch (error: unknown) {
+            sideEffectErrors += 1;
+            console.error("[orders-refund] Refund reconciliation notification enqueue failed after local commit:", error);
+        }
+    }
+
+    return { notificationCount, sideEffectErrors };
 }
 
 function publicRefundResult<T extends { refundNotification?: unknown }>(result: T): Omit<T, "refundNotification"> {
@@ -274,6 +332,61 @@ app.openapi(refundOrderRoute, async (c) => {
         source: "orders-refund",
     });
     return ok(c, publicRefundResult(result));
+});
+
+// ─── POST /:id/refund-attempts/:attemptId/reconcile ─────────────────────────
+
+const reconcileRefundAttemptRoute = createRoute({
+    method: "post",
+    path: "/{id}/refund-attempts/{attemptId}/reconcile",
+    tags: ["Admin - Orders"],
+    summary: "Check refund recovery",
+    request: {
+        params: z.object({
+            id: z.string(),
+            attemptId: z.string(),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Refund recovery check completed",
+            content: { "application/json": { schema: reconcileRefundAttemptResultSchema } },
+        },
+    },
+});
+
+app.openapi(reconcileRefundAttemptRoute, async (c) => {
+    const { id: orderId, attemptId } = c.req.valid("param");
+    const db = c.get("db");
+    const result = await reconcileRefundAttemptForOrder(
+        db,
+        c.env?.CACHE,
+        orderId,
+        attemptId,
+        {
+            encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+        },
+    );
+    if (!result.found) {
+        throw new NotFoundError("Refund attempt not found");
+    }
+
+    const sideEffects = await recordReconciledRefundAttemptSideEffects({
+        db,
+        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        orderIds: result.orderIds,
+        notifications: result.refundNotifications,
+        context: c,
+    });
+
+    return ok(c, {
+        attemptId,
+        status: result.status,
+        ...(result.reason && result.reason !== "not_found" ? { reason: result.reason } : {}),
+        orderIds: result.orderIds,
+        notificationCount: sideEffects.notificationCount,
+        sideEffectErrors: sideEffects.sideEffectErrors,
+    });
 });
 
 export { app as adminOrdersRefundRoutes };

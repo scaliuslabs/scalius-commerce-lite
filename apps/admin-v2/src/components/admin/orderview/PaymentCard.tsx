@@ -48,7 +48,11 @@ import {
 } from "@/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
 import { queryKeys } from "@/lib/query-keys";
-import { useUpdateOrderCod, useRefundOrder } from "@/lib/api-mutations/orders";
+import {
+  useReconcileRefundAttempt,
+  useRefundOrder,
+  useUpdateOrderCod,
+} from "@/lib/api-mutations/orders";
 import type { UpdateOrderCodInput } from "@/lib/api-functions/orders";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
@@ -172,6 +176,13 @@ const REFUND_SEVERITY_CLASS: Record<string, string> = {
   danger: "border-red-200 bg-red-50 text-red-950 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100",
 };
 
+const MANUAL_REFUND_RECOVERY_STATUSES = new Set([
+  "processing",
+  "provider_unknown",
+  "reconcile_required",
+  "pending",
+]);
+
 function getSessionAttemptView(attempt: PaymentSessionAttempt): {
   label: string;
   message: string;
@@ -241,6 +252,10 @@ function refundTimestampLabel(attempt: OrderRefundAttempt): string | null {
   return formatTimestamp(attempt.createdAt);
 }
 
+function canManuallyCheckRefundAttempt(attempt: OrderRefundAttempt): boolean {
+  return attempt.active && MANUAL_REFUND_RECOVERY_STATUSES.has(attempt.status);
+}
+
 function paymentReferences(payment: OrderPayment): Array<{ label: string; value: string }> {
   return [
     { label: "Payment row", value: payment.id },
@@ -297,7 +312,10 @@ export function PaymentCard({ order }: PaymentCardProps) {
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: (query) => {
       const data = query.state.data as OrderPaymentsResult | undefined;
-      return data?.paymentSessionAttempts?.some((attempt) => attempt.activeProcessing)
+      const hasActivePaymentSetup = data?.paymentSessionAttempts?.some((attempt) => attempt.activeProcessing);
+      const hasActiveRefundRecovery = Boolean(data?.activeRefundOperation?.active)
+        || data?.refundAttempts?.some((attempt) => attempt.active);
+      return hasActivePaymentSetup || hasActiveRefundRecovery
         ? 30_000
         : false;
     },
@@ -330,6 +348,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
   // Mutations
   const codMutation = useUpdateOrderCod();
   const refundMutation = useRefundOrder();
+  const refundRecoveryMutation = useReconcileRefundAttempt();
 
   function submitCODAction() {
     if (!codAction) return;
@@ -411,6 +430,23 @@ export function PaymentCard({ order }: PaymentCardProps) {
           setIsRefundDialogOpen(false);
           // Invalidate order detail to refresh payment status
           queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
+        },
+      },
+    );
+  }
+
+  function handleCheckRefundAttempt(attempt: OrderRefundAttempt) {
+    if (!canRefund) {
+      toast.error("Refund recovery unavailable", {
+        description: "Your role can view orders but cannot reconcile refunds.",
+      });
+      return;
+    }
+    refundRecoveryMutation.mutate(
+      { orderId: order.id, attemptId: attempt.id },
+      {
+        onSettled: () => {
+          void refetchPayments();
         },
       },
     );
@@ -782,9 +818,25 @@ export function PaymentCard({ order }: PaymentCardProps) {
 
           {refundAttempts.length > 0 && (
             <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Refund operations</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Refund operations</div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => void refetchPayments()}
+                  disabled={paymentsFetching}
+                >
+                  {paymentsFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                  Refresh
+                </Button>
+              </div>
               {refundAttempts.map((attempt) => {
                 const timestampLabel = refundTimestampLabel(attempt);
+                const canCheck = canRefund && canManuallyCheckRefundAttempt(attempt);
+                const isChecking = refundRecoveryMutation.isPending
+                  && refundRecoveryMutation.variables?.attemptId === attempt.id;
                 return (
                   <div key={attempt.id} className="flex items-start justify-between gap-3 text-xs">
                     <div className="min-w-0">
@@ -812,9 +864,28 @@ export function PaymentCard({ order }: PaymentCardProps) {
                         {timestampLabel && <span>{timestampLabel}</span>}
                       </div>
                     </div>
-                    <span className="shrink-0 font-medium text-foreground">
-                      {attempt.currency} {formatOrderAmount(attempt.amount)}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <span className="font-medium text-foreground">
+                        {attempt.currency} {formatOrderAmount(attempt.amount)}
+                      </span>
+                      {canCheck && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => handleCheckRefundAttempt(attempt)}
+                          disabled={refundRecoveryMutation.isPending}
+                        >
+                          {isChecking ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="mr-1 h-3 w-3" />
+                          )}
+                          Check now
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 );
               })}

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
     processReturn: vi.fn(),
     processRefund: vi.fn(),
+    reconcileRefundAttemptForOrder: vi.fn(),
     getUserPermissions: vi.fn(),
     getCredentialEncryptionKey: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
@@ -17,6 +18,14 @@ vi.mock("@scalius/core/modules/payments/refund-service", async (importOriginal) 
         ...actual,
         processReturn: mocks.processReturn,
         processRefund: mocks.processRefund,
+    };
+});
+
+vi.mock("@scalius/core/modules/payments/refund-reconciliation", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@scalius/core/modules/payments/refund-reconciliation")>();
+    return {
+        ...actual,
+        reconcileRefundAttemptForOrder: mocks.reconcileRefundAttemptForOrder,
     };
 });
 
@@ -70,6 +79,12 @@ describe("admin refund notification routes", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
+        mocks.reconcileRefundAttemptForOrder.mockResolvedValue({
+            found: true,
+            status: "deferred",
+            orderIds: [],
+            refundNotifications: [],
+        });
         mocks.getUserPermissions.mockResolvedValue(new Set(["orders.refund"]));
         mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
         mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({ orderId: "order_1", enqueued: true });
@@ -209,6 +224,76 @@ describe("admin refund notification routes", () => {
         expect(body.error.code).toBe("SERVICE_UNAVAILABLE");
         expect(body.error.message).toContain("Refund partially processed");
         expect(body.error.details).toBeUndefined();
+    });
+
+    it("checks a refund attempt and records recovery side effects without leaking notification facts", async () => {
+        mocks.reconcileRefundAttemptForOrder.mockResolvedValue({
+            found: true,
+            status: "finalized",
+            orderIds: ["order_1"],
+            refundNotifications: [{
+                orderId: "order_1",
+                notificationType: "order_partially_refunded",
+                dedupeKey: "refund-reconcile:order_1:rfa_1:partial",
+                amount: 25,
+                refundId: "re_1",
+            }],
+        });
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/orders/order_1/refund-attempts/rfa_1/reconcile", {
+            method: "POST",
+        }, env);
+
+        expect(response.status).toBe(200);
+        expect(mocks.reconcileRefundAttemptForOrder).toHaveBeenCalledWith(
+            db,
+            env.CACHE,
+            "order_1",
+            "rfa_1",
+            { encryptionKey: "credential-key" },
+        );
+        expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+            db,
+            { orderIds: ["order_1"] },
+            expect.anything(),
+        );
+        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
+            db,
+            queue,
+            orderId: "order_1",
+            notificationType: "order_partially_refunded",
+            dedupeKey: "refund-reconcile:order_1:rfa_1:partial",
+            source: "orders-refund-reconciliation",
+            data: { amount: 25, refundId: "re_1" },
+        });
+        const body = await response.json() as { data: Record<string, unknown> };
+        expect(body.data).toEqual({
+            attemptId: "rfa_1",
+            status: "finalized",
+            orderIds: ["order_1"],
+            notificationCount: 1,
+            sideEffectErrors: 0,
+        });
+    });
+
+    it("returns not found for a refund attempt that does not belong to the order", async () => {
+        mocks.reconcileRefundAttemptForOrder.mockResolvedValue({
+            found: false,
+            status: "deferred",
+            reason: "not_found",
+            orderIds: [],
+            refundNotifications: [],
+        });
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/orders/order_1/refund-attempts/rfa_other/reconcile", {
+            method: "POST",
+        }, env);
+
+        expect(response.status).toBe(404);
+        expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+        expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
     });
 
     it("does not notify for already-refunded inventory repair results without a refund notification fact", async () => {

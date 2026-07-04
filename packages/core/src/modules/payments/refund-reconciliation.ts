@@ -116,6 +116,22 @@ export interface RefundReconciliationOptions {
   nowSeconds?: number;
 }
 
+export type ManualRefundAttemptReconciliationReason =
+  | "not_found"
+  | "not_recoverable"
+  | "leased"
+  | "pending_not_due"
+  | "claim_unavailable"
+  | "reconciliation_error";
+
+export interface ManualRefundAttemptReconciliationResult {
+  found: boolean;
+  status: "finalized" | "failed" | "deferred";
+  reason?: ManualRefundAttemptReconciliationReason;
+  orderIds: string[];
+  refundNotifications: RefundNotificationFact[];
+}
+
 export interface StripeExternalRefundWebhookReconciliationOptions {
   encryptionKey?: string;
   limit?: number;
@@ -225,19 +241,24 @@ async function claimRefundAttempt(
   db: Database,
   attemptId: string,
   nowSeconds: number,
+  options: { requireDue?: boolean } = {},
 ): Promise<boolean> {
   const claimId = `refund_reconcile:${attemptId}:${nowSeconds}`;
+  const conditions = [
+    eq(refundAttempts.id, attemptId),
+    inArray(refundAttempts.status, [...RECOVERABLE_REFUND_ATTEMPT_STATUSES]),
+    or(isNull(refundAttempts.claimExpiresAt), lte(refundAttempts.claimExpiresAt, nowSeconds)),
+  ];
+  if (options.requireDue !== false) {
+    conditions.push(lte(refundAttempts.nextProbeAt, nowSeconds));
+  }
+
   const rows = await db.update(refundAttempts).set({
     claimId,
     claimExpiresAt: nowSeconds + REFUND_RECONCILIATION_LEASE_SECONDS,
     attempts: sql`${refundAttempts.attempts} + 1`,
     updatedAt: sql`unixepoch()`,
-  }).where(and(
-    eq(refundAttempts.id, attemptId),
-    inArray(refundAttempts.status, [...RECOVERABLE_REFUND_ATTEMPT_STATUSES]),
-    lte(refundAttempts.nextProbeAt, nowSeconds),
-    or(isNull(refundAttempts.claimExpiresAt), lte(refundAttempts.claimExpiresAt, nowSeconds)),
-  )).returning({ id: refundAttempts.id });
+  }).where(and(...conditions)).returning({ id: refundAttempts.id });
 
   return rows.length > 0;
 }
@@ -974,6 +995,69 @@ export async function reconcileRefundAttemptById(
         ]
       : [],
   };
+}
+
+export async function reconcileRefundAttemptForOrder(
+  db: Database,
+  kv: KVNamespace | undefined,
+  orderId: string,
+  attemptId: string,
+  options: Omit<RefundReconciliationOptions, "limit"> = {},
+): Promise<ManualRefundAttemptReconciliationResult> {
+  const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
+  const attempt = await db
+    .select({
+      id: refundAttempts.id,
+      orderId: refundAttempts.orderId,
+      status: refundAttempts.status,
+      claimExpiresAt: refundAttempts.claimExpiresAt,
+      nextProbeAt: refundAttempts.nextProbeAt,
+    })
+    .from(refundAttempts)
+    .where(and(
+      eq(refundAttempts.id, attemptId),
+      eq(refundAttempts.orderId, orderId),
+    ))
+    .get() as Pick<RefundAttempt, "id" | "orderId" | "status" | "claimExpiresAt" | "nextProbeAt"> | undefined;
+
+  if (!attempt) {
+    return { found: false, status: "deferred", reason: "not_found", orderIds: [], refundNotifications: [] };
+  }
+  if (!RECOVERABLE_REFUND_ATTEMPT_STATUSES.includes(attempt.status as RecoverableRefundAttemptStatus)) {
+    return { found: true, status: "deferred", reason: "not_recoverable", orderIds: [], refundNotifications: [] };
+  }
+  if (attempt.claimExpiresAt && attempt.claimExpiresAt > nowSeconds) {
+    return { found: true, status: "deferred", reason: "leased", orderIds: [], refundNotifications: [] };
+  }
+  if (attempt.status === "pending" && (!attempt.nextProbeAt || attempt.nextProbeAt > nowSeconds)) {
+    return { found: true, status: "deferred", reason: "pending_not_due", orderIds: [], refundNotifications: [] };
+  }
+
+  const claimed = await claimRefundAttempt(db, attemptId, nowSeconds, {
+    requireDue: attempt.status === "pending",
+  });
+  if (!claimed) {
+    return { found: true, status: "deferred", reason: "claim_unavailable", orderIds: [], refundNotifications: [] };
+  }
+
+  try {
+    const result = await reconcileRefundAttemptById(db, kv, attemptId, {
+      ...options,
+      nowSeconds,
+    });
+    return { found: true, ...result };
+  } catch (error: unknown) {
+    const message = serializeError(error);
+    await db.update(refundAttempts).set({
+      claimId: null,
+      claimExpiresAt: null,
+      lastProbeAt: nowSeconds,
+      nextProbeAt: nowSeconds + REFUND_RECONCILIATION_RETRY_SECONDS,
+      lastError: message,
+      updatedAt: sql`unixepoch()`,
+    }).where(eq(refundAttempts.id, attemptId));
+    return { found: true, status: "deferred", reason: "reconciliation_error", orderIds: [], refundNotifications: [] };
+  }
 }
 
 export async function reconcileDueRefundAttempts(

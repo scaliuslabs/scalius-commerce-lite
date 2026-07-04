@@ -108,10 +108,13 @@ export type {
 } from "./refund-service";
 export {
   reconcileDueRefundAttempts,
+  reconcileRefundAttemptForOrder,
   reconcileRefundAttemptById,
   reconcileStripeExternalRefundWebhooks,
 } from "./refund-reconciliation";
 export type {
+  ManualRefundAttemptReconciliationReason,
+  ManualRefundAttemptReconciliationResult,
   RefundReconciliationOptions,
   RefundReconciliationResult,
   StripeExternalRefundWebhookReconciliationOptions,
