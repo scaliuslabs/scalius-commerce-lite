@@ -22,7 +22,7 @@
 import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { delimiter, resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import { resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -45,6 +45,9 @@ const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
 const STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS = 8_000;
 const STOREFRONT_WARM_CONCURRENCY = 4;
+const API_READYZ_SAMPLE_COUNT = 4;
+const API_READYZ_SAMPLE_DELAY_MS = 1_000;
+const API_READYZ_TIMEOUT_MS = 10_000;
 const pnpmExecutable = resolvePnpmExecutable();
 process.env.SCALIUS_PNPM_BIN = pnpmExecutable;
 process.env.PATH = `${dirname(pnpmExecutable)}${delimiter}${process.env.PATH || ""}`;
@@ -141,7 +144,7 @@ function deployTarget(target) {
   }
 }
 
-function getLatestDeployment(deployments) {
+export function getLatestDeployment(deployments) {
   if (!Array.isArray(deployments) || deployments.length === 0) return null;
   return deployments.reduce((latest, deployment) => {
     if (!latest) return deployment;
@@ -149,6 +152,15 @@ function getLatestDeployment(deployments) {
       ? deployment
       : latest;
   }, null);
+}
+
+function getFullyServedVersion(deployment) {
+  return deployment?.versions?.find((version) => version.percentage === 100);
+}
+
+function buildApiV1Url(apiBaseUrl, path) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return new URL(`/api/v1${normalizedPath}`, apiBaseUrl).toString();
 }
 
 async function verifyHttpOk(url, label) {
@@ -171,6 +183,126 @@ async function verifyHttpOk(url, label) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+}
+
+function getReadinessCheckSummary(payload) {
+  const checks = payload?.checks;
+  if (!checks || typeof checks !== "object") return "no checks payload";
+
+  return Object.entries(checks)
+    .map(([name, check]) => {
+      const status = typeof check?.status === "string" ? check.status : "unknown";
+      const latency = typeof check?.latencyMs === "number" ? ` ${check.latencyMs}ms` : "";
+      return `${name}:${status}${latency}`;
+    })
+    .join(", ");
+}
+
+function isReadyzPayloadReady(status, payload) {
+  if (status !== 200 || payload?.success !== true || payload?.status !== "ready") {
+    return false;
+  }
+
+  const checks = payload?.checks;
+  if (!checks || typeof checks !== "object") return false;
+  return Object.values(checks).every((check) => check?.status === "ok");
+}
+
+async function fetchReadinessSample(url, {
+  fetchImpl = fetch,
+  timeoutMs = API_READYZ_TIMEOUT_MS,
+} = {}) {
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "Cache-Control": "no-cache",
+      },
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let payload = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      payload = null;
+    }
+
+    return {
+      ok: isReadyzPayloadReady(response.status, payload),
+      status: response.status,
+      payload,
+      durationMs: Date.now() - startedAt,
+      summary: getReadinessCheckSummary(payload),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      payload: null,
+      durationMs: Date.now() - startedAt,
+      summary: errorMessage(error),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function sampleApiReadiness(apiBaseUrl, {
+  sampleCount = API_READYZ_SAMPLE_COUNT,
+  delayMs = API_READYZ_SAMPLE_DELAY_MS,
+  timeoutMs = API_READYZ_TIMEOUT_MS,
+  fetchImpl = fetch,
+  sleepImpl = sleep,
+} = {}) {
+  const readyzUrl = buildApiV1Url(apiBaseUrl, "/readyz");
+  const samples = [];
+
+  console.log(`\n▶ Verify live API /readyz recovery window`);
+  console.log(`  GET ${readyzUrl} (${sampleCount} samples)\n`);
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const sample = await fetchReadinessSample(readyzUrl, { fetchImpl, timeoutMs });
+    samples.push(sample);
+    const prefix = sample.ok ? "✓" : "⚠";
+    console.log(
+      `${prefix} /readyz sample ${index + 1}/${sampleCount}: ` +
+      `${sample.status || "error"} in ${sample.durationMs}ms (${sample.summary})`,
+    );
+
+    if (index < sampleCount - 1 && delayMs > 0) {
+      await sleepImpl(delayMs);
+    }
+  }
+
+  const readyCount = samples.filter((sample) => sample.ok).length;
+  const finalSample = samples.at(-1);
+  const requiredReadyCount = Math.min(2, sampleCount);
+
+  if (!finalSample?.ok || readyCount < requiredReadyCount) {
+    throw new Error(
+      `API /readyz did not recover during deploy verification: ` +
+      `${readyCount}/${sampleCount} ready; final=${finalSample?.status ?? "none"} ` +
+      `(${finalSample?.summary ?? "missing sample"})`,
+    );
+  }
+
+  if (readyCount < sampleCount) {
+    console.warn(`⚠ API /readyz recovered after transient degraded samples (${readyCount}/${sampleCount} ready).`);
+  } else {
+    console.log(`✓ API /readyz returned ready for all ${sampleCount} samples.`);
+  }
+
+  return { readyCount, samples };
 }
 
 async function warmStorefrontPath(url, path) {
@@ -368,7 +500,32 @@ async function verifyStorefrontDeploy() {
   await warmStorefrontAfterDeploy(storefrontUrl, generatedConfig);
 }
 
-async function verifyPostDeployTarget(target) {
+async function verifyApiDeploy(config) {
+  const deployments = runJson(
+    `${pnpm} exec wrangler deployments list --json`,
+    "Verify latest API Worker deployment",
+    apiDir,
+  );
+  const latest = getLatestDeployment(deployments);
+  const deployedVersion = getFullyServedVersion(latest);
+  if (!latest || !deployedVersion?.version_id) {
+    throw new Error("Could not prove the latest API Worker deployment is serving one version at 100%.");
+  }
+  console.log(`✓ Latest API deployment serves ${deployedVersion.version_id} at 100%.`);
+
+  const apiBaseUrl = config.vars?.PUBLIC_API_BASE_URL;
+  if (!apiBaseUrl) {
+    throw new Error("Could not verify live API: PUBLIC_API_BASE_URL is missing from API Wrangler config.");
+  }
+
+  await verifyHttpOk(buildApiV1Url(apiBaseUrl, "/health"), "Verify live API /health");
+  await sampleApiReadiness(apiBaseUrl);
+}
+
+async function verifyPostDeployTarget(target, apiConfig) {
+  if (target === "api") {
+    await verifyApiDeploy(apiConfig);
+  }
   if (target === "storefront") {
     await verifyStorefrontDeploy();
   }
@@ -383,7 +540,7 @@ function checkDistEnvFiles(targets = deployTargets) {
 }
 
 // ── Main
-(async () => {
+export async function main() {
   let config;
   try {
     config = readWranglerConfig();
@@ -454,7 +611,7 @@ function checkDistEnvFiles(targets = deployTargets) {
       }
 
       deployTarget(requestedTarget);
-      await verifyPostDeployTarget(requestedTarget);
+      await verifyPostDeployTarget(requestedTarget, config);
       console.log(`\n✓ Deploy complete (${requestedTarget}).`);
       return;
     }
@@ -478,13 +635,18 @@ function checkDistEnvFiles(targets = deployTargets) {
 
     // 4. Deploy all three workers (admin-v2 replaces the old Astro admin)
     deployTarget("api");
+    await verifyPostDeployTarget("api", config);
     deployTarget("admin");
     deployTarget("storefront");
-    await verifyPostDeployTarget("storefront");
+    await verifyPostDeployTarget("storefront", config);
 
     console.log("\n✓ Deploy complete (API + Admin V2 + Storefront).");
   } catch {
     console.error("\n✗ Deploy failed after retries. See errors above.");
     process.exit(1);
   }
-})();
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}
