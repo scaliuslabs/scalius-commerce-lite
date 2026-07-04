@@ -77,6 +77,14 @@ describe("admin order list boundaries", () => {
     expect(summarySource).not.toContain("claimId");
   });
 
+  it("adds active refund operation summaries to order list rows", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain("listActiveRefundOperationsForOrders");
+    expect(source).toContain("const activeRefundOperations = await listActiveRefundOperationsForOrders(db, orderIds)");
+    expect(source).toContain("activeRefundOperation: activeRefundOperations.get(order.id) ?? null");
+  });
+
   it("validates manual order SKUs before create/update inventory work", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
 

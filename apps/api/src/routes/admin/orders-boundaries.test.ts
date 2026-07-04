@@ -36,6 +36,24 @@ describe("admin orders route boundaries", () => {
         expect(source).toContain("paymentRecovery: query.paymentRecovery");
     });
 
+    it("keeps order-list refund recovery visibility as a compact summary", () => {
+        const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
+        const entitiesSource = readFileSync(
+            fileURLToPath(new URL("../../schemas/entities.ts", import.meta.url)),
+            "utf8",
+        );
+        const summarySchema = entitiesSource.split("export const orderSummarySchema")[1]?.split("/** Order item")[0] ?? "";
+        const listActiveRefundSchema = entitiesSource.split("export const orderListActiveRefundOperationSchema")[1]?.split("/** Order summary")[0] ?? "";
+
+        expect(summarySchema).toContain("activeRefundOperation: orderListActiveRefundOperationSchema.nullable()");
+        expect(summarySchema).not.toContain("refundAttempts: z.array(orderRefundAttemptSchema)");
+        expect(listActiveRefundSchema).toContain("attemptCount: z.number()");
+        expect(listActiveRefundSchema).toContain("providerStatus: z.string().nullable()");
+        expect(listActiveRefundSchema).not.toContain("providerRefundId");
+        expect(listActiveRefundSchema).not.toContain("lastError");
+        expect(source).toContain("orderSummarySchema");
+    });
+
     it("keeps hosted-payment recovery queue and export sanitized", () => {
         const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
         const recoveryListRoute = source.split("const paymentRecoveryListRoute = createRoute")[1]?.split("const paymentRecoveryExportRoute = createRoute")[0] ?? "";

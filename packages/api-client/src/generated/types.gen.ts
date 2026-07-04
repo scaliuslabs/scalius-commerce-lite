@@ -25509,6 +25509,20 @@ export type GetApiV1AdminOrdersResponses = {
                     staleProcessing: boolean;
                     updatedAt: string | number | null;
                 };
+                activeRefundOperation: {
+                    active: true;
+                    status: string;
+                    severity: 'info' | 'success' | 'warning' | 'danger';
+                    label: string;
+                    message: string;
+                    amount: number;
+                    currency: string;
+                    gateway: string;
+                    attemptCount: number;
+                    nextProbeAt: string | number | null;
+                    lastProbeAt: string | number | null;
+                    providerStatus: string | null;
+                } | null;
             }>;
             pagination: {
                 page: number;
@@ -25733,6 +25747,20 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     staleProcessing: boolean;
                     updatedAt: string | number | null;
                 };
+                activeRefundOperation: {
+                    active: true;
+                    status: string;
+                    severity: 'info' | 'success' | 'warning' | 'danger';
+                    label: string;
+                    message: string;
+                    amount: number;
+                    currency: string;
+                    gateway: string;
+                    attemptCount: number;
+                    nextProbeAt: string | number | null;
+                    lastProbeAt: string | number | null;
+                    providerStatus: string | null;
+                } | null;
             }>;
             pagination: {
                 page: number;

@@ -32,7 +32,10 @@ import {
 } from "lucide-react";
 import { OrderStatusSelector } from "./OrderStatusSelector";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
-import { PaymentRecoveryBadge } from "./PaymentRecoveryBadge";
+import {
+  PaymentRecoveryBadge,
+  RefundRecoveryBadge,
+} from "./PaymentRecoveryBadge";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { useCurrency } from "@/hooks/use-currency";
@@ -97,8 +100,10 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
   const { symbol } = useCurrency();
   const hasPaymentRecovery =
     order.paymentRecovery != null && order.paymentRecovery.state !== "none";
+  const hasActiveRefundOperation = order.activeRefundOperation?.active === true;
+  const hasRecoveryLock = hasPaymentRecovery || hasActiveRefundOperation;
   const customerRoute = orderActions.canEditOrders
-    ? hasPaymentRecovery
+    ? hasRecoveryLock
       ? `/admin/orders/${order.id}`
       : `/admin/orders/${order.id}/edit`
     : `/admin/orders/${order.id}`;
@@ -170,6 +175,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <FulfillmentStatusBadge status={order.fulfillmentStatus} />
               <PaymentMethodLabel method={order.paymentMethod} />
               <PaymentRecoveryBadge recovery={order.paymentRecovery} compact />
+              <RefundRecoveryBadge operation={order.activeRefundOperation} compact />
             </div>
           </div>
         </div>
@@ -207,7 +213,12 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
             orderId={order.id}
             isLoading={isUpdatingStatus}
             showTrashed={showTrashed}
-            canChangeStatus={orderActions.canChangeOrderStatus}
+            canChangeStatus={orderActions.canChangeOrderStatus && !hasActiveRefundOperation}
+            disabledReason={
+              hasActiveRefundOperation
+                ? "Complete or reconcile the refund before changing this order."
+                : undefined
+            }
             onStatusUpdate={onStatusUpdate}
           />
           {shipment ? (
@@ -250,7 +261,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <Eye className="h-4 w-4" />
             </Button>
 
-            {!showTrashed && orderActions.canEditOrders && (
+            {!showTrashed && orderActions.canEditOrders && !hasActiveRefundOperation && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -273,7 +284,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                     <Undo className="h-4 w-4" />
                   </Button>
                 )}
-                {orderActions.canDeleteOrders && (
+                {orderActions.canDeleteOrders && !hasActiveRefundOperation && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -284,6 +295,16 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                   </Button>
                 )}
               </>
+            ) : orderActions.canDeleteOrders && hasActiveRefundOperation ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 cursor-not-allowed p-0 text-[var(--muted-foreground)]"
+                title="Resolve refund recovery before deleting"
+                disabled
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             ) : orderActions.canDeleteOrders ? (
               <Button
                 variant="ghost"

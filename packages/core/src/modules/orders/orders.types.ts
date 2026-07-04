@@ -73,6 +73,7 @@ export interface OrderListItem {
     areaName: string | null;
     latestShipment: OrderShipmentSummary | null;
     paymentRecovery: OrderPaymentRecoverySummary;
+    activeRefundOperation: ActiveRefundOperationView | null;
 }
 
 export interface OrderDetails extends OrderListItem {

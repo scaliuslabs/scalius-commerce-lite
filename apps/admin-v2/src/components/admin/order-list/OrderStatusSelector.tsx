@@ -14,6 +14,7 @@ interface OrderStatusSelectorProps {
   isLoading: boolean;
   showTrashed: boolean;
   canChangeStatus?: boolean;
+  disabledReason?: string;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
 }
 
@@ -113,6 +114,7 @@ export function OrderStatusSelector({
   isLoading,
   showTrashed,
   canChangeStatus = true,
+  disabledReason: disabledReasonOverride,
   onStatusUpdate,
 }: OrderStatusSelectorProps) {
   const baseClasses =
@@ -122,6 +124,8 @@ export function OrderStatusSelector({
   const canOpenMenu = canChangeStatus && !showTrashed && !isLoading;
   const disabledReason = showTrashed
     ? "Deleted orders cannot change status."
+    : disabledReasonOverride
+      ? disabledReasonOverride
     : !canChangeStatus
       ? "Status changes require order status permission."
       : undefined;

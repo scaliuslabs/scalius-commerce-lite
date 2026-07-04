@@ -29,7 +29,10 @@ import {
   formatDateVerbose,
 } from "@scalius/shared/timestamps";
 import { LazyOrderItemsPopover } from "~/components/admin/order-list/LazyOrderItemsPopover";
-import { PaymentRecoveryBadge } from "~/components/admin/order-list/PaymentRecoveryBadge";
+import {
+  PaymentRecoveryBadge,
+  RefundRecoveryBadge,
+} from "~/components/admin/order-list/PaymentRecoveryBadge";
 import { OrderStatusSelector } from "~/components/admin/order-list/OrderStatusSelector";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
 import { LazyFraudCheckIndicator } from "~/components/admin/order-list/LazyFraudCheckIndicator";
@@ -100,8 +103,10 @@ export function getOrderColumns(
         const order = row.original;
         const hasPaymentRecovery =
           order.paymentRecovery != null && order.paymentRecovery.state !== "none";
+        const hasActiveRefundOperation = order.activeRefundOperation?.active === true;
+        const hasRecoveryLock = hasPaymentRecovery || hasActiveRefundOperation;
         const customerRoute = opts.orderActions.canEditOrders
-          ? hasPaymentRecovery
+          ? hasRecoveryLock
             ? `/admin/orders/${order.id}`
             : `/admin/orders/${order.id}/edit`
           : `/admin/orders/${order.id}`;
@@ -210,6 +215,7 @@ export function getOrderColumns(
               <FulfillmentStatusBadge status={order.fulfillmentStatus} />
               <PaymentMethodLabel method={order.paymentMethod} />
               <PaymentRecoveryBadge recovery={order.paymentRecovery} />
+              <RefundRecoveryBadge operation={order.activeRefundOperation} />
             </div>
           </div>
         );
@@ -230,7 +236,14 @@ export function getOrderColumns(
             orderId={order.id}
             isLoading={opts.updatingStatusIds.has(order.id)}
             showTrashed={opts.showTrashed}
-            canChangeStatus={opts.orderActions.canChangeOrderStatus}
+            canChangeStatus={
+              opts.orderActions.canChangeOrderStatus && order.activeRefundOperation?.active !== true
+            }
+            disabledReason={
+              order.activeRefundOperation?.active
+                ? "Complete or reconcile the refund before changing this order."
+                : undefined
+            }
             onStatusUpdate={opts.onStatusUpdate}
           />
         );
@@ -344,6 +357,7 @@ export function getOrderColumns(
       ),
       cell: ({ row }) => {
         const order = row.original;
+        const hasActiveRefundOperation = order.activeRefundOperation?.active === true;
         return (
           <div className="flex items-center justify-end gap-1">
             <TooltipProvider>
@@ -360,7 +374,7 @@ export function getOrderColumns(
               </Tooltip>
             </TooltipProvider>
 
-            {!opts.showTrashed && opts.orderActions.canEditOrders && (
+            {!opts.showTrashed && opts.orderActions.canEditOrders && !hasActiveRefundOperation && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -413,6 +427,21 @@ export function getOrderColumns(
                   </TooltipProvider>
                 )}
               </>
+            ) : opts.orderActions.canDeleteOrders && hasActiveRefundOperation ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      disabled
+                      className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-full bg-[var(--destructive)]/5 text-[var(--muted-foreground)]"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Resolve refund recovery before deleting</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ) : opts.orderActions.canDeleteOrders ? (
               <TooltipProvider>
                 <Tooltip>

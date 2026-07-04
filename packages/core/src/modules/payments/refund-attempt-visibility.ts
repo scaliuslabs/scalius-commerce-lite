@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { refundAttempts } from "@scalius/database/schema";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "./refund-attempt-guard";
@@ -265,6 +265,86 @@ export function summarizeActiveRefundOperation(
       lastError: primary.lastError ?? null,
     } : {}),
   };
+}
+
+function toOrderListActiveRefundOperation(
+  operation: ActiveRefundOperationView | null,
+): ActiveRefundOperationView | null {
+  if (!operation) return null;
+
+  return {
+    active: true,
+    status: operation.status,
+    severity: operation.severity,
+    label: operation.label,
+    message: operation.message,
+    amount: operation.amount,
+    currency: operation.currency,
+    gateway: operation.gateway,
+    attemptCount: operation.attemptCount,
+    nextProbeAt: operation.nextProbeAt,
+    lastProbeAt: operation.lastProbeAt,
+    providerStatus: operation.providerStatus,
+  };
+}
+
+export async function listActiveRefundOperationsForOrders(
+  db: Database,
+  orderIds: string[],
+): Promise<Map<string, ActiveRefundOperationView>> {
+  const uniqueOrderIds = [...new Set(orderIds)].filter(Boolean);
+  const operations = new Map<string, ActiveRefundOperationView>();
+  if (uniqueOrderIds.length === 0) return operations;
+
+  const rows = await db
+    .select({
+      id: refundAttempts.id,
+      orderId: refundAttempts.orderId,
+      sourcePaymentId: refundAttempts.sourcePaymentId,
+      refundPaymentId: refundAttempts.refundPaymentId,
+      gateway: refundAttempts.gateway,
+      amount: refundAttempts.amount,
+      currency: refundAttempts.currency,
+      reason: refundAttempts.reason,
+      refundReference: refundAttempts.refundReference,
+      allocationIndex: refundAttempts.allocationIndex,
+      allocationCount: refundAttempts.allocationCount,
+      sourceTransactionId: refundAttempts.sourceTransactionId,
+      providerRefundId: refundAttempts.providerRefundId,
+      providerCorrelationId: refundAttempts.providerCorrelationId,
+      providerStatus: refundAttempts.providerStatus,
+      status: refundAttempts.status,
+      attempts: refundAttempts.attempts,
+      nextProbeAt: sql<number | null>`CAST(${refundAttempts.nextProbeAt} AS INTEGER)`,
+      lastProbeAt: sql<number | null>`CAST(${refundAttempts.lastProbeAt} AS INTEGER)`,
+      lastError: refundAttempts.lastError,
+      refundedAt: sql<number | null>`CAST(${refundAttempts.refundedAt} AS INTEGER)`,
+      failedAt: sql<number | null>`CAST(${refundAttempts.failedAt} AS INTEGER)`,
+      createdAt: sql<number | null>`CAST(${refundAttempts.createdAt} AS INTEGER)`,
+      updatedAt: sql<number | null>`CAST(${refundAttempts.updatedAt} AS INTEGER)`,
+    })
+    .from(refundAttempts)
+    .where(and(
+      inArray(refundAttempts.orderId, uniqueOrderIds),
+      inArray(refundAttempts.status, [...ACTIVE_REFUND_ATTEMPT_STATUSES]),
+    ))
+    .orderBy(desc(refundAttempts.createdAt));
+
+  const attemptsByOrderId = new Map<string, OrderRefundAttemptView[]>();
+  for (const row of rows) {
+    const attempts = attemptsByOrderId.get(row.orderId) ?? [];
+    attempts.push(formatRefundAttemptForVisibility(row, "admin"));
+    attemptsByOrderId.set(row.orderId, attempts);
+  }
+
+  for (const [orderId, attempts] of attemptsByOrderId) {
+    const operation = toOrderListActiveRefundOperation(
+      summarizeActiveRefundOperation(attempts, "admin"),
+    );
+    if (operation) operations.set(orderId, operation);
+  }
+
+  return operations;
 }
 
 export async function listOrderRefundAttempts(

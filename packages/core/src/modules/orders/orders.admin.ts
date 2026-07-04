@@ -61,6 +61,7 @@ import {
     noActiveRefundAttemptForOrderIdCondition,
 } from "../payments/refund-attempt-guard";
 import {
+    listActiveRefundOperationsForOrders,
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
 } from "../payments/refund-attempt-visibility";
@@ -833,6 +834,7 @@ export async function listOrders(db: Database, options: {
                 updatedAt: sql<number>`0`.as("updatedAt"),
             }).from(paymentSessionAttempts).where(sql`1=0`)
     ]);
+    const activeRefundOperations = await listActiveRefundOperationsForOrders(db, orderIds);
 
     const itemCountMap = new Map(
         itemCounts.map((ic) => [
@@ -882,6 +884,7 @@ export async function listOrders(db: Database, options: {
             attemptsByOrderId.get(order.id) ?? [],
             nowSeconds,
         ),
+        activeRefundOperation: activeRefundOperations.get(order.id) ?? null,
     }));
 
     return {
