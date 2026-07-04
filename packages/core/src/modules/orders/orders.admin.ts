@@ -27,6 +27,7 @@ import {
     reserveStockBatch,
     deductMultiple,
     releaseMultiple,
+    releaseReservedStockBatch,
     restoreDeductedMultiple,
     validateStockBatchAvailability,
 } from "../inventory";
@@ -40,7 +41,7 @@ import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { unixToDate } from "@scalius/shared/utils";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "./orders.validation";
-import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { validateTransition } from "./order-state-machine";
 import type { OrderShipmentSummary, OrderDetails } from "./orders.types";
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
@@ -73,6 +74,7 @@ const TRASH_RESTORE_DEDUCTED_STATUSES = new Set<string>([
     OrderStatus.PARTIALLY_REFUNDED,
 ]);
 type SQLiteBatchItem = BatchItem<"sqlite">;
+const ADMIN_CREATE_ROLLBACK_RELEASE_KEY = "admin-order-create-rollback:v1";
 const MAX_ORDER_LIST_LIMIT = 100;
 type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
 type AdminOrderSkuItem = { productId: string; variantId: string | null };
@@ -929,9 +931,19 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
     try {
         await safeBatch(db, writeBatch);
     } catch (batchError) {
-        // DB write failed -- release any reservations we made
+        // DB write failed -- prove any reservations we made were released.
         if (reservationEntries.length > 0) {
-            await releaseMultiple(db, reservationEntries, orderId);
+            const releaseResult = await releaseReservedStockBatch(db, reservationEntries, orderId, {
+                releaseKey: ADMIN_CREATE_ROLLBACK_RELEASE_KEY,
+            });
+            if (!releaseResult.success) {
+                console.error("[orders.admin] Failed to prove reserved stock release after manual order create failure:", {
+                    orderId,
+                    error: releaseResult.error,
+                    manualReconciliationRequired: releaseResult.manualReconciliationRequired,
+                });
+                throw new ServiceUnavailableError("Manual order inventory cleanup is temporarily unavailable. Please try again.");
+            }
         }
         throw batchError;
     }
