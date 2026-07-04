@@ -156,6 +156,20 @@ export const orderShipmentSummarySchema = z
     createdAt: timestampSchema,
   })
 
+export const orderPaymentRecoverySchema = z
+  .object({
+    state: z.enum(["none", "awaiting_payment", "processing", "needs_attention"]),
+    label: z.string(),
+    message: z.string().nullable(),
+    gateway: z.string().nullable(),
+    paymentType: z.string().nullable(),
+    status: z.string().nullable(),
+    attempts: z.number(),
+    activeProcessing: z.boolean(),
+    staleProcessing: z.boolean(),
+    updatedAt: nullableTimestampSchema,
+  })
+
 /** Order summary — returned by listOrders (admin). */
 export const orderSummarySchema = z
   .object({
@@ -182,6 +196,7 @@ export const orderSummarySchema = z
     itemCount: z.number(),
     totalQuantity: z.number(),
     latestShipment: orderShipmentSummarySchema.nullable(),
+    paymentRecovery: orderPaymentRecoverySchema,
   })
 
 /** Order item — returned inside order detail. */
@@ -300,6 +315,7 @@ export const orderDetailSchema = z
     itemCount: z.number(),
     items: z.array(orderItemSchema),
     latestShipment: orderShipmentSummarySchema.nullable(),
+    paymentRecovery: orderPaymentRecoverySchema,
     refundAttempts: z.array(orderRefundAttemptSchema),
     activeRefundOperation: activeRefundOperationSchema.nullable(),
     supportRequests: z.array(orderSupportRequestSchema),

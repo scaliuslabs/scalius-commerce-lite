@@ -13,7 +13,9 @@ import {
     productImages,
     deliveryShipments,
     deliveryProviders,
+    paymentSessionAttempts,
     OrderStatus,
+    PaymentMethod,
     PaymentStatus,
     ItemFulfillmentStatus,
 } from "@scalius/database/schema";
@@ -43,7 +45,12 @@ import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "./orders.validation";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { validateTransition } from "./order-state-machine";
-import type { OrderShipmentSummary, OrderDetails } from "./orders.types";
+import type {
+    OrderDetails,
+    OrderPaymentRecoveryFilter,
+    OrderPaymentRecoverySummary,
+    OrderShipmentSummary,
+} from "./orders.types";
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-claim";
 import { computeOrderPaymentState } from "../payments/payment-state";
@@ -77,6 +84,22 @@ type SQLiteBatchItem = BatchItem<"sqlite">;
 const ADMIN_CREATE_ROLLBACK_RELEASE_KEY = "admin-order-create-rollback:v1";
 const MAX_ORDER_LIST_LIMIT = 100;
 type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
+type OrderListPaymentAttemptRow = {
+    orderId: string;
+    gateway: string;
+    paymentType: string;
+    status: string;
+    attempts: number;
+    claimExpiresAt: number | null;
+    createdAt: number;
+    updatedAt: number;
+};
+type OrderRecoverySourceRow = {
+    id: string;
+    status: string;
+    paymentStatus: string;
+    paymentMethod: string | null;
+};
 type AdminOrderSkuItem = { productId: string; variantId: string | null };
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     variantId: string;
@@ -96,6 +119,25 @@ interface AdminOrderSkuIssue {
     message: string;
 }
 
+const HOSTED_PAYMENT_METHODS = [
+    PaymentMethod.STRIPE,
+    PaymentMethod.SSLCOMMERZ,
+    PaymentMethod.POLAR,
+] as const;
+
+const DEFAULT_PAYMENT_RECOVERY_SUMMARY: OrderPaymentRecoverySummary = {
+    state: "none",
+    label: "No payment recovery",
+    message: null,
+    gateway: null,
+    paymentType: null,
+    status: null,
+    attempts: 0,
+    activeProcessing: false,
+    staleProcessing: false,
+    updatedAt: null,
+};
+
 function throwAdminOrderSkuIssues(issues: AdminOrderSkuIssue[]): never {
     throw new ValidationError("Some manual order items need attention.", { itemIssues: issues });
 }
@@ -114,6 +156,174 @@ function addAdminOrderSkuIssue(
         code,
         message,
     });
+}
+
+function isHostedPaymentMethod(method: string | null | undefined): method is (typeof HOSTED_PAYMENT_METHODS)[number] {
+    return typeof method === "string" && (HOSTED_PAYMENT_METHODS as readonly string[]).includes(method);
+}
+
+function activePaymentSessionAttemptExistsCondition(orderIdSql: SQL) {
+    return sql`EXISTS (
+        SELECT 1 FROM ${paymentSessionAttempts}
+        WHERE ${paymentSessionAttempts.orderId} = ${orderIdSql}
+          AND ${paymentSessionAttempts.status} = 'processing'
+          AND ${paymentSessionAttempts.claimExpiresAt} IS NOT NULL
+          AND ${paymentSessionAttempts.claimExpiresAt} > unixepoch()
+    )`;
+}
+
+function staleOrFailedPaymentSessionAttemptExistsCondition(orderIdSql: SQL) {
+    return sql`EXISTS (
+        SELECT 1 FROM ${paymentSessionAttempts}
+        WHERE ${paymentSessionAttempts.orderId} = ${orderIdSql}
+          AND (
+            ${paymentSessionAttempts.status} = 'failed'
+            OR (
+              ${paymentSessionAttempts.status} = 'processing'
+              AND (
+                ${paymentSessionAttempts.claimExpiresAt} IS NULL
+                OR ${paymentSessionAttempts.claimExpiresAt} <= unixepoch()
+              )
+            )
+          )
+    )`;
+}
+
+function paymentRecoveryFilterCondition(filter: OrderPaymentRecoveryFilter) {
+    const orderIdSql = sql`${orders.id}`;
+    const activeAttempt = activePaymentSessionAttemptExistsCondition(orderIdSql);
+    const staleOrFailedAttempt = staleOrFailedPaymentSessionAttemptExistsCondition(orderIdSql);
+    const hostedMethod = inArray(orders.paymentMethod, [...HOSTED_PAYMENT_METHODS]);
+    const needsAttention = sql`(
+        ${hostedMethod}
+        AND (
+          ${orders.paymentStatus} = ${PaymentStatus.FAILED}
+          OR ${staleOrFailedAttempt}
+        )
+    )`;
+    const awaitingPayment = sql`(
+        ${hostedMethod}
+        AND ${orders.status} = ${OrderStatus.INCOMPLETE}
+        AND ${orders.paymentStatus} = ${PaymentStatus.UNPAID}
+        AND NOT ${activeAttempt}
+        AND NOT ${staleOrFailedAttempt}
+    )`;
+
+    switch (filter) {
+        case "processing":
+            return activeAttempt;
+        case "needs_attention":
+            return needsAttention;
+        case "awaiting_payment":
+            return awaitingPayment;
+        case "recoverable":
+            return sql`(${activeAttempt} OR ${needsAttention} OR ${awaitingPayment})`;
+    }
+}
+
+function isActivePaymentAttempt(attempt: OrderListPaymentAttemptRow, nowSeconds: number) {
+    return attempt.status === "processing"
+        && attempt.claimExpiresAt !== null
+        && attempt.claimExpiresAt > nowSeconds;
+}
+
+function isStalePaymentAttempt(attempt: OrderListPaymentAttemptRow, nowSeconds: number) {
+    return attempt.status === "processing"
+        && (attempt.claimExpiresAt === null || attempt.claimExpiresAt <= nowSeconds);
+}
+
+function findLatestAttempt(
+    attempts: OrderListPaymentAttemptRow[],
+    predicate: (attempt: OrderListPaymentAttemptRow) => boolean,
+) {
+    return attempts
+        .filter(predicate)
+        .sort((a, b) => b.updatedAt - a.updatedAt || b.createdAt - a.createdAt)[0] ?? null;
+}
+
+function buildPaymentRecoverySummary(
+    order: OrderRecoverySourceRow,
+    attempts: OrderListPaymentAttemptRow[],
+    nowSeconds: number,
+): OrderPaymentRecoverySummary {
+    const activeAttempt = findLatestAttempt(attempts, (attempt) => isActivePaymentAttempt(attempt, nowSeconds));
+    if (activeAttempt) {
+        return {
+            state: "processing",
+            label: "Payment setup running",
+            message: "A hosted payment session is being prepared. Avoid manual recovery until it finishes.",
+            gateway: activeAttempt.gateway,
+            paymentType: activeAttempt.paymentType,
+            status: activeAttempt.status,
+            attempts: activeAttempt.attempts,
+            activeProcessing: true,
+            staleProcessing: false,
+            updatedAt: unixToDate(activeAttempt.updatedAt),
+        };
+    }
+
+    const failedAttempt = findLatestAttempt(attempts, (attempt) => attempt.status === "failed");
+    const staleAttempt = findLatestAttempt(attempts, (attempt) => isStalePaymentAttempt(attempt, nowSeconds));
+    const attentionAttempt = failedAttempt ?? staleAttempt;
+    if (attentionAttempt || (isHostedPaymentMethod(order.paymentMethod) && order.paymentStatus === PaymentStatus.FAILED)) {
+        return {
+            state: "needs_attention",
+            label: failedAttempt || order.paymentStatus === PaymentStatus.FAILED
+                ? "Payment needs attention"
+                : "Payment setup stalled",
+            message: failedAttempt || order.paymentStatus === PaymentStatus.FAILED
+                ? "The hosted payment flow failed. Open the order payment panel to retry or reconcile."
+                : "Payment setup stopped before finishing. Open the order payment panel before taking shipment or delete actions.",
+            gateway: attentionAttempt?.gateway ?? order.paymentMethod,
+            paymentType: attentionAttempt?.paymentType ?? null,
+            status: attentionAttempt?.status ?? order.paymentStatus,
+            attempts: attentionAttempt?.attempts ?? 0,
+            activeProcessing: false,
+            staleProcessing: staleAttempt !== null,
+            updatedAt: unixToDate(attentionAttempt?.updatedAt),
+        };
+    }
+
+    if (
+        isHostedPaymentMethod(order.paymentMethod)
+        && order.status === OrderStatus.INCOMPLETE
+        && order.paymentStatus === PaymentStatus.UNPAID
+    ) {
+        const latestAttempt = findLatestAttempt(attempts, () => true);
+        return {
+            state: "awaiting_payment",
+            label: "Awaiting hosted payment",
+            message: "The order is waiting for buyer payment or gateway confirmation.",
+            gateway: latestAttempt?.gateway ?? order.paymentMethod,
+            paymentType: latestAttempt?.paymentType ?? null,
+            status: latestAttempt?.status ?? order.paymentStatus,
+            attempts: latestAttempt?.attempts ?? 0,
+            activeProcessing: false,
+            staleProcessing: false,
+            updatedAt: unixToDate(latestAttempt?.updatedAt),
+        };
+    }
+
+    return { ...DEFAULT_PAYMENT_RECOVERY_SUMMARY };
+}
+
+async function assertNoActivePaymentSessionAttemptsForOrders(db: Database, orderIds: string[]) {
+    if (orderIds.length === 0) return;
+    const rows = await db
+        .select({ orderId: paymentSessionAttempts.orderId })
+        .from(paymentSessionAttempts)
+        .where(and(
+            inArray(paymentSessionAttempts.orderId, orderIds),
+            eq(paymentSessionAttempts.status, "processing"),
+            sql`${paymentSessionAttempts.claimExpiresAt} IS NOT NULL`,
+            sql`${paymentSessionAttempts.claimExpiresAt} > unixepoch()`,
+        ))
+        .groupBy(paymentSessionAttempts.orderId)
+        .all();
+
+    if (rows.length > 0) {
+        throw new ConflictError(`Orders have active payment setup in progress: ${rows.map((row) => row.orderId).join(", ")}`);
+    }
 }
 
 function orderEditReadyCondition(orderId: string, expectedVersion: number) {
@@ -363,6 +573,7 @@ export async function listOrders(db: Database, options: {
     paymentStatus?: string;
     paymentMethod?: string;
     fulfillmentStatus?: string;
+    paymentRecovery?: OrderPaymentRecoveryFilter;
     page?: number;
     limit?: number;
     showTrashed?: boolean;
@@ -377,6 +588,7 @@ export async function listOrders(db: Database, options: {
         paymentStatus,
         paymentMethod,
         fulfillmentStatus,
+        paymentRecovery,
         page: rawPage = 1,
         limit: rawLimit = 10,
         showTrashed = false,
@@ -439,6 +651,10 @@ export async function listOrders(db: Database, options: {
 
     if (fulfillmentStatus) {
         whereConditions.push(sql`${orders.fulfillmentStatus} = ${fulfillmentStatus}`);
+    }
+
+    if (paymentRecovery) {
+        whereConditions.push(paymentRecoveryFilterCondition(paymentRecovery));
     }
 
     if (startDate) {
@@ -537,16 +753,22 @@ export async function listOrders(db: Database, options: {
 
     const orderIds = results.map((r) => r.id);
 
-    const [itemCounts, shipments] = await db.batch([
-        db
-            .select({
-                orderId: orderItems.orderId,
-                count: sql<number>`COUNT(*)`,
-                totalQuantity: sql<number>`SUM(${orderItems.quantity})`,
-            })
-            .from(orderItems)
-            .where(sql`${orderItems.orderId} IN ${orderIds}`)
-            .groupBy(orderItems.orderId),
+    const [itemCounts, shipments, paymentAttempts] = await db.batch([
+        results.length > 0
+            ? db
+                .select({
+                    orderId: orderItems.orderId,
+                    count: sql<number>`COUNT(*)`,
+                    totalQuantity: sql<number>`SUM(${orderItems.quantity})`,
+                })
+                .from(orderItems)
+                .where(inArray(orderItems.orderId, orderIds))
+                .groupBy(orderItems.orderId)
+            : db.select({
+                orderId: sql<string>`NULL`.as("orderId"),
+                count: sql<number>`0`.as("count"),
+                totalQuantity: sql<number>`0`.as("totalQuantity"),
+            }).from(orderItems).where(sql`1=0`),
         results.length > 0
             ? db
                 .select({
@@ -583,7 +805,32 @@ export async function listOrders(db: Database, options: {
                 updatedAt: sql<Date | null>`NULL`.as("updatedAt"),
                 createdAt: sql<Date | null>`NULL`.as("createdAt"),
                 providerName: sql<string | null>`NULL`.as("providerName"),
-            }).from(deliveryShipments).where(sql`1=0`)
+            }).from(deliveryShipments).where(sql`1=0`),
+        results.length > 0
+            ? db
+                .select({
+                    orderId: paymentSessionAttempts.orderId,
+                    gateway: paymentSessionAttempts.gateway,
+                    paymentType: paymentSessionAttempts.paymentType,
+                    status: paymentSessionAttempts.status,
+                    attempts: paymentSessionAttempts.attempts,
+                    claimExpiresAt: paymentSessionAttempts.claimExpiresAt,
+                    createdAt: paymentSessionAttempts.createdAt,
+                    updatedAt: paymentSessionAttempts.updatedAt,
+                })
+                .from(paymentSessionAttempts)
+                .where(inArray(paymentSessionAttempts.orderId, orderIds))
+                .orderBy(desc(paymentSessionAttempts.updatedAt), desc(paymentSessionAttempts.createdAt))
+            : db.select({
+                orderId: sql<string>`NULL`.as("orderId"),
+                gateway: sql<string>`NULL`.as("gateway"),
+                paymentType: sql<string>`NULL`.as("paymentType"),
+                status: sql<string>`NULL`.as("status"),
+                attempts: sql<number>`0`.as("attempts"),
+                claimExpiresAt: sql<number | null>`NULL`.as("claimExpiresAt"),
+                createdAt: sql<number>`0`.as("createdAt"),
+                updatedAt: sql<number>`0`.as("updatedAt"),
+            }).from(paymentSessionAttempts).where(sql`1=0`)
     ]);
 
     const itemCountMap = new Map(
@@ -613,6 +860,15 @@ export async function listOrders(db: Database, options: {
         }
     }
 
+    const attemptsByOrderId = new Map<string, OrderListPaymentAttemptRow[]>();
+    for (const attempt of paymentAttempts as OrderListPaymentAttemptRow[]) {
+        if (!attempt.orderId) continue;
+        const attempts = attemptsByOrderId.get(attempt.orderId) ?? [];
+        attempts.push(attempt);
+        attemptsByOrderId.set(attempt.orderId, attempts);
+    }
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
     const formattedResults = results.map((order) => ({
         ...order,
         createdAt: new Date(order.createdAt * 1000),
@@ -620,6 +876,11 @@ export async function listOrders(db: Database, options: {
         itemCount: itemCountMap.get(order.id)?.count || 0,
         totalQuantity: itemCountMap.get(order.id)?.quantity || 0,
         latestShipment: shipmentMap.get(order.id) || null,
+        paymentRecovery: buildPaymentRecoverySummary(
+            order,
+            attemptsByOrderId.get(order.id) ?? [],
+            nowSeconds,
+        ),
     }));
 
     return {
@@ -732,6 +993,7 @@ export async function getOrderDetails(
         refundAttempts: refundAttemptViews,
         activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
         supportRequests,
+        paymentRecovery: buildPaymentRecoverySummary(order, [], Math.floor(Date.now() / 1000)),
     };
 }
 
@@ -1466,6 +1728,7 @@ export async function deleteOrder(db: Database, id: string) {
     if (!orderToDelete) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(orderToDelete);
     await assertNoActiveRefundAttempt(db, id);
+    await assertNoActivePaymentSessionAttemptsForOrders(db, [id]);
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
     }
@@ -1569,6 +1832,7 @@ export async function permanentlyDeleteOrder(db: Database, id: string) {
     if (!orderToDelete) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(orderToDelete);
     await assertNoActiveRefundAttempt(db, id);
+    await assertNoActivePaymentSessionAttemptsForOrders(db, [id]);
     if (!orderToDelete.deletedAt) throw new ValidationError("Order must be soft-deleted before permanent deletion");
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
@@ -1596,6 +1860,7 @@ export async function bulkDeleteOrders(db: Database, orderIds: string[], permane
         throw new ConflictError(`Orders have active shipment creation in progress: ${claimedOrders.map((order) => order.id).join(", ")}`);
     }
     await assertNoActiveRefundAttemptsForOrders(db, affectedOrders.map((order) => order.id));
+    await assertNoActivePaymentSessionAttemptsForOrders(db, affectedOrders.map((order) => order.id));
 
     // Apply inventory transitions for orders that need it
     // (applyInventoryForStatusChange reads order items internally and uses CAS operations)

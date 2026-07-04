@@ -114,7 +114,7 @@ Scope:
 Prompt:
 
 ```md
-Fix storefront reliability around API transport, checkout recovery, cart prefill, and cache invalidation. Avoid global SDK mutation where feasible, preserve cart recovery through redirect gateways, make location prefill match the rendered controls, and unblock focused storefront tests.
+Fix storefront reliability around API transport, checkout recovery, cart prefill, and cache invalidation. Avoid global SDK mutation where feasible, make location prefill match the rendered controls, and unblock focused storefront tests. Note: the old "preserve cart recovery through redirect gateways" direction is superseded for SSLCommerz/Polar by `CHECKOUT-011`; after durable hosted order commit, recovery should continue through receipt/order paths and the empty-cart recovery marker.
 ```
 
 ## Slice 7: Content And SEO Rules

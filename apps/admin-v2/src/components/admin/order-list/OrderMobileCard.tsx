@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { OrderStatusSelector } from "./OrderStatusSelector";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
+import { PaymentRecoveryBadge } from "./PaymentRecoveryBadge";
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { useCurrency } from "@/hooks/use-currency";
@@ -94,8 +95,12 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
 }: OrderMobileCardProps) {
   const navigate = useNavigate();
   const { symbol } = useCurrency();
+  const hasPaymentRecovery =
+    order.paymentRecovery != null && order.paymentRecovery.state !== "none";
   const customerRoute = orderActions.canEditOrders
-    ? `/admin/orders/${order.id}/edit`
+    ? hasPaymentRecovery
+      ? `/admin/orders/${order.id}`
+      : `/admin/orders/${order.id}/edit`
     : `/admin/orders/${order.id}`;
   return (
     <Card
@@ -164,6 +169,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               <PaymentStatusBadge status={order.paymentStatus} />
               <FulfillmentStatusBadge status={order.fulfillmentStatus} />
               <PaymentMethodLabel method={order.paymentMethod} />
+              <PaymentRecoveryBadge recovery={order.paymentRecovery} compact />
             </div>
           </div>
         </div>

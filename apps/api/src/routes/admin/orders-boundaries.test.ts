@@ -25,12 +25,15 @@ describe("admin orders route boundaries", () => {
         expect(source).toContain("const paymentStatusQuerySchema = z.enum([");
         expect(source).toContain("const paymentMethodQuerySchema = z.enum([");
         expect(source).toContain("const fulfillmentStatusQuerySchema = z.enum([");
+        expect(source).toContain("const paymentRecoveryQuerySchema = z.enum([");
         expect(source).toContain("paymentStatus: paymentStatusQuerySchema.optional()");
         expect(source).toContain("paymentMethod: paymentMethodQuerySchema.optional()");
         expect(source).toContain("fulfillmentStatus: fulfillmentStatusQuerySchema.optional()");
+        expect(source).toContain("paymentRecovery: paymentRecoveryQuerySchema.optional()");
         expect(source).toContain("paymentStatus: query.paymentStatus");
         expect(source).toContain("paymentMethod: query.paymentMethod");
         expect(source).toContain("fulfillmentStatus: query.fulfillmentStatus");
+        expect(source).toContain("paymentRecovery: query.paymentRecovery");
     });
 
     it("exposes sanitized payment-session attempt visibility on order payments", () => {

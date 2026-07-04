@@ -29,6 +29,7 @@ import {
   formatDateVerbose,
 } from "@scalius/shared/timestamps";
 import { LazyOrderItemsPopover } from "~/components/admin/order-list/LazyOrderItemsPopover";
+import { PaymentRecoveryBadge } from "~/components/admin/order-list/PaymentRecoveryBadge";
 import { OrderStatusSelector } from "~/components/admin/order-list/OrderStatusSelector";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
 import { LazyFraudCheckIndicator } from "~/components/admin/order-list/LazyFraudCheckIndicator";
@@ -97,8 +98,12 @@ export function getOrderColumns(
       ),
       cell: ({ row }) => {
         const order = row.original;
+        const hasPaymentRecovery =
+          order.paymentRecovery != null && order.paymentRecovery.state !== "none";
         const customerRoute = opts.orderActions.canEditOrders
-          ? `/admin/orders/${order.id}/edit`
+          ? hasPaymentRecovery
+            ? `/admin/orders/${order.id}`
+            : `/admin/orders/${order.id}/edit`
           : `/admin/orders/${order.id}`;
         return (
           <div className="space-y-1.5 max-w-[300px]">
@@ -204,6 +209,7 @@ export function getOrderColumns(
               <PaymentStatusBadge status={order.paymentStatus} />
               <FulfillmentStatusBadge status={order.fulfillmentStatus} />
               <PaymentMethodLabel method={order.paymentMethod} />
+              <PaymentRecoveryBadge recovery={order.paymentRecovery} />
             </div>
           </div>
         );

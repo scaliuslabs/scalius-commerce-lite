@@ -18,6 +18,7 @@ interface DeleteOrderDialogProps {
   showTrashed: boolean;
   isBulk: boolean;
   itemCount: number;
+  paymentRecoveryCount?: number;
 }
 
 export function DeleteOrderDialog({
@@ -28,6 +29,7 @@ export function DeleteOrderDialog({
   showTrashed,
   isBulk,
   itemCount,
+  paymentRecoveryCount = 0,
 }: DeleteOrderDialogProps) {
   const title = showTrashed
     ? `Delete Order${isBulk ? "s" : ""} Permanently`
@@ -49,6 +51,13 @@ export function DeleteOrderDialog({
           </AlertDialogTitle>
           <AlertDialogDescription className="text-base text-[var(--muted-foreground)] mt-2">
             {description}
+            {paymentRecoveryCount > 0 && (
+              <span className="mt-3 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                {paymentRecoveryCount} selected order{paymentRecoveryCount === 1 ? "" : "s"} still
+                {paymentRecoveryCount === 1 ? " has" : " have"} hosted payment recovery state.
+                Active payment setup will be blocked automatically.
+              </span>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="mt-4 gap-2">

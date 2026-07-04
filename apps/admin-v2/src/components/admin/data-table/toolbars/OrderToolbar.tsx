@@ -65,6 +65,13 @@ const fulfillmentStatusFilters = [
   { value: "complete", label: "Fulfilled" },
 ];
 
+const paymentRecoveryFilters = [
+  { value: "recoverable", label: "Any recovery" },
+  { value: "needs_attention", label: "Needs attention" },
+  { value: "processing", label: "Processing" },
+  { value: "awaiting_payment", label: "Awaiting payment" },
+];
+
 interface OrderToolbarProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
@@ -79,6 +86,8 @@ interface OrderToolbarProps {
   onPaymentMethodFilterChange: (method: string | null) => void;
   activeFulfillmentStatus: string | null;
   onFulfillmentStatusFilterChange: (status: string | null) => void;
+  activePaymentRecovery: string | null;
+  onPaymentRecoveryFilterChange: (state: string | null) => void;
   // Date range
   dateRange: DateRange | undefined;
   onDateRangeChange: (range: DateRange | undefined) => void;
@@ -221,6 +230,8 @@ export function OrderToolbar({
   onPaymentMethodFilterChange,
   activeFulfillmentStatus,
   onFulfillmentStatusFilterChange,
+  activePaymentRecovery,
+  onPaymentRecoveryFilterChange,
   dateRange,
   onDateRangeChange,
   onBulkDelete,
@@ -328,6 +339,13 @@ export function OrderToolbar({
         options={paymentMethodFilters}
         ariaLabel="Filter by payment method"
         onChange={onPaymentMethodFilterChange}
+      />
+      <OrderFilterSelect
+        value={activePaymentRecovery}
+        placeholder="Payment recovery"
+        options={paymentRecoveryFilters}
+        ariaLabel="Filter by payment recovery"
+        onChange={onPaymentRecoveryFilterChange}
       />
       <OrderFilterSelect
         value={activeFulfillmentStatus}

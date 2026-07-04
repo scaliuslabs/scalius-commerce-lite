@@ -46,6 +46,7 @@ describe("admin order list boundaries", () => {
     expect(source).toContain("paymentStatus?: string");
     expect(source).toContain("paymentMethod?: string");
     expect(source).toContain("fulfillmentStatus?: string");
+    expect(source).toContain("paymentRecovery?: OrderPaymentRecoveryFilter");
     expect(source).toContain(
       "whereConditions.push(sql`${orders.paymentStatus} = ${paymentStatus}`)",
     );
@@ -55,6 +56,25 @@ describe("admin order list boundaries", () => {
     expect(source).toContain(
       "whereConditions.push(sql`${orders.fulfillmentStatus} = ${fulfillmentStatus}`)",
     );
+    expect(source).toContain("whereConditions.push(paymentRecoveryFilterCondition(paymentRecovery))");
+  });
+
+  it("summarizes hosted payment recovery without exposing private attempt identity", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+    const summarySource = source.split("function buildPaymentRecoverySummary")[1]?.split("async function assertNoActivePaymentSessionAttemptsForOrders")[0] ?? "";
+
+    expect(source).toContain("paymentSessionAttempts");
+    expect(source).toContain("paymentRecovery: buildPaymentRecoverySummary(");
+    expect(source).toContain("activePaymentSessionAttemptExistsCondition");
+    expect(source).toContain("staleOrFailedPaymentSessionAttemptExistsCondition");
+    expect(source).toContain("await assertNoActivePaymentSessionAttemptsForOrders(db, [id])");
+    expect(summarySource).toContain('state: "awaiting_payment"');
+    expect(summarySource).toContain('state: "processing"');
+    expect(summarySource).toContain('state: "needs_attention"');
+    expect(summarySource).not.toContain("attemptKey");
+    expect(summarySource).not.toContain("requestHash");
+    expect(summarySource).not.toContain("responsePayload");
+    expect(summarySource).not.toContain("claimId");
   });
 
   it("validates manual order SKUs before create/update inventory work", () => {
