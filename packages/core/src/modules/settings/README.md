@@ -148,6 +148,8 @@ Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homep
 ### `settings` (key-value store)
 Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `customer_auth` (advanced OTP channel and email collection policy), `theme` (storefront_colors), `security` (csp_allowed_domains), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (encrypted service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `notification_provider_health` (channel/provider pause markers for merchant-actionable provider setup failures), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
+SMS provider readiness is structural and local: it requires an active supported provider, decryptable required credentials, provider-required non-secret fields, and no obvious placeholder values such as `dummy`, `example`, `changeme`, `your-token-here`, or all-zero/simple numeric junk. This keeps notification and OTP settings fail-closed without issuing paid SMS test sends.
+
 ## API Endpoints (Admin)
 
 All under `/api/v1/admin/settings/` -- split across multiple route files:

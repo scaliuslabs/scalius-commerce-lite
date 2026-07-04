@@ -143,7 +143,7 @@ function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?:
 
 const readySmsSettings = [
   { key: "active_provider", value: "bdbulksms" },
-  { key: "bdbulksms_token", value: "test-token" },
+  { key: "bdbulksms_token", value: "scalius-local-token-789" },
 ];
 const readyEmailSettings = [
   { key: "email_provider", value: "cloudflare" },

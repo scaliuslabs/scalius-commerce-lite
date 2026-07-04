@@ -1,4 +1,4 @@
-import type { OrderNotificationReceiptDto } from "./api-functions/orders";
+import type { OrderNotificationOutboxDto, OrderNotificationReceiptDto } from "./api-functions/orders";
 
 export interface OrderNotificationReceiptDisplayGroup {
   key: string;
@@ -18,6 +18,7 @@ export interface OrderNotificationReceiptDisplayGroup {
 }
 
 const TERMINAL_DELIVERY_STATUSES = new Set(["accepted", "delivered", "skipped"]);
+const TERMINAL_OUTBOX_STATUSES = new Set(["sent"]);
 
 export function describeNotificationIssue(value: string | null | undefined): string | null {
   const text = value?.trim();
@@ -103,29 +104,27 @@ export function buildReceiptDisplayGroups(
   const groups = new Map<string, OrderNotificationReceiptDto[]>();
 
   for (const receipt of receipts) {
-    const providerStatus = describeNotificationIssue(receipt.providerStatus) ?? "";
-    const lastError = describeNotificationIssue(receipt.lastError) ?? "";
     const key = [
       receipt.channel,
       receipt.provider,
       receipt.status,
-      providerStatus,
-      lastError,
+      displayGroupingIssueKey(receipt.providerStatus),
+      displayGroupingIssueKey(receipt.lastError),
     ].join("|");
     groups.set(key, [...(groups.get(key) ?? []), receipt]);
   }
 
   return Array.from(groups.entries()).map(([key, groupedReceipts]) => {
     const first = groupedReceipts[0] as OrderNotificationReceiptDto;
-    const providerStatus = describeNotificationIssue(first.providerStatus);
-    const lastError = describeNotificationIssue(first.lastError);
+    const providerStatus = pickPrimaryIssue(groupedReceipts.map((receipt) => receipt.providerStatus));
+    const lastError = pickPrimaryIssue(groupedReceipts.map((receipt) => receipt.lastError));
     const latestTimestamp = findLatestReceiptTimestamp(groupedReceipts);
     const totalAttempts = groupedReceipts.reduce((sum, receipt) => sum + Math.max(0, receipt.attempts), 0);
     const maxAttempts = groupedReceipts.reduce((max, receipt) => Math.max(max, receipt.attempts), 0);
 
-    const setupIssue =
-      isProviderSetupIssue(first.providerStatus) ||
-      isProviderSetupIssue(first.lastError);
+    const setupIssue = groupedReceipts.some((receipt) =>
+      isProviderSetupIssue(receipt.providerStatus) || isProviderSetupIssue(receipt.lastError)
+    );
 
     return {
       key,
@@ -137,7 +136,11 @@ export function buildReceiptDisplayGroups(
       recipientLabel: getReceiptGroupRecipientLabel(first, groupedReceipts.length),
       providerStatus,
       lastError,
-      showLastError: Boolean(lastError && lastError !== providerStatus),
+      showLastError: Boolean(
+        lastError &&
+        lastError !== providerStatus &&
+        !(setupIssue && isProviderSetupIssue(lastError) && isProviderSetupIssue(providerStatus)),
+      ),
       latestTimestamp,
       totalAttempts,
       maxAttempts,
@@ -159,6 +162,19 @@ export function deliveryAttemptLabel(group: Pick<
   }
   const attempts = group.count > 1 ? group.totalAttempts : group.maxAttempts;
   return `${attempts} attempt${attempts === 1 ? "" : "s"}`;
+}
+
+export function outboxAttemptLabel(outbox: Pick<OrderNotificationOutboxDto, "status" | "attempts">): string {
+  if (TERMINAL_OUTBOX_STATUSES.has(outbox.status)) {
+    return "Delivery settled";
+  }
+  if (outbox.status === "dead_lettered") {
+    return "Retry stopped";
+  }
+  if (outbox.status === "failed" && outbox.attempts >= 8) {
+    return "Needs attention";
+  }
+  return `${outbox.attempts} attempt${outbox.attempts === 1 ? "" : "s"}`;
 }
 
 function getReceiptGroupRecipientLabel(receipt: OrderNotificationReceiptDto, count: number): string {
@@ -189,6 +205,20 @@ function findLatestReceiptTimestamp(receipts: OrderNotificationReceiptDto[]): st
 
 function humanize(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function displayGroupingIssueKey(value: string | null | undefined): string {
+  if (!value) return "";
+  if (isProviderSetupIssue(value)) return "provider_setup";
+  return describeNotificationIssue(value) ?? "";
+}
+
+function pickPrimaryIssue(values: Array<string | null | undefined>): string | null {
+  const firstBlocked = values.find((value) =>
+    value?.toLowerCase().includes("provider_blocked_until_settings_save")
+  );
+  const firstValue = firstBlocked ?? values.find((value) => Boolean(value?.trim()));
+  return describeNotificationIssue(firstValue);
 }
 
 function isProviderSetupIssue(value: string | null | undefined): boolean {

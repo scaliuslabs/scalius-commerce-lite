@@ -14,6 +14,7 @@ import {
   upsertEncryptedSetting,
 } from "@scalius/core/modules/payments/gateway-settings";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
+import { ValidationError } from "@scalius/core/errors";
 import type { SmsProvider, SmsProviderId } from "./provider";
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,38 @@ function setCachedCredential(key: string, data: unknown): void {
 const SMS_CATEGORY = "sms";
 const SMS_CACHE_KEY = "sms:active";
 const MASKED = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"; // 12 bullet chars
+const PLACEHOLDER_EXACT_VALUES = new Set([
+  "000000",
+  "111111",
+  "123456",
+  "123456789",
+  "apikey",
+  "apitoken",
+  "changeme",
+  "changeit",
+  "demo",
+  "dummy",
+  "example",
+  "password",
+  "sample",
+  "secret",
+  "test",
+  "testing",
+  "token",
+  "yourapikey",
+  "yourapikeyhere",
+  "yourapi",
+  "yourtoken",
+  "yourtokenhere",
+]);
+
+const PLACEHOLDER_WORD_VALUES = new Set([
+  "changeme",
+  "dummy",
+  "example",
+  "placeholder",
+  "sample",
+]);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,6 +146,11 @@ async function instantiateSmsProvider(
         "SMS.net.bd API key",
       );
       if (apiKey.error) return smsProviderReadinessError(providerName, apiKey.error);
+      const placeholderError = firstPlaceholderConfigError([
+        ["SMS.net.bd API key", apiKey.value],
+        ["SMS.net.bd sender ID", vals.smsnetbd_sender_id],
+      ]);
+      if (placeholderError) return smsProviderReadinessError(providerName, placeholderError);
       provider = new SmsNetBdProvider({
         apiKey: apiKey.value,
         senderId: vals.smsnetbd_sender_id || undefined,
@@ -127,6 +165,10 @@ async function instantiateSmsProvider(
         "BDBulkSMS token",
       );
       if (token.error) return smsProviderReadinessError(providerName, token.error);
+      const placeholderError = firstPlaceholderConfigError([
+        ["BDBulkSMS token", token.value],
+      ]);
+      if (placeholderError) return smsProviderReadinessError(providerName, placeholderError);
       provider = new BdBulkSmsProvider({
         token: token.value,
       });
@@ -140,6 +182,12 @@ async function instantiateSmsProvider(
         "MIM SMS API key",
       );
       if (apiKey.error) return smsProviderReadinessError(providerName, apiKey.error);
+      const placeholderError = firstPlaceholderConfigError([
+        ["MIM SMS username", vals.mimsms_username],
+        ["MIM SMS API key", apiKey.value],
+        ["MIM SMS sender name", vals.mimsms_sender_name],
+      ]);
+      if (placeholderError) return smsProviderReadinessError(providerName, placeholderError);
       provider = new MimSmsProvider({
         userName: vals.mimsms_username ?? "",
         apiKey: apiKey.value,
@@ -155,6 +203,12 @@ async function instantiateSmsProvider(
         "GenNet API token",
       );
       if (apiToken.error) return smsProviderReadinessError(providerName, apiToken.error);
+      const placeholderError = firstPlaceholderConfigError([
+        ["GenNet API token", apiToken.value],
+        ["GenNet base URL", vals.gennet_base_url],
+        ["GenNet SID", vals.gennet_sid],
+      ]);
+      if (placeholderError) return smsProviderReadinessError(providerName, placeholderError);
       provider = new GennetProvider({
         apiToken: apiToken.value,
         baseUrl: vals.gennet_base_url ?? "",
@@ -176,6 +230,39 @@ async function instantiateSmsProvider(
     provider: validationError ? null : provider,
     error: validationError,
   };
+}
+
+function firstPlaceholderConfigError(
+  fields: Array<[label: string, value: string | null | undefined]>,
+): string | null {
+  for (const [label, value] of fields) {
+    if (looksLikePlaceholderCredential(value)) {
+      return `${label} looks like a placeholder. Save a real provider value before enabling SMS.`;
+    }
+  }
+  return null;
+}
+
+function looksLikePlaceholderCredential(value: string | null | undefined): boolean {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === MASKED) return false;
+
+  const normalized = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (!normalized) return false;
+  if (PLACEHOLDER_EXACT_VALUES.has(normalized)) return true;
+  if (/^([0-9])\1{3,}$/.test(normalized)) return true;
+  if (/^1234567890?$/.test(normalized)) return true;
+
+  const words = trimmed.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  if (words.some((word) => PLACEHOLDER_WORD_VALUES.has(word))) return true;
+  if (words.length <= 2 && words.some((word) => word === "test" || word === "demo")) {
+    return true;
+  }
+  if (words[0] === "your" && words.some((word) => word === "key" || word === "token" || word === "api")) {
+    return true;
+  }
+
+  return false;
 }
 
 function smsProviderReadinessError(
@@ -273,6 +360,7 @@ export async function saveSmsSettings(
   }>,
   encryptionKey?: string,
 ): Promise<void> {
+  validateSmsSettingsInput(data);
   const ops: Promise<void>[] = [];
 
   // Plain text fields
@@ -353,6 +441,33 @@ export async function saveSmsSettings(
 
   await Promise.all(ops);
   invalidateSmsCache();
+}
+
+function validateSmsSettingsInput(
+  data: Partial<{
+    bdbulksmsToken: string;
+    mimsmsUsername: string;
+    mimsmsApiKey: string;
+    mimsmsSenderName: string;
+    smsnetbdApiKey: string;
+    smsnetbdSenderId: string;
+    gennetApiToken: string;
+    gennetBaseUrl: string;
+    gennetSid: string;
+  }>,
+): void {
+  const placeholderError = firstPlaceholderConfigError([
+    ["BDBulkSMS token", data.bdbulksmsToken],
+    ["MIM SMS username", data.mimsmsUsername],
+    ["MIM SMS API key", data.mimsmsApiKey],
+    ["MIM SMS sender name", data.mimsmsSenderName],
+    ["SMS.net.bd API key", data.smsnetbdApiKey],
+    ["SMS.net.bd sender ID", data.smsnetbdSenderId],
+    ["GenNet API token", data.gennetApiToken],
+    ["GenNet base URL", data.gennetBaseUrl],
+    ["GenNet SID", data.gennetSid],
+  ]);
+  if (placeholderError) throw new ValidationError(placeholderError);
 }
 
 // ---------------------------------------------------------------------------

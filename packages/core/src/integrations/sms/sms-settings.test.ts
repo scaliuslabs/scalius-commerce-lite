@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { encryptCredentials } from "../../utils/credential-encryption";
-import { getSmsProviderReadiness, getSmsSettings } from "./sms-settings";
+import { ValidationError } from "../../errors";
+import { getSmsProviderReadiness, getSmsSettings, saveSmsSettings } from "./sms-settings";
 
 function createSmsSettingsDb(rows: Array<{ key: string; value: string }>) {
   return {
@@ -42,7 +43,7 @@ describe("SMS settings readiness", () => {
     const db = createSmsSettingsDb([
       { key: "active_provider", value: "gennet" },
       { key: "gennet_api_token", value: "token_123" },
-      { key: "gennet_base_url", value: "https://example.gennet.com.bd" },
+      { key: "gennet_base_url", value: "https://merchant.gennet.com.bd" },
       { key: "gennet_sid", value: "SCALIUS" },
     ]);
 
@@ -56,9 +57,39 @@ describe("SMS settings readiness", () => {
       activeProviderConfigured: true,
       activeProviderError: null,
       gennetApiToken: "••••••••••••",
-      gennetBaseUrl: "https://example.gennet.com.bd",
+      gennetBaseUrl: "https://merchant.gennet.com.bd",
       gennetSid: "SCALIUS",
     });
+  });
+
+  it("does not treat obvious placeholder SMS credentials as ready", async () => {
+    await expect(getSmsProviderReadiness(createSmsSettingsDb([
+      { key: "active_provider", value: "smsnetbd" },
+      { key: "smsnetbd_api_key", value: "dummy" },
+      { key: "smsnetbd_sender_id", value: "SCALIUS" },
+    ]) as never)).resolves.toEqual({
+      activeProvider: "smsnetbd",
+      configured: false,
+      error: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS.",
+    });
+
+    await expect(getSmsProviderReadiness(createSmsSettingsDb([
+      { key: "active_provider", value: "gennet" },
+      { key: "gennet_api_token", value: "realish-token-789" },
+      { key: "gennet_base_url", value: "https://example.gennet.com.bd" },
+      { key: "gennet_sid", value: "SCALIUS" },
+    ]) as never)).resolves.toEqual({
+      activeProvider: "gennet",
+      configured: false,
+      error: "GenNet base URL looks like a placeholder. Save a real provider value before enabling SMS.",
+    });
+  });
+
+  it("rejects new placeholder SMS credentials before saving", async () => {
+    await expect(saveSmsSettings({} as never, {
+      activeProvider: "bdbulksms",
+      bdbulksmsToken: "your-token-here",
+    }, "credential-key")).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("does not treat encrypted secrets as ready when the credential key is unavailable", async () => {
