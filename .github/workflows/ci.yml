@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [cloudflare-only, mono-repo, main]
+  push:
+    branches: [cloudflare-only, mono-repo, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level moderate
+
+      - name: Worker env binding guard
+        run: pnpm check:env
+
+      - name: Migration metadata guard
+        run: pnpm --filter @scalius/database check:migrations
+
+      - name: Regenerate API client
+        run: pnpm generate:sdk
+
+      - name: Generated API client freshness
+        run: git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/generated
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: API deploy dry-run
+        run: pnpm run deploy:api -- --dry-run
+
+      - name: Dist secret guard
+        run: pnpm check:dist-secrets
+
+      - name: Working tree cleanliness
+        run: git diff --exit-code
+
+      - name: Whitespace guard
+        run: git show --check --format= --no-renames HEAD

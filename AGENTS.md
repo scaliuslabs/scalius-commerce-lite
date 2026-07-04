@@ -72,7 +72,7 @@ packages/
 
 ### Packages
 
-- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 267 paths / 365 operations after the customer order support-request endpoint; regenerate with `pnpm generate:sdk` after API contract changes instead of trusting prose counts. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. The generator removes the development-only `/api/v1/media/{key}` passthrough so the generated contract matches production OpenAPI. Do not hand-edit files in `packages/api-client/src/generated/**`.
+- **`@scalius/api-client`**: Generated SDK from OpenAPI. Current generated spec has 269 paths / 367 operations; regenerate with `pnpm generate:sdk` after API contract changes instead of trusting prose counts. Uses `@hey-api/openapi-ts` with the bundled Fetch client generator; do not add the deprecated `@hey-api/client-fetch` runtime package back. The generator removes the development-only `/api/v1/media/{key}` passthrough so the generated contract matches production OpenAPI. Do not hand-edit files in `packages/api-client/src/generated/**`.
 - **`@scalius/database`**: Drizzle schema and D1 `getDb(env)` client factory. Current schema has 13 schema files and 10 table-defining files; use fresh `rg`/Drizzle scans for volatile table/migration counts instead of trusting prose.
 - **`@scalius/core`**: Domain modules in `src/modules/`, Better Auth config, RBAC, providers, integrations, FTS5 search, and cache utilities.
 - **`@scalius/shared`**: Shared utilities. It has external runtime deps, but no internal workspace deps.
@@ -176,6 +176,7 @@ Packages are JIT-consumed from TypeScript source by Workers/Vite/Astro. Most pac
 - **Storefront build ID**: `apps/storefront/src/config/build-id.ts` is generated and git-ignored. `apps/storefront/scripts/generate-build-id.js` must run before storefront typecheck/build/deploy. It prefers commit SHA env vars and otherwise hashes stable source/config inputs; do not reintroduce timestamp-only build IDs.
 - **Package subpath imports**: `@scalius/database` and `@scalius/shared` do not expose useful root imports. Use subpaths such as `@scalius/database/client`, `@scalius/database/schema`, and `@scalius/shared/utils`.
 - **Cloudflare bindings/types**: Wrangler configs are the source of truth for Worker bindings and vars. Keep each app's `env.d.ts`/`hono-env.d.ts` in sync and run `pnpm check:env` after binding/var changes. The check also guards allowed secret-only Env names; update its allowlist only when code really reads a runtime secret or dashboard-only override.
+- **CI quality gates**: `.github/workflows/ci.yml` is tracked and must stay aligned with local release gates. It runs dependency audit, `pnpm generate:sdk` plus generated-client freshness, env binding checks, migration metadata, lint, typecheck, tests, build, API deploy dry-run, dist-secret checks, tree cleanliness, and whitespace checks. Do not re-ignore `.github`.
 
 ## Admin App Notes
 

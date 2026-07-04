@@ -49,5 +49,4 @@ skills-lock.json
 /docs/*
 !/docs/research/
 !/docs/research/*.md
-/.github
 CLAUDE.md
