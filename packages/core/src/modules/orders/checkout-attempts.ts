@@ -103,6 +103,9 @@ export async function claimCheckoutAttempt<TResponse>(
 
   const replay = replayCheckoutAttempt<TResponse>(existing);
   if (replay) return replay;
+  if (existing && isFreshProcessingAttempt(existing)) {
+    return processingResultFromAttempt(existing);
+  }
 
   const reclaimed = await db
     .update(checkoutAttempts)
@@ -161,11 +164,7 @@ export async function claimCheckoutAttempt<TResponse>(
     throw new ServiceUnavailableError("Checkout attempt state is unavailable. Please try again.");
   }
 
-  return {
-    status: "processing",
-    orderId: latest.orderId,
-    checkoutToken: latest.checkoutToken,
-  };
+  return processingResultFromAttempt(latest);
 }
 
 export async function resolveExistingCheckoutAttempt<TResponse>(
@@ -182,11 +181,7 @@ export async function resolveExistingCheckoutAttempt<TResponse>(
   if (!existing || existing.status !== "processing") return null;
   if (existing.claimExpiresAt == null || existing.claimExpiresAt <= nowSeconds) return null;
 
-  return {
-    status: "processing",
-    orderId: existing.orderId,
-    checkoutToken: existing.checkoutToken,
-  };
+  return processingResultFromAttempt(existing);
 }
 
 export async function markCheckoutAttemptCommitted<TResponse>(
@@ -272,6 +267,23 @@ function replayCheckoutAttempt<TResponse>(
   } catch {
     throw new ServiceUnavailableError("Checkout replay payload is unreadable. Please try again.");
   }
+}
+
+function isFreshProcessingAttempt(
+  row: CheckoutAttemptRow,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): boolean {
+  return row.status === "processing" &&
+    row.claimExpiresAt !== null &&
+    row.claimExpiresAt > nowSeconds;
+}
+
+function processingResultFromAttempt(row: Pick<CheckoutAttemptRow, "orderId" | "checkoutToken">): CheckoutAttemptProcessingResult {
+  return {
+    status: "processing",
+    orderId: row.orderId,
+    checkoutToken: row.checkoutToken,
+  };
 }
 
 function assertSameCheckoutRequest(

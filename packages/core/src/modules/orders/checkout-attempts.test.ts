@@ -81,6 +81,8 @@ describe("checkout attempts", () => {
     const first = await claimCheckoutAttempt(fake.db, identity);
     if (first.status !== "claimed") throw new Error("expected first claim");
 
+    fake.stats.selects = 0;
+    fake.stats.updates = 0;
     const second = await claimCheckoutAttempt(fake.db, identity);
 
     expect(second).toEqual({
@@ -90,6 +92,8 @@ describe("checkout attempts", () => {
     });
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]?.attempts).toBe(1);
+    expect(fake.stats.selects).toBe(1);
+    expect(fake.stats.updates).toBe(0);
   });
 
   it("resolves an active processing checkout submit through the read-only precheck", async () => {
@@ -193,9 +197,10 @@ function buildInput(overrides: Partial<CreateStorefrontOrderInput> = {}): Create
   };
 }
 
-function createFakeCheckoutAttemptDb(): { db: Database; rows: AttemptRow[] } {
+function createFakeCheckoutAttemptDb(): { db: Database; rows: AttemptRow[]; stats: { selects: number; updates: number } } {
   const rows: AttemptRow[] = [];
   const now = () => Math.floor(Date.now() / 1000);
+  const stats = { selects: 0, updates: 0 };
 
   const db = {
     insert: () => ({
@@ -236,7 +241,10 @@ function createFakeCheckoutAttemptDb(): { db: Database; rows: AttemptRow[] } {
     select: () => ({
       from: () => ({
         where: () => ({
-          get: async () => rows[0],
+          get: async () => {
+            stats.selects += 1;
+            return rows[0];
+          },
         }),
       }),
     }),
@@ -244,6 +252,7 @@ function createFakeCheckoutAttemptDb(): { db: Database; rows: AttemptRow[] } {
       set: (values: Record<string, unknown>) => ({
         where: () => {
           const applyUpdate = () => {
+            stats.updates += 1;
             const row = rows[0];
             if (!row) return [];
             if (values.status === "processing" && row.status === "processing" && (row.claimExpiresAt ?? 0) > now()) {
@@ -267,7 +276,7 @@ function createFakeCheckoutAttemptDb(): { db: Database; rows: AttemptRow[] } {
     }),
   } as unknown as Database;
 
-  return { db, rows };
+  return { db, rows, stats };
 }
 
 function materializeUpdate(values: Record<string, unknown>, row: AttemptRow): Partial<AttemptRow> {

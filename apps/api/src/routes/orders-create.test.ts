@@ -198,6 +198,62 @@ function createTestApp(options: {
   return { app, db, kv, calls };
 }
 
+function createStatusTestApp(options: {
+  kvStatus?: Record<string, unknown> | null;
+  attempt?: {
+    status: "committed" | "failed" | "processing";
+    orderId: string;
+    checkoutToken: string;
+    lastError?: string | null;
+  } | null;
+  orderExists?: boolean;
+}) {
+  let selectCount = 0;
+  const kv = {
+    get: vi.fn(async (key: string): Promise<string | null> => {
+      if (key !== "checkout_status:chk_status") return null;
+      return options.kvStatus ? JSON.stringify(options.kvStatus) : null;
+    }),
+    put: vi.fn(async (_key: string, _value: string, _options?: { expirationTtl: number }) => undefined),
+  };
+  const db = {
+    select: vi.fn(() => {
+      selectCount += 1;
+      const query = {
+        from: vi.fn(() => query),
+        where: vi.fn(() => query),
+        get: vi.fn(async () => {
+          if (!options.kvStatus && selectCount === 1) {
+            return options.attempt ?? null;
+          }
+          return options.orderExists ? { id: options.attempt?.orderId ?? "order_1" } : null;
+        }),
+        limit: vi.fn(async () => options.orderExists ? [{ id: "order_1" }] : []),
+      };
+      return query;
+    }),
+  };
+  const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
+  app.onError((error, c) => {
+    const { body, status } = errorResponseFromError(error);
+    return c.json(body, status);
+  });
+  app.use("*", async (c, next) => {
+    c.set("db", db as never);
+    await next();
+  });
+  app.route("/orders", orderRoutes);
+
+  return { app, db, kv };
+}
+
+function createWaitUntilContext() {
+  return {
+    waitUntil: vi.fn((_promise: Promise<unknown>) => undefined),
+    passThroughOnException: vi.fn(),
+  };
+}
+
 describe("cart validation preflight", () => {
   it("returns every cart item issue without creating checkout side effects", async () => {
     mocks.validateStorefrontCartItems.mockResolvedValue({
@@ -360,6 +416,157 @@ describe("cart validation preflight", () => {
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkout status recovery hints", () => {
+  it("repairs checkout status and receipt KV after a committed D1 fallback", async () => {
+    const { app, kv } = createStatusTestApp({
+      attempt: {
+        status: "committed",
+        orderId: "order_1",
+        checkoutToken: "chk_status",
+      },
+    });
+    const executionCtx = createWaitUntilContext();
+
+    const response = await app.request(
+      "/api/v1/orders/status/chk_status",
+      {},
+      { CACHE: kv } as never,
+      executionCtx as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        status: "completed",
+        orderId: "order_1",
+        receiptToken: "chk_status",
+      },
+    });
+    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
+    await executionCtx.waitUntil.mock.calls[0]?.[0];
+    const statusWrite = kv.put.mock.calls.find(([key]) => key === "checkout_status:chk_status");
+    const receiptWrite = kv.put.mock.calls.find(([key]) => key === "order_receipt:chk_status");
+    expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
+      status: "completed",
+      orderId: "order_1",
+      receiptToken: "chk_status",
+    });
+    expect(statusWrite?.[2]).toEqual({ expirationTtl: 86400 });
+    expect(JSON.parse(String(receiptWrite?.[1]))).toEqual({ orderId: "order_1" });
+    expect(receiptWrite?.[2]).toEqual({ expirationTtl: 60 * 60 * 24 * 7 });
+  });
+
+  it("repairs success hints when a processing D1 attempt already has an order", async () => {
+    const { app, kv } = createStatusTestApp({
+      attempt: {
+        status: "processing",
+        orderId: "order_1",
+        checkoutToken: "chk_status",
+      },
+      orderExists: true,
+    });
+    const executionCtx = createWaitUntilContext();
+
+    const response = await app.request(
+      "/api/v1/orders/status/chk_status",
+      {},
+      { CACHE: kv } as never,
+      executionCtx as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        status: "completed",
+        orderId: "order_1",
+        receiptToken: "chk_status",
+      },
+    });
+    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
+    await executionCtx.waitUntil.mock.calls[0]?.[0];
+    expect(kv.put.mock.calls.map(([key]) => key)).toEqual([
+      "checkout_status:chk_status",
+      "order_receipt:chk_status",
+    ]);
+  });
+
+  it("repairs stale processing KV when the order is already committed", async () => {
+    const { app, kv } = createStatusTestApp({
+      kvStatus: {
+        status: "processing",
+        orderId: "order_1",
+        updatedAt: Date.now() - 60_000,
+      },
+      orderExists: true,
+    });
+    const executionCtx = createWaitUntilContext();
+
+    const response = await app.request(
+      "/api/v1/orders/status/chk_status",
+      {},
+      { CACHE: kv } as never,
+      executionCtx as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        status: "completed",
+        orderId: "order_1",
+        receiptToken: "chk_status",
+      },
+    });
+    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
+    await executionCtx.waitUntil.mock.calls[0]?.[0];
+    const statusWrite = kv.put.mock.calls.find(([key]) => key === "checkout_status:chk_status");
+    expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
+      status: "completed",
+      orderId: "order_1",
+    });
+  });
+
+  it("repairs failed checkout status after a failed D1 fallback", async () => {
+    const { app, kv } = createStatusTestApp({
+      attempt: {
+        status: "failed",
+        orderId: "order_1",
+        checkoutToken: "chk_status",
+        lastError: "Discount code has reached its usage limit",
+      },
+    });
+    const executionCtx = createWaitUntilContext();
+
+    const response = await app.request(
+      "/api/v1/orders/status/chk_status",
+      {},
+      { CACHE: kv } as never,
+      executionCtx as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        status: "failed",
+        orderId: "order_1",
+        error: "Discount code has reached its usage limit",
+      },
+    });
+    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
+    await executionCtx.waitUntil.mock.calls[0]?.[0];
+    const statusWrite = kv.put.mock.calls.find(([key]) => key === "checkout_status:chk_status");
+    expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
+      status: "failed",
+      orderId: "order_1",
+      error: "Discount code has reached its usage limit",
+    });
+    expect(kv.put.mock.calls.some(([key]) => key === "order_receipt:chk_status")).toBe(false);
   });
 });
 
