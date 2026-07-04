@@ -555,7 +555,21 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         );
     }
 
-    return { shipmentId, isFinalShipment, fulfillmentStatus: newFulfillmentStatus };
+    return {
+        shipmentId,
+        isFinalShipment,
+        fulfillmentStatus: newFulfillmentStatus,
+        ...(shouldShipOrder
+            ? {
+                statusChange: {
+                    orderId,
+                    previousStatus: order.status,
+                    newStatus: OrderStatus.SHIPPED,
+                    version: order.version + 2,
+                },
+            }
+            : {}),
+    };
 }
 
 // Statuses that warrant a customer notification email

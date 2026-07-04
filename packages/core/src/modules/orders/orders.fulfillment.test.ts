@@ -728,11 +728,17 @@ describe("orders fulfillment side-effect ordering", () => {
       updateResults: [[{ id: "order_1" }]],
     });
 
-    await createFulfillmentShipment(db as never, "order_1", {
+    const result = await createFulfillmentShipment(db as never, "order_1", {
       itemIds: ["item_1"],
       isFinalShipment: true,
     });
 
+    expect(result.statusChange).toEqual({
+      orderId: "order_1",
+      previousStatus: OrderStatus.CONFIRMED,
+      newStatus: OrderStatus.SHIPPED,
+      version: 7,
+    });
     expect(updates[0]).toMatchObject({
       shipmentClaimId: expect.stringMatching(/^shp_/),
       version: 6,
@@ -799,6 +805,7 @@ describe("orders fulfillment side-effect ordering", () => {
       isFinalShipment: true,
       fulfillmentStatus: "complete",
     });
+    expect(result.statusChange).toBeUndefined();
     expect(batches).toHaveLength(1);
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
     expect(updates.at(-1)).toMatchObject({ inventoryAction: "deducted" });

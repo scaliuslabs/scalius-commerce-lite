@@ -17,6 +17,7 @@ import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidat
 import {
     enqueueOrderNotificationMessage,
     enqueueOrderNotificationsForStatus,
+    enqueueOrderStatusChangeNotification,
 } from "../../utils/order-notification-queue";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 
@@ -273,8 +274,16 @@ app.openapi(postFulfillRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.createFulfillmentShipment(db, orderId, data);
+    const { statusChange, ...responseData } = result;
     await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
-    return created(c, result);
+    await enqueueOrderStatusChangeNotification({
+        db,
+        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        statusChange,
+        trackingId: typeof data.trackingId === "string" ? data.trackingId : null,
+        source: "orders-manual-fulfillment",
+    });
+    return created(c, responseData);
 });
 
 // ─── PUT /:id/fulfillment-status ─────────────────────────────────────────────

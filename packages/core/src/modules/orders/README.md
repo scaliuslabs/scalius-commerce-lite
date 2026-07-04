@@ -140,6 +140,7 @@ All 10 buyer-visible order statuses that trigger status notifications are covere
 3. Claims the order with a version/status/fulfillment check, then creates a manual/own-courier `deliveryShipments` row and updates item fulfillment statuses to `shipped`
 4. If final shipment: updates order `fulfillmentStatus` to `complete`, and order status to `shipped` when it was still confirmed
 5. Applies inventory deduction for final shipments, including retries where the order was already marked shipped or delivered before inventory completed
+6. When the final manual shipment actually changes the buyer-visible order status to `shipped`, the core result returns a private `statusChange` fact and the API route records it through the durable order-notification outbox. Plain fulfillment-status-only edits do not reuse `order_completed`; that event remains tied to the buyer-visible `completed` order status.
 
 ### COD Actions
 
