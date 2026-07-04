@@ -24,7 +24,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
 const pnpmExecutable = resolvePnpmExecutable();
-const validCommands = new Set(["seed", "checkout-smoke", "load", "otp-smoke", "help"]);
+const validCommands = new Set(["seed", "checkout-smoke", "load", "otp-smoke", "payment-readiness", "help"]);
 
 const fixture = {
   cityId: "ops006_city_dhaka",
@@ -38,7 +38,29 @@ const fixture = {
   variantSku: "OPS006-SMOKE-SIMPLE",
   price: 1200,
   shippingCharge: 80,
+  partialPaymentAmount: 150,
 };
+
+const paymentReadinessGateways = [
+  {
+    gateway: "stripe",
+    orderId: "ops006_order_stripe",
+    token: "chk_ops006_stripe",
+    path: "/api/v1/payment/stripe/intent",
+  },
+  {
+    gateway: "sslcommerz",
+    orderId: "ops006_order_sslcommerz",
+    token: "chk_ops006_sslcommerz",
+    path: "/api/v1/payment/sslcommerz/session",
+  },
+  {
+    gateway: "polar",
+    orderId: "ops006_order_polar",
+    token: "chk_ops006_polar",
+    path: "/api/v1/payment/polar/session",
+  },
+];
 
 const defaults = {
   apiBaseUrl: process.env.LOCAL_API_BASE_URL || "http://localhost:8787",
@@ -281,6 +303,7 @@ export async function runCommand(config) {
     if (config.command === "checkout-smoke") return runCheckoutSmoke(config);
     if (config.command === "load") return runLoadSmoke(config);
     if (config.command === "otp-smoke") return runOtpSmoke(config);
+    if (config.command === "payment-readiness") return runPaymentReadinessSmoke(config);
     throw new Error(`Unknown command: ${config.command}`);
   });
 }
@@ -294,6 +317,8 @@ Commands:
   checkout-smoke   Seed, create a COD order, replay it, verify receipt, submit support request
   load             Seed, create bounded concurrent COD orders, print latency/status summary
   otp-smoke        Seed, exercise customer OTP readiness once without provider hammering
+  payment-readiness
+                   Seed committed local online orders and verify unconfigured gateways fail closed
 
 Options:
   --api <url>          Local API origin (default: ${defaults.apiBaseUrl})
@@ -328,6 +353,82 @@ function seedFixture(config) {
   };
   printResult(config, result, "Local post-sale fixture seeded.");
   return result;
+}
+
+export function buildPaymentReadinessFixtureSql() {
+  const orderIds = paymentReadinessGateways.map((item) => sqlString(item.orderId)).join(", ");
+  const onlineMethods = ["stripe", "sslcommerz", "polar", "cod"];
+
+  return [
+    `DELETE FROM payment_session_attempts WHERE order_id IN (${orderIds})`,
+    `DELETE FROM payment_plans WHERE order_id IN (${orderIds})`,
+    `DELETE FROM order_payments WHERE order_id IN (${orderIds})`,
+    `DELETE FROM order_items WHERE order_id IN (${orderIds})`,
+    `DELETE FROM checkout_attempts WHERE order_id IN (${orderIds})`,
+    `DELETE FROM orders WHERE id IN (${orderIds})`,
+    `DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz', 'polar')`,
+    `UPDATE site_settings SET
+      checkout_mode = 'all',
+      partial_payment_enabled = 1,
+      partial_payment_amount = ${fixture.partialPaymentAmount},
+      updated_at = unixepoch()
+      WHERE singleton_key = 'default'`,
+    upsertSetting("payment_methods", "enabled_methods", JSON.stringify(onlineMethods), "json"),
+    upsertSetting("payment_methods", "default_method", "cod", "string"),
+    ...paymentReadinessGateways.flatMap((gateway, index) => {
+      const totalAmount = fixture.price + fixture.shippingCharge;
+      const requestKey = `ops006_payment_readiness:${gateway.gateway}`;
+      const responsePayload = JSON.stringify({
+        success: true,
+        data: {
+          id: gateway.orderId,
+          orderId: gateway.orderId,
+          checkoutToken: gateway.token,
+          receiptToken: gateway.token,
+        },
+      });
+      return [
+        `INSERT INTO orders (
+          id, customer_name, customer_phone, customer_email, shipping_address,
+          city, zone, area, city_name, zone_name, area_name,
+          total_amount, shipping_charge, discount_amount, status, notes,
+          payment_method, payment_status, paid_amount, balance_due,
+          fulfillment_status, inventory_pool, inventory_action, version,
+          created_at, updated_at, deleted_at
+        ) VALUES (
+          ${sqlString(gateway.orderId)}, ${sqlString(`OPS006 ${gateway.gateway} Buyer`)},
+          ${sqlString(`+88017${String(20000000 + index).slice(-8)}`)},
+          ${sqlString(`ops006-${gateway.gateway}@example.com`)},
+          'House 1, Road 10, Mirpur DOHS, Dhaka',
+          ${sqlString(fixture.cityId)}, ${sqlString(fixture.zoneId)}, ${sqlString(fixture.areaId)},
+          'Dhaka', 'Mirpur', 'Section 10',
+          ${totalAmount}, ${fixture.shippingCharge}, 0, 'pending',
+          'Disposable local payment readiness smoke order.',
+          ${sqlString(gateway.gateway)}, 'unpaid', 0, ${totalAmount},
+          'pending', 'regular', 'none', 1, unixepoch(), unixepoch(), NULL
+        )`,
+        `INSERT INTO order_items (
+          id, order_id, product_id, variant_id, quantity, price,
+          product_name, variant_label, inventory_tracked, fulfillment_status, created_at
+        ) VALUES (
+          ${sqlString(`ops006_item_${gateway.gateway}`)}, ${sqlString(gateway.orderId)},
+          ${sqlString(fixture.productId)}, ${sqlString(fixture.variantId)},
+          1, ${fixture.price}, ${sqlString(fixture.productName)}, NULL, 0, 'pending', unixepoch()
+        )`,
+        `INSERT INTO checkout_attempts (
+          id, request_key, request_hash, checkout_token, order_id, status,
+          payment_method, total_amount, response_payload, attempts,
+          claim_id, claim_expires_at, last_error, created_at, updated_at
+        ) VALUES (
+          ${sqlString(`ops006_attempt_${gateway.gateway}`)}, ${sqlString(requestKey)},
+          ${sqlString(`${requestKey}:hash`)}, ${sqlString(gateway.token)},
+          ${sqlString(gateway.orderId)}, 'committed', ${sqlString(gateway.gateway)},
+          ${totalAmount}, ${sqlString(responsePayload)}, 1,
+          NULL, NULL, NULL, unixepoch(), unixepoch()
+        )`,
+      ];
+    }),
+  ].map((statement) => compactSql(statement)).join("; ");
 }
 
 async function runCheckoutSmoke(config) {
@@ -479,6 +580,51 @@ async function runOtpSmoke(config) {
       ? "OTP send smoke passed with a configured local provider."
       : "OTP readiness smoke passed: local provider is unavailable and failed closed once.",
   );
+  return result;
+}
+
+async function runPaymentReadinessSmoke(config) {
+  runD1Execute(config, buildPaymentReadinessFixtureSql());
+  const results = [];
+
+  for (const gateway of paymentReadinessGateways) {
+    const response = await requestJson(
+      config,
+      "POST",
+      gateway.path,
+      {
+        orderId: gateway.orderId,
+        receiptToken: gateway.token,
+        paymentType: "deposit",
+        depositAmount: fixture.partialPaymentAmount,
+      },
+      [503],
+    );
+    results.push({
+      gateway: gateway.gateway,
+      status: response.status,
+      message: response.errorMessage,
+    });
+  }
+
+  const sideEffects = readD1FirstRow(config, `
+    SELECT
+      (SELECT COUNT(*) FROM payment_plans WHERE order_id IN (${paymentReadinessGateways.map((item) => sqlString(item.orderId)).join(", ")})) AS payment_plans,
+      (SELECT COUNT(*) FROM payment_session_attempts WHERE order_id IN (${paymentReadinessGateways.map((item) => sqlString(item.orderId)).join(", ")})) AS payment_session_attempts
+  `);
+  const paymentPlanCount = Number(sideEffects?.payment_plans ?? 0);
+  const attemptCount = Number(sideEffects?.payment_session_attempts ?? 0);
+  assertCondition(paymentPlanCount === 0, `Expected zero payment plans, found ${paymentPlanCount}.`);
+  assertCondition(attemptCount === 0, `Expected zero payment session attempts, found ${attemptCount}.`);
+
+  const result = {
+    gateways: results,
+    sideEffects: {
+      paymentPlans: paymentPlanCount,
+      paymentSessionAttempts: attemptCount,
+    },
+  };
+  printResult(config, result, "Payment gateway readiness smoke passed: unconfigured local gateways failed closed without payment side effects.");
   return result;
 }
 

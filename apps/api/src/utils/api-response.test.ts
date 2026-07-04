@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { errorResponseFromError } from "./api-response";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { NotFoundError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { errorResponseFromError, logApiError } from "./api-response";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("errorResponseFromError", () => {
   it("hides unexpected internal error messages", () => {
@@ -35,5 +39,52 @@ describe("errorResponseFromError", () => {
     expect(response.body.success).toBe(false);
     expect(response.body.error.code).toBe("NOT_FOUND");
     expect(response.body.error.message).toBe("Order not found");
+  });
+});
+
+describe("logApiError", () => {
+  it("keeps routine client errors out of logs", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    logApiError(new ValidationError("Bad checkout"), { method: "POST", path: "/api/v1/orders" });
+
+    expect(info).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("logs expected service unavailability as one compact warning", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    logApiError(new ServiceUnavailableError("Stripe is not configured"), {
+      method: "POST",
+      path: "/api/v1/payment/stripe/intent",
+    });
+
+    expect(warn).toHaveBeenCalledWith(
+      "[api-error]",
+      JSON.stringify({
+        status: 503,
+        code: "SERVICE_UNAVAILABLE",
+        message: "Stripe is not configured",
+        method: "POST",
+        path: "/api/v1/payment/stripe/intent",
+      }),
+    );
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("keeps full error objects for unexpected crashes", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const crash = new Error("Unexpected DB crash");
+
+    logApiError(crash, { method: "GET", path: "/api/v1/admin/orders" });
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith("API Error (onError):", crash);
   });
 });

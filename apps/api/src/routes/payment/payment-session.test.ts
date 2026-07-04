@@ -510,6 +510,64 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      label: "Stripe",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      settings: mocks.getStripeSettings,
+      gateway: mocks.createPaymentIntent,
+    },
+    {
+      label: "SSLCommerz",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      settings: mocks.getSSLCommerzSettings,
+      gateway: mocks.initSSLCommerzSession,
+    },
+    {
+      label: "Polar",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      settings: mocks.getPolarSettings,
+      gateway: mocks.createPolarCheckout,
+    },
+  ])("rejects $label deposits before creating a payment plan when the gateway is not ready", async ({
+    paymentMethod,
+    path,
+    settings,
+    gateway,
+  }) => {
+    settings.mockResolvedValueOnce(null);
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod,
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 50,
+    });
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+          paymentType: "deposit",
+          depositAmount: 50,
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(503);
+    expect(settings).toHaveBeenCalledTimes(1);
+    expect(db.__insertedValues).toHaveLength(0);
+    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
+    expect(gateway).not.toHaveBeenCalled();
+  });
+
   it("creates Stripe deposit intents from server policy and ignores manual capture/currency", async () => {
     const { app, db, kv } = createTestApp("valid", {
       paymentMethod: "stripe",

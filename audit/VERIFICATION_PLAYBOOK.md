@@ -544,6 +544,7 @@ rm -rf /tmp/scalius-commerce-ops006-state
 node scripts/dev-postsale.mjs checkout-smoke --state /tmp/scalius-commerce-ops006-state
 node scripts/dev-postsale.mjs load --state /tmp/scalius-commerce-ops006-state --skip-migrations --orders 10 --concurrency 3
 node scripts/dev-postsale.mjs otp-smoke --state /tmp/scalius-commerce-ops006-state --skip-migrations
+node scripts/dev-postsale.mjs payment-readiness --state /tmp/scalius-commerce-ops006-state --skip-migrations
 ```
 
 Expected result:
@@ -552,6 +553,7 @@ Expected result:
 - `checkout-smoke` seeds one active shipping method, one active city/zone/area, COD settings, email notification settings, and one published SKU-backed product, then validates cart state, creates a COD order, replays the same checkout request id, fetches the receipt, and submits one support request.
 - `load` creates only disposable local COD orders and reports `201` counts plus min/p50/p95/max/avg latency. Start with `--orders 10 --concurrency 3`; raise the numbers only when investigating measured local bottlenecks.
 - `otp-smoke` passes when a local delivery provider is configured, or when the runtime fails closed with `503` and leaves no pending OTP challenge for dummy/unconfigured delivery.
+- `payment-readiness` seeds committed local Stripe, SSLCommerz, and Polar orders with receipt-token proof, clears local gateway credentials, and expects each payment-session endpoint to fail closed with `503` before writing `payment_plans` or `payment_session_attempts`. It must not contact external providers.
 
 Production and staging mutation policy:
 

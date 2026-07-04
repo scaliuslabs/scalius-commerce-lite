@@ -382,6 +382,7 @@ pnpm dev:post-sale:seed   # Seed the local disposable checkout/order fixture
 pnpm dev:post-sale:smoke  # Local-only COD cart/order/replay/receipt/support smoke
 pnpm dev:post-sale:load   # Local-only bounded disposable COD order load smoke
 pnpm dev:post-sale:otp    # Local-only customer OTP readiness smoke
+pnpm dev:post-sale:payment-readiness  # Local-only online gateway readiness fail-closed smoke
 pnpm dev:doctor         # Diagnose local env, state, ports, and service readiness
 pnpm dev:doctor:api     # Require API :8787 to be running
 pnpm dev:doctor:admin   # Require API :8787 + admin-v2 :4323 to be running

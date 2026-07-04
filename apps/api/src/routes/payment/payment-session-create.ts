@@ -203,16 +203,16 @@ async function createStripePaymentSessionForOrder(
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
   }, checkoutFlowSettings);
-  await ensurePendingPaymentPlanForSession(db, order, policy);
 
-  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const currency = currencyConfig.code.toLowerCase();
   const stripe = await loadCheckoutGatewaySettings(
     db,
     c.env.CACHE,
     encryptionKey,
     "stripe",
   );
+  await ensurePendingPaymentPlanForSession(db, order, policy);
+  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
+  const currency = currencyConfig.code.toLowerCase();
 
   const decimals = getDecimalPlaces(currency);
   const amountInSmallestUnit = Math.round(policy.chargeAmount * Math.pow(10, decimals));
@@ -389,16 +389,16 @@ async function createSSLCommerzPaymentSessionForOrder(
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
   }, checkoutFlowSettings);
-  await ensurePendingPaymentPlanForSession(db, order, policy);
 
-  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const currency = currencyConfig.code;
   const ssl = await loadCheckoutGatewaySettings(
     db,
     c.env.CACHE,
     encryptionKey,
     "sslcommerz",
   );
+  await ensurePendingPaymentPlanForSession(db, order, policy);
+  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
+  const currency = currencyConfig.code;
 
   const origin = getTrustedApiOrigin(c.env, c.req.url);
   const apiBase = `${origin}/api/v1`;
@@ -538,8 +538,14 @@ async function createPolarPaymentSessionForOrder(
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
   }, checkoutFlowSettings);
-  await ensurePendingPaymentPlanForSession(db, order, policy);
 
+  const polarSettings = await loadCheckoutGatewaySettings(
+    db,
+    kv,
+    encryptionKey,
+    "polar",
+  );
+  await ensurePendingPaymentPlanForSession(db, order, policy);
   const currencyConfig = await getCurrencyConfig(db, kv);
   let currency = currencyConfig.code.toLowerCase();
   let paymentAmount = policy.chargeAmount;
@@ -560,13 +566,6 @@ async function createPolarPaymentSessionForOrder(
     paymentAmount = Math.round((paymentAmount / rate) * 100) / 100;
     currency = "usd";
   }
-
-  const polarSettings = await loadCheckoutGatewaySettings(
-    db,
-    kv,
-    encryptionKey,
-    "polar",
-  );
 
   const decimals = getDecimalPlaces(currency);
   const amountInCents = Math.round(paymentAmount * Math.pow(10, decimals));
