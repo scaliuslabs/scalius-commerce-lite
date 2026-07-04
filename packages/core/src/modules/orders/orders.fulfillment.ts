@@ -28,6 +28,7 @@ import {
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
+import { normalizeOrderStatus } from "@scalius/shared/order-state";
 import { validateTransition } from "./order-state-machine";
 import type { StatusUpdateResult } from "./orders.types";
 import type { OrderNotificationType } from "../notifications/notification-types";
@@ -587,6 +588,11 @@ const NOTIFICATION_STATUSES: Record<string, OrderNotificationType> = {
 };
 
 export async function updateOrderStatus(db: Database, orderId: string, status: string, data?: { trackingId?: string }): Promise<StatusUpdateResult> {
+    const nextStatus = normalizeOrderStatus(status);
+    if (!nextStatus) {
+        throw new ValidationError("Unknown order status.");
+    }
+
     const existingOrder = await db.select({
         status: orders.status,
         inventoryAction: orders.inventoryAction,
@@ -601,18 +607,22 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
+    const currentStatus = normalizeOrderStatus(existingOrder.status);
+    if (!currentStatus) {
+        throw new ValidationError("Order has an unknown current status.");
+    }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, orderId);
-    if (existingOrder.status === status) {
-        await reconcileInventoryForStatus(db, orderId, status);
+    if (currentStatus === nextStatus) {
+        await reconcileInventoryForStatus(db, orderId, nextStatus);
         return { message: "Status unchanged; inventory reconciled" };
     }
 
     // Validate the status transition before applying any side effects
-    validateTransition("order", existingOrder.status, status);
+    validateTransition("order", currentStatus, nextStatus);
 
     const isCod = existingOrder.paymentMethod === PaymentMethod.COD;
-    const isDeliveredOrCompleted = status === OrderStatus.DELIVERED || status === OrderStatus.COMPLETED;
+    const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
     if (isCod && isDeliveredOrCompleted) {
         const hasCodCollection = await hasRecordedCodCollection(db, orderId);
         if (
@@ -630,7 +640,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     // concurrent callers (e.g. admin + webhook) both apply inventory before
     // either detects the conflict.
     const result = await db.update(orders).set({
-        status,
+        status: nextStatus,
         version: existingOrder.version + 1,
         updatedAt: sql`unixepoch()`,
     }).where(and(
@@ -647,12 +657,12 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     // inventoryAction changes, roll back the buyer-visible status so operators
     // do not see a completed transition with stale stock counters.
     try {
-        await reconcileInventoryForStatus(db, orderId, status);
+        await reconcileInventoryForStatus(db, orderId, nextStatus);
     } catch (error: unknown) {
         await rollbackOrderStatusIfInventoryUnchanged(db, {
             orderId,
-            previousStatus: existingOrder.status,
-            claimedStatus: status,
+            previousStatus: currentStatus,
+            claimedStatus: nextStatus,
             claimedVersion: existingOrder.version + 1,
             previousInventoryAction: existingOrder.inventoryAction as string,
         });
@@ -660,7 +670,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     }
 
     // Build notification payload if the new status warrants one
-    const notificationType = NOTIFICATION_STATUSES[status];
+    const notificationType = NOTIFICATION_STATUSES[nextStatus];
     const notification = notificationType
         ? {
             orderId,
@@ -670,14 +680,14 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
             dedupeKey: buildOrderStatusNotificationDedupeKey({
                 orderId,
                 notificationType,
-                previousStatus: existingOrder.status,
-                newStatus: status,
+                previousStatus: currentStatus,
+                newStatus: nextStatus,
                 version: existingOrder.version + 1,
             }),
-            previousStatus: existingOrder.status,
-            newStatus: status,
+            previousStatus: currentStatus,
+            newStatus: nextStatus,
             version: existingOrder.version + 1,
-            ...(status === OrderStatus.SHIPPED && data?.trackingId
+            ...(nextStatus === OrderStatus.SHIPPED && data?.trackingId
                 ? { trackingId: data.trackingId }
                 : {}),
         }

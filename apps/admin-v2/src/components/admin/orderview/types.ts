@@ -143,38 +143,7 @@ export interface OrderShipment {
   lastChecked?: OrderTimestamp | null;
 }
 
-// All valid order statuses — matches the state machine in order-state-machine.ts
-export const ORDER_STATUSES = [
-  "pending",
-  "processing",
-  "confirmed",
-  "shipped",
-  "delivered",
-  "completed",
-  "cancelled",
-  "returned",
-  "refunded",
-  "partially_refunded",
-  "incomplete",
-] as const;
-
-// State machine transitions — which statuses can transition to which.
-// Mirrors ORDER_STATUS_TRANSITIONS in packages/core/src/modules/orders/order-state-machine.ts
-export const ORDER_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
-  incomplete: ["pending", "cancelled"],
-  pending: ["processing", "confirmed", "cancelled"],
-  processing: ["confirmed", "cancelled"],
-  confirmed: ["shipped", "cancelled"],
-  shipped: ["delivered", "returned", "cancelled"],
-  delivered: ["completed", "returned", "refunded", "partially_refunded"],
-  completed: ["returned", "refunded", "partially_refunded"],
-  cancelled: ["pending", "confirmed"],
-  returned: ["refunded"],
-  refunded: [],
-  partially_refunded: ["refunded"],
-} as const;
-
-/** Get valid next statuses for a given current status */
-export function getAvailableTransitions(currentStatus: string): string[] {
-  return [...(ORDER_STATUS_TRANSITIONS[currentStatus.toLowerCase()] || [])];
-}
+export {
+  ORDER_STATUSES,
+  getAvailableOrderStatusTransitions as getAvailableTransitions,
+} from "@scalius/shared/order-state";
