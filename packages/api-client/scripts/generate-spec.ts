@@ -14,8 +14,10 @@ async function generateSpec() {
   // Strategy 1: Try importing the Hono app directly (works when all deps resolve)
   try {
     const appPath = resolve(monorepoRoot, "apps/api/src/app");
+    const contractPath = resolve(monorepoRoot, "apps/api/src/openapi-contract");
     const { default: app } = await import(appPath);
-    const spec = app.getOpenAPIDocument({
+    const { finalizeOpenApiContract } = await import(contractPath);
+    const spec = finalizeOpenApiContract(app.getOpenAPIDocument({
       openapi: "3.0.0",
       info: {
         title: "Scalius Commerce API",
@@ -24,7 +26,7 @@ async function generateSpec() {
           "E-commerce platform API powering admin dashboard and storefront",
       },
       servers: [{ url: "/", description: "Default" }],
-    });
+    }));
     writeSpec(spec);
     return;
   } catch (e) {

@@ -16,7 +16,32 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "bearerFormat": "JWT",
+        "description": "Service JWT returned by /auth/token for protected API-to-API endpoints."
+      },
+      "apiTokenHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Token",
+        "description": "Static service token used only to mint short-lived service JWTs through /auth/token."
+      },
+      "adminSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+        "description": "Better Auth dashboard session cookie for admin/RBAC protected endpoints."
+      },
+      "scannerSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "scanner_sid",
+        "description": "Limited scanner workflow cookie accepted only by exact inventory scanner endpoints."
+      },
+      "customerSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "cs_tok",
+        "description": "Customer account session cookie for customer account endpoints."
       }
     },
     "schemas": {},
@@ -303,7 +328,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiTokenHeader": []
+          }
+        ]
       }
     },
     "/api/v1/auth/firebase-config": {
@@ -885,7 +915,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/auth/revoke": {
@@ -1168,7 +1203,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/auth/token-stats": {
@@ -1447,7 +1487,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/attributes/filterable": {
@@ -8627,7 +8672,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "customerSession": []
+          }
+        ]
       }
     },
     "/api/v1/customer-auth/logout": {
@@ -8910,7 +8960,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "customerSession": []
+          }
+        ]
       }
     },
     "/api/v1/customer-auth/profile": {
@@ -9287,7 +9342,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "customerSession": []
+          }
+        ]
       }
     },
     "/api/v1/customer-auth/orders": {
@@ -9920,7 +9980,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "customerSession": []
+          }
+        ]
       }
     },
     "/api/v1/customer-auth/orders/{id}": {
@@ -11331,7 +11396,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "customerSession": []
+          }
+        ]
       }
     },
     "/api/v1/customer-auth/orders/{id}/support-requests": {
@@ -11960,7 +12030,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "customerSession": []
+          }
+        ]
       }
     },
     "/api/v1/customer-auth/orders/{id}/payment-session": {
@@ -12555,7 +12630,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "customerSession": []
+          }
+        ]
       }
     },
     "/api/v1/checkout-languages/active": {
@@ -15952,7 +16032,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/cache/groups": {
@@ -16245,7 +16330,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/cache/last-cleared": {
@@ -16532,7 +16622,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/cache/storefront-dlq": {
@@ -16932,7 +17027,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/cache/storefront-dlq/{id}/replay": {
@@ -17334,7 +17434,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/cache/storefront-dlq/{id}/ignore": {
@@ -17721,7 +17826,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/cache/clear": {
@@ -18004,7 +18114,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/cache/clear-group": {
@@ -18319,7 +18434,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/orders/status/{token}": {
@@ -18458,7 +18578,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/orders/receipt/{id}": {
@@ -18824,7 +18949,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/orders/receipt/{id}/support-requests": {
@@ -19402,7 +19532,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/orders/cart-validation": {
@@ -19776,7 +19911,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/orders": {
@@ -20587,7 +20727,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/categories": {
@@ -21022,7 +21167,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -21381,7 +21531,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/categories/{id}": {
@@ -21710,7 +21865,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -22072,7 +22232,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -22333,7 +22498,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/categories/bulk-delete": {
@@ -22610,7 +22780,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/categories/bulk-restore": {
@@ -22883,7 +23058,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/categories/{id}/permanent": {
@@ -23146,7 +23326,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/categories/{id}/restore": {
@@ -23432,7 +23617,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/form-options": {
@@ -23758,7 +23948,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/category-options": {
@@ -24056,7 +24251,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections": {
@@ -24504,7 +24704,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -24911,7 +25116,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/by-ids": {
@@ -25230,7 +25440,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/bulk-delete": {
@@ -25507,7 +25722,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/bulk-activate": {
@@ -25780,7 +26000,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/bulk-deactivate": {
@@ -26053,7 +26278,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/bulk-restore": {
@@ -26326,7 +26556,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/{id}/restore": {
@@ -26619,7 +26854,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/reorder": {
@@ -26927,7 +27167,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/{id}": {
@@ -27080,7 +27325,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -27491,7 +27741,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -27752,7 +28007,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/collections/{id}/permanent": {
@@ -28015,7 +28275,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/customers": {
@@ -28472,7 +28737,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -28805,7 +29075,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/customers/bulk-delete": {
@@ -28842,7 +29117,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/customers/{id}": {
@@ -29237,7 +29517,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -29564,7 +29849,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -29585,7 +29875,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/customers/{id}/permanent": {
@@ -29608,7 +29903,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/customers/{id}/restore": {
@@ -29631,7 +29931,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/customers/{id}/history": {
@@ -30146,7 +30451,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/pages": {
@@ -30689,7 +30999,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -31120,7 +31435,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/pages/bulk-delete": {
@@ -31397,7 +31717,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/pages/bulk-publish": {
@@ -31670,7 +31995,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/pages/bulk-unpublish": {
@@ -31943,7 +32273,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/pages/bulk-restore": {
@@ -32216,7 +32551,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/pages/{id}/restore": {
@@ -32509,7 +32849,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/pages/{id}": {
@@ -32957,7 +33302,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -33379,7 +33729,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -33640,7 +33995,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/pages/{id}/permanent": {
@@ -33903,7 +34263,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets": {
@@ -34448,7 +34813,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -35018,7 +35388,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/placement-targets": {
@@ -35378,7 +35753,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/bulk-delete": {
@@ -35655,7 +36035,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/bulk-activate": {
@@ -35928,7 +36313,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/bulk-deactivate": {
@@ -36201,7 +36591,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/bulk-restore": {
@@ -36474,7 +36869,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/{id}": {
@@ -36932,7 +37332,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -37504,7 +37909,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -37765,7 +38175,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/{id}/permanent": {
@@ -38028,7 +38443,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/{id}/restore": {
@@ -38291,7 +38711,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/{id}/toggle-status": {
@@ -38749,7 +39174,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/{id}/history": {
@@ -39078,7 +39508,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -39428,7 +39863,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/{id}/history/restore": {
@@ -39738,7 +40178,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/widgets/{id}/history/{versionId}": {
@@ -40009,7 +40454,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/discounts": {
@@ -40518,7 +40968,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -41036,7 +41491,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/discounts/bulk-delete": {
@@ -41073,7 +41533,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/discounts/bulk-restore": {
@@ -41106,7 +41571,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/discounts/{id}": {
@@ -41505,7 +41975,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -42037,7 +42512,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -42058,7 +42538,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/discounts/{id}/permanent": {
@@ -42081,7 +42566,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/discounts/{id}/toggle-status": {
@@ -42395,7 +42885,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/discounts/{id}/restore": {
@@ -42681,7 +43176,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/media": {
@@ -43165,7 +43665,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/media/upload": {
@@ -43629,7 +44134,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/media/{id}": {
@@ -44019,7 +44529,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -44407,7 +44922,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -44668,7 +45188,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/media/move": {
@@ -44976,7 +45501,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/media/folders": {
@@ -45313,7 +45843,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -45667,7 +46202,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/media/folders/{id}": {
@@ -46029,7 +46569,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -46290,7 +46835,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/inventory": {
@@ -46716,7 +47266,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/inventory/alerts": {
@@ -46862,7 +47417,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "patch": {
         "tags": [
@@ -46914,7 +47474,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/inventory/{variantId}/adjust": {
@@ -47062,7 +47627,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/inventory/scanner/lookup": {
@@ -47250,7 +47820,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "scannerSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/inventory/stock-adjust": {
@@ -47372,7 +47950,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "scannerSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/inventory/stock-set": {
@@ -47495,7 +48081,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "scannerSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/navigation/items": {
@@ -47844,7 +48438,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/navigation/preview-products": {
@@ -48188,7 +48787,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/navigation": {
@@ -48481,7 +49085,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -48790,7 +49399,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/navigation/{id}": {
@@ -49111,7 +49725,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -49393,7 +50012,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/search": {
@@ -49839,7 +50463,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/search/reindex": {
@@ -49882,7 +50511,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/shipments/{id}": {
@@ -50077,7 +50711,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -50168,7 +50807,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/shipments/{id}/check-status": {
@@ -50383,7 +51027,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/analytics": {
@@ -50719,7 +51368,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -51066,7 +51720,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/analytics/{id}": {
@@ -51386,7 +52045,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -51755,7 +52419,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -52061,7 +52730,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/analytics/{id}/toggle": {
@@ -52390,7 +53064,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/dashboard/home-summary": {
@@ -52550,7 +53229,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/dashboard/summary": {
@@ -52714,7 +53398,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/dashboard/activity": {
@@ -52780,7 +53469,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/dashboard": {
@@ -52971,7 +53665,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/fraud-checker": {
@@ -53291,7 +53990,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -53654,7 +54358,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -54022,7 +54731,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/fraud-checker/{id}": {
@@ -54308,7 +55022,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/fraud-checker/{id}/test": {
@@ -54607,7 +55326,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/fraud-checker/lookup": {
@@ -54963,7 +55687,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/rbac/roles": {
@@ -55306,7 +56035,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -55601,6 +56335,44 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -55681,7 +56453,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/rbac/roles/{id}": {
@@ -56031,7 +56808,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -56405,7 +57187,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -56609,6 +57396,44 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -56689,7 +57514,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/rbac/user-roles": {
@@ -56908,6 +57738,44 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -56988,7 +57856,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -57285,7 +58158,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/rbac/user-permissions": {
@@ -57588,7 +58466,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -57885,7 +58768,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/rbac/permissions": {
@@ -58217,7 +59105,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/rbac/my-permissions": {
@@ -58555,7 +59448,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/currency": {
@@ -58846,7 +59744,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -59147,7 +60050,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/general": {
@@ -59440,7 +60348,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/header": {
@@ -59869,7 +60782,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/footer": {
@@ -60277,7 +61195,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/theme": {
@@ -60566,7 +61489,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -60867,7 +61795,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/media": {
@@ -61166,7 +62099,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -61502,7 +62440,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/seo": {
@@ -61797,7 +62740,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -62101,7 +63049,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/storefront-url": {
@@ -62384,7 +63337,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -62679,7 +63637,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/allowed-countries": {
@@ -62972,7 +63935,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -63281,7 +64249,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/business": {
@@ -63616,7 +64589,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -63950,7 +64928,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/payment-methods": {
@@ -64432,7 +65415,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -64750,7 +65738,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/stripe": {
@@ -65045,7 +66038,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -65349,7 +66347,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/sslcommerz": {
@@ -65644,7 +66647,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -65948,7 +66956,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/polar": {
@@ -66247,7 +67260,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -66554,7 +67572,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/checkout-readiness": {
@@ -66852,7 +67875,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/auth": {
@@ -67222,7 +68250,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -67602,7 +68635,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/security": {
@@ -67885,7 +68923,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -68180,7 +69223,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/email": {
@@ -68496,7 +69544,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -68803,7 +69856,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/firebase": {
@@ -69093,7 +70151,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -69394,7 +70457,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/shipping-methods": {
@@ -69821,7 +70889,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -70186,7 +71259,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/shipping-methods/{id}": {
@@ -70526,7 +71604,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -70895,7 +71978,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -70956,7 +72044,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/shipping-methods/{id}/restore": {
@@ -71249,7 +72342,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/shipping-methods/{id}/permanent-delete": {
@@ -71312,7 +72410,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/delivery-providers": {
@@ -71643,7 +72746,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -72024,7 +73132,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -72407,7 +73520,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/delivery-providers/create-test": {
@@ -72746,7 +73864,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/delivery-providers/{id}": {
@@ -73084,7 +74207,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -73381,7 +74509,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -73665,7 +74798,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/hero-sliders": {
@@ -74028,7 +75166,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -74438,7 +75581,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/hero-sliders/{id}": {
@@ -74808,7 +75956,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -75224,7 +76377,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -75592,7 +76750,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/meta-conversions": {
@@ -75977,7 +77140,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -76393,7 +77561,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/meta-conversions/logs": {
@@ -76787,7 +77960,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -77068,7 +78246,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -77349,7 +78532,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/notification-channels": {
@@ -77687,7 +78875,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -78067,7 +79260,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/notification-channels/admin-channels": {
@@ -78365,7 +79563,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -78684,7 +79887,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/sms": {
@@ -79013,7 +80221,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -79341,7 +80554,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/widget-ai": {
@@ -79620,7 +80838,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -80194,7 +81417,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/status": {
@@ -80264,7 +81492,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/cod": {
@@ -80404,7 +81637,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -80535,7 +81773,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/fulfill": {
@@ -80701,7 +81944,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -80795,7 +82043,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/fulfillment-status": {
@@ -80870,7 +82123,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/shipments": {
@@ -81036,7 +82294,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -81261,7 +82524,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/shipments/{shipmentId}": {
@@ -81464,7 +82732,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -81556,7 +82829,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/shipments/{shipmentId}/status": {
@@ -81767,7 +83045,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/shipments/{shipmentId}/refresh": {
@@ -82018,7 +83301,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/return": {
@@ -82114,7 +83402,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/refund": {
@@ -82214,7 +83507,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/:id/invoice": {
@@ -82739,7 +84037,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/support-requests/{requestId}/status": {
@@ -83334,7 +84637,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders": {
@@ -83765,7 +85073,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -83916,7 +85229,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/bulk-delete": {
@@ -83953,7 +85271,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/bulk-ship": {
@@ -84074,7 +85397,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}": {
@@ -84835,7 +86163,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -85001,7 +86334,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -85022,7 +86360,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/restore": {
@@ -85045,7 +86388,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/permanent": {
@@ -85068,7 +86416,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/items": {
@@ -85165,7 +86518,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/payments": {
@@ -85854,7 +87212,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/notifications": {
@@ -86153,7 +87516,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/notifications/{outboxId}/retry": {
@@ -86229,7 +87597,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/orders/{id}/form-data": {
@@ -86707,7 +88080,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/stats": {
@@ -87002,7 +88380,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/lookup-barcode": {
@@ -87181,7 +88564,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products": {
@@ -87665,7 +89053,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -88108,7 +89501,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/by-ids": {
@@ -88438,7 +89836,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/bulk-delete": {
@@ -88715,7 +90118,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}": {
@@ -89161,7 +90569,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -89611,7 +91024,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -89872,7 +91290,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}/restore": {
@@ -90158,7 +91581,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}/permanent": {
@@ -90421,7 +91849,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}/variants": {
@@ -90933,7 +92366,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "get": {
         "tags": [
@@ -91372,7 +92810,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}/variants/{variantId}": {
@@ -91892,7 +93335,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -92161,7 +93609,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}/variants/bulk-create": {
@@ -92711,7 +94164,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}/variants/bulk-delete": {
@@ -92994,7 +94452,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}/variants/bulk-update": {
@@ -93351,7 +94814,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}/variants/{variantId}/duplicate": {
@@ -93789,7 +95257,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/products/{id}/variants/sort-order": {
@@ -94116,7 +95589,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -94458,7 +95936,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/auth/users": {
@@ -94844,7 +96327,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -95178,7 +96666,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/auth/users/{id}": {
@@ -95471,7 +96964,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/auth/change-password": {
@@ -95777,7 +97275,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/auth/update-profile": {
@@ -96102,7 +97605,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/auth/2fa/info": {
@@ -96393,7 +97901,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/auth/2fa/complete-verification": {
@@ -96694,7 +98207,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/auth/2fa/method": {
@@ -96999,7 +98517,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/auth/2fa/verify": {
@@ -97311,7 +98834,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/auth/account-security": {
@@ -97599,7 +99127,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/ai-context/batch-details": {
@@ -98379,7 +99912,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/ai-prompts": {
@@ -98652,7 +100190,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/ai/models": {
@@ -98972,7 +100515,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/ai/generate": {
@@ -99391,7 +100939,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/ai/generate-staged": {
@@ -99791,7 +101344,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/attributes": {
@@ -100237,7 +101795,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -100615,7 +102178,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/attributes/{id}": {
@@ -101001,7 +102569,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -101262,7 +102835,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/attributes/{id}/permanent": {
@@ -101525,7 +103103,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/attributes/bulk-delete": {
@@ -101803,7 +103386,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/attributes/bulk-restore": {
@@ -102081,7 +103669,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/attributes/{id}/restore": {
@@ -102374,7 +103967,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/attributes/{id}/values": {
@@ -102770,7 +104368,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -103072,7 +104675,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -103386,7 +104994,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -103695,7 +105308,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/abandoned-checkouts": {
@@ -104112,7 +105730,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -104144,7 +105767,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/abandoned-checkouts/bulk-delete": {
@@ -104178,7 +105806,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/fcm-token": {
@@ -104487,7 +106120,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/fcm-token-cleanup": {
@@ -104795,7 +106433,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/delivery-locations": {
@@ -105218,7 +106861,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -105615,7 +107263,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -105916,7 +107569,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/delivery-locations/all": {
@@ -106219,7 +107877,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/delivery-locations/{id}": {
@@ -106560,7 +108223,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -106943,7 +108611,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -107227,7 +108900,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/checkout-languages/active": {
@@ -107596,7 +109274,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/checkout-languages": {
@@ -108078,7 +109761,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -108495,7 +110183,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/checkout-languages/{id}": {
@@ -108866,7 +110559,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "put": {
         "tags": [
@@ -109289,7 +110987,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "patch": {
         "tags": [
@@ -109573,7 +111276,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -109594,7 +111302,12 @@
           "204": {
             "description": "No content"
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/checkout-languages/{id}/restore": {
@@ -109880,7 +111593,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/abandoned-checkouts": {
@@ -110192,7 +111910,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/admin/settings/abandoned-checkouts/cleanup": {
@@ -110493,7 +112216,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
       }
     },
     "/api/v1/setup": {
@@ -110769,6 +112497,44 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -110845,6 +112611,44 @@
                     "success",
                     "error"
                   ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -111182,6 +112986,44 @@
                     "success",
                     "error"
                   ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -111619,6 +113461,44 @@
                     "success",
                     "error"
                   ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -112073,6 +113953,44 @@
                     "success",
                     "error"
                   ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
                 }
               }
             }
