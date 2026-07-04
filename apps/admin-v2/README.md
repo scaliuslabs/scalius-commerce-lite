@@ -9,7 +9,7 @@ Modern admin dashboard built with **TanStack Start** (full-stack React framework
 - **UI**: React 19 + shadcn/ui + Tailwind CSS v4 + Radix primitives
 - **Tables**: TanStack Table with server-side pagination
 - **Forms**: React Hook Form + Zod validation
-- **Rich Text**: Product descriptions lazy-load the real Tiptap editor directly; lower-priority rich fields can use sanitized deferred previews while keeping Tiptap split out of route bundles (images, tables, YouTube, resizable images). Deferred editor fallbacks reserve toolbar height with a neutral loading rail only; do not render fake toolbar controls that look clickable before Tiptap mounts.
+- **Rich Text**: Product descriptions import the real Tiptap editor in the product-form chunk because it is the primary merchant editing control. While `useEditor()` initializes, `TiptapEditor` shows a disabled icon toolbar plus sanitized content/placeholder preview so the surface never looks broken. Lower-priority rich fields can still use `DeferredTiptapEditor` previews to keep Tiptap split out of non-editor route bundles.
 - **DnD**: dnd-kit (sortable lists, collection reorder)
 - **Charts**: Recharts (dashboard analytics)
 - **Auth**: Better Auth (email/password + optional 2FA)
