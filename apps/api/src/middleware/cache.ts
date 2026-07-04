@@ -26,6 +26,10 @@ type CacheQueryDefaultValue = string | number | boolean | undefined;
 type CacheQueryDefaults =
   | Record<string, CacheQueryDefaultValue>
   | ((c: Context) => Record<string, CacheQueryDefaultValue>);
+type CacheQueryNormalizers = Record<
+  string,
+  (value: string, key: string) => string | undefined
+>;
 
 export interface CacheOptions {
   ttl?: number;
@@ -34,6 +38,7 @@ export interface CacheOptions {
   methods?: string[];
   varyByQuery?: boolean;
   queryDefaults?: CacheQueryDefaults;
+  queryNormalizers?: CacheQueryNormalizers;
   varyByAuth?: boolean;
   cacheCondition?: (c: Context) => boolean;
   /** Override Cache-Control. Default ensures browser revalidation for consistency with KV invalidation. */
@@ -52,17 +57,19 @@ function resolveQueryDefaults(
 export function canonicalizeCacheQueryString(
   url: string,
   queryDefaults: Record<string, CacheQueryDefaultValue> = {},
+  queryNormalizers: CacheQueryNormalizers = {},
 ): string {
   const params = new URL(url).searchParams;
   const entries: Array<[string, string]> = [];
 
   for (const [key, value] of params.entries()) {
-    if (value === "") continue;
+    const normalizedValue = queryNormalizers[key]?.(value, key) ?? value;
+    if (normalizedValue === "") continue;
     const defaultValue = queryDefaults[key];
-    if (defaultValue !== undefined && value === String(defaultValue)) {
+    if (defaultValue !== undefined && normalizedValue === String(defaultValue)) {
       continue;
     }
-    entries.push([key, value]);
+    entries.push([key, normalizedValue]);
   }
 
   entries.sort(([aKey, aValue], [bKey, bValue]) => {
@@ -90,6 +97,7 @@ export const cacheMiddleware = (
     methods = ["GET"],
     varyByQuery = true,
     queryDefaults,
+    queryNormalizers,
     varyByAuth = false,
     cacheCondition,
     cacheControl = DEFAULT_CACHE_CONTROL,
@@ -110,6 +118,7 @@ export const cacheMiddleware = (
       const qs = canonicalizeCacheQueryString(
         c.req.url,
         resolveQueryDefaults(c, queryDefaults),
+        queryNormalizers,
       );
       if (qs) cacheKey += `?${qs}`;
     }

@@ -535,26 +535,17 @@ export const postApiV1CacheClearGroup = <ThrowOnError extends boolean = false>(o
 /**
  * Check order processing status by checkout token
  */
-export const getApiV1OrdersStatusByToken = <ThrowOnError extends boolean = false>(options: Options<GetApiV1OrdersStatusByTokenData, ThrowOnError>): RequestResult<GetApiV1OrdersStatusByTokenResponses, GetApiV1OrdersStatusByTokenErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1OrdersStatusByTokenResponses, GetApiV1OrdersStatusByTokenErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/v1/orders/status/{token}',
-    ...options
-});
+export const getApiV1OrdersStatusByToken = <ThrowOnError extends boolean = false>(options: Options<GetApiV1OrdersStatusByTokenData, ThrowOnError>): RequestResult<GetApiV1OrdersStatusByTokenResponses, GetApiV1OrdersStatusByTokenErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1OrdersStatusByTokenResponses, GetApiV1OrdersStatusByTokenErrors, ThrowOnError>({ url: '/api/v1/orders/status/{token}', ...options });
 
 /**
  * Get minimal order receipt by ID and receipt token
  */
-export const getApiV1OrdersReceiptById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1OrdersReceiptByIdData, ThrowOnError>): RequestResult<GetApiV1OrdersReceiptByIdResponses, GetApiV1OrdersReceiptByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1OrdersReceiptByIdResponses, GetApiV1OrdersReceiptByIdErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/v1/orders/receipt/{id}',
-    ...options
-});
+export const getApiV1OrdersReceiptById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1OrdersReceiptByIdData, ThrowOnError>): RequestResult<GetApiV1OrdersReceiptByIdResponses, GetApiV1OrdersReceiptByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1OrdersReceiptByIdResponses, GetApiV1OrdersReceiptByIdErrors, ThrowOnError>({ url: '/api/v1/orders/receipt/{id}', ...options });
 
 /**
  * Create a receipt-token support request for an order
  */
 export const postApiV1OrdersReceiptByIdSupportRequests = <ThrowOnError extends boolean = false>(options: Options<PostApiV1OrdersReceiptByIdSupportRequestsData, ThrowOnError>): RequestResult<PostApiV1OrdersReceiptByIdSupportRequestsResponses, PostApiV1OrdersReceiptByIdSupportRequestsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1OrdersReceiptByIdSupportRequestsResponses, PostApiV1OrdersReceiptByIdSupportRequestsErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/orders/receipt/{id}/support-requests',
     ...options,
     headers: {
@@ -567,7 +558,6 @@ export const postApiV1OrdersReceiptByIdSupportRequests = <ThrowOnError extends b
  * Validate a storefront cart before checkout
  */
 export const postApiV1OrdersCartValidation = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1OrdersCartValidationData, ThrowOnError>): RequestResult<PostApiV1OrdersCartValidationResponses, PostApiV1OrdersCartValidationErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1OrdersCartValidationResponses, PostApiV1OrdersCartValidationErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/orders/cart-validation',
     ...options,
     headers: {

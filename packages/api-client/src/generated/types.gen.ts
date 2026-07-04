@@ -974,7 +974,7 @@ export type GetApiV1SearchData = {
         /**
          * Max results
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Include pages in search results
          */
@@ -989,7 +989,18 @@ export type GetApiV1SearchData = {
 
 export type GetApiV1SearchErrors = {
     /**
-     * Rate limited
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
      */
     429: {
         success: false;
@@ -4249,11 +4260,11 @@ export type GetApiV1ProductsData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Sort order
          */
@@ -4283,6 +4294,17 @@ export type GetApiV1ProductsData = {
 };
 
 export type GetApiV1ProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -4360,6 +4382,17 @@ export type GetApiV1ProductsSearchData = {
 };
 
 export type GetApiV1ProductsSearchErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -4589,11 +4622,11 @@ export type GetApiV1CategoriesBySlugProductsData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Sort order
          */
@@ -4623,6 +4656,17 @@ export type GetApiV1CategoriesBySlugProductsData = {
 };
 
 export type GetApiV1CategoriesBySlugProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Not found
      */

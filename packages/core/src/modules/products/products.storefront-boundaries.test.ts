@@ -105,6 +105,8 @@ describe("storefront product query boundaries", () => {
             attributeHelperIndex,
         );
         const categoryHelperIndex = source.indexOf("export async function getStorefrontCategoryProducts");
+        const invalidListingSearchIndex = source.indexOf("conditions.push(cond ?? sql`0 = 1`);");
+        const invalidLookupSearchIndex = source.indexOf("conditions.push(searchCondition ?? sql`0 = 1`);");
         const newestSortIndex = source.indexOf(
             "return desc(products.createdAt);",
             sortHelperIndex,
@@ -134,6 +136,8 @@ describe("storefront product query boundaries", () => {
         expect(multiFilterGroupIndex).toBeGreaterThan(singleFilterAliasIndex);
         expect(attributeInnerJoinIndex).toBeGreaterThan(attributeHelperIndex);
         expect(attributeLeftJoinIndex).toBe(-1);
+        expect(invalidListingSearchIndex).toBeGreaterThan(conditionsHelperIndex);
+        expect(invalidLookupSearchIndex).toBeGreaterThan(categoryHelperIndex);
         expect(categoryHelperIndex).toBeGreaterThan(attributeHelperIndex);
         expect(categoryConditionsIndex).toBeGreaterThan(categoryHelperIndex);
         expect(categorySortIndex).toBeGreaterThan(categoryHelperIndex);

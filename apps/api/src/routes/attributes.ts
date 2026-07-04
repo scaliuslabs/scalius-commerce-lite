@@ -16,6 +16,7 @@ import { NotFoundError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { CACHE_TTLS } from "../utils/cache-ttls";
+import { normalizePublicFtsSearchCacheValue, normalizePublicFtsSearchQuery } from "../utils/public-search-query";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Cache this endpoint as it changes infrequently
@@ -53,6 +54,7 @@ app.use(
     ttl: CACHE_TTLS.ATTRIBUTES,
     keyPrefix: "api:attributes:search-filters",
     varyByQuery: true,
+    queryNormalizers: { q: normalizePublicFtsSearchCacheValue },
     methods: ["GET"],
   }),
 );
@@ -169,9 +171,10 @@ const searchFiltersRoute = createRoute({
 
 app.openapi(searchFiltersRoute, async (c) => {
   const db = c.get("db");
-  const { q: query, categoryId } = c.req.valid("query");
+  const { q, categoryId } = c.req.valid("query");
+  const query = normalizePublicFtsSearchQuery(q);
 
-  if (!query || query.trim().length === 0) {
+  if (!query) {
     return ok(c, { filters: [] });
   }
 
@@ -180,7 +183,7 @@ app.openapi(searchFiltersRoute, async (c) => {
     isNull(products.deletedAt),
   ];
 
-  const ftsCond = ftsMatch("products_fts", "products", query.trim());
+  const ftsCond = ftsMatch("products_fts", "products", query);
   if (ftsCond) searchConditions.push(ftsCond);
 
   // If categoryId is provided, add it to conditions

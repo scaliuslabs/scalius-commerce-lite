@@ -1,9 +1,9 @@
 import type { Database } from "@scalius/database/client";
 import { products, productImages, categories, pages } from "@scalius/database/schema";
 import { eq, sql, and, inArray, gte, lte, type SQL } from "drizzle-orm";
-import { ftsMatch } from "./fts5";
+import { ftsMatch, sanitizeFtsQuery } from "./fts5";
 import { publicProductBaseConditions } from "../modules/products/products.public-eligibility";
-export { ftsMatch } from "./fts5";
+export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 
 // Types for search results
 export type ProductSearchResult = {
@@ -59,6 +59,9 @@ export async function search(
   const searchPages = options?.searchPages !== false;
   const searchCategories = options?.searchCategories !== false;
   const hasValidQuery = query && query.trim() !== "";
+  if (hasValidQuery && !sanitizeFtsQuery(query)) {
+    return { products: [], pages: [], categories: [] };
+  }
 
   try {
     // Build Product Query

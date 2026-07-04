@@ -61,6 +61,30 @@ curl -sS -o /tmp/scalius-storefront-search-brand-apple.html -w 'HTTP %{http_code
 
 Expected D1 plan shape: global newest uses `products_public_newest_idx` without `USE TEMP B-TREE FOR ORDER BY`; category newest uses `products_public_category_newest_idx` without a temp sort; a single attribute filter uses `product_attributes_slug_idx` plus covering `product_attribute_values_attr_value_product_idx` without a temp group. Re-run with a fresh production category/filter pair if demo data changes.
 
+## Public Search Cache And Cost Policy
+
+Use this after changing public search, storefront listing filters, cache key canonicalization, FTS helpers, or public list limits:
+
+```bash
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/search?q=!!!!'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/search?q=fish&limit=5000'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/search?q=fish&limit='
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/search?q=%20fish%20%20curry%20&limit=4'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/products?search=!!!!&freeDelivery=false'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/products?limit=5000'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/products?limit='
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/products?page=1001'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/products/search?search=%20%20%20&limit=4'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/products/search?search=!!!!&limit=4'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/products/search?page=1001'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/categories/drinks/products?search=!!!!'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/categories/drinks/products?limit='
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/categories/drinks/products?page=1001'
+curl -sS -w '\nHTTP %{http_code} time %{time_total}\n' 'https://api.scalius.com/api/v1/attributes/search-filters?q=!!!!'
+```
+
+Expected result: punctuation-only public FTS queries return successful empty data instead of broad catalog/listing reads; whitespace-only `/products/search` behaves like blank search; excessive or empty numeric params return `400`; public page numbers above `1000` return `400`; normalized whitespace queries return the canonical query text; and category/listing invalid searches do not report an applied search filter. Cache hits for `/api/v1/search` intentionally bypass the miss-only search limiter so hot public search reads stay cheap; invalid raw query shapes must bypass cache before validation; valid cache misses are rate-limited before DB/FTS work. Keep this policy covered by `apps/api/src/routes/search.test.ts`, `apps/api/src/utils/public-search-query.test.ts`, route-boundary tests, and core storefront product boundary tests.
+
 ## Focused Typecheck Commands
 
 ```bash

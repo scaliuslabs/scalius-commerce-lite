@@ -15,6 +15,7 @@ describe("public product eligibility boundaries", () => {
 
         expect(searchSource).toContain("publicProductBaseConditions");
         expect(searchSource).toContain("const productConditions: SQL[] = publicProductBaseConditions();");
+        expect(searchSource).toContain("sanitizeFtsQuery(query)");
         expect(attributesSource).toContain("publicProductHasBuyerResolvableSku");
         expect(attributesSource.match(/publicProductHasBuyerResolvableSku\(\)/g)?.length).toBeGreaterThanOrEqual(3);
     });

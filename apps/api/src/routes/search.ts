@@ -7,6 +7,13 @@ import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import { ok } from "../utils/api-response";
 import { RateLimitError } from "../utils/api-error";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+import {
+  isPublicSearchCacheable,
+  normalizePublicFtsSearchCacheValue,
+  normalizePublicFtsSearchQuery,
+  normalizePublicIntegerCacheValue,
+  normalizePublicNumberCacheValue,
+} from "../utils/public-search-query";
 // Create an OpenAPIHono app for search routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -18,6 +25,13 @@ app.use(
     keyPrefix: "api:search:",
     varyByQuery: true,
     queryDefaults: { q: "", limit: 10, searchPages: "true", searchCategories: "true" },
+    queryNormalizers: {
+      q: normalizePublicFtsSearchCacheValue,
+      limit: normalizePublicIntegerCacheValue,
+      minPrice: normalizePublicNumberCacheValue,
+      maxPrice: normalizePublicNumberCacheValue,
+    },
+    cacheCondition: (c) => isPublicSearchCacheable(c.req.url),
     methods: ["GET"]
   }),
 );
@@ -28,7 +42,7 @@ const searchQuerySchema = z.object({
   categoryId: z.string().optional().openapi({ description: "Category ID filter" }),
   minPrice: z.coerce.number().optional().openapi({ description: "Minimum price filter" }),
   maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
-  limit: z.coerce.number().optional().default(10).openapi({ description: "Max results" }),
+  limit: z.coerce.number().int().min(1).max(50).optional().default(10).openapi({ description: "Max results" }),
   searchPages: z
     .enum(["true", "false"])
     .optional()
@@ -63,28 +77,16 @@ const searchRoute = createRoute({
         timestamp: z.string().optional(),
       })) } },
     },
-    429: {
-      description: "Rate limited",
-      content: { "application/json": { schema: errorResponses[500].content["application/json"].schema } },
-    },
+    400: errorResponses[400],
+    429: errorResponses[429],
     500: errorResponses[500],
   }
 });
 
 app.openapi(searchRoute, async (c) => {
-  // Apply rate limiting via KV
-  const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
-  if (kv) {
-    const ip = getClientIp(c.req.raw);
-    const result = await rateLimit({ kv, key: `search:${ip}`, limit: 30, windowMs: 60_000 });
-    if (!result.allowed) {
-      throw new RateLimitError("Too many requests. Please try again later.");
-    }
-  }
-
   const params = c.req.valid("query");
   const {
-    q: query,
+    q,
     categoryId,
     minPrice,
     maxPrice,
@@ -92,15 +94,26 @@ app.openapi(searchRoute, async (c) => {
     searchPages,
     searchCategories
   } = params;
+  const query = normalizePublicFtsSearchQuery(q);
 
   // If no query, return empty results
-  if (!query.trim()) {
+  if (!query) {
     return ok(c, {
       products: [],
       pages: [],
       categories: [],
       query: ""
     });
+  }
+
+  // Apply rate limiting to cache misses that would execute real search work.
+  const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
+  if (kv) {
+    const ip = getClientIp(c.req.raw);
+    const result = await rateLimit({ kv, key: `search:${ip}`, limit: 30, windowMs: 60_000 });
+    if (!result.allowed) {
+      throw new RateLimitError("Too many requests. Please try again later.");
+    }
   }
 
   // Set up timeout for search (5 seconds)

@@ -8,6 +8,14 @@ import { successEnvelope, paginationSchema, errorResponses } from "../schemas/re
 
 import { ok } from "../utils/api-response";
 import { CACHE_TTLS } from "../utils/cache-ttls";
+import {
+  isPublicProductListCacheable,
+  normalizePublicFtsSearchCacheValue,
+  normalizePublicFtsSearchQuery,
+  normalizePublicIntegerCacheValue,
+  normalizePublicListingSearchParam,
+  normalizePublicNumberCacheValue,
+} from "../utils/public-search-query";
 // Create an OpenAPIHono app for category routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -22,14 +30,25 @@ app.use(
       c.req.path.replace(/\/$/, "").endsWith("/products")
         ? { page: 1, limit: 20, sort: "newest" }
         : {},
+    queryNormalizers: {
+      search: normalizePublicFtsSearchCacheValue,
+      page: normalizePublicIntegerCacheValue,
+      limit: normalizePublicIntegerCacheValue,
+      minPrice: normalizePublicNumberCacheValue,
+      maxPrice: normalizePublicNumberCacheValue,
+    },
+    cacheCondition: (c) =>
+      c.req.path.replace(/\/$/, "").endsWith("/products")
+        ? isPublicProductListCacheable(c.req.url)
+        : true,
     methods: ["GET"]
   }),
 );
 
 // Schema for category product filtering
 const categoryProductFilterSchema = z.object({
-  page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),
-  limit: z.coerce.number().optional().default(20).openapi({ description: "Items per page" }),
+  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
   sort: z
     .enum([
       "newest",
@@ -151,6 +170,7 @@ const getCategoryProductsRoute = createRoute({
         appliedFilters: z.record(z.string(), z.any()),
       })) } },
     },
+    400: errorResponses[400],
     404: errorResponses[404],
     500: errorResponses[500],
   }
@@ -169,6 +189,8 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   if (!category) {
     throw new NotFoundError("Category not found");
   }
+  const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
+  const search = normalizePublicListingSearchParam(params.search);
 
   const categoryForProducts = {
     id: category.id,
@@ -184,6 +206,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
 
   const result = await getStorefrontCategoryProducts(db, categoryForProducts, {
     ...params,
+    search,
     attributeFilters,
   });
 
@@ -191,7 +214,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     attributes: attributeFilters,
     sort: params.sort,
   };
-  if (params.search !== undefined) appliedFilters.search = params.search;
+  if (normalizedSearch) appliedFilters.search = normalizedSearch;
   if (params.minPrice !== undefined) appliedFilters.minPrice = params.minPrice;
   if (params.maxPrice !== undefined) appliedFilters.maxPrice = params.maxPrice;
   if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;
