@@ -1,5 +1,4 @@
 import { OpenAPIHono, z } from "@hono/zod-openapi";
-import { getAgentByName } from "agents";
 import { GENERATION_CONFIG } from "@scalius/core/modules/ai";
 import { enforceAiRateLimit } from "./ai";
 import { optionalTimestampSchema } from "../../schemas/timestamps";
@@ -79,12 +78,17 @@ const widgetGenerationRunSchema = z.object({
   allCategoriesSelected: z.boolean().optional(),
 });
 
+async function getWidgetDesignAgent(env: Env, sessionName: string) {
+  const { getAgentByName } = await import("agents");
+  return getAgentByName(env.WidgetDesignAgent, sessionName);
+}
+
 app.post("/", async (c) => {
   const payload = widgetGenerationRunSchema.parse(await c.req.json());
   await enforceAiRateLimit(c);
 
   const sessionName = payload.sessionId || `widget-${crypto.randomUUID()}`;
-  const agent = await getAgentByName(c.env.WidgetDesignAgent, sessionName);
+  const agent = await getWidgetDesignAgent(c.env, sessionName);
   const agentUrl = new URL("/run", c.req.url);
 
   return agent.fetch(
@@ -99,7 +103,7 @@ app.post("/", async (c) => {
 
 app.get("/sessions/:sessionId/status", async (c) => {
   const sessionId = c.req.param("sessionId");
-  const agent = await getAgentByName(c.env.WidgetDesignAgent, sessionId);
+  const agent = await getWidgetDesignAgent(c.env, sessionId);
   const agentUrl = new URL("/status", c.req.url);
   return agent.fetch(new Request(agentUrl, { method: "GET" }));
 });
