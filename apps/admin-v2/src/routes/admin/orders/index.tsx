@@ -181,6 +181,14 @@ function hasPaymentRecoveryState(order: OrderListItem) {
   return order.paymentRecovery != null && order.paymentRecovery.state !== "none";
 }
 
+function hasActivePaymentSetup(order: OrderListItem) {
+  return order.paymentRecovery?.activeProcessing === true;
+}
+
+function hasActiveRefundOperation(order: OrderListItem) {
+  return order.activeRefundOperation?.active === true;
+}
+
 function buildRecoveryExportSearchParams(search: SearchParams) {
   if (!search.paymentRecovery) return null;
   const params = new URLSearchParams();
@@ -603,12 +611,50 @@ function OrdersPage() {
     },
     [selectedIds, table],
   );
+  const selectedActivePaymentSetupOrders = useMemo(
+    () => {
+      const selectedOrderIds = new Set(selectedIds);
+      return table
+        .getRowModel()
+        .rows.map((row) => row.original)
+        .filter((order) => selectedOrderIds.has(order.id) && hasActivePaymentSetup(order));
+    },
+    [selectedIds, table],
+  );
+  const selectedActiveRefundOrders = useMemo(
+    () => {
+      const selectedOrderIds = new Set(selectedIds);
+      return table
+        .getRowModel()
+        .rows.map((row) => row.original)
+        .filter((order) => selectedOrderIds.has(order.id) && hasActiveRefundOperation(order));
+    },
+    [selectedIds, table],
+  );
   const deletePaymentRecoveryCount = isBulkDeleteOpen
     ? selectedPaymentRecoveryOrders.length
     : orderToDelete
       ? table
           .getRowModel()
           .rows.some((row) => row.original.id === orderToDelete && hasPaymentRecoveryState(row.original))
+        ? 1
+        : 0
+      : 0;
+  const deleteActivePaymentSetupCount = isBulkDeleteOpen
+    ? selectedActivePaymentSetupOrders.length
+    : orderToDelete
+      ? table
+          .getRowModel()
+          .rows.some((row) => row.original.id === orderToDelete && hasActivePaymentSetup(row.original))
+        ? 1
+        : 0
+      : 0;
+  const deleteActiveRefundCount = isBulkDeleteOpen
+    ? selectedActiveRefundOrders.length
+    : orderToDelete
+      ? table
+          .getRowModel()
+          .rows.some((row) => row.original.id === orderToDelete && hasActiveRefundOperation(row.original))
         ? 1
         : 0
       : 0;
@@ -813,6 +859,18 @@ function OrdersPage() {
       });
       return;
     }
+    if (selectedActiveRefundOrders.length > 0) {
+      toast.error("Resolve refund recovery first", {
+        description: `${selectedActiveRefundOrders.length} selected order(s) still have active refund recovery.`,
+      });
+      return;
+    }
+    if (selectedActivePaymentSetupOrders.length > 0) {
+      toast.error("Wait for payment setup first", {
+        description: `${selectedActivePaymentSetupOrders.length} selected order(s) still have active hosted payment setup.`,
+      });
+      return;
+    }
     bulkDeleteMut.mutate(
       { orderIds: selectedIds, permanent: showTrashed },
       {
@@ -825,7 +883,15 @@ function OrdersPage() {
         },
       },
     );
-  }, [showTrashed, bulkDeleteMut, selectedIds, clearSelection, orderActions.canBulkDeleteOrders]);
+  }, [
+    showTrashed,
+    bulkDeleteMut,
+    selectedIds,
+    clearSelection,
+    orderActions.canBulkDeleteOrders,
+    selectedActiveRefundOrders,
+    selectedActivePaymentSetupOrders,
+  ]);
 
   // ── Bulk shipment handler (after useServerTable for selectedIds/clearSelection) ──
   const handleBulkShipmentSubmit = useCallback(
@@ -840,6 +906,12 @@ function OrdersPage() {
       if (selectedPaymentRecoveryOrders.length > 0) {
         toast.error("Resolve payment recovery first", {
           description: `${selectedPaymentRecoveryOrders.length} selected order(s) still have hosted payment state.`,
+        });
+        return;
+      }
+      if (selectedActiveRefundOrders.length > 0) {
+        toast.error("Resolve refund recovery first", {
+          description: `${selectedActiveRefundOrders.length} selected order(s) still have active refund recovery.`,
         });
         return;
       }
@@ -899,6 +971,7 @@ function OrdersPage() {
       isShipping,
       orderActions.canBulkShipOrders,
       selectedPaymentRecoveryOrders,
+      selectedActiveRefundOrders,
     ],
   );
 
@@ -994,10 +1067,18 @@ function OrdersPage() {
           });
           return;
         }
+        if (selectedActiveRefundOrders.length > 0) {
+          toast.error("Resolve refund recovery first", {
+            description: `${selectedActiveRefundOrders.length} selected order(s) still have active refund recovery.`,
+          });
+          return;
+        }
         setIsShippingDialogOpen(true);
       }}
       isBulkActionBusy={isShipping || bulkDeleteMut.isPending}
       selectedPaymentRecoveryCount={selectedPaymentRecoveryOrders.length}
+      selectedActivePaymentSetupCount={selectedActivePaymentSetupOrders.length}
+      selectedActiveRefundCount={selectedActiveRefundOrders.length}
       onExportCSV={handleExportCSV}
       autoRefreshEnabled={autoRefreshEnabled}
       onToggleAutoRefresh={toggleAutoRefresh}
@@ -1072,6 +1153,8 @@ function OrdersPage() {
             isBulk={isBulkDeleteOpen}
             itemCount={selectedIds.length}
             paymentRecoveryCount={deletePaymentRecoveryCount}
+            activePaymentSetupCount={deleteActivePaymentSetupCount}
+            activeRefundCount={deleteActiveRefundCount}
           />
         </Suspense>
       )}

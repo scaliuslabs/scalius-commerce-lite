@@ -170,6 +170,21 @@ export const orderPaymentRecoverySchema = z
     updatedAt: nullableTimestampSchema,
   })
 
+export const orderListActiveRefundOperationSchema = z.object({
+  active: z.literal(true),
+  status: z.string(),
+  severity: z.enum(["info", "success", "warning", "danger"]),
+  label: z.string(),
+  message: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  gateway: z.string(),
+  attemptCount: z.number(),
+  nextProbeAt: nullableTimestampSchema,
+  lastProbeAt: nullableTimestampSchema,
+  providerStatus: z.string().nullable(),
+});
+
 /** Order summary — returned by listOrders (admin). */
 export const orderSummarySchema = z
   .object({
@@ -197,6 +212,7 @@ export const orderSummarySchema = z
     totalQuantity: z.number(),
     latestShipment: orderShipmentSummarySchema.nullable(),
     paymentRecovery: orderPaymentRecoverySchema,
+    activeRefundOperation: orderListActiveRefundOperationSchema.nullable(),
   })
 
 /** Order item — returned inside order detail. */

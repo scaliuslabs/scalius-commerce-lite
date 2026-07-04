@@ -53,13 +53,21 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("deselectIds(shippedOrderIds)");
     expect(routeSource).toContain("isBulkActionBusy={isShipping || bulkDeleteMut.isPending}");
     expect(routeSource).toContain("if (isShipping && !isOpen) return");
+    expect(routeSource).toContain("const selectedActiveRefundOrders = useMemo");
+    expect(routeSource).toContain("hasActiveRefundOperation(order)");
+    expect(routeSource).toContain("selectedActiveRefundOrders.length > 0");
+    expect(routeSource).toContain("Resolve refund recovery first");
 
     expect(toolbarSource).toContain("isBulkActionBusy?: boolean");
     expect(toolbarSource).toContain("selectedPaymentRecoveryCount?: number");
-    expect(toolbarSource).toContain("const bulkShipBlockedByRecovery = selectedPaymentRecoveryCount > 0");
+    expect(toolbarSource).toContain("selectedActivePaymentSetupCount?: number");
+    expect(toolbarSource).toContain("selectedActiveRefundCount?: number");
+    expect(toolbarSource).toContain("const bulkDeleteBlockedByRecovery = selectedActiveRefundCount > 0 || selectedActivePaymentSetupCount > 0");
+    expect(toolbarSource).toContain("const bulkShipBlockedByRecovery = selectedPaymentRecoveryCount > 0 || selectedActiveRefundCount > 0");
     expect(toolbarSource).toContain("disabled={isBulkActionBusy || bulkShipBlockedByRecovery}");
-    expect(toolbarSource).toContain("Resolve hosted payment recovery before creating shipments.");
-    expect(toolbarSource).toContain("`Resolve Payment (${selectedPaymentRecoveryCount})`");
+    expect(toolbarSource).toContain("disabled={isBulkActionBusy || bulkDeleteBlockedByRecovery}");
+    expect(toolbarSource).toContain("Resolve active refund recovery before changing these orders.");
+    expect(toolbarSource).toContain("`Resolve Refund (${selectedActiveRefundCount})`");
 
     expect(dialogSource).toContain("if (isShipping) return");
     expect(dialogSource).toContain("if (isShipping && !nextOpen) return");
@@ -152,6 +160,8 @@ describe("order list interactions", () => {
     );
     expect(routeSource).toContain("activePaymentRecovery={activePaymentRecovery}");
     expect(routeSource).toContain("selectedPaymentRecoveryCount={selectedPaymentRecoveryOrders.length}");
+    expect(routeSource).toContain("selectedActivePaymentSetupCount={selectedActivePaymentSetupOrders.length}");
+    expect(routeSource).toContain("selectedActiveRefundCount={selectedActiveRefundOrders.length}");
 
     expect(toolbarSource).toContain("OrderFilterSelect");
     expect(toolbarSource).toContain('placeholder="Any payment"');
@@ -208,6 +218,51 @@ describe("order list interactions", () => {
       "FulfillmentStatusBadge status={order.fulfillmentStatus}",
     );
     expect(mobileSource).toContain("function PaymentMethodLabel");
+  });
+
+  it("surfaces active refund locks in desktop/mobile rows and delete dialog", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+    const columnsSource = readFileSync(ORDER_COLUMNS_SOURCE, "utf8");
+    const mobileSource = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
+    const dialogSource = readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../../components/admin/order-list/DeleteOrderDialog.tsx",
+          import.meta.url,
+        ),
+      ),
+      "utf8",
+    );
+    const statusSelectorSource = readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../../components/admin/order-list/OrderStatusSelector.tsx",
+          import.meta.url,
+        ),
+      ),
+      "utf8",
+    );
+
+    expect(columnsSource).toContain("RefundRecoveryBadge");
+    expect(columnsSource).toContain("operation={order.activeRefundOperation}");
+    expect(columnsSource).toContain("order.activeRefundOperation?.active !== true");
+    expect(columnsSource).toContain("Complete or reconcile the refund before changing this order.");
+    expect(columnsSource).toContain("Resolve refund recovery before deleting");
+
+    expect(mobileSource).toContain("RefundRecoveryBadge");
+    expect(mobileSource).toContain("operation={order.activeRefundOperation} compact");
+    expect(mobileSource).toContain("orderActions.canChangeOrderStatus && !hasActiveRefundOperation");
+    expect(mobileSource).toContain("Resolve refund recovery before deleting");
+
+    expect(dialogSource).toContain("activeRefundCount?: number");
+    expect(dialogSource).toContain("const isBlocked = activeRefundCount > 0 || activePaymentSetupCount > 0");
+    expect(dialogSource).toContain("disabled={isDeleting || isBlocked}");
+    expect(dialogSource).toContain("active refund recovery. Complete or reconcile");
+
+    expect(routeSource).toContain("const deleteActiveRefundCount = isBulkDeleteOpen");
+    expect(routeSource).toContain("activeRefundCount={deleteActiveRefundCount}");
+    expect(statusSelectorSource).toContain("disabledReason?: string");
+    expect(statusSelectorSource).toContain("disabledReason: disabledReasonOverride");
   });
 
   it("allows the order toolbar filters and actions to wrap on narrow screens", () => {

@@ -96,6 +96,8 @@ interface OrderToolbarProps {
   onBulkShip: () => void;
   isBulkActionBusy?: boolean;
   selectedPaymentRecoveryCount?: number;
+  selectedActivePaymentSetupCount?: number;
+  selectedActiveRefundCount?: number;
   // Export & refresh
   onExportCSV: () => void;
   // Auto-refresh
@@ -239,6 +241,8 @@ export function OrderToolbar({
   onBulkShip,
   isBulkActionBusy = false,
   selectedPaymentRecoveryCount = 0,
+  selectedActivePaymentSetupCount = 0,
+  selectedActiveRefundCount = 0,
   onExportCSV,
   autoRefreshEnabled,
   onToggleAutoRefresh,
@@ -248,7 +252,18 @@ export function OrderToolbar({
   const showBulkDelete = selectedCount > 0 && orderActions.canBulkDeleteOrders;
   const showBulkShip =
     selectedCount > 0 && !showTrashed && orderActions.canBulkShipOrders;
-  const bulkShipBlockedByRecovery = selectedPaymentRecoveryCount > 0;
+  const bulkDeleteBlockedByRecovery = selectedActiveRefundCount > 0 || selectedActivePaymentSetupCount > 0;
+  const bulkShipBlockedByRecovery = selectedPaymentRecoveryCount > 0 || selectedActiveRefundCount > 0;
+  const recoveryBlockTitle = selectedActiveRefundCount > 0
+    ? "Resolve active refund recovery before changing these orders."
+    : selectedActivePaymentSetupCount > 0
+      ? "Wait for active hosted payment setup before deleting these orders."
+      : "Resolve hosted payment recovery before creating shipments.";
+  const recoveryBlockLabel = selectedActiveRefundCount > 0
+    ? `Resolve Refund (${selectedActiveRefundCount})`
+    : selectedActivePaymentSetupCount > 0
+      ? `Payment Running (${selectedActivePaymentSetupCount})`
+      : `Resolve Payment (${selectedPaymentRecoveryCount})`;
   const bulkActions: ReactNode =
     showBulkDelete || showBulkShip ? (
       <div className="flex flex-wrap items-center gap-2">
@@ -257,12 +272,14 @@ export function OrderToolbar({
             variant="destructive"
             size="sm"
             onClick={onBulkDelete}
-            disabled={isBulkActionBusy}
+            disabled={isBulkActionBusy || bulkDeleteBlockedByRecovery}
+            title={bulkDeleteBlockedByRecovery ? recoveryBlockTitle : undefined}
             className="h-9 px-3 text-xs"
           >
             <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-            {showTrashed ? "Delete Permanently" : "Move to Trash"} (
-            {selectedCount})
+            {bulkDeleteBlockedByRecovery
+              ? recoveryBlockLabel
+              : `${showTrashed ? "Delete Permanently" : "Move to Trash"} (${selectedCount})`}
           </Button>
         )}
         {showBulkShip && (
@@ -273,14 +290,14 @@ export function OrderToolbar({
             disabled={isBulkActionBusy || bulkShipBlockedByRecovery}
             title={
               bulkShipBlockedByRecovery
-                ? "Resolve hosted payment recovery before creating shipments."
+                ? recoveryBlockTitle
                 : undefined
             }
             className="h-9 px-3 text-xs"
           >
             <Truck className="mr-1.5 h-3.5 w-3.5" />
             {bulkShipBlockedByRecovery
-              ? `Resolve Payment (${selectedPaymentRecoveryCount})`
+              ? recoveryBlockLabel
               : isBulkActionBusy
                 ? "Shipping..."
                 : `Ship Orders (${selectedCount})`}
