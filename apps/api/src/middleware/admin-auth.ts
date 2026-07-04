@@ -1,10 +1,11 @@
 // src/server/middleware/admin-auth.ts
 import type { MiddlewareHandler } from "hono";
-import { eq } from "drizzle-orm";
-import { getAuth } from "@scalius/core/auth";
+import { and, eq, sql } from "drizzle-orm";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
-import { user as userTable } from "@scalius/database/schema";
+import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
+import { session as sessionTable, user as userTable } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 import {
     SCANNER_COOKIE_NAME,
@@ -39,6 +40,151 @@ const BETTER_AUTH_SESSION_COOKIE_NAMES = [
     "better-auth.session_token",
     "__Secure-better-auth.session_token",
 ] as const;
+
+function truthy(value: number | boolean | null | undefined): boolean {
+    return value === true || value === 1;
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+    let binary = "";
+    for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+}
+
+function constantTimeStringEqual(a: string, b: string): boolean {
+    let mismatch = a.length ^ b.length;
+    const length = Math.max(a.length, b.length);
+    for (let index = 0; index < length; index += 1) {
+        mismatch |= (a.charCodeAt(index) || 0) ^ (b.charCodeAt(index) || 0);
+    }
+    return mismatch === 0;
+}
+
+async function signBetterAuthCookieValue(value: string, secret: string): Promise<string> {
+    const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"],
+    );
+    const signature = await crypto.subtle.sign(
+        "HMAC",
+        key,
+        new TextEncoder().encode(value),
+    );
+    return encodeBase64(new Uint8Array(signature));
+}
+
+async function verifyBetterAuthSignedCookieValue(
+    signedValue: string,
+    secret: string | null | undefined,
+): Promise<string | null> {
+    const trimmedSecret = secret?.trim();
+    if (!trimmedSecret) return null;
+
+    const separatorIndex = signedValue.lastIndexOf(".");
+    if (separatorIndex <= 0 || separatorIndex === signedValue.length - 1) {
+        return null;
+    }
+
+    const token = signedValue.slice(0, separatorIndex).trim();
+    const signature = signedValue.slice(separatorIndex + 1).trim();
+    if (!token || !signature) return null;
+
+    const expectedSignature = await signBetterAuthCookieValue(token, trimmedSecret);
+    if (!constantTimeStringEqual(signature, expectedSignature)) return null;
+
+    return token;
+}
+
+async function getAdminSessionTokenFromCookieHeader(
+    cookieHeader: string | undefined,
+    secret: string | undefined,
+): Promise<string | null> {
+    const cookie = cookieHeader?.trim();
+    if (!cookie) return null;
+
+    for (const part of cookie.split(";")) {
+        const [rawName, ...rawValueParts] = part.trim().split("=");
+        if (!rawName || rawValueParts.length === 0) continue;
+        if (!BETTER_AUTH_SESSION_COOKIE_NAMES.includes(rawName as (typeof BETTER_AUTH_SESSION_COOKIE_NAMES)[number])) {
+            continue;
+        }
+
+        const rawValue = rawValueParts.join("=");
+        if (!rawValue) continue;
+
+        try {
+            const decoded = decodeURIComponent(rawValue);
+            const token = await verifyBetterAuthSignedCookieValue(decoded, secret);
+            if (token) return token;
+        } catch {
+            const token = await verifyBetterAuthSignedCookieValue(rawValue, secret);
+            if (token) return token;
+        }
+    }
+
+    return null;
+}
+
+async function getAdminSessionFromCookieHeader(
+    db: Database,
+    cookieHeader: string | undefined,
+    secret: string | undefined,
+): Promise<{ user: User; session: Session } | null> {
+    const token = await getAdminSessionTokenFromCookieHeader(cookieHeader, secret);
+    if (!token) return null;
+
+    const row = await retryTransientD1(() =>
+        db
+            .select({
+                sessionId: sessionTable.id,
+                twoFactorVerified: sessionTable.twoFactorVerified,
+                id: userTable.id,
+                email: userTable.email,
+                name: userTable.name,
+                role: userTable.role,
+                isSuperAdmin: userTable.isSuperAdmin,
+                twoFactorEnabled: userTable.twoFactorEnabled,
+                mustChangePassword: userTable.mustChangePassword,
+                mustEnrollTwoFactor: userTable.mustEnrollTwoFactor,
+            })
+            .from(sessionTable)
+            .innerJoin(userTable, eq(userTable.id, sessionTable.userId))
+            .where(and(
+                eq(sessionTable.token, token),
+                sql`${sessionTable.expiresAt} > unixepoch()`,
+                sql`(
+                    ${userTable.banned} = 0
+                    OR ${userTable.banned} IS NULL
+                    OR (${userTable.banExpires} IS NOT NULL AND ${userTable.banExpires} <= unixepoch())
+                )`,
+            ))
+            .get(),
+    );
+
+    if (!row) return null;
+
+    return {
+        user: {
+            id: row.id,
+            email: row.email,
+            name: row.name,
+            role: row.role ?? "user",
+            isSuperAdmin: truthy(row.isSuperAdmin),
+            twoFactorEnabled: truthy(row.twoFactorEnabled),
+            mustChangePassword: truthy(row.mustChangePassword),
+            mustEnrollTwoFactor: truthy(row.mustEnrollTwoFactor),
+        },
+        session: {
+            id: row.sessionId,
+            twoFactorVerified: truthy(row.twoFactorVerified),
+        },
+    };
+}
 
 function normalizeAdminPath(url: string): string {
     const pathname = new URL(url).pathname;
@@ -105,17 +251,19 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     const hasBetterAuthCookie = hasBetterAuthSessionCookie(cookieHeader);
     const hasScannerCookie = hasNamedCookie(cookieHeader, SCANNER_COOKIE_NAME);
 
-    // 1. Try Better Auth Session Cookie
+    // 1. Try Better Auth Session Cookie. Verify the signed cookie locally before
+    // touching D1 so raw/tampered cookies fail fast and cannot stall admin reads.
     if (hasBetterAuthCookie) {
         try {
-            const auth = getAuth(c.env);
-            const sessionResult = await auth.api.getSession({
-                headers: c.req.raw.headers,
-                query: { disableCookieCache: true },
-            });
+            const db = c.get("db");
+            const sessionResult = await getAdminSessionFromCookieHeader(
+                db,
+                cookieHeader,
+                c.env.BETTER_AUTH_SECRET,
+            );
             if (sessionResult?.user) {
-                user = sessionResult.user as User;
-                session = (sessionResult.session ?? null) as Session | null;
+                user = sessionResult.user;
+                session = sessionResult.session;
             }
         } catch (error: unknown) {
             console.warn(
@@ -184,40 +332,6 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         return;
     }
 
-    // D1 is the authority for admin onboarding gates. Better Auth session payloads
-    // can be stale, and RBAC must not run until invited admins finish setup.
-    const db = c.get("db");
-    const liveUser = await db
-        .select({
-            id: userTable.id,
-            email: userTable.email,
-            name: userTable.name,
-            role: userTable.role,
-            isSuperAdmin: userTable.isSuperAdmin,
-            twoFactorEnabled: userTable.twoFactorEnabled,
-            mustChangePassword: userTable.mustChangePassword,
-            mustEnrollTwoFactor: userTable.mustEnrollTwoFactor,
-        })
-        .from(userTable)
-        .where(eq(userTable.id, user.id))
-        .get();
-
-    if (!liveUser) {
-        throw new UnauthorizedError("Admin session user no longer exists.");
-    }
-
-    user = {
-        ...user,
-        id: liveUser.id,
-        email: liveUser.email,
-        name: liveUser.name,
-        role: liveUser.role ?? user.role,
-        isSuperAdmin: liveUser.isSuperAdmin,
-        twoFactorEnabled: liveUser.twoFactorEnabled,
-        mustChangePassword: liveUser.mustChangePassword,
-        mustEnrollTwoFactor: liveUser.mustEnrollTwoFactor,
-    };
-
     c.set("user", user);
     if (session) {
         c.set("session", session);
@@ -251,6 +365,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // 4. Admin & RBAC Validation
     // getUserPermissions already checks isSuperAdmin internally and returns ALL
     // permissions for super admins — no need for a separate isSuperAdmin() query.
+    const db = c.get("db");
     const userPerms = await getUserPermissions(db, user.id, c.env.CACHE);
 
     // Gate: must have at least one RBAC permission (super admins get all).

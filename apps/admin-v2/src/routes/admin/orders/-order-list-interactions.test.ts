@@ -55,10 +55,11 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("if (isShipping && !isOpen) return");
 
     expect(toolbarSource).toContain("isBulkActionBusy?: boolean");
-    expect(toolbarSource).toContain("disabled={isBulkActionBusy}");
-    expect(toolbarSource).toContain(
-      '{isBulkActionBusy ? "Shipping..." : `Ship Orders (${selectedCount})`}',
-    );
+    expect(toolbarSource).toContain("selectedPaymentRecoveryCount?: number");
+    expect(toolbarSource).toContain("const bulkShipBlockedByRecovery = selectedPaymentRecoveryCount > 0");
+    expect(toolbarSource).toContain("disabled={isBulkActionBusy || bulkShipBlockedByRecovery}");
+    expect(toolbarSource).toContain("Resolve hosted payment recovery before creating shipments.");
+    expect(toolbarSource).toContain("`Resolve Payment (${selectedPaymentRecoveryCount})`");
 
     expect(dialogSource).toContain("if (isShipping) return");
     expect(dialogSource).toContain("if (isShipping && !nextOpen) return");
@@ -121,6 +122,7 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("const PAYMENT_STATUS_FILTERS");
     expect(routeSource).toContain("const PAYMENT_METHOD_FILTERS");
     expect(routeSource).toContain("const FULFILLMENT_STATUS_FILTERS");
+    expect(routeSource).toContain("const PAYMENT_RECOVERY_FILTERS");
     expect(routeSource).toContain(
       "paymentStatus: normalizeOptionalEnumSearchParam",
     );
@@ -130,26 +132,35 @@ describe("order list interactions", () => {
     expect(routeSource).toContain(
       "fulfillmentStatus: normalizeOptionalEnumSearchParam",
     );
+    expect(routeSource).toContain(
+      "paymentRecovery: normalizeOptionalEnumSearchParam",
+    );
     expect(routeSource).toContain("paymentStatus: deps.paymentStatus");
     expect(routeSource).toContain("paymentMethod: deps.paymentMethod");
     expect(routeSource).toContain(
       "fulfillmentStatus: deps.fulfillmentStatus",
     );
+    expect(routeSource).toContain("paymentRecovery: deps.paymentRecovery");
     expect(routeSource).toContain("paymentStatus: normalizeOptionalEnumSearchParam(");
     expect(routeSource).toContain("paymentMethod: normalizeOptionalEnumSearchParam(");
     expect(routeSource).toContain("fulfillmentStatus: normalizeOptionalEnumSearchParam(");
+    expect(routeSource).toContain("paymentRecovery: normalizeOptionalEnumSearchParam(");
     expect(routeSource).toContain("activePaymentStatus={activePaymentStatus}");
     expect(routeSource).toContain("activePaymentMethod={activePaymentMethod}");
     expect(routeSource).toContain(
       "activeFulfillmentStatus={activeFulfillmentStatus}",
     );
+    expect(routeSource).toContain("activePaymentRecovery={activePaymentRecovery}");
+    expect(routeSource).toContain("selectedPaymentRecoveryCount={selectedPaymentRecoveryOrders.length}");
 
     expect(toolbarSource).toContain("OrderFilterSelect");
     expect(toolbarSource).toContain('placeholder="Any payment"');
     expect(toolbarSource).toContain('placeholder="Any method"');
+    expect(toolbarSource).toContain('placeholder="Payment recovery"');
     expect(toolbarSource).toContain('placeholder="Any fulfillment"');
     expect(toolbarSource).toContain('ariaLabel="Filter by payment status"');
     expect(toolbarSource).toContain('ariaLabel="Filter by payment method"');
+    expect(toolbarSource).toContain('ariaLabel="Filter by payment recovery"');
     expect(toolbarSource).toContain(
       'ariaLabel="Filter by fulfillment status"',
     );
@@ -163,6 +174,25 @@ describe("order list interactions", () => {
     expect(serverFunctionsSource).toContain(
       "if (data.fulfillmentStatus) params.fulfillmentStatus = data.fulfillmentStatus",
     );
+    expect(serverFunctionsSource).toContain(
+      "if (data.paymentRecovery) params.paymentRecovery = data.paymentRecovery",
+    );
+  });
+
+  it("uses a server-backed export for hosted-payment recovery filters", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+
+    expect(routeSource).toContain("function buildRecoveryExportSearchParams");
+    expect(routeSource).toContain("if (!search.paymentRecovery) return null");
+    expect(routeSource).toContain('params.set("state", search.paymentRecovery)');
+    expect(routeSource).toContain("/api/v1/admin/orders/payment-recovery/export?");
+    expect(routeSource).toContain('`payment-recovery-${new Date().toISOString().split("T")[0]}.csv`');
+    expect(routeSource).toContain('response.headers.get("X-Export-Row-Count")');
+    expect(routeSource).toContain('response.headers.get("X-Export-Limited") === "true"');
+    expect(routeSource).toContain('"Payment Recovery"');
+    expect(routeSource).toContain('"Recovery Gateway"');
+    expect(routeSource).toContain('"Recovery Status"');
+    expect(routeSource).toContain("order.paymentRecovery?.attempts ?? 0");
   });
 
   it("shows fulfillment state in desktop and mobile order rows", () => {

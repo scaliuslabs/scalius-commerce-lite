@@ -151,7 +151,7 @@ The TanStack admin app now uses route/server-function guards rather than the old
 ### Admin Auth Middleware (`apps/api/src/middleware/admin-auth.ts`)
 
 Authentication strategy:
-1. **Better Auth session cookie** -- tries first (for dashboard frontend requests via service binding)
+1. **Better Auth session cookie** -- tries first (for dashboard frontend requests via service binding). The API middleware uses the same direct signed-cookie model as the admin route guard: verify `token.signature` with `BETTER_AUTH_SECRET`, then read the active session/user row from D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach D1 or Better Auth's heavier request handler.
 2. **Scanner session cookie** -- created only after the admin worker atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
 
 Then validates:

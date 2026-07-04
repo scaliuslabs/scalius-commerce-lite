@@ -50,12 +50,14 @@ import {
   MapPin,
   Package,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 import { abandonedCheckoutsQueryOptions } from "@/lib/api-query-options/abandoned-checkouts";
 import { deleteAbandonedCheckouts } from "@/lib/api-functions/abandoned-checkouts";
+import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import {
   parseAbandonedCheckoutDisplay,
   type AbandonedCheckoutCartItem,
@@ -108,12 +110,14 @@ const CheckoutRow = React.memo(
     onToggleSelection,
     onViewDetails,
     onDelete,
+    canDelete,
   }: {
     checkout: AbandonedCheckout;
     isSelected: boolean;
     onToggleSelection: (id: string) => void;
     onViewDetails: (checkout: AbandonedCheckout) => void;
     onDelete: (id: string) => void;
+    canDelete: boolean;
   }) => {
     const { symbol } = useCurrency();
   const display = useMemo(
@@ -121,6 +125,7 @@ const CheckoutRow = React.memo(
       [checkout],
     );
     const displayId = getCheckoutDisplayId(checkout);
+    const isHostedArchive = display.kind === "stale_hosted_payment_order";
     const updatedAt = useMemo(
       () => (checkout.updatedAt ? new Date(checkout.updatedAt) : null),
       [checkout.updatedAt],
@@ -129,11 +134,13 @@ const CheckoutRow = React.memo(
     return (
       <TableRow data-state={isSelected ? "selected" : undefined}>
         <TableCell className="w-10">
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={() => onToggleSelection(checkout.id)}
-            aria-label={`Select incomplete order ${displayId}`}
-          />
+          {canDelete && (
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelection(checkout.id)}
+              aria-label={`Select incomplete order ${displayId}`}
+            />
+          )}
         </TableCell>
         <TableCell className="font-mono text-xs">
           {displayId.substring(0, 12)}
@@ -155,6 +162,19 @@ const CheckoutRow = React.memo(
           {timeSince(updatedAt)}
         </TableCell>
         <TableCell className="text-right">
+          {isHostedArchive && display.orderId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              asChild
+              aria-label={`View archived hosted-payment order ${display.orderId}`}
+              title="View order"
+            >
+              <Link to={`/admin/orders/${display.orderId}` as string}>
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -164,15 +184,17 @@ const CheckoutRow = React.memo(
           >
             <Eye className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onDelete(checkout.id)}
-            aria-label={`Delete incomplete order ${displayId}`}
-            title="Delete"
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onDelete(checkout.id)}
+              aria-label={`Delete incomplete order ${displayId}`}
+              title={isHostedArchive ? "Delete recovery record" : "Delete checkout record"}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
         </TableCell>
       </TableRow>
     );
@@ -318,6 +340,7 @@ const DetailsModal = ({
 export function AbandonedCheckoutsManager() {
   useCurrency();
   const queryClient = useQueryClient();
+  const orderActions = useOrderActionPermissions();
 
   // Local UI state
   const [requestedPage, setRequestedPage] = useState(1);
@@ -365,6 +388,15 @@ export function AbandonedCheckoutsManager() {
     };
   }, [rawData, requestedLimit]);
 
+  const deleteDialogHostedArchiveCount = useMemo(() => {
+    if (!deleteDialog) return 0;
+    const ids = new Set(deleteDialog.ids);
+    return checkouts.filter((checkout) =>
+      ids.has(checkout.id)
+      && parseAbandonedCheckoutDisplay(checkout).kind === "stale_hosted_payment_order"
+    ).length;
+  }, [checkouts, deleteDialog]);
+
   // Reset selection when data changes (search/sort/page change)
   // This is handled implicitly by the query key changing
 
@@ -407,6 +439,13 @@ export function AbandonedCheckoutsManager() {
 
   const performDelete = useCallback(async () => {
     if (!deleteDialog) return;
+    if (!orderActions.canDeleteOrders) {
+      toast.error("Delete unavailable", {
+        description: "Your role can view incomplete orders but cannot delete them.",
+      });
+      setDeleteDialog(null);
+      return;
+    }
     setIsActionLoading(true);
     try {
       await deleteAbandonedCheckouts({ data: { ids: deleteDialog.ids } });
@@ -419,7 +458,7 @@ export function AbandonedCheckoutsManager() {
       setIsActionLoading(false);
       setDeleteDialog(null);
     }
-  }, [deleteDialog, queryClient]);
+  }, [deleteDialog, orderActions.canDeleteOrders, queryClient]);
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["abandoned-checkouts"] });
@@ -458,7 +497,7 @@ export function AbandonedCheckoutsManager() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {selectedIds.size > 0 && (
+            {selectedIds.size > 0 && orderActions.canBulkDeleteOrders && (
               <Button
                 variant="destructive"
                 size="sm"
@@ -488,8 +527,9 @@ export function AbandonedCheckoutsManager() {
         <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg">
           <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
           <p className="text-xs text-blue-700 dark:text-blue-300">
-            Showing active checkout sessions. Empty sessions older than 1 hour
-            and any session older than 30 days are automatically cleared.
+            Showing active checkout sessions and archived hosted-payment orders
+            that need recovery context. Empty sessions older than 1 hour and any
+            session older than 30 days are automatically cleared.
           </p>
         </div>
 
@@ -503,13 +543,15 @@ export function AbandonedCheckoutsManager() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">
-                      <Checkbox
-                        onCheckedChange={handleToggleSelectAll}
-                        checked={
-                          checkouts.length > 0 &&
-                          selectedIds.size === checkouts.length
-                        }
-                      />
+                      {orderActions.canBulkDeleteOrders && (
+                        <Checkbox
+                          onCheckedChange={handleToggleSelectAll}
+                          checked={
+                            checkouts.length > 0 &&
+                            selectedIds.size === checkouts.length
+                          }
+                        />
+                      )}
                     </TableHead>
                     <TableHead
                       className="cursor-pointer select-none"
@@ -567,6 +609,7 @@ export function AbandonedCheckoutsManager() {
                         onToggleSelection={handleToggleSelection}
                         onViewDetails={setDetailsDialog}
                         onDelete={(id) => setDeleteDialog({ ids: [id] })}
+                        canDelete={orderActions.canDeleteOrders}
                       />
                     ))
                   )}
@@ -596,8 +639,16 @@ export function AbandonedCheckoutsManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete {deleteDialog?.ids.length} checkout
-              session(s). This action cannot be undone.
+              This will permanently delete {deleteDialog?.ids.length} incomplete
+              checkout record(s), including any archived hosted-payment recovery
+              context in the selection. This action cannot be undone.
+              {deleteDialogHostedArchiveCount > 0 && (
+                <span className="mt-3 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                  {deleteDialogHostedArchiveCount} archived hosted-payment record
+                  {deleteDialogHostedArchiveCount === 1 ? "" : "s"} will be removed from
+                  this recovery list. The original order record remains in Orders.
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

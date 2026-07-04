@@ -14,7 +14,8 @@ function AbandonedCheckoutsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Incomplete Orders</h1>
         <p className="text-muted-foreground">
-          View and manage incomplete orders. Records are automatically cleared when an order is completed.
+          Review active checkout sessions and archived hosted-payment recovery records.
+          Completed orders are cleared automatically.
         </p>
       </div>
       <AbandonedCheckoutsManager />

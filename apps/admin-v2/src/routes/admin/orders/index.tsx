@@ -181,6 +181,19 @@ function hasPaymentRecoveryState(order: OrderListItem) {
   return order.paymentRecovery != null && order.paymentRecovery.state !== "none";
 }
 
+function buildRecoveryExportSearchParams(search: SearchParams) {
+  if (!search.paymentRecovery) return null;
+  const params = new URLSearchParams();
+  params.set("state", search.paymentRecovery);
+  if (search.search.trim()) params.set("search", search.search.trim());
+  if (search.paymentMethod) params.set("paymentMethod", search.paymentMethod);
+  if (search.sort) params.set("sort", search.sort);
+  if (search.order) params.set("order", search.order);
+  if (search.startDate) params.set("startDate", search.startDate);
+  if (search.endDate) params.set("endDate", search.endDate);
+  return params;
+}
+
 // ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/orders/")({
@@ -691,7 +704,43 @@ function OrdersPage() {
 
   // ── Export CSV ─────────────────────────────────────────────────
 
-  const handleExportCSV = useCallback(() => {
+  const handleExportCSV = useCallback(async () => {
+    const recoveryExportParams = buildRecoveryExportSearchParams(search);
+    if (recoveryExportParams) {
+      try {
+        const response = await fetch(
+          `/api/v1/admin/orders/payment-recovery/export?${recoveryExportParams.toString()}`,
+        );
+        if (!response.ok) {
+          throw new Error(`Export failed with ${response.status}`);
+        }
+        const blob = await response.blob();
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute(
+          "download",
+          `payment-recovery-${new Date().toISOString().split("T")[0]}.csv`,
+        );
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        const rowCount = response.headers.get("X-Export-Row-Count");
+        const limited = response.headers.get("X-Export-Limited") === "true";
+        toast.success(
+          `${rowCount ?? "Recovery"} order${rowCount === "1" ? "" : "s"} exported.`,
+          limited
+            ? { description: "The CSV was capped. Narrow the filter to export fewer rows." }
+            : undefined,
+        );
+      } catch {
+        toast.error("Payment recovery export failed.");
+      }
+      return;
+    }
+
     const rows = table.getRowModel().rows.map((r) => r.original);
     const csvHeaders = [
       "Order ID",
@@ -754,7 +803,7 @@ function OrdersPage() {
     link.click();
     document.body.removeChild(link);
     toast.success(`${rows.length} orders exported successfully.`);
-  }, [table]);
+  }, [search, table]);
 
   // ── Bulk delete handler (after useServerTable for selectedIds/clearSelection) ──
   const handleBulkDeleteConfirm = useCallback(() => {
@@ -948,6 +997,7 @@ function OrdersPage() {
         setIsShippingDialogOpen(true);
       }}
       isBulkActionBusy={isShipping || bulkDeleteMut.isPending}
+      selectedPaymentRecoveryCount={selectedPaymentRecoveryOrders.length}
       onExportCSV={handleExportCSV}
       autoRefreshEnabled={autoRefreshEnabled}
       onToggleAutoRefresh={toggleAutoRefresh}

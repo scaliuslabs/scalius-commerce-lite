@@ -85465,6 +85465,1088 @@
         ]
       }
     },
+    "/api/v1/admin/orders/payment-recovery": {
+      "get": {
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "List hosted-payment recovery orders",
+        "parameters": [
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true,
+              "default": 1,
+              "description": "Page number"
+            },
+            "required": false,
+            "description": "Page number",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true,
+              "maximum": 100,
+              "default": 20,
+              "description": "Items per page"
+            },
+            "required": false,
+            "description": "Items per page",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Search query"
+            },
+            "required": false,
+            "description": "Search query",
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recoverable",
+                "awaiting_payment",
+                "processing",
+                "needs_attention"
+              ],
+              "default": "recoverable",
+              "description": "Hosted-payment recovery state"
+            },
+            "required": false,
+            "description": "Hosted-payment recovery state",
+            "name": "state",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cod",
+                "stripe",
+                "sslcommerz",
+                "polar"
+              ],
+              "description": "Filter by payment gateway"
+            },
+            "required": false,
+            "description": "Filter by payment gateway",
+            "name": "paymentMethod",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "relevance",
+                "customerName",
+                "totalAmount",
+                "status",
+                "createdAt",
+                "updatedAt"
+              ],
+              "description": "Sort field"
+            },
+            "required": false,
+            "description": "Sort field",
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc",
+              "description": "Sort order"
+            },
+            "required": false,
+            "description": "Sort order",
+            "name": "order",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Start date filter (YYYY-MM-DD, Bangladesh calendar day)"
+            },
+            "required": false,
+            "description": "Start date filter (YYYY-MM-DD, Bangladesh calendar day)",
+            "name": "startDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "End date filter (YYYY-MM-DD, Bangladesh calendar day)"
+            },
+            "required": false,
+            "description": "End date filter (YYYY-MM-DD, Bangladesh calendar day)",
+            "name": "endDate",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated hosted-payment recovery order list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "customerName": {
+                                "type": "string"
+                              },
+                              "customerPhone": {
+                                "type": "string"
+                              },
+                              "customerEmail": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "customerId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "totalAmount": {
+                                "type": "number"
+                              },
+                              "shippingCharge": {
+                                "type": "number"
+                              },
+                              "discountAmount": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "paymentStatus": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "paymentMethod": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "fulfillmentStatus": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "city": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "zone": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "area": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "cityName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "zoneName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "areaName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "itemCount": {
+                                "type": "number"
+                              },
+                              "totalQuantity": {
+                                "type": "number"
+                              },
+                              "latestShipment": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "providerId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "providerType": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "providerName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "rawStatus": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "externalId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "trackingId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "lastChecked": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "nullable": true
+                                  },
+                                  "updatedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  },
+                                  "createdAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "providerId",
+                                  "providerType",
+                                  "providerName",
+                                  "status",
+                                  "rawStatus",
+                                  "externalId",
+                                  "trackingId",
+                                  "lastChecked",
+                                  "updatedAt",
+                                  "createdAt"
+                                ]
+                              },
+                              "paymentRecovery": {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "awaiting_payment",
+                                      "processing",
+                                      "needs_attention"
+                                    ]
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "gateway": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "paymentType": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "attempts": {
+                                    "type": "number"
+                                  },
+                                  "activeProcessing": {
+                                    "type": "boolean"
+                                  },
+                                  "staleProcessing": {
+                                    "type": "boolean"
+                                  },
+                                  "updatedAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "label",
+                                  "message",
+                                  "gateway",
+                                  "paymentType",
+                                  "status",
+                                  "attempts",
+                                  "activeProcessing",
+                                  "staleProcessing",
+                                  "updatedAt"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "customerName",
+                              "customerPhone",
+                              "customerEmail",
+                              "customerId",
+                              "totalAmount",
+                              "shippingCharge",
+                              "discountAmount",
+                              "status",
+                              "paymentStatus",
+                              "paymentMethod",
+                              "fulfillmentStatus",
+                              "createdAt",
+                              "updatedAt",
+                              "city",
+                              "zone",
+                              "area",
+                              "cityName",
+                              "zoneName",
+                              "areaName",
+                              "itemCount",
+                              "totalQuantity",
+                              "latestShipment",
+                              "paymentRecovery"
+                            ]
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "number"
+                            },
+                            "limit": {
+                              "type": "number"
+                            },
+                            "total": {
+                              "type": "number"
+                            },
+                            "totalPages": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "page",
+                            "limit",
+                            "total",
+                            "totalPages"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "pagination"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/orders/payment-recovery/export": {
+      "get": {
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Export hosted-payment recovery orders as CSV",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Search query"
+            },
+            "required": false,
+            "description": "Search query",
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recoverable",
+                "awaiting_payment",
+                "processing",
+                "needs_attention"
+              ],
+              "default": "recoverable",
+              "description": "Hosted-payment recovery state"
+            },
+            "required": false,
+            "description": "Hosted-payment recovery state",
+            "name": "state",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cod",
+                "stripe",
+                "sslcommerz",
+                "polar"
+              ],
+              "description": "Filter by payment gateway"
+            },
+            "required": false,
+            "description": "Filter by payment gateway",
+            "name": "paymentMethod",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "relevance",
+                "customerName",
+                "totalAmount",
+                "status",
+                "createdAt",
+                "updatedAt"
+              ],
+              "description": "Sort field"
+            },
+            "required": false,
+            "description": "Sort field",
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc",
+              "description": "Sort order"
+            },
+            "required": false,
+            "description": "Sort order",
+            "name": "order",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Start date filter (YYYY-MM-DD, Bangladesh calendar day)"
+            },
+            "required": false,
+            "description": "Start date filter (YYYY-MM-DD, Bangladesh calendar day)",
+            "name": "startDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "End date filter (YYYY-MM-DD, Bangladesh calendar day)"
+            },
+            "required": false,
+            "description": "End date filter (YYYY-MM-DD, Bangladesh calendar day)",
+            "name": "endDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000,
+              "default": 1000,
+              "description": "Maximum rows to export. Hard-capped at 5000."
+            },
+            "required": false,
+            "description": "Maximum rows to export. Hard-capped at 5000.",
+            "name": "maxRows",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hosted-payment recovery CSV",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/orders/bulk-delete": {
       "post": {
         "tags": [
