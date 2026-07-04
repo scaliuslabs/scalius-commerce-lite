@@ -236,7 +236,9 @@ Client-side cart state using Nano Stores (`nanostores/map`):
 - Cart item keys use `{productId}-{variantId}` for option SKUs, `{productId}-{option1}-{option2}` for legacy option rows without a variant ID, or just `{productId}` for simple products.
 - Discount support with auto-clear when cart contents change
 - Cross-component communication via `CustomEvent` dispatches (`cart-updated`, `discount-applied`, `discount-removed`)
-- Checkout repair handoff uses a one-shot `sessionStorage` key (`scalius_cart_repair_state`) written by `/checkout`; `src/lib/cart/client.ts` consumes it, renders line-level issues immediately, then runs the normal backend cart validation as authority.
+- Cart-to-checkout payment transfer uses `src/lib/checkout/session-state.ts` and must persist/read back `scalius_checkout_data` before leaving `/cart`; blocked or quota-full storage restores the submit button and shows a top-of-cart error instead of redirecting to a broken `/checkout`. The gateway snapshot is optional and checkout falls back to fresh public config if it is missing.
+- Checkout repair handoff uses a one-shot `sessionStorage` key (`scalius_cart_repair_state`) written by `/checkout`; `src/lib/cart/client.ts` consumes it, renders line-level issues immediately, then runs the normal backend cart validation as authority. Direct or stale `/checkout` visits show an explicit Return to cart recovery action instead of silently bouncing.
+- Quick-buy still uses a short-lived `quickBuyData` storage payload after server-side SKU/cart validation; if that storage write cannot be proven, `/buy/{slug}` redirects to `/cart?quickBuyStorage=blocked` so the cart can render a server-side explanation instead of an empty-cart mystery.
 
 ## Checkout (`src/lib/checkout/`)
 
@@ -247,7 +249,7 @@ Gateway-based payment architecture:
 - `handlers/stripe.ts` -- Stripe Elements
 - `handlers/sslcommerz.ts` -- SSLCommerz redirect
 - `handlers/polar.ts` -- Polar redirect
-- `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, validates cart freshness on load and before payment, renders order summary, renders gateway cards, handles payment processing, and redirects stale cart snapshots back to `/cart?checkoutIssues=1`
+- `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, validates cart freshness on load and before payment, renders order summary, renders gateway cards, handles payment processing, redirects stale cart snapshots back to `/cart?checkoutIssues=1`, and shows an inline recovery state when the cart-to-checkout transfer is missing or unreadable.
 - Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
 - Payment-session proxies preserve backend `202 processing` responses. Hosted gateways send already-committed orders to receipt recovery without retry loops; Stripe stays on checkout with retryable copy until a real client secret is available.
 

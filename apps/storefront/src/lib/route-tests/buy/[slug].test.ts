@@ -140,6 +140,8 @@ describe("/buy/[slug]", () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain("var_default_prod_1");
+    expect(html).toContain("sessionStorage.getItem('quickBuyData')");
+    expect(html).toContain("/cart?quickBuyStorage=blocked");
     expect(mocks.validateCartItems).toHaveBeenCalledWith([
       expect.objectContaining({
         cartKey: "quick_buy:prod_1:var_default_prod_1",
