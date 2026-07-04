@@ -101,7 +101,7 @@ describe("hosted online payment handlers", () => {
     expect(result).toEqual({
       success: true,
       redirectUrl: successBody.gatewayUrl,
-      clearCheckoutSessionOnRedirect: true,
+      clearCartOnRedirect: true,
     });
     expect(fetch).toHaveBeenCalledWith(
       endpoint,
@@ -153,7 +153,7 @@ describe("hosted online payment handlers", () => {
     expect(result).toEqual({
       success: true,
       redirectUrl: gatewayUrl,
-      clearCheckoutSessionOnRedirect: true,
+      clearCartOnRedirect: true,
     });
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -173,7 +173,7 @@ describe("hosted online payment handlers", () => {
     const result = await handler.processPayment(makeContext());
 
     expect(result.success).toBe(true);
-    expect(result.clearCheckoutSessionOnRedirect).toBe(true);
+    expect(result.clearCartOnRedirect).toBe(true);
     expect(result.redirectUrl).toBe(
       `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
     );
@@ -200,7 +200,7 @@ describe("hosted online payment handlers", () => {
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
-    expect(result.clearCheckoutSessionOnRedirect).toBe(true);
+    expect(result.clearCartOnRedirect).toBe(true);
     expect(result.redirectUrl).toBe(
       `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
     );
@@ -225,6 +225,7 @@ describe("hosted online payment handlers", () => {
 
     expect(fetch).not.toHaveBeenCalled();
     expect(result.success).toBe(true);
+    expect(result.clearCartOnRedirect).toBe(true);
     expect(result.redirectUrl).toBe(
       `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
     );
