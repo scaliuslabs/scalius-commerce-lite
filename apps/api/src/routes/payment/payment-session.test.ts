@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createPolarCheckout: vi.fn(),
   findReusablePolarCheckout: vi.fn(),
   getActivePaymentMethods: vi.fn(),
+  getPaymentMethodPreferences: vi.fn(),
   getStripeSettings: vi.fn(),
   getSSLCommerzSettings: vi.fn(),
   getPolarSettings: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal
   ...(await importOriginal<typeof import("@scalius/core/modules/payments/gateway-settings")>()),
   FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getActivePaymentMethods: mocks.getActivePaymentMethods,
+  getPaymentMethodPreferences: mocks.getPaymentMethodPreferences,
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
   getPolarSettings: mocks.getPolarSettings,
@@ -212,6 +214,11 @@ beforeEach(() => {
   mocks.getActivePaymentMethods.mockResolvedValue({
     enabledMethods: ["stripe", "sslcommerz", "polar", "cod"],
     defaultMethod: "cod",
+  });
+  mocks.getPaymentMethodPreferences.mockResolvedValue({
+    enabledMethods: ["stripe", "sslcommerz", "polar", "cod"],
+    defaultMethod: "cod",
+    hasExplicitEnabledMethods: true,
   });
   mocks.getStripeSettings.mockResolvedValue({
     enabled: true,
@@ -513,18 +520,16 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
-      db,
-      kv,
-      undefined,
-      expect.objectContaining({ bypassMemoryCache: true }),
-    );
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getPaymentMethodPreferences).toHaveBeenCalledWith(db);
     expect(mocks.getStripeSettings).toHaveBeenCalledWith(
       db,
       kv,
       undefined,
       expect.objectContaining({ bypassMemoryCache: true }),
     );
+    expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
+    expect(mocks.getPolarSettings).not.toHaveBeenCalled();
     expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
       amount: 5000,
       currency: "bdt",
@@ -666,18 +671,16 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
-      db,
-      kv,
-      undefined,
-      expect.objectContaining({ bypassMemoryCache: true }),
-    );
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getPaymentMethodPreferences).toHaveBeenCalledWith(db);
+    expect(mocks.getStripeSettings).not.toHaveBeenCalled();
     expect(mocks.getSSLCommerzSettings).toHaveBeenCalledWith(
       db,
       kv,
       undefined,
       expect.objectContaining({ bypassMemoryCache: true }),
     );
+    expect(mocks.getPolarSettings).not.toHaveBeenCalled();
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
       "store",
       "password",
@@ -916,12 +919,10 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
-      db,
-      kv,
-      undefined,
-      expect.objectContaining({ bypassMemoryCache: true }),
-    );
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getPaymentMethodPreferences).toHaveBeenCalledWith(db);
+    expect(mocks.getStripeSettings).not.toHaveBeenCalled();
+    expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
     expect(mocks.getPolarSettings).toHaveBeenCalledWith(
       db,
       kv,
@@ -1426,9 +1427,10 @@ describe("payment session receipt-token proof", () => {
     settings,
     gateway,
   }) => {
-    mocks.getActivePaymentMethods.mockResolvedValue({
+    mocks.getPaymentMethodPreferences.mockResolvedValue({
       enabledMethods: ["cod"],
       defaultMethod: "cod",
+      hasExplicitEnabledMethods: true,
     });
     const { app, db, kv } = createTestApp("valid", paymentMethod);
 
@@ -1443,13 +1445,97 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(503);
-    expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getPaymentMethodPreferences).toHaveBeenCalledWith(db);
+    expect(settings).not.toHaveBeenCalled();
+    expect(gateway).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "Stripe",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+      settings: mocks.getStripeSettings,
+      disabledSettings: {
+        enabled: false,
+        secretKey: "sk_test",
+        publishableKey: "pk_test",
+        webhookSecret: "whsec_test",
+      },
+      otherSettings: [mocks.getSSLCommerzSettings, mocks.getPolarSettings],
+      gateway: mocks.createPaymentIntent,
+      message: "Stripe gateway is disabled.",
+    },
+    {
+      label: "SSLCommerz",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+      settings: mocks.getSSLCommerzSettings,
+      disabledSettings: {
+        enabled: false,
+        storeId: "store",
+        storePassword: "password",
+        sandbox: true,
+      },
+      otherSettings: [mocks.getStripeSettings, mocks.getPolarSettings],
+      gateway: mocks.initSSLCommerzSession,
+      message: "SSLCommerz gateway is disabled.",
+    },
+    {
+      label: "Polar",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+      settings: mocks.getPolarSettings,
+      disabledSettings: {
+        enabled: false,
+        accessToken: "polar_token",
+        productId: "polar_product",
+        webhookSecret: "polar_webhook",
+        sandbox: true,
+      },
+      otherSettings: [mocks.getStripeSettings, mocks.getSSLCommerzSettings],
+      gateway: mocks.createPolarCheckout,
+      message: "Polar gateway is disabled.",
+    },
+  ])("rejects selected $label sessions when the provider is not checkout-ready", async ({
+    paymentMethod,
+    path,
+    settings,
+    disabledSettings,
+    otherSettings,
+    gateway,
+    message,
+  }) => {
+    settings.mockResolvedValueOnce(disabledSettings);
+    const { app, db, kv } = createTestApp("valid", paymentMethod);
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+    const json = await response.json() as { error: { code: string; message: string } };
+
+    expect(response.status).toBe(503);
+    expect(json.error.code).toBe("SERVICE_UNAVAILABLE");
+    expect(json.error.message).toBe(message);
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.getPaymentMethodPreferences).toHaveBeenCalledWith(db);
+    expect(settings).toHaveBeenCalledTimes(1);
+    expect(settings).toHaveBeenCalledWith(
       db,
       kv,
       undefined,
       expect.objectContaining({ bypassMemoryCache: true }),
     );
-    expect(settings).not.toHaveBeenCalled();
+    for (const otherSetting of otherSettings) {
+      expect(otherSetting).not.toHaveBeenCalled();
+    }
     expect(gateway).not.toHaveBeenCalled();
   });
 
