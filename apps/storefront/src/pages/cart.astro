@@ -147,6 +147,7 @@ if (Astro.request.method === "POST" && codOnly) {
         customerSessionToken: getCustomerSessionTokenFromCookie(
           Astro.request.headers.get("cookie"),
         ),
+        waitUntil: (promise) => Astro.locals.cfContext.waitUntil(promise),
       });
 
       if (

@@ -364,7 +364,7 @@ describe("cart validation preflight", () => {
 });
 
 describe("create order commit/KV ordering", () => {
-  it("writes checkout and receipt KV before synchronously committing the order", async () => {
+  it("commits the order before scheduling checkout recovery hints and side effects", async () => {
     mocks.createStorefrontOrder.mockResolvedValue({
       checkoutToken: "chk_order_1",
       orderId: "order_1",
@@ -373,8 +373,20 @@ describe("create order commit/KV ordering", () => {
       commitPayload: { orderData: { id: "order_1" } },
     });
     const { app, kv, calls } = createTestApp();
+    const neverSettles = new Promise<never>(() => undefined);
+    kv.put.mockImplementation(async (key: string) => {
+      calls.push(`kv:${key}`);
+      await neverSettles;
+    });
+    const executionCtx = {
+      waitUntil: vi.fn(),
+      passThroughOnException: vi.fn(),
+    };
     mocks.commitStorefrontOrderPayload.mockImplementation(async () => {
       calls.push("commit");
+    });
+    mocks.markCheckoutAttemptCommitted.mockImplementation(async () => {
+      calls.push("mark-committed");
     });
     mocks.runStorefrontOrderPostCommitSideEffects.mockImplementation(async () => {
       calls.push("side-effects");
@@ -391,17 +403,24 @@ describe("create order commit/KV ordering", () => {
         body: JSON.stringify(validOrderBody),
       },
       { CACHE: kv } as never,
+      executionCtx as never,
     );
 
     const responseText = await response.clone().text();
     expect(response.status, responseText).toBe(201);
     expect(calls).toEqual([
+      "commit",
+      "mark-committed",
       "kv:checkout_status:chk_order_1",
       "kv:order_receipt:chk_order_1",
-      "commit",
       "side-effects",
       "availability",
     ]);
+    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(2);
+    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orderData: { id: "order_1" } }),
+    );
     expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ checkoutRequestId: "checkout_req_123456" }),
@@ -442,7 +461,7 @@ describe("create order commit/KV ordering", () => {
       { orderIds: ["order_1"] },
       expect.objectContaining({
         env: expect.objectContaining({ CACHE: kv }),
-        executionCtx: undefined,
+        executionCtx,
       }),
     );
   });
@@ -820,8 +839,6 @@ describe("create order commit/KV ordering", () => {
 
     expect(response.status).toBe(500);
     expect(calls).toEqual([
-      "kv:checkout_status:chk_order_2",
-      "kv:order_receipt:chk_order_2",
       "commit",
       "kv:checkout_status:chk_order_2",
     ]);

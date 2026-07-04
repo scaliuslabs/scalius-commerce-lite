@@ -19,6 +19,8 @@ describe("cart checkout auth regressions", () => {
     expect(source).toContain("getCustomerSessionTokenFromCookie");
     expect(source).toContain("processOrder(formData, {");
     expect(source).toContain("customerSessionToken:");
+    expect(source).toContain("waitUntil:");
+    expect(source).toContain("Astro.locals.cfContext.waitUntil");
   });
 
   it("does not rely on the readable auth mirror cookie for guest-disabled submits", async () => {
