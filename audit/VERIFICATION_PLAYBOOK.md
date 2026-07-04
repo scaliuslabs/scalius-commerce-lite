@@ -452,7 +452,7 @@ pnpm --filter @scalius/core typecheck
 # ORDER-007 coverage
 pnpm --filter @scalius/core exec vitest run src/modules/orders/orders.fulfillment.test.ts src/modules/delivery/tracking.test.ts src/modules/payments/polar.test.ts src/modules/payments/process-payment.test.ts
 pnpm exec vitest run tests/unit/core/orders/update-order-atomicity.test.ts tests/unit/core/payments/refund-validation.test.ts
-pnpm --filter @scalius/api exec vitest run src/routes/webhooks/steadfast.test.ts src/routes/admin/abandoned-checkouts.test.ts
+pnpm --filter @scalius/api exec vitest run src/routes/webhooks/steadfast.test.ts src/routes/admin/system-utils-safe-methods.test.ts src/scheduled-maintenance.test.ts
 pnpm --filter @scalius/core typecheck
 pnpm --filter @scalius/api typecheck
 
@@ -481,10 +481,26 @@ pnpm --filter @scalius/core typecheck
 pnpm --filter @scalius/core lint
 
 # ORDER-005 coverage
-pnpm --filter @scalius/api test -- src/routes/admin/abandoned-checkouts.test.ts
+pnpm --filter @scalius/api test -- src/routes/admin/system-utils-safe-methods.test.ts src/scheduled-maintenance.test.ts
+pnpm --filter @scalius/core test -- src/modules/orders/stale-incomplete-orders.test.ts src/modules/abandoned-checkout/abandoned-checkout-cleanup.test.ts
 pnpm --filter @scalius/api typecheck
 pnpm --filter @scalius/api lint
 ```
+
+Admin hosted-payment recovery checks:
+
+```bash
+pnpm --filter @scalius/core test -- src/auth/rbac/route-permissions.test.ts
+pnpm --filter @scalius/api test -- src/routes/admin/orders-boundaries.test.ts
+pnpm exec vitest run apps/admin-v2/src/routes/admin/orders/-order-list-interactions.test.ts apps/admin-v2/src/lib/route-graph-boundaries.test.ts
+pnpm generate:sdk
+pnpm --filter @scalius/api typecheck
+pnpm --filter @scalius/admin-v2 typecheck
+```
+
+Use the admin hosted-payment recovery checks to prove `/api/v1/admin/orders/payment-recovery` and `/api/v1/admin/orders/payment-recovery/export` are mapped to `orders.view`, declared before the dynamic order-id route, and export only sanitized recovery summary fields. The admin order list should call the server-backed recovery export when a payment-recovery filter is active, block bulk shipments for selected recovery rows before opening the shipment dialog, and keep abandoned-checkout hosted-payment archive delete controls hidden from view-only operators.
+
+For live/admin-release smokes, also prove cookie-bearing admin API failures fail fast: an invalid `better-auth.session_token` against `/api/v1/admin/settings/site` should return `401` quickly, while a real dashboard session should read `/api/v1/admin/orders`, `/api/v1/admin/orders/payment-recovery`, and `/api/v1/admin/orders/payment-recovery/export` through both `api.scalius.com` and the dashboard proxy without hitting `ADMIN_API_READ_TIMEOUT`.
 
 Use the PAY-003/PAY-004 checks to prove that payment-session routes reject missing or wrong receipt tokens before gateway calls, derive gateway URLs from trusted config, reject disabled or mismatched deposit attempts, ignore caller currency for session creation, and force public Stripe manual capture off. Use the PAY-005 SSLCommerz webhook checks to prove canonical validated transaction data is used instead of form metadata. Use the webhook-idempotency checks to prove fresh `processing` claims dedupe, stale `processing` claims are leased/reclaimable by only one retry, `failed` claims are reclaimable, `queued`/`processed` claims stay terminal, and non-duplicate insert failures throw for provider retry. Use the ORDER-006 checks to prove storefront order creation rejects bogus shipping methods and derives shipping from active backend methods. Use the ORDER-007 checks to prove same-status retries repair inventory across admin status changes, fulfillment, COD, delivery webhook/refresh, admin full edits, refunds, and returns while fulfilled refunds do not auto-restock deducted inventory. Use the ORDER-008 checks to prove provider shipment creation owns an order-level shipment claim, active claims block admin/order/refund/payment-session mutations and shipment refresh, queue/webhook paths retry instead of skipping, provider failures clear claims, and provider success plus final local CAS failure leaves reconciliation-required state without inventory side effects. Use the ORDER-009 checks to prove admin full order edits reject failed negative inventory deltas before item replacement, preserve old item context when item replacement fails, compensate pre-write inventory on later write failures, and treat delivered as a stock-deducting status consistently with the central inventory transition helper. Use checkout-attempt/order-ingest retirement checks to prove storefront order creation remains synchronous, same-key retries replay or return duplicate in-flight `202`, stale claims converge on existing committed orders, and reservation failures release stock or return buyer-safe cart issues. Use the ORDER-005 checks to prove abandoned-checkout cleanup releases reserved inventory before archiving, does not hard-delete orders, and leaves orders/items retryable when release fails.
 

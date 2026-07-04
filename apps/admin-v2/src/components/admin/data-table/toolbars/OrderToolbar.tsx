@@ -95,6 +95,7 @@ interface OrderToolbarProps {
   onBulkDelete: () => void;
   onBulkShip: () => void;
   isBulkActionBusy?: boolean;
+  selectedPaymentRecoveryCount?: number;
   // Export & refresh
   onExportCSV: () => void;
   // Auto-refresh
@@ -237,6 +238,7 @@ export function OrderToolbar({
   onBulkDelete,
   onBulkShip,
   isBulkActionBusy = false,
+  selectedPaymentRecoveryCount = 0,
   onExportCSV,
   autoRefreshEnabled,
   onToggleAutoRefresh,
@@ -246,6 +248,7 @@ export function OrderToolbar({
   const showBulkDelete = selectedCount > 0 && orderActions.canBulkDeleteOrders;
   const showBulkShip =
     selectedCount > 0 && !showTrashed && orderActions.canBulkShipOrders;
+  const bulkShipBlockedByRecovery = selectedPaymentRecoveryCount > 0;
   const bulkActions: ReactNode =
     showBulkDelete || showBulkShip ? (
       <div className="flex flex-wrap items-center gap-2">
@@ -267,11 +270,20 @@ export function OrderToolbar({
             variant="outline"
             size="sm"
             onClick={onBulkShip}
-            disabled={isBulkActionBusy}
+            disabled={isBulkActionBusy || bulkShipBlockedByRecovery}
+            title={
+              bulkShipBlockedByRecovery
+                ? "Resolve hosted payment recovery before creating shipments."
+                : undefined
+            }
             className="h-9 px-3 text-xs"
           >
             <Truck className="mr-1.5 h-3.5 w-3.5" />
-            {isBulkActionBusy ? "Shipping..." : `Ship Orders (${selectedCount})`}
+            {bulkShipBlockedByRecovery
+              ? `Resolve Payment (${selectedPaymentRecoveryCount})`
+              : isBulkActionBusy
+                ? "Shipping..."
+                : `Ship Orders (${selectedCount})`}
           </Button>
         )}
       </div>

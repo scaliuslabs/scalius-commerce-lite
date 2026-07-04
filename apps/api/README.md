@@ -101,9 +101,10 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/admin/widget-generation-runs` | `routes/admin/widget-generation-runs.ts` | Durable Object widget generation run lifecycle and status APIs |
 | `/admin/attributes` | `routes/admin/attributes.ts` | Attribute CRUD |
 | `/admin` | `routes/admin/system-utils.ts` | System utilities |
+| `/admin/abandoned-checkouts` | `routes/admin/system-utils.ts` | Incomplete order and hosted-payment recovery records |
 | `/admin/settings/delivery-locations` | `routes/admin/settings/delivery-locations.ts` | Location hierarchy CRUD |
 | `/admin/settings/checkout-languages` | (reuses) `routes/checkout-languages.ts` | Admin checkout language CRUD |
-| `/admin/settings/abandoned-checkouts` | (reuses) `routes/abandoned-checkouts.ts` | Admin abandoned checkout view |
+| `/admin/settings/abandoned-checkouts` | (reuses) `routes/abandoned-checkouts.ts` | Abandoned-checkout settings API |
 
 **Admin Settings Sub-routes** (mounted inside `routes/admin/settings.ts`):
 

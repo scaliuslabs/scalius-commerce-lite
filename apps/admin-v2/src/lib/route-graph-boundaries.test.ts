@@ -1170,12 +1170,23 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "admin", "AbandonedCheckoutsManager.tsx"),
       "utf8",
     );
+    const routeSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "abandoned-checkouts.tsx"),
+      "utf8",
+    );
 
     expect(source).toContain("parseAbandonedCheckoutDisplay");
+    expect(source).toContain("useOrderActionPermissions");
+    expect(source).toContain("orderActions.canDeleteOrders");
+    expect(source).toContain("orderActions.canBulkDeleteOrders");
     expect(source).toContain("Archived hosted-payment order");
     expect(source).toContain("This was a stale online checkout order");
     expect(source).toContain("View order");
+    expect(source).toContain("Delete recovery record");
+    expect(source).toContain("The original order record remains in Orders.");
     expect(source).not.toContain("const parseCheckoutData =");
+
+    expect(routeSource).toContain("archived hosted-payment recovery records");
   });
 
   it("keeps order detail SSR formatting deterministic", () => {

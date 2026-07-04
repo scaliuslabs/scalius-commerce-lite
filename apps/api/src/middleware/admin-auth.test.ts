@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import {
   SCANNER_COOKIE_NAME,
@@ -7,12 +10,7 @@ import {
 } from "@scalius/shared/scanner-auth";
 
 const mocks = vi.hoisted(() => ({
-  getAuth: vi.fn(),
   getUserPermissions: vi.fn(),
-}));
-
-vi.mock("@scalius/core/auth", () => ({
-  getAuth: mocks.getAuth,
 }));
 
 vi.mock("@scalius/core/auth/rbac/helpers", () => ({
@@ -21,7 +19,9 @@ vi.mock("@scalius/core/auth/rbac/helpers", () => ({
 
 import { adminAuthMiddleware } from "./admin-auth";
 
+const TEST_SECRET = "test-secret";
 let currentAuthUser: Record<string, unknown> = {};
+let currentAuthSession: Record<string, unknown> = {};
 
 function mockBetterAuthSession(
   overrides: {
@@ -37,18 +37,18 @@ function mockBetterAuthSession(
     twoFactorEnabled: false,
     ...overrides.user,
   };
-  mocks.getAuth.mockReturnValue({
-    api: {
-      getSession: vi.fn().mockResolvedValue({
-        session: {
-          id: "session_1",
-          twoFactorVerified: true,
-          ...overrides.session,
-        },
-        user: currentAuthUser,
-      }),
-    },
-  });
+  currentAuthSession = {
+    id: "session_1",
+    twoFactorVerified: true,
+    ...overrides.session,
+  };
+}
+
+function signTestCookieValue(value: string): string {
+  const signature = createHmac("sha256", TEST_SECRET)
+    .update(value)
+    .digest("base64");
+  return `${value}.${signature}`;
 }
 
 function createDbMock(liveUser: Record<string, unknown> = {}) {
@@ -61,14 +61,18 @@ function createDbMock(liveUser: Record<string, unknown> = {}) {
     twoFactorEnabled: currentAuthUser.twoFactorEnabled ?? false,
     mustChangePassword: currentAuthUser.mustChangePassword ?? false,
     mustEnrollTwoFactor: currentAuthUser.mustEnrollTwoFactor ?? false,
+    sessionId: currentAuthSession.id ?? "session_1",
+    twoFactorVerified: currentAuthSession.twoFactorVerified ?? true,
     ...liveUser,
   };
   return {
     id: "db",
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          get: vi.fn(async () => row),
+        innerJoin: vi.fn(() => ({
+          where: vi.fn(() => ({
+            get: vi.fn(async () => row),
+          })),
         })),
       })),
     })),
@@ -86,7 +90,7 @@ function createContext(
   } = {},
 ) {
   const headers = options.headers ?? {
-    Cookie: "better-auth.session_token=test_session",
+    Cookie: `better-auth.session_token=${encodeURIComponent(signTestCookieValue("test_session"))}`,
   };
   const request = new Request(`https://api.scalius.test${pathname}`, {
     method,
@@ -95,7 +99,6 @@ function createContext(
   const db = options.db ?? createDbMock(options.liveUser);
 
   return {
-    env: options.env ?? {},
     req: {
       raw: request,
       url: request.url,
@@ -106,6 +109,7 @@ function createContext(
     set: vi.fn(),
     get: vi.fn((key: string) => (key === "db" ? db : undefined)),
     header: vi.fn(),
+    env: { BETTER_AUTH_SECRET: TEST_SECRET, ...(options.env ?? {}) },
   };
 }
 
@@ -164,6 +168,17 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       cache,
     );
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps ordinary admin session checks on the direct signed-cookie path", () => {
+    const source = readFileSync(
+      fileURLToPath(new URL("./admin-auth.ts", import.meta.url)),
+      "utf8",
+    );
+
+    expect(source).toContain("verifyBetterAuthSignedCookieValue");
+    expect(source).not.toContain("getAuth(");
+    expect(source).not.toContain("auth.api.getSession");
   });
 
   it("allows own-account endpoints for any verified admin with admin access", async () => {
@@ -232,9 +247,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("rejects Bearer-only admin API requests instead of trusting JWT claims", async () => {
-    mocks.getAuth.mockReturnValue({
-      api: { getSession: vi.fn().mockResolvedValue(null) },
-    });
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createContext("/api/v1/admin/products", "GET", {
       headers: { Authorization: "Bearer valid-looking-admin-jwt" },
@@ -248,7 +260,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       message: "Admin access requires a valid dashboard session cookie.",
     });
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
-    expect(mocks.getAuth).not.toHaveBeenCalled();
     expect(context.header).not.toHaveBeenCalledWith(
       "X-New-Token",
       expect.any(String),
@@ -269,7 +280,41 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       code: "UNAUTHORIZED",
       message: "Admin access requires a valid dashboard session cookie.",
     });
-    expect(mocks.getAuth).not.toHaveBeenCalled();
+    expect(mocks.getUserPermissions).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects raw or tampered Better Auth cookies before D1/RBAC work", async () => {
+    const next = vi.fn().mockResolvedValue(undefined);
+    const db = createDbMock();
+
+    await expect(
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/orders", "GET", {
+          headers: { Cookie: "better-auth.session_token=test_session" },
+          db,
+        }) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 401,
+      code: "UNAUTHORIZED",
+    });
+
+    await expect(
+      adminAuthMiddleware(
+        createContext("/api/v1/admin/orders", "GET", {
+          headers: { Cookie: `better-auth.session_token=${encodeURIComponent(signTestCookieValue("test_session"))}tampered` },
+          db,
+        }) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({
+      status: 401,
+      code: "UNAUTHORIZED",
+    });
+
+    expect(db.select).not.toHaveBeenCalled();
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
   });
@@ -627,9 +672,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("allows scanner sessions only on exact scanner workflow endpoints", async () => {
-    mocks.getAuth.mockReturnValue({
-      api: { getSession: vi.fn().mockResolvedValue(null) },
-    });
     const sessionId = "scanner-session";
     const session: ScannerSessionPayload = {
       adminId: "admin_1",
@@ -661,9 +703,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("rejects scanner sessions on broader inventory endpoints", async () => {
-    mocks.getAuth.mockReturnValue({
-      api: { getSession: vi.fn().mockResolvedValue(null) },
-    });
     const sessionId = "scanner-session";
     const sessionKey = await getScannerSessionKey(sessionId);
     const kv = {
@@ -697,9 +736,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   });
 
   it("does not accept raw scanner QR tokens as API credentials", async () => {
-    mocks.getAuth.mockReturnValue({
-      api: { getSession: vi.fn().mockResolvedValue(null) },
-    });
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(

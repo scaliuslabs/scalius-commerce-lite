@@ -54,12 +54,14 @@ import {
     listOrderNotificationOutboxForOrder,
     retryFailedOrderNotificationOutboxById,
 } from "@scalius/core/modules/notifications";
+import type { OrderPaymentRecoveryFilter } from "@scalius/core/modules/orders";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
+type PaymentRecoveryExportOrder = Awaited<ReturnType<typeof OrdersService.listOrders>>["orders"][number];
 
 const paymentStatusQuerySchema = z.enum([
     PaymentStatus.UNPAID,
@@ -88,6 +90,71 @@ const paymentRecoveryQuerySchema = z.enum([
     "processing",
     "needs_attention",
 ]);
+
+const PAYMENT_RECOVERY_EXPORT_MAX_ROWS = 5_000;
+const PAYMENT_RECOVERY_EXPORT_PAGE_SIZE = 100;
+
+function toCsvCell(value: unknown): string {
+    const normalized = value == null
+        ? ""
+        : value instanceof Date
+            ? value.toISOString()
+            : String(value);
+    return `"${normalized.replaceAll('"', '""')}"`;
+}
+
+function toCsvRow(values: unknown[]): string {
+    return values.map(toCsvCell).join(",");
+}
+
+function buildPaymentRecoveryCsv(ordersList: PaymentRecoveryExportOrder[]): string {
+    const headers = [
+        "Order ID",
+        "Customer Name",
+        "Phone",
+        "Email",
+        "Order Status",
+        "Payment Status",
+        "Payment Method",
+        "Recovery State",
+        "Recovery Label",
+        "Recovery Gateway",
+        "Recovery Payment Type",
+        "Recovery Attempt Status",
+        "Recovery Attempts",
+        "Active Processing",
+        "Stale Processing",
+        "Recovery Updated At",
+        "Total Amount",
+        "Created At",
+    ];
+
+    const rows = ordersList.map((order) => [
+        order.id,
+        order.customerName,
+        order.customerPhone,
+        order.customerEmail ?? "",
+        order.status,
+        order.paymentStatus,
+        order.paymentMethod,
+        order.paymentRecovery.state,
+        order.paymentRecovery.label,
+        order.paymentRecovery.gateway ?? "",
+        order.paymentRecovery.paymentType ?? "",
+        order.paymentRecovery.status ?? "",
+        order.paymentRecovery.attempts,
+        order.paymentRecovery.activeProcessing ? "yes" : "no",
+        order.paymentRecovery.staleProcessing ? "yes" : "no",
+        order.paymentRecovery.updatedAt,
+        order.totalAmount,
+        order.createdAt,
+    ]);
+
+    return [
+        toCsvRow(headers),
+        ...rows.map(toCsvRow),
+    ].join("\n");
+}
 
 function isSuccessfulOrderResult(result: unknown): result is { success: true; orderId: string } {
     return typeof result === "object"
@@ -297,6 +364,152 @@ app.openapi(listOrdersRoute, async (c) => {
         endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end")
     });
     return ok(c, result);
+});
+
+// ─── GET /payment-recovery (Dedicated queue view) ───────────────────────────
+
+const paymentRecoveryListRoute = createRoute({
+    method: "get",
+    path: "/payment-recovery",
+    tags: ["Admin - Orders"],
+    summary: "List hosted-payment recovery orders",
+    request: {
+        query: z.object({
+            page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().max(100).optional().default(20).openapi({ description: "Items per page" }),
+            search: z.string().optional().openapi({ description: "Search query" }),
+            state: paymentRecoveryQuerySchema.optional().default("recoverable").openapi({ description: "Hosted-payment recovery state" }),
+            paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment gateway" }),
+            sort: z.enum([
+                "relevance",
+                "customerName",
+                "totalAmount",
+                "status",
+                "createdAt",
+                "updatedAt",
+            ]).optional().openapi({ description: "Sort field" }),
+            order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
+            startDate: z.string()
+                .regex(/^\d{4}-\d{2}-\d{2}$/)
+                .optional()
+                .openapi({ description: "Start date filter (YYYY-MM-DD, Bangladesh calendar day)" }),
+            endDate: z.string()
+                .regex(/^\d{4}-\d{2}-\d{2}$/)
+                .optional()
+                .openapi({ description: "End date filter (YYYY-MM-DD, Bangladesh calendar day)" }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Paginated hosted-payment recovery order list",
+            content: { "application/json": { schema: paginatedEnvelope("orders", orderSummarySchema) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(paymentRecoveryListRoute, async (c) => {
+    const db = c.get("db");
+    const query = c.req.valid("query");
+    const effectiveSort: OrderListSort = query.sort
+        ?? (query.search?.trim() ? "relevance" : "updatedAt");
+    const result = await OrdersService.listOrders(db, {
+        page: query.page,
+        limit: query.limit,
+        search: query.search || "",
+        paymentMethod: query.paymentMethod,
+        paymentRecovery: query.state as OrderPaymentRecoveryFilter,
+        sort: effectiveSort,
+        order: query.order as "asc" | "desc",
+        startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
+        endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
+    });
+    return ok(c, result);
+});
+
+const paymentRecoveryExportRoute = createRoute({
+    method: "get",
+    path: "/payment-recovery/export",
+    tags: ["Admin - Orders"],
+    summary: "Export hosted-payment recovery orders as CSV",
+    request: {
+        query: z.object({
+            search: z.string().optional().openapi({ description: "Search query" }),
+            state: paymentRecoveryQuerySchema.optional().default("recoverable").openapi({ description: "Hosted-payment recovery state" }),
+            paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment gateway" }),
+            sort: z.enum([
+                "relevance",
+                "customerName",
+                "totalAmount",
+                "status",
+                "createdAt",
+                "updatedAt",
+            ]).optional().openapi({ description: "Sort field" }),
+            order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
+            startDate: z.string()
+                .regex(/^\d{4}-\d{2}-\d{2}$/)
+                .optional()
+                .openapi({ description: "Start date filter (YYYY-MM-DD, Bangladesh calendar day)" }),
+            endDate: z.string()
+                .regex(/^\d{4}-\d{2}-\d{2}$/)
+                .optional()
+                .openapi({ description: "End date filter (YYYY-MM-DD, Bangladesh calendar day)" }),
+            maxRows: z.coerce.number()
+                .int()
+                .min(1)
+                .max(PAYMENT_RECOVERY_EXPORT_MAX_ROWS)
+                .optional()
+                .default(1_000)
+                .openapi({ description: "Maximum rows to export. Hard-capped at 5000." }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Hosted-payment recovery CSV",
+            content: { "text/csv": { schema: z.string() } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(paymentRecoveryExportRoute, async (c) => {
+    const db = c.get("db");
+    const query = c.req.valid("query");
+    const maxRows = Math.min(query.maxRows, PAYMENT_RECOVERY_EXPORT_MAX_ROWS);
+    const effectiveSort: OrderListSort = query.sort
+        ?? (query.search?.trim() ? "relevance" : "updatedAt");
+    const rows: PaymentRecoveryExportOrder[] = [];
+    let page = 1;
+    let total = 0;
+
+    while (rows.length < maxRows) {
+        const result = await OrdersService.listOrders(db, {
+            page,
+            limit: Math.min(PAYMENT_RECOVERY_EXPORT_PAGE_SIZE, maxRows - rows.length),
+            search: query.search || "",
+            paymentMethod: query.paymentMethod,
+            paymentRecovery: query.state as OrderPaymentRecoveryFilter,
+            sort: effectiveSort,
+            order: query.order as "asc" | "desc",
+            startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
+            endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
+        });
+        total = result.pagination.total;
+        rows.push(...result.orders);
+        if (result.orders.length === 0 || page >= result.pagination.totalPages) break;
+        page += 1;
+    }
+
+    const csv = buildPaymentRecoveryCsv(rows);
+    const filename = `payment-recovery-${new Date().toISOString().slice(0, 10)}.csv`;
+    return c.text(csv, 200, {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "private, no-store",
+        "X-Export-Limited": total > rows.length ? "true" : "false",
+        "X-Export-Row-Count": String(rows.length),
+        "X-Export-Total-Count": String(total),
+    });
 });
 
 // ─── POST / (Create) ────────────────────────────────────────────────────────

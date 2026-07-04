@@ -36,6 +36,45 @@ describe("admin orders route boundaries", () => {
         expect(source).toContain("paymentRecovery: query.paymentRecovery");
     });
 
+    it("keeps hosted-payment recovery queue and export sanitized", () => {
+        const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
+        const recoveryListRoute = source.split("const paymentRecoveryListRoute = createRoute")[1]?.split("const paymentRecoveryExportRoute = createRoute")[0] ?? "";
+        const recoveryExportRoute = source.split("const paymentRecoveryExportRoute = createRoute")[1]?.split("// ─── POST / (Create)")[0] ?? "";
+        const csvBuilder = source.split("function buildPaymentRecoveryCsv")[1]?.split("function isSuccessfulOrderResult")[0] ?? "";
+
+        expect(source.indexOf("const paymentRecoveryListRoute = createRoute"))
+            .toBeLessThan(source.indexOf("const createOrderRoute = createRoute"));
+        expect(source.indexOf("const paymentRecoveryExportRoute = createRoute"))
+            .toBeLessThan(source.indexOf("const createOrderRoute = createRoute"));
+
+        expect(recoveryListRoute).toContain('path: "/payment-recovery"');
+        expect(recoveryListRoute).toContain('summary: "List hosted-payment recovery orders"');
+        expect(recoveryListRoute).toContain('paginatedEnvelope("orders", orderSummarySchema)');
+        expect(recoveryListRoute).toContain("paymentRecovery: query.state as OrderPaymentRecoveryFilter");
+
+        expect(recoveryExportRoute).toContain('path: "/payment-recovery/export"');
+        expect(recoveryExportRoute).toContain('summary: "Export hosted-payment recovery orders as CSV"');
+        expect(recoveryExportRoute).toContain("PAYMENT_RECOVERY_EXPORT_MAX_ROWS");
+        expect(recoveryExportRoute).toContain('"Content-Disposition"');
+        expect(recoveryExportRoute).toContain('"X-Export-Row-Count"');
+        expect(recoveryExportRoute).toContain('"X-Export-Limited"');
+        expect(recoveryExportRoute).toContain("paymentRecovery: query.state as OrderPaymentRecoveryFilter");
+
+        expect(csvBuilder).toContain('"Recovery State"');
+        expect(csvBuilder).toContain('"Recovery Gateway"');
+        expect(csvBuilder).toContain('"Recovery Attempt Status"');
+        expect(csvBuilder).toContain("order.paymentRecovery.state");
+        expect(csvBuilder).toContain("order.paymentRecovery.gateway");
+        expect(csvBuilder).toContain("order.paymentRecovery.status");
+        expect(csvBuilder).not.toContain("attemptKey");
+        expect(csvBuilder).not.toContain("requestHash");
+        expect(csvBuilder).not.toContain("responsePayload");
+        expect(csvBuilder).not.toContain("claimId");
+        expect(csvBuilder).not.toContain("providerSessionId");
+        expect(csvBuilder).not.toContain("providerCorrelationId");
+        expect(csvBuilder).not.toContain("lastError");
+    });
+
     it("exposes sanitized payment-session attempt visibility on order payments", () => {
         const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
         const attemptSchema = source.split("const paymentSessionAttemptSchema = z.object")[1]?.split("const getItemsRoute = createRoute")[0] ?? "";

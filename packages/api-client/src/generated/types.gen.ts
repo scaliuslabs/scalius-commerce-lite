@@ -25563,6 +25563,309 @@ export type PostApiV1AdminOrdersResponses = {
 
 export type PostApiV1AdminOrdersResponse = PostApiV1AdminOrdersResponses[keyof PostApiV1AdminOrdersResponses];
 
+export type GetApiV1AdminOrdersPaymentRecoveryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number
+         */
+        page?: number | null;
+        /**
+         * Items per page
+         */
+        limit?: number | null;
+        /**
+         * Search query
+         */
+        search?: string;
+        /**
+         * Hosted-payment recovery state
+         */
+        state?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
+        /**
+         * Filter by payment gateway
+         */
+        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        /**
+         * Sort field
+         */
+        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
+        /**
+         * Sort order
+         */
+        order?: 'asc' | 'desc';
+        /**
+         * Start date filter (YYYY-MM-DD, Bangladesh calendar day)
+         */
+        startDate?: string;
+        /**
+         * End date filter (YYYY-MM-DD, Bangladesh calendar day)
+         */
+        endDate?: string;
+    };
+    url: '/api/v1/admin/orders/payment-recovery';
+};
+
+export type GetApiV1AdminOrdersPaymentRecoveryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersPaymentRecoveryError = GetApiV1AdminOrdersPaymentRecoveryErrors[keyof GetApiV1AdminOrdersPaymentRecoveryErrors];
+
+export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
+    /**
+     * Paginated hosted-payment recovery order list
+     */
+    200: {
+        success: true;
+        data: {
+            orders: Array<{
+                id: string;
+                customerName: string;
+                customerPhone: string;
+                customerEmail: string | null;
+                customerId: string | null;
+                totalAmount: number;
+                shippingCharge: number;
+                discountAmount: number;
+                status: string;
+                paymentStatus: string | null;
+                paymentMethod: string | null;
+                fulfillmentStatus: string | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                itemCount: number;
+                totalQuantity: number;
+                latestShipment: {
+                    id: string;
+                    providerId: string | null;
+                    providerType: string | null;
+                    providerName: string | null;
+                    status: string;
+                    rawStatus: string | null;
+                    externalId: string | null;
+                    trackingId: string | null;
+                    lastChecked: string | number | null;
+                    updatedAt: string | number;
+                    createdAt: string | number;
+                } | null;
+                paymentRecovery: {
+                    state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
+                    label: string;
+                    message: string | null;
+                    gateway: string | null;
+                    paymentType: string | null;
+                    status: string | null;
+                    attempts: number;
+                    activeProcessing: boolean;
+                    staleProcessing: boolean;
+                    updatedAt: string | number | null;
+                };
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersPaymentRecoveryResponse = GetApiV1AdminOrdersPaymentRecoveryResponses[keyof GetApiV1AdminOrdersPaymentRecoveryResponses];
+
+export type GetApiV1AdminOrdersPaymentRecoveryExportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Search query
+         */
+        search?: string;
+        /**
+         * Hosted-payment recovery state
+         */
+        state?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
+        /**
+         * Filter by payment gateway
+         */
+        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        /**
+         * Sort field
+         */
+        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
+        /**
+         * Sort order
+         */
+        order?: 'asc' | 'desc';
+        /**
+         * Start date filter (YYYY-MM-DD, Bangladesh calendar day)
+         */
+        startDate?: string;
+        /**
+         * End date filter (YYYY-MM-DD, Bangladesh calendar day)
+         */
+        endDate?: string;
+        /**
+         * Maximum rows to export. Hard-capped at 5000.
+         */
+        maxRows?: number;
+    };
+    url: '/api/v1/admin/orders/payment-recovery/export';
+};
+
+export type GetApiV1AdminOrdersPaymentRecoveryExportErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersPaymentRecoveryExportError = GetApiV1AdminOrdersPaymentRecoveryExportErrors[keyof GetApiV1AdminOrdersPaymentRecoveryExportErrors];
+
+export type GetApiV1AdminOrdersPaymentRecoveryExportResponses = {
+    /**
+     * Hosted-payment recovery CSV
+     */
+    200: string;
+};
+
+export type GetApiV1AdminOrdersPaymentRecoveryExportResponse = GetApiV1AdminOrdersPaymentRecoveryExportResponses[keyof GetApiV1AdminOrdersPaymentRecoveryExportResponses];
+
 export type PostApiV1AdminOrdersBulkDeleteData = {
     body?: {
         orderIds: Array<string>;
