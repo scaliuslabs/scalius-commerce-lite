@@ -10,6 +10,7 @@ import {
   CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE,
   clearCheckoutSession,
   clearCheckoutTransferSession,
+  writeHostedPaymentRecoverySession,
 } from "./session-state";
 import { isDepositPaymentRequired } from "./payment-mode";
 import type { CartValidationIssue, CartValidationRequestItem } from "../api/orders";
@@ -582,6 +583,7 @@ async function processPayment(): Promise<void> {
 
     if (result.success && result.redirectUrl) {
       if (shouldClearCheckoutBeforeRedirect(result)) {
+        writeHostedPaymentRecoverySession(result.hostedPaymentRecoveryUrl);
         clearCheckoutAndCart();
       } else if (shouldClearCheckoutSessionBeforeRedirect(result)) {
         clearCheckoutSession();

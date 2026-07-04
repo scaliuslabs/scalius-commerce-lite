@@ -61,24 +61,34 @@ export const polarHandler: GatewayHandler = {
         gatewayUrl = sessionData.gatewayUrl as string;
       }
       if (!gatewayUrl) throw new Error("No gateway URL received");
+      const hostedPaymentRecoveryUrl = buildPaymentRecoveryUrl({
+        orderId,
+        receiptToken,
+        gateway: "polar",
+        paymentType: paymentRequest?.paymentType,
+        depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,
+      });
 
       return {
         success: true,
         redirectUrl: gatewayUrl,
         clearCartOnRedirect: true,
+        hostedPaymentRecoveryUrl,
       };
     } catch (err: unknown) {
       if (createdOrder) {
+        const hostedPaymentRecoveryUrl = buildPaymentRecoveryUrl({
+          orderId: createdOrder.orderId,
+          receiptToken: createdOrder.receiptToken,
+          gateway: "polar",
+          paymentType: paymentRequest?.paymentType,
+          depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,
+        });
         return {
           success: true,
-          redirectUrl: buildPaymentRecoveryUrl({
-            orderId: createdOrder.orderId,
-            receiptToken: createdOrder.receiptToken,
-            gateway: "polar",
-            paymentType: paymentRequest?.paymentType,
-            depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,
-          }),
+          redirectUrl: hostedPaymentRecoveryUrl,
           clearCartOnRedirect: true,
+          hostedPaymentRecoveryUrl,
         };
       }
       if (err instanceof CheckoutOrderError) {

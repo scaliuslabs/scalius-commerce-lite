@@ -28,6 +28,7 @@ export interface PaymentResult {
   cartIssues?: CartValidationIssue[];
   clearCartOnRedirect?: boolean;
   clearCheckoutSessionOnRedirect?: boolean;
+  hostedPaymentRecoveryUrl?: string;
 }
 
 export interface GatewayHandler {

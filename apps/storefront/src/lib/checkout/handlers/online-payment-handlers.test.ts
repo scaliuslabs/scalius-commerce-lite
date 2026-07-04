@@ -58,6 +58,14 @@ function makeContext(config: CheckoutConfig = partialConfig): PaymentContext {
   };
 }
 
+function recoveryUrl(gateway: string): string {
+  return `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`;
+}
+
+function failedRecoveryUrl(gateway: string): string {
+  return recoveryUrl(gateway);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   document.body.innerHTML = "";
@@ -89,6 +97,7 @@ describe("hosted online payment handlers", () => {
   ])("lets the API derive payment type for $label sessions", async ({
     handler,
     endpoint,
+    gateway,
     successBody,
   }) => {
     vi.mocked(fetch).mockResolvedValueOnce({
@@ -102,6 +111,7 @@ describe("hosted online payment handlers", () => {
       success: true,
       redirectUrl: successBody.gatewayUrl,
       clearCartOnRedirect: true,
+      hostedPaymentRecoveryUrl: recoveryUrl(gateway),
     });
     expect(fetch).toHaveBeenCalledWith(
       endpoint,
@@ -154,6 +164,7 @@ describe("hosted online payment handlers", () => {
       success: true,
       redirectUrl: gatewayUrl,
       clearCartOnRedirect: true,
+      hostedPaymentRecoveryUrl: recoveryUrl(gateway),
     });
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -175,8 +186,9 @@ describe("hosted online payment handlers", () => {
     expect(result.success).toBe(true);
     expect(result.clearCartOnRedirect).toBe(true);
     expect(result.redirectUrl).toBe(
-      `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
+      failedRecoveryUrl(gateway),
     );
+    expect(result.hostedPaymentRecoveryUrl).toBe(failedRecoveryUrl(gateway));
   });
 
   it.each([
@@ -202,8 +214,9 @@ describe("hosted online payment handlers", () => {
     expect(result.success).toBe(true);
     expect(result.clearCartOnRedirect).toBe(true);
     expect(result.redirectUrl).toBe(
-      `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
+      failedRecoveryUrl(gateway),
     );
+    expect(result.hostedPaymentRecoveryUrl).toBe(failedRecoveryUrl(gateway));
   });
 
   it.each([
@@ -227,8 +240,9 @@ describe("hosted online payment handlers", () => {
     expect(result.success).toBe(true);
     expect(result.clearCartOnRedirect).toBe(true);
     expect(result.redirectUrl).toBe(
-      `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`,
+      failedRecoveryUrl(gateway),
     );
+    expect(result.hostedPaymentRecoveryUrl).toBe(failedRecoveryUrl(gateway));
   });
 
   it.each([

@@ -1,5 +1,10 @@
 import type { CheckoutLanguageData } from "../api/types";
 
+export interface EmptyCartRecoveryAction {
+  href: string;
+  onClick?: () => void;
+}
+
 function createStaticSvg(markup: string): SVGElement {
   const template = document.createElement("template");
   template.innerHTML = markup.trim();
@@ -9,6 +14,7 @@ function createStaticSvg(markup: string): SVGElement {
 export function renderEmptyCartState(
   container: HTMLElement,
   lang: CheckoutLanguageData,
+  recoveryAction?: EmptyCartRecoveryAction | null,
 ): void {
   const wrapper = document.createElement("div");
   wrapper.className = "text-center py-8 px-4";
@@ -25,11 +31,12 @@ export function renderEmptyCartState(
 
   const message = document.createElement("p");
   message.className = "mt-1 text-sm text-muted-foreground";
-  message.textContent =
-    "Looks like you haven't added anything to your cart yet.";
+  message.textContent = recoveryAction
+    ? "Your order was created before payment handoff. Continue to payment status from the receipt page."
+    : "Looks like you haven't added anything to your cart yet.";
 
   const actionWrapper = document.createElement("div");
-  actionWrapper.className = "mt-6";
+  actionWrapper.className = "mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row";
 
   const continueLink = document.createElement("a");
   continueLink.href = "/";
@@ -45,7 +52,21 @@ export function renderEmptyCartState(
     backIcon,
     document.createTextNode(lang.languageData.continueShoppingText),
   );
-  actionWrapper.append(continueLink);
+  if (recoveryAction) {
+    const recoveryLink = document.createElement("a");
+    recoveryLink.href = recoveryAction.href;
+    recoveryLink.className =
+      "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90";
+    recoveryLink.textContent = "View payment status";
+    if (recoveryAction.onClick) {
+      recoveryLink.addEventListener("click", recoveryAction.onClick);
+    }
+    continueLink.className =
+      "inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-md text-foreground bg-background hover:bg-muted";
+    actionWrapper.append(recoveryLink, continueLink);
+  } else {
+    actionWrapper.append(continueLink);
+  }
 
   wrapper.append(cartIcon, title, message, actionWrapper);
   container.replaceChildren(wrapper);
