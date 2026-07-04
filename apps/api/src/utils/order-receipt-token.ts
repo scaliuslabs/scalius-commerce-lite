@@ -1,6 +1,6 @@
 import { NotFoundError } from "./api-error";
 import type { Database } from "@scalius/database/client";
-import { checkoutAttempts, orders } from "@scalius/database/schema";
+import { checkoutAttempts } from "@scalius/database/schema";
 import { and, eq, or } from "drizzle-orm";
 
 export const RECEIPT_TOKEN_PREFIX = "order_receipt:";
@@ -57,27 +57,17 @@ export async function validateReceiptToken(
     throw new NotFoundError("Order receipt not found");
   }
 
-  if (attempt.status !== "committed") {
-    const order = await db
-      .select({ id: orders.id })
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .get();
-
-    if (!order) {
-      throw new NotFoundError("Order receipt not found");
-    }
-  }
-
-  await kv?.put(
-    `${RECEIPT_TOKEN_PREFIX}${token}`,
-    JSON.stringify({ orderId }),
-    { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
-  ).catch((error: unknown) => {
-    console.error("[Orders] Failed to repair receipt token KV from D1:", {
-      orderId,
-      token,
-      error,
+  if (attempt.status === "committed") {
+    await kv?.put(
+      `${RECEIPT_TOKEN_PREFIX}${token}`,
+      JSON.stringify({ orderId }),
+      { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
+    ).catch((error: unknown) => {
+      console.error("[Orders] Failed to repair receipt token KV from D1:", {
+        orderId,
+        token,
+        error,
+      });
     });
-  });
+  }
 }

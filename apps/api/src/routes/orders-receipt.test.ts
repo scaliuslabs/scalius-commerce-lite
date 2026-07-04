@@ -6,7 +6,7 @@ import { orderRoutes } from "./orders";
 
 const orderSupportMocks = vi.hoisted(() => ({
   createReceiptOrderSupportRequest: vi.fn(),
-  getReceiptOrderSupportRequestState: vi.fn(),
+  getReceiptOrderSupportRequestStateForOrder: vi.fn(),
 }));
 
 const notificationMocks = vi.hoisted(() => ({
@@ -18,7 +18,7 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
   return {
     ...actual,
     createReceiptOrderSupportRequest: orderSupportMocks.createReceiptOrderSupportRequest,
-    getReceiptOrderSupportRequestState: orderSupportMocks.getReceiptOrderSupportRequestState,
+    getReceiptOrderSupportRequestStateForOrder: orderSupportMocks.getReceiptOrderSupportRequestStateForOrder,
   };
 });
 
@@ -26,6 +26,7 @@ vi.mock("../utils/order-notification-queue", () => notificationMocks);
 
 const orderRow = {
   id: "order_1",
+  customerId: "cust_internal",
   customerName: "Receipt Customer",
   shippingAddress: "123 Receipt Street",
   totalAmount: 250,
@@ -42,6 +43,7 @@ const orderRow = {
   paymentStatus: "partial",
   paidAmount: 100,
   balanceDue: 150,
+  fulfillmentStatus: "pending",
   createdAt: 1_700_000_000,
   updatedAt: 1_700_000_100,
 };
@@ -178,7 +180,7 @@ function createTestApp(options: {
 
 describe("order receipt route", () => {
   beforeEach(() => {
-    orderSupportMocks.getReceiptOrderSupportRequestState.mockResolvedValue({
+    orderSupportMocks.getReceiptOrderSupportRequestStateForOrder.mockResolvedValue({
       supportRequests: [supportRequest],
       supportRequestActions,
     });
@@ -269,9 +271,21 @@ describe("order receipt route", () => {
     expect(body.data?.order).not.toHaveProperty("customerPhone");
     expect(body.data?.order).not.toHaveProperty("customerEmail");
     expect(body.data?.order).not.toHaveProperty("customerId");
+    expect(body.data?.order).not.toHaveProperty("fulfillmentStatus");
     expect(body.data?.order).not.toHaveProperty("paymentIntentId");
     expect(body.data?.order).not.toHaveProperty("shipments");
     expect(body.data?.order).not.toHaveProperty("deliveryProviders");
+    expect(orderSupportMocks.getReceiptOrderSupportRequestStateForOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        id: "order_1",
+        customerId: "cust_internal",
+        status: "pending",
+        paymentStatus: "partial",
+        fulfillmentStatus: "pending",
+        paidAmount: 100,
+      }),
+    );
   });
 
   it("falls back to D1 checkout attempts and repairs KV when receipt KV is missing", async () => {
@@ -298,6 +312,27 @@ describe("order receipt route", () => {
       JSON.stringify({ orderId: "order_1" }),
       { expirationTtl: 60 * 60 * 24 * 7 },
     );
+  });
+
+  it("does not repair receipt KV for a still-processing checkout attempt", async () => {
+    const { app, kv } = createTestApp({
+      tokenOrderId: null,
+      attemptRow: { orderId: "order_1", status: "processing" },
+    });
+
+    const response = await app.request(
+      "/api/v1/orders/receipt/order_1?token=chk_valid",
+      {},
+      { CACHE: kv } as never,
+    );
+    const body = await response.json() as {
+      data?: { order?: Record<string, unknown> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.order?.id).toBe("order_1");
+    expect(kv.get).toHaveBeenCalledWith("order_receipt:chk_valid");
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects receipt support requests when the token does not match", async () => {

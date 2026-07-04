@@ -18,7 +18,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 
 ### Storefront And Related Routes
 
-26 route groups mounted directly on the app. Most serve the customer-facing storefront without admin auth; `/orders` applies order/customer auth middleware, and `/cache` is admin-protected.
+26 route groups mounted directly on the app. Most serve the customer-facing storefront without admin auth; `/orders` is public but protected by route-level proof, idempotency, checkout policy, and unsafe cookie-origin checks; `/cache` is admin-protected.
 
 | Mount Point | Route File | Purpose |
 |---|---|---|
@@ -45,7 +45,7 @@ Standalone Hono API worker deployed as a Cloudflare Worker. Owns all HTTP routes
 | `/seo` | `routes/seo.ts` | SEO settings for meta tags |
 | `/products` | `routes/products.ts` | Product catalog |
 | `/categories` | `routes/categories.ts` | Category listings |
-| `/orders` | `routes/orders.ts` | Idempotent storefront order creation, receipt/status recovery, auth-protected via `authMiddleware` |
+| `/orders` | `routes/orders.ts` | Idempotent storefront order creation, cart validation, receipt/status recovery, and receipt-token support requests; public proof/origin guarded, not bearer-auth protected |
 | `/cache` | `routes/cache.ts` | Cache control (admin-protected via `adminAuthMiddleware`) |
 | `/__ptproxy` | `routes/partytown-proxy.ts` | Partytown analytics proxy |
 
@@ -129,7 +129,7 @@ All routes under `/admin/*` are protected by `adminAuthMiddleware`. The settings
 | `/payment/sslcommerz` | `routes/payment/sslcommerz-routes.ts` | Create session + redirect handlers |
 | `/payment/polar` | `routes/payment/polar-routes.ts` | Create checkout session + redirect handlers |
 
-`routes/payment/payment-session-create.ts` is the shared session-creation boundary for Stripe, SSLCommerz, and Polar. Receipt-token checkout retries and authenticated customer-account retries both go through it, so gateway freshness, checkout-flow policy, payment-plan preparation, provider deadlines, and `payment_session_attempts` idempotency stay identical across initial checkout and post-sale recovery. Payment session creation checks the raw merchant payment-method allowlist and checkout-flow policy first, then fresh-reads only the selected target gateway settings via `loadCheckoutGatewaySettings()`; it must not call the storefront-wide `getActivePaymentMethods()` helper, because that helper evaluates every selected gateway for full checkout config assembly. Customer order detail previews reuse the already customer-scoped order header for recovery policy instead of reloading the order, and account-owned payment-session POSTs use `createCustomerAccountPaymentSession()` so order/gateway/policy/settings are resolved once before the provider call. Created attempts replay as `200` only for the same proof/return-target context; live processing attempts are single-flight per order/gateway/payment type and return `202` with `Retry-After` and `Cache-Control: no-store`; exact duplicate attempts with a fresh processing lease return from the first selected row without a reclaim update or second state read; failed or stale attempts are reclaimable. Account-owned sessions use a customer-account proof and account return URLs; they never accept or return receipt tokens.
+`routes/payment/payment-session-create.ts` is the shared session-creation boundary for Stripe, SSLCommerz, and Polar. Receipt-token checkout retries and authenticated customer-account retries both go through it, so gateway freshness, checkout-flow policy, payment-plan preparation, provider deadlines, and `payment_session_attempts` idempotency stay identical across initial checkout and post-sale recovery. Payment session creation checks the raw merchant payment-method allowlist and checkout-flow policy first, then fresh-reads only the selected target gateway settings via `loadCheckoutGatewaySettings()`; it must not call the storefront-wide `getActivePaymentMethods()` helper, because that helper evaluates every selected gateway for full checkout config assembly. Customer order detail previews reuse the already customer-scoped order header for recovery policy instead of reloading the order, account-owned payment-session POSTs use `createCustomerAccountPaymentSession()` so order/gateway/policy/settings are resolved once before the provider call, and receipt pages pass their already loaded receipt order state into support-action resolution instead of rereading the order. Created attempts replay as `200` only for the same proof/return-target context; live processing attempts are single-flight per order/gateway/payment type and return `202` with `Retry-After` and `Cache-Control: no-store`; exact duplicate attempts with a fresh processing lease return from the first selected row without a reclaim update or second state read; failed or stale attempts are reclaimable. Account-owned sessions use a customer-account proof and account return URLs; they never accept or return receipt tokens.
 
 ### Setup & Documentation
 
@@ -157,9 +157,9 @@ Then, route-specific middleware:
 
 | Middleware | Applied To | Purpose |
 |---|---|---|
-| `cookieOriginGuardMiddleware` | `/admin/*`, `/cache/*`, `/customer-auth/*` | Rejects unsafe cookie-bearing browser requests when `Origin` is outside the credentialed API CORS allowlist; service-binding/server-to-server calls without a browser `Origin` continue to rely on route auth. |
+| `cookieOriginGuardMiddleware` | `/admin/*`, `/cache/*`, `/customer-auth/*`, `/orders/*` | Rejects unsafe cookie-bearing browser requests when `Origin` is outside the credentialed API CORS allowlist; service-binding/server-to-server calls without a browser `Origin` continue to rely on route auth or route-level proof. |
 | `adminAuthMiddleware` | `/admin/*`, `/cache/*` | Active Better Auth dashboard session cookie, plus scanner session cookies only for exact scanner workflow endpoints. Then invited-admin onboarding, 2FA, and RBAC permission checks. |
-| `authMiddleware` | `/orders/*` | JWT Bearer token verification with auto-refresh. |
+| `authMiddleware` | `/auth/me`, `/auth/revoke`, `/auth/token-stats`, and service-token flows inside `routes/auth.ts` | JWT Bearer token verification with auto-refresh. |
 | `cacheMiddleware` | Individual routes | KV-backed response caching with configurable TTL; cache-miss writes use `executionCtx.waitUntil()` when Workers provides it. |
 
 ### Admin Auth Flow (`src/middleware/admin-auth.ts`)
@@ -175,7 +175,7 @@ Admin APIs intentionally do not accept JWT Bearer fallback. Non-admin service-to
 
 ### Auth Middleware (`src/middleware/auth.ts`)
 
-JWT Bearer token verification for protected public routes (e.g., `/orders/*`) and protected `/auth/*` token-management routes. `/auth/token` and `/auth/firebase-config` are public before this middleware; `/auth/me`, `/auth/revoke`, and `/auth/token-stats` require a valid JWT. Auto-refreshes tokens nearing expiry and returns generic error messages to prevent token enumeration.
+JWT Bearer token verification for protected `/auth/*` token-management routes and service-token flows. Storefront `/orders/*` routes do not use this middleware because they are public checkout/receipt endpoints guarded by checkout request identity, receipt tokens, customer-session checks where relevant, rate limits, and unsafe cookie-origin checks. `/auth/token` and `/auth/firebase-config` are public before this middleware; `/auth/me`, `/auth/revoke`, and `/auth/token-stats` require a valid JWT. Auto-refreshes tokens nearing expiry and returns generic error messages to prevent token enumeration.
 
 ### Webhook Auth (`src/middleware/webhook-auth.ts`)
 

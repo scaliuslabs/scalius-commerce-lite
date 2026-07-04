@@ -27,7 +27,6 @@ import { sslcommerzWebhookRoutes } from "./routes/webhooks/sslcommerz";
 import { polarWebhookRoutes } from "./routes/webhooks/polar";
 import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
 import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
-import { authMiddleware } from "./middleware/auth";
 import { discountRoutes } from "./routes/discounts";
 import { widgetRoutes } from "./routes/widgets";
 import { analyticsRoutes } from "./routes/analytics";
@@ -268,11 +267,12 @@ app.route("/webhooks/polar", polarWebhookRoutes);
 app.route("/webhooks/pathao", pathaoWebhookRoutes);
 app.route("/webhooks/steadfast", steadfastWebhookRoutes);
 
-// Apply auth middleware ONLY to paths needing protection
+// Apply protection only to paths needing it. The storefront order router is
+// public but proof/origin guarded: checkout create/cart-validation/status/receipt
+// must stay reachable without a bearer token.
 app.use("/cache/*", cookieOriginGuardMiddleware);
 app.use("/cache/*", adminAuthMiddleware);
 app.use("/orders/*", cookieOriginGuardMiddleware);
-app.use("/orders/*", authMiddleware);
 
 // Register routes (mix of public and protected)
 app.route("/products", productRoutes);

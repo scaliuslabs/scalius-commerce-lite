@@ -65,9 +65,7 @@ describe("finalizeOpenApiContract", () => {
     expect(operation(spec, "/api/v1/customer-auth/me", "get").security).toEqual([
       { customerSession: [] },
     ]);
-    expect(operation(spec, "/api/v1/orders/status/{token}", "get").security).toEqual([
-      { bearerAuth: [] },
-    ]);
+    expect(operation(spec, "/api/v1/orders/status/{token}", "get").security).toBeUndefined();
     expect(operation(spec, "/api/v1/products", "get").security).toBeUndefined();
     expect(operation(spec, "/api/v1/admin/explicit-public", "get").security).toEqual([]);
   });

@@ -139,7 +139,6 @@ function securityForOperation(path: string, method: string): OpenApiSecurityRequ
   if (path === "/auth/me" || path === "/auth/revoke" || path === "/auth/token-stats") {
     return BEARER_SECURITY;
   }
-  if (path.startsWith("/orders/")) return BEARER_SECURITY;
   if (isCustomerSessionEndpoint(path)) return CUSTOMER_SECURITY;
   if (path === "/admin" || path.startsWith("/admin/")) return ADMIN_SECURITY;
   if (path === "/cache" || path.startsWith("/cache/")) return ADMIN_SECURITY;
