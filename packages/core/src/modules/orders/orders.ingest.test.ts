@@ -6,7 +6,7 @@ import type { StorefrontOrderCommitPayload } from "./orders.types";
 const mocks = vi.hoisted(() => ({
   safeBatch: vi.fn(),
   reserveStockBatch: vi.fn(),
-  releaseMultiple: vi.fn(),
+  releaseReservedStockBatch: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", async (importOriginal) => ({
@@ -16,7 +16,7 @@ vi.mock("@scalius/database/client", async (importOriginal) => ({
 
 vi.mock("../inventory", () => ({
   reserveStockBatch: mocks.reserveStockBatch,
-  releaseMultiple: mocks.releaseMultiple,
+  releaseReservedStockBatch: mocks.releaseReservedStockBatch,
 }));
 
 import { commitStorefrontOrderPayload } from "./orders.ingest";
@@ -110,7 +110,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
-    mocks.releaseMultiple.mockResolvedValue({ success: true, results: [] });
+    mocks.releaseReservedStockBatch.mockResolvedValue({ success: true, results: [] });
   });
 
   it("maps max-uses trigger aborts to a checkout validation error and releases reserved stock", async () => {
@@ -123,10 +123,11 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       name: "ValidationError",
       message: "Discount code has reached its usage limit",
     });
-    expect(mocks.releaseMultiple).toHaveBeenCalledWith(
+    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledWith(
       db,
       [{ variantId: "variant_1", quantity: 2, pool: "regular", orderId: "order_discount" }],
       "order_discount",
+      { releaseKey: "checkout-rollback:v1" },
     );
   });
 
@@ -176,7 +177,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         message: "Discount already used by this customer",
       });
 
-    expect(mocks.releaseMultiple).toHaveBeenCalledOnce();
+    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
   });
 
   it("maps missing customer-key trigger aborts to a phone-specific validation error", async () => {
@@ -186,7 +187,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toThrow("A valid phone number is required to use this discount");
 
-    expect(mocks.releaseMultiple).toHaveBeenCalledOnce();
+    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
   });
 
   it("preserves unrelated commit errors after releasing reserved stock", async () => {
@@ -197,7 +198,34 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toBe(rawError);
 
-    expect(mocks.releaseMultiple).toHaveBeenCalledOnce();
+    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed when reserved stock cleanup cannot be proven after a commit error", async () => {
+    const db = createDbMock();
+    mocks.safeBatch.mockRejectedValue(new Error("D1 batch unavailable"));
+    mocks.releaseReservedStockBatch.mockResolvedValue({
+      success: false,
+      results: [
+        {
+          success: false,
+          variantId: "variant_1",
+          previousStock: 0,
+          newStock: 0,
+          error: "Reservation release batch failed",
+        },
+      ],
+      error: "Reservation release batch failed",
+      manualReconciliationRequired: true,
+    });
+
+    await expect(commitStorefrontOrderPayload(db, createPayload()))
+      .rejects.toMatchObject({
+        name: "ServiceUnavailableError",
+        message: "Checkout inventory cleanup is temporarily unavailable. Please try again.",
+      });
+
+    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
   });
 
   it("maps reservation failures to structured cart item issues", async () => {

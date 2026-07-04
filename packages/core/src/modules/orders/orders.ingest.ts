@@ -14,8 +14,8 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
-import { ValidationError } from "../../errors";
-import { reserveStockBatch, releaseMultiple } from "../inventory";
+import { ServiceUnavailableError, ValidationError } from "../../errors";
+import { reserveStockBatch, releaseReservedStockBatch } from "../inventory";
 import { ensureAndProcessMetaPurchaseForOrder } from "../../integrations/meta/purchase-outbox";
 import { initCODTracking } from "../payments/cod";
 import {
@@ -55,6 +55,7 @@ type ReservationEntry = {
 // value stable so crash retries can recognize reservations created before this
 // source-level queue retirement.
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
+const CHECKOUT_ROLLBACK_RELEASE_KEY = "checkout-rollback:v1";
 
 async function loadExistingCommittedOrder(db: Database, orderId: string) {
     return db
@@ -220,9 +221,17 @@ async function reserveOrderInventory(
 
 async function releaseReservedEntries(db: Database, entries: ReservationEntry[]): Promise<void> {
     if (entries.length === 0) return;
-    const result = await releaseMultiple(db, entries, entries[0]!.orderId);
+    const orderId = entries[0]!.orderId;
+    const result = await releaseReservedStockBatch(db, entries, orderId, {
+        releaseKey: CHECKOUT_ROLLBACK_RELEASE_KEY,
+    });
     if (!result.success) {
-        console.error("[orders/commit] Failed to release reserved stock after order commit failure:", result.error);
+        console.error("[orders/commit] Failed to prove reserved stock release after order commit failure:", {
+            orderId,
+            error: result.error,
+            manualReconciliationRequired: result.manualReconciliationRequired,
+        });
+        throw new ServiceUnavailableError("Checkout inventory cleanup is temporarily unavailable. Please try again.");
     }
 }
 

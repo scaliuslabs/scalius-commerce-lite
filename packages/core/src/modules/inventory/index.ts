@@ -3,7 +3,8 @@
 
 export { reserveStock, reserveMultiple, reserveStockBatch, validateStockBatchAvailability } from "./reserve";
 export { deductStock, deductMultiple } from "./deduct";
-export { releaseReservation, releaseMultiple } from "./release";
+export { releaseReservation, releaseMultiple, releaseReservedStockBatch } from "./release";
+export type { ReleaseReservedStockBatchResult } from "./release";
 export { restoreDeductedStock, restoreDeductedMultiple } from "./restore";
 export { recordMovement } from "./movements";
 export { checkAndAlertLowStock } from "./alerts";
