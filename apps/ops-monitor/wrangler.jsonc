@@ -12,6 +12,11 @@
       "id": "6e5d1736490f4e7e82d7a27b1b173355"
     }
   ],
+  "send_email": [
+    {
+      "name": "ALERT_EMAIL"
+    }
+  ],
   "queues": {
     "producers": [
       {
@@ -57,6 +62,9 @@
     "QUEUE_OLDEST_AGE_THRESHOLD_MS": "300000",
     "ALERT_STREAK_THRESHOLD": "3",
     "ALERT_COOLDOWN_MS": "300000",
-    "STATE_TTL_SECONDS": "86400"
+    "STATE_TTL_SECONDS": "86400",
+    "ALERT_EMAIL_FROM": "",
+    "ALERT_EMAIL_TO": "",
+    "ALERT_EMAIL_SUBJECT_PREFIX": "[Scalius ops]"
   }
 }
