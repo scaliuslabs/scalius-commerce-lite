@@ -4,6 +4,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { productQueryOptions } from "~/lib/api-query-options/products";
+import { useHydrated } from "~/hooks/use-hydrated";
 import type { ProductDetail, ProductImageDetail, ProductVariant } from "~/types/api-responses";
 import type { Category } from "~/components/admin/product-form/types";
 import type { ProductVariant as LocalProductVariant } from "~/components/admin/product-form/variants/types";
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/admin/products/$productId/edit")({
 
 function EditProductPage() {
   const { productId } = Route.useParams();
+  const isHydrated = useHydrated();
   const { data: productResult } = useSuspenseQuery(productQueryOptions(productId));
   const { data: categoryData } = useSuspenseQuery(categoryFormOptionsQueryOptions());
 
@@ -102,14 +104,18 @@ function EditProductPage() {
       />
 
       <div className="mt-6" id="variant-section">
-        <Suspense fallback={<LoadingFallback height="h-48" />}>
-          <VariantManager
-            productId={product.id}
-            productSlug={product.slug}
-            productName={product.name}
-            variants={formattedVariants}
-          />
-        </Suspense>
+        {isHydrated ? (
+          <Suspense fallback={<LoadingFallback height="h-48" />}>
+            <VariantManager
+              productId={product.id}
+              productSlug={product.slug}
+              productName={product.name}
+              variants={formattedVariants}
+            />
+          </Suspense>
+        ) : (
+          <LoadingFallback height="h-48" />
+        )}
       </div>
     </div>
   );
