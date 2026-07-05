@@ -14,10 +14,22 @@ import {
   normalizeRetryDepositAmount,
   resolveOrderSuccessRetryPaymentType,
 } from "@/lib/order-success-payment-retry";
+import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 
+
+const legacyProofParams = ["token", "receipt_token", "receiptToken"];
+if (legacyProofParams.some((param) => Astro.url.searchParams.has(param))) {
+  const cleanUrl = new URL(Astro.url);
+  for (const param of legacyProofParams) {
+    cleanUrl.searchParams.delete(param);
+  }
+  return Astro.redirect(`${cleanUrl.pathname}${cleanUrl.search}`);
+}
 
 const orderId = Astro.url.searchParams.get("orderId");
-const receiptToken = Astro.url.searchParams.get("token");
+const receiptToken = orderId
+  ? readOrderReceiptCookie(Astro.request.headers.get("cookie"), orderId)
+  : "";
 const paymentResult = Astro.url.searchParams.get("result");
 const requestedPaymentType = Astro.url.searchParams.get("paymentType");
 const requestedDepositAmount = normalizeRetryDepositAmount(Astro.url.searchParams.get("depositAmount"));
@@ -38,7 +50,7 @@ const [layoutData, checkoutConfig]: [LayoutData | null, CheckoutConfig] = await 
 if (!orderId || !receiptToken) {
   recoveryState = {
     title: "We could not open this receipt",
-    message: "This order link is missing its private receipt proof. Sign in to your account to check your order history before placing another order.",
+    message: "This browser is missing the private receipt cookie for this order. Reopen the receipt from the same browser used at checkout, or sign in to check account orders before placing another order.",
     status: 400,
     showRetry: false,
   };
@@ -123,7 +135,6 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
                 data-endpoint={option.endpoint}
                 data-gateway={option.gateway}
                 data-order-id={order.id}
-                data-receipt-token={receiptToken}
                 data-payment-type={retryPaymentType}
                 data-deposit-amount={retryPaymentType === "deposit" && requestedDepositAmount ? String(requestedDepositAmount) : undefined}
               >
@@ -450,11 +461,10 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
     buttons.forEach((button) => button.addEventListener("click", async () => {
       const endpoint = button.dataset.endpoint;
       const orderId = button.dataset.orderId;
-      const receiptToken = button.dataset.receiptToken;
       const paymentType = button.dataset.paymentType || "full";
       const depositAmount = Number(button.dataset.depositAmount);
 
-      if (!endpoint || !orderId || !receiptToken) {
+      if (!endpoint || !orderId) {
         if (message) message.textContent = "Payment retry is unavailable for this order.";
         return;
       }
@@ -472,7 +482,6 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
       try {
         const payload: Record<string, unknown> = {
           orderId,
-          receiptToken,
           paymentType,
           currency: window.__CURRENCY_CODE__ || "BDT",
         };

@@ -5666,12 +5666,13 @@ export type GetApiV1OrdersStatusByTokenResponse = GetApiV1OrdersStatusByTokenRes
 
 export type GetApiV1OrdersReceiptByIdData = {
     body?: never;
+    headers?: {
+        'X-Receipt-Token'?: string;
+    };
     path: {
         id: string;
     };
-    query?: {
-        token?: string;
-    };
+    query?: never;
     url: '/api/v1/orders/receipt/{id}';
 };
 
@@ -27690,6 +27691,8 @@ export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses = {
             orderId: string;
             url: string;
             expiresAt: string | number;
+            accessMode: 'existing_browser_receipt';
+            note: string;
             gateway: 'sslcommerz' | 'polar';
             paymentType: 'full' | 'deposit' | 'balance' | null;
             depositAmount: number | null;
@@ -36090,11 +36093,14 @@ export type PostApiV1SetupResponse = PostApiV1SetupResponses[keyof PostApiV1Setu
 export type PostApiV1PaymentStripeIntentData = {
     body?: {
         orderId: string;
-        receiptToken: string;
+        receiptToken?: string;
         paymentType?: 'full' | 'deposit' | 'balance';
         depositAmount?: number;
         currency?: string;
         manualCapture?: boolean;
+    };
+    headers?: {
+        'X-Receipt-Token'?: string;
     };
     path?: never;
     query?: never;
@@ -36230,10 +36236,13 @@ export type PostApiV1PaymentStripeIntentResponse = PostApiV1PaymentStripeIntentR
 export type PostApiV1PaymentSslcommerzSessionData = {
     body?: {
         orderId: string;
-        receiptToken: string;
+        receiptToken?: string;
         paymentType?: 'full' | 'deposit' | 'balance';
         depositAmount?: number;
         currency?: string;
+    };
+    headers?: {
+        'X-Receipt-Token'?: string;
     };
     path?: never;
     query?: never;
@@ -36373,7 +36382,10 @@ export type PostApiV1PaymentPolarSessionData = {
         customerName?: string;
         customerEmail?: string;
         customerPhone?: string;
-        receiptToken: string;
+        receiptToken?: string;
+    };
+    headers?: {
+        'X-Receipt-Token'?: string;
     };
     path?: never;
     query?: never;

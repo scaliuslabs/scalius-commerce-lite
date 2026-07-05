@@ -20,6 +20,7 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
 import { POST as polarPost } from "../../../../pages/api/checkout/polar-session";
 import { POST as sslcommerzPost } from "../../../../pages/api/checkout/sslcommerz-session";
 import { POST as stripePost } from "../../../../pages/api/checkout/stripe-intent";
+import { getOrderReceiptCookieName } from "../../../order-receipt-cookie";
 
 beforeEach(() => {
   mocks.createApiUrl.mockClear();
@@ -29,6 +30,37 @@ beforeEach(() => {
 });
 
 describe("checkout payment-session proxies", () => {
+  it.each([
+    {
+      label: "Stripe",
+      endpoint: "https://storefront.example.test/api/checkout/stripe-intent",
+      post: stripePost,
+    },
+    {
+      label: "SSLCommerz",
+      endpoint: "https://storefront.example.test/api/checkout/sslcommerz-session",
+      post: sslcommerzPost,
+    },
+    {
+      label: "Polar",
+      endpoint: "https://storefront.example.test/api/checkout/polar-session",
+      post: polarPost,
+    },
+  ])("fails closed for $label when the receipt cookie is missing", async ({ endpoint, post }) => {
+    const response = await post({
+      request: new Request(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1" }),
+      }),
+    } as never);
+    const json = await response.json() as { error?: string };
+
+    expect(response.status).toBe(400);
+    expect(json.error).toContain("Private receipt proof is missing");
+    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+  });
+
   it.each([
     {
       label: "Stripe",
@@ -62,11 +94,19 @@ describe("checkout payment-session proxies", () => {
     const response = await post({
       request: new Request(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", receiptToken: "receipt_1" }),
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `${getOrderReceiptCookieName("order_1")}=receipt_1`,
+        },
+        body: JSON.stringify({
+          orderId: "order_1",
+          paymentType: "full",
+        }),
       }),
     } as never);
     const json = await response.json() as Record<string, unknown>;
+    const [, requestInit] = mocks.fetchWithRetry.mock.calls[0]!;
+    const backendBody = JSON.parse(String(requestInit.body)) as Record<string, unknown>;
 
     expect(response.status).toBe(202);
     expect(response.headers.get("retry-after")).toBe("2");
@@ -89,5 +129,12 @@ describe("checkout payment-session proxies", () => {
       15000,
       false,
     );
+    expect(backendBody).toMatchObject({
+      orderId: "order_1",
+      paymentType: "full",
+      receiptToken: "receipt_1",
+    });
+    expect(backendBody).not.toHaveProperty("token");
+    expect(backendBody).not.toHaveProperty("receipt_token");
   });
 });

@@ -26,7 +26,7 @@ export const sslcommerzHandler: GatewayHandler = {
     let paymentRequest: ReturnType<typeof resolveCheckoutPaymentRequest> | null = null;
     try {
       createdOrder = await createOrder(ctx.checkoutData, "sslcommerz");
-      const { orderId, receiptToken } = createdOrder;
+      const { orderId } = createdOrder;
       paymentRequest = resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
 
       let gatewayUrl = createdOrder.initialPaymentSession?.gateway === "sslcommerz"
@@ -40,7 +40,6 @@ export const sslcommerzHandler: GatewayHandler = {
       if (!gatewayUrl) {
         const sessionPayload: Record<string, unknown> = {
           orderId,
-          receiptToken,
         };
 
         const sessionRes = await fetch("/api/checkout/sslcommerz-session", {
@@ -63,7 +62,6 @@ export const sslcommerzHandler: GatewayHandler = {
       if (!gatewayUrl) throw new Error("No gateway URL received");
       const hostedPaymentRecoveryUrl = buildPaymentRecoveryUrl({
         orderId,
-        receiptToken,
         gateway: "sslcommerz",
         paymentType: paymentRequest?.paymentType,
         depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,
@@ -79,7 +77,6 @@ export const sslcommerzHandler: GatewayHandler = {
       if (createdOrder) {
         const hostedPaymentRecoveryUrl = buildPaymentRecoveryUrl({
           orderId: createdOrder.orderId,
-          receiptToken: createdOrder.receiptToken,
           gateway: "sslcommerz",
           paymentType: paymentRequest?.paymentType,
           depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,

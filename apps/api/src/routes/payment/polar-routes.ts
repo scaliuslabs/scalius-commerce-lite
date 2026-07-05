@@ -12,6 +12,7 @@ import { createPolarPaymentSession, isPaymentSessionProcessingResult } from "./p
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment-session-response";
 
 export const polarPaymentRoutes = new OpenAPIHono<{ Bindings: Env }>();
+const RECEIPT_TOKEN_HEADER = "X-Receipt-Token";
 
 // ─── POST /session ───────────────────────────────────────────────────────────
 
@@ -24,8 +25,24 @@ const polarSessionSchema = z.object({
     customerName: z.string().optional(),
     customerEmail: z.string().optional(),
     customerPhone: z.string().optional(),
-    receiptToken: z.string().min(1),
+    receiptToken: z.string().min(1).optional(),
 });
+
+function getSessionReceiptToken(c: { req: { header: (name: string) => string | undefined } }, body: { receiptToken?: string }): string | undefined {
+    const headerToken = c.req.header(RECEIPT_TOKEN_HEADER)?.trim();
+    return body.receiptToken ?? (headerToken || undefined);
+}
+
+async function validateReceiptProof(
+    c: { env: Env; req: { header: (name: string) => string | undefined } },
+    db: Database,
+    body: { orderId: string; receiptToken?: string },
+): Promise<string> {
+    const receiptToken = getSessionReceiptToken(c, body);
+    await validateReceiptToken(c.env.CACHE, body.orderId, receiptToken, db);
+    if (!receiptToken) throw new Error("Receipt token validation returned without proof.");
+    return receiptToken;
+}
 
 const createPolarSessionRoute = createRoute({
     method: "post",
@@ -37,7 +54,10 @@ const createPolarSessionRoute = createRoute({
             content: {
                 "application/json": { schema: polarSessionSchema }
             }
-        }
+        },
+        headers: z.object({
+            [RECEIPT_TOKEN_HEADER]: z.string().optional(),
+        }),
     },
     responses: {
         200: {
@@ -62,14 +82,14 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
     const orderId = body.orderId;
 
     const db: Database = c.get("db");
-    await validateReceiptToken(c.env.CACHE, orderId, body.receiptToken, db);
+    const receiptToken = await validateReceiptProof(c, db, body);
 
     const result = await createPolarPaymentSession(c, {
         orderId,
         paymentType: body.paymentType || body.type,
         depositAmount: body.depositAmount,
-        proof: { kind: "receipt", receiptToken: body.receiptToken },
-        returnTarget: { kind: "receipt", receiptToken: body.receiptToken },
+        proof: { kind: "receipt", receiptToken },
+        returnTarget: { kind: "receipt" },
     });
 
     if (isPaymentSessionProcessingResult(result)) {
@@ -110,7 +130,6 @@ function buildStorefrontOrderSuccessUrl(
     storefront: string,
     params: {
         orderId: string;
-        receiptToken: string;
         payment: "polar";
         result?: "cancelled";
         paymentType?: "full" | "deposit" | "balance" | "";
@@ -119,7 +138,6 @@ function buildStorefrontOrderSuccessUrl(
 ): string {
     const url = new URL(`${storefront}/order-success`);
     url.searchParams.set("orderId", params.orderId);
-    url.searchParams.set("token", params.receiptToken);
     url.searchParams.set("payment", params.payment);
     if (params.result) url.searchParams.set("result", params.result);
     if (params.paymentType) url.searchParams.set("paymentType", params.paymentType);
@@ -151,7 +169,6 @@ async function validateCallbackOrder(db: Pick<Database, "select">, orderId: stri
 
 polarPaymentRoutes.get("/success", async (c) => {
     const orderId = c.req.query("order_id");
-    const receiptToken = c.req.query("receipt_token") ?? "";
     const paymentType = getCallbackPaymentType(c);
     const depositAmount = getCallbackDepositAmount(c);
 
@@ -171,10 +188,8 @@ polarPaymentRoutes.get("/success", async (c) => {
                 paymentType,
             }));
         }
-        if (!receiptToken) return c.redirect(`${storefrontUrl}/checkout?error=payment_return_missing_receipt&payment=polar`);
         return c.redirect(buildStorefrontOrderSuccessUrl(storefrontUrl, {
             orderId: orderId ?? "",
-            receiptToken,
             payment: "polar",
             paymentType,
             depositAmount,
@@ -190,7 +205,6 @@ polarPaymentRoutes.get("/cancel", async (c) => {
     const envObj = c.env;
     const storefrontUrl = getConfiguredStorefrontUrl(envObj);
     const orderId = c.req.query("order_id") ?? "";
-    const receiptToken = c.req.query("receipt_token") ?? "";
 
     if (storefrontUrl) {
         if (orderId) {
@@ -206,12 +220,8 @@ polarPaymentRoutes.get("/cancel", async (c) => {
                 paymentType: getCallbackPaymentType(c),
             }));
         }
-        if (!receiptToken) {
-            return c.redirect(`${storefrontUrl}/checkout?error=payment_cancelled&payment=polar`);
-        }
         return c.redirect(buildStorefrontOrderSuccessUrl(storefrontUrl, {
             orderId,
-            receiptToken,
             payment: "polar",
             result: "cancelled",
             paymentType: getCallbackPaymentType(c),

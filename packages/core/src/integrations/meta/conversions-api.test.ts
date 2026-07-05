@@ -27,7 +27,7 @@ describe("Meta Conversions API log redaction", () => {
           event_name: "Purchase",
           event_time: 1_800_000_000,
           event_source_url:
-            "https://store.example/order-success?orderId=order_1&token=receipt_secret",
+            "https://store.example/order-success?orderId=order_1&payment=sslcommerz&result=failed",
           event_id: "Purchase:order_1",
           action_source: "website",
           user_data: {

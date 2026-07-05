@@ -38,7 +38,6 @@ describe("createOrder", () => {
       success: true,
       data: {
         id: "ord_1",
-        receiptToken: "receipt_1",
       },
     }), { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -69,7 +68,6 @@ describe("createOrder", () => {
       success: true,
       data: {
         id: "ord_1",
-        receiptToken: "receipt_1",
         initialPaymentSession: {
           gateway: "sslcommerz",
           gatewayUrl: "https://ssl.example.test/pay",

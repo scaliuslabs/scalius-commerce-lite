@@ -207,7 +207,7 @@ function createKvMock(mode: TokenMode) {
   return {
     get: vi.fn(async (key: string) => {
       if (mode === "missing") return null;
-      if (key !== "order_receipt:chk_valid") return null;
+      if (!key.startsWith("order_receipt:") || key.includes("chk_valid")) return null;
       return JSON.stringify({
         orderId: mode === "valid" ? "order_1" : "other_order",
       });
@@ -245,6 +245,13 @@ function envFor(kv: ReturnType<typeof createKvMock>) {
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://shop.example.test",
   } as never;
+}
+
+function expectNoReceiptProofInUrl(url: string | null): asserts url is string {
+  expect(url).toBeTruthy();
+  expect(url).not.toContain("token=");
+  expect(url).not.toContain("receipt_token");
+  expect(url).not.toContain("receiptToken");
 }
 
 function createPaymentRouteContext(db: ReturnType<typeof createDbMock>, kv: ReturnType<typeof createKvMock>) {
@@ -365,10 +372,51 @@ describe("payment session receipt-token proof", () => {
       envFor(kv),
     );
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(404);
     expect(kv.get).not.toHaveBeenCalled();
     expect(mocks.getStripeSettings).not.toHaveBeenCalled();
     expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "Stripe intent",
+      paymentMethod: "stripe",
+      path: "/api/v1/payment/stripe/intent",
+    },
+    {
+      label: "SSLCommerz session",
+      paymentMethod: "sslcommerz",
+      path: "/api/v1/payment/sslcommerz/session",
+    },
+    {
+      label: "Polar session",
+      paymentMethod: "polar",
+      path: "/api/v1/payment/polar/session",
+    },
+  ])("creates $label with receipt proof from X-Receipt-Token", async ({ paymentMethod, path }) => {
+    const { app, kv } = createTestApp("valid", paymentMethod);
+
+    const response = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Receipt-Token": "chk_valid",
+        },
+        body: JSON.stringify({ orderId: "order_1" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: "order_1",
+        receiptToken: "chk_valid",
+      }),
+    );
   });
 
   it("rejects SSLCommerz session creation when the token belongs to another order", async () => {
@@ -819,11 +867,19 @@ describe("payment session receipt-token proof", () => {
         currency: "BDT",
         paymentType: "deposit",
         signal: expect.any(AbortSignal),
-        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
-        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
-        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
+        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&payment_type=deposit&deposit_amount=60",
+        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1&payment_type=deposit&deposit_amount=60",
+        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&payment_type=deposit&deposit_amount=60",
       }),
     );
+    const sslRequest = mocks.initSSLCommerzSession.mock.calls.at(-1)?.[3] as {
+      successUrl?: string;
+      failUrl?: string;
+      cancelUrl?: string;
+    };
+    expectNoReceiptProofInUrl(sslRequest.successUrl ?? null);
+    expectNoReceiptProofInUrl(sslRequest.failUrl ?? null);
+    expectNoReceiptProofInUrl(sslRequest.cancelUrl ?? null);
   });
 
   it("creates customer-account SSLCommerz balance sessions through one target-gateway context", async () => {
@@ -890,45 +946,51 @@ describe("payment session receipt-token proof", () => {
     const { app, kv } = createTestApp("valid", "sslcommerz");
 
     const response = await app.request(
-      "/api/v1/payment/sslcommerz/success?tran_id=order_1_deposit_ABC12345&receipt_token=chk_valid",
+      "/api/v1/payment/sslcommerz/success?tran_id=order_1_deposit_ABC12345",
       { method: "GET" },
       envFor(kv),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=sslcommerz",
+    const location = response.headers.get("location");
+    expect(location).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz",
     );
+    expectNoReceiptProofInUrl(location);
   });
 
   it("redirects SSLCommerz failed hosted payments back to the receipt recovery page", async () => {
     const { app, kv } = createTestApp("valid", "sslcommerz");
 
     const response = await app.request(
-      "/api/v1/payment/sslcommerz/fail?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=60",
+      "/api/v1/payment/sslcommerz/fail?order_id=order_1&payment_type=deposit&deposit_amount=60",
       { method: "GET" },
       envFor(kv),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",
+    const location = response.headers.get("location");
+    expect(location).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",
     );
+    expectNoReceiptProofInUrl(location);
   });
 
   it("redirects SSLCommerz cancelled hosted payments back to the receipt recovery page", async () => {
     const { app, kv } = createTestApp("valid", "sslcommerz");
 
     const response = await app.request(
-      "/api/v1/payment/sslcommerz/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+      "/api/v1/payment/sslcommerz/cancel?order_id=order_1&payment_type=full",
       { method: "GET" },
       envFor(kv),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=sslcommerz&result=cancelled&paymentType=full",
+    const location = response.headers.get("location");
+    expect(location).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&result=cancelled&paymentType=full",
     );
+    expectNoReceiptProofInUrl(location);
   });
 
   it("redirects SSLCommerz account callbacks without exposing receipt tokens", async () => {
@@ -960,10 +1022,8 @@ describe("payment session receipt-token proof", () => {
       "https://shop.example.test/account/orders/order_1?payment=sslcommerz&result=cancelled&paymentType=balance",
     );
     for (const response of [success, failed, cancelled]) {
-      const location = response.headers.get("location") ?? "";
       expect(response.status).toBe(302);
-      expect(location).not.toContain("token=");
-      expect(location).not.toContain("receipt_token");
+      expectNoReceiptProofInUrl(response.headers.get("location"));
     }
   });
 
@@ -1122,8 +1182,8 @@ describe("payment session receipt-token proof", () => {
         amount: 50,
         currency: "usd",
         paymentType: "deposit",
-        successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=55",
-        cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=deposit&deposit_amount=55",
+        successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&payment_type=deposit&deposit_amount=55",
+        cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&payment_type=deposit&deposit_amount=55",
         metadata: expect.objectContaining({
           orderId: "order_1",
           paymentType: "deposit",
@@ -1135,6 +1195,12 @@ describe("payment session receipt-token proof", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+    const polarRequest = mocks.createPolarCheckout.mock.calls.at(-1)?.[1] as {
+      successUrl?: string;
+      cancelUrl?: string;
+    };
+    expectNoReceiptProofInUrl(polarRequest.successUrl ?? null);
+    expectNoReceiptProofInUrl(polarRequest.cancelUrl ?? null);
   });
 
   it("switches a failed unpaid SSLCommerz order to Polar after target readiness passes", async () => {
@@ -1359,15 +1425,17 @@ describe("payment session receipt-token proof", () => {
     const { app, kv } = createTestApp("valid", "polar");
 
     const response = await app.request(
-      "/api/v1/payment/polar/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+      "/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full",
       { method: "GET" },
       envFor(kv),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://shop.example.test/order-success?orderId=order_1&token=chk_valid&payment=polar&result=cancelled&paymentType=full",
+    const location = response.headers.get("location");
+    expect(location).toBe(
+      "https://shop.example.test/order-success?orderId=order_1&payment=polar&result=cancelled&paymentType=full",
     );
+    expectNoReceiptProofInUrl(location);
   });
 
   it("redirects Polar account callbacks without exposing receipt tokens", async () => {
@@ -1391,10 +1459,8 @@ describe("payment session receipt-token proof", () => {
       "https://shop.example.test/account/orders/order_1?payment=polar&result=cancelled&paymentType=balance",
     );
     for (const response of [success, cancelled]) {
-      const location = response.headers.get("location") ?? "";
       expect(response.status).toBe(302);
-      expect(location).not.toContain("token=");
-      expect(location).not.toContain("receipt_token");
+      expectNoReceiptProofInUrl(response.headers.get("location"));
     }
   });
 
@@ -2071,12 +2137,20 @@ describe("payment session receipt-token proof", () => {
       "password",
       true,
       expect.objectContaining({
-        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&receipt_token=chk_valid&payment_type=full",
-        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1&receipt_token=chk_valid&payment_type=full",
-        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&payment_type=full",
+        failUrl: "https://api.example.test/api/v1/payment/sslcommerz/fail?order_id=order_1&payment_type=full",
+        cancelUrl: "https://api.example.test/api/v1/payment/sslcommerz/cancel?order_id=order_1&payment_type=full",
         ipnUrl: "https://api.example.test/api/v1/webhooks/sslcommerz",
       }),
     );
+    const sslRequest = mocks.initSSLCommerzSession.mock.calls.at(-1)?.[3] as {
+      successUrl?: string;
+      failUrl?: string;
+      cancelUrl?: string;
+    };
+    expectNoReceiptProofInUrl(sslRequest.successUrl ?? null);
+    expectNoReceiptProofInUrl(sslRequest.failUrl ?? null);
+    expectNoReceiptProofInUrl(sslRequest.cancelUrl ?? null);
     const identityInput = mocks.buildPaymentSessionAttemptIdentity.mock.calls.at(-1)?.[0] as {
       requestContext?: Record<string, unknown>;
     };
@@ -2106,10 +2180,16 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
       expect.objectContaining({ productId: "polar_product" }),
       expect.objectContaining({
-        successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&receipt_token=chk_valid&payment_type=full",
-        cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&receipt_token=chk_valid&payment_type=full",
+        successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&payment_type=full",
+        cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full",
       }),
     );
+    const polarRequest = mocks.createPolarCheckout.mock.calls.at(-1)?.[1] as {
+      successUrl?: string;
+      cancelUrl?: string;
+    };
+    expectNoReceiptProofInUrl(polarRequest.successUrl ?? null);
+    expectNoReceiptProofInUrl(polarRequest.cancelUrl ?? null);
     const identityInput = mocks.buildPaymentSessionAttemptIdentity.mock.calls.at(-1)?.[0] as {
       requestContext?: Record<string, unknown>;
     };

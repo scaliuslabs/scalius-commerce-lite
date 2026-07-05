@@ -59,7 +59,7 @@ function makeContext(config: CheckoutConfig = partialConfig): PaymentContext {
 }
 
 function recoveryUrl(gateway: string): string {
-  return `/order-success?orderId=order_1&token=receipt_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`;
+  return `/order-success?orderId=order_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`;
 }
 
 function failedRecoveryUrl(gateway: string): string {
@@ -71,7 +71,6 @@ beforeEach(() => {
   document.body.innerHTML = "";
   mocks.createOrder.mockResolvedValue({
     orderId: "order_1",
-    receiptToken: "receipt_1",
     totalAmount: 125,
     paymentMethod: "sslcommerz",
   });
@@ -123,8 +122,10 @@ describe("hosted online payment handlers", () => {
     const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body));
     expect(payload).toMatchObject({
       orderId: "order_1",
-      receiptToken: "receipt_1",
     });
+    expect(payload).not.toHaveProperty("receiptToken");
+    expect(payload).not.toHaveProperty("token");
+    expect(payload).not.toHaveProperty("receipt_token");
     expect(payload).not.toHaveProperty("paymentType");
     expect(payload).not.toHaveProperty("depositAmount");
   });
@@ -149,7 +150,6 @@ describe("hosted online payment handlers", () => {
   }) => {
     mocks.createOrder.mockResolvedValueOnce({
       orderId: "order_1",
-      receiptToken: "receipt_1",
       totalAmount: 125,
       paymentMethod: gateway,
       initialPaymentSession: {
@@ -228,7 +228,6 @@ describe("hosted online payment handlers", () => {
   }) => {
     mocks.createOrder.mockResolvedValueOnce({
       orderId: "order_1",
-      receiptToken: "receipt_1",
       totalAmount: 125,
       paymentMethod: gateway,
       initialPaymentSessionError: "Gateway timeout",
@@ -296,7 +295,6 @@ describe("Stripe checkout handler", () => {
 
     mocks.createOrder.mockResolvedValueOnce({
       orderId: "order_1",
-      receiptToken: "receipt_1",
       totalAmount: 125,
       paymentMethod: "stripe",
     });
@@ -339,7 +337,6 @@ describe("Stripe checkout handler", () => {
 
     mocks.createOrder.mockResolvedValueOnce({
       orderId: "order_1",
-      receiptToken: "receipt_1",
       totalAmount: 125,
       paymentMethod: "stripe",
     });
@@ -356,7 +353,7 @@ describe("Stripe checkout handler", () => {
       "/api/checkout/stripe-intent",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ orderId: "order_1", receiptToken: "receipt_1" }),
+        body: JSON.stringify({ orderId: "order_1" }),
       }),
     );
     expect(stripeInstance.confirmCardPayment).toHaveBeenCalledWith("pi_secret_fallback", {
@@ -364,7 +361,7 @@ describe("Stripe checkout handler", () => {
     });
     expect(result).toEqual({
       success: true,
-      redirectUrl: "/order-success?orderId=order_1&token=receipt_1&payment=stripe",
+      redirectUrl: "/order-success?orderId=order_1&payment=stripe",
     });
   });
 
@@ -390,7 +387,6 @@ describe("Stripe checkout handler", () => {
 
     mocks.createOrder.mockResolvedValueOnce({
       orderId: "order_1",
-      receiptToken: "receipt_1",
       totalAmount: 125,
       paymentMethod: "stripe",
     });
@@ -437,7 +433,6 @@ describe("Stripe checkout handler", () => {
 
     mocks.createOrder.mockResolvedValueOnce({
       orderId: "order_1",
-      receiptToken: "receipt_1",
       totalAmount: 125,
       paymentMethod: "stripe",
       initialPaymentSession: {
@@ -454,7 +449,7 @@ describe("Stripe checkout handler", () => {
     });
     expect(result).toEqual({
       success: true,
-      redirectUrl: "/order-success?orderId=order_1&token=receipt_1&payment=stripe",
+      redirectUrl: "/order-success?orderId=order_1&payment=stripe",
     });
   });
 
@@ -480,7 +475,6 @@ describe("Stripe checkout handler", () => {
 
     mocks.createOrder.mockResolvedValueOnce({
       orderId: "order_1",
-      receiptToken: "receipt_1",
       totalAmount: 125,
       paymentMethod: "stripe",
       initialPaymentSessionError: "Stripe timeout",

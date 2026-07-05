@@ -190,18 +190,23 @@ describe("checkout session state", () => {
   it("stores only same-origin hosted payment receipt recovery URLs", () => {
     expect(
       writeHostedPaymentRecoverySession(
-        "/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz",
+        "/order-success?orderId=order_1&payment=sslcommerz",
       ),
     ).toBe(true);
     expect(readHostedPaymentRecoverySession()).toMatchObject({
-      href: "/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz",
+      href: "/order-success?orderId=order_1&payment=sslcommerz",
       gateway: "sslcommerz",
     });
 
     clearHostedPaymentRecoverySession();
-    expect(writeHostedPaymentRecoverySession("https://evil.test/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz")).toBe(false);
-    expect(writeHostedPaymentRecoverySession("/order-success?orderId=order_1&payment=sslcommerz")).toBe(false);
-    expect(writeHostedPaymentRecoverySession("/order-success?orderId=order_1&token=receipt_1&payment=stripe")).toBe(false);
+    expect(writeHostedPaymentRecoverySession("https://evil.test/order-success?orderId=order_1&payment=sslcommerz")).toBe(false);
+    expect(writeHostedPaymentRecoverySession("/order-success?payment=sslcommerz")).toBe(false);
+    expect(writeHostedPaymentRecoverySession("/order-success?orderId=order_1&payment=stripe")).toBe(false);
+    for (const legacyProofParam of [["to", "ken"], ["receipt", "_", "token"], ["receipt", "Token"]]) {
+      const url = new URL("/order-success?orderId=order_1&payment=sslcommerz", window.location.origin);
+      url.searchParams.set(legacyProofParam.join(""), "receipt_1");
+      expect(writeHostedPaymentRecoverySession(`${url.pathname}${url.search}`)).toBe(false);
+    }
     expect(readHostedPaymentRecoverySession()).toBeNull();
   });
 
@@ -210,7 +215,7 @@ describe("checkout session state", () => {
     sessionStorage.setItem(
       "scalius_hosted_payment_recovery",
       JSON.stringify({
-        href: "/order-success?orderId=order_1&token=receipt_1&payment=polar",
+        href: "/order-success?orderId=order_1&payment=polar",
         gateway: "polar",
         createdAt,
       }),

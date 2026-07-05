@@ -277,8 +277,10 @@ describe("order payment recovery link mutations", () => {
     mutation.onSuccess?.(
       {
         orderId: "ord_123",
-        url: "https://storefront.test/order-success?token=private",
+        url: "https://storefront.test/order-success?orderId=ord_123&payment=sslcommerz&result=failed",
         expiresAt: 1_800_000_000,
+        accessMode: "existing_browser_receipt",
+        note: "This clean recovery URL does not contain private receipt proof.",
       },
       variables,
     );

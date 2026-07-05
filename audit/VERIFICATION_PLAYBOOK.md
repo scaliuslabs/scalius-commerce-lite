@@ -422,7 +422,7 @@ pnpm --filter @scalius/api exec vitest run src/routes/orders-receipt.test.ts src
 pnpm --filter @scalius/core test -- src/modules/orders/order-receipts.test.ts src/modules/orders/order-payment-recovery-link.test.ts
 ```
 
-For `PRIV-003`, receipt proof remains required for guest receipt/payment recovery, but bearer proof must not travel in URLs. Public order-success URLs, receipt API calls from the browser, SSLCommerz success/fail/cancel redirects, Polar success URLs, payment-recovery links, and same-origin payment-session proxies must avoid `token`, `receipt_token`, or `receiptToken` URL parameters. Prefer a short-lived same-origin httpOnly cookie, POST body, or header handoff with explicit expiry, origin checks, and no raw proof in logs or analytics. Keep backend callback validation deterministic and ensure live read-only smokes prove receipt access still fails closed without proof.
+For `PRIV-003`, receipt proof remains required for guest receipt/payment recovery, but bearer proof must not travel in URLs. Public order-success URLs, receipt API calls from the browser, SSLCommerz success/fail/cancel redirects, Polar success URLs, payment-recovery links, and same-origin payment-session proxies must avoid `token`, `receipt_token`, or `receiptToken` URL parameters. Use same-origin httpOnly cookies plus POST body or header proof forwarding with explicit expiry, origin checks, and no raw proof in KV keys, logs, analytics, or clipboard URLs. Admin recovery copy links are clean same-browser receipt URLs only; merchant-sendable cross-browser recovery requires `POSTSALE-021`, not a renamed bearer URL. Keep backend callback validation deterministic and ensure live read-only smokes prove receipt access still fails closed without proof.
 
 Payment settings and checkout-cache checks:
 
@@ -817,13 +817,15 @@ Scanner RBAC:
 
 Public order receipt:
 
-1. Create an order and capture both `orderId` and `receiptToken`.
+1. Create an order and capture both `orderId` and the same-origin receipt cookie set by the storefront checkout proxy.
 2. Open `http://localhost:4322/order-success?orderId=<id>` in a private browser with no cookies.
 3. Expected: storefront redirects away from the receipt page and no order PII is rendered.
-4. Open `http://localhost:4322/order-success?orderId=<id>&token=<receiptToken>`.
-5. Expected: minimal receipt renders, but phone, email, customer ID, shipments, delivery provider objects, and notes are absent.
-6. Call `GET /api/v1/orders/receipt/<id>?token=wrong`.
-7. Expected: `404`; wrong tokens must not reach the order lookup path.
+4. Open `http://localhost:4322/order-success?orderId=<id>&token=<old-proof>`.
+5. Expected: the URL proof is ignored/removed, the receipt still fails closed without the cookie, and no order PII is rendered.
+6. Open `http://localhost:4322/order-success?orderId=<id>` with the receipt cookie from checkout.
+7. Expected: minimal receipt renders, but phone, email, customer ID, shipments, delivery provider objects, raw receipt proof, and notes are absent.
+8. Call `GET /api/v1/orders/receipt/<id>?token=wrong`.
+9. Expected: `401`/`404`; query proof must not be accepted and must not reach the order lookup path. Valid proof uses `X-Receipt-Token` or same-origin proxy body/header forwarding only.
 
 Checkout DOM injection:
 

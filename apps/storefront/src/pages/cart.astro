@@ -19,6 +19,7 @@ import {
   isCodOnly,
 } from "@/lib/api";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
+import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartValidationIssue } from "@/lib/api/orders";
 
@@ -163,9 +164,14 @@ if (Astro.request.method === "POST" && codOnly) {
         result.receiptToken
       ) {
         successOrderId = result.orderId;
-        return Astro.redirect(
-          `/order-success?orderId=${encodeURIComponent(result.orderId)}&token=${encodeURIComponent(result.receiptToken)}`,
+        const response = Astro.redirect(
+          `/order-success?orderId=${encodeURIComponent(result.orderId)}`,
         );
+        const receiptCookie = createOrderReceiptCookieHeader(result.orderId, result.receiptToken);
+        if (receiptCookie) {
+          response.headers.append("Set-Cookie", receiptCookie);
+        }
+        return response;
       } else {
         console.error("Order processing failed:", result.error);
         const resultError = result.error;

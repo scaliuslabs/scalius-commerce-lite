@@ -80,7 +80,7 @@ describe("sendServerEvent", () => {
     window.history.replaceState(
       null,
       "",
-      "/order-success?orderId=order_1&token=receipt_secret&payment_intent_client_secret=pi_secret&keep=yes",
+      "/order-success?orderId=order_1&payment_intent_client_secret=pi_secret&keep=yes",
     );
 
     sendServerEvent({

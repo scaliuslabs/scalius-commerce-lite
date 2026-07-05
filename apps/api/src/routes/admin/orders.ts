@@ -191,7 +191,6 @@ function buildPaymentRecoveryUrl(
 ): string {
     const url = new URL("/order-success", storefrontUrl);
     url.searchParams.set("orderId", result.orderId);
-    url.searchParams.set("token", result.receiptToken);
     url.searchParams.set("payment", result.gateway);
     url.searchParams.set("result", "failed");
     if (result.paymentType) url.searchParams.set("paymentType", result.paymentType);
@@ -199,25 +198,6 @@ function buildPaymentRecoveryUrl(
         url.searchParams.set("depositAmount", String(result.depositAmount));
     }
     return url.toString();
-}
-
-async function writePaymentRecoveryReceiptHint(
-    kv: KVNamespace | undefined,
-    result: OrdersService.OrderPaymentRecoveryLink,
-): Promise<void> {
-    if (!kv) return;
-
-    await kv.put(
-        `${OrdersService.ORDER_RECEIPT_TOKEN_PREFIX}${result.receiptToken}`,
-        JSON.stringify({ orderId: result.orderId }),
-        { expirationTtl: OrdersService.ORDER_RECEIPT_TOKEN_TTL_SECONDS },
-    ).catch((error: unknown) => {
-        console.error("[Admin Orders] Failed to write payment recovery receipt KV hint:", {
-            orderId: result.orderId,
-            tokenHash: result.tokenHash.slice(0, 12),
-            error,
-        });
-    });
 }
 
 function isSuccessfulOrderResult(result: unknown): result is { success: true; orderId: string } {
@@ -342,6 +322,8 @@ const paymentRecoveryLinkResponseSchema = successEnvelope(z.object({
     orderId: z.string(),
     url: z.string().url(),
     expiresAt: timestampSchema,
+    accessMode: z.literal("existing_browser_receipt"),
+    note: z.string(),
     gateway: z.enum(["sslcommerz", "polar"]),
     paymentType: recoveryLinkPaymentTypeSchema.nullable(),
     depositAmount: z.number().nullable(),
@@ -738,12 +720,13 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
     const storefrontUrl = resolveStorefrontUrl(c.env);
     const recoveryLink = await OrdersService.createOrderPaymentRecoveryLink(db, orderId);
     const url = buildPaymentRecoveryUrl(storefrontUrl, recoveryLink);
-    await writePaymentRecoveryReceiptHint(c.env.CACHE, recoveryLink);
 
     return created(c, {
         orderId: recoveryLink.orderId,
         url,
         expiresAt: new Date(recoveryLink.expiresAt * 1000).toISOString(),
+        accessMode: "existing_browser_receipt" as const,
+        note: "This clean recovery URL does not contain private receipt proof. It opens only in the buyer browser that already holds the order receipt cookie.",
         gateway: recoveryLink.gateway,
         paymentType: recoveryLink.paymentType,
         depositAmount: recoveryLink.depositAmount,

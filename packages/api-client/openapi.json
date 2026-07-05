@@ -18967,8 +18967,8 @@
               "type": "string"
             },
             "required": false,
-            "name": "token",
-            "in": "query"
+            "name": "X-Receipt-Token",
+            "in": "header"
           }
         ],
         "responses": {
@@ -92776,6 +92776,15 @@
                             }
                           ]
                         },
+                        "accessMode": {
+                          "type": "string",
+                          "enum": [
+                            "existing_browser_receipt"
+                          ]
+                        },
+                        "note": {
+                          "type": "string"
+                        },
                         "gateway": {
                           "type": "string",
                           "enum": [
@@ -92867,6 +92876,8 @@
                         "orderId",
                         "url",
                         "expiresAt",
+                        "accessMode",
+                        "note",
                         "gateway",
                         "paymentType",
                         "depositAmount",
@@ -121708,6 +121719,16 @@
           "Payments - Stripe"
         ],
         "summary": "Create a Stripe PaymentIntent for an order",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "X-Receipt-Token",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -121746,8 +121767,7 @@
                   }
                 },
                 "required": [
-                  "orderId",
-                  "receiptToken"
+                  "orderId"
                 ]
               }
             }
@@ -122203,6 +122223,16 @@
           "Payments - SSLCommerz"
         ],
         "summary": "Create an SSLCommerz payment session",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "X-Receipt-Token",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -122235,8 +122265,7 @@
                   }
                 },
                 "required": [
-                  "orderId",
-                  "receiptToken"
+                  "orderId"
                 ]
               }
             }
@@ -122678,6 +122707,16 @@
           "Payments - Polar"
         ],
         "summary": "Create a Polar checkout session",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "X-Receipt-Token",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -122727,8 +122766,7 @@
                   }
                 },
                 "required": [
-                  "orderId",
-                  "receiptToken"
+                  "orderId"
                 ]
               }
             }

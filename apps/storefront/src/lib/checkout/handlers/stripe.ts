@@ -109,7 +109,7 @@ export const stripeHandler: GatewayHandler = {
 
     try {
       const createdOrder = await createOrder(ctx.checkoutData, "stripe");
-      const { orderId, receiptToken } = createdOrder;
+      const { orderId } = createdOrder;
 
       let clientSecret = createdOrder.initialPaymentSession?.gateway === "stripe"
         ? createdOrder.initialPaymentSession.clientSecret
@@ -122,7 +122,6 @@ export const stripeHandler: GatewayHandler = {
       if (!clientSecret) {
         const intentPayload: Record<string, unknown> = {
           orderId,
-          receiptToken,
         };
 
         const intentRes = await fetch("/api/checkout/stripe-intent", {
@@ -153,7 +152,7 @@ export const stripeHandler: GatewayHandler = {
       if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "requires_capture") {
         return {
           success: true,
-          redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}&token=${encodeURIComponent(receiptToken)}&payment=stripe`,
+          redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}&payment=stripe`,
         };
       }
 

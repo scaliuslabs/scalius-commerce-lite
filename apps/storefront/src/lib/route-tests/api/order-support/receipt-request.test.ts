@@ -18,6 +18,7 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
 }));
 
 import { POST } from "../../../../pages/api/order-support/receipt-request";
+import { getOrderReceiptCookieName } from "../../../order-receipt-cookie";
 
 beforeEach(() => {
   mocks.createApiUrl.mockClear();
@@ -40,7 +41,6 @@ describe("receipt-token order support proxy", () => {
         },
         body: JSON.stringify({
           orderId: "ord_1",
-          receiptToken: "receipt_1",
           type: "cancel_pre_shipment",
           reason: "Please cancel this order.",
         }),
@@ -51,14 +51,13 @@ describe("receipt-token order support proxy", () => {
     expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
   });
 
-  it("returns 400 for missing receipt proof or unsupported actions", async () => {
+  it("returns 400 for missing receipt cookie or unsupported actions", async () => {
     const response = await POST({
       request: new Request("https://storefront.example.test/api/order-support/receipt-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId: "ord_1",
-          receiptToken: "",
           type: "delete_order",
           reason: "Please delete this order.",
         }),
@@ -66,6 +65,25 @@ describe("receipt-token order support proxy", () => {
     } as never);
 
     expect(response.status).toBe(400);
+    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+  });
+
+  it("returns a clear fail-closed message when the receipt cookie is missing", async () => {
+    const response = await POST({
+      request: new Request("https://storefront.example.test/api/order-support/receipt-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "ord_1",
+          type: "refund",
+          reason: "Payment issue.",
+        }),
+      }),
+    } as never);
+    const json = await response.json() as { error?: string };
+
+    expect(response.status).toBe(400);
+    expect(json.error).toContain("Private receipt proof is missing");
     expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
   });
 
@@ -85,10 +103,12 @@ describe("receipt-token order support proxy", () => {
     const response = await POST({
       request: new Request("https://storefront.example.test/api/order-support/receipt-request", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `${getOrderReceiptCookieName("ord_1")}=receipt_1`,
+        },
         body: JSON.stringify({
           orderId: "ord_1",
-          receiptToken: " receipt_1 ",
           type: "cancel_pre_shipment",
           reason: "  Please cancel before shipment. ",
           message: "   ",
@@ -129,10 +149,12 @@ describe("receipt-token order support proxy", () => {
     const response = await POST({
       request: new Request("https://storefront.example.test/api/order-support/receipt-request", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `${getOrderReceiptCookieName("ord_1")}=receipt_1`,
+        },
         body: JSON.stringify({
           orderId: "ord_1",
-          receiptToken: "receipt_1",
           type: "refund",
           reason: "Payment issue.",
         }),
