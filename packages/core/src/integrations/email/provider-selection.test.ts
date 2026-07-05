@@ -169,6 +169,31 @@ describe("email provider selection", () => {
     )).rejects.toThrow("Resend API error: 401");
   });
 
+  it("preserves Resend status when the provider returns a JSON message", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: vi.fn().mockResolvedValue({ message: "The from address must be a verified domain" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(sendEmail(
+      {
+        to: "buyer@example.com",
+        subject: "Order received",
+        html: "<p>Thanks</p>",
+      },
+      {
+        settings: {
+          ...baseSettings,
+          provider: "resend",
+          resendApiKey: "bad_key",
+          hasResendApiKey: true,
+        },
+      },
+    )).rejects.toThrow("Resend API error: 422: The from address must be a verified domain");
+  });
+
   it("fails without logging email bodies when no provider is configured", async () => {
     await expect(sendEmail(
       {

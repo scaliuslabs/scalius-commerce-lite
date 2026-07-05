@@ -42,7 +42,7 @@ export function VariantBulkEditRow({ variant, draftUpdate, onChange, isNew, onRe
                 />
             </TableCell>
 
-            {/* Size */}
+            {/* Option 1 */}
             <TableCell className={cn(cellClass, "min-w-[90px]")}>
                 <Input
                     placeholder="—"
@@ -52,7 +52,7 @@ export function VariantBulkEditRow({ variant, draftUpdate, onChange, isNew, onRe
                 />
             </TableCell>
 
-            {/* Color */}
+            {/* Option 2 */}
             <TableCell className={cn(cellClass, "min-w-[90px]")}>
                 <Input
                     placeholder="—"
@@ -169,12 +169,12 @@ function StockLimitSegment({
                 aria-pressed={!trackInventory}
                 title="No stock limit"
                 className={cn(
-                    "whitespace-nowrap rounded-[5px] px-1.5 font-semibold text-muted-foreground/60 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
+                    "flex items-center justify-center rounded-[5px] px-1 py-0.5 text-[9px] font-semibold leading-none text-muted-foreground/60 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
                     !trackInventory && "bg-slate-100 text-slate-600 shadow-sm dark:bg-slate-800 dark:text-slate-200",
                 )}
                 onClick={() => onChange(false)}
             >
-                No limit
+                No stock limit
             </button>
         </div>
     );

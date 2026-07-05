@@ -19,8 +19,11 @@ type ProviderBlockTestReceipt = {
 describe("notification provider health", () => {
     it("blocks merchant-actionable provider setup and credential failures", () => {
         expect(isNotificationProviderBreakerFailure("error=405: Authorization required")).toBe(true);
+        expect(isNotificationProviderBreakerFailure("HTTP 400 bad request")).toBe(true);
         expect(isNotificationProviderBreakerFailure("Invalid API key")).toBe(true);
         expect(isNotificationProviderBreakerFailure("HTTP 403 forbidden")).toBe(true);
+        expect(isNotificationProviderBreakerFailure("Resend API error: 404: domain not found")).toBe(true);
+        expect(isNotificationProviderBreakerFailure("status=422 sender rejected")).toBe(true);
         expect(isNotificationProviderBreakerFailure("Sender ID is not approved")).toBe(true);
         expect(isNotificationProviderBreakerFailure("invalid_grant service account disabled")).toBe(true);
         expect(isNotificationProviderBreakerFailure("No configured email provider available; email not delivered")).toBe(true);
@@ -40,7 +43,7 @@ describe("notification provider health", () => {
             latestSettingsUpdatedAt: 100,
             receipts: [
                 {
-                    providerStatus: "temporary gateway timeout",
+                    providerStatus: "HTTP 422 sender rejected",
                     rawResponse: null,
                     lastError: null,
                     skippedAt: 150,
@@ -66,8 +69,8 @@ describe("notification provider health", () => {
         expect(block).toMatchObject({
             channel: "sms",
             provider: "smsnetbd",
-            reason: "error=405: Authorization required",
-            blockedAt: 140,
+            reason: "HTTP 422 sender rejected",
+            blockedAt: 150,
             source: "receipt",
         });
         expect(db.calls.receiptReads).toBe(1);

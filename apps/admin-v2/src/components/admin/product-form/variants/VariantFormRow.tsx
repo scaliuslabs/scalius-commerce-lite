@@ -127,10 +127,10 @@ function VariantOptionForm({
         <LabeledCell label="SKU" className={layout === "row" ? "col-span-2" : "col-span-2"}>
           <SkuField {...controlProps} autoFocus={isEditMode} />
         </LabeledCell>
-        <LabeledCell label="Option 1" hint="size" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
+        <LabeledCell label="Option 1" hint="choice" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
           <OptionOneField {...controlProps} autoFocus={!isEditMode} />
         </LabeledCell>
-        <LabeledCell label="Option 2" hint="color" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
+        <LabeledCell label="Option 2" hint="choice" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
           <OptionTwoField {...controlProps} />
         </LabeledCell>
         <LabeledCell label="Price" className={layout === "row" ? "col-span-1" : ""}>
@@ -232,7 +232,7 @@ function OptionOneField({
         <FormItem className="relative min-w-0 space-y-0">
           <FormControl>
             <Input
-              placeholder="2KG, XL"
+              placeholder="2KG, XL, 100ml"
               {...field}
               value={field.value ?? ""}
               className={compactInputClass}
@@ -255,7 +255,7 @@ function OptionTwoField({ form, compactInputClass, messageClass }: ControlProps)
         <FormItem className="relative min-w-0 space-y-0">
           <FormControl>
             <Input
-              placeholder="Red, Pack A"
+              placeholder="Red, Blue, Pro"
               {...field}
               value={field.value ?? ""}
               className={compactInputClass}
@@ -378,12 +378,12 @@ function StockLimitField({ form }: ControlProps) {
                 aria-pressed={field.value === false}
                 title="No stock limit"
                 className={cn(
-                  "whitespace-nowrap rounded-[3px] px-1.5 font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+                  "flex items-center justify-center rounded-[3px] px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
                   field.value === false && "bg-slate-100 text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200",
                 )}
                 onClick={() => field.onChange(false)}
               >
-                No limit
+                No stock limit
               </button>
             </div>
           </FormControl>

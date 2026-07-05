@@ -277,5 +277,5 @@ const PROVIDER_BREAKER_PATTERNS = [
     /permission/i,
     /sender(?:\s+id)?(?:\s+is)?\s+(?:not\s+approved|rejected|invalid|mismatch)/i,
     /account\s+(?:expired|suspended|inactive|disabled)/i,
-    /\b(?:http|status|code|error)[^0-9]*(?:401|402|403|405)\b/i,
+    /\b(?:http|status|code|error)[^0-9]*(?:400|401|402|403|404|405|422)\b/i,
 ];

@@ -145,7 +145,11 @@ describe("VariantManager product mode boundaries", () => {
     expect(orderItemSelectionSource).not.toContain("Stock: not tracked");
     expect(productViewSource).toContain("Product SKU");
     expect(productViewSource).toContain("No stock limit");
+    expect(productViewSource).toContain("Option 1: ${v.size}");
+    expect(productViewSource).toContain("Option 2: ${v.color}");
     expect(productViewSource).not.toContain("Simple product SKU");
+    expect(productViewSource).not.toContain("Size: ${v.size}");
+    expect(productViewSource).not.toContain("Color: ${v.color}");
     expect(productFormSource).toContain("manage its product SKU or add customer options");
     expect(productFormSource).not.toContain("size/color options");
     expect(productImagesSource).toContain('Product Options → "Reorder"');
@@ -196,11 +200,13 @@ describe("VariantManager product mode boundaries", () => {
     expect(formRowSource).toContain("Stock limit for this option");
     expect(formRowSource).toContain("Track stock");
     expect(formRowSource).toContain("No stock limit");
+    expect(formRowSource).not.toContain("No limit");
     expect(formRowSource).toContain("Math.max(0");
     expect(bulkEditSource).toContain("'trackInventory'");
     expect(bulkEditSource).toContain("Stock limit for option");
     expect(bulkEditSource).toContain("Track stock");
     expect(bulkEditSource).toContain("No stock limit");
+    expect(bulkEditSource).not.toContain("No limit");
     expect(generatorSource).toContain("const [trackInventory, setTrackInventory] = useState(true)");
     expect(generatorSource).toContain("trackInventory,");
     expect(generatorSource).toContain("validateSkuTemplate");
@@ -232,9 +238,12 @@ describe("VariantManager product mode boundaries", () => {
     expect(formRowSource).toContain("rounded-[4px] bg-background px-2 text-[11px] shadow-none");
     expect(formRowSource).toContain("border border-border/60");
     expect(formRowSource).toContain('label="Option 1"');
-    expect(formRowSource).toContain('hint="size"');
+    expect(formRowSource).toContain('hint="choice"');
+    expect(formRowSource).toContain('placeholder="2KG, XL, 100ml"');
     expect(formRowSource).toContain('label="Option 2"');
-    expect(formRowSource).toContain('hint="color"');
+    expect(formRowSource).toContain('placeholder="Red, Blue, Pro"');
+    expect(formRowSource).not.toContain('hint="size"');
+    expect(formRowSource).not.toContain('hint="color"');
     expect(formRowSource).not.toContain("colSpan={11}");
   });
 
