@@ -1,22 +1,38 @@
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useState,
+  type ComponentType,
+  type KeyboardEvent,
+} from "react";
 import type { Table } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
+import type { DataTablePaginationPageSizeMenuProps } from "./DataTablePaginationPageSizeMenu";
 
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
   itemLabel?: string;
   pageSizeOptions?: number[];
+}
+
+const LazyDataTablePaginationPageSizeMenu = lazy(async () => {
+  const module = await import("./DataTablePaginationPageSizeMenu");
+  return {
+    default: module.DataTablePaginationPageSizeMenu as ComponentType<
+      DataTablePaginationPageSizeMenuProps
+    >,
+  };
+});
+
+function isMenuOpenKey(key: string) {
+  return key === "Enter" || key === " " || key === "ArrowDown";
 }
 
 export function DataTablePagination<TData>({
@@ -27,12 +43,56 @@ export function DataTablePagination<TData>({
   const { pageIndex, pageSize } = table.getState().pagination;
   const rowCount = table.getRowCount();
   const pageCount = table.getPageCount();
+  const [isPageSizeMenuRequested, setIsPageSizeMenuRequested] = useState(false);
+  const [isPageSizeMenuOpen, setIsPageSizeMenuOpen] = useState(false);
+
+  const requestPageSizeMenuOpen = useCallback(() => {
+    setIsPageSizeMenuRequested(true);
+    setIsPageSizeMenuOpen(true);
+  }, []);
+
+  const handlePageSizeMenuOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      setIsPageSizeMenuRequested(true);
+    }
+    setIsPageSizeMenuOpen(open);
+  }, []);
+
+  const handlePageSizeTriggerKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (!isMenuOpenKey(event.key)) {
+        return;
+      }
+
+      event.preventDefault();
+      requestPageSizeMenuOpen();
+    },
+    [requestPageSizeMenuOpen],
+  );
 
   if (rowCount === 0) return null;
 
   const start = pageIndex * pageSize + 1;
   const end = Math.min((pageIndex + 1) * pageSize, rowCount);
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+  const pageSizeTrigger = (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-8 px-2 text-xs text-foreground"
+      data-state={isPageSizeMenuOpen ? "open" : undefined}
+      aria-haspopup="menu"
+      aria-expanded={isPageSizeMenuOpen}
+      onClick={
+        isPageSizeMenuRequested ? undefined : requestPageSizeMenuOpen
+      }
+      onKeyDown={
+        isPageSizeMenuRequested ? undefined : handlePageSizeTriggerKeyDown
+      }
+    >
+      {pageSize} per page
+    </Button>
+  );
 
   return (
     <div className="flex flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -49,28 +109,20 @@ export function DataTablePagination<TData>({
           <span className="font-medium text-foreground">{rowCount}</span>{" "}
           {itemLabel}
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-2 text-xs text-foreground"
-            >
-              {pageSize} per page
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {pageSizeOptions.map((size) => (
-              <DropdownMenuItem
-                key={size}
-                onClick={() => table.setPageSize(size)}
-                className={pageSize === size ? "bg-muted font-medium" : ""}
-              >
-                {size} per page
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {isPageSizeMenuRequested ? (
+          <Suspense fallback={pageSizeTrigger}>
+            <LazyDataTablePaginationPageSizeMenu
+              open={isPageSizeMenuOpen}
+              onOpenChange={handlePageSizeMenuOpenChange}
+              trigger={pageSizeTrigger}
+              pageSize={pageSize}
+              pageSizeOptions={pageSizeOptions}
+              onPageSizeChange={table.setPageSize}
+            />
+          </Suspense>
+        ) : (
+          pageSizeTrigger
+        )}
       </div>
 
       <nav aria-label="Pagination" className="flex items-center gap-1.5">

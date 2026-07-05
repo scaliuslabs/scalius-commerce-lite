@@ -1,13 +1,16 @@
-import { memo, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Eye, Pencil, Trash2, Undo, AlertTriangle } from "lucide-react";
+  lazy,
+  memo,
+  Suspense,
+  useCallback,
+  useState,
+  type ComponentType,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import { Button } from "@/components/ui/button";
+import { MoreHorizontal } from "lucide-react";
+import type { DataTableRowActionsMenuProps } from "./DataTableRowActionsMenu";
 
 export interface ExtraAction {
   label: string;
@@ -28,6 +31,19 @@ interface DataTableRowActionsProps {
   children?: ReactNode;
 }
 
+const LazyDataTableRowActionsMenu = lazy(async () => {
+  const module = await import("./DataTableRowActionsMenu");
+  return {
+    default: module.DataTableRowActionsMenu as ComponentType<
+      DataTableRowActionsMenuProps
+    >,
+  };
+});
+
+function isMenuOpenKey(key: string) {
+  return key === "Enter" || key === " " || key === "ArrowDown";
+}
+
 export const DataTableRowActions = memo(function DataTableRowActions({
   showTrashed = false,
   onView,
@@ -39,68 +55,72 @@ export const DataTableRowActions = memo(function DataTableRowActions({
   isLoading = false,
   children,
 }: DataTableRowActionsProps) {
+  const [isMenuRequested, setIsMenuRequested] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const requestMenuOpen = useCallback(() => {
+    setIsMenuRequested(true);
+    setOpen(true);
+  }, []);
+
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen) {
+      setIsMenuRequested(true);
+    }
+    setOpen(nextOpen);
+  }, []);
+
+  const handleTriggerKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (!isMenuOpenKey(event.key)) {
+        return;
+      }
+
+      event.preventDefault();
+      requestMenuOpen();
+    },
+    [requestMenuOpen],
+  );
+
+  const trigger = (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0"
+      data-state={open ? "open" : undefined}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      disabled={isLoading}
+      onClick={isMenuRequested ? undefined : requestMenuOpen}
+      onKeyDown={isMenuRequested ? undefined : handleTriggerKeyDown}
+    >
+      <span className="sr-only">Open menu</span>
+      <MoreHorizontal className="h-4 w-4" />
+    </Button>
+  );
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={isLoading}>
-          <span className="sr-only">Open menu</span>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {children}
-        {onView && (
-          <DropdownMenuItem onClick={onView}>
-            <Eye className="mr-2 h-3.5 w-3.5" />
-            View
-          </DropdownMenuItem>
-        )}
-        {onEdit && !showTrashed && (
-          <DropdownMenuItem onClick={onEdit}>
-            <Pencil className="mr-2 h-3.5 w-3.5" />
-            Edit
-          </DropdownMenuItem>
-        )}
-        {extraActions?.map((action) => (
-          <DropdownMenuItem
-            key={action.label}
-            onClick={action.onClick}
-            className={action.destructive ? "text-destructive" : ""}
+    <>
+      {isMenuRequested ? (
+        <Suspense fallback={trigger}>
+          <LazyDataTableRowActionsMenu
+            open={open}
+            onOpenChange={handleOpenChange}
+            trigger={trigger}
+            showTrashed={showTrashed}
+            onView={onView}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onRestore={onRestore}
+            onPermanentDelete={onPermanentDelete}
+            extraActions={extraActions}
           >
-            {action.icon && <action.icon className="mr-2 h-3.5 w-3.5" />}
-            {action.label}
-          </DropdownMenuItem>
-        ))}
-        {(onDelete || onRestore || onPermanentDelete) && (
-          <DropdownMenuSeparator />
-        )}
-        {showTrashed ? (
-          <>
-            {onRestore && (
-              <DropdownMenuItem onClick={onRestore}>
-                <Undo className="mr-2 h-3.5 w-3.5" />
-                Restore
-              </DropdownMenuItem>
-            )}
-            {onPermanentDelete && (
-              <DropdownMenuItem
-                onClick={onPermanentDelete}
-                className="text-destructive"
-              >
-                <AlertTriangle className="mr-2 h-3.5 w-3.5" />
-                Delete Permanently
-              </DropdownMenuItem>
-            )}
-          </>
-        ) : (
-          onDelete && (
-            <DropdownMenuItem onClick={onDelete} className="text-destructive">
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
-              Move to Trash
-            </DropdownMenuItem>
-          )
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            {children}
+          </LazyDataTableRowActionsMenu>
+        </Suspense>
+      ) : (
+        trigger
+      )}
+    </>
   );
 });
