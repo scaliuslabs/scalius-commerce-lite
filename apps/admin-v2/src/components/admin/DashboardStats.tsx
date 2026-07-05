@@ -19,8 +19,8 @@ import {
   Users,
   CheckCircle,
 } from "lucide-react";
-import type { ChartConfig } from "@/components/ui/chart";
 import { useCurrency } from "@/hooks/use-currency";
+import type { DashboardChartConfig } from "./DashboardChart";
 import {
   getDashboardActivityPanelState,
   type DashboardActivityLoadState,
@@ -134,7 +134,7 @@ interface DashboardStatsProps {
   activityLoadState: DashboardActivityLoadState;
 }
 
-const getChartConfig = (symbol: string): ChartConfig => ({
+const getChartConfig = (symbol: string): DashboardChartConfig => ({
   orders: {
     label: "Orders",
     color: "var(--chart-2)",
