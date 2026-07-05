@@ -41,6 +41,8 @@ Expected degraded result: HTTP `503`, `success: false`, `status: "degraded"`, an
 
 Every API HTTP response should carry `X-Request-Id`; preserve a safe caller-supplied value during smoke tests when you want to match client output to Worker logs. Structured API ops logs include `requestId` and Cloudflare `cfRay` when available. Alert on repeated `api.readyz.degraded` events by required-check status, then use the same request id/CF-Ray to inspect the matching Worker invocation without exposing secrets or buyer data.
 
+Operational runbook: see [OPERATIONAL_RUNBOOK.md](OPERATIONAL_RUNBOOK.md) for concrete alert signals, read-only live smoke commands, queue/DLQ backlog checks, scheduled-maintenance checks, and deploy/rollback investigation pointers. The repo names the signals and safe commands; Cloudflare/dashboard alert policies and external notification routing still need provider-side configuration.
+
 API deploy verification:
 
 ```bash

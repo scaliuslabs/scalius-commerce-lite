@@ -18,6 +18,7 @@ import {
     successEnvelope,
     paginatedEnvelope,
     errorResponses,
+    conflictResponse,
     messageResponse,
     idResponse,
     noContentResponse,
@@ -137,6 +138,11 @@ const bulkDeleteSchema = z.object({
     productIds: z.array(z.string()),
     permanent: z.boolean().default(false)
 });
+
+const conflictMutationErrorResponses = {
+    ...errorResponses,
+    409: conflictResponse,
+} as const;
 
 // ── Barcode Lookup ──
 
@@ -318,7 +324,7 @@ const bulkDeleteRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 
@@ -472,7 +478,7 @@ const permanentDeleteRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 
@@ -571,7 +577,7 @@ const updateVariantRoute = createRoute({
             description: "Variant updated",
             content: { "application/json": { schema: successEnvelope(productVariantSchema as z.ZodTypeAny) } },
         },
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 
@@ -702,7 +708,7 @@ const bulkUpdateVariantsRoute = createRoute({
             description: "Variants updated",
             content: { "application/json": { schema: successEnvelope(z.object({})) } },
         },
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 

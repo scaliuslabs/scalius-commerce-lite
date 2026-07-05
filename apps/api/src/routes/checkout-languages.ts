@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import { NotFoundError, ConflictError } from "../utils/api-error";
 
 import { ok, created, noContent } from "../utils/api-response";
-import { successEnvelope, noContentResponse, errorResponses } from "../schemas/responses";
+import { successEnvelope, noContentResponse, errorResponses, conflictResponse } from "../schemas/responses";
 import { optionalNullableTimestampSchema, optionalTimestampSchema } from "../schemas/timestamps";
 import { invalidateApiAndScheduleStorefrontGroups } from "../utils/cache-invalidation";
 
@@ -15,6 +15,29 @@ const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 
 const publicApp = new OpenAPIHono<{ Bindings: Env }>();
 const adminApp = new OpenAPIHono<{ Bindings: Env }>();
+
+const checkoutLanguageCreateErrorResponses = {
+  400: errorResponses[400],
+  401: errorResponses[401],
+  403: errorResponses[403],
+  409: conflictResponse,
+  500: errorResponses[500],
+} as const;
+
+const checkoutLanguageUpdateErrorResponses = {
+  400: errorResponses[400],
+  401: errorResponses[401],
+  403: errorResponses[403],
+  404: errorResponses[404],
+  409: conflictResponse,
+  500: errorResponses[500],
+} as const;
+
+const checkoutLanguageSideEffectErrorResponses = {
+  401: errorResponses[401],
+  403: errorResponses[403],
+  500: errorResponses[500],
+} as const;
 
 const checkoutLanguageSchema = z.object({
   id: z.string(),
@@ -260,7 +283,7 @@ const createRoute2 = createRoute({
       description: "Created checkout language",
       content: { "application/json": { schema: successEnvelope(z.object({ language: checkoutLanguageSchema.optional() })) } },
     },
-    ...errorResponses,
+    ...checkoutLanguageCreateErrorResponses,
   }
 });
 
@@ -348,7 +371,7 @@ const updateRoute = createRoute({
       description: "Updated checkout language",
       content: { "application/json": { schema: successEnvelope(z.object({ language: checkoutLanguageSchema.optional() })) } },
     },
-    ...errorResponses,
+    ...checkoutLanguageUpdateErrorResponses,
   }
 });
 
@@ -401,7 +424,7 @@ const softDeleteRoute = createRoute({
       description: "Success",
       content: { "application/json": { schema: successEnvelope(z.object({})) } },
     },
-    ...errorResponses,
+    ...checkoutLanguageSideEffectErrorResponses,
   }
 });
 
@@ -426,6 +449,7 @@ const hardDeleteRoute = createRoute({
   },
   responses: {
     204: noContentResponse,
+    ...checkoutLanguageSideEffectErrorResponses,
   }
 });
 
@@ -453,7 +477,7 @@ const restoreRoute = createRoute({
       description: "Success",
       content: { "application/json": { schema: successEnvelope(z.object({})) } },
     },
-    ...errorResponses,
+    ...checkoutLanguageSideEffectErrorResponses,
   }
 });
 
