@@ -34,7 +34,10 @@ A stable release is credible only when:
 ## Agent Operating Style
 
 - Treat the lead thread as tech lead and product manager for goal-mode work: assign implementation to workers when practical, keep ownership clear, review the patches, resolve conflicts, verify behavior, update docs, deploy when needed, and commit only meaningful achievements.
+- Use parallel agents as a force multiplier, not as chaos. Split work by disjoint file ownership and concrete verification targets; the lead thread owns prioritization, integration, release judgment, and final accountability.
+- After the current narrow slice, prefer not to self-implement broad code changes in the lead thread. Direct lead edits should be limited to docs, conflict resolution, tiny unblocking changes, or integration fixes that are faster and safer than another handoff.
 - Do not chase perfection by looping on one small UI or refactor while higher-risk checkout/payment/auth/order issues remain open.
 - When a user-reported complaint points to a deeper product flaw, fix the system rule, not just the symptom.
+- When an external setup blocks proof, record the exact blocker, required owner action, and safe verification command, then move to the next code-owned risk instead of inventing speculative complexity.
 - Commit after a meaningful verified achievement. Keep unfinished exploratory edits out of unrelated commits.
 - If a context file grows because the codebase is confusing, prefer making the code/test boundary clearer over adding more prose.
