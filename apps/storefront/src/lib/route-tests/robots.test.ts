@@ -62,4 +62,25 @@ describe("robots.txt route", () => {
     expect(body).toContain("Sitemap: https://storefront.example.test/sitemap.xml");
     expect(body).not.toContain("[your-sitemap-url]");
   });
+
+  it("does not advertise sitemap when the discovery policy disables it", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      siteTitle: "Store",
+      homepageTitle: "Home",
+      homepageMetaDescription: "Description",
+      robotsTxt: "User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]",
+      discovery: {
+        sitemap: { enabled: true },
+        robots: { advertiseSitemap: false },
+      },
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("User-agent: *");
+    expect(body).not.toContain("Sitemap:");
+    expect(body).not.toContain("[your-sitemap-url]");
+  });
 });

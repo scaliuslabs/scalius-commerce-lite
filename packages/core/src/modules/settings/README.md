@@ -58,8 +58,8 @@ Admin-facing DB operations for site settings. Cache invalidation stays in route 
 | `saveFooterConfig` | `(db, config) => void` | Upserts footerConfig on `siteSettings` singleton |
 | `getThemeSettings` | `(db) => { colors }` | Reads storefront color overrides from `settings` (category=theme, key=storefront_colors) and sanitizes legacy rows through `@scalius/shared/storefront-theme` |
 | `saveThemeSettings` | `(db, colors) => void` | Sanitizes and saves storefront color overrides via `upsertSetting()` |
-| `getSeoSettings` | `(db) => { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt }` | Reads SEO fields from `siteSettings` singleton |
-| `saveSeoSettings` | `(db, data) => void` | Upserts SEO fields. Only updates provided fields (undefined values are skipped to avoid NULLing existing data) |
+| `getSeoSettings` | `(db) => { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, discovery }` | Reads SEO fields from `siteSettings` singleton and the default-on discovery policy from `settings` (`category=seo`, `key=discovery`) |
+| `saveSeoSettings` | `(db, data) => void` | Upserts SEO fields and optional discovery policy. Site fields only update provided values; discovery is normalized and stored via `upsertSetting()` without requiring a `site_settings` migration |
 | `getStorefrontUrlSetting` | `(db) => { storefrontUrl }` | Reads storefrontUrl from `siteSettings` |
 | `saveStorefrontUrl` | `(db, url?) => void` | Upserts storefrontUrl on `siteSettings` singleton |
 | `getAllowedCountries` | `(db) => { allowedCountries, allowedCountriesMode }` | Reads allowed countries. Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |

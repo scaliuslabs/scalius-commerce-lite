@@ -442,6 +442,25 @@ const seoSettingsSchema = z.object({
   homepageTitle: z.string(),
   homepageMetaDescription: z.string(),
   robotsTxt: z.string(),
+  discovery: z.object({
+    sitemap: z.object({
+      enabled: z.boolean(),
+      products: z.boolean(),
+      categories: z.boolean(),
+      collections: z.boolean(),
+      pages: z.boolean(),
+    }),
+    feeds: z.object({
+      productCatalogEnabled: z.boolean(),
+    }),
+    robots: z.object({
+      advertiseSitemap: z.boolean(),
+    }),
+    structuredData: z.object({
+      organization: z.boolean(),
+      websiteSearch: z.boolean(),
+    }),
+  }),
 });
 
 const getSeoRoute = createRoute({
@@ -471,6 +490,18 @@ app.openapi(getSeoRoute, async (c) => {
       homepageTitle: "",
       homepageMetaDescription: "",
       robotsTxt: "",
+      discovery: {
+        sitemap: {
+          enabled: true,
+          products: true,
+          categories: true,
+          collections: true,
+          pages: true,
+        },
+        feeds: { productCatalogEnabled: true },
+        robots: { advertiseSitemap: true },
+        structuredData: { organization: true, websiteSearch: true },
+      },
     });
   }
 });
@@ -480,6 +511,7 @@ const saveSeoSchema = z.object({
   homepageTitle: z.string().optional(),
   homepageMetaDescription: z.string().optional(),
   robotsTxt: z.string().optional(),
+  discovery: seoSettingsSchema.shape.discovery.partial().optional(),
 });
 
 const saveSeoRoute = createRoute({
@@ -504,7 +536,10 @@ app.openapi(saveSeoRoute, async (c) => {
   const data = c.req.valid("json");
   await saveSeoSettings(db, data);
   await invalidateSiteSettingsCache(getKv());
-  await invalidateApiAndScheduleStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c);
+  await invalidateApiAndScheduleStorefrontGroups(
+    [...HOMEPAGE_CACHE_GROUPS, ...LAYOUT_CACHE_GROUPS] as const,
+    c,
+  );
   return ok(c, { message: "SEO settings saved successfully" });
 });
 

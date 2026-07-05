@@ -16,6 +16,7 @@ import {
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
+import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 interface Props {
   title: string;
@@ -72,6 +73,9 @@ const footerData = layoutData?.footer ?? {
   menus: [],
   social: [],
 };
+const discoverySettings = normalizeSeoDiscoverySettings(
+  layoutData?.seo?.discovery,
+);
 
 const faviconUrl = headerData?.favicon?.src
   ? getOptimizedImageUrl(headerData.favicon.src, {
@@ -96,7 +100,7 @@ const logoUrl = headerData.logo.src
 const socialUrls = (footerData.social || [])
   .map((s: { url?: string }) => s.url)
   .filter(Boolean);
-const orgJsonLd = logoUrl
+const orgJsonLd = discoverySettings.structuredData.organization && logoUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "Organization",
@@ -108,7 +112,7 @@ const orgJsonLd = logoUrl
   : null;
 
 // WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
-const websiteJsonLd = storefrontUrl
+const websiteJsonLd = discoverySettings.structuredData.websiteSearch && storefrontUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "WebSite",

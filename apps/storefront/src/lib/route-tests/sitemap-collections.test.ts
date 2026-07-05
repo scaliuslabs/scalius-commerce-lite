@@ -4,11 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getAllCollections: vi.fn(),
+  getSeoSettings: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
 }));
 
 vi.mock("@/lib/api/collections", () => ({
   getAllCollections: mocks.getAllCollections,
+}));
+
+vi.mock("@/lib/api", () => ({
+  getSeoSettings: mocks.getSeoSettings,
 }));
 
 vi.mock("@/lib/api/runtime-env", () => ({
@@ -20,6 +25,8 @@ import { GET } from "../../pages/sitemap-collections.xml";
 describe("collections sitemap route", () => {
   beforeEach(() => {
     mocks.getAllCollections.mockReset();
+    mocks.getSeoSettings.mockReset();
+    mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
   });
 
@@ -56,5 +63,24 @@ describe("collections sitemap route", () => {
     expect(body).toContain("<urlset");
     expect(body).toContain("https://storefront.example.test/collections/collection%20one");
     expect(body).toContain("<lastmod>2026-06-20T00:00:00.000Z</lastmod>");
+  });
+
+  it("returns empty XML without fetching collections when collection sitemap is disabled", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      discovery: {
+        sitemap: {
+          enabled: true,
+          collections: false,
+        },
+      },
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(mocks.getAllCollections).not.toHaveBeenCalled();
+    expect(body).toContain("<urlset");
+    expect(body).not.toContain("/collections/");
   });
 });

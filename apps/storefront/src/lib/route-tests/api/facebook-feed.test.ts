@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getAllProducts: vi.fn(),
   getLayoutData: vi.fn(),
+  getSeoSettings: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
   setRuntimeImageCdnPolicy: vi.fn(),
   getOptimizedImageUrl: vi.fn((url: string) => url),
@@ -16,6 +17,7 @@ vi.mock("@/lib/api/products", () => ({
 
 vi.mock("@/lib/api", () => ({
   getLayoutData: mocks.getLayoutData,
+  getSeoSettings: mocks.getSeoSettings,
 }));
 
 vi.mock("@/lib/api/runtime-env", () => ({
@@ -37,6 +39,8 @@ describe("Facebook product feed route", () => {
   beforeEach(() => {
     mocks.getAllProducts.mockReset();
     mocks.getLayoutData.mockReset();
+    mocks.getSeoSettings.mockReset();
+    mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
     mocks.getLayoutData.mockResolvedValue({
       currency: { code: "BDT" },
@@ -66,6 +70,24 @@ describe("Facebook product feed route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("application/xml");
     expect(body).toContain("<rss");
+  });
+
+  it("returns a no-store 404 without fetching products when catalog feed is disabled", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      discovery: {
+        feeds: {
+          productCatalogEnabled: false,
+        },
+      },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toContain("Product catalog feed is disabled");
+    expect(mocks.getAllProducts).not.toHaveBeenCalled();
   });
 
   it("fails closed when a later feed product page cannot be read", async () => {

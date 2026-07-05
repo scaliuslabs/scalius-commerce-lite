@@ -7,10 +7,12 @@
 
 import { generateSitemap, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
+import { getSeoSettings } from '@/lib/api';
 import { getAllProducts } from '@/lib/api/products';
 import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext, APIRoute } from 'astro';
 import type { Product } from '@/lib/api/types';
+import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
 
@@ -19,6 +21,17 @@ const URLS_PER_SITEMAP = 5000; // Chunk size safe for Cloudflare Workers
 export const GET: APIRoute = async ({ url }: APIContext) => {
   try {
     const baseUrl = getRuntimeStorefrontUrl();
+    const seo = await getSeoSettings();
+    if (!seo) {
+      return xmlDataUnavailableResponse('Product sitemap is temporarily unavailable');
+    }
+    const sitemapPolicy = normalizeSeoDiscoverySettings(seo.discovery).sitemap;
+    if (!sitemapPolicy.enabled || !sitemapPolicy.products) {
+      return new Response(generateSitemap([], baseUrl), {
+        status: 200,
+        headers: getSitemapHeaders(),
+      });
+    }
 
     // Get page number from query params (default to 1)
     const pageParam = url.searchParams.get('page');

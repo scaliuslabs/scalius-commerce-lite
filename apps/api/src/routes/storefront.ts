@@ -41,6 +41,7 @@ const layoutDataSchema = z.object({
   footer: flexibleObjectSchema,
   currency: flexibleObjectSchema,
   theme: flexibleObjectSchema,
+  seo: flexibleObjectSchema.optional(),
 }).passthrough();
 type LayoutData = z.infer<typeof layoutDataSchema>;
 

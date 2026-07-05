@@ -2267,6 +2267,9 @@ export type GetApiV1StorefrontLayoutResponses = {
             theme: {
                 [key: string]: unknown;
             };
+            seo?: {
+                [key: string]: unknown;
+            };
             [key: string]: unknown;
         };
     };
@@ -4215,6 +4218,25 @@ export type GetApiV1SeoResponses = {
             homepageTitle: string | null;
             homepageMetaDescription: string | null;
             robotsTxt: string | null;
+            discovery: {
+                sitemap: {
+                    enabled: boolean;
+                    products: boolean;
+                    categories: boolean;
+                    collections: boolean;
+                    pages: boolean;
+                };
+                feeds: {
+                    productCatalogEnabled: boolean;
+                };
+                robots: {
+                    advertiseSitemap: boolean;
+                };
+                structuredData: {
+                    organization: boolean;
+                    websiteSearch: boolean;
+                };
+            };
         };
     };
 };
@@ -19485,6 +19507,25 @@ export type GetApiV1AdminSettingsSeoResponses = {
             homepageTitle: string;
             homepageMetaDescription: string;
             robotsTxt: string;
+            discovery: {
+                sitemap: {
+                    enabled: boolean;
+                    products: boolean;
+                    categories: boolean;
+                    collections: boolean;
+                    pages: boolean;
+                };
+                feeds: {
+                    productCatalogEnabled: boolean;
+                };
+                robots: {
+                    advertiseSitemap: boolean;
+                };
+                structuredData: {
+                    organization: boolean;
+                    websiteSearch: boolean;
+                };
+            };
         };
     };
 };
@@ -19497,6 +19538,25 @@ export type PostApiV1AdminSettingsSeoData = {
         homepageTitle?: string;
         homepageMetaDescription?: string;
         robotsTxt?: string;
+        discovery?: {
+            sitemap?: {
+                enabled: boolean;
+                products: boolean;
+                categories: boolean;
+                collections: boolean;
+                pages: boolean;
+            };
+            feeds?: {
+                productCatalogEnabled: boolean;
+            };
+            robots?: {
+                advertiseSitemap: boolean;
+            };
+            structuredData?: {
+                organization: boolean;
+                websiteSearch: boolean;
+            };
+        };
     };
     path?: never;
     query?: never;

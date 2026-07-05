@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { siteSettings } from "@scalius/database/schema";
 import { cacheMiddleware } from "../middleware/cache";
+import { getSeoSettings } from "@scalius/core/modules/settings/site-settings.service";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -25,6 +25,26 @@ export interface SeoSettingsData {
   robotsTxt: string | null;
 }
 
+const discoverySchema = z.object({
+  sitemap: z.object({
+    enabled: z.boolean(),
+    products: z.boolean(),
+    categories: z.boolean(),
+    collections: z.boolean(),
+    pages: z.boolean(),
+  }),
+  feeds: z.object({
+    productCatalogEnabled: z.boolean(),
+  }),
+  robots: z.object({
+    advertiseSitemap: z.boolean(),
+  }),
+  structuredData: z.object({
+    organization: z.boolean(),
+    websiteSearch: z.boolean(),
+  }),
+});
+
 // GET /seo — get SEO settings
 const getSeoSettingsRoute = createRoute({
   method: "get",
@@ -39,6 +59,7 @@ const getSeoSettingsRoute = createRoute({
         homepageTitle: z.string().nullable(),
         homepageMetaDescription: z.string().nullable(),
         robotsTxt: z.string().nullable(),
+        discovery: discoverySchema,
       })) } },
     },
     500: errorResponses[500],
@@ -47,29 +68,8 @@ const getSeoSettingsRoute = createRoute({
 
 app.openapi(getSeoSettingsRoute, async (c) => {
   const db = c.get("db");
-  const [settings] = await db
-    .select({
-      siteTitle: siteSettings.siteTitle,
-      homepageTitle: siteSettings.homepageTitle,
-      homepageMetaDescription: siteSettings.homepageMetaDescription,
-      robotsTxt: siteSettings.robotsTxt
-    })
-    .from(siteSettings)
-    .limit(1);
-
-  if (!settings) {
-    // Return default/empty values if no settings are found
-    return ok(c, {
-      siteTitle: "Scalius Commerce",
-      homepageTitle: "Welcome to Scalius Commerce",
-      homepageMetaDescription: "Your one-stop shop for everything amazing.",
-      robotsTxt: "User-agent: *\nAllow: /",
-    });
-  }
-
-  return ok(c, {
-    ...settings,
-  });
+  const settings = await getSeoSettings(db);
+  return ok(c, settings);
 });
 
 export { app as seoRoutes };

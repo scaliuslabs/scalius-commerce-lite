@@ -14,6 +14,7 @@ import type {
   NavigationItem,
   AnalyticsConfig,
 } from "./types";
+import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
   getApiV1StorefrontHomepage,
   getApiV1StorefrontLayout,
@@ -78,6 +79,9 @@ export interface LayoutData {
   };
   metaCapi?: {
     browserEventsEnabled?: boolean;
+  };
+  seo?: {
+    discovery?: SeoDiscoverySettings;
   };
 }
 

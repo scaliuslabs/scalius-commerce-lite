@@ -14,6 +14,7 @@ import {
   getApiV1CheckoutLanguagesActive,
   getApiV1HeroSliders,
 } from "@scalius/api-client/sdk";
+import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 /**
  * Defines the structure for the hero slider data, containing separate
@@ -46,7 +47,12 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
         const { data } = await getApiV1Seo({
           client: getConfiguredSdkClient(),
         });
-        return unwrapEnvelope<SeoSettings>(data);
+        const settings = unwrapEnvelope<SeoSettings>(data);
+        if (!settings) return null;
+        return {
+          ...settings,
+          discovery: normalizeSeoDiscoverySettings(settings.discovery),
+        };
       } catch (error: unknown) {
         console.error("Error fetching SEO settings:", error);
         return null;
