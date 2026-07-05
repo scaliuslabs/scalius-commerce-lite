@@ -25,7 +25,7 @@ Relevant Cloudflare references: [Workers Logs](https://developers.cloudflare.com
 
 Use a Cloudflare-native scheduled Worker as the primary continuous monitor:
 
-- Schedule: run every few minutes through Cron Triggers; no `fetch` route should be exposed.
+- Schedule: the ops monitor runs every two minutes through Cron Triggers (`*/2 * * * *`); no `fetch` route should be exposed. This is separate from the API Worker's scheduled maintenance cron (`*/15 * * * *`).
 - Readiness: call `https://api.scalius.com/api/v1/readyz` with `Cache-Control: no-cache` and a safe monitor request id.
 - Queues: bind every normal queue and DLQ, then read backlog count and oldest-message age through `Queue.metrics()`; do not require Cloudflare API tokens for queue checks.
 - State: store only alert streaks, last status, last notification time, and cooldown timestamps in KV. Do not store raw response bodies, queue payloads, request bodies, provider payloads, OTPs, receipt tokens, or buyer PII.
@@ -41,7 +41,7 @@ Alternative considered: Cloudflare Health Checks are useful outside-in reachabil
 | API deep readiness | Scheduled ops monitor Worker calls `https://api.scalius.com/api/v1/readyz` and records consecutive failures/degraded checks in KV. Health Checks may be added as outside-in reachability, but they are not the primary completion evidence. | Alert/log when deep readiness is unhealthy for the same required check 3 times in 5 minutes, or when the deploy sampler fails to recover. |
 | Worker errors and degraded dependencies | Workers Logs/Observability enabled for `scalius-api`, with saved filters for `[api-ops]`, `api.readyz.degraded`, `api.error`, `requestId`, and `cfRay`. | Page on 5 or more `[api-ops]` 5xx events in 5 minutes, repeated 5xx for the same `method` + `path`, or repeated `api.readyz.degraded` for a required dependency. |
 | Queue backlog and DLQs | Ops monitor Worker binds all API queues and DLQs listed below and reads `Queue.metrics()` for backlog count and oldest-message age. The repo smoke must also prove provider-side producer/consumer wiring with `pnpm ops:check --queues` so missing queue consumers are not hidden behind monitor logs. | Alert/log when any `*-dlq` backlog is non-zero for 5 minutes, any normal queue has oldest message age above `300000ms`, backlog grows for 15 minutes, completions repeatedly report retries, or `pnpm ops:check --queues` reports missing expected `worker:scalius-api` wiring. |
-| Scheduled maintenance | Workers Logs/Observability filter for `[scheduled]` events from the `*/15 * * * *` API cron. | Page on any `scheduled_run_failed` / `scheduled_operation_failed`, or when no `scheduled_run_completed` appears for 45 minutes. |
+| API scheduled maintenance | Workers Logs/Observability filter for `[scheduled]` events from the `*/15 * * * *` API cron. | Page on any `scheduled_run_failed` / `scheduled_operation_failed`, or when no `scheduled_run_completed` appears for 45 minutes. |
 | Deployment readiness variance | Preserve `pnpm run deploy:api` readiness sampler output and Worker deployment version evidence. | Treat transient dependency timeout recovery as warning evidence; persistent degraded readiness is rollback investigation input. |
 
 Queues to monitor: `payment-events`, `payment-events-dlq`, `order-notifications`, `order-notifications-dlq`, `auth-otp`, `auth-otp-dlq`, `storefront-cache`, and `storefront-cache-dlq`.
@@ -73,7 +73,8 @@ Use this checklist before marking the monitoring part of OPS-005 or OPS-008 comp
 | Queue metrics are active | Wrangler tail or Workers Logs evidence showing `Queue.metrics()` results for every queue/DLQ, plus `pnpm ops:check --queues --samples 1 --timeout-ms 20000` output summary proving API provider wiring still matches expectations. |
 | Notifications are routed | Cloudflare Email Service channel alias, verified sender/destination alias, test notification timestamp, cooldown state, and mute state. Do not paste API tokens, webhook URLs, raw email inbox screenshots, or personal email addresses into repo docs. If `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO` are empty or unverified, record logs-only monitoring as remaining scope. |
 | Worker observability is enabled | `apps/api/wrangler.jsonc` still has `observability.enabled: true`, plus a current Cloudflare Workers Logs/Observability screenshot or exported note showing `scalius-api` filters for `api.readyz.degraded` and `api.error`. |
-| Scheduled monitoring covers cron | Latest `scheduled_run_completed` for the `*/15 * * * *` trigger and an alert policy for missing or failed runs. |
+| Ops monitor scheduled run is active | Latest `ops_monitor.run_completed` for the `*/2 * * * *` ops-monitor trigger. |
+| API scheduled maintenance covers cron | Latest `scheduled_run_completed` for the API `*/15 * * * *` trigger and an alert policy for missing or failed runs. |
 | Correlation works | A safe `X-Request-Id` from `pnpm ops:check --json` can be found in Workers Logs, and the log entry includes `cfRay` when Cloudflare supplies one. |
 | Runbook is actionable | `audit/OPERATIONAL_RUNBOOK.md` first actions still match the provider setup and remain read-only until an explicit rollback or DLQ replay decision. |
 
@@ -104,6 +105,8 @@ curl -fsS -H 'Cache-Control: no-cache' \
 ## Cloudflare Email Alert Configuration
 
 The source `apps/ops-monitor/wrangler.jsonc` declares the `ALERT_EMAIL` binding and keeps `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO` empty so deploys stay safe before Email Service is onboarded. To finish routed monitoring, configure the Worker with a verified sender on an onboarded Cloudflare Email Service domain and one or more verified destination addresses, then deploy and trigger a controlled alert. If the account has a fixed ops inbox, tighten the `send_email` binding with `destination_address`, `allowed_destination_addresses`, or `allowed_sender_addresses` in Wrangler config during that same verified slice.
+
+As of 2026-07-05, the repo code path is deployed but routed proof is externally blocked: the active Wrangler OAuth token can see the zone, but Email Routing/Sending list/settings calls fail with Cloudflare auth error `10000` because the token is missing `email_routing:write` and `email_sending:write`. Destination addresses also require human email verification before they can be used. After `wrangler login` refreshes those scopes and verified aliases exist, run a safe Email Service test and record only aliases/timestamps, never raw personal addresses or inbox screenshots.
 
 Cloudflare Email Service requires Cloudflare DNS for domain setup. Official pricing notes that sends to verified destination addresses are free on all plans, while arbitrary-recipient Email Sending requires Workers Paid. Keep the alert email plain text and compact; it must not contain raw response bodies, queue payloads, request bodies, OTPs, receipt tokens, provider payloads, credentials, or buyer contact data.
 
