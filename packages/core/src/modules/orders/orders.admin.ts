@@ -128,16 +128,24 @@ type AdminOrderSkuIssueCode =
     | "VARIANT_UNAVAILABLE"
     | "VARIANT_MISMATCH"
     | "PRODUCT_UNAVAILABLE";
-type BuyerRecoveryPaymentMethod =
+export type BuyerRecoveryPaymentMethod =
     | typeof PaymentMethod.SSLCOMMERZ
     | typeof PaymentMethod.POLAR;
-type RecoveryLinkPaymentType = "full" | "deposit" | "balance";
+export type RecoveryLinkPaymentType = "full" | "deposit" | "balance";
 
 export interface OrderPaymentRecoveryLink {
     orderId: string;
     receiptToken: string;
     tokenHash: string;
     expiresAt: number;
+    gateway: BuyerRecoveryPaymentMethod;
+    paymentType: RecoveryLinkPaymentType | null;
+    depositAmount: number | null;
+    paymentRecovery: OrderPaymentRecoverySummary;
+}
+
+export interface OrderPaymentRecoveryPreview {
+    orderId: string;
     gateway: BuyerRecoveryPaymentMethod;
     paymentType: RecoveryLinkPaymentType | null;
     depositAmount: number | null;
@@ -1034,15 +1042,11 @@ export async function listOrders(db: Database, options: {
     };
 }
 
-/**
- * Issues a fresh private receipt proof for an unpaid SSLCommerz/Polar order
- * whose hosted payment flow can still be recovered from the receipt page.
- */
-export async function createOrderPaymentRecoveryLink(
+async function resolveOrderPaymentRecoveryPreview(
     db: Database,
     orderId: string,
     options: { nowSeconds?: number } = {},
-): Promise<OrderPaymentRecoveryLink> {
+): Promise<OrderPaymentRecoveryPreview> {
     const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
     const order = await db
         .select({
@@ -1165,23 +1169,47 @@ export async function createOrderPaymentRecoveryLink(
         ? Number(paymentPlan.depositAmount)
         : null;
 
-    const receiptToken = createOrderReceiptToken();
-    const receipt = await recordOrderReceipt(db, {
-        orderId,
-        token: receiptToken,
-        source: "admin_payment_recovery",
-        nowSeconds,
-    });
-
     return {
         orderId,
-        receiptToken,
-        tokenHash: receipt.tokenHash,
-        expiresAt: receipt.expiresAt,
         gateway: order.paymentMethod,
         paymentType,
         depositAmount,
         paymentRecovery,
+    };
+}
+
+export async function previewOrderPaymentRecoveryLink(
+    db: Database,
+    orderId: string,
+    options: { nowSeconds?: number } = {},
+): Promise<OrderPaymentRecoveryPreview> {
+    return resolveOrderPaymentRecoveryPreview(db, orderId, options);
+}
+
+/**
+ * Issues a fresh private receipt proof for an unpaid SSLCommerz/Polar order
+ * whose hosted payment flow can still be recovered from the receipt page.
+ */
+export async function createOrderPaymentRecoveryLink(
+    db: Database,
+    orderId: string,
+    options: { nowSeconds?: number; source?: string } = {},
+): Promise<OrderPaymentRecoveryLink> {
+    const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
+    const preview = await resolveOrderPaymentRecoveryPreview(db, orderId, { nowSeconds });
+    const receiptToken = createOrderReceiptToken();
+    const receipt = await recordOrderReceipt(db, {
+        orderId,
+        token: receiptToken,
+        source: options.source ?? "admin_payment_recovery",
+        nowSeconds,
+    });
+
+    return {
+        ...preview,
+        receiptToken,
+        tokenHash: receipt.tokenHash,
+        expiresAt: receipt.expiresAt,
     };
 }
 

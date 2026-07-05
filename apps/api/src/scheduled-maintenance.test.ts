@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
     getDb: vi.fn(() => db),
     releaseExpiredReservations: vi.fn(),
     cleanupStaleAbandonedCheckouts: vi.fn(),
+    cleanupExpiredOrderPaymentRecoveryChallenges: vi.fn(),
     archiveStaleIncompleteOrders: vi.fn(),
     flushPendingOrderNotificationOutbox: vi.fn(),
     flushPendingMetaPurchaseOutbox: vi.fn(),
@@ -36,6 +37,10 @@ vi.mock("@scalius/core/modules/orders/abandoned-checkout-cleanup", () => ({
 
 vi.mock("@scalius/core/modules/orders/stale-incomplete-orders", () => ({
   archiveStaleIncompleteOrders: mocks.archiveStaleIncompleteOrders,
+}));
+
+vi.mock("@scalius/core/modules/orders", () => ({
+  cleanupExpiredOrderPaymentRecoveryChallenges: mocks.cleanupExpiredOrderPaymentRecoveryChallenges,
 }));
 
 vi.mock("@scalius/core/modules/notifications", () => ({
@@ -83,6 +88,7 @@ import {
   CUSTOMER_SESSION_SWEEP_LIMIT,
   META_PURCHASE_OUTBOX_SWEEP_LIMIT,
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
+  ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT,
   REFUND_ATTEMPT_RECONCILIATION_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
   STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
@@ -157,6 +163,12 @@ describe("runScheduledMaintenance", () => {
       scanned: 0,
       deleted: 0,
       limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
+      hasMore: false,
+    });
+    mocks.cleanupExpiredOrderPaymentRecoveryChallenges.mockResolvedValue({
+      scanned: 0,
+      deleted: 0,
+      limit: ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT,
       hasMore: false,
     });
     mocks.cleanupExpiredCustomerAuthOtpRateLimits.mockResolvedValue({
@@ -306,6 +318,12 @@ describe("runScheduledMaintenance", () => {
       limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
       hasMore: false,
     });
+    mocks.cleanupExpiredOrderPaymentRecoveryChallenges.mockResolvedValue({
+      scanned: 2,
+      deleted: 2,
+      limit: ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT,
+      hasMore: false,
+    });
     mocks.cleanupExpiredCustomerAuthOtpRateLimits.mockResolvedValue({
       scanned: 2,
       deleted: 2,
@@ -437,6 +455,11 @@ describe("runScheduledMaintenance", () => {
       mocks.db,
       Math.floor(now.getTime() / 1000),
       { limit: CUSTOMER_AUTH_OTP_SWEEP_LIMIT },
+    );
+    expect(mocks.cleanupExpiredOrderPaymentRecoveryChallenges).toHaveBeenCalledWith(
+      mocks.db,
+      Math.floor(now.getTime() / 1000),
+      { limit: ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT },
     );
     expect(mocks.cleanupExpiredCustomerAuthOtpRateLimits).toHaveBeenCalledWith(
       mocks.db,

@@ -1,6 +1,7 @@
 import { getDb } from "@scalius/database/client";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/orders/abandoned-checkout-cleanup";
+import { cleanupExpiredOrderPaymentRecoveryChallenges } from "@scalius/core/modules/orders";
 import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete-orders";
 import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
@@ -25,6 +26,7 @@ export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
 export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 10;
 export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 10;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
+export const ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
@@ -367,6 +369,19 @@ async function runScheduledMaintenanceInner(
       `[scheduled] Customer auth OTP cleanup: scanned=${customerAuthOtpCleanup.scanned}, ` +
         `deleted=${customerAuthOtpCleanup.deleted}, limit=${customerAuthOtpCleanup.limit}, ` +
         `hasMore=${customerAuthOtpCleanup.hasMore}`,
+    );
+  }
+
+  const paymentRecoveryOtpCleanup = await timed("order_payment_recovery_otp_cleanup", () =>
+    cleanupExpiredOrderPaymentRecoveryChallenges(db, Math.floor(Date.now() / 1000), {
+      limit: ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT,
+    }),
+  );
+  if (paymentRecoveryOtpCleanup.scanned > 0 || paymentRecoveryOtpCleanup.hasMore) {
+    console.log(
+      `[scheduled] Order payment recovery OTP cleanup: scanned=${paymentRecoveryOtpCleanup.scanned}, ` +
+        `deleted=${paymentRecoveryOtpCleanup.deleted}, limit=${paymentRecoveryOtpCleanup.limit}, ` +
+        `hasMore=${paymentRecoveryOtpCleanup.hasMore}`,
     );
   }
 

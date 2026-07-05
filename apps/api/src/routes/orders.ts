@@ -20,6 +20,7 @@ import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@s
 import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
 import { getAllowedCountries } from "@scalius/core/modules/settings/site-settings.service";
 import {
+  deleteOrderPaymentRecoveryChallenge,
   createReceiptOrderSupportRequest,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
   getOrderSupportRequestStatusLabel,
@@ -32,17 +33,20 @@ import {
   markCheckoutAttemptFailed,
   resolveExistingCheckoutAttempt,
   runStorefrontOrderPostCommitSideEffects,
+  sendOrderPaymentRecoveryOtp,
   validateStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
+  verifyOrderPaymentRecoveryOtp,
   type ClaimedCheckoutAttempt,
 } from "@scalius/core/modules/orders";
+import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import {
   getOptionalExecutionContext,
   invalidateProductAvailabilityCaches,
   type WaitUntilExecutionContext,
 } from "../utils/cache-invalidation";
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
-import { getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
+import { getCredentialEncryptionKey, getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import {
   RECEIPT_TOKEN_TTL_SECONDS,
@@ -53,6 +57,8 @@ import {
 import { created, ok } from "../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse, conflictResponse } from "../schemas/responses";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
+import { authMiddleware } from "../middleware/auth";
+import { getTrustedClientIp } from "../utils/client-ip";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CUSTOMER_SESSION_HEADER = "X-Customer-Session";
 const RECEIPT_TOKEN_HEADER = "X-Receipt-Token";
@@ -498,6 +504,151 @@ const receiptSupportRequestResponseSchema = z.object({
   request: receiptSupportRequestSchema,
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
+});
+
+const orderPaymentRecoveryChannelSchema = z.enum(CUSTOMER_AUTH_OTP_CHANNELS);
+const ORDER_PAYMENT_RECOVERY_GENERIC_MESSAGE =
+  "If this order is eligible for payment recovery, a verification code will be sent to the buyer contact.";
+
+const sendOrderPaymentRecoveryOtpRoute = createRoute({
+  method: "post",
+  path: "/payment-recovery/send-otp",
+  tags: ["Orders"],
+  summary: "Request a buyer verification code for hosted payment recovery",
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            orderId: z.string().trim().min(1).max(128),
+            channel: orderPaymentRecoveryChannelSchema.optional(),
+          }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Payment recovery code request accepted",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({ message: z.string() })),
+        },
+      },
+    },
+    503: serviceUnavailableResponse,
+    ...errorResponses,
+  },
+});
+
+app.openapi(sendOrderPaymentRecoveryOtpRoute, async (c) => {
+  const db = c.get("db");
+  const body = c.req.valid("json");
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  c.header("Pragma", "no-cache");
+  c.header("Expires", "0");
+
+  let result: Awaited<ReturnType<typeof sendOrderPaymentRecoveryOtp>>;
+  try {
+    result = await sendOrderPaymentRecoveryOtp(db, {
+      orderId: body.orderId,
+      channel: body.channel,
+      ip: getTrustedClientIp(c),
+      emailEnv: c.env as unknown as Record<string, unknown>,
+      encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+      credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+      migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    });
+  } catch (error) {
+    if (error instanceof ValidationError || error instanceof NotFoundError) {
+      return ok(c, { message: ORDER_PAYMENT_RECOVERY_GENERIC_MESSAGE });
+    }
+    throw error;
+  }
+
+  if (result.queuePayload) {
+    try {
+      await c.env.AUTH_OTP_QUEUE.send(result.queuePayload);
+    } catch (error) {
+      if (result.challengeKey && result.deliveryKey) {
+        await deleteOrderPaymentRecoveryChallenge(db, {
+          challengeKey: result.challengeKey,
+          deliveryKey: result.deliveryKey,
+        }).catch((deleteError: unknown) => {
+          console.error("[Orders] Failed to clear payment recovery challenge after queue handoff failure:", deleteError);
+        });
+      }
+      console.error("[Orders] Failed to enqueue payment recovery OTP:", error);
+      throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
+    }
+  }
+
+  return ok(c, { message: ORDER_PAYMENT_RECOVERY_GENERIC_MESSAGE });
+});
+
+const verifyOrderPaymentRecoveryOtpRoute = createRoute({
+  method: "post",
+  path: "/payment-recovery/verify-otp",
+  tags: ["Orders"],
+  summary: "Verify payment recovery code and issue a private receipt proof",
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            orderId: z.string().trim().min(1).max(128),
+            channel: orderPaymentRecoveryChannelSchema,
+            code: z.string().trim().min(4).max(12),
+          }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Payment recovery verified",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            orderId: z.string(),
+            receiptToken: z.string(),
+            expiresAt: z.number(),
+            gateway: z.string(),
+            paymentType: z.enum(["full", "deposit", "balance"]).nullable(),
+            depositAmount: z.number().nullable(),
+            redirectParams: z.object({
+              payment: z.string(),
+              result: z.literal("failed"),
+              paymentType: z.string().optional(),
+              depositAmount: z.number().optional(),
+            }),
+          })),
+        },
+      },
+    },
+    503: serviceUnavailableResponse,
+    ...errorResponses,
+  },
+});
+
+app.use("/payment-recovery/verify-otp", authMiddleware);
+app.openapi(verifyOrderPaymentRecoveryOtpRoute, async (c) => {
+  const db = c.get("db");
+  const body = c.req.valid("json");
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  c.header("Pragma", "no-cache");
+  c.header("Expires", "0");
+
+  const result = await verifyOrderPaymentRecoveryOtp(db, {
+    orderId: body.orderId,
+    channel: body.channel,
+    code: body.code,
+    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+  });
+
+  return ok(c, result);
 });
 
 const getOrderReceiptRoute = createRoute({

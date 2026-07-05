@@ -5664,6 +5664,230 @@ export type GetApiV1OrdersStatusByTokenResponses = {
 
 export type GetApiV1OrdersStatusByTokenResponse = GetApiV1OrdersStatusByTokenResponses[keyof GetApiV1OrdersStatusByTokenResponses];
 
+export type PostApiV1OrdersPaymentRecoverySendOtpData = {
+    body: {
+        orderId: string;
+        channel?: 'email' | 'sms' | 'whatsapp';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/payment-recovery/send-otp';
+};
+
+export type PostApiV1OrdersPaymentRecoverySendOtpErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersPaymentRecoverySendOtpError = PostApiV1OrdersPaymentRecoverySendOtpErrors[keyof PostApiV1OrdersPaymentRecoverySendOtpErrors];
+
+export type PostApiV1OrdersPaymentRecoverySendOtpResponses = {
+    /**
+     * Payment recovery code request accepted
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1OrdersPaymentRecoverySendOtpResponse = PostApiV1OrdersPaymentRecoverySendOtpResponses[keyof PostApiV1OrdersPaymentRecoverySendOtpResponses];
+
+export type PostApiV1OrdersPaymentRecoveryVerifyOtpData = {
+    body: {
+        orderId: string;
+        channel: 'email' | 'sms' | 'whatsapp';
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/payment-recovery/verify-otp';
+};
+
+export type PostApiV1OrdersPaymentRecoveryVerifyOtpErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersPaymentRecoveryVerifyOtpError = PostApiV1OrdersPaymentRecoveryVerifyOtpErrors[keyof PostApiV1OrdersPaymentRecoveryVerifyOtpErrors];
+
+export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponses = {
+    /**
+     * Payment recovery verified
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            receiptToken: string;
+            expiresAt: number;
+            gateway: string;
+            paymentType: 'full' | 'deposit' | 'balance' | null;
+            depositAmount: number | null;
+            redirectParams: {
+                payment: string;
+                result: 'failed';
+                paymentType?: string;
+                depositAmount?: number;
+            };
+        };
+    };
+};
+
+export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponse = PostApiV1OrdersPaymentRecoveryVerifyOtpResponses[keyof PostApiV1OrdersPaymentRecoveryVerifyOtpResponses];
+
 export type GetApiV1OrdersReceiptByIdData = {
     body?: never;
     headers?: {
@@ -27690,8 +27914,8 @@ export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses = {
         data: {
             orderId: string;
             url: string;
-            expiresAt: string | number;
-            accessMode: 'existing_browser_receipt';
+            expiresAt: string | number | null;
+            accessMode: 'buyer_verified_receipt';
             note: string;
             gateway: 'sslcommerz' | 'polar';
             paymentType: 'full' | 'deposit' | 'balance' | null;
