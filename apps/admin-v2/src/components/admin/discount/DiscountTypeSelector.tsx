@@ -8,7 +8,6 @@ import {
 } from "../../ui/card";
 import { Button } from "../../ui/button";
 import { Tag, Percent, Truck } from "lucide-react";
-import { motion } from "motion/react";
 import { cn } from "@scalius/shared/utils";
 
 interface DiscountType {
@@ -76,53 +75,45 @@ export function DiscountTypeSelector({ onSelect }: DiscountTypeSelectorProps) {
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {discountTypes.map((type) => (
-            <motion.div
+            <Button
               key={type.id}
-              whileHover={{
-                y: -2,
-                boxShadow: "0 4px 15px rgba(0, 0, 0, 0.07)",
-              }}
-              whileTap={{ scale: 0.98, y: 0 }}
-              className="transition-all"
+              variant="outline"
+              className={cn(
+                "w-full h-full flex flex-col items-start justify-start p-5 gap-2.5",
+                "border bg-card hover:bg-accent hover:border-primary/50",
+                "rounded-lg shadow-sm hover:shadow-md focus-visible:shadow-md",
+                "transition-all duration-200 ease-out group cursor-pointer text-left",
+                "transform-gpu hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:-translate-y-0.5",
+                "whitespace-normal",
+              )}
+              onClick={() => handleSelect(type.id)}
             >
-              <Button
-                variant="outline"
+              {React.isValidElement(type.icon)
+                ? React.cloneElement(
+                    type.icon as React.ReactElement<SVGProps<SVGSVGElement>>,
+                    {
+                      className: cn(
+                        "h-6 w-6 text-primary mb-2",
+                        "transition-colors duration-200",
+                      ),
+                      "aria-hidden": "true",
+                    },
+                  )
+                : null}
+
+              <div
                 className={cn(
-                  "w-full h-full flex flex-col items-start justify-start p-5 gap-2.5",
-                  "border bg-card hover:bg-accent hover:border-primary/50",
-                  "rounded-lg shadow-sm hover:shadow-md",
-                  "transition-all duration-200 group cursor-pointer text-left",
-                  "whitespace-normal",
+                  "font-semibold text-md text-foreground group-hover:text-primary",
+                  "transition-colors duration-200 mb-1",
                 )}
-                onClick={() => handleSelect(type.id)}
               >
-                {React.isValidElement(type.icon)
-                  ? React.cloneElement(
-                      type.icon as React.ReactElement<SVGProps<SVGSVGElement>>,
-                      {
-                        className: cn(
-                          "h-6 w-6 text-primary mb-2",
-                          "transition-colors duration-200",
-                        ),
-                        "aria-hidden": "true",
-                      },
-                    )
-                  : null}
+                {type.name}
+              </div>
 
-                <div
-                  className={cn(
-                    "font-semibold text-md text-foreground group-hover:text-primary",
-                    "transition-colors duration-200 mb-1",
-                  )}
-                >
-                  {type.name}
-                </div>
-
-                <div className="text-sm text-muted-foreground leading-normal">
-                  {type.description}
-                </div>
-              </Button>
-            </motion.div>
+              <div className="text-sm text-muted-foreground leading-normal">
+                {type.description}
+              </div>
+            </Button>
           ))}
         </div>
       </CardContent>
