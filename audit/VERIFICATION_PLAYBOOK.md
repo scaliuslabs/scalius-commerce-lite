@@ -32,6 +32,9 @@ Current expected result:
 Deep API readiness is exposed at:
 
 ```bash
+pnpm ops:check
+pnpm ops:check --json
+pnpm ops:check --queues
 curl -fsS https://api.scalius.com/api/v1/readyz
 ```
 
@@ -54,8 +57,9 @@ Expected deploy proof after the Worker upload: latest API deployment serves one 
 Focused local test:
 
 ```bash
+node --check scripts/ops-check.mjs
+pnpm exec vitest run scripts/ops-check.test.mjs scripts/deploy.test.mjs --passWithNoTests
 pnpm --filter @scalius/api exec vitest run src/routes/readiness.test.ts --passWithNoTests
-pnpm exec vitest run scripts/deploy.test.mjs
 ```
 
 ## Storefront Listing Query Plans
