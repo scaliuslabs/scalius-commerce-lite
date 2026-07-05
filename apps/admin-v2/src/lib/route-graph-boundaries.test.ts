@@ -801,6 +801,31 @@ describe("admin route graph boundaries", () => {
     );
   });
 
+  it("keeps product delete confirmations behind a lazy interaction boundary", () => {
+    const routeSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "products", "index.tsx"),
+      "utf8",
+    );
+    const dialogSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "routes",
+        "admin",
+        "products",
+        "-ProductDeleteDialog.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("const ProductDeleteDialog = lazy(()");
+    expect(routeSource).toContain('import("./-ProductDeleteDialog")');
+    expect(routeSource).toContain("isProductDeleteDialogOpen &&");
+    expect(routeSource).not.toContain("~/components/ui/alert-dialog");
+    expect(routeSource).not.toContain("AlertDialogContent");
+    expect(dialogSource).toContain("~/components/ui/alert-dialog");
+    expect(dialogSource).toContain("ProductDeleteDialog");
+  });
+
   it("keeps dashboard route entry from blocking on summary data", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "index.tsx"),
