@@ -140,6 +140,31 @@ export const orderReceipts = sqliteTable("order_receipts", {
     index("order_receipts_status_expires_idx").on(table.status, table.expiresAt),
 ]);
 
+export const orderPaymentRecoveryChallenges = sqliteTable("order_payment_recovery_challenges", {
+    challengeKey: text("challenge_key").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    deliveryKey: text("delivery_key").notNull(),
+    method: text("method", { enum: ["email", "phone"] }).notNull(),
+    channel: text("channel", { enum: ["email", "sms", "whatsapp"] }).notNull(),
+    identifierHash: text("identifier_hash").notNull(),
+    identifierMasked: text("identifier_masked").notNull(),
+    codeHash: text("code_hash").notNull(),
+    status: text("status", { enum: ["pending", "consumed", "locked"] }).notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(5),
+    resendAvailableAt: integer("resend_available_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    consumedAt: integer("consumed_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_payment_recovery_delivery_key_unique").on(table.deliveryKey),
+    index("order_payment_recovery_order_status_expires_idx").on(table.orderId, table.status, table.expiresAt),
+    index("order_payment_recovery_identifier_created_idx").on(table.identifierHash, table.createdAt),
+]);
+
 export const orderItems = sqliteTable("order_items", {
     id: text("id").primaryKey(),
     orderId: text("order_id")

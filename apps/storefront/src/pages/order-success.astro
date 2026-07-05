@@ -31,8 +31,12 @@ const receiptToken = orderId
   ? readOrderReceiptCookie(Astro.request.headers.get("cookie"), orderId)
   : "";
 const paymentResult = Astro.url.searchParams.get("result");
+const requestedPayment = Astro.url.searchParams.get("payment");
 const requestedPaymentType = Astro.url.searchParams.get("paymentType");
 const requestedDepositAmount = normalizeRetryDepositAmount(Astro.url.searchParams.get("depositAmount"));
+const hostedRecoveryPayment = requestedPayment === "sslcommerz" || requestedPayment === "polar"
+  ? requestedPayment
+  : null;
 
 let order: OrderReceipt | null = null;
 let recoveryState: {
@@ -40,6 +44,7 @@ let recoveryState: {
   message: string;
   status: number;
   showRetry: boolean;
+  recoveryUrl?: string;
 } | null = null;
 
 const [layoutData, checkoutConfig]: [LayoutData | null, CheckoutConfig] = await Promise.all([
@@ -48,11 +53,25 @@ const [layoutData, checkoutConfig]: [LayoutData | null, CheckoutConfig] = await 
 ]);
 
 if (!orderId || !receiptToken) {
+  const recoveryUrl = orderId && hostedRecoveryPayment
+    ? (() => {
+        const url = new URL("/payment-recovery", Astro.url);
+        url.searchParams.set("orderId", orderId);
+        url.searchParams.set("payment", hostedRecoveryPayment);
+        url.searchParams.set("result", "failed");
+        if (requestedPaymentType) url.searchParams.set("paymentType", requestedPaymentType);
+        if (requestedDepositAmount) url.searchParams.set("depositAmount", String(requestedDepositAmount));
+        return `${url.pathname}${url.search}`;
+      })()
+    : undefined;
   recoveryState = {
     title: "We could not open this receipt",
-    message: "This browser is missing the private receipt cookie for this order. Reopen the receipt from the same browser used at checkout, or sign in to check account orders before placing another order.",
+    message: recoveryUrl
+      ? "This browser is missing the private receipt cookie for this order. Verify the buyer contact to recover payment from this browser."
+      : "This browser is missing the private receipt cookie for this order. Reopen the receipt from the same browser used at checkout, or sign in to check account orders before placing another order.",
     status: 400,
     showRetry: false,
+    recoveryUrl,
   };
 } else {
   try {
@@ -368,6 +387,9 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
           </p>
         )}
         <div class="flex flex-col justify-center gap-3 sm:flex-row">
+          {recoveryState?.recoveryUrl && (
+            <a href={recoveryState.recoveryUrl} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Verify payment recovery</a>
+          )}
           {recoveryState?.showRetry && (
             <a href={Astro.url.pathname + Astro.url.search} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Retry Receipt</a>
           )}

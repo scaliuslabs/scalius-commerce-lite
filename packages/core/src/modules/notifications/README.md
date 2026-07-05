@@ -108,7 +108,7 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification
 Delivery notification enqueue is intentionally API-local because it depends on the Cloudflare Queue binding. `updateOrderStatusFromShipment()` remains a pure order/inventory transition helper and does not send queue messages itself.
 
 ### `auth.send_otp`
-- Enqueued by: Customer auth flow
+- Enqueued by: Customer auth flow and guest hosted-payment recovery
 - Handler: Inline in queue consumer
   - Claims `auth_otp_delivery_receipts` by `deliveryKey` before provider work
   - Skips already accepted/delivered/skipped receipts and marks expired OTP attempts as skipped instead of sending stale codes
@@ -118,6 +118,7 @@ Delivery notification enqueue is intentionally API-local because it depends on t
   - Failed transient attempts retry using the receipt backoff schedule; busy receipts retry around the D1 `nextAttemptAt`/claim lease instead of burning fixed 30-second queue retries
   - Accepted provider responses retry the D1 receipt write briefly; if D1 still cannot persist, a short-lived KV hint stores only delivery key/channel/provider acceptance metadata so the next queue or DLQ attempt repairs the D1 receipt before provider work
   - `auth-otp-dlq` handling never calls email/SMS/WhatsApp providers; it creates or updates the D1 receipt as `skipped` with redacted evidence, or as `accepted` when a provider-accepted recovery hint exists, then ACKs the DLQ message
+  - `purpose: "order_payment_recovery"` -- Uses payment-recovery copy while preserving the same D1 delivery receipt, provider-health, idempotency, and redacted logging behavior. It must not create customer sessions or expose receipt proof.
   - `method: "email"` -- Sends OTP code via email provider. Resend receives `deliveryKey` as `Idempotency-Key`; Cloudflare Email stores the returned `messageId`.
   - `method: "phone"` + `allowedMethod: "whatsapp_otp"` -- Sends OTP via WhatsApp Business API template and stores Meta message IDs when returned
   - `method: "phone"` + other -- Sends OTP via active SMS provider (`getActiveSmsProvider()`); GenNet receives a deterministic receipt-derived client reference as `csms_id`

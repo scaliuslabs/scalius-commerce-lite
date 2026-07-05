@@ -30,7 +30,7 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 - Products are merchandising containers. Sellable/inventory identities are `product_variants`; simple products use exactly one hidden/default persisted SKU, never product-level inventory.
 - Public checkout/config/payment readiness must fail closed. Do not guess COD or a gateway when settings cannot be read.
 - Sensitive forms must be safe before hydration and with JavaScript disabled. Credentials, OTPs, tokens, phone/email, cart, payment, and discount values must not enter URLs.
-- Receipt proof must not enter URLs, analytics payloads, logs, clipboard URLs, or KV keys. Guest receipt access uses same-origin httpOnly cookies plus API header/body proof; merchant-sendable cross-browser recovery needs a separate buyer-verified handoff.
+- Receipt proof must not enter URLs, analytics payloads, logs, clipboard URLs, or KV keys. Guest receipt access uses same-origin httpOnly cookies plus API header/body proof; merchant-sendable cross-browser hosted-payment recovery must use the buyer-verified `/payment-recovery?orderId=...` OTP handoff, never a bearer recovery URL.
 - Provider failures should log masked metadata only. Never log raw OTPs, credentials, receipt tokens, provider payloads, or buyer PII.
 
 ## Work Loop

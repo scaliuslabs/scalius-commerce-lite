@@ -187,9 +187,9 @@ function resolveStorefrontUrl(env: Env): URL {
 
 function buildPaymentRecoveryUrl(
     storefrontUrl: URL,
-    result: OrdersService.OrderPaymentRecoveryLink,
+    result: OrdersService.OrderPaymentRecoveryPreview,
 ): string {
-    const url = new URL("/order-success", storefrontUrl);
+    const url = new URL("/payment-recovery", storefrontUrl);
     url.searchParams.set("orderId", result.orderId);
     url.searchParams.set("payment", result.gateway);
     url.searchParams.set("result", "failed");
@@ -321,8 +321,8 @@ const paymentSessionAttemptSchema = z.object({
 const paymentRecoveryLinkResponseSchema = successEnvelope(z.object({
     orderId: z.string(),
     url: z.string().url(),
-    expiresAt: timestampSchema,
-    accessMode: z.literal("existing_browser_receipt"),
+    expiresAt: timestampSchema.nullable(),
+    accessMode: z.literal("buyer_verified_receipt"),
     note: z.string(),
     gateway: z.enum(["sslcommerz", "polar"]),
     paymentType: recoveryLinkPaymentTypeSchema.nullable(),
@@ -718,15 +718,15 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const storefrontUrl = resolveStorefrontUrl(c.env);
-    const recoveryLink = await OrdersService.createOrderPaymentRecoveryLink(db, orderId);
+    const recoveryLink = await OrdersService.previewOrderPaymentRecoveryLink(db, orderId);
     const url = buildPaymentRecoveryUrl(storefrontUrl, recoveryLink);
 
     return created(c, {
         orderId: recoveryLink.orderId,
         url,
-        expiresAt: new Date(recoveryLink.expiresAt * 1000).toISOString(),
-        accessMode: "existing_browser_receipt" as const,
-        note: "This clean recovery URL does not contain private receipt proof. It opens only in the buyer browser that already holds the order receipt cookie.",
+        expiresAt: null,
+        accessMode: "buyer_verified_receipt" as const,
+        note: "This clean recovery URL contains no private receipt proof. The buyer must verify the order contact before this browser receives receipt access.",
         gateway: recoveryLink.gateway,
         paymentType: recoveryLink.paymentType,
         depositAmount: recoveryLink.depositAmount,

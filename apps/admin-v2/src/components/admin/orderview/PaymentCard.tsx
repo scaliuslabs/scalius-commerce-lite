@@ -527,7 +527,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
   async function handleCopyRecoveryLink() {
     if (!canIssuePaymentRecoveryLink) {
       toast.error("Recovery link unavailable", {
-        description: "Your role can view orders but cannot create payment recovery links.",
+        description: "Your role can view orders but cannot create buyer verification links.",
       });
       return;
     }
@@ -553,17 +553,15 @@ export function PaymentCard({ order }: PaymentCardProps) {
     try {
       await copyRecoveryUrlToClipboard(recoveryLink.url);
     } catch {
-      toast.error("Could not copy recovery link", {
+      toast.error("Could not copy verification link", {
         description: "The browser did not allow clipboard access. Try again from a focused admin tab.",
       });
       return;
     }
 
-    const expiresAt = formatTimestamp(recoveryLink.expiresAt);
-    toast.success("Clean recovery URL copied", {
-      description: expiresAt
-        ? `It opens only in the buyer browser that already has the private receipt cookie, until ${expiresAt}.`
-        : "It opens only in the buyer browser that already has the private receipt cookie.",
+    toast.success("Buyer verification link copied", {
+      description: recoveryLink.note
+        || "The buyer must verify their order contact before this browser receives receipt access.",
     });
   }
 
@@ -720,7 +718,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 <p className="font-medium text-foreground">Hosted payment recovery</p>
                 <p className="mt-1 text-muted-foreground">
                   {paymentRecovery?.message
-                    ?? "Copy a fresh buyer link for the current hosted payment state."}
+                    ?? "Copy a buyer verification link for the current hosted payment state."}
                 </p>
               </div>
               <Button
@@ -736,7 +734,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 ) : (
                   <Copy className="mr-1 h-3 w-3" />
                 )}
-                Copy recovery link
+                Copy verification link
               </Button>
             </div>
           )}

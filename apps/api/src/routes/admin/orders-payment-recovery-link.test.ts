@@ -2,14 +2,14 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-    createOrderPaymentRecoveryLink: vi.fn(),
+    previewOrderPaymentRecoveryLink: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@scalius/core/modules/orders")>();
     return {
         ...actual,
-        createOrderPaymentRecoveryLink: mocks.createOrderPaymentRecoveryLink,
+        previewOrderPaymentRecoveryLink: mocks.previewOrderPaymentRecoveryLink,
     };
 });
 
@@ -45,11 +45,8 @@ function createTestApp() {
 describe("admin order payment recovery link route", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mocks.createOrderPaymentRecoveryLink.mockResolvedValue({
+        mocks.previewOrderPaymentRecoveryLink.mockResolvedValue({
             orderId: "order_1",
-            receiptToken: "chk_secret_recovery",
-            tokenHash: "abcdef1234567890",
-            expiresAt: 1_765_000_000,
             gateway: "sslcommerz",
             paymentType: "deposit",
             depositAmount: 60,
@@ -68,7 +65,7 @@ describe("admin order payment recovery link route", () => {
         });
     });
 
-    it("returns a clean same-browser recovery URL without storing raw proof in KV", async () => {
+    it("returns a clean buyer verification URL without minting receipt proof", async () => {
         const { app, env, kv } = createTestApp();
 
         const response = await app.request(
@@ -81,13 +78,13 @@ describe("admin order payment recovery link route", () => {
         };
 
         expect(response.status).toBe(201);
-        expect(mocks.createOrderPaymentRecoveryLink).toHaveBeenCalledWith(db, "order_1");
+        expect(mocks.previewOrderPaymentRecoveryLink).toHaveBeenCalledWith(db, "order_1");
         expect(body.data).toMatchObject({
             orderId: "order_1",
-            url: "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",
-            expiresAt: new Date(1_765_000_000 * 1000).toISOString(),
-            accessMode: "existing_browser_receipt",
-            note: "This clean recovery URL does not contain private receipt proof. It opens only in the buyer browser that already holds the order receipt cookie.",
+            url: "https://shop.example.test/payment-recovery?orderId=order_1&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",
+            expiresAt: null,
+            accessMode: "buyer_verified_receipt",
+            note: "This clean recovery URL contains no private receipt proof. The buyer must verify the order contact before this browser receives receipt access.",
             gateway: "sslcommerz",
             paymentType: "deposit",
             depositAmount: 60,
@@ -95,7 +92,6 @@ describe("admin order payment recovery link route", () => {
         expect(body.data.url).not.toContain("token=");
         expect(body.data.url).not.toContain("receipt_token");
         expect(body.data.url).not.toContain("receiptToken");
-        expect(JSON.stringify(body.data)).not.toContain("chk_secret_recovery");
         expect(body.data).not.toHaveProperty("receiptToken");
         expect(body.data).not.toHaveProperty("tokenHash");
         expect(kv.put).not.toHaveBeenCalled();
@@ -116,7 +112,7 @@ describe("admin order payment recovery link route", () => {
 
         expect(response.status).toBe(503);
         expect(body.error?.code).toBe("SERVICE_UNAVAILABLE");
-        expect(mocks.createOrderPaymentRecoveryLink).not.toHaveBeenCalled();
+        expect(mocks.previewOrderPaymentRecoveryLink).not.toHaveBeenCalled();
         expect(kv.put).not.toHaveBeenCalled();
     });
 });

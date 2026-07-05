@@ -1705,20 +1705,21 @@ async function sendAuthOtpEmail(
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
   const safeName = escapeHtml(payload.name);
   const safeCode = escapeHtml(payload.code);
+  const copy = getAuthOtpMessageCopy(payload);
   const result = await sendEmail({
     to: payload.identifier,
-    subject: "Your login code",
+    subject: copy.emailSubject,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="font-size: 20px; margin-bottom: 8px;">Your login code</h2>
-        <p style="color: #555; margin-bottom: 24px;">Hi ${safeName}, enter this code to sign in:</p>
+        <h2 style="font-size: 20px; margin-bottom: 8px;">${escapeHtml(copy.emailTitle)}</h2>
+        <p style="color: #555; margin-bottom: 24px;">Hi ${safeName}, ${escapeHtml(copy.emailIntro)}</p>
         <div style="background: #f5f5f5; border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 24px;">
           <span style="font-size: 40px; font-weight: 700; letter-spacing: 10px; font-family: monospace; color: #111;">${safeCode}</span>
         </div>
         <p style="color: #888; font-size: 13px;">This code expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
       </div>
     `,
-    text: `Your login code is: ${payload.code}\n\nExpires in 5 minutes.`,
+    text: `${copy.emailTextPrefix}: ${payload.code}\n\nExpires in 5 minutes.`,
     idempotencyKey: target.deliveryKey,
   }, {
     db,
@@ -1873,7 +1874,7 @@ async function sendAuthOtpSms(
 
   const result = await smsProvider.sendSms({
     to: payload.identifier,  // Already E.164 from customers.phone
-    message: `Your login code: ${payload.code}\n\nValid for 5 minutes. Do not share.`,
+    message: `${getAuthOtpMessageCopy(payload).smsTextPrefix}: ${payload.code}\n\nValid for 5 minutes. Do not share.`,
     clientReference: createAuthOtpProviderClientReference(target),
   });
 
@@ -1902,6 +1903,32 @@ async function sendAuthOtpSms(
     `[Queue] SMS OTP sent via ${smsProvider.name} delivery=${target.deliveryKey} recipientHash=${target.identifierHash}, ref=${result.providerRef}`,
   );
   return receiptResult;
+}
+
+function getAuthOtpMessageCopy(payload: Pick<AuthOtpQueueMessage, "purpose">): {
+  emailSubject: string;
+  emailTitle: string;
+  emailIntro: string;
+  emailTextPrefix: string;
+  smsTextPrefix: string;
+} {
+  if (payload.purpose === "order_payment_recovery") {
+    return {
+      emailSubject: "Your payment recovery code",
+      emailTitle: "Your payment recovery code",
+      emailIntro: "enter this code to recover your order payment page:",
+      emailTextPrefix: "Your payment recovery code",
+      smsTextPrefix: "Your payment recovery code",
+    };
+  }
+
+  return {
+    emailSubject: "Your login code",
+    emailTitle: "Your login code",
+    emailIntro: "enter this code to sign in:",
+    emailTextPrefix: "Your login code is",
+    smsTextPrefix: "Your login code",
+  };
 }
 
 function resolveAuthOtpDeliveryChannel(payload: AuthOtpQueueMessage): AuthOtpDeliveryChannel {

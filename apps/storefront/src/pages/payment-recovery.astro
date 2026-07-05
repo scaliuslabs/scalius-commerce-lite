@@ -1,0 +1,171 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import { getLayoutData, type LayoutData } from "@/lib/api";
+
+const orderId = Astro.url.searchParams.get("orderId")?.trim() ?? "";
+const layoutData: LayoutData | null = await getLayoutData();
+---
+
+<Layout title="Payment Recovery" layoutData={layoutData} noindex>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
+  <section class="container mx-auto flex min-h-[60vh] items-center px-4 py-10">
+    <div class="mx-auto w-full max-w-xl rounded-xl border border-border bg-background p-5 shadow-sm sm:p-6">
+      <div class="mb-5">
+        <p class="text-sm font-medium uppercase text-muted-foreground">Hosted payment recovery</p>
+        <h1 class="mt-1 text-2xl font-semibold tracking-normal text-foreground">Verify this order</h1>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">
+          This link does not open private receipt details by itself. Verify the buyer contact to continue payment from this browser.
+        </p>
+      </div>
+
+      {orderId ? (
+        <form id="paymentRecoveryForm" class="space-y-4" method="post" action="/api/payment-recovery/send-code">
+          <input type="hidden" id="paymentRecoveryOrderId" name="orderId" value={orderId} />
+
+          <div class="rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
+            <span class="text-muted-foreground">Order reference</span>
+            <span class="ml-2 font-mono font-medium text-foreground">{orderId}</span>
+          </div>
+
+          <div class="grid gap-2">
+            <label for="paymentRecoveryChannel" class="text-sm font-medium text-foreground">Verification channel</label>
+            <select
+              id="paymentRecoveryChannel"
+              name="channel"
+              class="min-h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
+            >
+              <option value="sms">SMS to order phone</option>
+              <option value="whatsapp">WhatsApp to order phone</option>
+              <option value="email">Email on order</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              id="paymentRecoverySendCode"
+              class="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Send code
+            </button>
+          </div>
+
+          <div class="grid gap-2">
+            <label for="paymentRecoveryCode" class="text-sm font-medium text-foreground">Verification code</label>
+            <input
+              id="paymentRecoveryCode"
+              name="code"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="12"
+              class="min-h-11 rounded-lg border border-input bg-background px-3 text-center font-mono text-lg tracking-[0.35em] text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
+              placeholder="000000"
+            />
+          </div>
+
+          <button
+            type="button"
+            id="paymentRecoveryVerify"
+            class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Continue to receipt
+          </button>
+
+          <p id="paymentRecoveryMessage" class="min-h-5 text-sm text-muted-foreground" aria-live="polite"></p>
+        </form>
+      ) : (
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          This recovery link is missing an order reference. Ask the store to send a fresh payment recovery link.
+        </div>
+      )}
+
+      <div class="mt-5 flex flex-wrap gap-2 border-t border-border pt-4 text-sm">
+        <a href="/account" class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">View account orders</a>
+        <span class="text-muted-foreground">/</span>
+        <a href="/" class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">Continue shopping</a>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  const form = document.getElementById("paymentRecoveryForm") as HTMLFormElement | null;
+  const orderInput = document.getElementById("paymentRecoveryOrderId") as HTMLInputElement | null;
+  const channelInput = document.getElementById("paymentRecoveryChannel") as HTMLSelectElement | null;
+  const codeInput = document.getElementById("paymentRecoveryCode") as HTMLInputElement | null;
+  const sendButton = document.getElementById("paymentRecoverySendCode") as HTMLButtonElement | null;
+  const verifyButton = document.getElementById("paymentRecoveryVerify") as HTMLButtonElement | null;
+  const message = document.getElementById("paymentRecoveryMessage");
+
+  function setMessage(text: string, tone: "neutral" | "danger" | "success" = "neutral") {
+    if (!message) return;
+    message.textContent = text;
+    message.className = [
+      "min-h-5 text-sm",
+      tone === "danger" ? "text-destructive" : tone === "success" ? "text-emerald-700" : "text-muted-foreground",
+    ].join(" ");
+  }
+
+  async function postJson(url: string, payload: Record<string, unknown>) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({} as Record<string, unknown>));
+    if (!response.ok || data.success === false) {
+      const error = typeof data.error === "string" ? data.error : "Request failed. Please try again.";
+      throw new Error(error);
+    }
+    return data;
+  }
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+
+  sendButton?.addEventListener("click", async () => {
+    const orderId = orderInput?.value.trim() ?? "";
+    const channel = channelInput?.value ?? "sms";
+    if (!orderId) {
+      setMessage("This recovery link is missing an order reference.", "danger");
+      return;
+    }
+
+    sendButton.disabled = true;
+    setMessage("Sending verification code...");
+    try {
+      const data = await postJson("/api/payment-recovery/send-code", { orderId, channel });
+      const successMessage = typeof data.message === "string"
+        ? data.message
+        : "If this order is eligible, a verification code will be sent.";
+      setMessage(successMessage, "success");
+      codeInput?.focus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not send code. Please try again.", "danger");
+    } finally {
+      sendButton.disabled = false;
+    }
+  });
+
+  verifyButton?.addEventListener("click", async () => {
+    const orderId = orderInput?.value.trim() ?? "";
+    const channel = channelInput?.value ?? "sms";
+    const code = codeInput?.value.trim() ?? "";
+    if (!orderId || !code) {
+      setMessage("Enter the verification code to continue.", "danger");
+      return;
+    }
+
+    verifyButton.disabled = true;
+    setMessage("Verifying code...");
+    try {
+      const data = await postJson("/api/payment-recovery/verify", { orderId, channel, code });
+      const redirectUrl = typeof data.redirectUrl === "string" ? data.redirectUrl : `/order-success?orderId=${encodeURIComponent(orderId)}`;
+      window.location.href = redirectUrl;
+    } catch (error) {
+      verifyButton.disabled = false;
+      setMessage(error instanceof Error ? error.message : "Verification failed. Please try again.", "danger");
+    }
+  });
+</script>

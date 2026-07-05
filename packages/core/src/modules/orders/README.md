@@ -211,7 +211,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | PUT | `/:id/status` | `updateOrderStatus()` | Status change with inventory + COD paid-state guard + notifications |
 | GET | `/:id/items` | direct query | Items with product details and images |
 | GET | `/:id/payments` | direct query | Order payments + payment plan |
-| POST | `/:id/payment-recovery-link` | `createOrderPaymentRecoveryLink()` | Issue an RBAC-gated SSLCommerz/Polar clean same-browser receipt recovery URL without provider calls |
+| POST | `/:id/payment-recovery-link` | `previewOrderPaymentRecoveryLink()` | Issue an RBAC-gated SSLCommerz/Polar buyer verification URL without provider calls or receipt proof minting |
 | GET | `/:id/cod` | direct query | COD tracking record |
 | POST | `/:id/cod` | `processCodAction()` | COD collected/failed/returned |
 | GET | `/:id/fulfill` | `getOrderShipments()` | Fulfillment shipments |
@@ -231,7 +231,9 @@ Bulk provider shipment creation uses a durable order-level shipment claim (`orde
 
 Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/delete/refresh/bulk delete/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true. Shipment managers may run the explicit repair action from the recovery notice; view-only users only see the operator copy.
 
-Admin hosted-payment recovery link issuance is intentionally narrow. `POST /api/v1/admin/orders/{id}/payment-recovery-link` is gated by `orders.edit`, supports only SSLCommerz and Polar because those are the receipt-page retry gateways, validates local order/payment/session/shipment evidence before minting proof, stores only the `order_receipts` token hash in D1, and returns a clean `/order-success?orderId=...` URL for the buyer browser that already holds the private receipt cookie. It must not call payment providers, enqueue jobs, write raw receipt tokens into KV, or expose raw receipt tokens in returned URLs, logs, analytics, or clipboard copy.
+Admin hosted-payment recovery link issuance is intentionally narrow. `POST /api/v1/admin/orders/{id}/payment-recovery-link` is gated by `orders.edit`, supports only SSLCommerz and Polar because those are the receipt-page retry gateways, validates local order/payment/session/shipment evidence through `previewOrderPaymentRecoveryLink()`, and returns a clean `/payment-recovery?orderId=...` buyer verification URL. It must not mint receipt proof, call payment providers, enqueue jobs, write raw receipt tokens into KV, or expose raw receipt tokens in returned URLs, logs, analytics, or clipboard copy.
+
+Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link based. `/api/v1/orders/payment-recovery/send-otp` creates an order-owned `order_payment_recovery_challenges` row with hashed contact/code state and reuses the existing `auth.send_otp` queue with `purpose: "order_payment_recovery"`. `/api/v1/orders/payment-recovery/verify-otp` is service-JWT protected for the storefront server proxy; successful OTP proof rechecks eligibility, consumes the challenge, records an `order_receipts` hash with `source = "guest_payment_recovery"`, and returns raw proof only to the trusted storefront proxy so it can set the existing per-order HttpOnly receipt cookie. Public/browser responses must stay no-store and must not expose receipt tokens, token hashes, raw contacts, OTP codes, provider payloads, or receipt PII.
 
 ### Admin Shipments (`/api/v1/admin/shipments`)
 
@@ -248,6 +250,8 @@ Admin hosted-payment recovery link issuance is intentionally narrow. `POST /api/
 | GET | `/:id` | direct query | Order with items, shipments, delivery providers |
 | GET | `/receipt/:id` | receipt-token validation + support-request state | Buyer-safe private receipt detail with support request history/actions |
 | POST | `/receipt/:id/support-requests` | `createReceiptOrderSupportRequest()` | Receipt-token cancellation, return, or refund request creation; writes the support-request ledger and enqueues merchant/admin notification only after proof validation |
+| POST | `/payment-recovery/send-otp` | `sendOrderPaymentRecoveryOtp()` | Public, generic response for buyer OTP delivery against an eligible hosted-payment recovery order |
+| POST | `/payment-recovery/verify-otp` | `verifyOrderPaymentRecoveryOtp()` | Service-authenticated storefront handoff that verifies OTP and returns raw receipt proof only to the storefront server proxy |
 | GET | `/status/:token` | KV lookup | Poll checkout processing status |
 | POST | `/` | `createStorefrontOrder()` + `commitStorefrontOrderPayload()` | Synchronous idempotent order placement (returns `201` after D1 commit; `202` only for duplicate in-flight submits) |
 
