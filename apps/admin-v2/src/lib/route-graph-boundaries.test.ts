@@ -642,6 +642,40 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("disabled={saving || saveBlocked}");
   });
 
+  it("keeps new-discount type selection off the decorative animation runtime", () => {
+    const selectorSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "discount",
+        "DiscountTypeSelector.tsx",
+      ),
+      "utf8",
+    );
+    const newRouteSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "discounts", "new.tsx"),
+      "utf8",
+    );
+    const combinedSource = `${selectorSource}\n${newRouteSource}`;
+    const forbiddenMarkers = [
+      ["motion", "react"].join("/"),
+      ["while", "Hover"].join(""),
+      ["while", "Tap"].join(""),
+    ];
+
+    expect(selectorSource).toContain("hover:-translate-y-0.5");
+    expect(selectorSource).toContain("active:scale-[0.98]");
+    expect(selectorSource).toContain("focus-visible:-translate-y-0.5");
+    expect(newRouteSource).toContain("<DiscountTypeSelector onSelect={setSelectedType} />");
+    expect(newRouteSource).toContain("const AmountOffProductsContainer = lazy(");
+    expect(newRouteSource).toContain("const AmountOffOrderForm = lazy(");
+    expect(newRouteSource).toContain("const FreeShippingForm = lazy(");
+    for (const marker of forbiddenMarkers) {
+      expect(combinedSource).not.toContain(marker);
+    }
+  });
+
   it("keeps admin discount form values out of native GET submissions", () => {
     const discountForms = [
       join(ADMIN_SRC_ROOT, "components", "admin", "discount", "AmountOffOrderForm.tsx"),
