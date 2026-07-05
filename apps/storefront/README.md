@@ -129,7 +129,7 @@ Implements a two-layer edge caching strategy for HTML pages:
 ### Cache Key Canonicalization
 
 - `src/lib/cache-key.ts` owns canonical query-string handling for HTML Cache API keys and product-list L2 keys.
-- HTML keys sort surviving query params, trim/collapse search text (`q` / `search`), drop empty/tracking params (`utm_*`, `fbclid`, etc.), and strip client-side product selection params (`size`, `color`) before `cache_v` / `cache_gen` are added.
+- HTML keys sort surviving query params, trim/collapse search text (`q` / `search`), drop empty/tracking params (`utm_*`, `fbclid`, `gclid`, `gbraid`, `wbraid`, `msclkid`, `ttclid`, etc.), and strip client-side product selection params (`size`, `color`) before `cache_v` / `cache_gen` are added.
 - Product/category listing L2 keys use sorted query strings with normalized search text so equivalent filter objects do not create separate `all_products_` / `category_products_` entries.
 - Middleware and `/api/purge-cache` exact HTML deletion must stay aligned on the same helper so deletes and reads target the same key.
 
@@ -223,7 +223,7 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |
 | `__ptproxy.ts` | Partytown analytics proxy |
-| `facebook-feed.xml.ts` | Facebook/Meta product feed; availability comes from the public product list `availableForSale` SKU projection so feed XML matches product-page structured data and checkout purchasability |
+| `facebook-feed.xml.ts` | Facebook/Meta product feed; availability comes from the public product list `availableForSale` SKU projection so feed XML matches product-page structured data and checkout purchasability. Feed links require an absolute storefront URL and product items without a real absolute `http(s)` primary image are skipped because catalog feeds require `image_link`. |
 
 Checkout proxy endpoints unwrap `.data` before returning to the browser -- the checkout page reads top-level fields.
 `checkout/create-order.ts` must preserve structured `details.itemIssues` from the API; checkout gateway handlers use those issues to return buyers to the cart repair UI instead of collapsing catalog freshness failures into a string-only payment error.

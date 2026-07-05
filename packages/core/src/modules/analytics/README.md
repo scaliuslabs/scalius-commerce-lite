@@ -28,9 +28,15 @@ Third-party analytics script management, Meta Conversions API integration, and a
 
 ### Zod Schemas (`analytics.validation.ts`)
 
-- `createAnalyticsSchema` -- name (3-100 chars), type (`google_analytics` | `facebook_pixel` | `cloudflare_web_analytics` | `custom`), isActive (default true), usePartytown (default true), config (non-empty string), location (`head` | `body_start` | `body_end`)
+- `createAnalyticsSchema` -- name (3-100 chars), type (`google_analytics` | `google_tag_manager` | `facebook_pixel` | `cloudflare_web_analytics` | `custom`), isActive (default true), usePartytown (default true), config (non-empty string), location (`head` | `body_start` | `body_end`)
 - `updateAnalyticsSchema` -- same fields plus `id` (required)
 - `toggleAnalyticsSchema` -- `{ isActive: boolean }`
+
+Google Analytics and Google Tag Manager are separate first-class browser
+provider types. Use `google_analytics` for GA4 `gtag.js` snippets with `G-`
+measurement IDs. Use `google_tag_manager` for GTM web container snippets with
+`GTM-` container IDs; if a merchant wants the optional GTM noscript iframe, add
+it as a separate `body_start` custom snippet.
 
 Cloudflare Web Analytics is first-class because it is the default Cloudflare-native
 alternative to GA/Facebook page analytics. Admins may paste either the Cloudflare

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 export const analyticsScriptTypes = [
     "google_analytics",
+    "google_tag_manager",
     "facebook_pixel",
     "cloudflare_web_analytics",
     "custom",

@@ -16014,7 +16014,7 @@ export type GetApiV1AdminAnalyticsResponse = GetApiV1AdminAnalyticsResponses[key
 export type PostApiV1AdminAnalyticsData = {
     body?: {
         name: string;
-        type: 'google_analytics' | 'facebook_pixel' | 'cloudflare_web_analytics' | 'custom';
+        type: 'google_analytics' | 'google_tag_manager' | 'facebook_pixel' | 'cloudflare_web_analytics' | 'custom';
         config: string;
         location: 'head' | 'body_start' | 'body_end';
         isActive?: boolean;
@@ -16317,7 +16317,7 @@ export type PutApiV1AdminAnalyticsByIdData = {
     body?: {
         id: string;
         name: string;
-        type: 'google_analytics' | 'facebook_pixel' | 'cloudflare_web_analytics' | 'custom';
+        type: 'google_analytics' | 'google_tag_manager' | 'facebook_pixel' | 'cloudflare_web_analytics' | 'custom';
         config: string;
         location: 'head' | 'body_start' | 'body_end';
         isActive: boolean;

@@ -354,15 +354,44 @@ const runtimeGlobalsScript = [
     <script is:inline>
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        const fbclid = urlParams.get("fbclid");
+        const maxAge = 7776000;
+        const cookieSuffix = `; path=/; max-age=${maxAge}; SameSite=Lax${
+          window.location.protocol === "https:" ? "; Secure" : ""
+        }`;
+        const readClickId = (name) => {
+          const value = urlParams.get(name);
+          if (!value) return "";
+          const trimmed = value.trim();
+          return /^[A-Za-z0-9._~-]{1,512}$/.test(trimmed) ? trimmed : "";
+        };
+        const persistClickId = (cookieName, storageName, value) => {
+          document.cookie = `${cookieName}=${encodeURIComponent(value)}${cookieSuffix}`;
+          try {
+            sessionStorage.setItem(storageName, value);
+          } catch {
+            // Cookie persistence is enough when sessionStorage is unavailable.
+          }
+        };
+
+        const fbclid = readClickId("fbclid");
         if (fbclid) {
           const creationTime = Date.now();
           const fbcValue = `fb.1.${creationTime}.${fbclid}`;
-          document.cookie = `_fbc=${fbcValue}; path=/; max-age=7776000`;
-          sessionStorage.setItem("scalius_fbc", fbcValue);
+          persistClickId("_fbc", "scalius_fbc", fbcValue);
         }
+
+        [
+          ["gclid", "scalius_gclid"],
+          ["gbraid", "scalius_gbraid"],
+          ["wbraid", "scalius_wbraid"],
+          ["msclkid", "scalius_msclkid"],
+          ["ttclid", "scalius_ttclid"],
+        ].forEach(([paramName, storageName]) => {
+          const clickId = readClickId(paramName);
+          if (clickId) persistClickId(storageName, storageName, clickId);
+        });
       } catch (e) {
-        console.warn("Could not process fbclid:", e);
+        console.warn("Could not process ad click id:", e);
       }
     </script>
 

@@ -10,7 +10,9 @@ describe("storefront HTML cache path canonicalization", () => {
       "/products/fish",
     );
     expect(
-      canonicalizeStorefrontHtmlCachePath("/products/fish?color=red&utm_source=ad"),
+      canonicalizeStorefrontHtmlCachePath(
+        "/products/fish?color=red&utm_source=ad&gclid=google&gbraid=ios&wbraid=web&msclkid=bing&ttclid=tiktok",
+      ),
     ).toBe("/products/fish");
   });
 
@@ -20,6 +22,14 @@ describe("storefront HTML cache path canonicalization", () => {
         "/categories/drinks?sortBy=newest&page=1&brand=Fresh&q=%20hilsa%20%20fish%20",
       ),
     ).toBe("/categories/drinks?brand=Fresh&q=hilsa+fish");
+  });
+
+  it("ignores current ad click identifiers on listing HTML paths", () => {
+    expect(
+      canonicalizeStorefrontHtmlCachePath(
+        "/search?q=fish&fbclid=meta&gclid=google&gbraid=ios&wbraid=web&msclkid=bing&ttclid=tiktok",
+      ),
+    ).toBe("/search?q=fish");
   });
 
   it("collapses repeated query params to the last rendered value", () => {

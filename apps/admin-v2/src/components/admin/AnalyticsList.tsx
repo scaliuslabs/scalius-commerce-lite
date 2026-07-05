@@ -87,7 +87,9 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
   const formatType = (type: string) => {
     switch (type) {
       case "google_analytics":
-        return "Google Analytics";
+        return "Google Analytics 4";
+      case "google_tag_manager":
+        return "Google Tag Manager";
       case "facebook_pixel":
         return "Facebook Pixel";
       case "cloudflare_web_analytics":

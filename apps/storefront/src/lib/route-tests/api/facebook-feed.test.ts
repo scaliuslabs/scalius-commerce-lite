@@ -58,6 +58,18 @@ describe("Facebook product feed route", () => {
     expect(response.headers.get("Retry-After")).toBe("30");
   });
 
+  it("fails closed when the storefront base URL is not absolute", async () => {
+    mocks.getRuntimeStorefrontUrl.mockReturnValueOnce("/relative-store");
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toContain("Facebook product feed is temporarily unavailable");
+    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+  });
+
   it("keeps legitimate empty catalogs as empty XML", async () => {
     mocks.getAllProducts.mockResolvedValueOnce({
       data: [],
@@ -84,6 +96,7 @@ describe("Facebook product feed route", () => {
           discountedPrice: 1200,
           isActive: true,
           availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/available.jpg",
         },
         {
           id: "prod_sold_out",
@@ -94,6 +107,7 @@ describe("Facebook product feed route", () => {
           discountedPrice: 1400,
           isActive: true,
           availableForSale: false,
+          imageUrl: "https://cdn.example.test/products/sold-out.jpg",
         },
       ],
       pagination: { page: 1, limit: 100, total: 2, totalPages: 1 },
@@ -107,6 +121,147 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:availability>in stock</g:availability>");
     expect(body).toContain("<g:id>prod_sold_out</g:id>");
     expect(body).toContain("<g:availability>out of stock</g:availability>");
+  });
+
+  it("skips image-less products and keeps required image and availability fields on valid items", async () => {
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_no_image",
+          slug: "no-image",
+          name: "No Image",
+          description: "Missing primary image",
+          price: 900,
+          discountedPrice: 900,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: null,
+        },
+        {
+          id: "prod_blank_image",
+          slug: "blank-image",
+          name: "Blank Image",
+          description: "Blank primary image",
+          price: 950,
+          discountedPrice: 950,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "   ",
+        },
+        {
+          id: "prod_valid",
+          slug: "valid-image",
+          name: "Valid Image",
+          description: "Has primary image",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          availableForSale: false,
+          imageUrl: "https://cdn.example.test/products/valid.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 3, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).not.toContain("<g:id>prod_no_image</g:id>");
+    expect(body).not.toContain("<g:id>prod_blank_image</g:id>");
+    expect(body).toContain("<g:id>prod_valid</g:id>");
+    expect(body).toContain(
+      "<g:image_link>https://cdn.example.test/products/valid.jpg</g:image_link>",
+    );
+    expect(body).toContain("<g:availability>out of stock</g:availability>");
+    expect(body.match(/<item>/g)).toHaveLength(1);
+  });
+
+  it("emits absolute image links when the image optimizer returns a relative URL", async () => {
+    mocks.getOptimizedImageUrl.mockReturnValueOnce(
+      "/cdn-cgi/image/width=1200/products/valid.jpg",
+    );
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_valid",
+          slug: "valid-image",
+          name: "Valid Image",
+          description: "Has primary image",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "/products/valid.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(
+      "<g:image_link>https://storefront.example.test/cdn-cgi/image/width=1200/products/valid.jpg</g:image_link>",
+    );
+  });
+
+  it("skips products whose optimized image URL is not an http URL", async () => {
+    mocks.getOptimizedImageUrl.mockReturnValueOnce(
+      "data:image/svg+xml,%3Csvg%3E%3C/svg%3E",
+    );
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_data_image",
+          slug: "data-image",
+          name: "Data Image",
+          description: "Invalid catalog image",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "data:image/svg+xml,%3Csvg%3E%3C/svg%3E",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).not.toContain("<item>");
+    expect(body).not.toContain("<g:image_link>");
+  });
+
+  it("keeps page one as valid empty XML when every product is image-ineligible", async () => {
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_no_image",
+          slug: "no-image",
+          name: "No Image",
+          description: "Missing primary image",
+          price: 900,
+          discountedPrice: 900,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: null,
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toContain("application/xml");
+    expect(body).toContain("<rss");
+    expect(body).not.toContain("<item>");
+    expect(body).not.toContain("<g:image_link>");
   });
 
   it("returns a no-store 404 without fetching products when catalog feed is disabled", async () => {
@@ -151,5 +306,16 @@ describe("Facebook product feed route", () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
+  });
+
+  it("returns a non-cacheable 503 when feed generation throws unexpectedly", async () => {
+    mocks.getLayoutData.mockRejectedValueOnce(new Error("layout unavailable"));
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toContain("Facebook product feed is temporarily unavailable");
   });
 });
