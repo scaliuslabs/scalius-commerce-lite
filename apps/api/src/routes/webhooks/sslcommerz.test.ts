@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
+import { PaymentStatus } from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
   getSSLCommerzSettings: vi.fn(),
@@ -8,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventQueued: vi.fn(),
   markWebhookEventProcessed: vi.fn(),
   markWebhookEventFailed: vi.fn(),
+  markWebhookEventManualReconciliation: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
@@ -33,6 +35,7 @@ vi.mock("../../utils/webhook-idempotency", async (importOriginal) => {
     markWebhookEventQueued: mocks.markWebhookEventQueued,
     markWebhookEventProcessed: mocks.markWebhookEventProcessed,
     markWebhookEventFailed: mocks.markWebhookEventFailed,
+    markWebhookEventManualReconciliation: mocks.markWebhookEventManualReconciliation,
   };
 });
 
@@ -44,6 +47,7 @@ const defaultOrder = {
   paidAmount: 0,
   balanceDue: 100.5,
   paymentMethod: "sslcommerz",
+  paymentStatus: PaymentStatus.UNPAID,
 };
 
 function createSelectQuery(value: unknown) {
@@ -133,6 +137,7 @@ describe("SSLCommerz webhook route", () => {
     mocks.markWebhookEventQueued.mockResolvedValue(undefined);
     mocks.markWebhookEventProcessed.mockResolvedValue(undefined);
     mocks.markWebhookEventFailed.mockResolvedValue(undefined);
+    mocks.markWebhookEventManualReconciliation.mockResolvedValue(undefined);
   });
 
   it("claims a durable event before enqueueing and marks it queued after queue send", async () => {
@@ -336,6 +341,67 @@ describe("SSLCommerz webhook route", () => {
       paymentType: "deposit",
       amount: 25,
     }));
+  });
+
+  it("accepts a valid late SSLCommerz success after a failed unpaid order switches to another online gateway", async () => {
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp(createDb({
+      order: {
+        ...defaultOrder,
+        paymentMethod: "polar",
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+        balanceDue: 100.5,
+      },
+    }));
+
+    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("OK");
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: "payment.sslcommerz.confirmed",
+      orderId: "ord_1",
+      tranId: "ord_1",
+      valId: "val_1",
+      paymentType: "full",
+    }));
+    expect(mocks.markWebhookEventQueued).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      "sslcommerz:ipn:ord_1:val_1",
+      expect.objectContaining({ status: "VALID" }),
+    );
+    expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventManualReconciliation).not.toHaveBeenCalled();
+  });
+
+  it("settles mismatched paid order IPNs as manual reconciliation instead of retrying forever", async () => {
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp(createDb({
+      order: {
+        ...defaultOrder,
+        paymentMethod: "polar",
+        paymentStatus: PaymentStatus.PAID,
+        paidAmount: 100.5,
+        balanceDue: 0,
+      },
+    }));
+
+    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("OK");
+    expect(queue.send).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventManualReconciliation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      "sslcommerz:ipn:ord_1:val_1",
+      expect.objectContaining({
+        error: "Validated SSLCommerz payment conflicts with the current order payment state",
+        currentPaymentMethod: "polar",
+        currentPaymentStatus: PaymentStatus.PAID,
+      }),
+    );
+    expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
   });
 
   it("does not claim or enqueue when validation identifiers are inconsistent", async () => {

@@ -2,6 +2,7 @@
 import Layout from "@/layouts/Layout.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
 import { getOrderReceipt, getLayoutData, type OrderReceipt, type OrderItem, type LayoutData } from "@/lib/api";
+import { getCheckoutConfig, type CheckoutConfig } from "@/lib/api/checkout";
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessLabel,
@@ -9,7 +10,7 @@ import {
 } from "@/lib/order-success-state";
 import {
   canRetryOrderSuccessPayment,
-  getOrderSuccessRetryEndpoint,
+  getOrderSuccessRetryOptions,
   normalizeRetryDepositAmount,
   resolveOrderSuccessRetryPaymentType,
 } from "@/lib/order-success-payment-retry";
@@ -29,7 +30,10 @@ let recoveryState: {
   showRetry: boolean;
 } | null = null;
 
-const layoutData: LayoutData | null = await getLayoutData();
+const [layoutData, checkoutConfig]: [LayoutData | null, CheckoutConfig] = await Promise.all([
+  getLayoutData(),
+  getCheckoutConfig(),
+]);
 
 if (!orderId || !receiptToken) {
   recoveryState = {
@@ -69,9 +73,9 @@ const orderSuccessView = order ? getOrderSuccessViewState(order) : null;
 const retryPaymentType = order
   ? resolveOrderSuccessRetryPaymentType(order, requestedPaymentType)
   : null;
-const retryPaymentEndpoint = order && orderSuccessView && receiptToken && canRetryOrderSuccessPayment(order, orderSuccessView.kind, paymentResult)
-  ? getOrderSuccessRetryEndpoint(order.paymentMethod)
-  : null;
+const retryPaymentOptions = order && orderSuccessView && receiptToken && canRetryOrderSuccessPayment(order, orderSuccessView.kind, paymentResult)
+  ? getOrderSuccessRetryOptions(order, orderSuccessView.kind, paymentResult, checkoutConfig.gateways)
+  : [];
 const purchaseTrackingPayload =
   order && orderSuccessView?.shouldFinalizeClientSide
     ? createPurchaseTrackingPayload(order, orderItemsFromApi)
@@ -108,20 +112,25 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
       )}
       <h1 class="text-2xl font-bold mb-2">{orderSuccessView.title}</h1>
       <p class="text-gray-600">{orderSuccessView.message}</p>
-      {retryPaymentEndpoint && retryPaymentType && (
+      {retryPaymentOptions.length > 0 && retryPaymentType && (
         <div class="mt-5 flex flex-col items-center gap-2">
-          <button
-            type="button"
-            id="retryPaymentButton"
-            class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-            data-endpoint={retryPaymentEndpoint}
-            data-order-id={order.id}
-            data-receipt-token={receiptToken}
-            data-payment-type={retryPaymentType}
-            data-deposit-amount={retryPaymentType === "deposit" && requestedDepositAmount ? String(requestedDepositAmount) : undefined}
-          >
-            Retry payment
-          </button>
+          <div class="flex flex-col justify-center gap-2 sm:flex-row">
+            {retryPaymentOptions.map((option) => (
+              <button
+                type="button"
+                class={`inline-flex min-h-11 items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${option.current ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border border-border bg-background text-foreground hover:bg-muted"}`}
+                data-payment-retry-button
+                data-endpoint={option.endpoint}
+                data-gateway={option.gateway}
+                data-order-id={order.id}
+                data-receipt-token={receiptToken}
+                data-payment-type={retryPaymentType}
+                data-deposit-amount={retryPaymentType === "deposit" && requestedDepositAmount ? String(requestedDepositAmount) : undefined}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <p id="retryPaymentMessage" class="min-h-5 text-sm text-muted-foreground" aria-live="polite"></p>
         </div>
       )}
@@ -432,11 +441,13 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 
 <script>
   document.addEventListener("DOMContentLoaded", () => {
-    const button = document.getElementById("retryPaymentButton") as HTMLButtonElement | null;
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-payment-retry-button]")
+    );
     const message = document.getElementById("retryPaymentMessage");
-    if (!button) return;
+    if (buttons.length === 0) return;
 
-    button.addEventListener("click", async () => {
+    buttons.forEach((button) => button.addEventListener("click", async () => {
       const endpoint = button.dataset.endpoint;
       const orderId = button.dataset.orderId;
       const receiptToken = button.dataset.receiptToken;
@@ -448,8 +459,13 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
         return;
       }
 
-      button.disabled = true;
-      const previousText = button.textContent || "Retry payment";
+      const previousText = new Map(buttons.map((retryButton) => [
+        retryButton,
+        retryButton.textContent || "Retry payment",
+      ]));
+      buttons.forEach((retryButton) => {
+        retryButton.disabled = true;
+      });
       button.textContent = "Opening payment...";
       if (message) message.textContent = "";
 
@@ -486,13 +502,15 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
         }
         window.location.href = gatewayUrl;
       } catch (error) {
-        button.disabled = false;
-        button.textContent = previousText;
+        buttons.forEach((retryButton) => {
+          retryButton.disabled = false;
+          retryButton.textContent = previousText.get(retryButton) ?? "Retry payment";
+        });
         if (message) {
           message.textContent = error instanceof Error ? error.message : "Could not start payment. Please try again.";
         }
       }
-    });
+    }));
   });
 </script>
 

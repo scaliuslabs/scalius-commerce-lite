@@ -137,6 +137,7 @@ describe("payment processing idempotency", () => {
     expect(batch).toHaveBeenCalledTimes(1);
     expect(updates).toContainEqual(expect.objectContaining({
       status: OrderStatus.PENDING,
+      paymentMethod: "stripe",
       paidAmount: 100,
       balanceDue: 0,
       paymentStatus: PaymentStatus.PAID,
@@ -192,6 +193,7 @@ describe("payment processing idempotency", () => {
     });
     expect(batch).toHaveBeenCalledTimes(1);
     expect(updates).toContainEqual(expect.objectContaining({
+      paymentMethod: "sslcommerz",
       paidAmount: 100,
       balanceDue: 0,
       paymentStatus: PaymentStatus.PAID,
