@@ -7,6 +7,7 @@ import { successEnvelope, errorResponses } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { CACHE_TTLS } from "../utils/cache-ttls";
 import { resolveCollectionProducts } from "@scalius/core/modules/collections/collections.service";
+import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 import { toIsoTimestamp } from "../utils/timestamps";
 
 // Create an OpenAPIHono app for collection routes
@@ -95,7 +96,7 @@ app.openapi(listCollectionsRoute, async (c) => {
 
   const formattedCollections = activeCollections.map((collection) => ({
     ...collection,
-    config: JSON.parse(collection.config),
+    config: normalizeCollectionConfig(collection.config),
     createdAt: formatTimestamp(
       collection.createdAt,
       collection.id,
@@ -157,7 +158,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     throw new NotFoundError("Collection not found");
   }
 
-  const config = JSON.parse(collection.config);
+  const config = normalizeCollectionConfig(collection.config);
   const resolved = await resolveCollectionProducts(db, config);
 
   return ok(c, {

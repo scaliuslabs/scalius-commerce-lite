@@ -7,6 +7,7 @@ Curated product groups displayed on the storefront homepage, with manual and dyn
 | File | Purpose |
 |------|---------|
 | `index.ts` | Barrel exports (re-exports service + validation) |
+| `collection-config.ts` | Pure canonical parser/stringifier for the JSON `config` column |
 | `collections.validation.ts` | Zod schemas: `createCollectionSchema`, `updateCollectionSchema`, `collectionConfigSchema` |
 | `collections.service.ts` | All DB queries, mutations, lookup helpers, and product resolution |
 
@@ -31,6 +32,13 @@ The `config` column stores a JSON object:
   subtitle?: string          // Display subtitle on storefront
 }
 ```
+
+All reads and writes must pass through `normalizeCollectionConfig()` or
+`stringifyCollectionConfig()` from `collection-config.ts`. The helper guarantees
+arrays are always present, clamps `maxProducts` to 1-24, drops invalid product
+IDs, and maps the retired `specificProductIds` field into canonical
+`productIds`. Admin edit, public collection routes, AI context, and storefront
+product resolution should not call `JSON.parse(collection.config)` directly.
 
 ## Validation (`collections.validation.ts`)
 

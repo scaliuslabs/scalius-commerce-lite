@@ -12,6 +12,7 @@ import {
     publicCollectionProductConditions,
     publicProductHasCustomerOptions,
 } from "../products/products.public-eligibility";
+import { normalizeCollectionConfig, stringifyCollectionConfig } from "./collection-config";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -153,7 +154,7 @@ export async function createCollection(
             type: data.type,
             isActive: data.isActive,
             sortOrder: maxSortOrder,
-            config: JSON.stringify(data.config),
+            config: stringifyCollectionConfig(data.config),
         })
         .returning()
         .get();
@@ -171,7 +172,7 @@ export async function updateCollection(
     if (data.name !== undefined) updateData.name = data.name;
     if (data.type !== undefined) updateData.type = data.type;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
-    if (data.config !== undefined) updateData.config = JSON.stringify(data.config);
+    if (data.config !== undefined) updateData.config = stringifyCollectionConfig(data.config);
 
     return db
         .update(collections)
@@ -332,13 +333,9 @@ function uniqueNonEmptyIds(ids: string[]): string[] {
  */
 export async function resolveCollectionProducts(
     db: Database,
-    config: {
-        productIds?: string[];
-        categoryIds?: string[];
-        featuredProductId?: string;
-        maxProducts?: number;
-    },
+    rawConfig: unknown,
 ): Promise<CollectionProductResult> {
+    const config = normalizeCollectionConfig(rawConfig);
     const productIds = Array.isArray(config.productIds) ? config.productIds : [];
     const categoryIds = Array.isArray(config.categoryIds) ? config.categoryIds : [];
     const maxProducts = Math.min(Math.max(config.maxProducts || 8, 1), 24);
@@ -440,12 +437,7 @@ export async function resolveCollectionProductsBatch(
     db: Database,
     parsedCollections: {
         id: string;
-        config: {
-            productIds?: string[];
-            categoryIds?: string[];
-            featuredProductId?: string;
-            maxProducts?: number;
-        };
+        config: unknown;
     }[],
 ): Promise<Map<string, CollectionProductResult>> {
     // Gather all IDs across collections
@@ -454,9 +446,9 @@ export async function resolveCollectionProductsBatch(
     const allFeaturedIds = new Set<string>();
 
     for (const col of parsedCollections) {
-        const cfg = col.config;
-        if (Array.isArray(cfg.productIds)) cfg.productIds.forEach((id) => allProductIds.add(id));
-        if (Array.isArray(cfg.categoryIds)) cfg.categoryIds.forEach((id) => allCategoryIds.add(id));
+        const cfg = normalizeCollectionConfig(col.config);
+        cfg.productIds.forEach((id) => allProductIds.add(id));
+        cfg.categoryIds.forEach((id) => allCategoryIds.add(id));
         if (cfg.featuredProductId) allFeaturedIds.add(cfg.featuredProductId);
     }
 
@@ -509,9 +501,9 @@ export async function resolveCollectionProductsBatch(
     const results = new Map<string, CollectionProductResult>();
 
     for (const col of parsedCollections) {
-        const cfg = col.config;
-        const productIds = Array.isArray(cfg.productIds) ? cfg.productIds : [];
-        const categoryIds = Array.isArray(cfg.categoryIds) ? cfg.categoryIds : [];
+        const cfg = normalizeCollectionConfig(col.config);
+        const productIds = cfg.productIds;
+        const categoryIds = cfg.categoryIds;
         const maxProducts = Math.min(Math.max(cfg.maxProducts || 8, 1), 24);
 
         let collectionProducts: ResolvedProduct[] = [];
