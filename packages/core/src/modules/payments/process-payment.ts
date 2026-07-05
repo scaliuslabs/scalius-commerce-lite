@@ -427,6 +427,7 @@ export async function processPaymentConfirmed(
       const batchStatements: SQLiteBatchItem[] = [
         db.update(orders).set({
           status: newStatus,
+          paymentMethod: params.paymentGateway,
           paidAmount: newPaidAmount,
           balanceDue: newBalanceDue,
           paymentStatus: newPaymentStatus,

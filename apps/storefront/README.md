@@ -251,7 +251,7 @@ Gateway-based payment architecture:
 - `handlers/polar.ts` -- Polar redirect
 - `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, validates cart freshness on load and before payment, renders order summary, renders gateway cards, handles payment processing, redirects stale cart snapshots back to `/cart?checkoutIssues=1`, and shows an inline recovery state when the cart-to-checkout transfer is missing or unreadable.
 - Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
-- Payment-session proxies preserve backend `202 processing` responses. Hosted gateways send already-committed orders to receipt recovery without retry loops; Stripe stays on checkout with retryable copy until a real client secret is available.
+- Payment-session proxies preserve backend `202 processing` responses. Hosted gateways send already-committed orders to receipt recovery without retry loops; Stripe stays on checkout with retryable copy until a real client secret is available. `/order-success` reads fresh checkout config before rendering retry actions: callback-only failed/cancelled returns expose only the current hosted gateway, while durable `payment_issue` states may offer another currently visible hosted gateway such as SSLCommerz <-> Polar. The API is still the authority for whether a gateway switch is allowed.
 
 ## Account Order Payments (`src/pages/account/orders/[id].astro`)
 

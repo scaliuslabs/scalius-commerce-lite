@@ -1,7 +1,7 @@
 import type { Context } from "hono";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { orders, PaymentMethod, PaymentStatus } from "@scalius/database/schema";
+import { orderPayments, orders, PaymentMethod, PaymentRecordStatus, PaymentStatus } from "@scalius/database/schema";
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
 import {
   buildSSLCommerzTranId,
@@ -10,9 +10,11 @@ import {
 import { createPolarCheckout, findReusablePolarCheckout } from "@scalius/core/modules/payments/polar";
 import {
   buildPaymentSessionAttemptIdentity,
+  assertNoActivePaymentSessionAttempt,
   claimPaymentSessionAttempt,
   markPaymentSessionAttemptCreated,
   markPaymentSessionAttemptFailed,
+  noActivePaymentSessionAttemptForOrderSqlCondition,
   type PaymentSessionAttemptProcessingResult,
 } from "@scalius/core/modules/payments/payment-session-attempts";
 import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
@@ -140,6 +142,7 @@ type PaymentSessionOrderRow = {
   paymentStatus: string;
   paidAmount: number;
   balanceDue: number;
+  version: number;
   deletedAt: Date | null;
   shipmentClaimId: string | null;
   shipmentClaimExpiresAt: Date | null;
@@ -180,6 +183,12 @@ const POLAR_SUPPORTED_CURRENCIES = new Set([
   "sgd", "thb", "try", "twd", "usd", "zar",
 ]);
 
+const ONLINE_GATEWAY_METHODS = new Set<string>([
+  PaymentMethod.STRIPE,
+  PaymentMethod.SSLCOMMERZ,
+  PaymentMethod.POLAR,
+]);
+
 export async function createStripePaymentSession(
   c: PaymentRouteContext,
   input: CreatePaymentSessionInput,
@@ -195,7 +204,7 @@ async function createStripePaymentSessionForOrder(
   order: PaymentSessionOrderRow,
 ): Promise<(CreatedCustomerPaymentSession & { gateway: "stripe" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
-  assertOrderCanUseGateway(order, PaymentMethod.STRIPE, "Stripe");
+  assertOrderCanReachGatewayReadinessCheck(order, PaymentMethod.STRIPE, "Stripe");
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, "stripe");
@@ -210,6 +219,7 @@ async function createStripePaymentSessionForOrder(
     encryptionKey,
     "stripe",
   );
+  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.STRIPE, "Stripe");
   await ensurePendingPaymentPlanForSession(db, order, policy);
   const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
   const currency = currencyConfig.code.toLowerCase();
@@ -381,7 +391,7 @@ async function createSSLCommerzPaymentSessionForOrder(
   order: PaymentSessionOrderRow,
 ): Promise<(CreatedCustomerPaymentSession & { gateway: "sslcommerz" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
-  assertOrderCanUseGateway(order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
+  assertOrderCanReachGatewayReadinessCheck(order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, "sslcommerz");
@@ -396,6 +406,7 @@ async function createSSLCommerzPaymentSessionForOrder(
     encryptionKey,
     "sslcommerz",
   );
+  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
   await ensurePendingPaymentPlanForSession(db, order, policy);
   const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
   const currency = currencyConfig.code;
@@ -530,7 +541,7 @@ async function createPolarPaymentSessionForOrder(
 ): Promise<(CreatedCustomerPaymentSession & { gateway: "polar" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
   const kv = c.env.CACHE;
-  assertOrderCanUseGateway(order, PaymentMethod.POLAR, "Polar");
+  assertOrderCanReachGatewayReadinessCheck(order, PaymentMethod.POLAR, "Polar");
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, "polar");
@@ -545,6 +556,7 @@ async function createPolarPaymentSessionForOrder(
     encryptionKey,
     "polar",
   );
+  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.POLAR, "Polar");
   await ensurePendingPaymentPlanForSession(db, order, policy);
   const currencyConfig = await getCurrencyConfig(db, kv);
   let currency = currencyConfig.code.toLowerCase();
@@ -766,6 +778,7 @@ async function loadPaymentSessionOrder(
       paymentStatus: orders.paymentStatus,
       paidAmount: orders.paidAmount,
       balanceDue: orders.balanceDue,
+      version: orders.version,
       deletedAt: orders.deletedAt,
       shipmentClaimId: orders.shipmentClaimId,
       shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
@@ -791,6 +804,106 @@ function assertOrderCanUseGateway(
   if (order.paymentMethod !== expectedGateway) {
     throw new ValidationError(`Order is not configured for ${label} payment`);
   }
+}
+
+function assertOrderCanReachGatewayReadinessCheck(
+  order: GatewayPayableOrder,
+  expectedGateway: string,
+  label: string,
+): void {
+  assertNoActiveShipmentClaim(order);
+  assertPaymentSessionOrderPayable(order);
+  if (order.paymentMethod === expectedGateway) return;
+
+  if (
+    !ONLINE_GATEWAY_METHODS.has(order.paymentMethod) ||
+    !ONLINE_GATEWAY_METHODS.has(expectedGateway) ||
+    order.paymentStatus !== PaymentStatus.FAILED ||
+    Number(order.paidAmount ?? 0) > 0
+  ) {
+    throw new ValidationError(`Order is not configured for ${label} payment`);
+  }
+}
+
+async function ensureOrderCanUseGateway(
+  db: Database,
+  order: PaymentSessionOrderRow,
+  expectedGateway: string,
+  label: string,
+): Promise<PaymentSessionOrderRow> {
+  assertNoActiveShipmentClaim(order);
+  assertPaymentSessionOrderPayable(order);
+  if (order.paymentMethod === expectedGateway) return order;
+
+  if (!ONLINE_GATEWAY_METHODS.has(order.paymentMethod) || !ONLINE_GATEWAY_METHODS.has(expectedGateway)) {
+    throw new ValidationError(`Order is not configured for ${label} payment`);
+  }
+
+  if (order.paymentStatus !== PaymentStatus.FAILED || Number(order.paidAmount ?? 0) > 0) {
+    throw new ValidationError(`Order is not configured for ${label} payment`);
+  }
+
+  await assertNoActivePaymentSessionAttempt(db, order.id);
+
+  const paymentRows = await db
+    .select({
+      paymentMethod: orderPayments.paymentMethod,
+      status: orderPayments.status,
+    })
+    .from(orderPayments)
+    .where(eq(orderPayments.orderId, order.id))
+    .all();
+
+  const hasTerminalFailedEvidence = paymentRows.some((payment) =>
+    payment.paymentMethod === order.paymentMethod &&
+    payment.status === PaymentRecordStatus.FAILED
+  );
+  const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
+    payment.status === PaymentRecordStatus.PENDING ||
+    payment.status === PaymentRecordStatus.CONFIRMED ||
+    payment.status === PaymentRecordStatus.SUCCEEDED
+  );
+
+  if (!hasTerminalFailedEvidence || hasUnsafePaymentEvidence) {
+    throw new ValidationError(`Order is not configured for ${label} payment`);
+  }
+
+  const switched = await db
+    .update(orders)
+    .set({
+      paymentMethod: expectedGateway,
+      version: order.version + 1,
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(and(
+      eq(orders.id, order.id),
+      eq(orders.version, order.version),
+      eq(orders.paymentMethod, order.paymentMethod),
+      eq(orders.paymentStatus, PaymentStatus.FAILED),
+      noActivePaymentSessionAttemptForOrderSqlCondition(sql`${order.id}`),
+      sql`NOT EXISTS (
+        SELECT 1 FROM ${orderPayments}
+        WHERE ${orderPayments.orderId} = ${order.id}
+          AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.SUCCEEDED})
+      )`,
+      sql`EXISTS (
+        SELECT 1 FROM ${orderPayments}
+        WHERE ${orderPayments.orderId} = ${order.id}
+          AND ${orderPayments.paymentMethod} = ${order.paymentMethod}
+          AND ${orderPayments.status} = ${PaymentRecordStatus.FAILED}
+      )`,
+    ))
+    .returning({ id: orders.id });
+
+  if (switched.length === 0) {
+    throw new ValidationError(`Order is not configured for ${label} payment`);
+  }
+
+  return {
+    ...order,
+    paymentMethod: expectedGateway,
+    version: order.version + 1,
+  };
 }
 
 function getOrderPaymentGateway(order: Pick<PaymentSessionOrderRow, "paymentMethod">): PaymentGateway | null {

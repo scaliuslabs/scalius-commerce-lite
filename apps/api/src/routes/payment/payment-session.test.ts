@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ConflictError } from "../../utils/api-error";
 import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getSSLCommerzSettings: vi.fn(),
   getPolarSettings: vi.fn(),
   getCurrencyConfig: vi.fn(),
+  assertNoActivePaymentSessionAttempt: vi.fn(),
   buildPaymentSessionAttemptIdentity: vi.fn(),
   claimPaymentSessionAttempt: vi.fn(),
   markPaymentSessionAttemptCreated: vi.fn(),
@@ -48,7 +50,9 @@ vi.mock("@scalius/core/modules/settings/settings.service", () => ({
   getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 
-vi.mock("@scalius/core/modules/payments/payment-session-attempts", () => ({
+vi.mock("@scalius/core/modules/payments/payment-session-attempts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments/payment-session-attempts")>()),
+  assertNoActivePaymentSessionAttempt: mocks.assertNoActivePaymentSessionAttempt,
   buildPaymentSessionAttemptIdentity: mocks.buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt: mocks.claimPaymentSessionAttempt,
   markPaymentSessionAttemptCreated: mocks.markPaymentSessionAttemptCreated,
@@ -63,10 +67,13 @@ import { PAYMENT_SESSION_PROVIDER_REQUEST_TIMEOUT_MS } from "./payment-provider-
 import {
   OrderStatus,
   PaymentPlanStatus,
+  PaymentRecordStatus,
   PaymentStatus,
   checkoutAttempts as checkoutAttemptsTable,
+  orderPayments as orderPaymentsTable,
   orders as ordersTable,
   orderReceipts as orderReceiptsTable,
+  paymentSessionAttempts as paymentSessionAttemptsTable,
   paymentPlans as paymentPlansTable,
   siteSettings as siteSettingsTable,
 } from "@scalius/database/schema";
@@ -85,6 +92,7 @@ const orderRow = {
   paymentStatus: PaymentStatus.UNPAID as string,
   paidAmount: 0,
   balanceDue: 125,
+  version: 1,
   deletedAt: null as Date | null,
   shipmentClaimId: null as string | null,
   shipmentClaimExpiresAt: null as Date | null,
@@ -99,9 +107,12 @@ interface DbMockOptions {
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;
   paymentPlan?: { depositAmount?: number; balanceDue: number; status: string } | null;
+  paymentRows?: Array<{ paymentMethod: string; status: string }>;
+  paymentSessionAttemptRows?: Array<{ orderId: string }>;
   receiptOrderId?: string | null;
   insertError?: unknown;
   updateResult?: unknown;
+  returningResult?: Array<Record<string, unknown>>;
   updateError?: unknown;
 }
 
@@ -109,12 +120,26 @@ function createDbMock(options: string | DbMockOptions = "stripe") {
   const opts: DbMockOptions = typeof options === "string" ? { paymentMethod: options } : options;
   const currentOrder = { ...orderRow, ...opts.order, paymentMethod: opts.paymentMethod ?? "stripe" };
   const insertedValues: unknown[] = [];
-  const updateWhere = vi.fn(async () => {
+  const updateSetValues: unknown[] = [];
+  const resolveUpdateResult = async () => {
     if (opts.updateError) throw opts.updateError;
     return opts.updateResult;
-  });
+  };
+  const resolveReturningResult = async () => {
+    if (opts.updateError) throw opts.updateError;
+    return opts.returningResult ?? [{ id: currentOrder.id }];
+  };
+  const updateWhere = vi.fn(() => Object.assign(
+    Promise.resolve().then(resolveUpdateResult),
+    {
+      returning: vi.fn(resolveReturningResult),
+    },
+  ));
   const updateQuery = {
-    set: vi.fn(() => ({ where: updateWhere })),
+    set: vi.fn((values: unknown) => {
+      updateSetValues.push(values);
+      return { where: updateWhere };
+    }),
   };
   const insertQuery = {
     values: vi.fn((values: unknown) => {
@@ -160,11 +185,21 @@ function createDbMock(options: string | DbMockOptions = "stripe") {
           }
           return currentOrder;
         }),
+        all: vi.fn(async () => {
+          if (selectedTable === orderPaymentsTable) {
+            return opts.paymentRows ?? [];
+          }
+          if (selectedTable === paymentSessionAttemptsTable) {
+            return opts.paymentSessionAttemptRows ?? [];
+          }
+          return [];
+        }),
       };
       return query;
     }),
     update: vi.fn(() => updateQuery),
     insert: vi.fn(() => insertQuery),
+    __updateSetValues: updateSetValues,
   };
 }
 
@@ -286,6 +321,7 @@ beforeEach(() => {
     checkoutId: "polar_checkout_1",
   });
   mocks.findReusablePolarCheckout.mockResolvedValue(null);
+  mocks.assertNoActivePaymentSessionAttempt.mockResolvedValue(undefined);
   mocks.buildPaymentSessionAttemptIdentity.mockImplementation(async (input: {
     orderId: string;
     gateway: string;
@@ -1099,6 +1135,224 @@ describe("payment session receipt-token proof", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("switches a failed unpaid SSLCommerz order to Polar after target readiness passes", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+      paymentRows: [
+        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.FAILED },
+      ],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+    const json = await response.json();
+
+    expect(response.status, JSON.stringify(json)).toBe(200);
+    expect(json).toEqual({
+      success: true,
+      data: {
+        gatewayUrl: "https://polar.example.test/pay",
+        checkoutId: "polar_checkout_1",
+      },
+    });
+    expect(db.__updateSetValues).toContainEqual(expect.objectContaining({
+      paymentMethod: "polar",
+      version: 2,
+    }));
+    expect(mocks.createPolarCheckout).toHaveBeenCalledTimes(1);
+    expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ productId: "polar_product" }),
+      expect.objectContaining({
+        orderId: "order_1",
+        paymentType: "full",
+      }),
+    );
+  });
+
+  it("does not switch a failed order to another gateway without failed payment evidence", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+      paymentRows: [],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
+      paymentMethod: "polar",
+      version: 2,
+    }));
+    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+    expect(mocks.markPaymentSessionAttemptCreated).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    PaymentRecordStatus.PENDING,
+    PaymentRecordStatus.CONFIRMED,
+    PaymentRecordStatus.SUCCEEDED,
+  ])("does not switch gateways while a %s payment row exists", async (unsafeStatus) => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+      paymentRows: [
+        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.FAILED },
+        { paymentMethod: "sslcommerz", status: unsafeStatus },
+      ],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
+      paymentMethod: "polar",
+      version: 2,
+    }));
+    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+  });
+
+  it("does not switch gateways while any payment-session setup lease is active", async () => {
+    mocks.assertNoActivePaymentSessionAttempt.mockRejectedValueOnce(
+      new ConflictError("Order has an active hosted payment setup in progress."),
+    );
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+      paymentRows: [
+        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.FAILED },
+      ],
+      paymentSessionAttemptRows: [{ orderId: "order_1" }],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(409);
+    expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
+      paymentMethod: "polar",
+      version: 2,
+    }));
+    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
+  });
+
+  it("does not create a provider session when the gateway-switch CAS loses the race", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+      paymentRows: [
+        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.FAILED },
+      ],
+      returningResult: [],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(db.__updateSetValues).toContainEqual(expect.objectContaining({
+      paymentMethod: "polar",
+      version: 2,
+    }));
+    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
+  });
+
+  it("does not switch gateways when the target gateway is no longer checkout-visible", async () => {
+    mocks.getPaymentMethodPreferences.mockResolvedValueOnce({
+      enabledMethods: ["sslcommerz"],
+      defaultMethod: "sslcommerz",
+      hasExplicitEnabledMethods: true,
+    });
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+      paymentRows: [
+        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.FAILED },
+      ],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(503);
+    expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
+      paymentMethod: "polar",
+      version: 2,
+    }));
+    expect(mocks.getPolarSettings).not.toHaveBeenCalled();
+    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
   });
 
   it("redirects Polar cancelled hosted payments back to the receipt recovery page", async () => {

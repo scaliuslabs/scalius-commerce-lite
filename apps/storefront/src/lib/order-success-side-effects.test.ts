@@ -77,9 +77,9 @@ describe("order success side effects", () => {
       "utf8",
     );
 
-    expect(pageSource).toContain("id=\"retryPaymentButton\"");
+    expect(pageSource).toContain("data-payment-retry-button");
     expect(pageSource).not.toContain("retryKey");
-    const retryScriptIndex = pageSource.indexOf('document.getElementById("retryPaymentButton")');
+    const retryScriptIndex = pageSource.indexOf('querySelectorAll<HTMLButtonElement>("[data-payment-retry-button]")');
     expect(retryScriptIndex).toBeGreaterThan(pageSource.indexOf("clearCart();"));
     const retryScript = pageSource.slice(retryScriptIndex);
     expect(retryScript).not.toContain("clearCart");

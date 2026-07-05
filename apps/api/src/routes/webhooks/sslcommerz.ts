@@ -9,7 +9,7 @@ import {
   getSSLCommerzSettings,
 } from "@scalius/core/modules/payments/gateway-settings";
 import type { PaymentType, SSLCommerzIPNPayload, SSLCommerzValidationResult } from "@scalius/core/modules/payments/types";
-import { orders, paymentPlans, PaymentMethod } from "@scalius/database/schema";
+import { orders, paymentPlans, PaymentMethod, PaymentStatus } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
 import type { PaymentQueueMessage } from "../../queue-consumer";
@@ -18,6 +18,7 @@ import {
   buildWebhookEventId,
   claimWebhookEvent,
   markWebhookEventFailed,
+  markWebhookEventManualReconciliation,
   markWebhookEventProcessed,
   markWebhookEventQueued,
 } from "../../utils/webhook-idempotency";
@@ -33,6 +34,7 @@ type ServerPaymentContext = {
     paidAmount: number;
     balanceDue: number;
     paymentMethod: string;
+    paymentStatus: string;
   };
   plan: {
     depositAmount: number;
@@ -71,6 +73,7 @@ async function getServerPaymentContext(db: Database, orderId: string): Promise<S
       paidAmount: orders.paidAmount,
       balanceDue: orders.balanceDue,
       paymentMethod: orders.paymentMethod,
+      paymentStatus: orders.paymentStatus,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
@@ -88,6 +91,20 @@ async function getServerPaymentContext(db: Database, orderId: string): Promise<S
     .get();
 
   return { order, plan: plan ?? null };
+}
+
+const ONLINE_PAYMENT_METHODS = new Set<string>([
+  PaymentMethod.STRIPE,
+  PaymentMethod.SSLCOMMERZ,
+  PaymentMethod.POLAR,
+]);
+
+function canAcceptLateSwitchedSslPayment(context: ServerPaymentContext): boolean {
+  return (
+    ONLINE_PAYMENT_METHODS.has(context.order.paymentMethod) &&
+    context.order.paymentStatus === PaymentStatus.FAILED &&
+    Number(context.order.paidAmount ?? 0) <= 0
+  );
 }
 
 function resolvePaymentType(
@@ -233,11 +250,19 @@ app.post("/", async (c) => {
       return c.text("RETRY", 503);
     }
 
-    if (context.order.paymentMethod !== PaymentMethod.SSLCOMMERZ) {
-      const error = "Order is not configured for SSLCommerz payment";
+    if (context.order.paymentMethod !== PaymentMethod.SSLCOMMERZ && !canAcceptLateSwitchedSslPayment(context)) {
+      const error = "Validated SSLCommerz payment conflicts with the current order payment state";
       console.warn(`[ssl-webhook] ${error} for transaction ${tranId}`);
-      await markWebhookEventFailed(db, eventId, { orderId, tranId, valId, status: validation.status, error });
-      return c.text("RETRY", 503);
+      await markWebhookEventManualReconciliation(db, eventId, {
+        orderId,
+        tranId,
+        valId,
+        status: validation.status,
+        error,
+        currentPaymentMethod: context.order.paymentMethod,
+        currentPaymentStatus: context.order.paymentStatus,
+      });
+      return c.text("OK");
     }
 
     const paymentType = resolvePaymentType(
