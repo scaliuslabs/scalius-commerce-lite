@@ -1,20 +1,9 @@
-import { useState, useMemo, useCallback } from "react";
+import { lazy, Suspense, useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Tag, Plus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { Tag, Plus, Trash2 } from "lucide-react";
 import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { categoriesQueryOptions } from "~/lib/api-query-options/categories";
 import { warmRouteQuery } from "~/lib/route-query-warming";
@@ -31,6 +20,12 @@ import {
   getCategoryColumns,
   type CategoryListItem,
 } from "~/components/admin/data-table/columns/category-columns";
+
+const CategoryDeleteDialog = lazy(() =>
+  import("./-CategoryDeleteDialog").then((module) => ({
+    default: module.CategoryDeleteDialog,
+  })),
+);
 
 const validateCategorySearch = createListSearchValidator(
   ["name", "createdAt", "updatedAt"] as const,
@@ -94,6 +89,8 @@ function CategoriesPage() {
       deleteMutation.mutate(id);
     }
   }, [deleteId, showTrashed, deleteMutation, permanentDeleteMutation]);
+
+  const isCategoryDeleteDialogOpen = !!deleteId;
 
   // Column definitions
   const columns = useMemo(
@@ -227,54 +224,17 @@ function CategoriesPage() {
         }
       />
 
-      {/* Delete confirmation dialog */}
-      <AlertDialog
-        open={!!deleteId}
-        onOpenChange={(open) => !open && setDeleteId(null)}
-      >
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-base">
-              {showTrashed ? (
-                <>
-                  <AlertTriangle className="h-4 w-4 text-red-500" /> Delete
-                  Permanently?
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4 text-amber-500" /> Move to Trash?
-                </>
-              )}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="pt-1 text-xs">
-              {showTrashed
-                ? "This action cannot be undone. Are you sure you want to permanently delete this category?"
-                : "Are you sure you want to move this category to the trash? It can be restored later."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={isActionLoading}
-              className="h-8 text-xs"
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className={cn(
-                "h-8 text-xs",
-                showTrashed ? "bg-destructive hover:bg-destructive/90" : "",
-              )}
-              disabled={isActionLoading}
-            >
-              {isActionLoading ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : null}
-              {showTrashed ? "Delete Permanently" : "Move to Trash"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {isCategoryDeleteDialogOpen && (
+        <Suspense fallback={null}>
+          <CategoryDeleteDialog
+            showTrashed={showTrashed}
+            isOpen={isCategoryDeleteDialogOpen}
+            isActionLoading={isActionLoading}
+            onOpenChange={(open) => !open && setDeleteId(null)}
+            onConfirm={handleConfirmDelete}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

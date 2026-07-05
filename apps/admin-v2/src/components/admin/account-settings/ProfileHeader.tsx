@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Card, CardContent } from "~/components/ui/card";
@@ -35,6 +35,8 @@ interface ProfileHeaderProps {
 
 export function ProfileHeader({ user }: ProfileHeaderProps) {
   const router = useRouter();
+  const currentUserIdRef = useRef(user.id);
+  const isEditingRef = useRef(false);
   const [savedName, setSavedName] = useState(user.name);
   const [savedImage, setSavedImage] = useState(user.image || "");
   const [name, setName] = useState(user.name);
@@ -43,11 +45,27 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    setSavedName(user.name);
-    setSavedImage(user.image || "");
-    setName(user.name);
-    setImage(user.image || "");
+    isEditingRef.current = isEditing;
+  }, [isEditing]);
+
+  useEffect(() => {
+    const nextSavedName = user.name;
+    const nextSavedImage = user.image || "";
+    const isDifferentUser = currentUserIdRef.current !== user.id;
+
+    currentUserIdRef.current = user.id;
+    setSavedName(nextSavedName);
+    setSavedImage(nextSavedImage);
+
+    if (isDifferentUser || !isEditingRef.current) {
+      setName(nextSavedName);
+      setImage(nextSavedImage);
+      if (isDifferentUser) setIsEditing(false);
+    }
   }, [user.id, user.name, user.image]);
+
+  const normalizedName = name.trim();
+  const hasChanges = normalizedName !== savedName || image !== savedImage;
 
   const handleImageSelect = (file: MediaFile) => {
     setImage(file.url);
@@ -60,7 +78,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
   };
 
   const handleSave = async () => {
-    if (name.trim().length < 2) {
+    if (normalizedName.length < 2) {
       toast.error("Name must be at least 2 characters");
       return;
     }
@@ -68,11 +86,18 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
     setIsLoading(true);
 
     try {
-      await updateProfile({ data: { name: name.trim(), image: image || null } });
+      const result = await updateProfile({
+        data: { name: normalizedName, image: image || null },
+      });
+      const updatedName = result.user?.name ?? normalizedName;
+      const updatedImage =
+        result.user?.image === undefined ? image || "" : result.user.image || "";
+
       toast.success("Profile updated successfully");
-      setSavedName(name.trim());
-      setSavedImage(image || "");
-      setName(name.trim());
+      setSavedName(updatedName);
+      setSavedImage(updatedImage);
+      setName(updatedName);
+      setImage(updatedImage);
       setIsEditing(false);
       // Refresh to update header with updated user info
       void refreshAdminRouteContext(router);
@@ -88,8 +113,6 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
     setImage(savedImage);
     setIsEditing(false);
   };
-
-  const hasChanges = name.trim() !== savedName || image !== savedImage;
 
   return (
     <Card className="overflow-hidden rounded-lg shadow-sm">
@@ -136,10 +159,21 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
               <div className="min-w-0 flex-1 space-y-1.5">
                 {isEditing ? (
                   <Input
+                    id="profile-display-name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !isLoading && hasChanges) {
+                        event.preventDefault();
+                        void handleSave();
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        handleCancel();
+                      }
+                    }}
                     className="h-10 max-w-xl text-lg font-semibold"
-                    placeholder="Your name"
+                    placeholder="Display name"
                     aria-label="Display name"
                     autoFocus
                   />
@@ -149,7 +183,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                 <p className="truncate text-sm text-muted-foreground">{user.email}</p>
               </div>
 
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <div className="flex min-h-8 shrink-0 flex-wrap items-center gap-2 lg:justify-end">
                 {user.role === "admin" && (
                   <span className="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full">
                     <Shield className="h-3 w-3" />
@@ -162,85 +196,84 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                     2FA
                   </span>
                 )}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <MediaManager
-                  onSelect={handleImageSelect}
-                  triggerLabel={image ? "Change Photo" : "Add Photo"}
-                  trigger={
+                <div
+                  className="flex min-h-8 flex-wrap items-center gap-2"
+                  data-profile-edit-actions
+                >
+                  {!isEditing ? (
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 shrink-0 shadow-none after:shadow-none"
+                      className="h-8"
+                      onClick={() => setIsEditing(true)}
                     >
-                      <Upload className="h-3.5 w-3.5" />
-                      {image ? "Change photo" : "Add photo"}
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit profile
                     </Button>
-                  }
-                />
-                {image && isEditing && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-destructive hover:text-destructive"
-                    onClick={removeImage}
-                    disabled={isLoading}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remove
-                  </Button>
-                )}
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8"
+                        onClick={handleCancel}
+                        disabled={isLoading}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8"
+                        onClick={handleSave}
+                        disabled={isLoading || !hasChanges}
+                      >
+                        {isLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Save changes
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
+            </div>
 
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                {!isEditing && (
+            {/* Actions */}
+            <div className="flex min-h-8 flex-wrap items-center gap-2">
+              <MediaManager
+                onSelect={handleImageSelect}
+                triggerLabel={image ? "Change Photo" : "Add Photo"}
+                trigger={
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-8"
-                    onClick={() => setIsEditing(true)}
+                    className="h-8 shrink-0 shadow-none after:shadow-none"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit profile
+                    <Upload className="h-3.5 w-3.5" />
+                    {image ? "Change photo" : "Add photo"}
                   </Button>
-                )}
-                {isEditing && (
-                  <>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8"
-                      onClick={handleCancel}
-                      disabled={isLoading}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-8"
-                      onClick={handleSave}
-                      disabled={isLoading || !hasChanges}
-                    >
-                      {isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                      ) : (
-                        <Check className="h-3.5 w-3.5" />
-                      )}
-                      Save changes
-                    </Button>
-                  </>
-                )}
-              </div>
+                }
+              />
+              {image && isEditing && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-destructive hover:text-destructive"
+                  onClick={removeImage}
+                  disabled={isLoading}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Remove
+                </Button>
+              )}
             </div>
           </div>
         </div>

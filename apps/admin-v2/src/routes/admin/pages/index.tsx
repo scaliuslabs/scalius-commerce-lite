@@ -1,20 +1,9 @@
-import { useState, useMemo, useCallback } from "react";
+import { lazy, Suspense, useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { FileText, Plus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { pagesQueryOptions } from "~/lib/api-query-options/pages";
 import { warmRouteQuery } from "~/lib/route-query-warming";
@@ -29,6 +18,12 @@ import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getPageColumns } from "~/components/admin/data-table/columns/page-columns";
 import type { Page } from "~/types/api-responses";
+
+const PageDeleteDialog = lazy(() =>
+  import("./-PageDeleteDialog").then((module) => ({
+    default: module.PageDeleteDialog,
+  })),
+);
 
 const validatePageSearch = createListSearchValidator(
   ["title", "sortOrder", "createdAt", "updatedAt"] as const,
@@ -92,6 +87,8 @@ function PagesPage() {
       deleteMutation.mutate(id);
     }
   }, [deleteId, showTrashed, deleteMutation, permanentDeleteMutation]);
+
+  const isPageDeleteDialogOpen = !!deleteId;
 
   // Column definitions
   const columns = useMemo(
@@ -225,54 +222,17 @@ function PagesPage() {
         }
       />
 
-      {/* Delete confirmation dialog */}
-      <AlertDialog
-        open={!!deleteId}
-        onOpenChange={(open) => !open && setDeleteId(null)}
-      >
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-base">
-              {showTrashed ? (
-                <>
-                  <AlertTriangle className="h-4 w-4 text-red-500" /> Delete
-                  Permanently?
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4 text-amber-500" /> Move to Trash?
-                </>
-              )}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="pt-1 text-xs">
-              {showTrashed
-                ? "This action cannot be undone. Are you sure you want to permanently delete this page?"
-                : "Are you sure you want to move this page to the trash? It can be restored later."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={isActionLoading}
-              className="h-8 text-xs"
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className={cn(
-                "h-8 text-xs",
-                showTrashed ? "bg-destructive hover:bg-destructive/90" : "",
-              )}
-              disabled={isActionLoading}
-            >
-              {isActionLoading ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : null}
-              {showTrashed ? "Delete Permanently" : "Move to Trash"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {isPageDeleteDialogOpen && (
+        <Suspense fallback={null}>
+          <PageDeleteDialog
+            showTrashed={showTrashed}
+            isOpen={isPageDeleteDialogOpen}
+            isActionLoading={isActionLoading}
+            onOpenChange={(open) => !open && setDeleteId(null)}
+            onConfirm={handleConfirmDelete}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
