@@ -5,12 +5,14 @@ import {
   getCollectionFormOptions,
   getCollections,
   getCollectionsByIds,
+  type CollectionsByIdsPayload,
   type CollectionsQueryInput,
 } from "../api-functions/collections";
 import { queryKeys } from "../query-keys";
 
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
+const EMPTY_COLLECTIONS_BY_IDS: CollectionsByIdsPayload = { collections: [] };
 
 function normalizeLookupIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
@@ -29,8 +31,9 @@ export const collectionsByIdsQueryOptions = (ids: readonly string[]) => {
     queryKey: queryKeys.collections.byIds(normalizedIds),
     queryFn: () =>
       normalizedIds.length === 0
-        ? Promise.resolve({ collections: [] })
+        ? Promise.resolve(EMPTY_COLLECTIONS_BY_IDS)
         : getCollectionsByIds({ data: { ids: normalizedIds } }),
+    placeholderData: EMPTY_COLLECTIONS_BY_IDS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 };
