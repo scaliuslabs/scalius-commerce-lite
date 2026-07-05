@@ -1,8 +1,8 @@
 # Operational Runbook
 
-This is the repo-owned operating guide for OPS-005/OPS-008. It names the signals, read-only checks, and deploy evidence future operators should use. External alert rules, notification routing, uptime checks, and dashboards still need to be configured in Cloudflare or the chosen monitoring provider; this repo does not currently create those resources.
+This is the repo-owned operating guide for OPS-005/OPS-008. It names the signals, read-only checks, and deploy evidence future operators should use. The desired provider-side monitoring setup and completion checklist live in [ops-monitoring-contract.md](ops-monitoring-contract.md). External alert rules, notification routing, uptime checks, and dashboards still need to be configured in Cloudflare or the chosen monitoring provider; this repo does not currently create those resources.
 
-Cloudflare-native monitoring should be the default continuous layer: keep Workers Logs/observability enabled in Wrangler, configure a Cloudflare Health Check plus notification policy for `https://api.scalius.com/api/v1/readyz`, and alert on queue/DLQ backlog count plus oldest-message age for the queues listed below. The repo-owned `pnpm ops:check` command is a read-only smoke/sampler for deploys and incidents; it does not replace continuous Cloudflare monitoring.
+Cloudflare-native monitoring should be the default continuous layer: keep Workers Logs/observability enabled in Wrangler, configure a Cloudflare-native synthetic monitor plus notification policy for `https://api.scalius.com/api/v1/readyz`, and alert on queue/DLQ backlog count plus oldest-message age for the queues listed below. Use a Cloudflare Health Check only when the Worker/custom-domain target is valid for Health Checks; otherwise use an independent scheduled monitor Worker or equivalent Cloudflare-native monitor. The repo-owned `pnpm ops:check` command is a read-only smoke/sampler for deploys and incidents; it does not replace continuous Cloudflare monitoring.
 
 ## Alert Signals
 
