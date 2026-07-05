@@ -112,7 +112,7 @@ describe("Meta Conversions API log redaction", () => {
     ]);
   });
 
-  it("marks disabled or missing CAPI settings as non-retryable", async () => {
+  it("marks disabled or missing CAPI settings as non-retryable without writing noisy failure logs", async () => {
     mocks.getCapiSettings.mockResolvedValue(null);
 
     const result = await sendCapiEvent({} as never, {
@@ -135,14 +135,7 @@ describe("Meta Conversions API log redaction", () => {
       retryable: false,
       skipped: true,
     });
-    expect(mocks.logCapiEvent).toHaveBeenCalledWith(
-      {} as never,
-      expect.objectContaining({
-        eventId: "Purchase:order_1",
-        status: "failed",
-      }),
-      30 * 24,
-    );
+    expect(mocks.logCapiEvent).not.toHaveBeenCalled();
   });
 
   it("treats Meta credential/configuration HTTP failures as non-retryable", async () => {

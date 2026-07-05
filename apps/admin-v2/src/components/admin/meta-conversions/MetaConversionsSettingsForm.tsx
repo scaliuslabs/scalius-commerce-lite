@@ -154,6 +154,8 @@ export function MetaConversionsSettingsForm({
     showAccessToken,
     setShowAccessToken,
     hasUnsavedChanges,
+    settingsIssue,
+    enableIssue,
     pixelParity,
     handleSaveSettings,
     handleResetForm,
@@ -240,6 +242,27 @@ export function MetaConversionsSettingsForm({
               </p>
             </div>
 
+            {settingsIssue || enableIssue ? (
+              <Alert
+                className={
+                  settingsIssue
+                    ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100 [&_[data-slot=alert-description]]:text-amber-800 dark:[&_[data-slot=alert-description]]:text-amber-200"
+                    : "bg-muted/40"
+                }
+              >
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>
+                  {settingsIssue
+                    ? "Meta CAPI settings need attention"
+                    : "Meta CAPI is not ready to enable"}
+                </AlertTitle>
+                <AlertDescription>
+                  {settingsIssue ??
+                    "Add a Meta Pixel ID and access token before enabling server events. Use Events Manager test events with a test event code to verify delivery."}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="logRetentionDays">
@@ -272,12 +295,17 @@ export function MetaConversionsSettingsForm({
                   <Switch
                     id="isEnabled"
                     checked={formData.isEnabled}
+                    disabled={isSettingsLoading}
                     onCheckedChange={(checked) =>
                       updateFormData("isEnabled", checked)
                     }
                   />
                   <span className="text-sm text-muted-foreground">
-                    {formData.isEnabled ? "Enabled" : "Disabled"}
+                    {formData.isEnabled
+                      ? "Enabled"
+                      : enableIssue
+                        ? "Disabled until credentials are ready"
+                        : "Disabled"}
                   </span>
                 </div>
               </div>
@@ -286,7 +314,7 @@ export function MetaConversionsSettingsForm({
             <div className="flex items-center gap-3 pt-4">
               <Button
                 type="submit"
-                disabled={isSettingsLoading || !hasUnsavedChanges}
+                disabled={isSettingsLoading || !hasUnsavedChanges || Boolean(settingsIssue)}
                 className="flex items-center gap-2"
               >
                 {isSettingsLoading ? (

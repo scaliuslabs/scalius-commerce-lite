@@ -20,6 +20,7 @@ import {
     getStripeCheckoutReadiness,
     getSSLCommerzCheckoutReadiness,
     getSSLCommerzSettings,
+    isSSLCommerzPlaceholderCredential,
     getPolarCheckoutReadiness,
     getPolarSettings,
     isStripeCheckoutUsable,
@@ -161,6 +162,14 @@ function effectiveSecretValue(submitted: string | undefined, stored: string | un
     return submitted.trim();
 }
 
+function effectiveSSLCommerzSecretValue(submitted: string | undefined, stored: string | undefined): string {
+    if (submitted === undefined || submitted === MASKED || submitted.trim() === "") {
+        if (isSSLCommerzPlaceholderCredential(stored)) return stored?.trim() ?? "";
+        return storedMarker(stored);
+    }
+    return submitted.trim();
+}
+
 function effectivePlainValue(submitted: string | undefined, stored: string | undefined): string {
     if (submitted === undefined || submitted === MASKED) return stored ?? "";
     return submitted.trim();
@@ -179,16 +188,28 @@ function getEffectiveStripeCheckoutSettings(map: StripeSettingsMap, body: SaveSt
     };
 }
 
-function getEffectiveSSLCommerzCheckoutSettings(map: SSLCommerzSettingsMap, body: z.infer<typeof saveSSLCommerzSchema>) {
+function getEffectiveSSLCommerzCheckoutSettings(
+    map: SSLCommerzSettingsMap,
+    body: z.infer<typeof saveSSLCommerzSchema>,
+    storedSettings?: Awaited<ReturnType<typeof getSSLCommerzSettings>>,
+) {
     const existingEnabled = map.enabled !== undefined
         ? map.enabled !== "false"
         : hasStoredSSLCommerzAccount(map);
+    const hasSubmittedStorePassword = Boolean(
+        body.storePassword &&
+        body.storePassword !== MASKED &&
+        body.storePassword.trim(),
+    );
 
     return {
-        storeId: effectivePlainValue(body.storeId, map.store_id),
-        storePassword: effectiveSecretValue(body.storePassword, map.store_password),
+        storeId: effectivePlainValue(body.storeId, storedSettings?.storeId ?? map.store_id),
+        storePassword: hasSubmittedStorePassword
+            ? body.storePassword!.trim()
+            : (storedSettings?.storePassword || effectiveSSLCommerzSecretValue(body.storePassword, map.store_password)),
         sandbox: body.sandbox ?? map.sandbox !== "false",
         enabled: body.enabled ?? existingEnabled,
+        credentialErrors: storedSettings?.credentialErrors,
     };
 }
 
@@ -593,7 +614,14 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         const body = c.req.valid("json");
         const ops: Promise<void>[] = [];
         const existingMap = await readSSLCommerzSettingsMap(db);
-        const effectiveSettings = getEffectiveSSLCommerzCheckoutSettings(existingMap, body);
+        const kv = getKv();
+        const storedSettings = await getSSLCommerzSettings(
+            db,
+            kv,
+            getCredentialEncryptionKey(c.env as Record<string, unknown>),
+            { bypassMemoryCache: true },
+        );
+        const effectiveSettings = getEffectiveSSLCommerzCheckoutSettings(existingMap, body, storedSettings);
         const sslReadiness = getSSLCommerzCheckoutReadiness(effectiveSettings);
         if (sslReadiness.enabled && !sslReadiness.configured) {
             throw new ValidationError(sslReadiness.blockedReason ?? "SSLCommerz is not ready for checkout.");
@@ -614,7 +642,6 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
 
         await Promise.all(ops);
 
-        const kv = getKv();
         await Promise.all([
             invalidateSSLCommerzCache(kv),
             invalidatePaymentMethodsCache(kv),

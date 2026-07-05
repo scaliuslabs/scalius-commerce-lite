@@ -4,9 +4,6 @@ import { sha256, hashEmail, hashPhone } from "./crypto-utils";
 import { getCapiSettings, logCapiEvent } from "../../modules/analytics/meta.service";
 import { type Database } from "@scalius/database/client";
 
-// Fallback retention used when settings row doesn't exist yet
-const DEFAULT_LOG_RETENTION_DAYS = 30;
-
 export const META_GRAPH_API_VERSION = "v25.0";
 
 // --- META API TYPES ---
@@ -198,27 +195,12 @@ export async function sendCapiEvent(
 ): Promise<SendCapiEventResult> {
   const settings = await getCapiSettings(db, options.encryptionKey);
   if (!settings || !settings.isEnabled || !settings.pixelId || !settings.accessToken) {
-    // FIX: Write a diagnostic log so admin can see skipped events
     let errorMessage = "CAPI integration is disabled in settings.";
     if (!settings) {
       errorMessage = "CAPI settings not found in database (id='singleton').";
     } else if (!settings.pixelId || !settings.accessToken) {
       errorMessage = "Missing Pixel ID or Access Token in CAPI settings.";
     }
-
-    const fallbackRetentionHours = (settings?.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS) * 24;
-    await logCapiEvent(db, {
-      eventId: event.event_id,
-      eventName: event.event_name,
-      status: "failed",
-      requestPayload: JSON.stringify(
-        redactCapiPayloadForLog({ data: [{ ...event, user_data: {} }] }),
-        null,
-        2,
-      ),
-      errorMessage: errorMessage,
-      eventTime: event.event_time,
-    }, fallbackRetentionHours);
 
     console.log("Meta CAPI is disabled or not configured. Skipping event.", { reason: errorMessage });
     return { success: false, error: "CAPI not configured", retryable: false, skipped: true };

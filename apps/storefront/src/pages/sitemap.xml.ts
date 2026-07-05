@@ -30,6 +30,10 @@ export const GET: APIRoute = async (_context: APIContext) => {
         lastmod: now,
       },
       {
+        loc: `${baseUrl}/sitemap-collections.xml`,
+        lastmod: now,
+      },
+      {
         loc: `${baseUrl}/sitemap-pages.xml`,
         lastmod: now,
       },
@@ -53,13 +57,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
       });
     }
 
-    // Add Facebook feed as well
-    sitemaps.push({
-      loc: `${baseUrl}/api/facebook-feed.xml`,
-      lastmod: now,
-    });
-
-
     const xml = generateSitemapIndex(sitemaps, baseUrl);
 
     return new Response(xml, {
@@ -68,6 +65,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
     });
   } catch (error: unknown) {
     console.error('Error generating sitemap index:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return xmlDataUnavailableResponse('Sitemap index is temporarily unavailable');
   }
 };

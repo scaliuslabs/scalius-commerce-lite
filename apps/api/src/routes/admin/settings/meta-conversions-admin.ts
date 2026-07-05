@@ -19,8 +19,40 @@ import { requireEncryptionKey } from "../../../utils/encryption-key";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
+const PLACEHOLDER_CREDENTIALS = new Set([
+    "dummy",
+    "test",
+    "example",
+    "placeholder",
+    "123456",
+    "pixel123",
+    "accesstoken",
+    "badtoken",
+    "token",
+    "xxxx",
+]);
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
+
+function normalizedPlaceholderCandidate(value: string): string {
+    return value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function isPlaceholderCredential(value: string): boolean {
+    const normalized = normalizedPlaceholderCandidate(value);
+    return PLACEHOLDER_CREDENTIALS.has(normalized) || /^x{4,}$/.test(normalized);
+}
+
+function optionalTrimmedValue(value: string | undefined): string | null {
+    const trimmed = value?.trim() ?? "";
+    return trimmed ? trimmed : null;
+}
+
+function validateConcreteCredential(fieldLabel: string, value: string | null): void {
+    if (value && isPlaceholderCredential(value)) {
+        throw new ValidationError(`${fieldLabel} looks like a dummy or placeholder value. Use the real value from Meta Events Manager.`);
+    }
+}
 
 function redactStoredRequestPayload(payload: string | null): string | null {
     if (!payload) {
@@ -40,6 +72,38 @@ function redactStoredRequestPayload(payload: string | null): string | null {
             null,
             2,
         );
+    } catch {
+        return payload;
+    }
+}
+
+function redactTokenishResponseValue(value: unknown): unknown {
+    if (Array.isArray(value)) {
+        return value.map(redactTokenishResponseValue);
+    }
+
+    if (!value || typeof value !== "object") {
+        return value;
+    }
+
+    return Object.fromEntries(
+        Object.entries(value).map(([key, nested]) => {
+            const normalizedKey = key.toLowerCase().replace(/[\s_-]+/g, "");
+            if (["token", "accesstoken", "authtoken", "authorization", "bearer"].includes(normalizedKey)) {
+                return [key, "[redacted]"];
+            }
+            return [key, redactTokenishResponseValue(nested)];
+        }),
+    );
+}
+
+function redactStoredResponsePayload(payload: string | null): string | null {
+    if (!payload) {
+        return payload;
+    }
+
+    try {
+        return JSON.stringify(redactTokenishResponseValue(JSON.parse(payload)), null, 2);
     } catch {
         return payload;
     }
@@ -122,14 +186,37 @@ const saveSettingsRoute = createRoute({
 app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRoute>) => {
     const db = c.get("db");
     const validation = c.req.valid("json");
-    const { pixelId, testEventCode, isEnabled, logRetentionDays } = validation;
-    let accessToken: string | null | undefined = validation.accessToken;
     const existingSettings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
+    const pixelId = optionalTrimmedValue(validation.pixelId);
+    const testEventCode = optionalTrimmedValue(validation.testEventCode);
+    const rawAccessToken = validation.accessToken;
+    const trimmedAccessToken = typeof rawAccessToken === "string" ? rawAccessToken.trim() : undefined;
+    const hasStoredAccessToken = Boolean(existingSettings?.accessToken);
+    const isUsingMaskedAccessToken = trimmedAccessToken === MASKED_VALUE;
+    const hasEffectiveAccessToken = isUsingMaskedAccessToken || rawAccessToken === undefined
+        ? hasStoredAccessToken
+        : Boolean(trimmedAccessToken);
+    let accessToken: string | null | undefined;
 
-    if (accessToken === MASKED_VALUE && existingSettings?.accessToken) {
-        accessToken = existingSettings.accessToken;
-    } else if (typeof accessToken === "string") {
-        const trimmedAccessToken = accessToken.trim();
+    validateConcreteCredential("Pixel ID", pixelId);
+    validateConcreteCredential("access token", !isUsingMaskedAccessToken && trimmedAccessToken ? trimmedAccessToken : null);
+    validateConcreteCredential("test event code", testEventCode);
+
+    if (validation.isEnabled) {
+        const missingFields = [
+            pixelId ? null : "Pixel ID",
+            hasEffectiveAccessToken ? null : "access token",
+        ].filter((field): field is string => Boolean(field));
+        if (missingFields.length > 0) {
+            throw new ValidationError(
+                `Meta Conversions API needs ${missingFields.join(" and ")} before it can be enabled. Use your Pixel ID and access token from Meta Events Manager, then test with a test event code.`,
+            );
+        }
+    }
+
+    if (isUsingMaskedAccessToken) {
+        accessToken = existingSettings?.accessToken ?? null;
+    } else if (typeof trimmedAccessToken === "string") {
         accessToken = trimmedAccessToken
             ? await encryptCredentials(
                 trimmedAccessToken,
@@ -140,10 +227,10 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
 
     const resultArr = existingSettings
         ? await db.update(metaConversionsSettings)
-            .set({ pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, updatedAt: sql`(cast(strftime('%s','now') as int))` })
+            .set({ pixelId, accessToken, testEventCode, isEnabled: validation.isEnabled, logRetentionDays: validation.logRetentionDays, updatedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(eq(metaConversionsSettings.id, "singleton")).returning()
         : await db.insert(metaConversionsSettings)
-            .values({ id: "singleton", pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, createdAt: sql`(cast(strftime('%s','now') as int))`, updatedAt: sql`(cast(strftime('%s','now') as int))` })
+            .values({ id: "singleton", pixelId, accessToken: accessToken ?? null, testEventCode, isEnabled: validation.isEnabled, logRetentionDays: validation.logRetentionDays, createdAt: sql`(cast(strftime('%s','now') as int))`, updatedAt: sql`(cast(strftime('%s','now') as int))` })
             .returning();
     const result = resultArr[0];
 
@@ -204,6 +291,7 @@ app.openapi(getLogsRoute, (async (c: AppRouteContext<typeof getLogsRoute>) => {
         logs: logs.map((log) => ({
             ...log,
             requestPayload: redactStoredRequestPayload(log.requestPayload),
+            responsePayload: redactStoredResponsePayload(log.responsePayload),
         })),
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         retention: { days: retentionDays, hours: retentionDays * 24 }

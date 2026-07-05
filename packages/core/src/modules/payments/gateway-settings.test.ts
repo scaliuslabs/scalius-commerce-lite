@@ -6,6 +6,7 @@ import {
   getPolarCheckoutReadiness,
   getSSLCommerzSettings,
   getSSLCommerzCheckoutReadiness,
+  isSSLCommerzPlaceholderCredential,
   getStripeSettings,
   getStripeCheckoutReadiness,
   invalidatePaymentMethodsCache,
@@ -375,6 +376,73 @@ describe("payment gateway settings cache cleanup", () => {
       usable: false,
       missingFields: ["webhookSecret"],
       blockedReason: expect.stringContaining("webhook secret"),
+    });
+  });
+
+  it.each([
+    "dummy",
+    "test",
+    "testbox",
+    "qwerty",
+    "password",
+    "store_id",
+    "storeid",
+    "store_password",
+    "storepass",
+    "example",
+    "placeholder",
+    "demo",
+    "123456",
+    "000000",
+    "xxxxxx",
+    "__stored__",
+  ])("treats %s as an SSLCommerz placeholder credential", (value) => {
+    expect(isSSLCommerzPlaceholderCredential(` ${value.toUpperCase()} `)).toBe(true);
+  });
+
+  it("does not reject real-looking SSLCommerz sandbox credential names by substring", () => {
+    expect(isSSLCommerzPlaceholderCredential("sandbox")).toBe(false);
+    expect(isSSLCommerzPlaceholderCredential("sslcz_sandbox_store_123")).toBe(false);
+  });
+
+  it("blocks SSLCommerz checkout readiness when credentials are placeholders", () => {
+    expect(getSSLCommerzCheckoutReadiness({
+      storeId: "store_id",
+      storePassword: "password",
+      enabled: true,
+    })).toMatchObject({
+      configured: false,
+      enabled: true,
+      usable: false,
+      missingFields: [],
+      credentialErrors: [
+        "SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account.",
+        "SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account.",
+      ],
+      blockedReason: "SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account.",
+    });
+  });
+
+  it("does not make SSLCommerz active with placeholder credentials", async () => {
+    const db = createDbReturningCategoryReads([
+      [
+        { key: "enabled_methods", value: JSON.stringify(["sslcommerz"]) },
+        { key: "default_method", value: "sslcommerz" },
+      ],
+      [
+        { key: "store_id", value: "real_store_123" },
+        { key: "store_password", value: "password" },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+
+    await expect(
+      getActivePaymentMethods(db as never, undefined, undefined, {
+        bypassMemoryCache: true,
+      }),
+    ).resolves.toEqual({
+      enabledMethods: [],
+      defaultMethod: "cod",
     });
   });
 

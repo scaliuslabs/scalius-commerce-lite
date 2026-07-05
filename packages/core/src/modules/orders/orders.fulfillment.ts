@@ -625,14 +625,14 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             // transition through SHIPPED first (COD collection implies delivery).
             let currentVersion = order.version;
             let currentStatus = order.status;
-            let deliveredClaim: { previousStatus: string; claimedVersion: number } | null = null;
-            const rollbackDeliveredClaim = async () => {
-                if (!deliveredClaim) return;
+            let statusClaim: { claimedStatus: string; claimedVersion: number } | null = null;
+            const rollbackStatusClaim = async () => {
+                if (!statusClaim) return;
                 await rollbackOrderStatusIfInventoryUnchanged(db, {
                     orderId,
-                    previousStatus: deliveredClaim.previousStatus,
-                    claimedStatus: OrderStatus.DELIVERED,
-                    claimedVersion: deliveredClaim.claimedVersion,
+                    previousStatus: order.status,
+                    claimedStatus: statusClaim.claimedStatus,
+                    claimedVersion: statusClaim.claimedVersion,
                     previousInventoryAction: order.inventoryAction as string,
                 });
             };
@@ -647,6 +647,10 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                 if (shipResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
                 currentVersion += 1;
                 currentStatus = OrderStatus.SHIPPED;
+                statusClaim = {
+                    claimedStatus: OrderStatus.SHIPPED,
+                    claimedVersion: currentVersion,
+                };
             }
             if (currentStatus !== OrderStatus.DELIVERED) {
                 validateTransition("order", currentStatus, OrderStatus.DELIVERED);
@@ -657,9 +661,12 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     noActiveRefundAttemptForOrderIdCondition(orderId),
                     noActivePaymentSessionAttemptForOrderIdCondition(orderId),
                 )).returning({ id: orders.id });
-                if (delResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
-                deliveredClaim = {
-                    previousStatus: currentStatus,
+                if (delResult.length === 0) {
+                    await rollbackStatusClaim();
+                    throw new ConflictError("Order was modified by another request. Please reload and try again.");
+                }
+                statusClaim = {
+                    claimedStatus: OrderStatus.DELIVERED,
                     claimedVersion: deliveredVersion,
                 };
             }
@@ -668,14 +675,14 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     const colResult = await recordCODCollection(db, { orderId, collectedBy: collection.collectedBy, collectedAmount: collection.collectedAmount, receiptUrl: body.receiptUrl as string | undefined });
                     if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
                 } catch (error: unknown) {
-                    await rollbackDeliveredClaim();
+                    await rollbackStatusClaim();
                     throw error;
                 }
             }
             try {
                 await reconcileInventoryForStatus(db, orderId, OrderStatus.DELIVERED);
             } catch (error: unknown) {
-                await rollbackDeliveredClaim();
+                await rollbackStatusClaim();
                 throw error;
             }
             return { message: "COD collection recorded" };

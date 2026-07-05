@@ -29,6 +29,11 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 const SANDBOX_BASE = "https://sandbox.sslcommerz.com";
 const PRODUCTION_BASE = "https://securepay.sslcommerz.com";
 const SSL_COMMERZ_TRAN_SUFFIX_LENGTH = 8;
+export const SSL_COMMERZ_BDT_AMOUNT_LIMITS = {
+  currency: "BDT",
+  min: 10,
+  max: 500000,
+} as const;
 
 function getBaseUrl(sandbox: boolean): string {
   return sandbox ? SANDBOX_BASE : PRODUCTION_BASE;
@@ -51,6 +56,24 @@ function isProviderTimeoutError(error: unknown, signal?: AbortSignal): boolean {
     message.includes("timeout") ||
     message.includes("aborted")
   );
+}
+
+export function getSSLCommerzBdtAmountLimitIssue(amount: unknown, label = "SSLCommerz payment amount"): string | null {
+  const numericAmount = Number(amount);
+  if (
+    Number.isFinite(numericAmount) &&
+    numericAmount >= SSL_COMMERZ_BDT_AMOUNT_LIMITS.min &&
+    numericAmount <= SSL_COMMERZ_BDT_AMOUNT_LIMITS.max
+  ) {
+    return null;
+  }
+
+  return `${label} must be between ${SSL_COMMERZ_BDT_AMOUNT_LIMITS.min.toFixed(2)} BDT and ${SSL_COMMERZ_BDT_AMOUNT_LIMITS.max.toFixed(2)} BDT.`;
+}
+
+export function assertSSLCommerzBdtAmountWithinProviderLimits(amount: unknown, label?: string): void {
+  const issue = getSSLCommerzBdtAmountLimitIssue(amount, label);
+  if (issue) throw new ValidationError(issue);
 }
 
 export function buildSSLCommerzTranId(
@@ -88,6 +111,10 @@ export async function initSSLCommerzSession(
   sandbox: boolean,
   params: InitSSLCommerzSessionParams
 ): Promise<SSLCommerzSessionResult> {
+  if (params.currency.toUpperCase() === SSL_COMMERZ_BDT_AMOUNT_LIMITS.currency) {
+    assertSSLCommerzBdtAmountWithinProviderLimits(params.totalAmount);
+  }
+
   const base = getBaseUrl(sandbox);
   const endpoint = `${base}/gwprocess/v4/api.php`;
 

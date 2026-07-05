@@ -565,6 +565,34 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
+  it("rolls the full confirmed-to-delivered COD path back to confirmed when collection recording fails", async () => {
+    mocks.recordCODCollection.mockResolvedValueOnce({ success: false, error: "ledger write failed" });
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CONFIRMED,
+        version: 3,
+        totalAmount: 100,
+        paidAmount: 0,
+        balanceDue: 100,
+        inventoryAction: "reserved",
+      },
+      updateResults: [[{ id: "order_1" }], [{ id: "order_1" }]],
+    });
+
+    await expect(
+      processCodAction(db as never, "order_1", {
+        action: "collected",
+        collectedBy: "Courier A",
+        collectedAmount: 100,
+      }),
+    ).rejects.toThrow("ledger write failed");
+
+    expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 4 });
+    expect(updates[1]).toMatchObject({ status: OrderStatus.DELIVERED, version: 5 });
+    expect(updates[2]).toMatchObject({ status: OrderStatus.CONFIRMED });
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
   it("rolls back the delivered claim when COD inventory reconciliation fails after collection", async () => {
     mocks.applyInventoryForStatusChange.mockRejectedValueOnce(new Error("inventory transition failed"));
     const { db, updates } = createDbMock({
@@ -590,6 +618,46 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection).toHaveBeenCalled();
     expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED, version: 4 });
     expect(updates[1]).toMatchObject({ status: OrderStatus.SHIPPED });
+  });
+
+  it("rolls confirmed COD retry back to confirmed when delivered inventory reconciliation fails after existing collection evidence", async () => {
+    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(new Error("inventory transition failed"));
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CONFIRMED,
+        version: 3,
+        totalAmount: 100,
+        paidAmount: 100,
+        balanceDue: 0,
+        inventoryAction: "reserved",
+      },
+      selectedPayment: {
+        id: "pay_1",
+        amount: 100,
+        paymentMethod: PaymentMethod.COD,
+        status: PaymentRecordStatus.SUCCEEDED,
+      },
+      selectedCodTracking: {
+        id: "cod_1",
+        codStatus: CodStatus.COLLECTED,
+      },
+      updateResults: [[{ id: "order_1" }], [{ id: "order_1" }]],
+    });
+
+    await expect(
+      processCodAction(db as never, "order_1", {
+        action: "collected",
+        collectedBy: "Courier A",
+        collectedAmount: 100,
+      }),
+    ).rejects.toThrow("inventory transition failed");
+
+    expect(mocks.validateCODCollectionDetails).not.toHaveBeenCalled();
+    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
+    expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 4 });
+    expect(updates[1]).toMatchObject({ status: OrderStatus.DELIVERED, version: 5 });
+    expect(updates[2]).toMatchObject({ status: OrderStatus.CONFIRMED });
   });
 
   it("retries COD delivered inventory reconciliation when collection evidence already exists", async () => {

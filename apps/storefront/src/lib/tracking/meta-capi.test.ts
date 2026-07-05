@@ -14,7 +14,22 @@ describe("sendServerEvent", () => {
   beforeEach(() => {
     sendMetaCapiEventMock.mockClear();
     sessionStorage.clear();
+    window.__META_CAPI_BROWSER_EVENTS_ENABLED__ = true;
     window.history.replaceState(null, "", "/products/widget");
+  });
+
+  it("does not call the backend when browser CAPI dispatch is not ready", () => {
+    window.__META_CAPI_BROWSER_EVENTS_ENABLED__ = false;
+
+    sendServerEvent({
+      eventName: "ViewContent",
+      customData: {
+        content_ids: ["product-1"],
+        content_type: "product",
+      },
+    });
+
+    expect(sendMetaCapiEventMock).not.toHaveBeenCalled();
   });
 
   it("does not enrich broad events with checkout PII from sessionStorage", () => {

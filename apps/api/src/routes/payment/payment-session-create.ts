@@ -5,6 +5,7 @@ import { orderPayments, orders, PaymentMethod, PaymentRecordStatus, PaymentStatu
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
 import {
   buildSSLCommerzTranId,
+  getSSLCommerzBdtAmountLimitIssue,
   initSSLCommerzSession,
 } from "@scalius/core/modules/payments/sslcommerz";
 import { createPolarCheckout, findReusablePolarCheckout } from "@scalius/core/modules/payments/polar";
@@ -399,6 +400,10 @@ async function createSSLCommerzPaymentSessionForOrder(
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
   }, checkoutFlowSettings);
+  const sslcommerzAmountIssue = getSSLCommerzBdtAmountLimitIssue(policy.chargeAmount);
+  if (sslcommerzAmountIssue) {
+    throw new ValidationError(sslcommerzAmountIssue);
+  }
 
   const ssl = await loadCheckoutGatewaySettings(
     db,
