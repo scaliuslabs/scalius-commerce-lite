@@ -1,0 +1,307 @@
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  MONITORED_QUEUES,
+  applyAlerting,
+  checkReadiness,
+  checkQueues,
+  collectQueueChecks,
+  evaluateQueueMetrics,
+  evaluateReadinessResponse,
+  nextAlertState,
+  runScheduledMonitor,
+  type AlertState,
+  type MonitorConfig,
+  type OpsMonitorEnv,
+  type OpsMonitorStateNamespace,
+  type QueueMetricsBinding,
+} from "./worker";
+
+const config: MonitorConfig = {
+  readyzUrl: "https://api.example.test/api/v1/readyz",
+  dlqBacklogThreshold: 0,
+  queueOldestAgeThresholdMs: 300_000,
+  alertStreakThreshold: 3,
+  alertCooldownMs: 300_000,
+  stateTtlSeconds: 3_600,
+};
+
+function createQueue(metrics: Awaited<ReturnType<QueueMetricsBinding["metrics"]>>): QueueMetricsBinding {
+  return {
+    metrics: vi.fn(async () => metrics),
+  };
+}
+
+function createState(initial: Record<string, AlertState> = {}): OpsMonitorStateNamespace & { values: Map<string, string> } {
+  const values = new Map(Object.entries(initial).map(([key, value]) => [key, JSON.stringify(value)]));
+  return {
+    values,
+    get: vi.fn(async (key: string) => values.get(key) ?? null),
+    put: vi.fn(async (key: string, value: string) => {
+      values.set(key, value);
+    }),
+  };
+}
+
+function createEnv(overrides: Partial<OpsMonitorEnv> = {}): OpsMonitorEnv {
+  const empty = createQueue({ backlogCount: 0 });
+  return {
+    OPS_MONITOR_STATE: createState(),
+    READYZ_URL: config.readyzUrl,
+    DLQ_BACKLOG_THRESHOLD: "0",
+    QUEUE_OLDEST_AGE_THRESHOLD_MS: "300000",
+    ALERT_STREAK_THRESHOLD: "3",
+    ALERT_COOLDOWN_MS: "300000",
+    STATE_TTL_SECONDS: "3600",
+    PAYMENT_EVENTS_QUEUE: empty,
+    PAYMENT_EVENTS_DLQ: empty,
+    ORDER_NOTIFICATIONS_QUEUE: empty,
+    ORDER_NOTIFICATIONS_DLQ: empty,
+    AUTH_OTP_QUEUE: empty,
+    AUTH_OTP_DLQ: empty,
+    STOREFRONT_CACHE_QUEUE: empty,
+    STOREFRONT_CACHE_DLQ: empty,
+    ...overrides,
+  };
+}
+
+describe("readiness evaluation", () => {
+  it("requires 200, success true, ready status, and every check ok", () => {
+    expect(evaluateReadinessResponse(200, {
+      success: true,
+      status: "ready",
+      checks: {
+        d1: { status: "ok" },
+        api_cache_kv: { status: "ok" },
+      },
+    })).toEqual({
+      ready: true,
+      status: "ok",
+      failedChecks: [],
+    });
+
+    expect(evaluateReadinessResponse(503, {
+      success: false,
+      status: "degraded",
+      checks: {
+        d1: { status: "timeout" },
+        runtime_config: { status: "ok" },
+      },
+    })).toMatchObject({
+      ready: false,
+      status: "degraded",
+      failedChecks: ["http:503", "success:false", "status:degraded", "d1:timeout"],
+    });
+  });
+
+  it("sends safe readiness headers and reports degraded checks", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.headers).toMatchObject({
+        Accept: "application/json",
+        "Cache-Control": "no-cache",
+      });
+      expect(String((init?.headers as Record<string, string>)["X-Request-Id"])).toMatch(/^ops-monitor-/);
+      return Response.json({
+        success: false,
+        status: "degraded",
+        checks: { d1: { status: "error" } },
+      }, { status: 503 });
+    });
+
+    const result = await checkReadiness({
+      readyzUrl: config.readyzUrl,
+      fetchImpl,
+      now: Date.UTC(2026, 0, 1),
+    });
+
+    expect(result.issue).toMatchObject({
+      id: "readyz",
+      kind: "readyz",
+      status: "degraded",
+      failedChecks: ["http:503", "success:false", "status:degraded", "d1:error"],
+    });
+  });
+});
+
+describe("queue issue detection", () => {
+  it("flags DLQ backlog over threshold and normal queues older than threshold", () => {
+    const now = Date.UTC(2026, 0, 1, 0, 10, 0);
+    const normalQueue = MONITORED_QUEUES.find((queue) => queue.name === "payment-events");
+    const dlq = MONITORED_QUEUES.find((queue) => queue.name === "payment-events-dlq");
+
+    expect(normalQueue).toBeDefined();
+    expect(dlq).toBeDefined();
+    expect(evaluateQueueMetrics(normalQueue!, {
+      backlogCount: 4,
+      oldestMessageTimestamp: now - 300_001,
+    }, config, now)).toMatchObject({
+      id: "queue:payment-events",
+      status: "threshold",
+      backlogCount: 4,
+      oldestMessageAgeMs: 300_001,
+    });
+    expect(evaluateQueueMetrics(dlq!, {
+      backlogCount: 1,
+      oldestMessageTimestamp: now - 1_000,
+    }, config, now)).toMatchObject({
+      id: "queue:payment-events-dlq",
+      status: "threshold",
+      backlogCount: 1,
+    });
+  });
+
+  it("treats metrics failures as monitor issues without provider payloads", async () => {
+    const env = createEnv({
+      AUTH_OTP_QUEUE: {
+        metrics: vi.fn(async () => {
+          throw new Error("provider payload should not be logged");
+        }),
+      },
+    });
+
+    const issues = await checkQueues(env, config, Date.UTC(2026, 0, 1));
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        id: "queue:auth-otp",
+        kind: "monitor",
+        name: "auth-otp",
+        status: "error",
+        queueName: "auth-otp",
+      }),
+    ]);
+    expect(JSON.stringify(issues)).not.toContain("provider payload");
+  });
+
+  it("returns safe summaries for every queue even when there are no issues", async () => {
+    const now = Date.UTC(2026, 0, 1, 0, 10, 0);
+    const checks = await collectQueueChecks(createEnv(), config, now);
+
+    expect(checks.issues).toEqual([]);
+    expect(checks.summaries).toHaveLength(8);
+    expect(checks.summaries[0]).toMatchObject({
+      queueName: "payment-events",
+      kind: "normal",
+      status: "ok",
+      backlogCount: 0,
+      oldestMessageAgeMs: null,
+    });
+    expect(JSON.stringify(checks.summaries)).not.toContain("provider payload");
+  });
+});
+
+describe("streak and cooldown alerting", () => {
+  it("waits for the configured streak before alerting", () => {
+    const first = nextAlertState(null, true, 1_000, config);
+    const second = nextAlertState(first.state, true, 2_000, config);
+    const third = nextAlertState(second.state, true, 3_000, config);
+
+    expect(first.shouldAlert).toBe(false);
+    expect(second.shouldAlert).toBe(false);
+    expect(third.shouldAlert).toBe(true);
+    expect(third.state).toMatchObject({
+      status: "issue",
+      streak: 3,
+      lastAlertedAt: 3_000,
+    });
+  });
+
+  it("suppresses repeated alerts until cooldown expires and resets streak on recovery", async () => {
+    const state = createState({
+      "ops-monitor:v1:readyz": {
+        status: "issue",
+        streak: 3,
+        lastAlertedAt: 10_000,
+      },
+    });
+    const logger = { error: vi.fn() };
+    const issue = {
+      id: "readyz",
+      kind: "readyz" as const,
+      name: "api.readyz",
+      status: "degraded" as const,
+      durationMs: 25,
+      requestId: "ops-monitor-safe",
+      failedChecks: ["d1:error"],
+    };
+
+    await expect(applyAlerting({
+      state,
+      issues: [issue],
+      monitorIds: ["readyz"],
+      config,
+      now: 20_000,
+      runId: "run-safe",
+      logger,
+    })).resolves.toBe(0);
+    expect(logger.error).not.toHaveBeenCalled();
+
+    await expect(applyAlerting({
+      state,
+      issues: [issue],
+      monitorIds: ["readyz"],
+      config,
+      now: 310_000,
+      runId: "run-safe",
+      logger,
+    })).resolves.toBe(1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.error.mock.calls[0]?.[0]).toBe("[ops-monitor-alert]");
+    expect(JSON.parse(logger.error.mock.calls[0]?.[1] as string)).toMatchObject({
+      event: "ops_monitor.alert",
+      monitorId: "readyz",
+      checkKind: "readyz",
+      checkName: "api.readyz",
+      status: "degraded",
+      requestId: "ops-monitor-safe",
+      failedChecks: ["d1:error"],
+    });
+
+    await applyAlerting({
+      state,
+      issues: [],
+      monitorIds: ["readyz"],
+      config,
+      now: 320_000,
+      runId: "run-safe",
+      logger,
+    });
+    expect(JSON.parse(state.values.get("ops-monitor:v1:readyz") ?? "{}")).toMatchObject({
+      status: "ok",
+      streak: 0,
+    });
+  });
+
+  it("logs a compact healthy run summary with queue metric evidence", async () => {
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        success: true,
+        status: "ready",
+        checks: { d1: { status: "ok" } },
+      }));
+
+    await runScheduledMonitor(createEnv(), {
+      now: Date.UTC(2026, 0, 1),
+      fetchImpl,
+      logger,
+    });
+
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.log).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(logger.log.mock.calls[0]?.[1] as string);
+    expect(payload).toMatchObject({
+      event: "ops_monitor.run_completed",
+      status: "ok",
+      issueCount: 0,
+      alertCount: 0,
+    });
+    expect(payload.queues).toHaveLength(8);
+    expect(payload.queues[0]).toMatchObject({
+      queueName: "payment-events",
+      kind: "normal",
+      status: "ok",
+      backlogCount: 0,
+    });
+  });
+});

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sampleApiReadiness } from "./deploy.mjs";
+import {
+  getBuildCommandForTarget,
+  getDeployCommandForTarget,
+  parseOnlyTarget,
+  sampleApiReadiness,
+} from "./deploy.mjs";
 
 function readyResponse() {
   return new Response(JSON.stringify({
@@ -82,5 +87,30 @@ describe("deploy API readiness sampling", () => {
       fetchImpl,
       sleepImpl: async () => undefined,
     })).rejects.toThrow("1/2 ready");
+  });
+});
+
+describe("deploy target wiring", () => {
+  it("accepts ops-monitor as a deploy target", () => {
+    expect(parseOnlyTarget(["--only", "ops-monitor"])).toEqual({
+      ok: true,
+      target: "ops-monitor",
+    });
+
+    expect(parseOnlyTarget(["--only", "unknown"])).toMatchObject({
+      ok: false,
+      message: expect.stringContaining("api, admin, storefront, ops-monitor"),
+    });
+  });
+
+  it("builds and deploys ops-monitor from its app workspace", () => {
+    expect(getBuildCommandForTarget("ops-monitor")).toContain(
+      "--filter @scalius/ops-monitor build",
+    );
+
+    const command = getDeployCommandForTarget("ops-monitor");
+    expect(command.cmd).toContain("exec wrangler deploy");
+    expect(command.label).toBe("Deploy Ops Monitor Worker");
+    expect(command.cwd).toMatch(/apps\/ops-monitor$/);
   });
 });

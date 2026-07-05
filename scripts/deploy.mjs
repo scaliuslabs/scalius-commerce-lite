@@ -7,6 +7,7 @@
  *   node scripts/deploy.mjs --only api       # typecheck + build/deploy API and migrate D1
  *   node scripts/deploy.mjs --only admin     # typecheck + build/deploy admin
  *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
+ *   node scripts/deploy.mjs --only ops-monitor # typecheck + build/deploy ops monitor
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
  *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
  *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
@@ -14,7 +15,7 @@
  * Runs in order (full deploy):
  *   1. turbo build       — builds all workspaces
  *   2. wrangler d1 migrations apply --remote  — applies pending migrations to D1
- *   3. wrangler deploy   — deploys all three workers (API, Admin, Storefront)
+ *   3. wrangler deploy   — deploys workers (API, Admin, Storefront, Ops Monitor)
  *
  * The database name is read from apps/api/wrangler.jsonc (API worker owns D1).
  */
@@ -28,18 +29,18 @@ import { resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
+const opsMonitorDir = resolve(root, "apps", "ops-monitor");
 const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
 const dryRun = args.includes("--dry-run");
 const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
-const onlyArgIndex = args.indexOf("--only");
-const onlyTarget = onlyArgIndex >= 0 ? args[onlyArgIndex + 1] : null;
-const deployTargets = ["api", "admin", "storefront"];
+const deployTargets = ["api", "admin", "storefront", "ops-monitor"];
 const appDirsByTarget = {
   api: "apps/api",
   admin: "apps/admin-v2",
   storefront: "apps/storefront",
+  "ops-monitor": "apps/ops-monitor",
 };
 const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
@@ -56,12 +57,16 @@ const pnpm = shellQuote(pnpmExecutable);
 // Suppress punycode deprecation warnings which corrupt Wrangler's STDOUT API payloads on Node >= 21
 process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || "") + " --no-warnings=DEP0040";
 
-// ── Read wrangler.jsonc from apps/api/ (strip // comments so JSON.parse works)
-function readWranglerConfig() {
-  const raw = readFileSync(resolve(apiDir, "wrangler.jsonc"), "utf8");
+function readJsoncFile(path) {
+  const raw = readFileSync(path, "utf8");
   // Strip single-line // comments to turn JSONC into valid JSON, ignoring http:// and https://
   const stripped = raw.replace(/(?<!https?:)\/\/[^\n]*/g, "");
   return JSON.parse(stripped);
+}
+
+// ── Read wrangler.jsonc from apps/api/ (strip // comments so JSON.parse works)
+function readWranglerConfig() {
+  return readJsoncFile(resolve(apiDir, "wrangler.jsonc"));
 }
 
 // ── Run a shell command, streaming output, throwing on failure
@@ -104,44 +109,79 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
 }
 
 function validateOnlyTarget() {
-  if (onlyArgIndex === -1) return null;
-  if (!onlyTarget || onlyTarget.startsWith("--") || !deployTargets.includes(onlyTarget)) {
-    console.error(`✗ Invalid --only target. Use one of: ${deployTargets.join(", ")}`);
-    process.exit(1);
+  const result = parseOnlyTarget(args);
+  if (result.ok) return result.target;
+
+  console.error(result.message);
+  process.exit(1);
+}
+
+export function parseOnlyTarget(inputArgs, targets = deployTargets) {
+  const inputOnlyArgIndex = inputArgs.indexOf("--only");
+  if (inputOnlyArgIndex === -1) return { ok: true, target: null };
+
+  const target = inputArgs[inputOnlyArgIndex + 1] ?? null;
+  if (!target || target.startsWith("--") || !targets.includes(target)) {
+    return {
+      ok: false,
+      message: `✗ Invalid --only target. Use one of: ${targets.join(", ")}`,
+    };
   }
-  return onlyTarget;
+
+  return { ok: true, target };
+}
+
+export function getBuildCommandForTarget(target) {
+  switch (target) {
+    case "api":
+      return `${pnpm} --filter @scalius/api build`;
+    case "admin":
+      return `${pnpm} --filter @scalius/admin-v2 build`;
+    case "storefront":
+      return `${pnpm} --filter @scalius/storefront build`;
+    case "ops-monitor":
+      return `${pnpm} --filter @scalius/ops-monitor build`;
+    default:
+      throw new Error(`Unknown deploy target: ${target}`);
+  }
+}
+
+export function getDeployCommandForTarget(target) {
+  switch (target) {
+    case "api":
+      return { cmd: `${pnpm} exec wrangler deploy`, label: "Deploy API Worker", cwd: apiDir };
+    case "admin":
+      return {
+        cmd: `${pnpm} exec wrangler deploy`,
+        label: "Deploy Admin V2 Worker",
+        cwd: resolve(root, "apps", "admin-v2"),
+      };
+    case "storefront":
+      return {
+        cmd: `${pnpm} exec wrangler deploy --config dist/server/wrangler.json`,
+        label: "Deploy Storefront Worker",
+        cwd: resolve(root, "apps", "storefront"),
+      };
+    case "ops-monitor":
+      return { cmd: `${pnpm} exec wrangler deploy`, label: "Deploy Ops Monitor Worker", cwd: opsMonitorDir };
+    default:
+      throw new Error(`Unknown deploy target: ${target}`);
+  }
 }
 
 function buildTarget(target) {
-  switch (target) {
-    case "api":
-      run(`${pnpm} --filter @scalius/api build`, "Build API workspace");
-      break;
-    case "admin":
-      run(`${pnpm} --filter @scalius/admin-v2 build`, "Build Admin V2 workspace");
-      break;
-    case "storefront":
-      run(`${pnpm} --filter @scalius/storefront build`, "Build Storefront workspace");
-      break;
-  }
+  const labels = {
+    api: "Build API workspace",
+    admin: "Build Admin V2 workspace",
+    storefront: "Build Storefront workspace",
+    "ops-monitor": "Build Ops Monitor workspace",
+  };
+  run(getBuildCommandForTarget(target), labels[target]);
 }
 
 function deployTarget(target) {
-  switch (target) {
-    case "api":
-      runWithRetry(`${pnpm} exec wrangler deploy`, "Deploy API Worker", apiDir);
-      break;
-    case "admin":
-      runWithRetry(`${pnpm} exec wrangler deploy`, "Deploy Admin V2 Worker", resolve(root, "apps", "admin-v2"));
-      break;
-    case "storefront":
-      runWithRetry(
-        `${pnpm} exec wrangler deploy --config dist/server/wrangler.json`,
-        "Deploy Storefront Worker",
-        resolve(root, "apps", "storefront"),
-      );
-      break;
-  }
+  const { cmd, label, cwd } = getDeployCommandForTarget(target);
+  runWithRetry(cmd, label, cwd);
 }
 
 export function getLatestDeployment(deployments) {
@@ -618,11 +658,11 @@ export async function main() {
 
     // 2. Build: all workspaces via Turbo
     run(`${pnpm} build`, "Build all workspaces");
-    checkDistEnvFiles();
+    checkDistEnvFiles(deployTargets);
 
     if (dryRun) {
       console.log("\nDRY RUN: skipping D1 migrations and Worker deploys.");
-      console.log("\n✓ Deploy dry run complete (API + Admin V2 + Storefront).");
+      console.log(`\n✓ Deploy dry run complete (${deployTargets.join(" + ")}).`);
       return;
     }
 
@@ -633,14 +673,13 @@ export async function main() {
       apiDir
     );
 
-    // 4. Deploy all three workers (admin-v2 replaces the old Astro admin)
-    deployTarget("api");
-    await verifyPostDeployTarget("api", config);
-    deployTarget("admin");
-    deployTarget("storefront");
-    await verifyPostDeployTarget("storefront", config);
+    // 4. Deploy all workers (admin-v2 replaces the old Astro admin)
+    for (const targetName of deployTargets) {
+      deployTarget(targetName);
+      await verifyPostDeployTarget(targetName, config);
+    }
 
-    console.log("\n✓ Deploy complete (API + Admin V2 + Storefront).");
+    console.log(`\n✓ Deploy complete (${deployTargets.join(" + ")}).`);
   } catch {
     console.error("\n✗ Deploy failed after retries. See errors above.");
     process.exit(1);

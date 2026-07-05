@@ -8,6 +8,8 @@
     "apps/admin-v2/.env*",
     "apps/storefront/.dev.vars",
     "apps/storefront/.env*",
+    "apps/ops-monitor/.dev.vars",
+    "apps/ops-monitor/.env*",
     "pnpm-lock.yaml",
     "eslint.config.js",
     "scripts/copy-flags.mjs"

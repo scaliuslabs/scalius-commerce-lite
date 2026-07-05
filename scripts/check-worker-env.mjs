@@ -42,6 +42,12 @@ const apps = [
     envFiles: ["apps/storefront/src/env.d.ts"],
     extraEnv: ["API_TOKEN", "JWT_SECRET", "PURGE_TOKEN"],
   },
+  {
+    name: "ops-monitor",
+    configs: ["apps/ops-monitor/wrangler.jsonc"],
+    envFiles: ["apps/ops-monitor/src/env.d.ts"],
+    extraEnv: [],
+  },
 ];
 
 function readText(path) {
@@ -223,6 +229,7 @@ function sorted(values) {
 }
 
 const errors = [];
+let checkedEnvFileCount = 0;
 
 for (const app of apps) {
   const expected = new Set();
@@ -236,6 +243,7 @@ for (const app of apps) {
   const allowed = new Set([...expected, ...app.extraEnv]);
 
   for (const envPath of app.envFiles) {
+    checkedEnvFileCount += 1;
     const actual = extractEnvNames(readText(envPath));
     const missing = sorted([...expected].filter((name) => !actual.has(name)));
     const extra = sorted([...actual].filter((name) => !allowed.has(name)));
@@ -260,8 +268,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Worker Env OK: checked ${apps.length} apps, ${apps.reduce(
-    (count, app) => count + app.envFiles.length,
-    0,
-  )} Env declaration files.`,
+  `Worker Env OK: checked ${apps.length} apps, ${checkedEnvFileCount} Env declaration files.`,
 );
