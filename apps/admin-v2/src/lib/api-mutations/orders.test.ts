@@ -35,6 +35,7 @@ vi.mock("../api-functions/orders", () => ({
   createOrderShipment: vi.fn(),
   reconcileRefundAttempt: vi.fn(),
   refundOrder: vi.fn(),
+  resendOrderNotification: vi.fn(),
   retryOrderNotification: vi.fn(),
   restoreOrder: vi.fn(),
   returnOrder: vi.fn(),
@@ -45,13 +46,16 @@ vi.mock("../api-functions/orders", () => ({
 }));
 
 import { queryKeys } from "../query-keys";
+import { resendOrderNotification } from "../api-functions/orders";
 import {
   useReconcileRefundAttempt,
+  useResendOrderNotification,
   useRetryOrderNotification,
   useUpdateOrderCod,
 } from "./orders";
 
 type MutationOptions = {
+  mutationFn?: (variables: unknown) => unknown;
   onSuccess?: (data: unknown, variables: { orderId: string }) => void;
 };
 
@@ -89,6 +93,24 @@ describe("order notification mutations", () => {
       queryKey: queryKeys.orders.notifications("ord_123"),
     });
     expect(toastMocks.success).toHaveBeenCalledWith("Notification retry queued");
+  });
+
+  it("passes a fresh resend request id through the resend mutation and invalidates history", () => {
+    const mutation = useResendOrderNotification() as MutationOptions;
+    const variables = {
+      orderId: "ord_123",
+      outboxId: "outbox_1",
+      resendRequestId: "req_1",
+    };
+
+    mutation.mutationFn?.(variables);
+    mutation.onSuccess?.({ enqueued: true }, variables as never);
+
+    expect(resendOrderNotification).toHaveBeenCalledWith({ data: variables });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.notifications("ord_123"),
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith("Notification resend queued");
   });
 });
 

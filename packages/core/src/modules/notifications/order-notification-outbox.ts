@@ -45,6 +45,8 @@ export interface RecordAndEnqueueOrderNotificationResult {
         | "no_queue"
         | "already_queued"
         | "already_sent"
+        | "already_retryable"
+        | "not_sent"
         | "busy"
         | "missing"
         | "queue_failed";
@@ -109,6 +111,13 @@ export function buildOrderBalancePaidNotificationDedupeKey(orderId: string): str
 
 export function buildSupportRequestSubmittedNotificationDedupeKey(requestId: string): string {
     return `support_request:${requestId}:submitted`;
+}
+
+export function buildManualOrderNotificationResendDedupeKey(options: {
+    outboxId: string;
+    resendRequestId: string;
+}): string {
+    return `manual_resend:${options.outboxId}:${options.resendRequestId}`;
 }
 
 export function buildSupportRequestStatusUpdatedNotificationDedupeKey(options: {
@@ -467,6 +476,53 @@ export async function retryFailedOrderNotificationOutboxById(options: {
     };
 }
 
+export async function resendTerminalOrderNotificationOutboxById(options: {
+    db: Database;
+    queue: OrderNotificationQueue | undefined;
+    orderId: string;
+    outboxId: string;
+    resendRequestId: string;
+}): Promise<RecordAndEnqueueOrderNotificationResult> {
+    const existing = await selectOutboxById(options.db, options.outboxId);
+    if (!existing || existing.orderId !== options.orderId) {
+        return {
+            outboxId: options.outboxId,
+            dedupeKey: "",
+            created: false,
+            enqueued: false,
+            skippedReason: "missing",
+        };
+    }
+
+    if (existing.status !== "sent") {
+        return {
+            outboxId: existing.id,
+            dedupeKey: existing.dedupeKey,
+            created: false,
+            enqueued: false,
+            skippedReason: isRetryableOutboxStatus(existing.status) ? "already_retryable" : "not_sent",
+        };
+    }
+
+    const payload = parseOrderNotificationPayload(existing.payload);
+    return await recordAndEnqueueOrderNotification({
+        db: options.db,
+        queue: options.queue,
+        notification: {
+            dedupeKey: buildManualOrderNotificationResendDedupeKey({
+                outboxId: existing.id,
+                resendRequestId: options.resendRequestId,
+            }),
+            orderId: existing.orderId,
+            customerEmail: payload.customerEmail,
+            customerName: payload.customerName,
+            notificationType: payload.notificationType,
+            data: payload.data,
+            source: "manual_resend",
+        },
+    });
+}
+
 export async function markOrderNotificationOutboxDeadLettered(options: {
     db: Database;
     outboxId: string;
@@ -592,6 +648,10 @@ async function resetRetryableOrderNotificationDeliveryReceipts(
             eq(orderNotificationDeliveryReceipts.outboxId, outboxId),
             inArray(orderNotificationDeliveryReceipts.status, ["pending", "failed"]),
         ));
+}
+
+function isRetryableOutboxStatus(status: string): boolean {
+    return status === "pending" || status === "failed" || status === "dead_lettered";
 }
 
 async function recordOrderNotificationOutbox(

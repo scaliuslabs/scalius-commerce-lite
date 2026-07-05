@@ -22,6 +22,13 @@ describe("route permissions", () => {
         "POST",
       ),
     ).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
+
+    expect(
+      getRoutePermission(
+        "/api/v1/admin/orders/order_1/notifications/outbox_1/resend",
+        "POST",
+      ),
+    ).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
   });
 
   it("gates manual refund recovery behind refund permission", () => {

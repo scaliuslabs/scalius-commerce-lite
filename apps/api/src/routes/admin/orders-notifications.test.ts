@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     listOrderNotificationOutboxForOrder: vi.fn(),
+    resendTerminalOrderNotificationOutboxById: vi.fn(),
     retryFailedOrderNotificationOutboxById: vi.fn(),
 }));
 
@@ -11,6 +12,7 @@ vi.mock("@scalius/core/modules/notifications", async (importOriginal) => {
     return {
         ...actual,
         listOrderNotificationOutboxForOrder: mocks.listOrderNotificationOutboxForOrder,
+        resendTerminalOrderNotificationOutboxById: mocks.resendTerminalOrderNotificationOutboxById,
         retryFailedOrderNotificationOutboxById: mocks.retryFailedOrderNotificationOutboxById,
     };
 });
@@ -80,6 +82,12 @@ describe("admin order notification routes", () => {
             created: false,
             enqueued: true,
         });
+        mocks.resendTerminalOrderNotificationOutboxById.mockResolvedValue({
+            outboxId: "outbox_resend_1",
+            dedupeKey: "manual_resend:outbox_1:resend_req_1",
+            created: true,
+            enqueued: true,
+        });
     });
 
     it("returns outbox and receipt delivery state for an order", async () => {
@@ -127,5 +135,52 @@ describe("admin order notification routes", () => {
             outboxId: "outbox_1",
             enqueued: true,
         });
+    });
+
+    it("resends a sent notification with an explicit request id", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/orders/order_1/notifications/outbox_1/resend",
+            {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ resendRequestId: " resend_req_1 " }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.resendTerminalOrderNotificationOutboxById).toHaveBeenCalledWith({
+            db,
+            queue,
+            orderId: "order_1",
+            outboxId: "outbox_1",
+            resendRequestId: "resend_req_1",
+        });
+        const body = await response.json() as { data: Record<string, unknown> };
+        expect(body.data).toMatchObject({
+            outboxId: "outbox_resend_1",
+            dedupeKey: "manual_resend:outbox_1:resend_req_1",
+            created: true,
+            enqueued: true,
+        });
+    });
+
+    it("rejects manual resend without a request id", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/orders/order_1/notifications/outbox_1/resend",
+            {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ resendRequestId: " " }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(400);
+        expect(mocks.resendTerminalOrderNotificationOutboxById).not.toHaveBeenCalled();
     });
 });

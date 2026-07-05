@@ -264,6 +264,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/orders/*/notifications/*/retry": {
     POST: { permission: PERMISSIONS.ORDERS_EDIT },
   },
+  "/api/v1/admin/orders/*/notifications/*/resend": {
+    POST: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
   "/api/v1/admin/orders/*/support-requests/*/status": {
     PUT: { permission: PERMISSIONS.ORDERS_EDIT },
     PATCH: { permission: PERMISSIONS.ORDERS_EDIT },

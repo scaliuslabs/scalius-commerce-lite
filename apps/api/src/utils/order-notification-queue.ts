@@ -32,6 +32,8 @@ export interface EnqueueOrderNotificationResult {
         | "queue_failed"
         | "already_queued"
         | "already_sent"
+        | "already_retryable"
+        | "not_sent"
         | "busy"
         | "missing";
 }

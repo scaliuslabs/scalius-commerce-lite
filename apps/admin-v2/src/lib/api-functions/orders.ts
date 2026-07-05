@@ -33,6 +33,8 @@ import type {
   PutApiV1AdminOrdersByIdStatusResponse,
   PostApiV1AdminOrdersByIdCodData,
   PostApiV1AdminOrdersByIdCodResponse,
+  PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendData,
+  PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponse,
   PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponse,
 } from "@scalius/api-client/types";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
@@ -150,6 +152,13 @@ export interface RetryOrderNotificationPayload {
   enqueued: boolean;
   skippedReason?: string;
 }
+export interface ResendOrderNotificationInput {
+  orderId: string;
+  outboxId: string;
+  resendRequestId: ApiBody<PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendData>["resendRequestId"];
+}
+export type ResendOrderNotificationPayload =
+  ApiData<PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponse>;
 export type ResolveOrderSupportRequestStatus =
   ApiBody<PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData>["status"];
 export interface ResolveOrderSupportRequestInput {
@@ -323,6 +332,15 @@ export const retryOrderNotification = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     return apiPost<RetryOrderNotificationPayload>(
       `/orders/${data.orderId}/notifications/${data.outboxId}/retry`,
+    );
+  });
+
+export const resendOrderNotification = createServerFn({ method: "POST" })
+  .validator((data: ResendOrderNotificationInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<ResendOrderNotificationPayload>(
+      `/orders/${data.orderId}/notifications/${data.outboxId}/resend`,
+      { resendRequestId: data.resendRequestId },
     );
   });
 

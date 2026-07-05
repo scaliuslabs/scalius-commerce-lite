@@ -60,6 +60,7 @@ import {
 import { listPaymentWebhookIssuesForOrder } from "../../utils/payment-webhook-issues";
 import {
     listOrderNotificationOutboxForOrder,
+    resendTerminalOrderNotificationOutboxById,
     retryFailedOrderNotificationOutboxById,
 } from "@scalius/core/modules/notifications";
 import type { OrderPaymentRecoveryFilter } from "@scalius/core/modules/orders";
@@ -1022,6 +1023,53 @@ app.openapi(retryNotificationRoute, (async (c: AdminRouteContext<typeof retryNot
     });
     return ok(c, result);
 }) as unknown as AdminRouteHandler<typeof retryNotificationRoute>);
+
+// ─── POST /:id/notifications/:outboxId/resend ──────────────────────────────
+
+const resendNotificationBodySchema = z.object({
+    resendRequestId: z.string().trim().min(1).max(128),
+});
+
+const resendNotificationRoute = createRoute({
+    method: "post",
+    path: "/{id}/notifications/{outboxId}/resend",
+    tags: ["Admin - Orders"],
+    summary: "Manually resend an already-sent order notification",
+    request: {
+        params: z.object({ id: z.string(), outboxId: z.string() }),
+        body: { content: { "application/json": { schema: resendNotificationBodySchema } } },
+    },
+    responses: {
+        200: {
+            description: "Manual resend result",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        outboxId: z.string(),
+                        dedupeKey: z.string(),
+                        created: z.boolean(),
+                        enqueued: z.boolean(),
+                        skippedReason: z.string().optional(),
+                    })),
+                },
+            },
+        },
+    },
+});
+
+app.openapi(resendNotificationRoute, (async (c: AdminRouteContext<typeof resendNotificationRoute>) => {
+    const { id: orderId, outboxId } = c.req.valid("param");
+    const { resendRequestId } = c.req.valid("json");
+    const db = c.get("db");
+    const result = await resendTerminalOrderNotificationOutboxById({
+        db,
+        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        orderId,
+        outboxId,
+        resendRequestId,
+    });
+    return ok(c, result);
+}) as unknown as AdminRouteHandler<typeof resendNotificationRoute>);
 
 // ─── GET /:id/form-data ──────────────────────────────────────────────────────
 

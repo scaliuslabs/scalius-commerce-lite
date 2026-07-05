@@ -95422,6 +95422,106 @@
         ]
       }
     },
+    "/api/v1/admin/orders/{id}/notifications/{outboxId}/resend": {
+      "post": {
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Manually resend an already-sent order notification",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "outboxId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "resendRequestId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "resendRequestId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Manual resend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "outboxId": {
+                          "type": "string"
+                        },
+                        "dedupeKey": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "boolean"
+                        },
+                        "enqueued": {
+                          "type": "boolean"
+                        },
+                        "skippedReason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "outboxId",
+                        "dedupeKey",
+                        "created",
+                        "enqueued"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/orders/{id}/form-data": {
       "get": {
         "tags": [

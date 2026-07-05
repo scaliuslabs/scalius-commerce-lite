@@ -27,6 +27,7 @@ export {
 export {
   buildOrderBalancePaidNotificationDedupeKey,
   buildOrderCreatedNotificationDedupeKey,
+  buildManualOrderNotificationResendDedupeKey,
   buildOrderStatusNotificationDedupeKey,
   buildSupportRequestStatusUpdatedNotificationDedupeKey,
   buildSupportRequestSubmittedNotificationDedupeKey,
@@ -39,6 +40,7 @@ export {
   markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent,
   recordAndEnqueueOrderNotification,
+  resendTerminalOrderNotificationOutboxById,
   retryFailedOrderNotificationOutboxById,
 } from "./order-notification-outbox";
 export type { OrderNotificationType } from "./notification-types";
