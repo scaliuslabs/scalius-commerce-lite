@@ -30,6 +30,7 @@ vi.mock("sonner", () => ({
 
 vi.mock("../api-functions/orders", () => ({
   bulkDeleteOrders: vi.fn(),
+  bulkShipOrders: vi.fn(),
   createFulfillmentShipment: vi.fn(),
   createOrder: vi.fn(),
   createOrderShipment: vi.fn(),
@@ -48,10 +49,12 @@ vi.mock("../api-functions/orders", () => ({
 
 import { queryKeys } from "../query-keys";
 import {
+  bulkShipOrders,
   issueOrderPaymentRecoveryLink,
   resendOrderNotification,
 } from "../api-functions/orders";
 import {
+  useBulkShipOrders,
   useIssueOrderPaymentRecoveryLink,
   useReconcileRefundAttempt,
   useResendOrderNotification,
@@ -61,7 +64,8 @@ import {
 
 type MutationOptions = {
   mutationFn?: (variables: unknown) => unknown;
-  onSuccess?: (data: unknown, variables: { orderId: string }) => void;
+  onSuccess?: (data: unknown, variables: Record<string, unknown>) => void;
+  onError?: (error: unknown, variables: Record<string, unknown>) => void;
 };
 
 beforeEach(() => {
@@ -85,6 +89,122 @@ describe("order COD mutations", () => {
     });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.cod("ord_123"),
+    });
+  });
+});
+
+describe("bulk ship order mutations", () => {
+  it("submits one bulk shipment request and invalidates touched orders after full success", () => {
+    const mutation = useBulkShipOrders() as MutationOptions;
+    const variables = {
+      orderIds: ["ord_1", "ord_2"],
+      providerId: "provider_1",
+      options: {},
+    };
+    const result = {
+      totalProcessed: 2,
+      successCount: 2,
+      failureCount: 0,
+      results: [
+        { orderId: "ord_1", success: true },
+        { orderId: "ord_2", success: true },
+      ],
+    };
+
+    mutation.mutationFn?.(variables);
+    mutation.onSuccess?.(result, variables);
+
+    expect(bulkShipOrders).toHaveBeenCalledWith({ data: variables });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.list(),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.dashboard.all,
+    });
+    for (const orderId of variables.orderIds) {
+      expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+        queryKey: queryKeys.orders.detail(orderId),
+      });
+      expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+        queryKey: queryKeys.orders.shipments(orderId),
+      });
+    }
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "2 shipments created successfully.",
+    );
+  });
+
+  it("keeps partial failures visible while invalidating every selected order", () => {
+    const mutation = useBulkShipOrders() as MutationOptions;
+    const variables = {
+      orderIds: ["ord_1", "ord_2"],
+      providerId: "provider_1",
+      options: {},
+    };
+    const result = {
+      totalProcessed: 2,
+      successCount: 1,
+      failureCount: 1,
+      results: [
+        { orderId: "ord_1", success: true },
+        {
+          orderId: "ord_2",
+          success: false,
+          error: "Order has an active refund operation.",
+        },
+      ],
+    };
+
+    mutation.onSuccess?.(result, variables);
+
+    for (const orderId of variables.orderIds) {
+      expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+        queryKey: queryKeys.orders.detail(orderId),
+      });
+      expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+        queryKey: queryKeys.orders.shipments(orderId),
+      });
+    }
+    expect(toastMocks.warning).toHaveBeenCalledWith(
+      "1 of 2 shipments created.",
+      {
+        description:
+          "1 failed. First issue: Order has an active refund operation.",
+      },
+    );
+  });
+
+  it("reports aggregate total failure with the first safe failure reason", () => {
+    const mutation = useBulkShipOrders() as MutationOptions;
+    const variables = {
+      orderIds: ["ord_1", "ord_2"],
+      providerId: "provider_1",
+      options: {},
+    };
+    const result = {
+      totalProcessed: 2,
+      successCount: 0,
+      failureCount: 2,
+      results: [
+        {
+          orderId: "ord_1",
+          success: false,
+          error: "Delivery provider is not active.",
+        },
+        { orderId: "ord_2", success: false, error: "Order not found." },
+      ],
+    };
+
+    mutation.onSuccess?.(result, variables);
+
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.list(),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.dashboard.all,
+    });
+    expect(toastMocks.error).toHaveBeenCalledWith("Shipment failed", {
+      description: "Delivery provider is not active.",
     });
   });
 });

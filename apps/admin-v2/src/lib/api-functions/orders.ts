@@ -37,6 +37,8 @@ import type {
   PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponse,
   PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponse,
   PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponse,
+  PostApiV1AdminOrdersBulkShipData,
+  PostApiV1AdminOrdersBulkShipResponse,
 } from "@scalius/api-client/types";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 
@@ -110,6 +112,9 @@ export type IssueOrderPaymentRecoveryLinkPayload =
   ApiData<PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponse>;
 export type BulkDeleteOrdersInput =
   ApiBody<PostApiV1AdminOrdersBulkDeleteData>;
+export type BulkShipOrdersInput = ApiBody<PostApiV1AdminOrdersBulkShipData>;
+export type BulkShipOrdersPayload =
+  ApiData<PostApiV1AdminOrdersBulkShipResponse>;
 export type OrderPaymentsPayload =
   ApiData<GetApiV1AdminOrdersByIdPaymentsResponse>;
 export interface OrderNotificationReceiptDto {
@@ -319,6 +324,12 @@ export const bulkDeleteOrders = createServerFn({ method: "POST" })
   .validator((data: BulkDeleteOrdersInput) => data)
   .handler(async ({ data }) => {
     return apiPost<void>("/orders/bulk-delete", data);
+  });
+
+export const bulkShipOrders = createServerFn({ method: "POST" })
+  .validator((data: BulkShipOrdersInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<BulkShipOrdersPayload>("/orders/bulk-ship", data);
   });
 
 export const getOrderPayments = createServerFn({ method: "GET" })

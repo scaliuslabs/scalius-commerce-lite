@@ -25,17 +25,15 @@ import type { OrderListItem } from "@scalius/core/modules/orders";
 import type { DateRange } from "react-day-picker";
 import { formatDateShort } from "@scalius/shared/timestamps";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
-import { useQueryClient } from "@tanstack/react-query";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
-import { queryKeys } from "~/lib/query-keys";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import {
   useUpdateOrderStatus,
   useBulkDeleteOrders,
+  useBulkShipOrders,
   useRestoreOrder,
 } from "~/lib/api-mutations/orders";
-import { createOrderShipment } from "~/lib/api-functions/orders";
 import { useCurrency } from "~/hooks/use-currency";
 import { useServerTable, DataTable } from "~/components/admin/data-table";
 import { getOrderColumns } from "~/components/admin/data-table/columns/order-columns";
@@ -44,6 +42,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ShoppingBag } from "lucide-react";
 import { OrderMobileCard } from "~/components/admin/order-list/OrderMobileCard";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import type { BulkShipOrdersPayload } from "~/lib/api-functions/orders";
+import type { BulkShipResultSummary } from "~/components/admin/order-list/BulkShipDialog";
 
 const DeleteOrderDialog = lazy(() =>
   import("~/components/admin/order-list/DeleteOrderDialog").then((module) => ({
@@ -206,6 +206,42 @@ function buildRecoveryExportSearchParams(search: SearchParams) {
   return params;
 }
 
+function getSafeBulkShipError(error: unknown) {
+  return typeof error === "string" && error.trim()
+    ? error.replace(/\s+/g, " ").slice(0, 160)
+    : "Shipment could not be created.";
+}
+
+function buildBulkShipResultSummary(
+  result: BulkShipOrdersPayload,
+): BulkShipResultSummary {
+  return {
+    totalProcessed: result.totalProcessed,
+    successCount: result.successCount,
+    failureCount: result.failureCount,
+    failures: result.results
+      .filter((item) => !item.success)
+      .map((item) => ({
+        orderId: item.orderId,
+        error: getSafeBulkShipError(item.error),
+      })),
+  };
+}
+
+function buildFailedBulkShipResultSummary(
+  orderIds: readonly string[],
+): BulkShipResultSummary {
+  return {
+    totalProcessed: orderIds.length,
+    successCount: 0,
+    failureCount: orderIds.length,
+    failures: orderIds.map((orderId) => ({
+      orderId,
+      error: "Shipment request failed. Try again.",
+    })),
+  };
+}
+
 // ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/orders/")({
@@ -231,7 +267,6 @@ export const Route = createFileRoute("/admin/orders/")({
 function OrdersPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { symbol } = useCurrency();
   const orderActions = useOrderActionPermissions();
   const showTrashed = search.trashed;
@@ -247,6 +282,8 @@ function OrdersPage() {
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [isShippingDialogOpen, setIsShippingDialogOpen] = useState(false);
   const [isShipping, setIsShipping] = useState(false);
+  const [lastBulkShipResult, setLastBulkShipResult] =
+    useState<BulkShipResultSummary | null>(null);
   // Derive filter values directly from URL search params (reactive to back/forward)
   const activeStatus = search.status ?? null;
   const activePaymentStatus = search.paymentStatus ?? null;
@@ -293,6 +330,7 @@ function OrdersPage() {
   // ── Mutations ─────────────────────────────────────────────────
   const statusMutation = useUpdateOrderStatus();
   const bulkDeleteMut = useBulkDeleteOrders();
+  const bulkShipMut = useBulkShipOrders();
   const restoreMut = useRestoreOrder();
 
   // ── Navigation helpers ────────────────────────────────────────
@@ -937,6 +975,12 @@ function OrdersPage() {
         });
         return;
       }
+      if (selectedActivePaymentSetupOrders.length > 0) {
+        toast.error("Wait for payment setup first", {
+          description: `${selectedActivePaymentSetupOrders.length} selected order(s) still have active hosted payment setup.`,
+        });
+        return;
+      }
       if (selectedPaymentRecoveryOrders.length > 0) {
         toast.error("Resolve payment recovery first", {
           description: `${selectedPaymentRecoveryOrders.length} selected order(s) still have hosted payment state.`,
@@ -955,63 +999,46 @@ function OrdersPage() {
         });
         return;
       }
+      setLastBulkShipResult(null);
       setIsShipping(true);
-      let successCount = 0;
-      const shippedOrderIds: string[] = [];
-      const failedOrderIds: string[] = [];
-      for (const orderId of selectedIds) {
-        try {
-          const result = await createOrderShipment({
-            data: { orderId, shipment: { providerId, options: {} } },
-          });
-          successCount++;
-          shippedOrderIds.push(orderId);
-          setShipmentStatuses((prev) => ({
-            ...prev,
-            [orderId]: result,
-          }));
-        } catch (error) {
-          failedOrderIds.push(orderId);
-          console.error(`Error for order ${orderId}:`, error);
+      const orderIds = [...selectedIds];
+      try {
+        const result = await bulkShipMut.mutateAsync({
+          orderIds,
+          providerId,
+          options: {},
+        });
+        const shippedOrderIds = result.results
+          .filter((item) => item.success)
+          .map((item) => item.orderId);
+        const failedOrderIds = result.results
+          .filter((item) => !item.success)
+          .map((item) => item.orderId);
+        if (result.successCount === orderIds.length) {
+          setLastBulkShipResult(null);
+          clearSelection();
+          setIsShippingDialogOpen(false);
+        } else if (failedOrderIds.length < orderIds.length) {
+          setLastBulkShipResult(buildBulkShipResultSummary(result));
+          deselectIds(shippedOrderIds);
+        } else {
+          setLastBulkShipResult(buildBulkShipResultSummary(result));
         }
-      }
-      if (successCount > 0) {
-        toast.success(
-          `${successCount} of ${selectedIds.length} shipments created successfully.`,
-        );
-      } else {
-        toast.error("Shipment failed");
-      }
-      const touchedOrderIds = [...new Set([...shippedOrderIds, ...failedOrderIds])];
-      if (touchedOrderIds.length > 0) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
-        for (const orderId of touchedOrderIds) {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.orders.detail(orderId),
-          });
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.orders.shipments(orderId),
-          });
-        }
-      }
-      setIsShipping(false);
-      setIsShippingDialogOpen(false);
-      if (successCount === selectedIds.length) {
-        clearSelection();
-      } else if (successCount > 0) {
-        deselectIds(shippedOrderIds);
-        toast.warning(`${failedOrderIds.length} selected order(s) still need shipment.`);
+      } catch {
+        setLastBulkShipResult(buildFailedBulkShipResultSummary(orderIds));
+      } finally {
+        setIsShipping(false);
       }
     },
     [
-      queryClient,
       selectedIds,
       clearSelection,
       deselectIds,
       isShipping,
+      bulkShipMut,
       orderActions.canBulkShipOrders,
       selectedPaymentRecoveryOrders,
+      selectedActivePaymentSetupOrders,
       selectedActiveRefundOrders,
       selectedShipmentLockedOrders,
     ],
@@ -1103,6 +1130,12 @@ function OrdersPage() {
           });
           return;
         }
+        if (selectedActivePaymentSetupOrders.length > 0) {
+          toast.error("Wait for payment setup first", {
+            description: `${selectedActivePaymentSetupOrders.length} selected order(s) still have active hosted payment setup.`,
+          });
+          return;
+        }
         if (selectedPaymentRecoveryOrders.length > 0) {
           toast.error("Resolve payment recovery first", {
             description: `${selectedPaymentRecoveryOrders.length} selected order(s) still have hosted payment state.`,
@@ -1121,6 +1154,7 @@ function OrdersPage() {
           });
           return;
         }
+        setLastBulkShipResult(null);
         setIsShippingDialogOpen(true);
       }}
       isBulkActionBusy={isShipping || bulkDeleteMut.isPending}
@@ -1221,6 +1255,7 @@ function OrdersPage() {
             isShipping={isShipping}
             onConfirm={handleBulkShipmentSubmit}
             itemCount={selectedIds.length}
+            resultSummary={lastBulkShipResult}
           />
         </Suspense>
       )}

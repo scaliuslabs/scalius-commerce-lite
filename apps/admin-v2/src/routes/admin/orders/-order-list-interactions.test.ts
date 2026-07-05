@@ -32,6 +32,9 @@ const ORDER_COLUMNS_SOURCE = fileURLToPath(
 const ORDER_SERVER_FUNCTIONS_SOURCE = fileURLToPath(
   new URL("../../../lib/api-functions/orders.ts", import.meta.url),
 );
+const ORDER_MUTATIONS_SOURCE = fileURLToPath(
+  new URL("../../../lib/api-mutations/orders.ts", import.meta.url),
+);
 const DATA_TABLE_TOOLBAR_SOURCE = fileURLToPath(
   new URL(
     "../../../components/admin/data-table/DataTableToolbar.tsx",
@@ -49,10 +52,20 @@ describe("order list interactions", () => {
     expect(routeSource).toContain(
       "if (isShipping || selectedIds.length === 0) return",
     );
-    expect(routeSource).toContain("const failedOrderIds: string[] = []");
+    expect(routeSource).toContain("useBulkShipOrders");
+    expect(routeSource).toContain("const bulkShipMut = useBulkShipOrders()");
+    expect(routeSource).toContain("await bulkShipMut.mutateAsync");
+    expect(routeSource).toContain("orderIds,");
+    expect(routeSource).toContain("providerId,");
+    expect(routeSource).toContain("options: {},");
+    expect(routeSource).not.toContain("createOrderShipment");
+    expect(routeSource).not.toContain("for (const orderId of selectedIds)");
+    expect(routeSource).not.toContain("data: { orderId, shipment:");
+    expect(routeSource).not.toContain("item.shipment");
     expect(routeSource).toContain("deselectIds(shippedOrderIds)");
     expect(routeSource).toContain("isBulkActionBusy={isShipping || bulkDeleteMut.isPending}");
     expect(routeSource).toContain("if (isShipping && !isOpen) return");
+    expect(routeSource).toContain("selectedActivePaymentSetupOrders.length > 0");
     expect(routeSource).toContain("const selectedActiveRefundOrders = useMemo");
     expect(routeSource).toContain("hasActiveRefundOperation(order)");
     expect(routeSource).toContain("selectedActiveRefundOrders.length > 0");
@@ -61,7 +74,16 @@ describe("order list interactions", () => {
     expect(routeSource).toContain("hasActiveShipmentLock(order)");
     expect(routeSource).toContain("selectedShipmentLockedOrders.length > 0");
     expect(routeSource).toContain("Resolve shipment recovery first");
-    expect(routeSource).toContain("const touchedOrderIds = [...new Set([...shippedOrderIds, ...failedOrderIds])]");
+    expect(routeSource).toContain("result.results");
+    expect(routeSource).toContain("filter((item) => item.success)");
+    expect(routeSource).toContain("filter((item) => !item.success)");
+    expect(routeSource).toContain("if (result.successCount === orderIds.length)");
+    expect(routeSource).toContain("setLastBulkShipResult(buildBulkShipResultSummary(result))");
+    expect(routeSource).toContain("setLastBulkShipResult(buildFailedBulkShipResultSummary(orderIds))");
+    expect(routeSource).toContain("resultSummary={lastBulkShipResult}");
+    expect(routeSource).not.toContain(
+      "finally {\n        setIsShipping(false);\n        setIsShippingDialogOpen(false);",
+    );
 
     expect(toolbarSource).toContain("isBulkActionBusy?: boolean");
     expect(toolbarSource).toContain("selectedPaymentRecoveryCount?: number");
@@ -81,6 +103,12 @@ describe("order list interactions", () => {
     expect(dialogSource).toContain(
       "<Dialog open={isOpen} onOpenChange={handleOpenChange}>",
     );
+    expect(dialogSource).toContain("resultSummary: BulkShipResultSummary | null");
+    expect(dialogSource).toContain("visibleFailures");
+    expect(dialogSource).toContain("resultSummary.successCount");
+    expect(dialogSource).toContain("resultSummary.failureCount");
+    expect(dialogSource).toContain("failure.orderId");
+    expect(dialogSource).toContain("failure.error");
   });
 
   it("surfaces list errors and canonicalizes out-of-range pages", () => {
@@ -98,6 +126,7 @@ describe("order list interactions", () => {
 
   it("keeps order auto-refresh scoped to the active list query", () => {
     const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+    const mutationsSource = readFileSync(ORDER_MUTATIONS_SOURCE, "utf8");
     const refreshBlock = routeSource.slice(
       routeSource.indexOf("// ── Active-query refresh"),
       routeSource.indexOf("// ── Auto-refresh"),
@@ -112,7 +141,7 @@ describe("order list interactions", () => {
     expect(refreshBlock).not.toContain("queryKeys.orders.list()");
 
     // Mutations may still invalidate all order-list variants; idle resume must not.
-    expect(routeSource).toContain("void queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() })");
+    expect(mutationsSource).toContain("queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() })");
   });
 
   it("serializes order date filters as date-only values", () => {

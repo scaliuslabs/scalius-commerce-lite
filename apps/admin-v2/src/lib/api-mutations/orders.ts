@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   bulkDeleteOrders,
+  bulkShipOrders,
   createFulfillmentShipment,
   createOrder,
   createOrderShipment,
@@ -19,6 +20,8 @@ import {
   updateOrderCod,
   updateOrderStatus,
   type BulkDeleteOrdersInput,
+  type BulkShipOrdersInput,
+  type BulkShipOrdersPayload,
   type CreateFulfillmentShipmentInput,
   type CreateOrderInput,
   type CreateOrderShipmentInput,
@@ -39,6 +42,52 @@ import {
   invalidateDashboardQueries,
   queryKeys,
 } from "./shared";
+
+function invalidateBulkShipOrderQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orderIds: readonly string[],
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+  invalidateDashboardQueries(queryClient);
+  for (const orderId of orderIds) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.orders.detail(orderId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.orders.shipments(orderId),
+    });
+  }
+}
+
+function firstBulkShipFailureReason(result: BulkShipOrdersPayload) {
+  const reason = result.results.find((item) => !item.success)?.error;
+  if (!reason) return undefined;
+  return reason.replace(/\s+/g, " ").slice(0, 180);
+}
+
+function toastBulkShipResult(result: BulkShipOrdersPayload) {
+  if (result.successCount === result.totalProcessed) {
+    toast.success(`${result.successCount} shipments created successfully.`);
+    return;
+  }
+
+  const reason = firstBulkShipFailureReason(result);
+  if (result.successCount > 0) {
+    toast.warning(
+      `${result.successCount} of ${result.totalProcessed} shipments created.`,
+      {
+        description: reason
+          ? `${result.failureCount} failed. First issue: ${reason}`
+          : `${result.failureCount} selected order(s) still need shipment.`,
+      },
+    );
+    return;
+  }
+
+  toast.error("Shipment failed", {
+    description: reason ?? "No selected orders could be shipped.",
+  });
+}
 
 export function useCreateOrder() {
   const queryClient = useQueryClient();
@@ -113,6 +162,27 @@ export function useCreateOrderShipment() {
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
       toast.error(getServerFnError(err, "Failed to create shipment"));
+    },
+  });
+}
+
+export function useBulkShipOrders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: BulkShipOrdersInput) => bulkShipOrders({ data }),
+    onSuccess: (result, variables) => {
+      const touchedOrderIds = [
+        ...new Set([
+          ...variables.orderIds,
+          ...result.results.map((item) => item.orderId),
+        ]),
+      ];
+      invalidateBulkShipOrderQueries(queryClient, touchedOrderIds);
+      toastBulkShipResult(result);
+    },
+    onError: (err, variables) => {
+      invalidateBulkShipOrderQueries(queryClient, variables.orderIds);
+      toast.error(getServerFnError(err, "Failed to create shipments"));
     },
   });
 }
