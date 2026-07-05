@@ -425,6 +425,24 @@ importers:
         specifier: 4.104.0
         version: 4.104.0(@cloudflare/workers-types@4.20260623.1)
 
+  apps/ops-monitor:
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20260623.1
+        version: 4.20260623.1
+      '@scalius/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(happy-dom@20.10.3)(vite@8.1.0(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      wrangler:
+        specifier: 4.104.0
+        version: 4.104.0(@cloudflare/workers-types@4.20260623.1)
+
   apps/storefront:
     dependencies:
       '@astrojs/check':
@@ -529,7 +547,7 @@ importers:
     devDependencies:
       '@astrojs/cloudflare':
         specifier: ^14.0.0
-        version: 14.0.0(@types/node@25.9.3)(astro@7.0.0(@astrojs/markdown-remark@7.2.0)(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@25.9.3)(jiti@2.7.0)(rollup@4.62.0)(tsx@4.22.4)(yaml@2.9.0))(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260623.1))(yaml@2.9.0)
+        version: 14.0.0(@types/node@25.9.3)(astro@7.0.0(@astrojs/markdown-remark@7.2.0)(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@types/node@25.9.3)(jiti@2.7.0)(rollup@4.62.0)(tsx@4.22.4)(yaml@2.9.0))(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(wrangler@4.104.0(@cloudflare/workers-types@4.20260623.1))(yaml@2.9.0)
       '@cloudflare/workers-types':
         specifier: ^4.20260623.1
         version: 4.20260623.1

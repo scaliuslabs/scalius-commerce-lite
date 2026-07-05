@@ -44,7 +44,7 @@ Expected degraded result: HTTP `503`, `success: false`, `status: "degraded"`, an
 
 Every API HTTP response should carry `X-Request-Id`; preserve a safe caller-supplied value during smoke tests when you want to match client output to Worker logs. Structured API ops logs include `requestId` and Cloudflare `cfRay` when available. Alert on repeated `api.readyz.degraded` events by required-check status, then use the same request id/CF-Ray to inspect the matching Worker invocation without exposing secrets or buyer data.
 
-Operational runbook: see [OPERATIONAL_RUNBOOK.md](OPERATIONAL_RUNBOOK.md) for concrete alert signals, read-only live smoke commands, queue/DLQ backlog checks, scheduled-maintenance checks, and deploy/rollback investigation pointers. Monitoring contract: see [ops-monitoring-contract.md](ops-monitoring-contract.md) for the desired Cloudflare-native provider setup and completion checklist. The repo names the signals and safe commands; Cloudflare/dashboard alert policies and external notification routing still need provider-side configuration.
+Operational runbook: see [OPERATIONAL_RUNBOOK.md](OPERATIONAL_RUNBOOK.md) for concrete alert signals, read-only live smoke commands, queue/DLQ backlog checks, scheduled-maintenance checks, and deploy/rollback investigation pointers. Monitoring contract: see [ops-monitoring-contract.md](ops-monitoring-contract.md) for the Cloudflare-native scheduled ops monitor and completion checklist. The deployed monitor is a tiny scheduled Worker with no public route: call `/readyz`, read queue/DLQ backlog through `Queue.metrics()` bindings, persist KV streak/cooldown state, and emit structured redacted logs. Cloudflare Health Checks are useful outside-in for `/readyz`, but they do not cover queue/DLQ backlog by themselves.
 
 API deploy verification:
 
@@ -61,6 +61,18 @@ node --check scripts/ops-check.mjs
 pnpm exec vitest run scripts/ops-check.test.mjs scripts/deploy.test.mjs --passWithNoTests
 pnpm --filter @scalius/api exec vitest run src/routes/readiness.test.ts --passWithNoTests
 ```
+
+Ops monitor verification:
+
+```bash
+pnpm --filter @scalius/ops-monitor test
+pnpm --filter @scalius/ops-monitor typecheck
+pnpm --filter @scalius/ops-monitor build
+pnpm deploy:ops-monitor
+pnpm ops:check --queues --samples 1 --timeout-ms 20000
+```
+
+Required evidence before closing OPS-005/OPS-008 monitoring scope: deployed ops-monitor Worker version, cron schedule, no-public-route confirmation, KV binding for streak/cooldown state, every normal/DLQ queue binding, Wrangler tail or Workers Logs showing scheduled `/readyz` checks and `Queue.metrics()` summaries, redacted structured log examples, and routed alert-channel proof. Logs-only monitoring is acceptable as an intermediate slice, but the tracker must keep alert-channel verification open.
 
 ## Storefront Listing Query Plans
 
