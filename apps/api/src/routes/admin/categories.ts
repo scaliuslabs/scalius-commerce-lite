@@ -24,6 +24,7 @@ import {
     successEnvelope,
     paginatedEnvelope,
     errorResponses,
+    conflictResponse,
     idResponse,
     noContentResponse,
 } from "../../schemas/responses";
@@ -165,6 +166,7 @@ const createCategoryRoute = createRoute({
             content: { "application/json": { schema: idResponse } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -262,6 +264,7 @@ const updateCategoryRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({})) } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -318,6 +321,7 @@ const permanentDeleteRoute = createRoute({
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 

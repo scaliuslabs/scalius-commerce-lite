@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getSmsSettings, saveSmsSettings, invalidateSmsCache, SMS_PROVIDER_IDS } from "@scalius/core/integrations/sms";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { ok } from "../../../utils/api-response";
-import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -83,6 +83,7 @@ const saveSmsRoute = createRoute({
     responses: {
         200: { description: "SMS settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     },
 });
 

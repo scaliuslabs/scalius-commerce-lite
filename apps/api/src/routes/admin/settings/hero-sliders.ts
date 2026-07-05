@@ -6,7 +6,7 @@ import { sql, and, eq, isNull } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "../../../utils/api-error";
 
 import { ok, created } from "../../../utils/api-response";
-import { successEnvelope, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, errorResponses, conflictResponse } from "../../../schemas/responses";
 import { nullableTimestampSchema } from "../../../schemas/timestamps";
 import {
     getOptionalExecutionContext,
@@ -92,6 +92,7 @@ const createSliderRoute = createRoute({
     responses: {
         201: { description: "Slider created", content: { "application/json": { schema: successEnvelope(heroSliderSchema) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 

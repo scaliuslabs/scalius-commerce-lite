@@ -13,7 +13,7 @@ import { redactCapiPayloadForLog } from "@scalius/core/integrations/meta/convers
 
 import { ok, created } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
-import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 import { requireEncryptionKey } from "../../../utils/encryption-key";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -115,6 +115,7 @@ const saveSettingsRoute = createRoute({
         200: { description: "Settings saved", content: { "application/json": { schema: successEnvelope(metaConversionsSettingsResponseSchema) } } },
         201: { description: "Settings created", content: { "application/json": { schema: successEnvelope(metaConversionsSettingsResponseSchema) } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 

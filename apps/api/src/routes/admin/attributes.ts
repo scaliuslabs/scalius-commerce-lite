@@ -30,6 +30,7 @@ import {
     successEnvelope,
     paginatedEnvelope,
     errorResponses,
+    conflictResponse,
     messageResponse,
     noContentResponse,
 } from "../../schemas/responses";
@@ -107,6 +108,7 @@ const createAttributeRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({ attribute: attributeSchema }) as z.ZodTypeAny) } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -135,6 +137,7 @@ const updateAttributeRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({ attribute: attributeSchema }) as z.ZodTypeAny) } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -160,6 +163,7 @@ const deleteAttributeRoute = createRoute({
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -259,6 +263,7 @@ const restoreRoute = createRoute({
             content: { "application/json": { schema: messageResponse } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -338,6 +343,7 @@ const addValueRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({})) } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 

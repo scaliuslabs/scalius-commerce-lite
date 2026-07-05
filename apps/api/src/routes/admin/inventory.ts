@@ -7,7 +7,7 @@ import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
-import { successEnvelope, paginationSchema, errorResponses } from "../../schemas/responses";
+import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
@@ -254,6 +254,7 @@ const adjustRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(adjustResultSchema) } },
         },
         404: errorResponses[404],
+        409: conflictResponse,
     }
 });
 
@@ -329,6 +330,7 @@ const stockAdjustRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(stockAdjustResultSchema) } },
         },
         404: errorResponses[404],
+        409: conflictResponse,
     },
 });
 
@@ -372,6 +374,7 @@ const stockSetRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(stockAdjustResultSchema) } },
         },
         404: errorResponses[404],
+        409: conflictResponse,
     },
 });
 

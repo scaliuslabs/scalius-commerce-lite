@@ -15,7 +15,7 @@ import {
   getMaxApiCacheFenceUpdatedAt,
 } from "../utils/api-cache-fence";
 import { ValidationError } from "../utils/api-error";
-import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
+import { successEnvelope, messageResponse, errorResponses, conflictResponse, serviceUnavailableResponse } from "../schemas/responses";
 import {
   ignoreStorefrontCacheQueueFailure,
   listStorefrontCacheQueueFailures,
@@ -218,6 +218,8 @@ const replayStorefrontCacheDlqRoute = createRoute({
       },
     },
     ...errorResponses,
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
   },
 });
 
@@ -259,6 +261,7 @@ const ignoreStorefrontCacheDlqRoute = createRoute({
       },
     },
     ...errorResponses,
+    409: conflictResponse,
   },
 });
 

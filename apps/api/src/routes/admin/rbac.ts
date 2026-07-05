@@ -20,7 +20,7 @@ import { PERMISSIONS, getPermissionsByCategory } from "@scalius/core/auth/rbac/p
 
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
-import { successEnvelope, errorResponses } from "../../schemas/responses";
+import { successEnvelope, errorResponses, conflictResponse } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
@@ -121,6 +121,7 @@ const createRoleRoute = createRoute({
     responses: {
         201: { description: "Role created", content: { "application/json": { schema: successEnvelope(z.object({ role: roleSchema })) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -357,6 +358,7 @@ const deleteRoleRoute = createRoute({
     responses: {
         200: { description: "Role deleted", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -422,6 +424,7 @@ const assignRoleRoute = createRoute({
     responses: {
         201: { description: "Role assigned", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 

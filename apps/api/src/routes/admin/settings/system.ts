@@ -40,7 +40,7 @@ import { clearNotificationProviderBlocks } from "@scalius/core/modules/notificat
 
 import { ok } from "../../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
-import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
@@ -174,6 +174,7 @@ const saveAuthRoute = createRoute({
     responses: {
         200: { description: "Auth settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 
@@ -481,6 +482,7 @@ const saveEmailRoute = createRoute({
     responses: {
         200: { description: "Email settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 
@@ -559,6 +561,7 @@ const saveFirebaseRoute = createRoute({
     responses: {
         200: { description: "Firebase settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 

@@ -6,7 +6,7 @@ import { search } from "@scalius/core/search";
 
 import { ok } from "../../utils/api-response";
 import { ServiceUnavailableError } from "../../utils/api-error";
-import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── Search ──
@@ -30,6 +30,7 @@ const searchRoute = createRoute({
     responses: {
         200: { description: "Search results", content: { "application/json": { schema: successEnvelope(z.object({ products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number() }).passthrough()), pages: z.array(z.object({ id: z.string(), title: z.string(), slug: z.string() }).passthrough()), categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough()), query: z.string(), timestamp: z.string().optional() })) } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 

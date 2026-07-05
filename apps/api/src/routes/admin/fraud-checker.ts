@@ -7,7 +7,7 @@ import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/
 import { getEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
 
 import { ok, created } from "../../utils/api-response";
-import { successEnvelope, errorResponses } from "../../schemas/responses";
+import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
 const providerTypeSchema = z.enum(FRAUD_CHECK_PROVIDER_TYPES);
@@ -76,6 +76,7 @@ const createProviderRoute = createRoute({
     responses: {
         201: { description: "Provider created", content: { "application/json": { schema: successEnvelope(fraudProviderSchema) } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 
@@ -115,6 +116,7 @@ const updateProviderRoute = createRoute({
     responses: {
         200: { description: "Provider updated", content: { "application/json": { schema: successEnvelope(fraudProviderSchema) } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 
@@ -229,6 +231,7 @@ const lookupRoute = createRoute({
     responses: {
         200: { description: "Lookup result", content: { "application/json": { schema: successEnvelope(lookupResponseSchema) } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 

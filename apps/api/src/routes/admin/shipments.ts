@@ -5,7 +5,7 @@ import { NotFoundError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
-import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, messageResponse, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 
@@ -75,6 +75,7 @@ const deleteShipmentRoute = createRoute({
             content: { "application/json": { schema: messageResponse } },
         },
         404: errorResponses[404],
+        409: conflictResponse,
     }
 });
 
@@ -107,6 +108,8 @@ const checkStatusRoute = createRoute({
             content: { "application/json": { schema: checkStatusResponseSchema } },
         },
         404: errorResponses[404],
+        409: conflictResponse,
+        503: serviceUnavailableResponse,
     }
 });
 
