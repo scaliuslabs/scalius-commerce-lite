@@ -8,6 +8,7 @@ import {
   reconcileRefundAttempt,
   refundOrder,
   reconcileShipment,
+  resendOrderNotification,
   resolveOrderSupportRequest,
   retryOrderNotification,
   restoreOrder,
@@ -23,6 +24,7 @@ import {
   type RefundOrderInput,
   type ReconcileShipmentInput,
   type ReconcileRefundAttemptInput,
+  type ResendOrderNotificationInput,
   type ResolveOrderSupportRequestInput,
   type ReturnOrderInput,
   type UpdateFulfillmentStatusInput,
@@ -275,6 +277,30 @@ export function useRetryOrderNotification() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to retry notification")),
+  });
+}
+
+export function useResendOrderNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ResendOrderNotificationInput) =>
+      resendOrderNotification({ data }),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.notifications(variables.orderId),
+      });
+      if (result.enqueued) {
+        toast.success("Notification resend queued");
+        return;
+      }
+      toast.info("Notification resend scheduled", {
+        description: result.skippedReason
+          ? `Current state: ${result.skippedReason.replace(/_/g, " ")}`
+          : undefined,
+      });
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to send notification again")),
   });
 }
 

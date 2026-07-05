@@ -22,7 +22,10 @@ import {
 } from "@/components/ui/card";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
 import { orderNotificationsQueryOptions } from "@/lib/api-query-options/orders";
-import { useRetryOrderNotification } from "@/lib/api-mutations/orders";
+import {
+  useResendOrderNotification,
+  useRetryOrderNotification,
+} from "@/lib/api-mutations/orders";
 import { useHydrated } from "@/hooks/use-hydrated";
 import type { OrderNotificationOutboxDto } from "@/lib/api-functions/orders";
 import {
@@ -56,6 +59,8 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
   push: Bell,
 };
 
+let resendRequestFallbackCounter = 0;
+
 function humanize(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -74,6 +79,42 @@ function outboxTimestamp(outbox: OrderNotificationOutboxDto): string | null {
 
 function canRetry(outbox: OrderNotificationOutboxDto): boolean {
   return outbox.status === "failed" || outbox.status === "pending" || outbox.status === "dead_lettered";
+}
+
+function canResend(outbox: OrderNotificationOutboxDto): boolean {
+  return outbox.status === "sent";
+}
+
+function createResendRequestId(): string {
+  const webCrypto = globalThis.crypto;
+  if (typeof webCrypto?.randomUUID === "function") {
+    return webCrypto.randomUUID();
+  }
+
+  if (typeof webCrypto?.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    webCrypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    );
+    return [
+      hex.slice(0, 4).join(""),
+      hex.slice(4, 6).join(""),
+      hex.slice(6, 8).join(""),
+      hex.slice(8, 10).join(""),
+      hex.slice(10, 16).join(""),
+    ].join("-");
+  }
+
+  resendRequestFallbackCounter += 1;
+  return [
+    "resend",
+    Date.now().toString(36),
+    resendRequestFallbackCounter.toString(36),
+    Math.random().toString(36).slice(2),
+  ].join("-");
 }
 
 function ReceiptRow({ group }: { group: OrderNotificationReceiptDisplayGroup }) {
@@ -121,12 +162,16 @@ function NotificationRow({
   canRetryNotifications: boolean;
 }) {
   const retryMutation = useRetryOrderNotification();
+  const resendMutation = useResendOrderNotification();
   const timestamp = outboxTimestamp(notification);
   const lastError = describeNotificationIssue(notification.lastError);
   const showOutboxError = Boolean(lastError && notification.receipts.length === 0);
   const retrying =
     retryMutation.isPending &&
     retryMutation.variables?.outboxId === notification.id;
+  const resending =
+    resendMutation.isPending &&
+    resendMutation.variables?.outboxId === notification.id;
 
   return (
     <div className="space-y-3 p-4">
@@ -162,6 +207,25 @@ function NotificationRow({
             >
               {retrying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Retry
+            </Button>
+          )}
+          {canRetryNotifications && canResend(notification) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              disabled={resending}
+              onClick={() =>
+                resendMutation.mutate({
+                  orderId,
+                  outboxId: notification.id,
+                  resendRequestId: createResendRequestId(),
+                })
+              }
+            >
+              {resending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              Send again
             </Button>
           )}
         </div>

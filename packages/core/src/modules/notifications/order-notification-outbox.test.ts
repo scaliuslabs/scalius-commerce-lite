@@ -7,6 +7,7 @@ import {
   listOrderNotificationOutboxForOrder,
   markOrderNotificationOutboxProcessingFailed,
   recordAndEnqueueOrderNotification,
+  resendTerminalOrderNotificationOutboxById,
   retryFailedOrderNotificationOutboxById,
   flushPendingOrderNotificationOutbox,
   STALE_QUEUED_REPLAY_SECONDS,
@@ -66,6 +67,53 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
   const receipts = new Map(initialReceipts.map((row) => [row.id, { ...row }]));
 
   const firstRow = () => [...rows.values()][0];
+  const isObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+  const findPredicateValue = (predicate: unknown, columnName: string): string | undefined => {
+    if (!isObject(predicate) || !Array.isArray(predicate.queryChunks)) return undefined;
+
+    for (let index = 0; index < predicate.queryChunks.length; index += 1) {
+      const chunk = predicate.queryChunks[index];
+      if (isObject(chunk) && chunk.name === columnName) {
+        for (const candidate of predicate.queryChunks.slice(index + 1)) {
+          if (!isObject(candidate)) continue;
+          if (Array.isArray(candidate.queryChunks)) break;
+          if ("value" in candidate && !Array.isArray(candidate.value) && candidate.value != null) {
+            return String(candidate.value);
+          }
+        }
+      }
+
+      const nested = findPredicateValue(chunk, columnName);
+      if (nested) return nested;
+    }
+
+    return undefined;
+  };
+  const findOutboxRow = (predicate?: unknown) => {
+    const id = findPredicateValue(predicate, "id");
+    if (id) return rows.get(id);
+
+    const dedupeKey = findPredicateValue(predicate, "dedupe_key");
+    if (dedupeKey) return [...rows.values()].find((row) => row.dedupeKey === dedupeKey);
+
+    const orderId = findPredicateValue(predicate, "order_id");
+    if (orderId) return [...rows.values()].find((row) => row.orderId === orderId);
+
+    return firstRow();
+  };
+  const filterOutboxRows = (predicate?: unknown) => {
+    const id = findPredicateValue(predicate, "id");
+    if (id) return [...rows.values()].filter((row) => row.id === id);
+
+    const dedupeKey = findPredicateValue(predicate, "dedupe_key");
+    if (dedupeKey) return [...rows.values()].filter((row) => row.dedupeKey === dedupeKey);
+
+    const orderId = findPredicateValue(predicate, "order_id");
+    if (orderId) return [...rows.values()].filter((row) => row.orderId === orderId);
+
+    return [...rows.values()];
+  };
   const project = (row: StoredOutboxRow, projection?: Record<string, unknown>) => {
     if (!projection) return { ...row };
     return Object.fromEntries(
@@ -73,8 +121,8 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
     );
   };
 
-  const applyOutboxUpdate = (values: Record<string, unknown>, returning: boolean) => {
-    const row = firstRow();
+  const applyOutboxUpdate = (values: Record<string, unknown>, returning: boolean, predicate?: unknown) => {
+    const row = findOutboxRow(predicate);
     if (!row) return [];
 
     if (values.status === "enqueueing") {
@@ -127,10 +175,11 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
     return returning ? [project(next, { id: true, payload: true, claimId: true, attempts: true })] : [];
   };
 
-  const applyReceiptUpdate = (values: Record<string, unknown>, returning: boolean) => {
+  const applyReceiptUpdate = (values: Record<string, unknown>, returning: boolean, predicate?: unknown) => {
     const updated: StoredReceiptRow[] = [];
+    const outboxId = findPredicateValue(predicate, "outbox_id") ?? "outbox_1";
     for (const receipt of receipts.values()) {
-      if (receipt.outboxId !== "outbox_1") continue;
+      if (receipt.outboxId !== outboxId) continue;
       if (!["pending", "failed"].includes(receipt.status)) continue;
       const next: StoredReceiptRow = {
         ...receipt,
@@ -168,24 +217,24 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
       from: () => {
         const keys = projection ? Object.keys(projection) : [];
         const isReceiptQuery = keys.includes("receiptKey");
-        const selectedRows = () => isReceiptQuery
+        const selectedRows = (predicate?: unknown) => isReceiptQuery
           ? [...receipts.values()]
-          : [...rows.values()].map((row) => project(row, projection));
+          : filterOutboxRows(predicate).map((row) => project(row, projection));
         const thenableRows = (items: unknown[]) => ({
           all: async () => items,
           then: (resolve: (value: unknown[]) => unknown, reject?: (reason: unknown) => unknown) =>
             Promise.resolve(items).then(resolve, reject),
         });
         return {
-        where: () => ({
+        where: (predicate?: unknown) => ({
           get: async () => {
-            const row = firstRow();
+            const row = findOutboxRow(predicate);
             return row ? project(row, projection) : undefined;
           },
           orderBy: () => ({
-            limit: (limit: number) => thenableRows(selectedRows().slice(0, limit)),
+            limit: (limit: number) => thenableRows(selectedRows(predicate).slice(0, limit)),
             then: (resolve: (value: unknown[]) => unknown, reject?: (reason: unknown) => unknown) =>
-              Promise.resolve(selectedRows()).then(resolve, reject),
+              Promise.resolve(selectedRows(predicate)).then(resolve, reject),
           }),
         }),
       };
@@ -193,14 +242,14 @@ function createOutboxDb(initialRows: StoredOutboxRow[] = [], initialReceipts: St
     }),
     update: (table?: unknown) => ({
       set: (values: Record<string, unknown>) => ({
-        where: () => ({
+        where: (predicate?: unknown) => ({
           returning: async () => table === orderNotificationDeliveryReceipts
-            ? applyReceiptUpdate(values, true)
-            : applyOutboxUpdate(values, true),
+            ? applyReceiptUpdate(values, true, predicate)
+            : applyOutboxUpdate(values, true, predicate),
           then: (resolve: (value: unknown[]) => void, reject: (reason?: unknown) => void) =>
             Promise.resolve(table === orderNotificationDeliveryReceipts
-              ? applyReceiptUpdate(values, false)
-              : applyOutboxUpdate(values, false)).then(resolve, reject),
+              ? applyReceiptUpdate(values, false, predicate)
+              : applyOutboxUpdate(values, false, predicate)).then(resolve, reject),
         }),
       }),
     }),
@@ -535,6 +584,114 @@ describe("order notification outbox", () => {
       enqueued: false,
       skippedReason: "already_sent",
     });
+    expect(queue.send).not.toHaveBeenCalled();
+  });
+
+  it("creates and enqueues a fresh manual resend row for sent outbox rows", async () => {
+    const { db, rows } = createOutboxDb([createRow({
+      status: "sent",
+      sentAt: now,
+      payload: JSON.stringify({
+        type: "order.notification",
+        orderId: "order_1",
+        customerEmail: "buyer@example.com",
+        customerName: "Buyer",
+        notificationType: "order_created",
+        data: { total: 1250 },
+      }),
+    })]);
+    const queue = { send: vi.fn(async () => undefined) };
+
+    const result = await resendTerminalOrderNotificationOutboxById({
+      db,
+      queue,
+      orderId: "order_1",
+      outboxId: "outbox_1",
+      resendRequestId: "manual_req_1",
+    });
+
+    expect(result).toMatchObject({
+      dedupeKey: "manual_resend:outbox_1:manual_req_1",
+      created: true,
+      enqueued: true,
+    });
+    expect(result.outboxId).not.toBe("outbox_1");
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      outboxId: result.outboxId,
+      orderId: "order_1",
+      customerEmail: "buyer@example.com",
+      notificationType: "order_created",
+      data: { total: 1250 },
+    }));
+    expect(rows.get(result.outboxId)).toMatchObject({
+      dedupeKey: "manual_resend:outbox_1:manual_req_1",
+      orderId: "order_1",
+      source: "manual_resend",
+      status: "queued",
+      attempts: 1,
+      claimId: null,
+    });
+    expect(rows.get("outbox_1")).toMatchObject({
+      status: "sent",
+      attempts: 0,
+    });
+  });
+
+  it("keeps duplicate manual resend requests idempotent by resend request id", async () => {
+    const { db, rows } = createOutboxDb([createRow({ status: "sent", sentAt: now })]);
+    const queue = { send: vi.fn(async () => undefined) };
+
+    const first = await resendTerminalOrderNotificationOutboxById({
+      db,
+      queue,
+      orderId: "order_1",
+      outboxId: "outbox_1",
+      resendRequestId: "manual_req_1",
+    });
+    const second = await resendTerminalOrderNotificationOutboxById({
+      db,
+      queue,
+      orderId: "order_1",
+      outboxId: "outbox_1",
+      resendRequestId: "manual_req_1",
+    });
+
+    expect(first).toMatchObject({ created: true, enqueued: true });
+    expect(second).toMatchObject({
+      outboxId: first.outboxId,
+      dedupeKey: "manual_resend:outbox_1:manual_req_1",
+      created: false,
+      enqueued: false,
+      skippedReason: "already_queued",
+    });
+    expect(rows.size).toBe(2);
+    expect(queue.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not manually resend non-sent rows", async () => {
+    const { db, rows } = createOutboxDb([createRow({
+      status: "failed",
+      attempts: 2,
+      lastError: "delivery failed",
+    })]);
+    const queue = { send: vi.fn(async () => undefined) };
+
+    const result = await resendTerminalOrderNotificationOutboxById({
+      db,
+      queue,
+      orderId: "order_1",
+      outboxId: "outbox_1",
+      resendRequestId: "manual_req_1",
+    });
+
+    expect(result).toMatchObject({
+      outboxId: "outbox_1",
+      dedupeKey: "order_created:order_1",
+      created: false,
+      enqueued: false,
+      skippedReason: "already_retryable",
+    });
+    expect(rows.size).toBe(1);
     expect(queue.send).not.toHaveBeenCalled();
   });
 

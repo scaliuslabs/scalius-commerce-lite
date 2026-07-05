@@ -70,6 +70,11 @@ describe("order detail permission boundaries", () => {
     expect(manualFulfillmentSource).toContain("orderActions.canManageOrderShipments");
     expect(manualFulfillmentSource).toContain("order.shipmentRecovery?.activeLock === true");
     expect(notificationsSource).toContain("orderActions.canRetryOrderNotifications");
+    expect(notificationsSource).toContain("useResendOrderNotification");
+    expect(notificationsSource).toContain('outbox.status === "sent"');
+    expect(notificationsSource).toContain("resendRequestId: createResendRequestId()");
+    expect(notificationsSource).toContain("crypto");
+    expect(notificationsSource).toContain("Send again");
     expect(supportRequestsSource).toContain("useOrderActionPermissions");
     expect(supportRequestsSource).toContain("orderActions.canResolveOrderSupportRequests");
   });

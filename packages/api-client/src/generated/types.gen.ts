@@ -28271,6 +28271,36 @@ export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses = {
 
 export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponse = PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses[keyof PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses];
 
+export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendData = {
+    body?: {
+        resendRequestId: string;
+    };
+    path: {
+        id: string;
+        outboxId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/notifications/{outboxId}/resend';
+};
+
+export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponses = {
+    /**
+     * Manual resend result
+     */
+    200: {
+        success: true;
+        data: {
+            outboxId: string;
+            dedupeKey: string;
+            created: boolean;
+            enqueued: boolean;
+            skippedReason?: string;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponse = PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponses[keyof PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponses];
+
 export type GetApiV1AdminOrdersByIdFormDataData = {
     body?: never;
     path: {
