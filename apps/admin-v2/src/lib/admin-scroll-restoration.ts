@@ -3,7 +3,7 @@ import { useRouter } from "@tanstack/react-router";
 
 const ADMIN_SCROLL_STORAGE_PREFIX = "scalius-admin-scroll-v2:";
 const DEFAULT_ADMIN_SCROLL_ELEMENT_ID = "admin-main-scroll";
-const MAX_RESTORE_FRAMES = 8;
+const MAX_RESTORE_FRAMES = 30;
 
 type NavigationTraverseEvent = Event & { navigationType?: string };
 type NavigationEventTarget = EventTarget & {
