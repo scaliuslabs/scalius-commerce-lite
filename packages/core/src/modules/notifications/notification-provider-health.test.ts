@@ -23,6 +23,9 @@ describe("notification provider health", () => {
         expect(isNotificationProviderBreakerFailure("HTTP 403 forbidden")).toBe(true);
         expect(isNotificationProviderBreakerFailure("Sender ID is not approved")).toBe(true);
         expect(isNotificationProviderBreakerFailure("invalid_grant service account disabled")).toBe(true);
+        expect(isNotificationProviderBreakerFailure("No configured email provider available; email not delivered")).toBe(true);
+        expect(isNotificationProviderBreakerFailure("SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS.")).toBe(true);
+        expect(isNotificationProviderBreakerFailure("messaging mismatched credential Sender ID mismatch")).toBe(true);
     });
 
     it("does not block transient or per-recipient failures provider-wide", () => {

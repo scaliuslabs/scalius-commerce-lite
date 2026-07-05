@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
     getNotificationChannels: vi.fn(),
     getOrderWhatsAppTemplateSettings: vi.fn(),
     getActiveSmsProvider: vi.fn(),
+    getSmsProviderReadiness: vi.fn(),
     sendEmail: vi.fn(),
     sendSms: vi.fn(),
     getWhatsAppCloudApiSettings: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("../settings/settings.service", () => ({
 
 vi.mock("../../integrations/sms", () => ({
     getActiveSmsProvider: mocks.getActiveSmsProvider,
+    getSmsProviderReadiness: mocks.getSmsProviderReadiness,
 }));
 
 vi.mock("../../integrations/email", () => ({
@@ -185,6 +187,11 @@ describe("order notification dispatch", () => {
         mocks.getNotificationProviderBlock.mockResolvedValue(null);
         mocks.markNotificationProviderBlocked.mockResolvedValue(undefined);
         mocks.isNotificationProviderBreakerFailure.mockReturnValue(false);
+        mocks.getSmsProviderReadiness.mockResolvedValue({
+            activeProvider: "smsnetbd",
+            configured: true,
+            error: null,
+        });
     });
 
     it("keeps the shared notification type list complete", () => {
@@ -527,6 +534,7 @@ describe("order notification dispatch", () => {
         mocks.getNotificationChannels.mockResolvedValue({
             order_created: ["email"],
         });
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
         mocks.sendEmail.mockResolvedValue({
             success: false,
             provider: "log",
@@ -555,6 +563,11 @@ describe("order notification dispatch", () => {
                 providerStatus: "No configured email provider available; email not delivered",
             }),
         );
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(db, {
+            channel: "email",
+            provider: "email",
+            reason: "No configured email provider available; email not delivered",
+        });
         expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
         expect(result.hasRetryableFailure).toBe(false);
     });
@@ -925,6 +938,12 @@ describe("order notification dispatch", () => {
         mocks.getNotificationChannels.mockResolvedValue({
             order_confirmed: ["sms"],
         });
+        mocks.getSmsProviderReadiness.mockResolvedValueOnce({
+            activeProvider: null,
+            configured: false,
+            error: "No active SMS provider selected",
+        });
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
         mocks.getActiveSmsProvider.mockResolvedValue(null);
 
         const result = await sendOrderNotificationEmail(
@@ -943,14 +962,62 @@ describe("order notification dispatch", () => {
         expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
             db,
             expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
-            "missing_sms_provider",
+            "No active SMS provider selected",
             expect.objectContaining({
                 provider: "sms",
-                providerStatus: "missing_sms_provider",
-                rawResponse: "No active SMS provider configured",
+                providerStatus: "No active SMS provider selected",
             }),
         );
+        expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(db, {
+            channel: "sms",
+            provider: "sms",
+            reason: "No active SMS provider selected",
+        });
         expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+    });
+
+    it("blocks placeholder SMS readiness before resolving the provider", async () => {
+        const db = createDb();
+        mocks.getNotificationChannels.mockResolvedValue({
+            order_confirmed: ["sms"],
+        });
+        mocks.getSmsProviderReadiness.mockResolvedValueOnce({
+            activeProvider: "smsnetbd",
+            configured: false,
+            error: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS.",
+        });
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
+
+        const result = await sendOrderNotificationEmail(
+            undefined,
+            "SMS Customer",
+            "order_sms_placeholder",
+            "order_confirmed",
+            {},
+            db,
+            {
+                encryptionKey: "credential-key",
+                outboxId: "outbox_sms_placeholder",
+            },
+        );
+
+        expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(db, {
+            channel: "sms",
+            provider: "smsnetbd",
+            reason: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS.",
+        });
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS.",
+            expect.objectContaining({
+                provider: "smsnetbd",
+                providerStatus: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS.",
+            }),
+        );
         expect(result.hasRetryableFailure).toBe(false);
     });
 
@@ -1573,5 +1640,70 @@ describe("order notification dispatch", () => {
         expect(mocks.markOrderNotificationDeliveryReceiptSkipped).not.toHaveBeenCalled();
         expect(pushDb.update).not.toHaveBeenCalled();
         expect(result.hasRetryableFailure).toBe(true);
+    });
+
+    it("marks FCM sender credential fanout failures skipped and provider-blocked", async () => {
+        const pushDb = createPushDb([
+            { token: "fcm_token_a" },
+            { token: "fcm_token_b" },
+        ]);
+        mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
+        mocks.sendEachForMulticast.mockResolvedValueOnce({
+            successCount: 0,
+            failureCount: 2,
+            responses: [
+                {
+                    success: false,
+                    error: {
+                        code: "messaging/mismatched-credential",
+                        message: "Sender ID mismatch",
+                    },
+                },
+                {
+                    success: false,
+                    error: {
+                        code: "messaging/mismatched-credential",
+                        message: "Sender ID mismatch",
+                    },
+                },
+            ],
+        });
+
+        const result = await sendOrderNotification(
+            pushDb.db,
+            {
+                id: "order_push_sender_mismatch",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+            "https://api.example.test",
+            { outboxId: "outbox_push_sender_mismatch" },
+        );
+
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledTimes(1);
+        expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(pushDb.db, {
+            channel: "push",
+            provider: "fcm",
+            reason: "messaging/mismatched-credential: Sender ID mismatch",
+        });
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledTimes(2);
+        expect(mocks.markOrderNotificationDeliveryReceiptSkipped).toHaveBeenCalledWith(
+            pushDb.db,
+            expect.objectContaining({ id: "receipt_1", claimId: "claim_1" }),
+            "messaging/mismatched-credential: Sender ID mismatch",
+            expect.objectContaining({
+                provider: "fcm",
+                providerStatus: "messaging/mismatched-credential",
+                rawResponse: "Sender ID mismatch",
+            }),
+        );
+        expect(mocks.markOrderNotificationDeliveryReceiptFailed).not.toHaveBeenCalled();
+        expect(pushDb.update).not.toHaveBeenCalled();
+        expect(result.hasRetryableFailure).toBe(false);
+        expect(result.outcomes.map((outcome) => outcome.status)).toEqual([
+            "skipped",
+            "skipped",
+        ]);
     });
 });

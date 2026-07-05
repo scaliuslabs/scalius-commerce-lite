@@ -199,6 +199,10 @@ describe("storefront page data boundaries", () => {
       `${STOREFRONT_SRC_ROOT}/pages/index.astro`,
       "utf8",
     );
+    const productSource = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/products/[slug].astro`,
+      "utf8",
+    );
     const searchSource = readFileSync(
       `${STOREFRONT_SRC_ROOT}/pages/search/index.astro`,
       "utf8",
@@ -210,6 +214,11 @@ describe("storefront page data boundaries", () => {
 
     expect(homepageSource).toContain("storefrontDataUnavailableResponse");
     expect(homepageSource).toContain("if (!layoutData || !homepageData)");
+    expect(productSource).toContain("storefrontDataUnavailableResponse");
+    expect(productSource).toContain("if (!layoutData)");
+    expect(productSource).toContain(
+      "const response = storefrontDataUnavailableResponse(\n    \"We could not load this product. Please try again shortly.\"",
+    );
     expect(searchSource).toContain("storefrontDataUnavailableResponse");
     expect(searchSource).toContain("if (!layoutData || !productsResponse)");
     expect(categorySource).toContain("storefrontDataUnavailableResponse");

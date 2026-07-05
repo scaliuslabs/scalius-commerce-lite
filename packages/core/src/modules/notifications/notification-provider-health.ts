@@ -121,7 +121,7 @@ function normalizeProvider(provider: string): string {
 }
 
 function normalizeReason(reason: string): string {
-    const normalized = reason.replace(/\s+/g, " ").trim();
+    const normalized = maskSensitiveReasonText(reason).replace(/\s+/g, " ").trim();
     return normalized.slice(0, MAX_REASON_LENGTH) || "provider_setup_failure";
 }
 
@@ -250,7 +250,19 @@ function humanizeChannel(channel: NotificationProviderHealthChannel): string {
     return "Email";
 }
 
+function maskSensitiveReasonText(value: string): string {
+    return value
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+        .replace(/\+?\d[\d\s().-]{8,}\d/g, "[phone]");
+}
+
 const PROVIDER_BREAKER_PATTERNS = [
+    /no configured .*provider/i,
+    /no active .*provider/i,
+    /provider .*not ready/i,
+    /not configured/i,
+    /missing[_\s-]?credentials/i,
+    /looks like a placeholder/i,
     /auth(?:orization|entication)?\s+(?:required|failed|error)/i,
     /unauthori[sz]ed/i,
     /forbidden/i,
@@ -258,6 +270,7 @@ const PROVIDER_BREAKER_PATTERNS = [
     /api\s*(?:key|token)\s+(?:invalid|expired|missing|not configured)/i,
     /could not be decrypted/i,
     /mismatched credential/i,
+    /mismatch(?:ed)?\s+credential/i,
     /invalid[_\s-]?grant/i,
     /private key/i,
     /service account/i,

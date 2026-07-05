@@ -19,6 +19,7 @@ const DEFAULT_READYZ_SAMPLES = 4;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const READYZ_SAMPLE_DELAY_MS = 1_000;
 const MAX_BODY_PREVIEW_LENGTH = 240;
+const EXPECTED_API_CRON = "*/15 * * * *";
 
 const booleanOptions = new Set(["help", "json", "skip-wrangler", "queues"]);
 const stringOptions = new Set(["api-base-url", "samples", "timeout-ms"]);
@@ -139,23 +140,106 @@ export function readApiWranglerConfig(configPath = defaultApiConfigPath) {
 }
 
 export function getKnownQueueNames(config) {
-  const names = [];
-  const seen = new Set();
-  const add = (name) => {
-    if (typeof name !== "string" || !name || seen.has(name)) return;
-    seen.add(name);
-    names.push(name);
+  return getQueueMonitoringExpectations(config).map((queue) => queue.name);
+}
+
+function addUnique(list, value) {
+  if (typeof value !== "string" || !value || list.includes(value)) return;
+  list.push(value);
+}
+
+function getQueueMonitoringExpectations(config) {
+  const workerName = typeof config?.name === "string" ? config.name.trim() : "";
+  const workerActor = workerName ? `worker:${workerName}` : "";
+  const byName = new Map();
+
+  const ensureQueue = (name) => {
+    if (typeof name !== "string" || !name) return null;
+    const existing = byName.get(name);
+    if (existing) return existing;
+    const expectation = {
+      name,
+      expectedProducers: [],
+      expectedConsumers: [],
+      deadLetterQueue: null,
+      deadLetterFor: [],
+    };
+    byName.set(name, expectation);
+    return expectation;
   };
 
   for (const consumer of config?.queues?.consumers ?? []) {
-    add(consumer.queue);
-    add(consumer.dead_letter_queue);
-  }
-  for (const producer of config?.queues?.producers ?? []) {
-    add(producer.queue);
+    const expectation = ensureQueue(consumer.queue);
+    if (!expectation) continue;
+    if (workerActor) addUnique(expectation.expectedConsumers, workerActor);
+
+    if (typeof consumer.dead_letter_queue === "string" && consumer.dead_letter_queue) {
+      expectation.deadLetterQueue = consumer.dead_letter_queue;
+      const deadLetterExpectation = ensureQueue(consumer.dead_letter_queue);
+      if (deadLetterExpectation) addUnique(deadLetterExpectation.deadLetterFor, consumer.queue);
+    }
   }
 
-  return names;
+  for (const producer of config?.queues?.producers ?? []) {
+    const expectation = ensureQueue(producer.queue);
+    if (expectation && workerActor) addUnique(expectation.expectedProducers, workerActor);
+  }
+
+  return [...byName.values()].map((expectation) => ({
+    ...expectation,
+    kind: expectation.deadLetterFor.length > 0 ? "dead_letter" : "normal",
+  }));
+}
+
+export function evaluateMonitoringConfig(config) {
+  const errors = [];
+  const workerName = typeof config?.name === "string" ? config.name.trim() : "";
+  const crons = Array.isArray(config?.triggers?.crons)
+    ? config.triggers.crons.filter((cron) => typeof cron === "string")
+    : [];
+  const observabilityEnabled = config?.observability?.enabled === true;
+  const requiredCronPresent = crons.includes(EXPECTED_API_CRON);
+  const queues = getQueueMonitoringExpectations(config);
+
+  if (!workerName) {
+    errors.push("apps/api/wrangler.jsonc must declare the API Worker name.");
+  }
+  if (!observabilityEnabled) {
+    errors.push("apps/api/wrangler.jsonc must keep observability.enabled true for Worker logs/alerts.");
+  }
+  if (!requiredCronPresent) {
+    errors.push(`apps/api/wrangler.jsonc must keep the scheduled maintenance cron ${EXPECTED_API_CRON}.`);
+  }
+  if (queues.length === 0) {
+    errors.push("apps/api/wrangler.jsonc must declare API queues for provider-side queue monitoring.");
+  }
+
+  for (const queue of queues) {
+    if (queue.expectedProducers.length > 0 && queue.expectedConsumers.length === 0) {
+      errors.push(`queue ${queue.name} is produced by ${workerName || "the API Worker"} but has no API consumer.`);
+    }
+    if (queue.expectedProducers.length > 0 && !queue.deadLetterQueue) {
+      errors.push(`queue ${queue.name} must declare a dead_letter_queue for alertable failure handling.`);
+    }
+    if (queue.deadLetterFor.length > 0 && queue.expectedConsumers.length === 0) {
+      errors.push(`DLQ ${queue.name} must have an API consumer so terminal failures are visible outside Cloudflare.`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    workerName,
+    workerActor: workerName ? `worker:${workerName}` : null,
+    observabilityEnabled,
+    requiredCron: EXPECTED_API_CRON,
+    requiredCronPresent,
+    crons,
+    queueCount: queues.length,
+    normalQueueCount: queues.filter((queue) => queue.expectedProducers.length > 0).length,
+    deadLetterQueueCount: queues.filter((queue) => queue.deadLetterFor.length > 0).length,
+    queues,
+  };
 }
 
 function createRequestId() {
@@ -396,6 +480,34 @@ async function checkOpenApi(options, {
   };
 }
 
+function checkMonitoringConfig(apiConfig, {
+  logger,
+}) {
+  const evaluation = evaluateMonitoringConfig(apiConfig);
+  if (!evaluation.ok) {
+    throw new Error(`Monitoring config contract failed: ${evaluation.errors.join("; ")}`);
+  }
+
+  logger?.log(
+    "✓ Monitoring config: observability enabled, " +
+    `${evaluation.crons.length} cron(s), ${evaluation.queueCount} queue(s) ` +
+    `(${evaluation.deadLetterQueueCount} DLQ).`,
+  );
+
+  return {
+    workerName: evaluation.workerName,
+    workerActor: evaluation.workerActor,
+    observabilityEnabled: evaluation.observabilityEnabled,
+    requiredCron: evaluation.requiredCron,
+    requiredCronPresent: evaluation.requiredCronPresent,
+    crons: evaluation.crons,
+    queueCount: evaluation.queueCount,
+    normalQueueCount: evaluation.normalQueueCount,
+    deadLetterQueueCount: evaluation.deadLetterQueueCount,
+    queues: evaluation.queues,
+  };
+}
+
 export function buildWranglerDeploymentsCommand({
   pnpmExecutable = "pnpm",
   rootDir = defaultRootDir,
@@ -540,24 +652,93 @@ function stripAnsi(value) {
   return value.replace(/\u001B\[[0-9;]*m/g, "");
 }
 
-export function summarizeQueueInfoOutput(queueName, output) {
-  const lines = stripAnsi(output)
-    .split(/\r?\n/)
-    .map((line) => line.trim())
+function parseActorList(value) {
+  if (typeof value !== "string" || !value.trim()) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
     .filter(Boolean);
-  const compact = lines.slice(0, 4).join(" | ");
-  return compact ? compact.slice(0, 220) : `${queueName}: info returned no output`;
+}
+
+function parseOptionalInteger(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value.trim());
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+export function parseWranglerQueueInfoOutput(output) {
+  const fields = new Map();
+  for (const line of stripAnsi(output).split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const separatorIndex = trimmed.indexOf(":");
+    if (separatorIndex <= 0) continue;
+    const label = trimmed.slice(0, separatorIndex).trim().toLowerCase();
+    const value = trimmed.slice(separatorIndex + 1).trim();
+    fields.set(label, value);
+  }
+
+  return {
+    name: fields.get("queue name") ?? null,
+    id: fields.get("queue id") ?? null,
+    producerCount: parseOptionalInteger(fields.get("number of producers")),
+    consumerCount: parseOptionalInteger(fields.get("number of consumers")),
+    producers: parseActorList(fields.get("producers")),
+    consumers: parseActorList(fields.get("consumers")),
+  };
+}
+
+export function summarizeQueueInfoOutput(queueName, output) {
+  const info = parseWranglerQueueInfoOutput(output);
+  const producers = info.producers.length > 0 ? info.producers.join(", ") : "none";
+  const consumers = info.consumers.length > 0 ? info.consumers.join(", ") : "none";
+  return `${info.name ?? queueName}: producers=${producers}; consumers=${consumers}`.slice(0, 220);
+}
+
+export function evaluateQueueInfoOutput(queueName, output, expectation = {}) {
+  const info = parseWranglerQueueInfoOutput(output);
+  const expectedProducers = expectation.expectedProducers ?? [];
+  const expectedConsumers = expectation.expectedConsumers ?? [];
+  const errors = [];
+
+  if (info.name && info.name !== queueName) {
+    errors.push(`expected queue name ${queueName}, got ${info.name}`);
+  }
+  for (const producer of expectedProducers) {
+    if (!info.producers.includes(producer)) {
+      errors.push(`missing expected producer ${producer}`);
+    }
+  }
+  for (const consumer of expectedConsumers) {
+    if (!info.consumers.includes(consumer)) {
+      errors.push(`missing expected consumer ${consumer}`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    summary: summarizeQueueInfoOutput(queueName, output),
+    name: info.name ?? queueName,
+    producerCount: info.producerCount,
+    consumerCount: info.consumerCount,
+    producers: info.producers,
+    consumers: info.consumers,
+    expectedProducers,
+    expectedConsumers,
+  };
 }
 
 async function checkQueues(options, {
   execFileImpl,
   pnpmExecutable,
   rootDir,
-  queueNames,
+  queueExpectations,
   logger,
 }) {
   const queues = [];
-  for (const queueName of queueNames) {
+  for (const expectation of queueExpectations) {
+    const queueName = expectation.name;
     const commandSpec = buildWranglerQueueInfoCommand(queueName, { pnpmExecutable, rootDir });
     let stdout;
     try {
@@ -569,12 +750,29 @@ async function checkQueues(options, {
       throw new Error(formatWranglerFailure(`Queue info check for ${queueName}`, commandSpec.display, error));
     }
 
-    const summary = summarizeQueueInfoOutput(queueName, stdout);
+    const queueInfo = evaluateQueueInfoOutput(queueName, stdout, expectation);
+    if (!queueInfo.ok) {
+      throw new Error(
+        `Queue provider wiring for ${queueName} did not match apps/api/wrangler.jsonc: ` +
+        queueInfo.errors.join("; "),
+      );
+    }
+
+    const summary = queueInfo.summary;
     logger?.log(`✓ queue ${queueName}: ${summary}`);
     queues.push({
       name: queueName,
       command: commandSpec.display,
       summary,
+      kind: expectation.kind,
+      deadLetterQueue: expectation.deadLetterQueue,
+      deadLetterFor: expectation.deadLetterFor,
+      producerCount: queueInfo.producerCount,
+      consumerCount: queueInfo.consumerCount,
+      producers: queueInfo.producers,
+      consumers: queueInfo.consumers,
+      expectedProducers: queueInfo.expectedProducers,
+      expectedConsumers: queueInfo.expectedConsumers,
     });
   }
 
@@ -637,6 +835,9 @@ export async function runOpsCheck(options, {
   await runStep(result, "openapi", () =>
     checkOpenApi(options, { fetchImpl, requestId, logger }));
 
+  const monitoringConfig = await runStep(result, "monitoringConfig", () =>
+    checkMonitoringConfig(apiConfig, { logger }));
+
   if (options.skipWrangler) {
     result.checks.deployment = {
       status: "skipped",
@@ -649,12 +850,12 @@ export async function runOpsCheck(options, {
   }
 
   if (options.queues) {
-    const queueNames = getKnownQueueNames(apiConfig);
-    if (queueNames.length === 0) {
+    const queueExpectations = monitoringConfig.queues;
+    if (queueExpectations.length === 0) {
       throw createCheckError("No API queues found in apps/api/wrangler.jsonc.", result);
     }
     await runStep(result, "queues", () =>
-      checkQueues(options, { execFileImpl, pnpmExecutable, rootDir, queueNames, logger }));
+      checkQueues(options, { execFileImpl, pnpmExecutable, rootDir, queueExpectations, logger }));
   } else {
     result.checks.queues = {
       status: "skipped",
@@ -677,7 +878,7 @@ Options:
   --samples <count>     /readyz sample count (default ${DEFAULT_READYZ_SAMPLES})
   --timeout-ms <ms>     Per-request/per-command timeout (default ${DEFAULT_TIMEOUT_MS})
   --skip-wrangler       Skip Cloudflare Wrangler deployment proof
-  --queues              Also read known Cloudflare queue info
+  --queues              Also verify Cloudflare queue provider wiring
   --json                Emit JSON
   -h, --help            Show this help
 `);

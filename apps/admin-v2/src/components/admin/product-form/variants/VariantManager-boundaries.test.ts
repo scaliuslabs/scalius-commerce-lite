@@ -59,7 +59,9 @@ describe("VariantManager product mode boundaries", () => {
     const source = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
 
     expect(source).toContain("import { SimpleProductSkuPanel }");
-    expect(source).toContain("getVariantManagementMode(localVariants)");
+    expect(source).toContain("const activeVariants = useMemo");
+    expect(source).toContain("variant.deletedAt === null");
+    expect(source).toContain("getVariantManagementMode(activeVariants)");
     expect(source).toContain('variantMode.mode === "simple" && !isAdding');
     expect(source).toContain("<SimpleProductSkuPanel");
     expect(source).toContain("variant={variantMode.variant}");

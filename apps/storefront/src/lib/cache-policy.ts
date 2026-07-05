@@ -11,6 +11,21 @@ function hasNamedCookie(cookieHeader: string, cookieNames: readonly string[]): b
   return false;
 }
 
+function responseHasSetCookie(headers: Headers): boolean {
+  const headersWithCookies = headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof headersWithCookies.getSetCookie === "function") {
+    return headersWithCookies.getSetCookie().length > 0;
+  }
+
+  if (headers.has("Set-Cookie") || headers.has("set-cookie")) return true;
+
+  for (const [key] of headers.entries()) {
+    if (key.toLowerCase() === "set-cookie") return true;
+  }
+
+  return false;
+}
+
 export function requestHasPrivateSession(headers: Headers): boolean {
   if (headers.has("Authorization")) return true;
 
@@ -38,7 +53,7 @@ export function isCacheablePublicResponse(response: Response): boolean {
   ) {
     return false;
   }
-  if (response.headers.has("Set-Cookie")) return false;
+  if (responseHasSetCookie(response.headers)) return false;
 
   const cacheControl = response.headers.get("Cache-Control")?.toLowerCase() ?? "";
   if (cacheControl.includes("private") || cacheControl.includes("no-store")) {

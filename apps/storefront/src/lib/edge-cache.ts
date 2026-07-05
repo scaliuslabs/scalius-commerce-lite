@@ -75,7 +75,7 @@ const DEFAULT_CONTEXT: CacheContext = {
  * Get the current cache context from ALS.
  */
 function getCacheContext(): CacheContext {
-  return cacheContextAls.getStore() ?? DEFAULT_CONTEXT;
+  return cacheContextAls.getStore() ?? _fallbackContext;
 }
 
 /**
