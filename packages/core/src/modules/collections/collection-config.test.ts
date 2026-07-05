@@ -49,6 +49,19 @@ describe("collection config normalization", () => {
         }).productIds).toEqual(["prod_new"]);
     });
 
+    it("normalizes older product object lists into canonical productIds", () => {
+        expect(normalizeCollectionConfig({
+            products: [
+                { id: "prod_1", name: "One" },
+                { productId: "prod_2" },
+                " prod_3 ",
+                { id: "" },
+                null,
+                "prod_1",
+            ],
+        }).productIds).toEqual(["prod_1", "prod_2", "prod_3"]);
+    });
+
     it("serializes canonical storage shape and builds product lookup ids", () => {
         const config = stringifyCollectionConfig({
             productIds: ["prod_1", "prod_1"],

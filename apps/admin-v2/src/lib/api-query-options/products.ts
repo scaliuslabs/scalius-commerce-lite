@@ -19,6 +19,12 @@ function normalizeLookupIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
 }
 
+function normalizeProductsByIdsPayload(payload: unknown): ProductsByIdsPayload {
+  const products = (payload as Partial<ProductsByIdsPayload> | null | undefined)
+    ?.products;
+  return { products: Array.isArray(products) ? products : [] };
+}
+
 export const productsQueryOptions = (params: ProductsQueryInput) =>
   queryOptions({
     queryKey: queryKeys.products.list(params),
@@ -33,7 +39,9 @@ export const productsByIdsQueryOptions = (ids: readonly string[]) => {
     queryFn: () =>
       normalizedIds.length === 0
         ? Promise.resolve(EMPTY_PRODUCTS_BY_IDS)
-        : getProductsByIds({ data: { ids: normalizedIds } }),
+        : getProductsByIds({ data: { ids: normalizedIds } }).then(
+            normalizeProductsByIdsPayload,
+          ),
     placeholderData: EMPTY_PRODUCTS_BY_IDS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
