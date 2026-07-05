@@ -58,14 +58,22 @@ describe("variant CSV helpers", () => {
     const result = parseCsvToVariants(generateCsvTemplate());
 
     expect(result.success).toBe(true);
+    expect(result.imported).toBe(3);
     expect(result.variants[0]).toMatchObject({
       sku: "SKU-001",
+      size: "2KG",
+      color: "Red",
       barcode: "5901234123457",
       barcodeType: "ean13",
       price: 299.99,
       stock: 50,
       trackInventory: true,
     });
+    expect(result.variants).toEqual([
+      expect.objectContaining({ sku: "SKU-001", size: "2KG", color: "Red" }),
+      expect.objectContaining({ sku: "SKU-002", size: "XL", color: "Blue" }),
+      expect.objectContaining({ sku: "SKU-003", size: "100ml", color: "Pro" }),
+    ]);
   });
 
   it("rejects duplicate imported SKUs and conflicts with existing variants", () => {

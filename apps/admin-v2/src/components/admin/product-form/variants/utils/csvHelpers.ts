@@ -262,21 +262,49 @@ function parseCsvLine(line: string): string[] {
  * Generate CSV template for download
  */
 export function generateCsvTemplate(): string {
-  const exampleRow = [
-    "SKU-001",
-    "XL",
-    "Red",
-    "500",
-    "5901234123457",
-    "ean13",
-    "299.99",
-    "50",
-    "yes",
-    "percentage",
-    "10",
+  const exampleRows = [
+    [
+      "SKU-001",
+      "2KG",
+      "Red",
+      "500",
+      "5901234123457",
+      "ean13",
+      "299.99",
+      "50",
+      "yes",
+      "percentage",
+      "10",
+    ],
+    [
+      "SKU-002",
+      "XL",
+      "Blue",
+      "500",
+      "",
+      "",
+      "299.99",
+      "50",
+      "yes",
+      "percentage",
+      "10",
+    ],
+    [
+      "SKU-003",
+      "100ml",
+      "Pro",
+      "100",
+      "",
+      "",
+      "299.99",
+      "50",
+      "yes",
+      "percentage",
+      "10",
+    ],
   ];
 
-  return [CSV_HEADERS, exampleRow]
+  return [CSV_HEADERS, ...exampleRows]
     .map((row) => row.map(formatCsvCell).join(","))
     .join("\n");
 }

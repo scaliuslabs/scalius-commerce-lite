@@ -56,7 +56,10 @@ export class ResendEmailProvider implements EmailProvider {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({})) as { message?: string };
-        throw new ServiceUnavailableError(error.message || `Resend API error: ${response.status}`);
+        const message = error.message?.replace(/\s+/g, " ").trim();
+        throw new ServiceUnavailableError(
+          `Resend API error: ${response.status}${message ? `: ${message}` : ""}`,
+        );
       }
 
       const data = await response.json().catch(() => ({})) as { id?: string };

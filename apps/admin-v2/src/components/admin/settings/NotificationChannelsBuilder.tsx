@@ -23,6 +23,7 @@ import {
   ORDER_NOTIFICATION_TYPES,
   type OrderNotificationType,
 } from "@scalius/core/modules/notifications/notification-types";
+import { describeNotificationIssue } from "@/lib/order-notification-display";
 
 const ORDER_STATUSES = ORDER_NOTIFICATION_TYPES.map((key) => ({
   key,
@@ -155,6 +156,13 @@ function sanitizeAdminChannelConfig(
     }
   }
   return sanitized;
+}
+
+function readinessIssueText(value: string | null | undefined, fallback: string): string {
+  const trimmed = value?.trim() ?? "";
+  const described = describeNotificationIssue(trimmed);
+  if (described) return described;
+  return trimmed.length > 0 ? trimmed : fallback;
 }
 
 export function NotificationChannelsBuilder() {
@@ -297,7 +305,10 @@ export function NotificationChannelsBuilder() {
       toast.success("Notification channels saved");
     } catch (error: unknown) {
       toast.error("Failed to save", {
-        description: error instanceof Error ? error.message : "Please try again.",
+        description: readinessIssueText(
+          error instanceof Error ? error.message : null,
+          "Please try again.",
+        ),
       });
     } finally {
       setIsSaving(false);
@@ -320,7 +331,10 @@ export function NotificationChannelsBuilder() {
       toast.success("Admin notification channels saved");
     } catch (error: unknown) {
       toast.error("Failed to save", {
-        description: error instanceof Error ? error.message : "Please try again.",
+        description: readinessIssueText(
+          error instanceof Error ? error.message : null,
+          "Please try again.",
+        ),
       });
     } finally {
       setIsAdminSaving(false);
@@ -390,7 +404,10 @@ export function NotificationChannelsBuilder() {
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    {emailError ?? "Email notifications are locked until a transactional email provider is ready."}
+                    {readinessIssueText(
+                      emailError,
+                      "Email notifications are locked until a transactional email provider is ready.",
+                    )}
                   </span>
                 </div>
               )}
@@ -398,7 +415,10 @@ export function NotificationChannelsBuilder() {
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    {smsProviderError ?? "SMS notifications are locked until an active SMS provider is ready."}
+                    {readinessIssueText(
+                      smsProviderError,
+                      "SMS notifications are locked until an active SMS provider is ready.",
+                    )}
                   </span>
                 </div>
               )}
@@ -406,7 +426,10 @@ export function NotificationChannelsBuilder() {
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    {whatsAppError ?? "WhatsApp notifications are locked until Meta WhatsApp Cloud API credentials are ready."}
+                    {readinessIssueText(
+                      whatsAppError,
+                      "WhatsApp notifications are locked until Meta WhatsApp Cloud API credentials are ready.",
+                    )}
                   </span>
                 </div>
               )}
@@ -495,7 +518,10 @@ export function NotificationChannelsBuilder() {
                 <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    {pushError ?? "Admin push notifications are locked until Firebase service account credentials are ready."}
+                    {readinessIssueText(
+                      pushError,
+                      "Admin push notifications are locked until Firebase service account credentials are ready.",
+                    )}
                   </span>
                 </div>
               )}

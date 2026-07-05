@@ -318,7 +318,7 @@ export function ProductView({ product }: ProductViewProps) {
                   <TableHeader>
                     <TableRow className="bg-muted/30">
                       <TableHead className="text-xs font-medium py-2 h-8 pl-4">SKU</TableHead>
-                      <TableHead className="text-xs font-medium py-2 h-8">Attributes</TableHead>
+                      <TableHead className="text-xs font-medium py-2 h-8">Options</TableHead>
                       <TableHead className="text-xs font-medium py-2 h-8 text-right">Price</TableHead>
                       <TableHead className="text-xs font-medium py-2 h-8 text-right">On Hand</TableHead>
                       <TableHead className="text-xs font-medium py-2 h-8 text-right">Reserved</TableHead>
@@ -333,8 +333,8 @@ export function ProductView({ product }: ProductViewProps) {
                       const attributes = isSimpleDefaultSku
                         ? "Product SKU"
                         : [
-                            v.size && `Size: ${v.size}`,
-                            v.color && `Color: ${v.color}`,
+                            v.size && `Option 1: ${v.size}`,
+                            v.color && `Option 2: ${v.color}`,
                             v.weight && `${v.weight}g`,
                           ].filter(Boolean).join(" • ") || "—";
                       return (
