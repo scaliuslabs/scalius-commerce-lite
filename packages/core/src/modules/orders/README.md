@@ -158,6 +158,8 @@ All 10 buyer-visible order statuses that trigger status notifications are covere
 4. Provider-success/local-finalization failures leave the shipment `reconcile_required` and keep the matching order shipment claim until repair succeeds
 5. CAS conflicts (concurrent admin + webhook edits) are logged and skipped gracefully
 
+Admin bulk-shipping UI must submit one `/bulk-ship` request with all selected order ids and render the aggregate per-order result. Do not loop over `/:id/shipments` from the browser for selected rows.
+
 ### Delete Flow
 
 - **Soft delete**: Releases inventory via `applyInventoryForStatusChange(db, id, "cancelled")` if reserved or deducted, sets `deletedAt`, sets `inventoryAction` to `"restored"`

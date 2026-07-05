@@ -21,12 +21,23 @@ import { toast } from "sonner";
 import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
 import type { DeliveryProviderRecord } from "~/types/api-responses";
 
+export interface BulkShipResultSummary {
+  totalProcessed: number;
+  successCount: number;
+  failureCount: number;
+  failures: Array<{
+    orderId: string;
+    error: string;
+  }>;
+}
+
 interface BulkShipDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   isShipping: boolean;
   onConfirm: (providerId: string) => void;
   itemCount: number;
+  resultSummary: BulkShipResultSummary | null;
 }
 
 export function BulkShipDialog({
@@ -35,8 +46,14 @@ export function BulkShipDialog({
   isShipping,
   onConfirm,
   itemCount,
+  resultSummary,
 }: BulkShipDialogProps) {
   const [selectedProvider, setSelectedProvider] = React.useState("");
+  const visibleFailures = resultSummary?.failures.slice(0, 5) ?? [];
+  const hiddenFailureCount = Math.max(
+    (resultSummary?.failures.length ?? 0) - visibleFailures.length,
+    0,
+  );
 
   const { data: providers = [], isLoading: isLoadingProviders } = useQuery({
     ...deliveryProvidersQueryOptions(),
@@ -116,6 +133,35 @@ export function BulkShipDialog({
               </p>
             )}
           </div>
+
+          {resultSummary && (
+            <div className="rounded-md border border-[var(--border)] bg-[var(--muted)] p-3 text-sm">
+              <div className="font-medium text-[var(--foreground)]">
+                {resultSummary.successCount} of {resultSummary.totalProcessed} shipped
+              </div>
+              <div className="mt-1 text-[var(--muted-foreground)]">
+                {resultSummary.failureCount} failed and remain selected.
+              </div>
+              {visibleFailures.length > 0 && (
+                <ul className="mt-2 space-y-1 text-[var(--muted-foreground)]">
+                  {visibleFailures.map((failure) => (
+                    <li key={failure.orderId} className="break-words">
+                      <span className="font-medium text-[var(--foreground)]">
+                        {failure.orderId}
+                      </span>
+                      : {failure.error}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {hiddenFailureCount > 0 && (
+                <div className="mt-2 text-[var(--muted-foreground)]">
+                  {hiddenFailureCount} more failed order
+                  {hiddenFailureCount === 1 ? "" : "s"}.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter className="gap-2">
