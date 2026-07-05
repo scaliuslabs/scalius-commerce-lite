@@ -44,8 +44,8 @@ describe("order success side effects", () => {
     expect(pageSource).toContain("orderId={order.id}");
     expect(pageSource).toContain("supportRequests={order.supportRequests}");
     expect(pageSource).toContain("supportRequestActions={order.supportRequestActions}");
-    expect(buttonsSource).toContain("Keep this private receipt link");
-    expect(buttonsSource).toContain("Guest orders are tracked from this private receipt link.");
+    expect(buttonsSource).toContain("Keep this browser receipt");
+    expect(buttonsSource).toContain("Guest receipts stay available in this browser for a limited time.");
     expect(buttonsSource).toContain("Account history only includes orders placed while signed in.");
     expect(buttonsSource).toContain("navigator.clipboard");
     expect(buttonsSource).toContain("Sign In For Future Orders");
@@ -64,11 +64,13 @@ describe("order success side effects", () => {
     );
 
     expect(buttonsSource).toContain("Need help with this order?");
-    expect(buttonsSource).toContain("getReceiptTokenFromUrl");
     expect(buttonsSource).toContain("/api/order-support/receipt-request");
     expect(buttonsSource).toContain("setSupportRequests(payload.data.supportRequests");
     expect(buttonsSource).toContain("The store reviews it before changing payment, shipment, or inventory.");
+    expect(buttonsSource).not.toContain("getReceiptTokenFromUrl");
+    expect(buttonsSource).not.toContain("receiptToken");
     expect(pageSource).not.toContain("receiptToken={");
+    expect(pageSource).not.toContain("data-receipt-token");
   });
 
   it("keeps hosted payment retry outside the finalization side-effect path", () => {

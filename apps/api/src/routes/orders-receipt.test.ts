@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { checkoutAttempts, orderItems, orderReceipts, orders } from "@scalius/database/schema";
 
 import { errorResponseFromError } from "../utils/api-response";
+import { getReceiptTokenKvKey } from "../utils/order-receipt-token";
 import { orderRoutes } from "./orders";
 
 const orderSupportMocks = vi.hoisted(() => ({
@@ -228,12 +229,26 @@ describe("order receipt route", () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
+  it("does not accept receipt proof from a URL query token", async () => {
+    const { app, db, kv } = createTestApp({ tokenOrderId: "order_1" });
+
+    const response = await app.request(
+      "/api/v1/orders/receipt/order_1?token=chk_valid",
+      {},
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(404);
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
   it("rejects a token that does not map to the requested order", async () => {
     const { app, db, kv } = createTestApp({ tokenOrderId: "other_order" });
 
     const response = await app.request(
-      "/api/v1/orders/receipt/order_1?token=chk_wrong",
-      {},
+      "/api/v1/orders/receipt/order_1",
+      { headers: { "X-Receipt-Token": "chk_wrong" } },
       { CACHE: kv } as never,
     );
 
@@ -247,8 +262,8 @@ describe("order receipt route", () => {
     const { app, kv } = createTestApp({ tokenOrderId: "order_1" });
 
     const response = await app.request(
-      "/api/v1/orders/receipt/order_1?token=chk_valid",
-      {},
+      "/api/v1/orders/receipt/order_1",
+      { headers: { "X-Receipt-Token": "chk_valid" } },
       { CACHE: kv } as never,
     );
     const body = await response.json() as {
@@ -295,8 +310,8 @@ describe("order receipt route", () => {
     });
 
     const response = await app.request(
-      "/api/v1/orders/receipt/order_1?token=chk_valid",
-      {},
+      "/api/v1/orders/receipt/order_1",
+      { headers: { "X-Receipt-Token": "chk_valid" } },
       { CACHE: kv } as never,
     );
     const body = await response.json() as {
@@ -310,8 +325,10 @@ describe("order receipt route", () => {
     expect((db as unknown as { __inserts: unknown[] }).__inserts).toHaveLength(1);
     expect(JSON.stringify((db as unknown as { __inserts: unknown[] }).__inserts[0]))
       .not.toContain("chk_valid");
+    const receiptKey = await getReceiptTokenKvKey("chk_valid");
+    expect(receiptKey).not.toContain("chk_valid");
     expect(kv.put).toHaveBeenCalledWith(
-      "order_receipt:chk_valid",
+      receiptKey,
       JSON.stringify({ orderId: "order_1" }),
       { expirationTtl: 60 * 60 * 24 * 7 },
     );
@@ -324,8 +341,8 @@ describe("order receipt route", () => {
     });
 
     const response = await app.request(
-      "/api/v1/orders/receipt/order_1?token=chk_valid",
-      {},
+      "/api/v1/orders/receipt/order_1",
+      { headers: { "X-Receipt-Token": "chk_valid" } },
       { CACHE: kv } as never,
     );
     const body = await response.json() as {

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 
 const RECEIPT_SUPPORT_TIMEOUT_MS = 8_000;
 const SUPPORT_REQUEST_TYPES = new Set(["cancel_pre_shipment", "return", "refund"]);
@@ -32,13 +33,19 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const orderId = stringField(payload as Record<string, unknown>, "orderId");
-    const receiptToken = stringField(payload as Record<string, unknown>, "receiptToken");
     const type = stringField(payload as Record<string, unknown>, "type");
     const reason = stringField(payload as Record<string, unknown>, "reason");
     const message = stringField(payload as Record<string, unknown>, "message");
+    const receiptToken = readOrderReceiptCookie(request.headers.get("cookie"), orderId);
 
-    if (!orderId || !receiptToken || !SUPPORT_REQUEST_TYPES.has(type)) {
+    if (!orderId || !SUPPORT_REQUEST_TYPES.has(type)) {
       return jsonResponse({ success: false, error: "Invalid private receipt support request." }, 400);
+    }
+    if (!receiptToken) {
+      return jsonResponse({
+        success: false,
+        error: "Private receipt proof is missing for this order. Please reopen the receipt from this browser and try again.",
+      }, 400);
     }
 
     const response = await fetchWithRetry(

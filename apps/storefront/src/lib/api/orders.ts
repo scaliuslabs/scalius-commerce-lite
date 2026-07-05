@@ -284,10 +284,12 @@ export async function getOrderReceipt(
   }
 
   try {
-    const params = new URLSearchParams({ token: receiptToken });
     const response = await fetchWithRetry(
-      createApiUrl(`/orders/receipt/${encodeURIComponent(orderId)}?${params}`),
-      {},
+      createApiUrl(`/orders/receipt/${encodeURIComponent(orderId)}`),
+      {
+        headers: { "X-Receipt-Token": receiptToken },
+        cache: "no-store",
+      },
       2,
       5000,
       false,

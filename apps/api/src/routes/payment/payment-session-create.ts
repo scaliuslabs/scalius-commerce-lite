@@ -48,7 +48,7 @@ type PaymentSessionProof =
   | { kind: "customer_account"; customerId: string };
 
 type PaymentReturnTarget =
-  | { kind: "receipt"; receiptToken: string }
+  | { kind: "receipt" }
   | { kind: "customer_account" };
 
 type PaymentGateway = "stripe" | "sslcommerz" | "polar";
@@ -1002,9 +1002,7 @@ function buildCallbackParams(
   depositAmount?: number,
 ): Record<string, string | undefined> {
   return {
-    ...(target.kind === "receipt"
-      ? { receipt_token: target.receiptToken }
-      : { return_to: "account" }),
+    ...(target.kind === "customer_account" ? { return_to: "account" } : {}),
     payment_type: paymentType,
     deposit_amount: depositAmount ? String(depositAmount) : undefined,
   };

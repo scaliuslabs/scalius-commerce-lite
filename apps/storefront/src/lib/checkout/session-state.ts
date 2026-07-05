@@ -105,7 +105,14 @@ function normalizeHostedPaymentRecoveryHref(href: string): HostedPaymentRecovery
 
     const gateway = url.searchParams.get("payment");
     if (!gateway || !HOSTED_PAYMENT_GATEWAYS.has(gateway)) return null;
-    if (!url.searchParams.get("orderId") || !url.searchParams.get("token")) return null;
+    if (
+      url.searchParams.has("token") ||
+      url.searchParams.has("receipt_token") ||
+      url.searchParams.has("receiptToken")
+    ) {
+      return null;
+    }
+    if (!url.searchParams.get("orderId")) return null;
 
     return {
       href: `${url.pathname}${url.search}`,

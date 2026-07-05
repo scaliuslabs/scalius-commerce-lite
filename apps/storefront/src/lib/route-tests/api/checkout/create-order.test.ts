@@ -28,6 +28,7 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
 }));
 
 import { POST } from "../../../../pages/api/checkout/create-order";
+import { getOrderReceiptCookieName } from "../../../order-receipt-cookie";
 
 beforeEach(() => {
   mocks.createOrder.mockReset();
@@ -187,18 +188,23 @@ describe("checkout create-order proxy Origin guard", () => {
     const json = await response.json() as {
       data?: {
         id?: string;
-        receiptToken?: string;
         initialPaymentSession?: unknown;
         initialPaymentSessionError?: string;
       };
     };
+    const setCookie = response.headers.get("set-cookie") ?? "";
 
     expect(response.status).toBe(200);
     expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
     expect(json.data).toMatchObject({
       id: "order_1",
-      receiptToken: "receipt_1",
     });
+    expect(JSON.stringify(json)).not.toContain("receipt_1");
+    expect(setCookie).toContain(`${getOrderReceiptCookieName("order_1")}=receipt_1`);
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("Max-Age=604800");
+    expect(setCookie).toContain("Path=/");
+    expect(setCookie).not.toContain("Domain=");
     expect(json.data?.initialPaymentSession).toBeUndefined();
     expect(json.data?.initialPaymentSessionError).toBeUndefined();
   });
@@ -238,6 +244,7 @@ describe("checkout create-order proxy Origin guard", () => {
         initialPaymentSession?: Record<string, unknown>;
       };
     };
+    const setCookie = response.headers.get("set-cookie") ?? "";
 
     expect(response.status).toBe(200);
     expect(mocks.createOrder).toHaveBeenCalledWith(
@@ -260,6 +267,8 @@ describe("checkout create-order proxy Origin guard", () => {
       gatewayUrl: "https://ssl.example.test/pay",
       sessionKey: "ssl_session_1",
     });
+    expect(JSON.stringify(json)).not.toContain("receipt_1");
+    expect(setCookie).toContain(`${getOrderReceiptCookieName("order_1")}=receipt_1`);
   });
 
   it("keeps the committed order response when initial payment session creation fails", async () => {

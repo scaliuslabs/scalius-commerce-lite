@@ -12,7 +12,7 @@ vi.mock("./client", () => ({
   fetchWithRetry: mocks.fetchWithRetry,
 }));
 
-import { createOrder } from "./orders";
+import { createOrder, getOrderReceipt } from "./orders";
 
 beforeEach(() => {
   mocks.createApiUrl.mockClear();
@@ -68,5 +68,52 @@ describe("storefront orders API client", () => {
       15000,
       false,
     );
+  });
+
+  it("fetches private receipts with header proof instead of URL proof", async () => {
+    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: true,
+      data: {
+        order: {
+          id: "order_1",
+          customerName: "Receipt Customer",
+          shippingAddress: "Dhaka",
+          totalAmount: 125,
+          shippingCharge: 0,
+          discountAmount: null,
+          city: "city_1",
+          zone: "zone_1",
+          area: null,
+          cityName: "Dhaka",
+          zoneName: "Gulshan",
+          areaName: null,
+          status: "pending",
+          paymentMethod: "cod",
+          paymentStatus: "unpaid",
+          paidAmount: 0,
+          balanceDue: 125,
+          createdAt: "2026-07-05T00:00:00.000Z",
+          updatedAt: "2026-07-05T00:00:00.000Z",
+          items: [],
+          supportRequests: [],
+          supportRequestActions: [],
+        },
+      },
+    }), { status: 200 }));
+
+    const receipt = await getOrderReceipt("order_1", "chk_secret");
+
+    expect(receipt?.id).toBe("order_1");
+    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
+      "https://api.example.test/api/v1/orders/receipt/order_1",
+      expect.objectContaining({
+        cache: "no-store",
+        headers: { "X-Receipt-Token": "chk_secret" },
+      }),
+      2,
+      5000,
+      false,
+    );
+    expect(mocks.fetchWithRetry.mock.calls[0]?.[0]).not.toContain("token=");
   });
 });

@@ -122,7 +122,7 @@ describe("renderEmptyCartState", () => {
       cartItemsContainer,
       checkoutLanguage(),
       {
-        href: "/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz",
+        href: "/order-success?orderId=order_1&payment=sslcommerz",
         onClick,
       },
     );
@@ -130,7 +130,7 @@ describe("renderEmptyCartState", () => {
     const links = [...cartItemsContainer.querySelectorAll("a")];
     expect(cartItemsContainer.textContent).toContain("Your order was created before payment handoff");
     expect(links[0]?.getAttribute("href")).toBe(
-      "/order-success?orderId=order_1&token=receipt_1&payment=sslcommerz",
+      "/order-success?orderId=order_1&payment=sslcommerz",
     );
     expect(links[0]?.textContent).toBe("View payment status");
     links[0]?.dispatchEvent(new Event("click"));

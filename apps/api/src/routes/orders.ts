@@ -45,8 +45,8 @@ import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedE
 import { getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import {
-  RECEIPT_TOKEN_PREFIX,
   RECEIPT_TOKEN_TTL_SECONDS,
+  getReceiptTokenKvKey,
   validateReceiptToken,
 } from "../utils/order-receipt-token";
 
@@ -55,6 +55,7 @@ import { successEnvelope, errorResponses, serviceUnavailableResponse, conflictRe
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CUSTOMER_SESSION_HEADER = "X-Customer-Session";
+const RECEIPT_TOKEN_HEADER = "X-Receipt-Token";
 const CHECKOUT_STATUS_TTL_SECONDS = 86400;
 const PAYMENT_METHOD_LABELS: Record<CheckoutPaymentMethodId, string> = {
   cod: "Cash on delivery",
@@ -124,11 +125,11 @@ function scheduleCheckoutSuccessRecoveryHints(
           }),
           { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
         ),
-        env.CACHE.put(
-          `${RECEIPT_TOKEN_PREFIX}${token}`,
+        getReceiptTokenKvKey(token).then((receiptKey) => env.CACHE.put(
+          receiptKey,
           JSON.stringify({ orderId }),
           { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
-        ),
+        )),
       ]),
       executionCtx,
     );
@@ -170,6 +171,11 @@ function getCustomerSessionTokenFromRequest(c: { req: { header: (name: string) =
   if (explicitSessionToken) return explicitSessionToken;
 
   return getSessionCookie(c.req.header("Cookie") ?? null);
+}
+
+function getReceiptTokenFromHeader(c: { req: { header: (name: string) => string | undefined } }): string | undefined {
+  const token = c.req.header(RECEIPT_TOKEN_HEADER)?.trim();
+  return token || undefined;
 }
 
 async function assertCheckoutOrderPolicy(
@@ -503,8 +509,8 @@ const getOrderReceiptRoute = createRoute({
     params: z.object({
       id: z.string(),
     }),
-    query: z.object({
-      token: z.string().optional(),
+    headers: z.object({
+      [RECEIPT_TOKEN_HEADER]: z.string().optional(),
     }),
   },
   responses: {
@@ -523,7 +529,7 @@ const getOrderReceiptRoute = createRoute({
 app.openapi(getOrderReceiptRoute, async (c) => {
   const db = c.get("db");
   const id = c.req.valid("param").id;
-  const token = c.req.valid("query").token;
+  const token = getReceiptTokenFromHeader(c);
 
   c.header("Cache-Control", "no-cache, no-store, must-revalidate");
   c.header("Pragma", "no-cache");

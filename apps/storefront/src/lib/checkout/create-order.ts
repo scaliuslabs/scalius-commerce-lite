@@ -136,7 +136,6 @@ export async function createOrder(
   paymentMethod: PaymentMethod,
 ): Promise<{
   orderId: string;
-  receiptToken: string;
   totalAmount?: number;
   paymentMethod?: string;
   initialPaymentSession?: InitialPaymentSession;
@@ -208,28 +207,24 @@ export async function createOrder(
   }
 
   const data = await res.json() as {
-    data?: {
-      id?: string;
-      orderId?: string;
-      checkoutToken?: string;
-      receiptToken?: string;
-      totalAmount?: number;
-      paymentMethod?: string;
-      initialPaymentSession?: unknown;
-      initialPaymentSessionError?: unknown;
-    };
+      data?: {
+        id?: string;
+        orderId?: string;
+        checkoutToken?: string;
+        totalAmount?: number;
+        paymentMethod?: string;
+        initialPaymentSession?: unknown;
+        initialPaymentSessionError?: unknown;
+      };
     orderId?: string;
     id?: string;
     order?: { id?: string };
-    receiptToken?: string;
-    checkoutToken?: string;
     totalAmount?: number;
     paymentMethod?: string;
     initialPaymentSession?: unknown;
     initialPaymentSessionError?: unknown;
   };
   const orderId = data.data?.id || data.orderId || data.id || data.order?.id;
-  const receiptToken = data.data?.receiptToken || data.receiptToken || data.checkoutToken;
   const totalAmount = typeof data.data?.totalAmount === "number"
     ? data.data.totalAmount
     : typeof data.totalAmount === "number"
@@ -251,10 +246,8 @@ export async function createOrder(
       ? data.initialPaymentSessionError
       : undefined;
   if (!orderId) throw new Error("Order creation failed");
-  if (!receiptToken) throw new Error("Order receipt token missing");
   return {
     orderId: orderId as string,
-    receiptToken: receiptToken as string,
     totalAmount,
     paymentMethod: resolvedPaymentMethod,
     initialPaymentSession,

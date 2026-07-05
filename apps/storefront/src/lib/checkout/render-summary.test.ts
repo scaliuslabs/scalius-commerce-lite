@@ -141,14 +141,14 @@ describe("checkout redirect cleanup", () => {
     expect(
       shouldClearCheckoutBeforeRedirect({
         success: true,
-        redirectUrl: "/order-success?orderId=1&token=receipt",
+        redirectUrl: "/order-success?orderId=1",
         clearCartOnRedirect: true,
       }),
     ).toBe(true);
     expect(
       shouldClearCheckoutSessionBeforeRedirect({
         success: true,
-        redirectUrl: "/order-success?orderId=1&token=receipt",
+        redirectUrl: "/order-success?orderId=1",
         clearCartOnRedirect: true,
       }),
     ).toBe(true);

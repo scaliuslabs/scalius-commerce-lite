@@ -16,6 +16,7 @@ import {
   PAYMENT_SESSION_PROXY_TIMEOUT_MS,
 } from "../../../lib/checkout/payment-session-proxy";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
+import { createOrderReceiptCookieHeader } from "../../../lib/order-receipt-cookie";
 
 const CUSTOMER_COOKIE_CLEAR_HEADERS = [
   "cs_tok=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax; Secure",
@@ -123,14 +124,22 @@ export const POST: APIRoute = async ({ request }) => {
 
     const responseData: Record<string, unknown> = {
       id: result.orderId,
-      receiptToken: result.receiptToken,
       totalAmount: result.totalAmount,
       paymentMethod: result.paymentMethod,
     };
+
+    if (!result.orderId || !result.receiptToken) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Order receipt proof missing. Please contact support before retrying payment.",
+      }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     if (
       initialPaymentSession === true &&
-      result.orderId &&
-      result.receiptToken &&
       isOnlinePaymentMethod(result.paymentMethod)
     ) {
       const sessionResult = await createInitialPaymentSession(
@@ -145,12 +154,18 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
+    const headers = new Headers({ "Content-Type": "application/json" });
+    const receiptCookie = createOrderReceiptCookieHeader(result.orderId, result.receiptToken);
+    if (receiptCookie) {
+      headers.append("Set-Cookie", receiptCookie);
+    }
+
     return new Response(JSON.stringify({
       success: true,
       data: responseData,
     }), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers,
     });
   } catch (err: unknown) {
     console.error("[checkout/create-order] Error:", err);

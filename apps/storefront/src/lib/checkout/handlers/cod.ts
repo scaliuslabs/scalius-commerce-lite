@@ -17,10 +17,10 @@ export const codHandler: GatewayHandler = {
 
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
     try {
-      const { orderId, receiptToken } = await createOrder(ctx.checkoutData, "cod");
+      const { orderId } = await createOrder(ctx.checkoutData, "cod");
       return {
         success: true,
-        redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}&token=${encodeURIComponent(receiptToken)}`,
+        redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}`,
         clearCartOnRedirect: true,
       };
     } catch (err: unknown) {

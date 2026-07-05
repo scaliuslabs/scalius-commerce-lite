@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConflictError, NotFoundError } from "@scalius/core/errors";
 import { ValidationError } from "../utils/api-error";
 import { errorResponseFromError } from "../utils/api-response";
+import { getReceiptTokenKvKey } from "../utils/order-receipt-token";
 
 const mocks = vi.hoisted(() => ({
   createStorefrontOrder: vi.fn(),
@@ -452,14 +453,16 @@ describe("checkout status recovery hints", () => {
     });
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     await executionCtx.waitUntil.mock.calls[0]?.[0];
+    const receiptKey = await getReceiptTokenKvKey("chk_status");
     const statusWrite = kv.put.mock.calls.find(([key]) => key === "checkout_status:chk_status");
-    const receiptWrite = kv.put.mock.calls.find(([key]) => key === "order_receipt:chk_status");
+    const receiptWrite = kv.put.mock.calls.find(([key]) => key === receiptKey);
     expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
       status: "completed",
       orderId: "order_1",
       receiptToken: "chk_status",
     });
     expect(statusWrite?.[2]).toEqual({ expirationTtl: 86400 });
+    expect(receiptKey).not.toContain("chk_status");
     expect(JSON.parse(String(receiptWrite?.[1]))).toEqual({ orderId: "order_1" });
     expect(receiptWrite?.[2]).toEqual({ expirationTtl: 60 * 60 * 24 * 7 });
   });
@@ -493,9 +496,10 @@ describe("checkout status recovery hints", () => {
     });
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     await executionCtx.waitUntil.mock.calls[0]?.[0];
+    const receiptKey = await getReceiptTokenKvKey("chk_status");
     expect(kv.put.mock.calls.map(([key]) => key)).toEqual([
       "checkout_status:chk_status",
-      "order_receipt:chk_status",
+      receiptKey,
     ]);
   });
 
@@ -570,7 +574,7 @@ describe("checkout status recovery hints", () => {
       orderId: "order_1",
       error: "Discount code has reached its usage limit",
     });
-    expect(kv.put.mock.calls.some(([key]) => key === "order_receipt:chk_status")).toBe(false);
+    expect(kv.put.mock.calls.some(([key]) => String(key).startsWith("order_receipt:"))).toBe(false);
   });
 });
 
@@ -619,14 +623,13 @@ describe("create order commit/KV ordering", () => {
 
     const responseText = await response.clone().text();
     expect(response.status, responseText).toBe(201);
-    expect(calls).toEqual([
-      "commit",
-      "mark-committed",
-      "kv:checkout_status:chk_order_1",
-      "kv:order_receipt:chk_order_1",
-      "side-effects",
-      "availability",
-    ]);
+    const receiptKey = await getReceiptTokenKvKey("chk_order_1");
+    expect(calls.slice(0, 2)).toEqual(["commit", "mark-committed"]);
+    expect(calls).toContain("kv:checkout_status:chk_order_1");
+    expect(calls).toContain(`kv:${receiptKey}`);
+    expect(calls).toContain("side-effects");
+    expect(calls).toContain("availability");
+    expect(receiptKey).not.toContain("chk_order_1");
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(2);
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledWith(
       expect.anything(),

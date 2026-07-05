@@ -68,7 +68,7 @@ describe("admin order payment recovery link route", () => {
         });
     });
 
-    it("returns a full storefront recovery URL and stores only the KV receipt hint", async () => {
+    it("returns a clean same-browser recovery URL without storing raw proof in KV", async () => {
         const { app, env, kv } = createTestApp();
 
         const response = await app.request(
@@ -84,20 +84,21 @@ describe("admin order payment recovery link route", () => {
         expect(mocks.createOrderPaymentRecoveryLink).toHaveBeenCalledWith(db, "order_1");
         expect(body.data).toMatchObject({
             orderId: "order_1",
-            url: "https://shop.example.test/order-success?orderId=order_1&token=chk_secret_recovery&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",
+            url: "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",
             expiresAt: new Date(1_765_000_000 * 1000).toISOString(),
+            accessMode: "existing_browser_receipt",
+            note: "This clean recovery URL does not contain private receipt proof. It opens only in the buyer browser that already holds the order receipt cookie.",
             gateway: "sslcommerz",
             paymentType: "deposit",
             depositAmount: 60,
         });
+        expect(body.data.url).not.toContain("token=");
+        expect(body.data.url).not.toContain("receipt_token");
+        expect(body.data.url).not.toContain("receiptToken");
+        expect(JSON.stringify(body.data)).not.toContain("chk_secret_recovery");
         expect(body.data).not.toHaveProperty("receiptToken");
         expect(body.data).not.toHaveProperty("tokenHash");
-        expect(kv.put).toHaveBeenCalledWith(
-            "order_receipt:chk_secret_recovery",
-            JSON.stringify({ orderId: "order_1" }),
-            { expirationTtl: 60 * 60 * 24 * 7 },
-        );
-        expect(JSON.stringify(kv.put.mock.calls[0]?.[1])).not.toContain("chk_secret_recovery");
+        expect(kv.put).not.toHaveBeenCalled();
     });
 
     it("fails closed when STOREFRONT_URL is missing", async () => {

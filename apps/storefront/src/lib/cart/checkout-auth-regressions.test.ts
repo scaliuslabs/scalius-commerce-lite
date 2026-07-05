@@ -23,6 +23,17 @@ describe("cart checkout auth regressions", () => {
     expect(source).toContain("Astro.locals.cfContext.waitUntil");
   });
 
+  it("sets a receipt cookie before COD-only success redirects", async () => {
+    const source = await readFile(join(storefrontRoot, "src/pages/cart.astro"), "utf8");
+
+    expect(source).toContain("createOrderReceiptCookieHeader");
+    expect(source).toContain('response.headers.append("Set-Cookie", receiptCookie)');
+    expect(source).toContain("`/order-success?orderId=${encodeURIComponent(result.orderId)}`");
+    expect(source).not.toContain(
+      "`/order-success?orderId=${encodeURIComponent(result.orderId)}&" + ["to", "ken"].join("") + "=",
+    );
+  });
+
   it("does not rely on the readable auth mirror cookie for guest-disabled submits", async () => {
     const source = await readFile(join(storefrontRoot, "src/pages/cart.astro"), "utf8");
 

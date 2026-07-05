@@ -26,7 +26,7 @@ export const polarHandler: GatewayHandler = {
     let paymentRequest: ReturnType<typeof resolveCheckoutPaymentRequest> | null = null;
     try {
       createdOrder = await createOrder(ctx.checkoutData, "polar");
-      const { orderId, receiptToken } = createdOrder;
+      const { orderId } = createdOrder;
       paymentRequest = resolveCheckoutPaymentRequest(ctx.config, createdOrder.totalAmount ?? ctx.totalAmount);
 
       let gatewayUrl = createdOrder.initialPaymentSession?.gateway === "polar"
@@ -40,7 +40,6 @@ export const polarHandler: GatewayHandler = {
       if (!gatewayUrl) {
         const sessionPayload: Record<string, unknown> = {
           orderId,
-          receiptToken,
         };
 
         const sessionRes = await fetch("/api/checkout/polar-session", {
@@ -63,7 +62,6 @@ export const polarHandler: GatewayHandler = {
       if (!gatewayUrl) throw new Error("No gateway URL received");
       const hostedPaymentRecoveryUrl = buildPaymentRecoveryUrl({
         orderId,
-        receiptToken,
         gateway: "polar",
         paymentType: paymentRequest?.paymentType,
         depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,
@@ -79,7 +77,6 @@ export const polarHandler: GatewayHandler = {
       if (createdOrder) {
         const hostedPaymentRecoveryUrl = buildPaymentRecoveryUrl({
           orderId: createdOrder.orderId,
-          receiptToken: createdOrder.receiptToken,
           gateway: "polar",
           paymentType: paymentRequest?.paymentType,
           depositAmount: paymentRequest?.paymentType === "deposit" ? paymentRequest.depositAmount : undefined,

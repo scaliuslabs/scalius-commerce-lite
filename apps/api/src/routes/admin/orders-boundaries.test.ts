@@ -110,7 +110,9 @@ describe("admin orders route boundaries", () => {
         expect(recoveryLinkRoute).toContain('summary: "Issue a hosted-payment receipt recovery link"');
         expect(recoveryLinkRoute).toContain("OrdersService.createOrderPaymentRecoveryLink");
         expect(recoveryLinkRoute).toContain("buildPaymentRecoveryUrl");
-        expect(recoveryLinkRoute).toContain("writePaymentRecoveryReceiptHint");
+        expect(recoveryLinkRoute).toContain('accessMode: "existing_browser_receipt"');
+        expect(recoveryLinkRoute).not.toContain("writePaymentRecoveryReceiptHint");
+        expect(recoveryLinkRoute).not.toContain("c.env.CACHE");
         expect(recoveryLinkRoute).not.toContain("ORDER_NOTIFICATIONS_QUEUE");
         expect(recoveryLinkRoute).not.toContain("createSSLCommerzPaymentSession");
         expect(recoveryLinkRoute).not.toContain("createPolarPaymentSession");

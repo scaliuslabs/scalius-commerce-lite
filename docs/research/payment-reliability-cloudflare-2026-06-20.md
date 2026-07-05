@@ -133,10 +133,10 @@ This blocks concurrent admin refunds, but it does not safely handle ambiguous pr
 ### Order creation and receipt proof
 
 - Current `POST /orders`: `apps/api/src/routes/orders.ts`
-  - Generates `checkoutToken`, writes `checkout_status:{token}` and `order_receipt:{token}` to KV, then synchronously calls `commitStorefrontOrderPayload()`.
-  - After commit, it uses `waitUntil()` for `runStorefrontOrderPostCommitSideEffects()`.
+  - Generates `checkoutToken`, synchronously calls `commitStorefrontOrderPayload()`, then schedules `checkout_status:{token}` and `order_receipt:{sha256(token)}` recovery hints.
+  - After commit, it uses `waitUntil()` for checkout recovery hints, `runStorefrontOrderPostCommitSideEffects()`, and availability cache invalidation.
 - Receipt token validation: `apps/api/src/utils/order-receipt-token.ts`
-  - Reads `order_receipt:{token}` from KV and checks `orderId`.
+  - Validates D1 `order_receipts` / checkout-attempt fallback first, then repairs `order_receipt:{sha256(token)}` KV hints.
 - Synchronous commit: `packages/core/src/modules/orders/orders.ingest.ts`
   - Commits customers, order, items, discount usage, inventory reservation, and notification outbox in D1.
 
@@ -242,8 +242,8 @@ Incremental fix:
 
 - Add D1 `order_receipts` or `checkout_intents`: `token_hash`, `order_id`, `created_at`, `expires_at`, `used_for_payment_at`, `status`.
 - Store only token hash in D1.
-- Continue writing KV `order_receipt:{token}` as a cache for fast reads.
-- Validation path: KV hit is fast path, D1 is authoritative fallback.
+- Continue writing KV `order_receipt:{sha256(token)}` as a cache for fast reads.
+- Validation path: D1 is authoritative; KV is a repairable hint and must not store raw receipt proof in keys or values.
 - On order commit failure, mark D1 intent failed; do not leave a valid receipt proof without an order.
 
 ### P1/P2: Non-retryable payment successes need durable reconciliation, not only logs

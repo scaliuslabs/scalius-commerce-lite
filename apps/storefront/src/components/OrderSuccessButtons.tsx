@@ -20,10 +20,6 @@ type SubmitState =
   | { status: "success"; message: string }
   | { status: "error"; message: string };
 
-function getReceiptTokenFromUrl() {
-  return new URLSearchParams(window.location.search).get("token")?.trim() || "";
-}
-
 function getSupportToneClass(severity: OrderReceiptSupportRequest["severity"]) {
   switch (severity) {
     case "success":
@@ -134,14 +130,13 @@ export default function OrderSuccessButtons({
   };
 
   const handleSubmitSupportRequest = async () => {
-    const receiptToken = getReceiptTokenFromUrl();
     const reason = supportReason.trim();
     const message = supportMessage.trim();
 
-    if (!orderId || !selectedSupportType || !receiptToken) {
+    if (!orderId || !selectedSupportType) {
       setSupportSubmitState({
         status: "error",
-        message: "This private receipt link is missing the proof needed to send a request.",
+        message: "This receipt is missing the browser proof needed to send a request.",
       });
       return;
     }
@@ -161,7 +156,6 @@ export default function OrderSuccessButtons({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId,
-          receiptToken,
           type: selectedSupportType,
           reason,
           message: message || null,
@@ -270,9 +264,9 @@ export default function OrderSuccessButtons({
       <div className="w-full max-w-xl rounded-xl border border-border bg-muted/30 p-4 text-left">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">Keep this private receipt link</p>
+            <p className="text-sm font-semibold text-foreground">Keep this browser receipt</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Guest orders are tracked from this private receipt link. Account history only includes orders placed while signed in.
+              Guest receipts stay available in this browser for a limited time. Account history only includes orders placed while signed in.
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
@@ -309,10 +303,10 @@ export default function OrderSuccessButtons({
           {receiptCopyState === "copied"
             ? "Receipt link copied."
             : receiptCopyState === "failed"
-              ? "Copy failed. Use your browser address bar to save this link."
+              ? "Copy failed. Use your browser address bar to save this clean receipt URL."
               : isCustomerAuthenticated
                 ? "If this order belongs to your account, the account button opens its private timeline."
-                : "Sign in before future orders to keep them in your account history."}
+                : "This link opens only while this browser keeps its private receipt cookie."}
         </p>
       </div>
 

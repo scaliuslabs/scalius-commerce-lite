@@ -1,13 +1,11 @@
 export function buildPaymentRecoveryUrl(options: {
   orderId: string;
-  receiptToken: string;
   gateway: string;
   paymentType?: string;
   depositAmount?: number;
 }): string {
   const params = new URLSearchParams({
     orderId: options.orderId,
-    token: options.receiptToken,
     payment: options.gateway,
     result: "failed",
   });

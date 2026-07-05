@@ -3,12 +3,21 @@ import type { Database } from "@scalius/database/client";
 import {
   ORDER_RECEIPT_TOKEN_PREFIX,
   ORDER_RECEIPT_TOKEN_TTL_SECONDS,
+  hashOrderReceiptToken,
   isOrderReceiptToken,
   validateOrderReceiptProof,
 } from "@scalius/core/modules/orders";
 
 export const RECEIPT_TOKEN_PREFIX = ORDER_RECEIPT_TOKEN_PREFIX;
 export const RECEIPT_TOKEN_TTL_SECONDS = ORDER_RECEIPT_TOKEN_TTL_SECONDS;
+
+export function getReceiptTokenKvKeyFromHash(tokenHash: string): string {
+  return `${RECEIPT_TOKEN_PREFIX}${tokenHash}`;
+}
+
+export async function getReceiptTokenKvKey(token: string): Promise<string> {
+  return getReceiptTokenKvKeyFromHash(await hashOrderReceiptToken(token));
+}
 
 export async function validateReceiptToken(
   kv: KVNamespace | undefined,
@@ -27,12 +36,12 @@ export async function validateReceiptToken(
     }
 
     if (result.shouldRepairKv) {
-      await repairReceiptKv(kv, token, orderId, result.tokenHash);
+      await repairReceiptKv(kv, orderId, result.tokenHash);
     }
     return;
   }
 
-  const raw = kv ? await kv.get(`${RECEIPT_TOKEN_PREFIX}${token}`) : null;
+  const raw = kv ? await kv.get(await getReceiptTokenKvKey(token)) : null;
   if (!raw) {
     throw new NotFoundError("Order receipt not found");
   }
@@ -50,14 +59,13 @@ export async function validateReceiptToken(
 
 async function repairReceiptKv(
   kv: KVNamespace | undefined,
-  token: string,
   orderId: string,
   tokenHash: string,
 ): Promise<void> {
   if (!kv) return;
 
   await kv.put(
-    `${RECEIPT_TOKEN_PREFIX}${token}`,
+    getReceiptTokenKvKeyFromHash(tokenHash),
     JSON.stringify({ orderId }),
     { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
   ).catch((error: unknown) => {

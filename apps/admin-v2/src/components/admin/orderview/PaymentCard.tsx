@@ -560,10 +560,10 @@ export function PaymentCard({ order }: PaymentCardProps) {
     }
 
     const expiresAt = formatTimestamp(recoveryLink.expiresAt);
-    toast.success("Recovery link copied", {
+    toast.success("Clean recovery URL copied", {
       description: expiresAt
-        ? `Share it with the buyer before ${expiresAt}.`
-        : "Share it with the buyer before it expires.",
+        ? `It opens only in the buyer browser that already has the private receipt cookie, until ${expiresAt}.`
+        : "It opens only in the buyer browser that already has the private receipt cookie.",
     });
   }
 

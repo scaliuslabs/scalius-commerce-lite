@@ -15,16 +15,33 @@ import { createSSLCommerzPaymentSession, isPaymentSessionProcessingResult } from
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment-session-response";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const RECEIPT_TOKEN_HEADER = "X-Receipt-Token";
 
 // ─── POST /session ───────────────────────────────────────────────────────────
 
 const sessionSchema = z.object({
   orderId: z.string().min(1),
-  receiptToken: z.string().min(1),
+  receiptToken: z.string().min(1).optional(),
   paymentType: z.enum(["full", "deposit", "balance"]).optional(),
   depositAmount: z.number().positive().optional(),
   currency: z.string().optional(),
 });
+
+function getSessionReceiptToken(c: { req: { header: (name: string) => string | undefined } }, body: { receiptToken?: string }): string | undefined {
+  const headerToken = c.req.header(RECEIPT_TOKEN_HEADER)?.trim();
+  return body.receiptToken ?? (headerToken || undefined);
+}
+
+async function validateReceiptProof(
+  c: { env: Env; req: { header: (name: string) => string | undefined } },
+  db: Database,
+  body: { orderId: string; receiptToken?: string },
+): Promise<string> {
+  const receiptToken = getSessionReceiptToken(c, body);
+  await validateReceiptToken(c.env.CACHE, body.orderId, receiptToken, db);
+  if (!receiptToken) throw new Error("Receipt token validation returned without proof.");
+  return receiptToken;
+}
 
 const createSessionRoute = createRoute({
   method: "post",
@@ -36,7 +53,10 @@ const createSessionRoute = createRoute({
       content: {
         "application/json": { schema: sessionSchema }
       }
-    }
+    },
+    headers: z.object({
+      [RECEIPT_TOKEN_HEADER]: z.string().optional(),
+    }),
   },
   responses: {
     200: {
@@ -59,14 +79,14 @@ const createSessionRoute = createRoute({
 app.openapi(createSessionRoute, async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
-  await validateReceiptToken(c.env.CACHE, body.orderId, body.receiptToken, db);
+  const receiptToken = await validateReceiptProof(c, db, body);
 
   const result = await createSSLCommerzPaymentSession(c, {
     orderId: body.orderId,
     paymentType: body.paymentType,
     depositAmount: body.depositAmount,
-    proof: { kind: "receipt", receiptToken: body.receiptToken },
-    returnTarget: { kind: "receipt", receiptToken: body.receiptToken },
+    proof: { kind: "receipt", receiptToken },
+    returnTarget: { kind: "receipt" },
   });
 
   if (isPaymentSessionProcessingResult(result)) {
@@ -124,10 +144,6 @@ function normalizeCallbackPaymentType(value: string | undefined): "full" | "depo
   return "";
 }
 
-function getCallbackReceiptToken(c: { req: { query: (key: string) => string | undefined } }): string {
-  return c.req.query("receipt_token") ?? c.req.query("receiptToken") ?? "";
-}
-
 function getCallbackPaymentType(c: { req: { query: (key: string) => string | undefined } }): "full" | "deposit" | "balance" | "" {
   return normalizeCallbackPaymentType(c.req.query("payment_type") ?? c.req.query("paymentType"));
 }
@@ -147,7 +163,6 @@ function buildStorefrontOrderSuccessUrl(
   storefront: string,
   params: {
     orderId: string;
-    receiptToken: string;
     payment: "sslcommerz";
     result?: "failed" | "cancelled";
     paymentType?: "full" | "deposit" | "balance" | "";
@@ -156,7 +171,6 @@ function buildStorefrontOrderSuccessUrl(
 ): string {
   const url = new URL(`${storefront}/order-success`);
   url.searchParams.set("orderId", params.orderId);
-  url.searchParams.set("token", params.receiptToken);
   url.searchParams.set("payment", params.payment);
   if (params.result) url.searchParams.set("result", params.result);
   if (params.paymentType) url.searchParams.set("paymentType", params.paymentType);
@@ -183,7 +197,6 @@ function buildStorefrontAccountOrderUrl(
 async function buildSslCallbackRedirectUrl(c: SslCallbackContext, result?: "failed" | "cancelled"): Promise<string> {
   const orderId = await resolveCallbackOrderId(c);
   const storefront = getStorefrontUrl(c);
-  const receiptToken = getCallbackReceiptToken(c);
 
   if (orderId) {
     const db = c.get("db");
@@ -200,14 +213,8 @@ async function buildSslCallbackRedirectUrl(c: SslCallbackContext, result?: "fail
     });
   }
 
-  if (!receiptToken) {
-    const error = result === "cancelled" ? "payment_cancelled" : "payment_failed";
-    return `${storefront}/cart?error=${error}&orderId=${encodeURIComponent(orderId)}`;
-  }
-
   return buildStorefrontOrderSuccessUrl(storefront, {
     orderId,
-    receiptToken,
     payment: "sslcommerz",
     result,
     paymentType: getCallbackPaymentType(c),
