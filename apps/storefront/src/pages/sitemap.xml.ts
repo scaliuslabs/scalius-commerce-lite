@@ -6,8 +6,10 @@
 import type { APIRoute } from 'astro';
 import { generateSitemapIndex, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
 import { getAllProducts } from '@/lib/api/products';
+import { getSeoSettings } from '@/lib/api';
 import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext } from 'astro';
+import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
 
@@ -18,6 +20,18 @@ export const GET: APIRoute = async (_context: APIContext) => {
   try {
     const baseUrl = getRuntimeStorefrontUrl();
     const now = new Date().toISOString();
+    const seo = await getSeoSettings();
+    if (!seo) {
+      return xmlDataUnavailableResponse('Sitemap index is temporarily unavailable');
+    }
+
+    const sitemapPolicy = normalizeSeoDiscoverySettings(seo.discovery).sitemap;
+    if (!sitemapPolicy.enabled) {
+      return new Response(generateSitemapIndex([], baseUrl), {
+        status: 200,
+        headers: getSitemapHeaders(),
+      });
+    }
 
     // Generate sitemap index with all sub-sitemaps
     const sitemaps = [
@@ -25,19 +39,36 @@ export const GET: APIRoute = async (_context: APIContext) => {
         loc: `${baseUrl}/sitemap-static.xml`,
         lastmod: now,
       },
-      {
+    ];
+
+    if (sitemapPolicy.categories) {
+      sitemaps.push({
         loc: `${baseUrl}/sitemap-categories.xml`,
         lastmod: now,
-      },
-      {
+      });
+    }
+
+    if (sitemapPolicy.collections) {
+      sitemaps.push({
         loc: `${baseUrl}/sitemap-collections.xml`,
         lastmod: now,
-      },
-      {
+      });
+    }
+
+    if (sitemapPolicy.pages) {
+      sitemaps.push({
         loc: `${baseUrl}/sitemap-pages.xml`,
         lastmod: now,
-      },
-    ];
+      });
+    }
+
+    if (!sitemapPolicy.products) {
+      const xml = generateSitemapIndex(sitemaps, baseUrl);
+      return new Response(xml, {
+        status: 200,
+        headers: getSitemapHeaders(),
+      });
+    }
 
     // Fetch just 1 product to get the total count for pagination
     const productsResponse = await getAllProducts({ limit: 1 });

@@ -15,13 +15,14 @@ import {
   getFacebookCategory,
   escapeXmlCategory,
 } from "@/lib/category-mapping";
-import { getLayoutData } from "@/lib/api";
+import { getLayoutData, getSeoSettings } from "@/lib/api";
 import {
   getRuntimeStorefrontUrl,
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
+import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 export const prerender = false;
 
@@ -199,6 +200,20 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     const baseUrl = getRuntimeStorefrontUrl();
     if (!baseUrl) {
       return new Response("STOREFRONT_URL not configured", { status: 500 });
+    }
+    const seo = await getSeoSettings();
+    if (!seo) {
+      return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
+    }
+    const discovery = normalizeSeoDiscoverySettings(seo.discovery);
+    if (!discovery.feeds.productCatalogEnabled) {
+      return new Response("Product catalog feed is disabled", {
+        status: 404,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+      });
     }
 
     // Get pagination parameters

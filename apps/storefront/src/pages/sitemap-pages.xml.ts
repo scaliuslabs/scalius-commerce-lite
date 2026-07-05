@@ -9,16 +9,30 @@ import {
   xmlDataUnavailableResponse,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
+import { getSeoSettings } from '@/lib/api';
 import { getAllPages } from '@/lib/api/pages';
 import type { Page } from '@/lib/api/types';
 import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext, APIRoute } from 'astro';
+import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
 
 export const GET: APIRoute = async (_context: APIContext) => {
   try {
     const baseUrl = getRuntimeStorefrontUrl();
+    const seo = await getSeoSettings();
+    if (!seo) {
+      return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
+    }
+    const sitemapPolicy = normalizeSeoDiscoverySettings(seo.discovery).sitemap;
+    if (!sitemapPolicy.enabled || !sitemapPolicy.pages) {
+      return new Response(generateSitemap([], baseUrl), {
+        status: 200,
+        headers: getSitemapHeaders(),
+      });
+    }
+
     const allPages: Page[] = [];
     let currentPage = 1;
     let hasMore = true;

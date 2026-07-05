@@ -1,11 +1,24 @@
 import { useCallback } from "react";
+import {
+  Braces,
+  Globe2,
+  Loader2,
+  Rss,
+  Search,
+  AlertCircle,
+} from "lucide-react";
+import {
+  DEFAULT_SEO_DISCOVERY_SETTINGS,
+  normalizeSeoDiscoverySettings,
+  type SeoDiscoverySettings,
+} from "@scalius/shared/seo-discovery";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
-import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { CharacterCounter } from "@/components/ui/character-counter";
+import { Switch } from "../ui/switch";
 import {
   getSeoSettings,
   type SettingsPayload,
@@ -19,6 +32,7 @@ interface SeoConfig {
   homepageTitle: string;
   homepageMetaDescription: string;
   robotsTxt: string;
+  discovery: SeoDiscoverySettings;
 }
 
 const defaultConfig: SeoConfig = {
@@ -26,6 +40,7 @@ const defaultConfig: SeoConfig = {
   homepageTitle: "",
   homepageMetaDescription: "",
   robotsTxt: `User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`,
+  discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
 };
 
 const fetchSeo = async (): Promise<SeoConfig> => {
@@ -37,6 +52,7 @@ const fetchSeo = async (): Promise<SeoConfig> => {
       (data.homepageMetaDescription as string) ||
       defaultConfig.homepageMetaDescription,
     robotsTxt: (data.robotsTxt as string) || defaultConfig.robotsTxt,
+    discovery: normalizeSeoDiscoverySettings(data.discovery),
   };
 };
 
@@ -63,6 +79,43 @@ export function SeoSettingsBuilder() {
     },
     [setValues],
   );
+
+  const updateDiscovery = useCallback(
+    <
+      Section extends keyof SeoDiscoverySettings,
+      Key extends keyof SeoDiscoverySettings[Section],
+    >(
+      section: Section,
+      key: Key,
+      value: SeoDiscoverySettings[Section][Key],
+    ) => {
+      setValues((prev) => ({
+        ...prev,
+        discovery: {
+          ...prev.discovery,
+          [section]: {
+            ...prev.discovery[section],
+            [key]: value,
+          },
+        },
+      }));
+    },
+    [setValues],
+  );
+
+  const discoveryRows = [
+    {
+      icon: Globe2,
+      title: "Sitemap",
+      rows: [
+        ["enabled", "Generate sitemap.xml"] as const,
+        ["products", "Products"] as const,
+        ["categories", "Categories"] as const,
+        ["collections", "Collections"] as const,
+        ["pages", "Pages"] as const,
+      ],
+    },
+  ];
 
   if (isLoading) {
     return (
@@ -146,6 +199,107 @@ export function SeoSettingsBuilder() {
           settings with their own meta titles.
         </AlertDescription>
       </Alert>
+
+      <div className="rounded-lg border border-border">
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <div>
+            <h3 className="text-sm font-semibold">Discovery Controls</h3>
+            <p className="text-xs text-muted-foreground">
+              Choose which public discovery files and global schema are emitted.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-0 md:grid-cols-2">
+          {discoveryRows.map((section) => (
+            <div key={section.title} className="border-b border-border p-4 md:border-r">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <section.icon className="h-4 w-4 text-muted-foreground" />
+                {section.title}
+              </div>
+              <div className="space-y-3">
+                {section.rows.map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex items-center justify-between gap-4 text-sm"
+                  >
+                    <span>{label}</span>
+                    <Switch
+                      checked={values.discovery.sitemap[key]}
+                      onCheckedChange={(checked) =>
+                        updateDiscovery("sitemap", key, checked)
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="border-b border-border p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+              <Rss className="h-4 w-4 text-muted-foreground" />
+              Product Feed
+            </div>
+            <label className="flex items-center justify-between gap-4 text-sm">
+              <span>Catalog feed XML</span>
+              <Switch
+                checked={values.discovery.feeds.productCatalogEnabled}
+                onCheckedChange={(checked) =>
+                  updateDiscovery("feeds", "productCatalogEnabled", checked)
+                }
+              />
+            </label>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Controls `/api/facebook-feed.xml` for catalog sync tools.
+            </p>
+          </div>
+
+          <div className="p-4 md:border-r">
+            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+              <Globe2 className="h-4 w-4 text-muted-foreground" />
+              robots.txt
+            </div>
+            <label className="flex items-center justify-between gap-4 text-sm">
+              <span>Advertise sitemap URL</span>
+              <Switch
+                checked={values.discovery.robots.advertiseSitemap}
+                onCheckedChange={(checked) =>
+                  updateDiscovery("robots", "advertiseSitemap", checked)
+                }
+              />
+            </label>
+          </div>
+
+          <div className="p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+              <Braces className="h-4 w-4 text-muted-foreground" />
+              JSON-LD
+            </div>
+            <div className="space-y-3">
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Organization schema</span>
+                <Switch
+                  checked={values.discovery.structuredData.organization}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("structuredData", "organization", checked)
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Website search schema</span>
+                <Switch
+                  checked={values.discovery.structuredData.websiteSearch}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("structuredData", "websiteSearch", checked)
+                  }
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="space-y-2">
         <Label htmlFor="robots-txt">robots.txt Content</Label>

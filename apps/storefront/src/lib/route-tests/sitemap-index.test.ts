@@ -4,11 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getAllProducts: vi.fn(),
+  getSeoSettings: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
 }));
 
 vi.mock("@/lib/api/products", () => ({
   getAllProducts: mocks.getAllProducts,
+}));
+
+vi.mock("@/lib/api", () => ({
+  getSeoSettings: mocks.getSeoSettings,
 }));
 
 vi.mock("@/lib/api/runtime-env", () => ({
@@ -20,6 +25,10 @@ import { GET } from "../../pages/sitemap.xml";
 describe("sitemap index route", () => {
   beforeEach(() => {
     mocks.getAllProducts.mockReset();
+    mocks.getSeoSettings.mockReset();
+    mocks.getSeoSettings.mockResolvedValue({
+      discovery: undefined,
+    });
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
   });
 
@@ -49,5 +58,30 @@ describe("sitemap index route", () => {
     expect(body).toContain("https://storefront.example.test/sitemap-pages.xml");
     expect(body).toContain("https://storefront.example.test/sitemap-products.xml?page=1");
     expect(body).not.toContain("/api/facebook-feed.xml");
+  });
+
+  it("omits disabled sitemap sections without reading product counts", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      discovery: {
+        sitemap: {
+          enabled: true,
+          products: false,
+          categories: false,
+          collections: true,
+          pages: false,
+        },
+      },
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+    expect(body).toContain("https://storefront.example.test/sitemap-static.xml");
+    expect(body).toContain("https://storefront.example.test/sitemap-collections.xml");
+    expect(body).not.toContain("sitemap-products.xml");
+    expect(body).not.toContain("sitemap-categories.xml");
+    expect(body).not.toContain("sitemap-pages.xml");
   });
 });

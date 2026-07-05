@@ -173,7 +173,7 @@ describe("site settings cache invalidation", () => {
       path: "/seo",
       method: "POST" as const,
       body: { siteTitle: "Site", homepageTitle: "Home" },
-      groups: ["homepage"],
+      groups: ["homepage", "layout"],
     },
     {
       path: "/storefront-url",

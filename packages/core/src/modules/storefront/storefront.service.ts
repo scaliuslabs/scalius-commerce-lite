@@ -24,7 +24,10 @@ import {
   shouldUsePartytown,
 } from "../../integrations/analytics";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
-import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
+import {
+  parseMediaOptimizationSettings,
+} from "../settings/site-settings.service";
+import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import {
@@ -322,6 +325,13 @@ export async function getLayoutData(db: Database) {
       .from(metaConversionsSettings)
       .where(eq(metaConversionsSettings.id, "singleton"))
       .limit(1),
+
+    // 8. SEO discovery policy
+    db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(and(eq(settings.category, "seo"), eq(settings.key, "discovery")))
+      .limit(1),
   ]);
 
   const [
@@ -333,6 +343,7 @@ export async function getLayoutData(db: Database) {
     themeResults,
     mediaResults,
     metaCapiResults,
+    seoDiscoveryResults,
   ] = batchResults;
 
   // Process Analytics
@@ -541,6 +552,8 @@ export async function getLayoutData(db: Database) {
       metaCapiRow.accessToken?.trim(),
     ),
   };
+  const seoDiscoveryRow = (seoDiscoveryResults as { value?: string }[])[0];
+  const discovery = parseSeoDiscoverySettings(seoDiscoveryRow?.value);
 
   return {
     analytics: processedAnalytics,
@@ -551,5 +564,8 @@ export async function getLayoutData(db: Database) {
     theme: { colors: themeColors },
     media,
     metaCapi,
+    seo: {
+      discovery,
+    },
   };
 }

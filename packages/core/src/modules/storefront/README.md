@@ -36,7 +36,7 @@ Returns: `{ seo, hero, widgets, collections }`.
 
 ### `getLayoutData(db)`
 
-Fetches and shapes all layout data in a **single batched D1 round-trip** (6 parallel queries):
+Fetches and shapes all layout data in a **single batched D1 round-trip** (9 parallel queries):
 
 1. Active analytics scripts -- applies Partytown processing via `processAnalyticsScript()` from `@scalius/core/integrations/analytics`
 2. Site settings (headerConfig, footerConfig JSON)
@@ -44,8 +44,11 @@ Fetches and shapes all layout data in a **single batched D1 round-trip** (6 para
 4. Published pages (for navigation fallback)
 5. Currency settings from `settings` table (category = "currency")
 6. Theme color overrides from `settings` table (category = "theme", key = "storefront_colors")
+7. Media/image optimization settings from `settings` table (category = "media", key = "image_optimization")
+8. Meta CAPI browser dispatch readiness from `metaConversionsSettings`
+9. SEO discovery policy from `settings` table (category = "seo", key = "discovery")
 
-Returns: `{ analytics, header, navigation, footer, currency, theme }`
+Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaCapi, seo }`
 
 **Analytics processing**: Each active analytics script is processed -- if `usePartytown` is true and the script matches Partytown criteria (`shouldUsePartytown()`), the config is modified via `processAnalyticsScript()`. Timestamps are converted to ISO 8601 via `unixToISO()`.
 
@@ -57,6 +60,8 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 
 **Theme**: Reads storefront color overrides from the `settings` table. Returns as `{ colors: Record<string, string> }`.
 
+**SEO discovery**: Reads the default-on sitemap/feed/robots/JSON-LD policy from `settings.seo/discovery`. Layout consumers use this to gate global Organization and WebSite JSON-LD without a second storefront API read.
+
 ## API Endpoints
 
 ### Public Storefront (`/api/v1/storefront`)
@@ -64,7 +69,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 |--------|------|-------------|-------|
 | GET | `/homepage` | Consolidated homepage data (SEO, hero, widgets, collections + products) | `api:storefront:homepage:*` with CACHE_TTLS.STANDARD; product/category/collection/homepage/widget/media writes invalidate it |
 | GET | `/pages/slug/{slug}` | Consolidated CMS page render data (page + active page-scoped widgets) | `api:storefront:page:*` with CACHE_TTLS.STANDARD; page/widget writes invalidate exact page render keys |
-| GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme) | `api:storefront:layout:*` with CACHE_TTLS.STANDARD |
+| GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme, media, Meta CAPI readiness, SEO discovery) | `api:storefront:layout:*` with CACHE_TTLS.STANDARD |
 | GET | `/csp` | CSP allowed domains from `settings` (category = security) | `api:storefront:csp:*` with CACHE_TTLS.STANDARD |
 
 ### Public Hero (`/api/v1/hero`)
@@ -76,7 +81,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme }`
 ### Public SEO (`/api/v1/seo`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt). Defaults to "Scalius Commerce" | `api:seo:*` with CACHE_TTLS.STANDARD / 3600s |
+| GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, default-on discovery policy) | `api:seo:*` with CACHE_TTLS.STANDARD / 3600s |
 
 ### Public Checkout (`/api/v1/checkout`)
 | Method | Path | Description |

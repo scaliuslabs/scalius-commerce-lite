@@ -507,7 +507,10 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(getGroupsForPath("/api/v1/admin/settings/hero-sliders")).toEqual([
       "homepage",
     ]);
-    expect(getGroupsForPath("/api/v1/admin/settings/seo")).toEqual(["homepage"]);
+    expect(getGroupsForPath("/api/v1/admin/settings/seo")).toEqual([
+      "homepage",
+      "layout",
+    ]);
     expect(getGroupsForPath("/api/v1/admin/pages/about-us")).toEqual([
       "pages",
       "layout",

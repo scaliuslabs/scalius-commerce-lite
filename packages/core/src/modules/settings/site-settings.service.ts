@@ -9,9 +9,17 @@ import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { upsertSetting } from "../payments/gateway-settings";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
+import {
+  DEFAULT_SEO_DISCOVERY_SETTINGS,
+  normalizeSeoDiscoverySettings,
+  parseSeoDiscoverySettings,
+  type SeoDiscoverySettings,
+} from "@scalius/shared/seo-discovery";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
+const SEO_SETTINGS_CATEGORY = "seo";
+const DISCOVERY_SETTINGS_KEY = "discovery";
 
 export interface MediaOptimizationSettings {
   enabled: boolean;
@@ -309,21 +317,37 @@ export async function saveMediaOptimizationSettings(
 // ─────────────────────────────────────────
 
 export async function getSeoSettings(db: Database) {
-  const [row] = await db
-    .select({
-      siteTitle: siteSettings.siteTitle,
-      homepageTitle: siteSettings.homepageTitle,
-      homepageMetaDescription: siteSettings.homepageMetaDescription,
-      robotsTxt: siteSettings.robotsTxt,
-    })
-    .from(siteSettings)
-    .limit(1);
+  const [siteRows, discoveryRows] = await db.batch([
+    db
+      .select({
+        siteTitle: siteSettings.siteTitle,
+        homepageTitle: siteSettings.homepageTitle,
+        homepageMetaDescription: siteSettings.homepageMetaDescription,
+        robotsTxt: siteSettings.robotsTxt,
+      })
+      .from(siteSettings)
+      .limit(1),
+    db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(
+        and(
+          eq(settings.category, SEO_SETTINGS_CATEGORY),
+          eq(settings.key, DISCOVERY_SETTINGS_KEY),
+        ),
+      )
+      .limit(1),
+  ]);
+
+  const row = siteRows[0];
+  const discoveryRow = discoveryRows[0];
 
   return {
     siteTitle: row?.siteTitle || "",
     homepageTitle: row?.homepageTitle || "",
     homepageMetaDescription: row?.homepageMetaDescription || "",
     robotsTxt: row?.robotsTxt || "",
+    discovery: parseSeoDiscoverySettings(discoveryRow?.value),
   };
 }
 
@@ -334,6 +358,7 @@ export async function saveSeoSettings(
     homepageTitle?: string;
     homepageMetaDescription?: string;
     robotsTxt?: string;
+    discovery?: Partial<SeoDiscoverySettings>;
   },
 ) {
   // Filter out undefined values to avoid NULLing existing data
@@ -345,24 +370,47 @@ export async function saveSeoSettings(
     updates.homepageMetaDescription = data.homepageMetaDescription;
   if (data.robotsTxt !== undefined) updates.robotsTxt = data.robotsTxt;
 
-  await db
-    .insert(siteSettings)
-    .values({
-      id: "settings_" + nanoid(),
-      siteName: "My Store",
-      headerConfig: JSON.stringify({}),
-      footerConfig: JSON.stringify({}),
-      ...updates,
-      createdAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .onConflictDoUpdate({
-      target: siteSettings.singletonKey,
-      set: {
-        ...updates,
-        updatedAt: sql`unixepoch()`,
-      },
+  const ops: Promise<unknown>[] = [];
+
+  if (Object.keys(updates).length > 0) {
+    ops.push(
+      db
+        .insert(siteSettings)
+        .values({
+          id: "settings_" + nanoid(),
+          siteName: "My Store",
+          headerConfig: JSON.stringify({}),
+          footerConfig: JSON.stringify({}),
+          ...updates,
+          createdAt: sql`unixepoch()`,
+          updatedAt: sql`unixepoch()`,
+        })
+        .onConflictDoUpdate({
+          target: siteSettings.singletonKey,
+          set: {
+            ...updates,
+            updatedAt: sql`unixepoch()`,
+          },
+        }),
+    );
+  }
+
+  if (data.discovery !== undefined) {
+    const discovery = normalizeSeoDiscoverySettings({
+      ...DEFAULT_SEO_DISCOVERY_SETTINGS,
+      ...data.discovery,
     });
+    ops.push(
+      upsertSetting(
+        db,
+        SEO_SETTINGS_CATEGORY,
+        DISCOVERY_SETTINGS_KEY,
+        JSON.stringify(discovery),
+      ),
+    );
+  }
+
+  await Promise.all(ops);
 }
 
 // ─────────────────────────────────────────

@@ -325,7 +325,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/footer": ["layout"],
   "/api/v1/admin/settings/storefront-url": ["layout"],
   "/api/v1/admin/settings/hero-sliders": ["homepage"],
-  "/api/v1/admin/settings/seo": ["homepage"],
+  "/api/v1/admin/settings/seo": ["homepage", "layout"],
   "/api/v1/admin/settings/security": ["layout"],
   "/api/v1/admin/settings/theme": ["layout"],
   "/api/v1/admin/settings/media": ["media"],

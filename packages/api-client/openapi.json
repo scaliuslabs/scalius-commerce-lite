@@ -7376,6 +7376,12 @@
                           "additionalProperties": {
                             "nullable": true
                           }
+                        },
+                        "seo": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "nullable": true
+                          }
                         }
                       },
                       "required": [
@@ -14320,13 +14326,89 @@
                         "robotsTxt": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "discovery": {
+                          "type": "object",
+                          "properties": {
+                            "sitemap": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "products": {
+                                  "type": "boolean"
+                                },
+                                "categories": {
+                                  "type": "boolean"
+                                },
+                                "collections": {
+                                  "type": "boolean"
+                                },
+                                "pages": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "products",
+                                "categories",
+                                "collections",
+                                "pages"
+                              ]
+                            },
+                            "feeds": {
+                              "type": "object",
+                              "properties": {
+                                "productCatalogEnabled": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "productCatalogEnabled"
+                              ]
+                            },
+                            "robots": {
+                              "type": "object",
+                              "properties": {
+                                "advertiseSitemap": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "advertiseSitemap"
+                              ]
+                            },
+                            "structuredData": {
+                              "type": "object",
+                              "properties": {
+                                "organization": {
+                                  "type": "boolean"
+                                },
+                                "websiteSearch": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "organization",
+                                "websiteSearch"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "sitemap",
+                            "feeds",
+                            "robots",
+                            "structuredData"
+                          ]
                         }
                       },
                       "required": [
                         "siteTitle",
                         "homepageTitle",
                         "homepageMetaDescription",
-                        "robotsTxt"
+                        "robotsTxt",
+                        "discovery"
                       ]
                     }
                   },
@@ -64838,13 +64920,89 @@
                         },
                         "robotsTxt": {
                           "type": "string"
+                        },
+                        "discovery": {
+                          "type": "object",
+                          "properties": {
+                            "sitemap": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "products": {
+                                  "type": "boolean"
+                                },
+                                "categories": {
+                                  "type": "boolean"
+                                },
+                                "collections": {
+                                  "type": "boolean"
+                                },
+                                "pages": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "products",
+                                "categories",
+                                "collections",
+                                "pages"
+                              ]
+                            },
+                            "feeds": {
+                              "type": "object",
+                              "properties": {
+                                "productCatalogEnabled": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "productCatalogEnabled"
+                              ]
+                            },
+                            "robots": {
+                              "type": "object",
+                              "properties": {
+                                "advertiseSitemap": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "advertiseSitemap"
+                              ]
+                            },
+                            "structuredData": {
+                              "type": "object",
+                              "properties": {
+                                "organization": {
+                                  "type": "boolean"
+                                },
+                                "websiteSearch": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "organization",
+                                "websiteSearch"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "sitemap",
+                            "feeds",
+                            "robots",
+                            "structuredData"
+                          ]
                         }
                       },
                       "required": [
                         "siteTitle",
                         "homepageTitle",
                         "homepageMetaDescription",
-                        "robotsTxt"
+                        "robotsTxt",
+                        "discovery"
                       ]
                     }
                   },
@@ -65125,6 +65283,75 @@
                   },
                   "robotsTxt": {
                     "type": "string"
+                  },
+                  "discovery": {
+                    "type": "object",
+                    "properties": {
+                      "sitemap": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "products": {
+                            "type": "boolean"
+                          },
+                          "categories": {
+                            "type": "boolean"
+                          },
+                          "collections": {
+                            "type": "boolean"
+                          },
+                          "pages": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "enabled",
+                          "products",
+                          "categories",
+                          "collections",
+                          "pages"
+                        ]
+                      },
+                      "feeds": {
+                        "type": "object",
+                        "properties": {
+                          "productCatalogEnabled": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "productCatalogEnabled"
+                        ]
+                      },
+                      "robots": {
+                        "type": "object",
+                        "properties": {
+                          "advertiseSitemap": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "advertiseSitemap"
+                        ]
+                      },
+                      "structuredData": {
+                        "type": "object",
+                        "properties": {
+                          "organization": {
+                            "type": "boolean"
+                          },
+                          "websiteSearch": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "organization",
+                          "websiteSearch"
+                        ]
+                      }
+                    }
                   }
                 }
               }

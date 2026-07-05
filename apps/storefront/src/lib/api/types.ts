@@ -36,6 +36,7 @@ import type {
   GetApiV1LocationsAreasResponse as GetLocationsAreasResponse,
   PostApiV1OrdersResponse as PostOrdersResponse,
 } from "@scalius/api-client/types";
+import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 export type {
   GetProductsResponse,
@@ -362,6 +363,7 @@ export interface SeoSettings {
   homepageTitle: string | null;
   homepageMetaDescription: string | null;
   robotsTxt: string | null;
+  discovery?: SeoDiscoverySettings;
 }
 
 // ---------------------------------------------------------------------------

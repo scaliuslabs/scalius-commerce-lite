@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
 import { getSeoSettings } from "@/lib/api";
+import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 export const prerender = false;
 
@@ -31,6 +32,24 @@ function ensureSitemapDirective(robotsContent: string, sitemapUrl: string): stri
   return `${normalized}\n\nSitemap: ${sitemapUrl}`;
 }
 
+function removePlaceholderSitemapDirectives(robotsContent: string): string {
+  return robotsContent
+    .split(/\r?\n/)
+    .filter((line) => {
+      const match = line.match(/^sitemap:\s*(.*)$/i);
+      if (!match) return true;
+      const value = match[1]?.trim() ?? "";
+      return !(
+        value === "" ||
+        value.startsWith("[") ||
+        value.toLowerCase() === "your-sitemap-url" ||
+        value.toLowerCase() === "[your-sitemap-url]"
+      );
+    })
+    .join("\n")
+    .trim();
+}
+
 export const GET: APIRoute = async () => {
   const seoSettings = await getSeoSettings();
 
@@ -53,14 +72,19 @@ export const GET: APIRoute = async () => {
     robotsContent = seoSettings.robotsTxt;
   }
 
-  // Append sitemap reference
-  const env = cfEnv as unknown as Env;
-  const storefrontUrl = (env?.STOREFRONT_URL as string) || '';
-  const sitemapUrl = storefrontUrl
-    ? `${storefrontUrl.replace(/\/$/, '')}/sitemap.xml`
-    : '/sitemap.xml';
+  const discovery = normalizeSeoDiscoverySettings(seoSettings.discovery);
+  if (discovery.sitemap.enabled && discovery.robots.advertiseSitemap) {
+    // Append sitemap reference
+    const env = cfEnv as unknown as Env;
+    const storefrontUrl = (env?.STOREFRONT_URL as string) || "";
+    const sitemapUrl = storefrontUrl
+      ? `${storefrontUrl.replace(/\/$/, "")}/sitemap.xml`
+      : "/sitemap.xml";
 
-  robotsContent = ensureSitemapDirective(robotsContent, sitemapUrl);
+    robotsContent = ensureSitemapDirective(robotsContent, sitemapUrl);
+  } else {
+    robotsContent = removePlaceholderSitemapDirectives(robotsContent);
+  }
 
   return new Response(robotsContent, {
     headers: {
