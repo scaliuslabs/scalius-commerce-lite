@@ -126,6 +126,7 @@ export interface Product {
   imageAlt?: string | null;
   category?: CategorySummary;
   hasVariants: boolean;
+  availableForSale?: boolean;
 }
 
 export interface ProductVariant {

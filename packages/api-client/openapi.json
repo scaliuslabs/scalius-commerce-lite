@@ -14764,6 +14764,9 @@
                               "hasVariants": {
                                 "type": "boolean"
                               },
+                              "availableForSale": {
+                                "type": "boolean"
+                              },
                               "imageUrl": {
                                 "type": "string",
                                 "nullable": true
@@ -14811,6 +14814,7 @@
                               "freeDelivery",
                               "categoryId",
                               "hasVariants",
+                              "availableForSale",
                               "imageUrl",
                               "category",
                               "createdAt",
@@ -65305,14 +65309,7 @@
                           "pages": {
                             "type": "boolean"
                           }
-                        },
-                        "required": [
-                          "enabled",
-                          "products",
-                          "categories",
-                          "collections",
-                          "pages"
-                        ]
+                        }
                       },
                       "feeds": {
                         "type": "object",
@@ -65320,10 +65317,7 @@
                           "productCatalogEnabled": {
                             "type": "boolean"
                           }
-                        },
-                        "required": [
-                          "productCatalogEnabled"
-                        ]
+                        }
                       },
                       "robots": {
                         "type": "object",
@@ -65331,10 +65325,7 @@
                           "advertiseSitemap": {
                             "type": "boolean"
                           }
-                        },
-                        "required": [
-                          "advertiseSitemap"
-                        ]
+                        }
                       },
                       "structuredData": {
                         "type": "object",
@@ -65345,11 +65336,7 @@
                           "websiteSearch": {
                             "type": "boolean"
                           }
-                        },
-                        "required": [
-                          "organization",
-                          "websiteSearch"
-                        ]
+                        }
                       }
                     }
                   }

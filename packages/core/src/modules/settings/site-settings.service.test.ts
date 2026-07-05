@@ -88,6 +88,7 @@ describe("site SEO settings", () => {
 
   it("saves discovery-only changes in the generic settings table", async () => {
     const db = {
+      ...createSeoReadDb(),
       insert: vi.fn(),
     };
 
@@ -105,6 +106,46 @@ describe("site SEO settings", () => {
       sitemap: { enabled: true, products: true },
       feeds: { productCatalogEnabled: false },
       robots: { advertiseSitemap: true },
+    });
+  });
+
+  it("preserves existing nested discovery settings on partial saves", async () => {
+    const db = {
+      ...createSeoReadDb(
+        JSON.stringify({
+          sitemap: {
+            enabled: true,
+            products: false,
+            categories: false,
+            collections: true,
+            pages: false,
+          },
+          feeds: { productCatalogEnabled: false },
+          robots: { advertiseSitemap: false },
+          structuredData: { organization: false, websiteSearch: true },
+        }),
+      ),
+      insert: vi.fn(),
+    };
+
+    await saveSeoSettings(db as never, {
+      discovery: {
+        sitemap: { pages: true },
+      } as never,
+    });
+
+    const [, , , rawValue] = mocks.upsertSetting.mock.calls[0] ?? [];
+    expect(JSON.parse(String(rawValue))).toEqual({
+      sitemap: {
+        enabled: true,
+        products: false,
+        categories: false,
+        collections: true,
+        pages: true,
+      },
+      feeds: { productCatalogEnabled: false },
+      robots: { advertiseSitemap: false },
+      structuredData: { organization: false, websiteSearch: true },
     });
   });
 });

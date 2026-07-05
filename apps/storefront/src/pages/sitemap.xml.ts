@@ -4,10 +4,9 @@
  */
 
 import type { APIRoute } from 'astro';
-import { generateSitemapIndex, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
+import { generateSitemapIndex, getBaseUrl, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
 import { getAllProducts } from '@/lib/api/products';
 import { getSeoSettings } from '@/lib/api';
-import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext } from 'astro';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
@@ -18,7 +17,7 @@ const PRODUCTS_PER_SITEMAP = 5000;
 
 export const GET: APIRoute = async (_context: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl();
+    const baseUrl = getBaseUrl();
     const now = new Date().toISOString();
     const seo = await getSeoSettings();
     if (!seo) {

@@ -18,6 +18,7 @@ import type { Database } from "@scalius/database/client";
 import {
     publicProductBaseConditions,
     publicProductHasCustomerOptions,
+    publicProductHasAvailableBuyerSku,
     publicProductHasBuyerResolvableSku,
     normalizeDefaultSkuOptions,
 } from "./products.public-eligibility";
@@ -41,6 +42,7 @@ type StorefrontProductListRow = {
 
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
     hasCustomerOptions: boolean;
+    availableForSale: boolean;
 };
 
 export interface StorefrontCategoryProductCategory {
@@ -239,6 +241,7 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             hasCustomerOptions: publicProductHasCustomerOptions(sql`${products.id}`).as("hasCustomerOptions"),
+            availableForSale: publicProductHasAvailableBuyerSku(sql`${products.id}`).as("availableForSale"),
         })
         .from(products)
         .where(and(...conditions));
@@ -279,11 +282,12 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
     ]);
     categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
 
-    const productsWithImages = productsList.map(({ hasCustomerOptions, ...product }: StorefrontProductListRowWithVariants) => {
+    const productsWithImages = productsList.map(({ hasCustomerOptions, availableForSale, ...product }: StorefrontProductListRowWithVariants) => {
         const imgData = imageMap.get(product.id);
         return {
             ...product,
             hasVariants: Boolean(hasCustomerOptions),
+            availableForSale: Boolean(availableForSale),
             imageUrl: imgData?.url || null,
             imageAlt: imgData?.alt || null,
             category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,

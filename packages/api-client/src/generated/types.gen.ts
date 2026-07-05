@@ -4382,6 +4382,7 @@ export type GetApiV1ProductsResponses = {
                 freeDelivery: boolean;
                 categoryId: string | null;
                 hasVariants: boolean;
+                availableForSale: boolean;
                 imageUrl: string | null;
                 category: {
                     id: string;
@@ -19540,21 +19541,21 @@ export type PostApiV1AdminSettingsSeoData = {
         robotsTxt?: string;
         discovery?: {
             sitemap?: {
-                enabled: boolean;
-                products: boolean;
-                categories: boolean;
-                collections: boolean;
-                pages: boolean;
+                enabled?: boolean;
+                products?: boolean;
+                categories?: boolean;
+                collections?: boolean;
+                pages?: boolean;
             };
             feeds?: {
-                productCatalogEnabled: boolean;
+                productCatalogEnabled?: boolean;
             };
             robots?: {
-                advertiseSitemap: boolean;
+                advertiseSitemap?: boolean;
             };
             structuredData?: {
-                organization: boolean;
-                websiteSearch: boolean;
+                organization?: boolean;
+                websiteSearch?: boolean;
             };
         };
     };

@@ -95,6 +95,7 @@ const storefrontProductSchema = z.object({
   freeDelivery: z.boolean(),
   categoryId: z.string().nullable(),
   hasVariants: z.boolean(),
+  availableForSale: z.boolean(),
   imageUrl: z.string().nullable(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),

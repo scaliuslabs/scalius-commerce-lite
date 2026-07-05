@@ -72,6 +72,41 @@ describe("pages sitemap route", () => {
     expect(body).toContain("<urlset");
   });
 
+  it("formats CMS page Unix-second timestamps as real lastmod dates", async () => {
+    mocks.getAllPages.mockResolvedValueOnce({
+      data: [
+        {
+          id: "page_1",
+          slug: "about-us",
+          title: "About us",
+          isPublished: true,
+          updatedAt: 1782691200,
+          publishedAt: null,
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<lastmod>2026-06-29T00:00:00.000Z</lastmod>");
+    expect(body).not.toContain("1970");
+  });
+
+  it("returns non-cacheable 503 instead of relative page locs when the storefront URL is missing", async () => {
+    mocks.getRuntimeStorefrontUrl.mockReturnValueOnce("");
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toContain("Pages sitemap is temporarily unavailable");
+    expect(mocks.getAllPages).not.toHaveBeenCalled();
+  });
+
   it("fails closed when a later CMS page batch cannot be read", async () => {
     mocks.getAllPages
       .mockResolvedValueOnce({

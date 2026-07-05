@@ -59,18 +59,14 @@ function formatFeedPrice(price: number, currencyCode: string): string {
 }
 
 /**
- * Determines product availability based on stock and active status
+ * Determines catalog availability from the storefront buyer availability signal.
  */
 function getAvailability(product: Product): "in stock" | "out of stock" {
-  // If product is explicitly marked as inactive, it's out of stock
-  // Treat undefined isActive as active (since API list endpoint doesn't return this field)
   if (product.isActive === false) {
     return "out of stock";
   }
 
-  // For products with variants, we'll mark as in stock if the product itself is active
-  // Individual variant stock is handled by variants having their own availability
-  return "in stock";
+  return product.availableForSale === false ? "out of stock" : "in stock";
 }
 
 /**

@@ -6,14 +6,14 @@ import { getRuntimeStorefrontUrl } from "./api/runtime-env";
 
 export interface SitemapUrl {
   loc: string;
-  lastmod?: string;
+  lastmod?: string | number | Date;
   changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
   priority?: number;
 }
 
 export interface SitemapIndexEntry {
   loc: string;
-  lastmod?: string;
+  lastmod?: string | number | Date;
 }
 
 /**
@@ -31,8 +31,27 @@ function escapeXml(unsafe: string): string {
 /**
  * Formats a date to ISO 8601 format (W3C Datetime)
  */
-export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+function dateFromSitemapValue(date: string | number | Date): Date {
+  if (date instanceof Date) return date;
+
+  if (typeof date === 'number') {
+    return new Date(date < 1_000_000_000_000 ? date * 1000 : date);
+  }
+
+  const trimmed = date.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const numeric = Number(trimmed);
+    return new Date(numeric < 1_000_000_000_000 ? numeric * 1000 : numeric);
+  }
+
+  return new Date(date);
+}
+
+export function formatDate(date: string | number | Date): string {
+  const d = dateFromSitemapValue(date);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error('Invalid sitemap date');
+  }
   return d.toISOString();
 }
 
@@ -120,12 +139,24 @@ export function generateSitemapIndex(sitemaps: SitemapIndexEntry[], baseUrl?: st
  * Gets the base URL from environment
  */
 export function getBaseUrl(): string {
-  const url = getRuntimeStorefrontUrl();
-  if (!url) {
+  const rawUrl = getRuntimeStorefrontUrl().trim();
+  if (!rawUrl) {
     throw new Error('STOREFRONT_URL environment variable is not set');
   }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error('STOREFRONT_URL must be an absolute URL');
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('STOREFRONT_URL must use http or https');
+  }
+
   // Remove trailing slash if present
-  return url.replace(/\/$/, '');
+  return parsed.toString().replace(/\/$/, '');
 }
 
 /**

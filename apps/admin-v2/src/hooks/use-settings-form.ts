@@ -29,7 +29,7 @@ export function useSettingsForm<T extends object>({
 }: UseSettingsFormOptions<T>) {
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, error, isError, isLoading } = useQuery({
     queryKey: queryKey as unknown[],
     queryFn: fetchFn,
   });
@@ -68,6 +68,8 @@ export function useSettingsForm<T extends object>({
     setValue,
     setValues,
     isLoading,
+    isLoadError: isError,
+    loadError: error,
     isSaving: mutation.isPending,
     handleSubmit,
     refetch: () =>

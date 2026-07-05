@@ -4,6 +4,7 @@ import {
     defaultProductSkuValues,
     normalizeDefaultSkuOptions,
     publicProductBaseConditions,
+    publicProductHasAvailableBuyerSku,
     publicProductHasCustomerOptions,
     publicProductHasBuyerResolvableSku,
 } from "./products.public-eligibility";
@@ -56,6 +57,20 @@ describe("public product SKU eligibility", () => {
         expect(query.sql).toContain("color");
         expect(query.sql).not.toContain("buyer_simple_sku");
         expect(query.sql).not.toContain("count(*)");
+    });
+
+    it("projects buyer purchase availability from the same SKU topology", () => {
+        const dialect = new SQLiteSyncDialect();
+        const query = dialect.sqlToQuery(publicProductHasAvailableBuyerSku());
+
+        expect(query.sql).toContain("buyer_available_option_sku");
+        expect(query.sql).toContain("buyer_available_simple_sku");
+        expect(query.sql).toContain("track_inventory");
+        expect(query.sql).toContain("stock");
+        expect(query.sql).toContain("reserved_stock");
+        expect(query.sql).toContain("> 0");
+        expect(query.sql).toContain("count(*)");
+        expect(query.sql).not.toContain("buyer_option_sku");
     });
 
     it("creates the protected untracked default SKU shape for simple products", () => {

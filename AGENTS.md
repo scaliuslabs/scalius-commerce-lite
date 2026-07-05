@@ -28,6 +28,8 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 - Checkout/order/payment writes must be idempotent and commit local state before provider side effects when duplicate orders, stock leaks, or double charges are possible.
 - Phone collection is mandatory for customer identity and checkout in Bangladesh. Do not add a merchant setting that disables phone collection.
 - Products are merchandising containers. Sellable/inventory identities are `product_variants`; simple products use exactly one hidden/default persisted SKU, never product-level inventory.
+- Product-feed availability must come from buyer-resolvable SKU availability (`availableForSale`), not product active status alone, so feed XML matches product JSON-LD and checkout truth.
+- Sitemaps and robots must fail closed when `STOREFRONT_URL` is missing or not absolute; never emit relative discovery URLs in XML or robots output.
 - Public checkout/config/payment readiness must fail closed. Do not guess COD or a gateway when settings cannot be read.
 - Sensitive forms must be safe before hydration and with JavaScript disabled. Credentials, OTPs, tokens, phone/email, cart, payment, and discount values must not enter URLs.
 - Receipt proof must not enter URLs, analytics payloads, logs, clipboard URLs, or KV keys. Guest receipt access uses same-origin httpOnly cookies plus API header/body proof; merchant-sendable cross-browser hosted-payment recovery must use the buyer-verified `/payment-recovery?orderId=...` OTP handoff, never a bearer recovery URL.

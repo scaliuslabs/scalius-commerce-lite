@@ -124,6 +124,44 @@ describe("site settings cache invalidation", () => {
     vi.clearAllMocks();
   });
 
+  it("fails SEO reads visibly instead of returning default-on settings", async () => {
+    const { app, env } = createTestApp();
+    mocks.getSeoSettings.mockRejectedValueOnce(new Error("D1 unavailable"));
+
+    const response = await app.request(
+      "/api/v1/admin/settings/seo",
+      { method: "GET" },
+      env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toMatchObject({ success: false });
+    expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
+  });
+
+  it("accepts nested partial SEO discovery saves for safe merge semantics", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(app, env, "POST", "/seo", {
+      discovery: {
+        sitemap: { pages: false },
+        structuredData: { websiteSearch: false },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.saveSeoSettings).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        discovery: {
+          sitemap: { pages: false },
+          structuredData: { websiteSearch: false },
+        },
+      },
+    );
+  });
+
   it.each([
     {
       path: "/currency",

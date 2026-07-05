@@ -10,8 +10,7 @@ import type { Database } from "@scalius/database/client";
 import { upsertSetting } from "../payments/gateway-settings";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
 import {
-  DEFAULT_SEO_DISCOVERY_SETTINGS,
-  normalizeSeoDiscoverySettings,
+  mergeSeoDiscoverySettings,
   parseSeoDiscoverySettings,
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
@@ -20,6 +19,10 @@ const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
 const SEO_SETTINGS_CATEGORY = "seo";
 const DISCOVERY_SETTINGS_KEY = "discovery";
+
+type PartialSeoDiscoverySettings = {
+  [Section in keyof SeoDiscoverySettings]?: Partial<SeoDiscoverySettings[Section]>;
+};
 
 export interface MediaOptimizationSettings {
   enabled: boolean;
@@ -358,7 +361,7 @@ export async function saveSeoSettings(
     homepageTitle?: string;
     homepageMetaDescription?: string;
     robotsTxt?: string;
-    discovery?: Partial<SeoDiscoverySettings>;
+    discovery?: PartialSeoDiscoverySettings;
   },
 ) {
   // Filter out undefined values to avoid NULLing existing data
@@ -396,10 +399,8 @@ export async function saveSeoSettings(
   }
 
   if (data.discovery !== undefined) {
-    const discovery = normalizeSeoDiscoverySettings({
-      ...DEFAULT_SEO_DISCOVERY_SETTINGS,
-      ...data.discovery,
-    });
+    const current = await getSeoSettings(db);
+    const discovery = mergeSeoDiscoverySettings(current.discovery, data.discovery);
     ops.push(
       upsertSetting(
         db,

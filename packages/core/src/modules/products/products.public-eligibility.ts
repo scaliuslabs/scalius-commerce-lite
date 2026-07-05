@@ -61,6 +61,40 @@ export function publicProductHasCustomerOptions(productId: SQL = sql`${products.
     )`;
 }
 
+function availableSkuPredicate(alias: string): SQL {
+    return sql`(
+        ${sql.raw(`${alias}.track_inventory`)} = 0
+        OR (${sql.raw(`${alias}.stock`)} - ${sql.raw(`${alias}.reserved_stock`)}) > 0
+    )`;
+}
+
+export function publicProductHasAvailableBuyerSku(productId: SQL = sql`${products.id}`): SQL<boolean> {
+    return sql`(
+        EXISTS (
+            SELECT 1
+            FROM "product_variants" AS buyer_available_option_sku
+            WHERE ${activePersistedSkuPredicate("buyer_available_option_sku", productId)}
+              AND ${sql.raw("buyer_available_option_sku.is_default")} = 0
+              AND ${hasCustomerOptionPredicate("buyer_available_option_sku")}
+              AND ${availableSkuPredicate("buyer_available_option_sku")}
+        )
+        OR (
+            (
+                SELECT count(*)
+                FROM "product_variants" AS buyer_available_active_sku
+                WHERE ${activePersistedSkuPredicate("buyer_available_active_sku", productId)}
+            ) = 1
+            AND EXISTS (
+                SELECT 1
+                FROM "product_variants" AS buyer_available_simple_sku
+                WHERE ${activePersistedSkuPredicate("buyer_available_simple_sku", productId)}
+                  AND ${sql.raw("buyer_available_simple_sku.is_default")} = 1
+                  AND ${availableSkuPredicate("buyer_available_simple_sku")}
+            )
+        )
+    )`;
+}
+
 export function publicProductBaseConditions(): SQL[] {
     return [
         eq(products.isActive, true),
