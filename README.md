@@ -360,6 +360,7 @@ pnpm run deploy             # Typecheck → build → migrate → deploy all wor
 pnpm run deploy:api         # Typecheck → build API → migrate remote D1 → deploy API
 pnpm run deploy:admin       # Typecheck → build admin-v2 → deploy admin-v2
 pnpm run deploy:storefront  # Typecheck → build storefront → deploy storefront
+pnpm ops:check              # Read-only production API ops smoke; add --queues for queue metadata
 
 # Database
 pnpm db:generate        # Generate Drizzle migrations from schema changes

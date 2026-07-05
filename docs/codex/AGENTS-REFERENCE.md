@@ -51,6 +51,7 @@ packages/
 | `pnpm dev:doctor:admin` | Require local API + admin to be live |
 | `pnpm dev:doctor:storefront` | Require local API + storefront to be live |
 | `pnpm dev:doctor:all` | Require API + admin + storefront to be live |
+| `pnpm ops:check` | Run a read-only production API ops smoke: health, readyz sampler, OpenAPI path count, app-local Wrangler deployment proof; add `--queues` for queue info |
 | `pnpm db:generate` | Generate Drizzle migrations via the API workspace |
 | `pnpm db:migrate:local` | Apply D1 migrations to local Wrangler state |
 | `pnpm db:migrate:remote` | Apply D1 migrations to remote D1 |

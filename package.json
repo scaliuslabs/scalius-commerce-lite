@@ -15,6 +15,7 @@
     "deploy:api": "node scripts/deploy.mjs --only api",
     "deploy:admin": "node scripts/deploy.mjs --only admin",
     "deploy:storefront": "node scripts/deploy.mjs --only storefront",
+    "ops:check": "node scripts/ops-check.mjs",
     "typecheck": "node scripts/turbo-run.mjs typecheck",
     "dev:setup": "node scripts/dev-setup.mjs",
     "dev:reset": "node scripts/dev-reset.mjs",
