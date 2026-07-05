@@ -46,6 +46,19 @@ export interface OrderShipmentRecoverySummary {
     updatedAt: Date | null;
 }
 
+export interface OrderShipmentReconciliationResult {
+    status: "repaired";
+    orderId: string;
+    shipmentId: string;
+    orderStatus: string;
+    shipmentStatus: string;
+    orderStatusChanged: boolean;
+    inventoryReconciled: boolean;
+    claimCleared: boolean;
+    trackingId: string | null;
+    message: string;
+}
+
 export type OrderPaymentRecoveryState =
     | "none"
     | "awaiting_payment"

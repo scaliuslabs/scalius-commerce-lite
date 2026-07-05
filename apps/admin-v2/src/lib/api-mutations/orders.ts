@@ -7,6 +7,7 @@ import {
   createOrderShipment,
   reconcileRefundAttempt,
   refundOrder,
+  reconcileShipment,
   resolveOrderSupportRequest,
   retryOrderNotification,
   restoreOrder,
@@ -20,6 +21,7 @@ import {
   type CreateOrderInput,
   type CreateOrderShipmentInput,
   type RefundOrderInput,
+  type ReconcileShipmentInput,
   type ReconcileRefundAttemptInput,
   type ResolveOrderSupportRequestInput,
   type ReturnOrderInput,
@@ -204,6 +206,28 @@ export function useReconcileRefundAttempt() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to check refund recovery")),
+  });
+}
+
+export function useReconcileShipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ReconcileShipmentInput) => reconcileShipment({ data }),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      invalidateDashboardQueries(queryClient);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.shipments(variables.orderId),
+      });
+      toast.success("Shipment recovery repaired", {
+        description: result.message,
+      });
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to repair shipment recovery")),
   });
 }
 

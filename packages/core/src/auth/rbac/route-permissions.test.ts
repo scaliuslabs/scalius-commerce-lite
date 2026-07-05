@@ -33,6 +33,15 @@ describe("route permissions", () => {
     ).toEqual({ permission: PERMISSIONS.ORDERS_REFUND });
   });
 
+  it("gates shipment recovery repair behind shipment management permission", () => {
+    expect(
+      getRoutePermission(
+        "/api/v1/admin/orders/order_1/shipments/shp_1/reconcile",
+        "POST",
+      ),
+    ).toEqual({ permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS });
+  });
+
   it("gates order support request resolution behind order edit permission", () => {
     expect(
       getRoutePermission(

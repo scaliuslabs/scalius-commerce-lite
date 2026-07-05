@@ -19,6 +19,7 @@ import type {
   PostApiV1AdminOrdersByIdReturnResponse,
   PostApiV1AdminOrdersByIdShipmentsData,
   PostApiV1AdminOrdersByIdShipmentsResponse,
+  PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponse,
   PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponse,
   PostApiV1AdminOrdersData,
   PostApiV1AdminOrdersResponse,
@@ -193,12 +194,18 @@ export type RefreshShipmentStatusInput = {
 };
 export type RefreshedShipmentPayload =
   ApiData<PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponse>;
+export type ReconcileShipmentPayload =
+  ApiData<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponse>;
 export type DeleteShipmentInput = {
   orderId: string;
   shipmentId: string;
 };
 export type DeleteShipmentPayload =
   ApiData<DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdResponse>;
+export type ReconcileShipmentInput = {
+  orderId: string;
+  shipmentId: string;
+};
 
 function buildOrdersParams(data: OrdersQueryInput): Record<string, string> {
   const params: Record<string, string> = {};
@@ -400,6 +407,15 @@ export const refreshShipmentStatus = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     return apiPost<RefreshedShipmentPayload>(
       `/orders/${data.orderId}/shipments/${data.shipmentId}/refresh`,
+      {},
+    );
+  });
+
+export const reconcileShipment = createServerFn({ method: "POST" })
+  .validator((data: ReconcileShipmentInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<ReconcileShipmentPayload>(
+      `/orders/${data.orderId}/shipments/${data.shipmentId}/reconcile`,
       {},
     );
   });

@@ -155,7 +155,8 @@ All 10 buyer-visible order statuses that trigger status notifications are covere
 1. Reads order status and version
 2. If the order is already `shipped`, treats the call as a retry and reconciles inventory without calling the provider again
 3. For unshipped orders: claims by version, calls the provider, CAS-updates status to `shipped`, then deducts inventory
-4. CAS conflicts (concurrent admin + webhook edits) are logged and skipped gracefully
+4. Provider-success/local-finalization failures leave the shipment `reconcile_required` and keep the matching order shipment claim until repair succeeds
+5. CAS conflicts (concurrent admin + webhook edits) are logged and skipped gracefully
 
 ### Delete Flow
 
@@ -218,13 +219,14 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | DELETE | `/:id/shipments/:shipmentId` | `DeliveryService.deleteShipment()` | Delete shipment |
 | POST | `/:id/shipments/:shipmentId/status` | shared check + sync helper | Check provider status, sync order/inventory/cache/notifications |
 | POST | `/:id/shipments/:shipmentId/refresh` | shared check + sync helper | Refresh provider status, sync order/inventory/cache/notifications |
+| POST | `/:id/shipments/:shipmentId/reconcile` | `reconcileOrderShipment()` | Repair `reconcile_required` shipment/order/inventory state without calling the provider again |
 | POST | `/:id/return` | `processReturn()` | Return with optional auto-refund |
 | POST | `/:id/refund` | `processRefund()` | Refund with optional gateway |
 | GET | `/:id/form-data` | direct query | Order + products for edit form |
 
-Bulk provider shipment creation uses a durable order-level shipment claim (`orders.shipmentClaimId` / `orders.shipmentClaimExpiresAt`) linked to the insert-first `delivery_shipments` row. Admin order mutations, status changes, manual fulfillment, COD actions, refunds, returns, public payment-session creation, shipment refresh/deletion, and cleanup must reject or skip active claims. Queue/webhook paths must surface retryable failures so external payment or delivery truth is not acknowledged while shipment creation is being finalized. Provider success with failed local finalization leaves the shipment in `reconcile_required` and keeps the order claim active until reconciliation.
+Bulk provider shipment creation uses a durable order-level shipment claim (`orders.shipmentClaimId` / `orders.shipmentClaimExpiresAt`) linked to the insert-first `delivery_shipments` row. Admin order mutations, status changes, manual fulfillment, COD actions, refunds, returns, public payment-session creation, shipment refresh/deletion, and cleanup must reject or skip active claims. Queue/webhook paths must surface retryable failures so external payment or delivery truth is not acknowledged while shipment creation is being finalized. Provider success with failed local finalization leaves the shipment in `reconcile_required` and keeps the order claim active until `reconcileOrderShipment()` repairs local order status, inventory state, shipment status, and then clears only the matching claim. The repair path must use persisted provider evidence on the shipment; it must not create another provider shipment.
 
-Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/delete/refresh/bulk delete/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true.
+Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/delete/refresh/bulk delete/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true. Shipment managers may run the explicit repair action from the recovery notice; view-only users only see the operator copy.
 
 ### Admin Shipments (`/api/v1/admin/shipments`)
 
