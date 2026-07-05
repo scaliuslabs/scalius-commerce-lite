@@ -21,7 +21,15 @@ import {
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
-import { successEnvelope, paginatedEnvelope, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
+import {
+    successEnvelope,
+    paginatedEnvelope,
+    idResponse,
+    noContentResponse,
+    errorResponses,
+    conflictResponse,
+    serviceUnavailableResponse,
+} from "../../schemas/responses";
 import {
     activeRefundOperationSchema,
     orderDetailSchema,
@@ -172,6 +180,18 @@ function isNewShipmentResult(result: unknown): result is {
         && typeof (result as Record<string, unknown>).shipment === "object"
         && (result as Record<string, unknown>).shipment !== null;
 }
+
+const adminWriteErrorResponses = {
+    400: errorResponses[400],
+    401: errorResponses[401],
+    403: errorResponses[403],
+} as const;
+
+const adminOrderResourceMutationErrorResponses = {
+    ...adminWriteErrorResponses,
+    404: errorResponses[404],
+    409: conflictResponse,
+} as const;
 
 // Mount sub-routers
 app.route("/", adminOrdersStatusRoutes);
@@ -527,6 +547,8 @@ const createOrderRoute = createRoute({
             description: "Order created",
             content: { "application/json": { schema: idResponse } },
         },
+        ...adminWriteErrorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 
@@ -550,6 +572,8 @@ const bulkDeleteRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        ...adminWriteErrorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -579,6 +603,7 @@ const bulkShipRoute = createRoute({
             description: "Bulk ship results",
             content: { "application/json": { schema: bulkShipResponseSchema } },
         },
+        ...adminWriteErrorResponses,
     }
 });
 
@@ -664,6 +689,7 @@ const updateOrderRoute = createRoute({
             description: "Order updated",
             content: { "application/json": { schema: idResponse } },
         },
+        ...adminOrderResourceMutationErrorResponses,
     }
 });
 
@@ -702,6 +728,7 @@ const deleteOrderRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        ...adminOrderResourceMutationErrorResponses,
     }
 });
 
@@ -728,6 +755,7 @@ const restoreOrderRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        ...adminOrderResourceMutationErrorResponses,
     }
 });
 
@@ -751,6 +779,7 @@ const permanentDeleteRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        ...adminOrderResourceMutationErrorResponses,
     }
 });
 

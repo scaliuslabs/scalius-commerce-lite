@@ -81,6 +81,26 @@ const reconcileShipmentResponseSchema = successEnvelope(z.object({
 
 const RECONCILE_NOTIFICATION_STATUSES = new Set(["shipped", "delivered", "returned", "cancelled"]);
 
+const adminMutationErrorResponses = {
+    400: errorResponses[400],
+    401: errorResponses[401],
+    403: errorResponses[403],
+    404: errorResponses[404],
+    409: conflictResponse,
+} as const;
+
+const adminProviderMutationErrorResponses = {
+    ...adminMutationErrorResponses,
+    503: serviceUnavailableResponse,
+} as const;
+
+const adminShipmentCreateErrorResponses = {
+    400: errorResponses[400],
+    401: errorResponses[401],
+    403: errorResponses[403],
+    404: errorResponses[404],
+} as const;
+
 // ─── PUT /:id/status ─────────────────────────────────────────────────────────
 
 const updateStatusRoute = createRoute({
@@ -97,6 +117,7 @@ const updateStatusRoute = createRoute({
             description: "Status updated",
             content: { "application/json": { schema: messageResponse } },
         },
+        ...adminMutationErrorResponses,
     }
 });
 
@@ -186,6 +207,7 @@ const postCodRoute = createRoute({
             description: "COD action processed",
             content: { "application/json": { schema: codActionResponseSchema } },
         },
+        ...adminMutationErrorResponses,
     }
 });
 
@@ -281,6 +303,7 @@ const postFulfillRoute = createRoute({
             description: "Fulfillment created",
             content: { "application/json": { schema: fulfillmentResultSchema } },
         },
+        ...adminMutationErrorResponses,
     }
 });
 
@@ -317,6 +340,7 @@ const updateFulfillmentStatusRoute = createRoute({
             description: "Fulfillment status updated",
             content: { "application/json": { schema: messageResponse } },
         },
+        ...adminMutationErrorResponses,
     }
 });
 
@@ -401,7 +425,7 @@ const createShipmentRoute = createRoute({
             description: "Shipment created",
             content: { "application/json": { schema: successEnvelope(enhancedShipmentSchema) } },
         },
-        400: errorResponses[400],
+        ...adminShipmentCreateErrorResponses,
     }
 });
 
@@ -506,7 +530,7 @@ const deleteShipmentRoute = createRoute({
             description: "Shipment deleted",
             content: { "application/json": { schema: successEnvelope(z.object({})) } },
         },
-        404: errorResponses[404],
+        ...adminMutationErrorResponses,
     }
 });
 
@@ -537,7 +561,7 @@ const checkShipmentStatusRoute = createRoute({
             description: "Status checked",
             content: { "application/json": { schema: successEnvelope(refreshedShipmentSchema) } },
         },
-        404: errorResponses[404],
+        ...adminProviderMutationErrorResponses,
     }
 });
 
@@ -575,8 +599,7 @@ const refreshShipmentRoute = createRoute({
             description: "Shipment refreshed",
             content: { "application/json": { schema: successEnvelope(refreshedShipmentSchema) } },
         },
-        400: errorResponses[400],
-        404: errorResponses[404],
+        ...adminProviderMutationErrorResponses,
     }
 });
 
@@ -615,10 +638,7 @@ const reconcileShipmentRoute = createRoute({
             description: "Shipment reconciliation repaired",
             content: { "application/json": { schema: reconcileShipmentResponseSchema } },
         },
-        400: errorResponses[400],
-        404: errorResponses[404],
-        409: conflictResponse,
-        503: serviceUnavailableResponse,
+        ...adminProviderMutationErrorResponses,
     },
 });
 

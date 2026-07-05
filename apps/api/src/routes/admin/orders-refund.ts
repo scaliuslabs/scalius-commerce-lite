@@ -12,7 +12,12 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { successEnvelope } from "../../schemas/responses";
+import {
+    conflictResponse,
+    errorResponses,
+    serviceUnavailableResponse,
+    successEnvelope,
+} from "../../schemas/responses";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 import {
     enqueueOrderRefundNotificationForOrder,
@@ -50,6 +55,21 @@ const reconcileRefundAttemptResultSchema = successEnvelope(z.object({
     notificationCount: z.number(),
     sideEffectErrors: z.number(),
 }));
+
+const adminRefundMutationErrorResponses = {
+    400: errorResponses[400],
+    401: errorResponses[401],
+    403: errorResponses[403],
+    404: errorResponses[404],
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
+} as const;
+
+const adminRefundRecoveryErrorResponses = {
+    401: errorResponses[401],
+    403: errorResponses[403],
+    404: errorResponses[404],
+} as const;
 
 async function enqueueRefundNotification(options: {
     db: Database;
@@ -207,6 +227,7 @@ const returnOrderRoute = createRoute({
             description: "Return processed",
             content: { "application/json": { schema: returnResultSchema } },
         },
+        ...adminRefundMutationErrorResponses,
     }
 });
 
@@ -293,6 +314,7 @@ const refundOrderRoute = createRoute({
             description: "Refund processed",
             content: { "application/json": { schema: successEnvelope(refundResultSchema) } },
         },
+        ...adminRefundMutationErrorResponses,
     }
 });
 
@@ -352,6 +374,7 @@ const reconcileRefundAttemptRoute = createRoute({
             description: "Refund recovery check completed",
             content: { "application/json": { schema: reconcileRefundAttemptResultSchema } },
         },
+        ...adminRefundRecoveryErrorResponses,
     },
 });
 

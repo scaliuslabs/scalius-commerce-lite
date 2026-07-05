@@ -62,29 +62,53 @@ describe("logApiError", () => {
     logApiError(new ServiceUnavailableError("Stripe is not configured"), {
       method: "POST",
       path: "/api/v1/payment/stripe/intent",
+      requestId: "req_payment_1234",
+      cfRay: "abc123-DAC",
     });
 
     expect(warn).toHaveBeenCalledWith(
-      "[api-error]",
+      "[api-ops]",
       JSON.stringify({
+        event: "api.error",
         status: 503,
         code: "SERVICE_UNAVAILABLE",
         message: "Stripe is not configured",
         method: "POST",
         path: "/api/v1/payment/stripe/intent",
+        requestId: "req_payment_1234",
+        cfRay: "abc123-DAC",
       }),
     );
     expect(error).not.toHaveBeenCalled();
   });
 
-  it("keeps full error objects for unexpected crashes", () => {
+  it("logs unexpected crashes without raw error objects", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const crash = new Error("Unexpected DB crash");
 
-    logApiError(crash, { method: "GET", path: "/api/v1/admin/orders" });
+    logApiError(crash, {
+      method: "GET",
+      path: "/api/v1/admin/orders",
+      requestId: "req_admin_1234",
+      cfRay: "def456-DAC",
+    });
 
     expect(warn).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalledWith("API Error (onError):", crash);
+    expect(error).toHaveBeenCalledWith(
+      "[api-ops]",
+      JSON.stringify({
+        event: "api.error",
+        status: 500,
+        code: "INTERNAL_ERROR",
+        message: "Unexpected API error",
+        method: "GET",
+        path: "/api/v1/admin/orders",
+        requestId: "req_admin_1234",
+        cfRay: "def456-DAC",
+        errorName: "Error",
+      }),
+    );
+    expect(error).not.toHaveBeenCalledWith(expect.any(String), crash);
   });
 });

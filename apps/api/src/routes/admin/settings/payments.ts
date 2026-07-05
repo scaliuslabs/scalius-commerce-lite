@@ -10,7 +10,7 @@ import {
     invalidateApiAndScheduleStorefrontGroups,
     type WaitUntilExecutionContext,
 } from "../../../utils/cache-invalidation";
-import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import {
     upsertSetting,
     upsertEncryptedSetting,
@@ -497,6 +497,7 @@ const saveStripeRoute = createRoute({
     responses: {
         200: { description: "Stripe settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 
@@ -583,6 +584,7 @@ const saveSSLCommerzRoute = createRoute({
     responses: {
         200: { description: "SSLCommerz settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 
@@ -668,6 +670,7 @@ const savePolarRoute = createRoute({
     responses: {
         200: { description: "Polar settings saved", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 

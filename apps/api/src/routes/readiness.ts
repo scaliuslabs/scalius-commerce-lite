@@ -1,5 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
+import { getRequestCorrelation } from "../utils/http-correlation";
+import { logOpsEvent } from "../utils/ops-log";
 
 const READINESS_TIMEOUT_MS = 1500;
 const READINESS_D1_TIMEOUT_MS = 3000;
@@ -185,6 +187,12 @@ function isReady(checks: CheckResult[]): boolean {
   return checks.every((result) => !result.required || result.check.status === "ok");
 }
 
+function degradedCheckSummaries(checks: CheckResult[]): string[] {
+  return checks
+    .filter((result) => result.required && result.check.status !== "ok")
+    .map((result) => `${result.name}:${result.check.status}`);
+}
+
 app.get("/readyz", async (c) => {
   const started = nowMs();
   const env = c.env;
@@ -206,15 +214,26 @@ app.get("/readyz", async (c) => {
     configCheck(env),
   ];
   const ready = isReady(checks);
+  const durationMs = nowMs() - started;
 
   c.header("Cache-Control", "no-store");
   c.header("Pragma", "no-cache");
+
+  if (!ready) {
+    const correlation = getRequestCorrelation(c);
+    logOpsEvent("warn", "api.readyz.degraded", {
+      requestId: correlation.requestId,
+      cfRay: correlation.cfRay,
+      durationMs,
+      degradedChecks: degradedCheckSummaries(checks),
+    });
+  }
 
   return c.json({
     success: ready,
     status: ready ? "ready" : "degraded",
     timestamp: new Date().toISOString(),
-    durationMs: nowMs() - started,
+    durationMs,
     checks: flattenChecks(checks),
   }, ready ? 200 : 503);
 });
