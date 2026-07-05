@@ -19,6 +19,9 @@ describe("order detail permission boundaries", () => {
     const listSelectorSource = readRepoFile(
       "apps/admin-v2/src/components/admin/order-list/OrderStatusSelector.tsx",
     );
+    const listSelectorMenuSource = readRepoFile(
+      "apps/admin-v2/src/components/admin/order-list/OrderStatusSelectorMenu.tsx",
+    );
     const coreStateMachineSource = readRepoFile(
       "packages/core/src/modules/orders/order-state-machine.ts",
     );
@@ -27,7 +30,9 @@ describe("order detail permission boundaries", () => {
     expect(adminTypesSource).not.toContain("ORDER_STATUS_TRANSITIONS");
     expect(coreStateMachineSource).toContain("@scalius/shared/order-state");
     expect(statusCardSource).toContain("getAvailableTransitions(order.status)");
-    expect(listSelectorSource).toContain("getAvailableTransitions(status)");
+    expect(listSelectorSource).toContain('import("./OrderStatusSelectorMenu")');
+    expect(listSelectorSource).not.toContain("getAvailableTransitions(status)");
+    expect(listSelectorMenuSource).toContain("getAvailableTransitions(status)");
   });
 
   it("keeps order detail mutation controls aligned with granular order permissions", () => {
