@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join, relative } from "node:path";
+import { dirname, extname, join, relative } from "node:path";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ADMIN_PERMISSIONS } from "./admin-permissions";
 import { NAV_PERMISSIONS } from "../components/admin/layout/AdminNav";
 
 const ADMIN_SRC_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const SOURCE_EXTENSIONS = [".ts", ".tsx"] as const;
 
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir)
@@ -16,6 +17,74 @@ function listSourceFiles(dir: string): string[] {
       return stats.isDirectory() ? listSourceFiles(path) : [path];
     })
     .filter((path) => /\.(?:ts|tsx)$/.test(path));
+}
+
+function resolveSourceModule(fromPath: string, specifier: string) {
+  let basePath: string | null = null;
+
+  if (specifier.startsWith("@/") || specifier.startsWith("~/")) {
+    basePath = join(ADMIN_SRC_ROOT, specifier.slice(2));
+  } else if (specifier.startsWith(".")) {
+    basePath = join(dirname(fromPath), specifier);
+  }
+
+  if (!basePath) return null;
+
+  const candidates = extname(basePath)
+    ? [basePath]
+    : [
+        ...SOURCE_EXTENSIONS.map((extension) => `${basePath}${extension}`),
+        ...SOURCE_EXTENSIONS.map((extension) =>
+          join(basePath, `index${extension}`),
+        ),
+      ];
+
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function extractStaticSourceImports(source: string) {
+  const specifiers: string[] = [];
+  const importPattern =
+    /\bimport\s+(?!type\b)(?:[^'";]*?\s+from\s*)?["']([^"']+)["']/g;
+  const exportPattern =
+    /\bexport\s+(?!type\b)(?:\*|\{[^}]*\})\s+from\s+["']([^"']+)["']/g;
+
+  for (const pattern of [importPattern, exportPattern]) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(source))) {
+      specifiers.push(match[1]);
+    }
+  }
+
+  return specifiers;
+}
+
+function findStaticImportPathToTarget(entryPath: string, targetPath: string) {
+  const queue: Array<{ path: string; chain: string[] }> = [
+    { path: entryPath, chain: [relative(ADMIN_SRC_ROOT, entryPath)] },
+  ];
+  const seen = new Set<string>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) break;
+    if (seen.has(current.path)) continue;
+    seen.add(current.path);
+
+    if (current.path === targetPath) return current.chain;
+
+    const source = readFileSync(current.path, "utf8");
+    for (const specifier of extractStaticSourceImports(source)) {
+      const resolved = resolveSourceModule(current.path, specifier);
+      if (!resolved || seen.has(resolved)) continue;
+      queue.push({
+        path: resolved,
+        chain: [...current.chain, relative(ADMIN_SRC_ROOT, resolved)],
+      });
+    }
+  }
+
+  return null;
 }
 
 function hasBroadQueryBarrelImport(source: string) {
@@ -330,6 +399,44 @@ describe("admin route graph boundaries", () => {
     expect(sidebarSource).toContain('import("./sidebar-mobile-sheet")');
     expect(sidebarSource).not.toContain("@/components/ui/sheet");
     expect(sidebarMobileSheetSource).toContain("@/components/ui/sheet");
+  });
+
+  it("keeps cmdk command UI out of the admin shell and hot list route graph", () => {
+    const commandSourcePath = join(
+      ADMIN_SRC_ROOT,
+      "components",
+      "ui",
+      "command.tsx",
+    );
+    const commandSource = readFileSync(commandSourcePath, "utf8");
+    const hotEntryPaths = [
+      "routes/admin.tsx",
+      "routes/admin/index.tsx",
+      "routes/admin/abandoned-checkouts.tsx",
+      "routes/admin/analytics/index.tsx",
+      "routes/admin/attributes.tsx",
+      "routes/admin/categories/index.tsx",
+      "routes/admin/collections/index.tsx",
+      "routes/admin/collections/trash.tsx",
+      "routes/admin/customers/index.tsx",
+      "routes/admin/discounts/index.tsx",
+      "routes/admin/inventory.tsx",
+      "routes/admin/orders/index.tsx",
+      "routes/admin/pages/index.tsx",
+      "routes/admin/pages/trash.tsx",
+      "routes/admin/products/index.tsx",
+      "routes/admin/widgets/index.tsx",
+      "routes/admin/widgets/trash.tsx",
+    ];
+
+    const eagerCommandPaths = hotEntryPaths
+      .map((entry) =>
+        findStaticImportPathToTarget(join(ADMIN_SRC_ROOT, entry), commandSourcePath),
+      )
+      .filter((path): path is string[] => path !== null);
+
+    expect(commandSource).toContain('from "cmdk"');
+    expect(eagerCommandPaths).toEqual([]);
   });
 
   it("keeps admin shell nav data local and aligned with core RBAC names", () => {

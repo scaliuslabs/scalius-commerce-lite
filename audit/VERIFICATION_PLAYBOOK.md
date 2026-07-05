@@ -167,6 +167,9 @@ Admin performance hot-path checks:
 ```bash
 pnpm exec vitest run \
   apps/admin-v2/src/lib/route-graph-boundaries.test.ts \
+  'apps/admin-v2/src/routes/admin/products/$productId/-edit-boundaries.test.ts' \
+  apps/admin-v2/src/components/admin/navigation/NavigationBuilder-boundaries.test.ts \
+  apps/admin-v2/src/components/admin/product-form/variants/VariantManager-boundaries.test.ts \
   apps/admin-v2/src/routes/admin/settings/-checkout-loader.test.ts
 ! test -e apps/admin-v2/src/lib/api.queries.ts
 ! rg "from ['\\\"](?:~/|@/)lib/api\\.queries|from ['\\\"](?:\\.\\.?/)+(?:lib/)?api\\.queries" \
@@ -313,9 +316,39 @@ for (const [, dir] of assets) {
 if (checked === 0) throw new Error("No header/footer builder chunks found");
 console.log({ checked });
 NODE
+node - <<'NODE'
+const fs = require("fs");
+const path = require("path");
+const roots = ["apps/admin-v2/dist/client/assets", "apps/admin-v2/dist/server/assets"];
+const productEditFiles = [];
+for (const root of roots) {
+  for (const file of fs.readdirSync(root)) {
+    if (/^(edit|ProductForm)-.*\.js$/.test(file)) productEditFiles.push(path.join(root, file));
+  }
+}
+const staticImport = /import\s+(?:[^'"]+?\s+from\s+)?["']([^"']+)["']/g;
+const blocked = /bulk-generator|VariantSortModal|csvHelpers|VariantImportExport/;
+for (const file of productEditFiles) {
+  const imports = [...fs.readFileSync(file, "utf8").matchAll(staticImport)].map((match) => match[1]);
+  const bad = imports.filter((specifier) => blocked.test(specifier));
+  if (bad.length) throw new Error(`${file} statically imports ${bad.join(", ")}`);
+}
+const navigationFiles = [];
+for (const root of roots) {
+  for (const file of fs.readdirSync(root)) {
+    if (/^NavigationBuilder-.*\.js$/.test(file)) navigationFiles.push(path.join(root, file));
+  }
+}
+for (const file of navigationFiles) {
+  const imports = [...fs.readFileSync(file, "utf8").matchAll(staticImport)].map((match) => match[1]);
+  const bad = imports.filter((specifier) => /SortableNavigationEditor|SortableNavItem|@dnd-kit|sortable/.test(specifier));
+  if (bad.length) throw new Error(`${file} statically imports ${bad.join(", ")}`);
+}
+console.log({ productEditFiles: productEditFiles.length, navigationFiles: navigationFiles.length });
+NODE
 ```
 
-Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, route-facing query options should live in narrow `api-query-options/*` modules, the broad `api.queries.ts` barrel must not exist, and routes should import `RouteErrorComponent` from `route-error.tsx` instead of Zod-backed `list-helpers.tsx`. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations and direct form submit paths must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`. The shared `DataTable` default path must not import `@dnd-kit`/sortable code; those imports should live only in `SortableDataTableContent`, and browser request capture should prove `/admin/orders` does not request it while drag-enabled `/admin/collections?sort=sortOrder&order=asc` does. Media picker consumers should hit the lightweight `LazyMediaManager` wrapper until the picker is clicked. Rich-text form fields should render saved read-only content through the sanitized `DeferredTiptapEditor`/`RichContent` preview, production form chunks should not contain Tiptap internals such as `useEditor`, `EditorContent`, ProseMirror, or `createTiptapExtensions`, and the real `TiptapEditor` should remain a separate lazy asset. Product form first load should have no static import of `AdditionalInfoManager`, `DraggableImageGallery`, or sortable dependencies; those may appear only as lazy dependency metadata/chunks. Product variant edit first load should have no static import of `bulk-generator`, `VariantSortModal`, or `csvHelpers`; clicking `Bulk Generate`, `Import/Export CSV`, or `Reorder` should load the needed tool on demand and still open the expected dialog/action. General Settings Header/Footer first load should have no static import of header social, header navigation, footer social, footer navigation menus, `NavigationBuilder`, or sortable dependencies; clicking the relevant Header/Footer subtabs should load and render those sections on demand. Widget editor/history/paste/prompt helper chunks should load only after preview/history/paste/copy-prompt actions. Local browser smokes should cover `/admin/products/new` media picker, product image/additional-info lazy shells, and rich-text edit shell; `/admin/products/:id/edit` variant `Bulk Generate` and `Reorder`; `/admin/categories/new` rich-text edit shell; `/admin/pages/new` rich-text edit shell; `/admin/media`; `/admin/settings/hero-sliders` custom `Add Slide Image` picker; `/admin/settings` Header Contact & Social, Header Navigation, Footer Branding, and Footer Navigation Menus; and `/admin/widgets/create` paste/preview/copy-prompt.
+Expected result: the checkout settings route loader warms only `authSettingsQueryOptions()`. It must not preload payment methods or shipping methods for inactive tabs, route-facing query options should live in narrow `api-query-options/*` modules, the broad `api.queries.ts` barrel must not exist, and routes should import `RouteErrorComponent` from `route-error.tsx` instead of Zod-backed `list-helpers.tsx`. List route loaders should use `warmRouteQuery()` for non-blocking client navigation, while `useServerTable()` must keep cached rows visible and refetch on mount for freshness. Current-user profile/2FA/session paths must clear the admin route-context cache before route invalidation. Product/customer/order mutations and direct form submit paths must invalidate dashboard aggregate keys, and category mutations/direct category creation paths must invalidate product stats. Dashboard first-paint components should not import `motion/react`. The shared `DataTable` default path must not import `@dnd-kit`/sortable code; those imports should live only in `SortableDataTableContent`, and browser request capture should prove `/admin/orders` does not request it while drag-enabled `/admin/collections?sort=sortOrder&order=asc` does. Media picker consumers should hit the lightweight `LazyMediaManager` wrapper until the picker is clicked. Rich-text form fields should render saved read-only content through the sanitized `DeferredTiptapEditor`/`RichContent` preview, production form chunks should not contain Tiptap internals such as `useEditor`, `EditorContent`, ProseMirror, or `createTiptapExtensions`, and the real `TiptapEditor` should remain a separate lazy asset. Product form first load should have no static import of `AdditionalInfoManager`, `DraggableImageGallery`, or sortable dependencies; those may appear only as lazy dependency metadata/chunks. Product edit SSR should return the document without rendering the heavy option manager, then hydrate `Product Options` in the browser. Product variant edit first load should have no static import of `bulk-generator`, `VariantSortModal`, `VariantImportExport`, or `csvHelpers`; clicking `Bulk Generate`, `Import/Export CSV`, or `Reorder` should load the needed tool on demand and still open the expected dialog/action. `NavigationBuilder` should render compact non-DnD rows by default and lazy-load sortable navigation only after `Reorder`. General Settings Header/Footer first load should have no static import of header social, header navigation, footer social, footer navigation menus, `NavigationBuilder`, or sortable dependencies; clicking the relevant Header/Footer subtabs should load and render those sections on demand. Widget editor/history/paste/prompt helper chunks should load only after preview/history/paste/copy-prompt actions. Local browser smokes should cover `/admin/products/new` media picker, product image/additional-info lazy shells, and rich-text edit shell; `/admin/products/:id/edit` variant `Bulk Generate` and `Reorder`; `/admin/categories/new` rich-text edit shell; `/admin/pages/new` rich-text edit shell; `/admin/media`; `/admin/settings/hero-sliders` custom `Add Slide Image` picker; `/admin/settings` Header Contact & Social, Header Navigation, Footer Branding, and Footer Navigation Menus; and `/admin/widgets/create` paste/preview/copy-prompt.
 
 Admin mutation-barrel split checks:
 
@@ -380,6 +413,16 @@ pnpm --filter @scalius/storefront typecheck
 ```
 
 For `PRIV-002`, broad Meta CAPI events must not inherit checkout/customer PII from `sessionStorage`; legacy `scalius_user_*` keys must be removed by checkout cleanup. Historical SSLCommerz/Polar checks that preserved cart contents after gateway session creation are superseded by `CHECKOUT-011`: after a durable hosted order commit, recovery continues through the receipt/order path and the short-lived empty-cart recovery marker.
+
+Receipt-proof URL safety checks:
+
+```bash
+pnpm --filter @scalius/storefront exec vitest run src/lib/order-success-state.test.ts src/lib/order-success-payment-retry.test.ts src/lib/checkout/handlers/online-payment-handlers.test.ts src/lib/route-tests/api/checkout/payment-session-proxies.test.ts --passWithNoTests
+pnpm --filter @scalius/api exec vitest run src/routes/orders-receipt.test.ts src/routes/payment/payment-session.test.ts src/routes/webhooks/sslcommerz.test.ts src/routes/webhooks/polar.test.ts --passWithNoTests
+pnpm --filter @scalius/core test -- src/modules/orders/order-receipts.test.ts src/modules/orders/order-payment-recovery-link.test.ts
+```
+
+For `PRIV-003`, receipt proof remains required for guest receipt/payment recovery, but bearer proof must not travel in URLs. Public order-success URLs, receipt API calls from the browser, SSLCommerz success/fail/cancel redirects, Polar success URLs, payment-recovery links, and same-origin payment-session proxies must avoid `token`, `receipt_token`, or `receiptToken` URL parameters. Prefer a short-lived same-origin httpOnly cookie, POST body, or header handoff with explicit expiry, origin checks, and no raw proof in logs or analytics. Keep backend callback validation deterministic and ensure live read-only smokes prove receipt access still fails closed without proof.
 
 Payment settings and checkout-cache checks:
 

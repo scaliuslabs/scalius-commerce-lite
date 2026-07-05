@@ -13,14 +13,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowUpDown,
+  Download,
   Loader2,
   Plus,
   Search,
   Sparkles,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
-import { VariantImportExport } from "./VariantImportExport";
 import type {
   ProductVariant,
   BulkGeneratedVariant,
@@ -31,6 +32,12 @@ import type {
 const BulkVariantGenerator = lazy(() =>
   import("./bulk-generator").then((module) => ({
     default: module.BulkVariantGenerator,
+  })),
+);
+
+const VariantImportExport = lazy(() =>
+  import("./VariantImportExport").then((module) => ({
+    default: module.VariantImportExport,
   })),
 );
 
@@ -172,7 +179,7 @@ export function VariantActionsToolbar({
                     Spreadsheet
                   </Button>
                 )}
-                <VariantImportExport
+                <LazyVariantImportExport
                   variants={variants}
                   reservedVariants={reservedVariants}
                   onImport={onImport}
@@ -253,9 +260,9 @@ function LazyBulkVariantGenerator({
         size="sm"
         disabled={disabled}
         onClick={() => setShouldLoad(true)}
-        className="h-8 w-full justify-center text-xs sm:w-auto"
+        className="h-7 w-full justify-center px-2 text-[11px] sm:w-auto"
       >
-        <Sparkles className="mr-2 h-4 w-4" />
+        <Sparkles className="mr-1 h-3 w-3" />
         Bulk Generate
       </Button>
     );
@@ -264,8 +271,8 @@ function LazyBulkVariantGenerator({
   return (
     <Suspense
       fallback={
-        <Button type="button" variant="outline" size="sm" disabled className="h-8 w-full justify-center text-xs sm:w-auto">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <Button type="button" variant="outline" size="sm" disabled className="h-7 w-full justify-center px-2 text-[11px] sm:w-auto">
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
           Bulk Generate
         </Button>
       }
@@ -278,5 +285,120 @@ function LazyBulkVariantGenerator({
         initialOpen
       />
     </Suspense>
+  );
+}
+
+interface LazyVariantImportExportProps {
+  variants: ProductVariant[];
+  reservedVariants?: ProductVariant[];
+  onImport: (variants: BulkGeneratedVariant[]) => Promise<void>;
+  disabled?: boolean;
+}
+
+function LazyVariantImportExport({
+  variants,
+  reservedVariants,
+  onImport,
+  disabled,
+}: LazyVariantImportExportProps) {
+  const [shouldLoadImportDialog, setShouldLoadImportDialog] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const { variantsToCsv, downloadCsv } = await import("./utils/csvHelpers");
+      const csv = variantsToCsv(variants);
+      const timestamp = new Date().toISOString().slice(0, 10);
+      downloadCsv(csv, `options-${timestamp}.csv`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  if (shouldLoadImportDialog) {
+    return (
+      <Suspense
+        fallback={
+          <VariantImportExportLoadingButtons
+            disabled={disabled}
+            isImportLoading
+          />
+        }
+      >
+        <VariantImportExport
+          variants={variants}
+          reservedVariants={reservedVariants}
+          onImport={onImport}
+          disabled={disabled}
+          initialImportDialogOpen
+        />
+      </Suspense>
+    );
+  }
+
+  return (
+    <div className="contents">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleExport}
+        disabled={disabled || variants.length === 0 || isExporting}
+        className="h-7 w-full justify-center px-2 text-[11px] sm:w-auto"
+      >
+        {isExporting ? (
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+        ) : (
+          <Download className="mr-1 h-3 w-3" />
+        )}
+        Export CSV
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => setShouldLoadImportDialog(true)}
+        className="h-7 w-full justify-center px-2 text-[11px] sm:w-auto"
+      >
+        <Upload className="mr-1 h-3 w-3" />
+        Import CSV
+      </Button>
+    </div>
+  );
+}
+
+function VariantImportExportLoadingButtons({
+  disabled,
+  isImportLoading,
+}: {
+  disabled?: boolean;
+  isImportLoading?: boolean;
+}) {
+  return (
+    <div className="contents">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled
+        className="h-7 w-full justify-center px-2 text-[11px] sm:w-auto"
+      >
+        <Download className="mr-1 h-3 w-3" />
+        Export CSV
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled || isImportLoading}
+        className="h-7 w-full justify-center px-2 text-[11px] sm:w-auto"
+      >
+        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+        Import CSV
+      </Button>
+    </div>
   );
 }

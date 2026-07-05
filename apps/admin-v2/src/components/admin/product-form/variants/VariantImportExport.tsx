@@ -30,6 +30,7 @@ interface VariantImportExportProps {
   reservedVariants?: ProductVariant[];
   onImport: (variants: BulkGeneratedVariant[]) => Promise<void>;
   disabled?: boolean;
+  initialImportDialogOpen?: boolean;
 }
 
 export function VariantImportExport({
@@ -37,8 +38,11 @@ export function VariantImportExport({
   reservedVariants = [],
   onImport,
   disabled,
+  initialImportDialogOpen = false,
 }: VariantImportExportProps) {
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(
+    initialImportDialogOpen,
+  );
   const [importResult, setImportResult] = useState<CsvImportResult | null>(
     null,
   );

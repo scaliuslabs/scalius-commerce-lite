@@ -27,6 +27,9 @@ const VARIANT_FORM_ROW_SOURCE = fileURLToPath(
 const VARIANT_BULK_EDIT_ROW_SOURCE = fileURLToPath(
   new URL("./VariantBulkEditRow.tsx", import.meta.url),
 );
+const VARIANT_IMPORT_EXPORT_SOURCE = fileURLToPath(
+  new URL("./VariantImportExport.tsx", import.meta.url),
+);
 const BULK_GENERATOR_SOURCE = fileURLToPath(
   new URL("./bulk-generator/BulkVariantGeneratorDialog.tsx", import.meta.url),
 );
@@ -184,6 +187,24 @@ describe("VariantManager product mode boundaries", () => {
     expect(source).toContain('throw new Error("No options were created.")');
     expect(source).toContain('throw new Error("No options were imported.")');
     expect(importSource).toContain("reservedVariants");
+  });
+
+  it("keeps CSV import dialog UI behind an explicit import interaction", () => {
+    const toolbarSource = readFileSync(VARIANT_TOOLBAR_SOURCE, "utf8");
+    const importExportSource = readFileSync(VARIANT_IMPORT_EXPORT_SOURCE, "utf8");
+
+    expect(toolbarSource).not.toContain(
+      'import { VariantImportExport } from "./VariantImportExport"',
+    );
+    expect(toolbarSource).toContain("const VariantImportExport = lazy(");
+    expect(toolbarSource).toContain('import("./VariantImportExport")');
+    expect(toolbarSource).toContain("setShouldLoadImportDialog(true)");
+    expect(toolbarSource).toContain("const handleExport = async () =>");
+    expect(toolbarSource).toContain('import("./utils/csvHelpers")');
+    expect(toolbarSource).toContain("initialImportDialogOpen");
+    expect(importExportSource).toContain("initialImportDialogOpen");
+    expect(importExportSource).toContain("@/components/ui/dialog");
+    expect(importExportSource).toContain("<DialogContent");
   });
 
   it("keeps stock-limit controls visible across row edit, spreadsheet edit, bulk generation, and CSV", () => {

@@ -1,5 +1,5 @@
 // src/components/admin/navigation/NavigationBuilder.tsx
-import { useState, useCallback, useMemo } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,26 +16,43 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Menu, Layers } from "lucide-react";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { SortableNavItem } from "./SortableNavItem";
+import { Check, GripVertical, Plus, Menu, Layers } from "lucide-react";
 import { AddNavItemDialog } from "./AddNavItemDialog";
+import { NavigationTreeRows } from "./NavigationTreeRows";
 import type { NavigationItem, NavigationBuilderProps } from "./types";
 import { MAX_NAV_DEPTH } from "./types";
+
+const SortableNavigationEditor = lazy(() =>
+  import("./SortableNavigationEditor").then((module) => ({
+    default: module.SortableNavigationEditor,
+  })),
+);
+
+function moveNavigationItem<T>(items: T[], oldIndex: number, newIndex: number): T[] {
+  if (
+    oldIndex === newIndex ||
+    oldIndex < 0 ||
+    newIndex < 0 ||
+    oldIndex >= items.length ||
+    newIndex >= items.length
+  ) {
+    return items;
+  }
+
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(oldIndex, 1);
+  nextItems.splice(newIndex, 0, movedItem);
+  return nextItems;
+}
+
+function hasReorderableItems(items: NavigationItem[]): boolean {
+  return (
+    items.length > 1 ||
+    items.some((item) =>
+      item.subMenu ? hasReorderableItems(item.subMenu) : false,
+    )
+  );
+}
 
 export function NavigationBuilder({
   navigation,
@@ -43,23 +60,22 @@ export function NavigationBuilder({
   getStorefrontPath,
 }: NavigationBuilderProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isReorderMode, setIsReorderMode] = useState(false);
   const [addToParentPath, setAddToParentPath] = useState<string | null>(null);
   const [addToParentLabel, setAddToParentLabel] = useState<string | undefined>(
     undefined,
   );
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
-
-  // Memoize root-level item IDs for SortableContext
-  const rootItemIds = useMemo(
-    () => navigation.map((i) => i.id),
+  const canReorderItems = useMemo(
+    () => hasReorderableItems(navigation),
     [navigation],
   );
+
+  useEffect(() => {
+    if (isReorderMode && !canReorderItems) {
+      setIsReorderMode(false);
+    }
+  }, [canReorderItems, isReorderMode]);
 
   // Helper: Get item at path
   const getItemAtPath = useCallback(
@@ -250,15 +266,9 @@ export function NavigationBuilder({
     [navigation, onChange],
   );
 
-  // Drag end handler for root-level items
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-
-      const oldIndex = navigation.findIndex((i) => i.id === active.id);
-      const newIndex = navigation.findIndex((i) => i.id === over.id);
-      onChange(arrayMove(navigation, oldIndex, newIndex));
+  const handleRootReorder = useCallback(
+    (oldIndex: number, newIndex: number) => {
+      onChange(moveNavigationItem(navigation, oldIndex, newIndex));
     },
     [navigation, onChange],
   );
@@ -269,7 +279,10 @@ export function NavigationBuilder({
       const reorderInItems = (items: NavigationItem[]): NavigationItem[] => {
         return items.map((item) => {
           if (item.id === parentId && item.subMenu) {
-            return { ...item, subMenu: arrayMove(item.subMenu, oldIndex, newIndex) };
+            return {
+              ...item,
+              subMenu: moveNavigationItem(item.subMenu, oldIndex, newIndex),
+            };
           }
           if (item.subMenu) {
             return { ...item, subMenu: reorderInItems(item.subMenu) };
@@ -306,6 +319,54 @@ export function NavigationBuilder({
   const totalItems = countItems(navigation);
   const maxDepth = getMaxDepth(navigation) + 1;
 
+  const renderNavigationTable = () => (
+    <Table>
+      <TableHeader>
+        <TableRow className="bg-muted/30 hover:bg-muted/30">
+          <TableHead className="w-[60px] pl-3">Order</TableHead>
+          <TableHead>Label</TableHead>
+          <TableHead>URL</TableHead>
+          <TableHead className="w-[100px] text-right pr-3">
+            Actions
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {navigation.length === 0 ? (
+          <TableRow>
+            <td colSpan={4} className="py-12 text-center">
+              <Menu className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
+              <p className="text-muted-foreground mb-1">
+                No navigation items yet
+              </p>
+              <p className="text-sm text-muted-foreground/70 mb-4">
+                Add categories, pages, custom links, or labels
+              </p>
+              <Button onClick={handleAddRoot}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add First Item
+              </Button>
+            </td>
+          </TableRow>
+        ) : (
+          <NavigationTreeRows
+            navigation={navigation}
+            maxDepth={MAX_NAV_DEPTH}
+            onUpdate={updateItem}
+            onRemove={removeItem}
+            onAddChild={handleAddChild}
+            onIndent={handleIndent}
+            onOutdent={handleOutdent}
+            parentPath=""
+            getStorefrontPath={getStorefrontPath}
+            onReorderRequest={() => setIsReorderMode(true)}
+            canReorder={canReorderItems}
+          />
+        )}
+      </TableBody>
+    </Table>
+  );
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -324,6 +385,28 @@ export function NavigationBuilder({
               <Layers className="h-3 w-3 mr-1" />
               {totalItems} items • {maxDepth} levels
             </Badge>
+            {isReorderMode ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setIsReorderMode(false)}
+              >
+                <Check className="h-4 w-4 mr-1" />
+                Done
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setIsReorderMode(true)}
+                disabled={!canReorderItems}
+              >
+                <GripVertical className="h-4 w-4 mr-1" />
+                Reorder
+              </Button>
+            )}
             <Button size="sm" onClick={handleAddRoot}>
               <Plus className="h-4 w-4 mr-1" />
               Add Item
@@ -334,68 +417,24 @@ export function NavigationBuilder({
 
       <CardContent className="p-0">
         <div className="border-t">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={rootItemIds}
-              strategy={verticalListSortingStrategy}
-            >
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30 hover:bg-muted/30">
-                    <TableHead className="w-[60px] pl-3">Order</TableHead>
-                    <TableHead>Label</TableHead>
-                    <TableHead>URL</TableHead>
-                    <TableHead className="w-[100px] text-right pr-3">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {navigation.length === 0 ? (
-                    <TableRow>
-                      <td colSpan={4} className="py-12 text-center">
-                        <Menu className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
-                        <p className="text-muted-foreground mb-1">
-                          No navigation items yet
-                        </p>
-                        <p className="text-sm text-muted-foreground/70 mb-4">
-                          Add categories, pages, custom links, or labels
-                        </p>
-                        <Button onClick={handleAddRoot}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add First Item
-                        </Button>
-                      </td>
-                    </TableRow>
-                  ) : (
-                    navigation.map((item, index) => (
-                      <SortableNavItem
-                        key={item.id}
-                        item={item}
-                        index={index}
-                        depth={0}
-                        maxDepth={MAX_NAV_DEPTH}
-                        onUpdate={updateItem}
-                        onRemove={removeItem}
-                        onAddChild={handleAddChild}
-                        onIndent={handleIndent}
-                        onOutdent={handleOutdent}
-                        parentPath=""
-                        getStorefrontPath={getStorefrontPath}
-                        canIndent={index > 0}
-                        canOutdent={false}
-                        onReorderSubmenu={handleReorderSubmenu}
-                      />
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </SortableContext>
-          </DndContext>
+          {isReorderMode && navigation.length > 0 ? (
+            <Suspense fallback={renderNavigationTable()}>
+              <SortableNavigationEditor
+                navigation={navigation}
+                maxDepth={MAX_NAV_DEPTH}
+                onUpdate={updateItem}
+                onRemove={removeItem}
+                onAddChild={handleAddChild}
+                onIndent={handleIndent}
+                onOutdent={handleOutdent}
+                getStorefrontPath={getStorefrontPath}
+                onRootReorder={handleRootReorder}
+                onReorderSubmenu={handleReorderSubmenu}
+              />
+            </Suspense>
+          ) : (
+            renderNavigationTable()
+          )}
         </div>
       </CardContent>
 
