@@ -3,7 +3,7 @@ import {
   consumeScannerTokenClaim,
   createScannerTokenClaim,
   type ConsumedScannerTokenClaim,
-} from "@scalius/core/auth";
+} from "@scalius/core/auth/scanner-token-claims";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { UnauthorizedError } from "@scalius/core/errors";
 import { getDb, type Database } from "@scalius/database/client";
