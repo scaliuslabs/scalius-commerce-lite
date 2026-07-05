@@ -206,6 +206,7 @@ const runtimeGlobalsScript = [
   `window.__CURRENCY_SYMBOL__=${serializeJsonForInlineScript(currencySymbol)};`,
   `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
   `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,
+  `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(layoutData?.metaCapi?.browserEventsEnabled === true)};`,
 ].join("");
 ---
 

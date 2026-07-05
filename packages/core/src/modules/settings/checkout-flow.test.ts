@@ -61,6 +61,29 @@ describe("checkout flow validation", () => {
     ]));
   });
 
+  it("rejects advance payments below the SSLCommerz provider minimum when SSLCommerz can receive them", () => {
+    expect(getCheckoutFlowValidationIssues({
+      checkoutMode: "gateways_only",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 5,
+      availablePaymentMethods: ["sslcommerz"],
+    })).toContain("SSLCommerz advance payment amount must be between 10.00 BDT and 500000.00 BDT.");
+
+    expect(getCheckoutFlowValidationIssues({
+      checkoutMode: "all",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 5,
+      availablePaymentMethods: ["stripe", "sslcommerz"],
+    })).toContain("SSLCommerz advance payment amount must be between 10.00 BDT and 500000.00 BDT.");
+
+    expect(getCheckoutFlowValidationIssues({
+      checkoutMode: "gateways_only",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 5,
+      availablePaymentMethods: ["stripe", "polar"],
+    })).not.toContain("SSLCommerz advance payment amount must be between 10.00 BDT and 500000.00 BDT.");
+  });
+
   it.each([
     ["all", false, 0, "cod", true],
     ["all", false, 0, "sslcommerz", true],

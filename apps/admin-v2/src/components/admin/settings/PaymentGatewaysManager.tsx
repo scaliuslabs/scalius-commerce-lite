@@ -216,6 +216,9 @@ export default function PaymentGatewaysManager() {
         const st = methods?.gatewayStatus?.[m];
         const providerEnabled = st?.providerEnabled ?? st?.enabled === true;
         const usable = st?.usable ?? (providerEnabled && st?.configured === true);
+        if (st?.blockedReason && !usable) {
+            return <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />Blocked</Badge>;
+        }
         if (!st?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">Needs setup</Badge>;
         if (!providerEnabled) return <Badge variant="secondary" className="text-xs">Provider off</Badge>;
         if (selected && !usable) {
@@ -230,13 +233,15 @@ export default function PaymentGatewaysManager() {
     };
 
     const getGatewayNotice = (m: MethodKey) => {
-        if (!enabledMethods.has(m)) return null;
+        const selected = enabledMethods.has(m);
         const flowHiddenReason = getFlowHiddenReason(m);
-        if (flowHiddenReason) return flowHiddenReason;
+        if (selected && flowHiddenReason) return flowHiddenReason;
         if (m === "cod") return null;
         const st = methods?.gatewayStatus?.[m];
         if (!st) return null;
-        if (st.blockedReason) return st.blockedReason;
+        const providerEnabled = st.providerEnabled ?? st.enabled;
+        if (st.blockedReason && (selected || providerEnabled)) return st.blockedReason;
+        if (!selected) return null;
         if (st.configured && !(st.providerEnabled ?? st.enabled)) {
             return `${META[m].label} has credentials, but the gateway itself is off. Save ${META[m].label} after turning it on.`;
         }

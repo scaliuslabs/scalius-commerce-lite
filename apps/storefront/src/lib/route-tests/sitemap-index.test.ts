@@ -31,4 +31,23 @@ describe("sitemap index route", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
   });
+
+  it("includes sitemap documents and excludes product feeds", async () => {
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [{ id: "prod_1" }],
+      pagination: { page: 1, limit: 1, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<sitemapindex");
+    expect(body).toContain("https://storefront.example.test/sitemap-static.xml");
+    expect(body).toContain("https://storefront.example.test/sitemap-categories.xml");
+    expect(body).toContain("https://storefront.example.test/sitemap-collections.xml");
+    expect(body).toContain("https://storefront.example.test/sitemap-pages.xml");
+    expect(body).toContain("https://storefront.example.test/sitemap-products.xml?page=1");
+    expect(body).not.toContain("/api/facebook-feed.xml");
+  });
 });

@@ -11,6 +11,7 @@ import {
   heroSliders,
   analytics,
   categories,
+  metaConversionsSettings,
   pages,
   settings,
   WidgetPlacementScope,
@@ -310,6 +311,17 @@ export async function getLayoutData(db: Database) {
         ),
       )
       .limit(1),
+
+    // 7. Meta CAPI browser dispatch readiness
+    db
+      .select({
+        isEnabled: metaConversionsSettings.isEnabled,
+        pixelId: metaConversionsSettings.pixelId,
+        accessToken: metaConversionsSettings.accessToken,
+      })
+      .from(metaConversionsSettings)
+      .where(eq(metaConversionsSettings.id, "singleton"))
+      .limit(1),
   ]);
 
   const [
@@ -320,6 +332,7 @@ export async function getLayoutData(db: Database) {
     currencyResults,
     themeResults,
     mediaResults,
+    metaCapiResults,
   ] = batchResults;
 
   // Process Analytics
@@ -516,6 +529,18 @@ export async function getLayoutData(db: Database) {
 
   const mediaRow = (mediaResults as { value?: string }[])[0];
   const media = parseMediaOptimizationSettings(mediaRow?.value);
+  const metaCapiRow = (metaCapiResults as {
+    isEnabled?: boolean | null;
+    pixelId?: string | null;
+    accessToken?: string | null;
+  }[])[0];
+  const metaCapi = {
+    browserEventsEnabled: Boolean(
+      metaCapiRow?.isEnabled &&
+      metaCapiRow.pixelId?.trim() &&
+      metaCapiRow.accessToken?.trim(),
+    ),
+  };
 
   return {
     analytics: processedAnalytics,
@@ -525,5 +550,6 @@ export async function getLayoutData(db: Database) {
     currency: currencyData,
     theme: { colors: themeColors },
     media,
+    metaCapi,
   };
 }

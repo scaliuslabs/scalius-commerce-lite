@@ -280,6 +280,31 @@ export async function invalidateStripeCache(kv?: KVNamespace): Promise<void> {
 
 const SSL_CATEGORY = "sslcommerz";
 const SSL_CACHE_KEY = "gw:sslcommerz";
+const SSLCOMMERZ_STORED_SECRET_MARKER = "__stored__";
+const SSLCOMMERZ_PLACEHOLDER_VALUES = new Set([
+  "dummy",
+  "test",
+  "testbox",
+  "qwerty",
+  "password",
+  "store_id",
+  "storeid",
+  "store_password",
+  "storepass",
+  "example",
+  "placeholder",
+  "demo",
+  "123456",
+  "000000",
+  "xxxxxx",
+  SSLCOMMERZ_STORED_SECRET_MARKER,
+]);
+
+type SSLCommerzCredentialField = "storeId" | "storePassword";
+
+export function isSSLCommerzPlaceholderCredential(value: unknown): boolean {
+  return typeof value === "string" && SSLCOMMERZ_PLACEHOLDER_VALUES.has(value.trim().toLowerCase());
+}
 
 export function getSSLCommerzCheckoutMissingFields(
   settings: Partial<Pick<SSLCommerzSettings, SSLCommerzCheckoutRequiredField>> | null | undefined,
@@ -296,11 +321,27 @@ function sslCommerzBlockedReason(missingFields: SSLCommerzCheckoutRequiredField[
   return `SSLCommerz needs ${labels.join(", ")} before it can be shown at checkout.`;
 }
 
+function getSSLCommerzPlaceholderCredentialErrors(
+  settings: Partial<Pick<SSLCommerzSettings, SSLCommerzCredentialField>> | null | undefined,
+): string[] {
+  const errors: string[] = [];
+  if (isSSLCommerzPlaceholderCredential(settings?.storeId)) {
+    errors.push("SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account.");
+  }
+  if (isSSLCommerzPlaceholderCredential(settings?.storePassword)) {
+    errors.push("SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account.");
+  }
+  return errors;
+}
+
 export function getSSLCommerzCheckoutReadiness(
   settings: Partial<SSLCommerzSettings> | null | undefined,
 ): SSLCommerzCheckoutReadiness {
   const missingFields = getSSLCommerzCheckoutMissingFields(settings);
-  const credentialErrors = compactErrors(settings?.credentialErrors ?? []);
+  const credentialErrors = compactErrors([
+    ...(settings?.credentialErrors ?? []),
+    ...getSSLCommerzPlaceholderCredentialErrors(settings),
+  ]);
   const enabled = settings?.enabled === true;
   const configured = missingFields.length === 0 && credentialErrors.length === 0;
   return {

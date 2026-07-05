@@ -307,7 +307,7 @@ beforeEach(() => {
   mocks.getSSLCommerzSettings.mockResolvedValue({
     enabled: true,
     storeId: "store",
-    storePassword: "password",
+    storePassword: "ssl_store_password_123",
     sandbox: true,
   });
   mocks.initSSLCommerzSession.mockResolvedValue({
@@ -461,6 +461,134 @@ describe("payment session receipt-token proof", () => {
     expect(response.status).toBe(400);
     expect(mocks.getStripeSettings).not.toHaveBeenCalled();
     expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "full payment below provider minimum",
+      dbOptions: {
+        paymentMethod: "sslcommerz",
+        order: {
+          totalAmount: 5,
+          balanceDue: 5,
+        },
+      },
+      body: {
+        orderId: "order_1",
+        receiptToken: "chk_valid",
+        paymentType: "full",
+      },
+    },
+    {
+      label: "deposit below provider minimum",
+      dbOptions: {
+        paymentMethod: "sslcommerz",
+        partialPaymentEnabled: true,
+        partialPaymentAmount: 5,
+      },
+      body: {
+        orderId: "order_1",
+        receiptToken: "chk_valid",
+        paymentType: "deposit",
+        depositAmount: 5,
+      },
+    },
+    {
+      label: "balance below provider minimum",
+      dbOptions: {
+        paymentMethod: "sslcommerz",
+        order: {
+          paymentStatus: PaymentStatus.PARTIAL,
+          paidAmount: 120,
+          balanceDue: 5,
+        },
+        paymentPlan: {
+          depositAmount: 120,
+          balanceDue: 5,
+          status: PaymentPlanStatus.DEPOSIT_PAID,
+        },
+      },
+      body: {
+        orderId: "order_1",
+        receiptToken: "chk_valid",
+        paymentType: "balance",
+      },
+    },
+    {
+      label: "full payment above provider maximum",
+      dbOptions: {
+        paymentMethod: "sslcommerz",
+        order: {
+          totalAmount: 500000.01,
+          balanceDue: 500000.01,
+        },
+      },
+      body: {
+        orderId: "order_1",
+        receiptToken: "chk_valid",
+        paymentType: "full",
+      },
+    },
+  ])("rejects SSLCommerz $label before settings, attempts, or provider init", async ({ dbOptions, body }) => {
+    const { app, kv } = createTestApp("valid", dbOptions);
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.clone().json()).resolves.toMatchObject({
+      error: {
+        message: "SSLCommerz payment amount must be between 10.00 BDT and 500000.00 BDT.",
+      },
+    });
+    expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
+    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
+    expect(mocks.initSSLCommerzSession).not.toHaveBeenCalled();
+  });
+
+  it("creates SSLCommerz full sessions at the provider minimum amount", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      order: {
+        totalAmount: 10,
+        balanceDue: 10,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/sslcommerz/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+          paymentType: "full",
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.getSSLCommerzSettings).toHaveBeenCalled();
+    expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
+      "store",
+      "ssl_store_password_123",
+      true,
+      expect.objectContaining({
+        orderId: "order_1",
+        totalAmount: 10,
+        currency: "BDT",
+        paymentType: "full",
+      }),
+    );
   });
 
   it.each([
@@ -858,7 +986,7 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.getPolarSettings).not.toHaveBeenCalled();
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
       "store",
-      "password",
+      "ssl_store_password_123",
       true,
       expect.objectContaining({
         orderId: "order_1",
@@ -929,7 +1057,7 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledTimes(1);
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
       "store",
-      "password",
+      "ssl_store_password_123",
       true,
       expect.objectContaining({
         orderId: "order_1",
@@ -1059,7 +1187,7 @@ describe("payment session receipt-token proof", () => {
     expect(response.status).toBe(200);
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
       "store",
-      "password",
+      "ssl_store_password_123",
       true,
       expect.objectContaining({
         orderId: "order_1",
@@ -1946,7 +2074,7 @@ describe("payment session receipt-token proof", () => {
       disabledSettings: {
         enabled: false,
         storeId: "store",
-        storePassword: "password",
+        storePassword: "ssl_store_password_123",
         sandbox: true,
       },
       otherSettings: [mocks.getStripeSettings, mocks.getPolarSettings],
@@ -2134,7 +2262,7 @@ describe("payment session receipt-token proof", () => {
     expect(response.status).toBe(200);
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
       "store",
-      "password",
+      "ssl_store_password_123",
       true,
       expect.objectContaining({
         successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&payment_type=full",

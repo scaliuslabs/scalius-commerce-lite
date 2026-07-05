@@ -82,6 +82,9 @@ export function sendServerEvent(
   if (typeof window === "undefined") {
     return;
   }
+  if (window.__META_CAPI_BROWSER_EVENTS_ENABLED__ !== true) {
+    return;
+  }
 
   // Construct the full payload
   const fullPayload: MetaCapiEventPayload = {

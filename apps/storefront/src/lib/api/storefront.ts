@@ -76,6 +76,9 @@ export interface LayoutData {
     allowedImageHosts?: string[];
     canonicalHostAliases?: string[];
   };
+  metaCapi?: {
+    browserEventsEnabled?: boolean;
+  };
 }
 
 // =============================================

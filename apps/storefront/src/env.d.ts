@@ -157,6 +157,7 @@ interface Window {
   __CURRENCY_SYMBOL__?: string;
   __CURRENCY_CODE__?: string;
   __CURRENCY_DECIMAL_PLACES__?: number;
+  __META_CAPI_BROWSER_EVENTS_ENABLED__?: boolean;
   __BUILD_ID__?: string;
   __CHECKOUT_CONFIG__?: unknown;
   __scaliusAuthModalOpenPending?: boolean;

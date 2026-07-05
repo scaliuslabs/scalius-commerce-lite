@@ -10,6 +10,10 @@ import {
   updateMetaConversionsSettings,
 } from "~/lib/api-functions/settings";
 import { getServerFnError } from "@/lib/api-helpers";
+import {
+  getMetaConversionsEnableIssue,
+  getMetaConversionsSettingsIssue,
+} from "./readiness";
 
 const DEFAULT_FORM_DATA: FormData = {
   pixelId: "",
@@ -20,7 +24,7 @@ const DEFAULT_FORM_DATA: FormData = {
 };
 
 function formDataFromSettings(settings: MetaConversionsSettings | null): FormData {
-  return settings
+  const formData = settings
     ? {
       pixelId: settings.pixelId || "",
       accessToken: settings.accessToken || "",
@@ -29,6 +33,12 @@ function formDataFromSettings(settings: MetaConversionsSettings | null): FormDat
       logRetentionDays: settings.logRetentionDays || 30,
     }
     : DEFAULT_FORM_DATA;
+
+  if (formData.isEnabled && getMetaConversionsEnableIssue(formData)) {
+    return { ...formData, isEnabled: false };
+  }
+
+  return formData;
 }
 
 export function useMetaConversionsSettings(
@@ -44,6 +54,8 @@ export function useMetaConversionsSettings(
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [showAccessToken, setShowAccessToken] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const settingsIssue = getMetaConversionsSettingsIssue(formData);
+  const enableIssue = getMetaConversionsEnableIssue(formData);
 
   useEffect(() => {
     const currentValues = settings || DEFAULT_FORM_DATA;
@@ -96,6 +108,12 @@ export function useMetaConversionsSettings(
   }, [applySettingsResponse, fetchSettings, initialPixelParity, initialSettings]);
 
   const handleSaveSettings = async () => {
+    const issue = getMetaConversionsSettingsIssue(formData);
+    if (issue) {
+      toast.error(issue);
+      return;
+    }
+
     setIsSettingsLoading(true);
     try {
       const savedSettings = await updateMetaConversionsSettings({ data: formData });
@@ -124,7 +142,13 @@ export function useMetaConversionsSettings(
     field: keyof FormData,
     value: string | number | boolean,
   ) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (next.isEnabled && getMetaConversionsEnableIssue(next)) {
+        return { ...next, isEnabled: false };
+      }
+      return next;
+    });
   };
 
   return {
@@ -133,6 +157,8 @@ export function useMetaConversionsSettings(
     showAccessToken,
     setShowAccessToken,
     hasUnsavedChanges,
+    settingsIssue,
+    enableIssue,
     pixelParity,
     handleSaveSettings,
     handleResetForm,

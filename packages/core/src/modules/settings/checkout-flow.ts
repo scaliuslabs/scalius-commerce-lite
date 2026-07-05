@@ -1,3 +1,5 @@
+import { getSSLCommerzBdtAmountLimitIssue } from "../payments/sslcommerz";
+
 export type CheckoutMode = "guest_cod_only" | "gateways_only" | "all";
 export type CheckoutPaymentMethodId = "stripe" | "sslcommerz" | "polar" | "cod";
 
@@ -63,6 +65,13 @@ export function getCheckoutFlowValidationIssues(options: {
 
     if (!isPositiveDepositAmount(options.partialPaymentAmount)) {
         issues.push("Advance payment amount must be greater than zero.");
+    }
+    if (availablePaymentMethods?.includes("sslcommerz") === true) {
+        const sslcommerzAmountIssue = getSSLCommerzBdtAmountLimitIssue(
+            options.partialPaymentAmount,
+            "SSLCommerz advance payment amount",
+        );
+        if (sslcommerzAmountIssue) issues.push(sslcommerzAmountIssue);
     }
     if (checkoutMode === "guest_cod_only") {
         issues.push("Partial payment needs an online payment gateway, so Fast COD Only cannot be used.");
