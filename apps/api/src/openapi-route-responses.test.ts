@@ -5,6 +5,7 @@ import { finalizeOpenApiContract, type OpenApiDocument } from "./openapi-contrac
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { adminAuthManagementRoutes } from "./routes/admin/auth-management";
 import { paymentSettingsRoutes } from "./routes/admin/settings/payments";
+import { checkoutLanguageRoutes } from "./routes/checkout-languages";
 
 type TestOperation = {
   responses?: Record<string, unknown>;
@@ -22,6 +23,7 @@ function generatedSpec(): OpenApiDocument {
   app.route("/customer-auth", customerAuthRoutes);
   app.route("/admin/auth", adminAuthManagementRoutes);
   app.route("/admin/settings", paymentSettingsRoutes);
+  app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
 
   return finalizeOpenApiContract(app.getOpenAPIDocument({
     openapi: "3.0.0",
@@ -37,6 +39,11 @@ describe("route OpenAPI error responses", () => {
     ["/api/v1/admin/settings/sslcommerz", "post", ["503"]],
     ["/api/v1/admin/settings/polar", "post", ["503"]],
     ["/api/v1/admin/auth/users", "post", ["409", "503"]],
+    ["/api/v1/admin/settings/checkout-languages", "post", ["400", "401", "403", "409", "500"]],
+    ["/api/v1/admin/settings/checkout-languages/{id}", "put", ["400", "401", "403", "404", "409", "500"]],
+    ["/api/v1/admin/settings/checkout-languages/{id}", "patch", ["401", "403", "500"]],
+    ["/api/v1/admin/settings/checkout-languages/{id}", "delete", ["401", "403", "500"]],
+    ["/api/v1/admin/settings/checkout-languages/{id}/restore", "post", ["401", "403", "500"]],
   ])("documents %s %s error statuses", (path, method, statuses) => {
     const responses = operation(generatedSpec(), path, method).responses;
 

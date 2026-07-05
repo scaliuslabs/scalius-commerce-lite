@@ -28373,6 +28373,17 @@ export type PostApiV1AdminProductsBulkDeleteErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -28878,6 +28889,17 @@ export type DeleteApiV1AdminProductsByIdPermanentErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -29332,6 +29354,17 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -29694,6 +29727,17 @@ export type PostApiV1AdminProductsByIdVariantsBulkUpdateErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -34329,20 +34373,9 @@ export type PostApiV1AdminSettingsCheckoutLanguagesErrors = {
         };
     };
     /**
-     * Not found
+     * Conflict
      */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
+    409: {
         success: false;
         error: {
             code: string;
@@ -34403,6 +34436,44 @@ export type DeleteApiV1AdminSettingsCheckoutLanguagesByIdData = {
     query?: never;
     url: '/api/v1/admin/settings/checkout-languages/{id}';
 };
+
+export type DeleteApiV1AdminSettingsCheckoutLanguagesByIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsCheckoutLanguagesByIdError = DeleteApiV1AdminSettingsCheckoutLanguagesByIdErrors[keyof DeleteApiV1AdminSettingsCheckoutLanguagesByIdErrors];
 
 export type DeleteApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
     /**
@@ -34532,17 +34603,6 @@ export type PatchApiV1AdminSettingsCheckoutLanguagesByIdData = {
 
 export type PatchApiV1AdminSettingsCheckoutLanguagesByIdErrors = {
     /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
      * Unauthorized
      */
     401: {
@@ -34557,28 +34617,6 @@ export type PatchApiV1AdminSettingsCheckoutLanguagesByIdErrors = {
      * Forbidden
      */
     403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
         success: false;
         error: {
             code: string;
@@ -34699,9 +34737,9 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdErrors = {
         };
     };
     /**
-     * Rate limit exceeded
+     * Conflict
      */
-    429: {
+    409: {
         success: false;
         error: {
             code: string;
@@ -34765,17 +34803,6 @@ export type PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreData = {
 
 export type PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreErrors = {
     /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
      * Unauthorized
      */
     401: {
@@ -34790,28 +34817,6 @@ export type PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreErrors = {
      * Forbidden
      */
     403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
         success: false;
         error: {
             code: string;
