@@ -174,6 +174,20 @@ function isPermanentInvalidFcmTokenError(error: FcmSendError | undefined): boole
     return getPermanentInvalidFcmTokenReason(error) !== undefined;
 }
 
+function getFcmProviderSetupFailureReason(error: FcmSendError | undefined): string | undefined {
+    if (!error) return undefined;
+
+    const normalized = [error.code, error.status, error.message]
+        .map(normalizeFcmErrorPart)
+        .filter(Boolean)
+        .join(" ");
+    if (!normalized || !isNotificationProviderBreakerFailure(normalized)) return undefined;
+
+    const code = String(error.code ?? error.status ?? "fcm_provider_setup_failure").trim();
+    const message = String(error.message ?? "").replace(/\s+/g, " ").trim();
+    return message ? `${code}: ${message}` : code;
+}
+
 /**
  * Sends push notifications to active admin devices about an order.
  * When an outbox id is provided, each FCM token is guarded by a durable
@@ -338,6 +352,7 @@ export async function sendOrderNotification(
             return buildDispatchResult(outcomes);
         }
         const invalidTokens: string[] = [];
+        let fcmProviderSetupFailureBlocked = false;
 
         for (let index = 0; index < claimedTargets.length; index += 1) {
             const entry = claimedTargets[index];
@@ -376,6 +391,34 @@ export async function sendOrderNotification(
                     invalidTokens.push(entry.token);
                 }
             } else {
+                const providerSetupFailureReason = getFcmProviderSetupFailureReason(resp.error);
+                if (providerSetupFailureReason) {
+                    if (!fcmProviderSetupFailureBlocked) {
+                        fcmProviderSetupFailureBlocked = true;
+                        await blockProviderForMerchantActionableFailure(db, {
+                            channel: "push",
+                            provider: "fcm",
+                            reason: providerSetupFailureReason,
+                        });
+                        console.warn(
+                            `[Notifications] FCM provider setup failure for ${claimedTargets.length} admin push receipt(s); ` +
+                                `skipping until Firebase settings are saved: ${compactProviderLogDetail(providerSetupFailureReason)}`,
+                        );
+                    }
+                    outcomes.push(await markSkippedOutcome(
+                        db,
+                        entry.target,
+                        entry.receipt,
+                        providerSetupFailureReason,
+                        {
+                            provider: "fcm",
+                            providerStatus: errorCode,
+                            rawResponse: errorMessage,
+                        },
+                    ));
+                    continue;
+                }
+
                 console.error(`[Notifications] FCM send failed for token #${index}:`, errorCode, errorMessage);
                 outcomes.push(await markFailedOutcome(
                     db,
@@ -634,7 +677,7 @@ export async function sendOrderNotificationEmail(
 
     if (enabledChannels.includes("sms")) {
         try {
-            const { getActiveSmsProvider } = await import("../../integrations/sms");
+            const { getActiveSmsProvider, getSmsProviderReadiness } = await import("../../integrations/sms");
             const orderRow = db
                 ? await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eq(orders.id, orderId)).get()
                 : undefined;
@@ -656,24 +699,53 @@ export async function sendOrderNotificationEmail(
                 }
             } else if (db) {
                 const msg = smsMessages[type] || `Hi ${name}, your order #${orderId} status has been updated.`;
-                const smsProvider = await getActiveSmsProvider(db, options.encryptionKey);
+                const smsReadiness = await getSmsProviderReadiness(db, options.encryptionKey);
+                const readinessProviderName = smsReadiness.activeProvider ?? "sms";
 
-                if (receiptDb && outboxId) {
-                    const providerName = smsProvider?.name ?? "sms";
-                    const blocked = await recordProviderBlockedDeliveryIfNeeded({
-                        db: receiptDb,
-                        outboxId,
-                        orderId,
-                        notificationType: type,
-                        channel: "sms",
-                        provider: providerName,
-                        recipient: customerPhone,
-                        recipientMasked: maskPhone(customerPhone),
-                    });
-                    if (blocked) {
-                        outcomes.push(blocked);
+                if (!smsReadiness.configured) {
+                    const reason = smsReadiness.error ?? "SMS provider is not configured";
+                    if (receiptDb && outboxId) {
+                        const blocked = await recordProviderBlockedDeliveryIfNeeded({
+                            db: receiptDb,
+                            outboxId,
+                            orderId,
+                            notificationType: type,
+                            channel: "sms",
+                            provider: readinessProviderName,
+                            recipient: `sms-setup:${orderId}:${type}`,
+                            recipientMasked: "sms-setup",
+                        });
+                        if (blocked) {
+                            outcomes.push(blocked);
+                        } else {
+                            await blockProviderForMerchantActionableFailure(receiptDb, {
+                                channel: "sms",
+                                provider: readinessProviderName,
+                                reason,
+                            });
+                            outcomes.push(await recordSkippedDelivery({
+                                db: receiptDb,
+                                outboxId,
+                                orderId,
+                                notificationType: type,
+                                channel: "sms",
+                                provider: readinessProviderName,
+                                recipient: `sms-setup:${orderId}:${type}`,
+                                recipientMasked: "sms-setup",
+                                reason,
+                            }));
+                        }
                     } else {
-                        outcomes.push(await dispatchWithReceipt({
+                        console.warn(
+                            `[Notifications] SMS channel enabled for ${type} but provider is not ready: ${compactProviderLogDetail(reason)}`,
+                        );
+                    }
+                } else {
+                    const smsProvider = await getActiveSmsProvider(db, options.encryptionKey);
+                    const providerName = smsProvider?.name ?? readinessProviderName;
+
+                    if (receiptDb && outboxId) {
+                        const blocked = await recordProviderBlockedDeliveryIfNeeded({
                             db: receiptDb,
                             outboxId,
                             orderId,
@@ -682,53 +754,72 @@ export async function sendOrderNotificationEmail(
                             provider: providerName,
                             recipient: customerPhone,
                             recipientMasked: maskPhone(customerPhone),
-                            send: async (target) => {
-                                if (!smsProvider) {
+                        });
+                        if (blocked) {
+                            outcomes.push(blocked);
+                        } else {
+                            outcomes.push(await dispatchWithReceipt({
+                                db: receiptDb,
+                                outboxId,
+                                orderId,
+                                notificationType: type,
+                                channel: "sms",
+                                provider: providerName,
+                                recipient: customerPhone,
+                                recipientMasked: maskPhone(customerPhone),
+                                send: async (target) => {
+                                    if (!smsProvider) {
+                                        return {
+                                            success: false,
+                                            provider: "sms",
+                                            providerStatus: "missing_sms_provider",
+                                            rawResponse: "No active SMS provider configured",
+                                            retryable: false,
+                                        };
+                                    }
+                                    const smsResult = await smsProvider.sendSms({
+                                        to: customerPhone,
+                                        message: msg,
+                                        clientReference: createProviderClientReference(target),
+                                    });
+                                    if (smsResult.success) {
+                                        console.log(`[Notifications] SMS sent via ${smsProvider.name} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
+                                    } else {
+                                        console.error(`[Notifications] SMS failed via ${smsProvider.name} for ${type} (order ${orderId}): ${smsResult.rawStatus}`);
+                                    }
                                     return {
-                                        success: false,
-                                        provider: "sms",
-                                        providerStatus: "missing_sms_provider",
-                                        rawResponse: "No active SMS provider configured",
-                                        retryable: false,
+                                        success: smsResult.success,
+                                        provider: smsProvider.name,
+                                        providerMessageId: smsResult.providerRef,
+                                        providerStatus: smsResult.rawStatus,
+                                        rawResponse: smsResult.rawStatus,
+                                        retryable: smsResult.retryable,
                                     };
-                                }
-                                const smsResult = await smsProvider.sendSms({
-                                    to: customerPhone,
-                                    message: msg,
-                                    clientReference: createProviderClientReference(target),
-                                });
-                                if (smsResult.success) {
-                                    console.log(`[Notifications] SMS sent via ${smsProvider.name} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
-                                } else {
-                                    console.error(`[Notifications] SMS failed via ${smsProvider.name} for ${type} (order ${orderId}): ${smsResult.rawStatus}`);
-                                }
-                                return {
-                                    success: smsResult.success,
-                                    provider: smsProvider.name,
-                                    providerMessageId: smsResult.providerRef,
-                                    providerStatus: smsResult.rawStatus,
-                                    rawResponse: smsResult.rawStatus,
-                                    retryable: smsResult.retryable,
-                                };
-                            },
-                        }));
-                    }
-                } else if (smsProvider) {
-                    const smsResult = await smsProvider.sendSms({ to: customerPhone, message: msg });
-                    if (smsResult.success) {
-                        console.log(`[Notifications] SMS sent via ${smsProvider.name} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
+                                },
+                            }));
+                        }
+                    } else if (smsProvider) {
+                        const smsResult = await smsProvider.sendSms({ to: customerPhone, message: msg });
+                        if (smsResult.success) {
+                            console.log(`[Notifications] SMS sent via ${smsProvider.name} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
+                        } else {
+                            console.error(`[Notifications] SMS failed via ${smsProvider.name} for ${type} (order ${orderId}): ${smsResult.rawStatus}`);
+                        }
                     } else {
-                        console.error(`[Notifications] SMS failed via ${smsProvider.name} for ${type} (order ${orderId}): ${smsResult.rawStatus}`);
+                        console.warn(`[Notifications] SMS channel enabled for ${type} but no SMS provider configured`);
                     }
-                } else {
-                    console.warn(`[Notifications] SMS channel enabled for ${type} but no SMS provider configured`);
                 }
             }
         } catch (smsError: unknown) {
-            console.error(`[Notifications] SMS dispatch failed for ${type} (order ${orderId}):`, smsError);
+            console.error(`[Notifications] SMS dispatch failed for ${type} (order ${orderId}): ${compactProviderLogDetail(smsError)}`);
             if (receiptDb && outboxId) {
                 const reason = normalizeError(smsError);
                 if (isNonRetryableDispatchStatus(reason)) {
+                    await blockProviderForMerchantActionableFailure(receiptDb, {
+                        channel: "sms",
+                        provider: "sms",
+                        reason,
+                    });
                     outcomes.push(await recordSkippedDelivery({
                         db: receiptDb,
                         outboxId,
@@ -865,7 +956,7 @@ export async function sendOrderNotificationEmail(
                 }
             }
         } catch (whatsappError: unknown) {
-            console.error(`[Notifications] WhatsApp dispatch failed for ${type} (order ${orderId}):`, whatsappError);
+            console.error(`[Notifications] WhatsApp dispatch failed for ${type} (order ${orderId}): ${compactProviderLogDetail(whatsappError)}`);
             if (receiptDb && outboxId) {
                 const reason = normalizeError(whatsappError);
                 if (isNonRetryableDispatchStatus(reason)) {
@@ -1004,7 +1095,7 @@ async function dispatchWithReceipt(options: {
             if (!isDeliveryFailureRetryable(result)) {
                 await blockProviderForMerchantActionableFailure(options.db, {
                     channel: options.channel,
-                    provider: result.provider,
+                    provider: options.provider,
                     reason: result.providerStatus ?? result.rawResponse ?? "provider_non_retryable_failure",
                 });
                 return await markSkippedOutcome(
@@ -1376,4 +1467,13 @@ function maskPushToken(token: string): string {
 
 function normalizeError(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function compactProviderLogDetail(error: unknown): string {
+    return normalizeError(error)
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+        .replace(/\+?\d[\d\s().-]{8,}\d/g, "[phone]")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 240);
 }

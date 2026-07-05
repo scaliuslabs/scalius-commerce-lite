@@ -48,6 +48,58 @@ describe("admin variant management mode", () => {
     expect(isSimpleDefaultVariant(legacyDefaultSku)).toBe(true);
   });
 
+  it("ignores soft-deleted option rows when classifying a simple product", () => {
+    const deletedOption = {
+      ...baseVariant,
+      id: "var_deleted",
+      sku: "DELETED-OPTION",
+      isDefault: false,
+      size: "XL",
+      trackInventory: true,
+      deletedAt: new Date("2026-06-22T00:00:00Z"),
+    };
+
+    const variants = [baseVariant, deletedOption];
+    const mode = getVariantManagementMode(variants);
+
+    expect(mode).toMatchObject({ mode: "simple", variant: baseVariant });
+    expect(variantsForOptionMatrix(variants)).toEqual([baseVariant]);
+  });
+
+  it("does not reserve a soft-deleted default SKU for optioned products", () => {
+    const deletedDefaultSku = {
+      ...baseVariant,
+      deletedAt: new Date("2026-06-22T00:00:00Z"),
+    };
+    const optionVariant = {
+      ...baseVariant,
+      id: "var_red",
+      sku: "TEE-RED",
+      isDefault: false,
+      color: "Red",
+      trackInventory: true,
+    };
+
+    const mode = getVariantManagementMode([deletedDefaultSku, optionVariant]);
+
+    expect(mode).toMatchObject({
+      mode: "optioned",
+      variants: [optionVariant],
+      hiddenSimpleSku: null,
+    });
+    expect(variantsForOptionMatrix([deletedDefaultSku, optionVariant])).toEqual([optionVariant]);
+  });
+
+  it("treats all-deleted SKU arrays as empty", () => {
+    const deletedDefaultSku = {
+      ...baseVariant,
+      deletedAt: new Date("2026-06-22T00:00:00Z"),
+    };
+
+    expect(getVariantManagementMode([deletedDefaultSku])).toMatchObject({ mode: "empty" });
+    expect(variantsForOptionMatrix([deletedDefaultSku])).toEqual([]);
+  });
+
   it("keeps one non-default no-option SKU ambiguous instead of normalizing bad data", () => {
     const invalidSimpleSku = {
       ...baseVariant,

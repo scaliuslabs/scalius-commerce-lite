@@ -2,7 +2,24 @@ import { describe, expect, it } from "vitest";
 import { isCacheablePublicResponse } from "./cache-policy";
 
 function responseWithHeaders(headers: HeadersInit, status = 200): Response {
-  return new Response("ok", { status, headers });
+  const response = new Response("ok", { status, headers });
+  const entries = headers instanceof Headers
+    ? [...headers.entries()]
+    : Array.isArray(headers)
+      ? headers
+      : Object.entries(headers);
+  const setCookieValues = entries
+    .filter(([key]) => key.toLowerCase() === "set-cookie")
+    .map(([, value]) => String(value));
+
+  if (setCookieValues.length > 0) {
+    const headersWithCookies = response.headers as Headers & {
+      getSetCookie?: () => string[];
+    };
+    headersWithCookies.getSetCookie = () => setCookieValues;
+  }
+
+  return response;
 }
 
 describe("storefront cache policy", () => {

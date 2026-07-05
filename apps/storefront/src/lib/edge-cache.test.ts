@@ -1,12 +1,18 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/config/build-id", () => ({ BUILD_ID: "test-build" }));
 
-import { cacheContextAls, clearMemoryCache, withEdgeCache } from "./edge-cache";
+import { clearMemoryCache, setEdgeCacheContext, withEdgeCache } from "./edge-cache";
 
 describe("withEdgeCache", () => {
+  beforeEach(() => {
+    clearMemoryCache();
+    setEdgeCacheContext(null, null, "localhost", null);
+  });
+
   afterEach(() => {
     clearMemoryCache();
+    setEdgeCacheContext(null, null, "localhost", null);
   });
 
   it("dedupes concurrent fetches even when KV versioning is unavailable", async () => {
@@ -47,17 +53,15 @@ describe("withEdgeCache", () => {
     };
     const fetcher = vi.fn(async () => ["zone-1"]);
 
-    const result = await cacheContextAls.run(
-      {
-        cache: cache as unknown as Cache,
-        kvStore: kvStore as unknown as KVNamespace,
-        kvVersion: "4",
-        hostname: "storefront.example.com",
-        cacheNamespace: "storefront.example.com",
-        waitUntil: null,
-      },
-      () => withEdgeCache("shipping_zones_city_1", fetcher),
+    setEdgeCacheContext(
+      cache as unknown as Cache,
+      "4",
+      "storefront.example.com",
+      null,
+      kvStore as unknown as KVNamespace,
+      "storefront.example.com",
     );
+    const result = await withEdgeCache("shipping_zones_city_1", fetcher);
 
     expect(result).toEqual(["zone-1"]);
     expect(kvStore.get).toHaveBeenCalledWith(

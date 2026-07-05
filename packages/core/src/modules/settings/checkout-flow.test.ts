@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { getCheckoutFlowValidationIssues } from "./checkout-flow";
+import {
+  getCheckoutFlowValidationIssues,
+  isCheckoutGatewayUsableForFlow,
+} from "./checkout-flow";
 
 describe("checkout flow validation", () => {
   it("rejects Fast COD Only when COD is not enabled", () => {
@@ -36,6 +39,15 @@ describe("checkout flow validation", () => {
     })).toEqual([]);
   });
 
+  it("rejects Standard mode when no compatible payment method is available", () => {
+    expect(getCheckoutFlowValidationIssues({
+      checkoutMode: "all",
+      partialPaymentEnabled: false,
+      partialPaymentAmount: 0,
+      availablePaymentMethods: [],
+    })).toContain("Standard checkout needs at least one enabled and configured payment method.");
+  });
+
   it("keeps partial payment online-gateway guards", () => {
     expect(getCheckoutFlowValidationIssues({
       checkoutMode: "guest_cod_only",
@@ -48,4 +60,26 @@ describe("checkout flow validation", () => {
       "Partial payment needs at least one enabled and configured online payment gateway.",
     ]));
   });
+
+  it.each([
+    ["all", false, 0, "cod", true],
+    ["all", false, 0, "sslcommerz", true],
+    ["guest_cod_only", false, 0, "cod", true],
+    ["guest_cod_only", false, 0, "stripe", false],
+    ["gateways_only", false, 0, "cod", false],
+    ["gateways_only", false, 0, "polar", true],
+    ["all", true, 200, "cod", false],
+    ["all", true, 200, "stripe", true],
+    ["all", true, 0, "stripe", false],
+  ] as const)(
+    "resolves gateway visibility for mode=%s partial=%s amount=%s gateway=%s",
+    (checkoutMode, partialPaymentEnabled, partialPaymentAmount, gatewayId, expected) => {
+      expect(isCheckoutGatewayUsableForFlow({
+        gatewayId,
+        checkoutMode,
+        partialPaymentEnabled,
+        partialPaymentAmount,
+      })).toBe(expected);
+    },
+  );
 });

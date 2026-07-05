@@ -189,9 +189,13 @@ export function VariantManager({
     );
   }, [variants]);
 
-  const variantMode = useMemo(
-    () => getVariantManagementMode(localVariants),
+  const activeVariants = useMemo(
+    () => localVariants.filter((variant) => variant.deletedAt === null),
     [localVariants],
+  );
+  const variantMode = useMemo(
+    () => getVariantManagementMode(activeVariants),
+    [activeVariants],
   );
   const simpleVariantForSetup = variantMode.mode === "simple" ? variantMode.variant : null;
   const reservedVariants = variantMode.mode === "optioned" && variantMode.hiddenSimpleSku
@@ -202,9 +206,10 @@ export function VariantManager({
     : undefined;
   const matrixVariants = useMemo(() => {
     if (variantMode.mode === "optioned") return variantMode.variants;
+    if (variantMode.mode === "ambiguous") return variantMode.variants;
     if (variantMode.mode === "simple" && isAdding) return [];
-    return localVariants;
-  }, [isAdding, localVariants, variantMode]);
+    return activeVariants;
+  }, [activeVariants, isAdding, variantMode]);
 
   // Filter and sort variants
   const filters: VariantFilters = useMemo(
@@ -635,7 +640,7 @@ export function VariantManager({
           />
 
           {/* Variant count footer */}
-          {localVariants.length > 0 && !isAdding && (
+          {activeVariants.length > 0 && !isAdding && (
             <div className="p-2 sm:p-3 border-t text-xs text-muted-foreground text-center sm:text-left">
               {filteredAndSortedVariants.length !== matrixVariants.length ? (
                 <span>

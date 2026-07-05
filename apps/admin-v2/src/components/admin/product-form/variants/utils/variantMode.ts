@@ -21,21 +21,27 @@ export function isSimpleDefaultVariant(
   return variant.isDefault === true;
 }
 
+function isActiveVariant(variant: Pick<ProductVariant, "deletedAt">): boolean {
+  return variant.deletedAt === null;
+}
+
 export function getVariantManagementMode(variants: ProductVariant[]): VariantManagementMode {
-  if (variants.length === 0) {
+  const activeVariants = variants.filter(isActiveVariant);
+
+  if (activeVariants.length === 0) {
     return { mode: "empty" };
   }
 
-  const defaultVariants = variants.filter((variant) => variant.isDefault === true);
+  const defaultVariants = activeVariants.filter((variant) => variant.isDefault === true);
   if (defaultVariants.length > 1) {
-    return { mode: "ambiguous", variants };
+    return { mode: "ambiguous", variants: activeVariants };
   }
 
-  const optionVariants = variants.filter((variant) => !variant.isDefault && hasCustomerOption(variant));
-  const malformedNoOptionVariants = variants.filter((variant) => !variant.isDefault && !hasCustomerOption(variant));
+  const optionVariants = activeVariants.filter((variant) => !variant.isDefault && hasCustomerOption(variant));
+  const malformedNoOptionVariants = activeVariants.filter((variant) => !variant.isDefault && !hasCustomerOption(variant));
   if (optionVariants.length > 0) {
     if (malformedNoOptionVariants.length > 0) {
-      return { mode: "ambiguous", variants };
+      return { mode: "ambiguous", variants: activeVariants };
     }
 
     return {
@@ -45,14 +51,20 @@ export function getVariantManagementMode(variants: ProductVariant[]): VariantMan
     };
   }
 
-  if (variants.length === 1 && isSimpleDefaultVariant(variants[0])) {
-    return { mode: "simple", variant: variants[0] };
+  if (activeVariants.length === 1 && isSimpleDefaultVariant(activeVariants[0])) {
+    return { mode: "simple", variant: activeVariants[0] };
   }
 
-  return { mode: "ambiguous", variants };
+  return { mode: "ambiguous", variants: activeVariants };
 }
 
 export function variantsForOptionMatrix(variants: ProductVariant[]): ProductVariant[] {
   const mode = getVariantManagementMode(variants);
-  return mode.mode === "optioned" ? mode.variants : variants;
+  if (mode.mode === "optioned" || mode.mode === "ambiguous") {
+    return mode.variants;
+  }
+  if (mode.mode === "simple") {
+    return [mode.variant];
+  }
+  return [];
 }

@@ -48,6 +48,9 @@ export function getCheckoutFlowValidationIssues(options: {
     const hasOnlineGateway = availablePaymentMethods?.some(isOnlinePaymentMethod) === true;
 
     if (availablePaymentMethods) {
+        if (checkoutMode === "all" && !hasCod && !hasOnlineGateway) {
+            issues.push("Standard checkout needs at least one enabled and configured payment method.");
+        }
         if (checkoutMode === "guest_cod_only" && !hasCod) {
             issues.push("Fast COD Only needs Cash on Delivery to be enabled.");
         }

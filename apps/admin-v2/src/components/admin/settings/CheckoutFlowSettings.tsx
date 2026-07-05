@@ -33,6 +33,7 @@ import {
     paymentMethodsQueryOptions,
 } from "@/lib/api-query-options/settings";
 import { queryKeys } from "@/lib/query-keys";
+import { getCheckoutFlowPreviewIssues } from "./checkout-flow-policy";
 
 function buildCheckoutFlowSummary(options: {
     guestCheckoutEnabled: boolean;
@@ -146,28 +147,15 @@ export default function CheckoutFlowSettings() {
     const paymentMethodsUnavailable = !paymentMethodsPending && !paymentMethods;
 
     const flowIssues = useMemo(() => {
-        const issues: string[] = [];
-        if (paymentMethodsUnavailable) {
-            issues.push("Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.");
-            return issues;
-        }
-        if (paymentMethods && checkoutMode === "guest_cod_only" && !codEnabled) {
-            issues.push("Enable Cash on Delivery in Payment Gateways before using Fast COD Only.");
-        }
-        if (paymentMethods && checkoutMode === "gateways_only" && activeOnlineMethods.length === 0) {
-            issues.push("Enable and configure at least one online gateway in Payment Gateways.");
-        }
-        if (!partialPaymentEnabled) return issues;
-        if (!Number.isFinite(partialPaymentAmount) || partialPaymentAmount <= 0) {
-            issues.push("Set an advance amount greater than 0.");
-        }
-        if (checkoutMode === "guest_cod_only") {
-            issues.push("Fast COD Only cannot be used with advance payments.");
-        }
-        if (paymentMethods && activeOnlineMethods.length === 0) {
-            issues.push("Advance payments need at least one enabled and configured online gateway.");
-        }
-        return issues;
+        return getCheckoutFlowPreviewIssues({
+            checkoutMode,
+            partialPaymentEnabled,
+            partialPaymentAmount,
+            paymentMethodsUnavailable,
+            paymentMethodsLoaded: Boolean(paymentMethods),
+            codEnabled,
+            activeOnlineMethodCount: activeOnlineMethods.length,
+        });
     }, [activeOnlineMethods.length, checkoutMode, codEnabled, partialPaymentAmount, partialPaymentEnabled, paymentMethods, paymentMethodsUnavailable]);
 
     const flowSummary = buildCheckoutFlowSummary({
