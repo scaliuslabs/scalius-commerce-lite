@@ -7,6 +7,7 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 - Current remediation queue: `audit/REMEDIATION_TRACKER.md`
 - Verification/deploy playbook: `audit/VERIFICATION_PLAYBOOK.md`
 - Platform goal, release bar, and orchestration rules: `docs/codex/PLATFORM-GOAL.md`
+- Codex doc index and update rules: `docs/codex/README.md`
 - Architecture map when boundaries are unclear: `docs/ARCHITECTURE.md`
 - Historical full agent notes only when a missing landmine blocks you: `docs/codex/AGENTS-REFERENCE.md`
 
@@ -39,6 +40,7 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 4. In goal-mode work, act as the lead: delegate independent code slices to workers with disjoint file ownership, review/integrate their patches, and keep direct edits narrow.
 5. Add focused tests around the failure mode before broad gates.
 6. For meaningful code changes, verify locally, deploy when required, smoke live behavior, update docs, then commit.
+7. When new agent guidance is needed, add the shortest pointer/rule here and put durable details beside the owning code, test, or focused doc.
 
 ## Context Hygiene
 
