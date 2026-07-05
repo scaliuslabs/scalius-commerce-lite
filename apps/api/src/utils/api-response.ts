@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import { ApiError } from "./api-error";
+import { logOpsEvent } from "./ops-log";
 
 /** Standard success response shape: { success: true, data: T } */
 export interface ApiSuccessResponse<T> {
@@ -78,27 +79,38 @@ export function errorResponseFromError(err: unknown): {
 
 export function logApiError(
   err: unknown,
-  request?: { method?: string; path?: string },
+  request?: { method?: string; path?: string; requestId?: string; cfRay?: string },
 ): void {
   if (err instanceof ApiError) {
     if (err.status < 500) return;
 
-    const event = JSON.stringify({
+    const metadata = {
       status: err.status,
       code: err.code,
       message: err.message,
       method: request?.method,
       path: request?.path,
-    });
+      requestId: request?.requestId,
+      cfRay: request?.cfRay,
+    };
     if (err.status === 503) {
-      console.warn("[api-error]", event);
+      logOpsEvent("warn", "api.error", metadata);
       return;
     }
-    console.error("[api-error]", event);
+    logOpsEvent("error", "api.error", metadata);
     return;
   }
 
-  console.error("API Error (onError):", err);
+  logOpsEvent("error", "api.error", {
+    status: 500,
+    code: "INTERNAL_ERROR",
+    message: "Unexpected API error",
+    method: request?.method,
+    path: request?.path,
+    requestId: request?.requestId,
+    cfRay: request?.cfRay,
+    errorName: err instanceof Error ? err.name : typeof err,
+  });
 }
 
 /**

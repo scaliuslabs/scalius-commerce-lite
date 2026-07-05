@@ -232,6 +232,7 @@ const sendOtpRoute = createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({ message: z.string().optional() })) } },
     },
     ...errorResponses,
+    503: serviceUnavailableResponse,
   },
 });
 
@@ -363,6 +364,7 @@ const verifyOtpRoute = createRoute({
       },
     },
     ...errorResponses,
+    503: serviceUnavailableResponse,
   },
 });
 

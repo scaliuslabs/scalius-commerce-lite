@@ -19,7 +19,13 @@ import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
 
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
-import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
+import {
+    conflictResponse,
+    errorResponses,
+    messageResponse,
+    serviceUnavailableResponse,
+    successEnvelope,
+} from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type BetterAuthHeaders = Headers & { getSetCookie?: () => string[] };
@@ -207,6 +213,8 @@ const createUserRoute = createRoute({
             }
         },
         ...errorResponses,
+        409: conflictResponse,
+        503: serviceUnavailableResponse,
     }
 });
 

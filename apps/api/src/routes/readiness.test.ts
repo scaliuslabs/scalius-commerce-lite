@@ -1,7 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readinessRoutes } from "./readiness";
+import { requestCorrelationMiddleware } from "../utils/http-correlation";
 
 function createKv() {
   return {
@@ -53,6 +54,7 @@ function createQueue() {
 
 function createApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
+  app.use("*", requestCorrelationMiddleware);
   app.route("/", readinessRoutes);
   return app;
 }
@@ -78,6 +80,10 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     ...overrides,
   } as Env;
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("API readiness route", () => {
   it("returns ready when required platform bindings respond", async () => {
@@ -110,6 +116,7 @@ describe("API readiness route", () => {
 
   it("returns degraded with per-check details when a required probe fails", async () => {
     const app = createApp();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const env = createEnv({
       DB: createDb({ fail: true }),
       PAYMENT_EVENTS_QUEUE: undefined as unknown as Queue,
@@ -118,7 +125,12 @@ describe("API readiness route", () => {
       PURGE_TOKEN: "",
     });
 
-    const response = await app.request("/api/v1/readyz", {}, env);
+    const response = await app.request("/api/v1/readyz", {
+      headers: {
+        "X-Request-Id": "req_readyz_1234",
+        "CF-Ray": "readyz123-DAC",
+      },
+    }, env);
     const json = await response.json() as {
       success?: boolean;
       status?: string;
@@ -144,6 +156,24 @@ describe("API readiness route", () => {
     expect(json.checks?.runtime_config).toMatchObject({
       status: "missing",
       detail: "missing STOREFRONT_URL, PURGE_TOKEN",
+    });
+    expect(response.headers.get("X-Request-Id")).toBe("req_readyz_1234");
+
+    const readinessLog = warn.mock.calls.find((call) => {
+      if (call[0] !== "[api-ops]" || typeof call[1] !== "string") return false;
+      return (JSON.parse(call[1]) as { event?: string }).event === "api.readyz.degraded";
+    });
+    expect(readinessLog).toBeTruthy();
+    expect(JSON.parse(readinessLog?.[1] as string)).toMatchObject({
+      event: "api.readyz.degraded",
+      requestId: "req_readyz_1234",
+      cfRay: "readyz123-DAC",
+      degradedChecks: [
+        "d1:error",
+        "payment_events_queue:missing",
+        "storefront_cache_queue:missing",
+        "runtime_config:missing",
+      ],
     });
   });
 

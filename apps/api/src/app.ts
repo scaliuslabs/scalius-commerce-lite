@@ -45,6 +45,10 @@ import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { readinessRoutes } from "./routes/readiness";
 import { errorResponseFromError, logApiError } from "./utils/api-response";
+import {
+  getRequestCorrelation,
+  requestCorrelationMiddleware,
+} from "./utils/http-correlation";
 import { serveMediaRoute } from "./routes/media-server";
 import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 import { finalizeOpenApiContract } from "./openapi-contract";
@@ -110,9 +114,12 @@ function getR2PublicUrl(env: Env, requestUrl: string): string {
 // SyntaxError when the browser tries to JSON.parse() it. This handler mirrors the
 // middleware-based handler below but acts as Hono's registered onError fallback.
 app.onError((err, c) => {
+  const correlation = getRequestCorrelation(c);
   logApiError(err, {
     method: c.req.method,
     path: new URL(c.req.url).pathname,
+    requestId: correlation.requestId,
+    cfRay: correlation.cfRay,
   });
 
   const { body, status } = errorResponseFromError(err);
@@ -124,6 +131,8 @@ app.onError((err, c) => {
 // breaks the cache middleware (compressed body stored as garbled text).
 
 // Per-request initialisation: DB, KV cache, R2 storage
+app.use("*", requestCorrelationMiddleware);
+
 app.use("*", async (c, next) => {
   const db = getDb(c.env);
   c.set("db", db);
@@ -147,8 +156,8 @@ app.use("*", async (c, next) => {
   const corsMiddleware = cors({
     origin: await getCorsOriginContext(c),
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowHeaders: ["Content-Type", "Authorization", "X-API-Token", "Accept"],
-    exposeHeaders: ["Content-Type", "Cache-Control"],
+    allowHeaders: ["Content-Type", "Authorization", "X-API-Token", "Accept", "X-Request-Id"],
+    exposeHeaders: ["Content-Type", "Cache-Control", "X-Request-Id"],
     credentials: true,
   });
   return corsMiddleware(c, next);

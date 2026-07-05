@@ -39,6 +39,8 @@ Expected healthy result: HTTP `200`, `Cache-Control: no-store`, `success: true`,
 
 Expected degraded result: HTTP `503`, `success: false`, `status: "degraded"`, and a per-check `status` of `missing`, `error`, or `timeout`. The endpoint must stay read-only: D1 uses `SELECT 1`, KV uses a read probe, R2 uses `list({ limit: 1 })`, and Queue/DO checks are binding-shape checks only.
 
+Every API HTTP response should carry `X-Request-Id`; preserve a safe caller-supplied value during smoke tests when you want to match client output to Worker logs. Structured API ops logs include `requestId` and Cloudflare `cfRay` when available. Alert on repeated `api.readyz.degraded` events by required-check status, then use the same request id/CF-Ray to inspect the matching Worker invocation without exposing secrets or buyer data.
+
 API deploy verification:
 
 ```bash
