@@ -72,7 +72,7 @@ pnpm deploy:ops-monitor
 pnpm ops:check --queues --samples 1 --timeout-ms 20000
 ```
 
-Required evidence before closing OPS-005/OPS-008 monitoring scope: deployed ops-monitor Worker version, cron schedule, no-public-route confirmation, KV binding for streak/cooldown state, every normal/DLQ queue binding, Wrangler tail or Workers Logs showing scheduled `/readyz` checks and `Queue.metrics()` summaries, redacted structured log examples, and routed alert-channel proof. Logs-only monitoring is acceptable as an intermediate slice, but the tracker must keep alert-channel verification open.
+Required evidence before closing OPS-005/OPS-008 monitoring scope: deployed ops-monitor Worker version, cron schedule, no-public-route confirmation, KV binding for streak/cooldown state, Cloudflare Email Service `ALERT_EMAIL` binding, every normal/DLQ queue binding, Wrangler tail or Workers Logs showing scheduled `/readyz` checks and `Queue.metrics()` summaries, redacted structured log examples, and routed Cloudflare Email Service proof. The monitor logs `alertCount`, `routedAlertCount`, and `deliveryFailureCount`; do not treat logs-only alert events as routed notification success. Logs-only monitoring is acceptable as an intermediate slice, but the tracker must keep alert-channel verification open until a verified sender/destination test notification is recorded without secrets or inbox screenshots.
 
 ## Storefront Listing Query Plans
 

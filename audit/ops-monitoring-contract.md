@@ -1,15 +1,15 @@
 # OPS Monitoring Contract
 
-This is the repo-owned contract for OPS-005 and the remaining OPS-008 monitoring scope. It defines the Cloudflare-native ops monitor and the evidence required to claim monitoring complete. It does not create alert destinations, store secrets, or add external provider resources.
+This is the repo-owned contract for OPS-005 and the remaining OPS-008 monitoring scope. It defines the Cloudflare-native ops monitor and the evidence required to claim monitoring complete. It does not store secrets or add external alert SaaS providers.
 
-Cloudflare remains the default continuous monitoring layer for this platform. The deployed logs-only monitor is a tiny scheduled Worker with no public route. It checks API `/readyz`, reads queue/DLQ backlog through `Queue.metrics()` on queue bindings, stores streak/cooldown state in KV, and emits structured redacted logs. An external notification channel is still required before closing OPS-005/OPS-008 monitoring. The monitor avoids Cloudflare API tokens and dashboard scraping by using Worker bindings. `pnpm ops:check` stays the repo-owned read-only sampler for deploys and incidents; it does not replace continuous scheduled monitoring.
+Cloudflare remains the default continuous monitoring layer for this platform. The deployed monitor is a tiny scheduled Worker with no public route. It checks API `/readyz`, reads queue/DLQ backlog through `Queue.metrics()` on queue bindings, stores streak/cooldown state in KV, emits structured redacted logs, and can route alerts through Cloudflare Email Service when `ALERT_EMAIL_FROM` and `ALERT_EMAIL_TO` are configured for verified Email Service addresses. Until a live routed Email Service test is captured, OPS-005/OPS-008 monitoring must remain open as partially complete. The monitor avoids Cloudflare API tokens and dashboard scraping by using Worker bindings. `pnpm ops:check` stays the repo-owned read-only sampler for deploys and incidents; it does not replace continuous scheduled monitoring.
 
 ## Source Inputs
 
 | Input | Current source |
 | --- | --- |
 | API Worker and bindings | `apps/api/wrangler.jsonc` (`scalius-api`, `observability.enabled`, queues, cron trigger) |
-| Ops monitor Worker | Deployed `apps/ops-monitor` scheduled Worker with no public route, queue bindings, monitor KV, and redacted logs |
+| Ops monitor Worker | Deployed `apps/ops-monitor` scheduled Worker with no public route, queue bindings, monitor KV, Cloudflare Email Service binding, and redacted logs |
 | Deep readiness | `GET https://api.scalius.com/api/v1/readyz` |
 | Shallow health | `GET https://api.scalius.com/api/v1/health` |
 | Operator smoke | `pnpm ops:check`, plus `pnpm ops:check --queues` when queue metadata matters |
@@ -19,7 +19,7 @@ Cloudflare remains the default continuous monitoring layer for this platform. Th
 | Scheduled correlation | `[scheduled] event=scheduled_run_*` with `runId` |
 | Dashboard read evidence | `[dashboard-query]` timing events |
 
-Relevant Cloudflare references: [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/), [Workers metrics and analytics](https://developers.cloudflare.com/workers/observability/metrics-and-analytics/), [Queues metrics](https://developers.cloudflare.com/queues/observability/metrics/), [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/), [Health Checks](https://developers.cloudflare.com/health-checks/), [Health Check notifications](https://developers.cloudflare.com/health-checks/how-to/health-checks-notifications/), and [Notifications](https://developers.cloudflare.com/notifications/get-started/).
+Relevant Cloudflare references: [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/), [Workers metrics and analytics](https://developers.cloudflare.com/workers/observability/metrics-and-analytics/), [Queues metrics](https://developers.cloudflare.com/queues/observability/metrics/), [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/), [Cloudflare Email Service Workers API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/), [Email send binding configuration](https://developers.cloudflare.com/email-service/configuration/send-bindings/), [Email Service pricing](https://developers.cloudflare.com/email-service/platform/pricing/), [Health Checks](https://developers.cloudflare.com/health-checks/), [Health Check notifications](https://developers.cloudflare.com/health-checks/how-to/health-checks-notifications/), and [Notifications](https://developers.cloudflare.com/notifications/get-started/).
 
 ## Architecture Decision
 
@@ -29,8 +29,8 @@ Use a Cloudflare-native scheduled Worker as the primary continuous monitor:
 - Readiness: call `https://api.scalius.com/api/v1/readyz` with `Cache-Control: no-cache` and a safe monitor request id.
 - Queues: bind every normal queue and DLQ, then read backlog count and oldest-message age through `Queue.metrics()`; do not require Cloudflare API tokens for queue checks.
 - State: store only alert streaks, last status, last notification time, and cooldown timestamps in KV. Do not store raw response bodies, queue payloads, request bodies, provider payloads, OTPs, receipt tokens, or buyer PII.
-- Logs: emit compact structured `ops_monitor.run_completed` events every scheduled run and `ops_monitor.alert` events after configured streak/cooldown thresholds, with dependency names, queue names, statuses, durations, counts, ages, request ids, and deployment/version hints only.
-- Alert channel: required follow-up. Until a routed channel is verified, logs are the alert surface and OPS-005/OPS-008 must remain open.
+- Logs: emit compact structured `ops_monitor.run_completed` events every scheduled run and `ops_monitor.alert` events after configured streak/cooldown thresholds, with dependency names, queue names, statuses, durations, counts, ages, request ids, alert counts, routed alert counts, delivery failure counts, and deployment/version hints only.
+- Alert channel: Cloudflare Email Service is the default routed channel. The Worker has an `ALERT_EMAIL` `send_email` binding and empty source defaults for `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO`; configure those only with verified sender and destination addresses. Missing config is intentionally logs-only. Delivery failures emit redacted `ops_monitor.alert_delivery_failed` logs and do not fail the scheduled monitor.
 
 Alternative considered: Cloudflare Health Checks are useful outside-in reachability monitors for `/readyz`, but they do not cover queue/DLQ backlog by themselves and may not be valid for Cloudflare-proxied Worker hostnames. The scheduled Worker is the intended repo-owned path because it can use queue bindings directly and avoids long-lived Cloudflare API tokens.
 
@@ -71,7 +71,7 @@ Use this checklist before marking the monitoring part of OPS-005 or OPS-008 comp
 | Ops monitor deploys | `pnpm deploy:ops-monitor` deployment id/version, cron schedule, KV namespace binding name, queue binding list, and confirmation that no public route is exposed. |
 | Readiness check is active | Wrangler tail or Workers Logs evidence showing scheduled `/readyz` checks, safe request ids, healthy and degraded event shapes, and cooldown/streak behavior without raw response bodies. |
 | Queue metrics are active | Wrangler tail or Workers Logs evidence showing `Queue.metrics()` results for every queue/DLQ, plus `pnpm ops:check --queues --samples 1 --timeout-ms 20000` output summary proving API provider wiring still matches expectations. |
-| Notifications are routed | Notification policy/webhook/channel alias, test notification timestamp, cooldown state, and mute state. Do not paste API tokens, webhook URLs, or personal inbox screenshots into repo docs. If no channel is enabled yet, record logs-only monitoring as remaining scope. |
+| Notifications are routed | Cloudflare Email Service channel alias, verified sender/destination alias, test notification timestamp, cooldown state, and mute state. Do not paste API tokens, webhook URLs, raw email inbox screenshots, or personal email addresses into repo docs. If `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO` are empty or unverified, record logs-only monitoring as remaining scope. |
 | Worker observability is enabled | `apps/api/wrangler.jsonc` still has `observability.enabled: true`, plus a current Cloudflare Workers Logs/Observability screenshot or exported note showing `scalius-api` filters for `api.readyz.degraded` and `api.error`. |
 | Scheduled monitoring covers cron | Latest `scheduled_run_completed` for the `*/15 * * * *` trigger and an alert policy for missing or failed runs. |
 | Correlation works | A safe `X-Request-Id` from `pnpm ops:check --json` can be found in Workers Logs, and the log entry includes `cfRay` when Cloudflare supplies one. |
@@ -100,6 +100,12 @@ curl -fsS -H 'Cache-Control: no-cache' \
   -H 'X-Request-Id: ops-manual-readiness-check' \
   https://api.scalius.com/api/v1/readyz
 ```
+
+## Cloudflare Email Alert Configuration
+
+The source `apps/ops-monitor/wrangler.jsonc` declares the `ALERT_EMAIL` binding and keeps `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO` empty so deploys stay safe before Email Service is onboarded. To finish routed monitoring, configure the Worker with a verified sender on an onboarded Cloudflare Email Service domain and one or more verified destination addresses, then deploy and trigger a controlled alert. If the account has a fixed ops inbox, tighten the `send_email` binding with `destination_address`, `allowed_destination_addresses`, or `allowed_sender_addresses` in Wrangler config during that same verified slice.
+
+Cloudflare Email Service requires Cloudflare DNS for domain setup. Official pricing notes that sends to verified destination addresses are free on all plans, while arbitrary-recipient Email Sending requires Workers Paid. Keep the alert email plain text and compact; it must not contain raw response bodies, queue payloads, request bodies, OTPs, receipt tokens, provider payloads, credentials, or buyer contact data.
 
 ## Future Alert Channel Or IaC Handoff
 

@@ -23,6 +23,17 @@ export interface OpsMonitorStateNamespace {
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
 }
 
+export interface OpsMonitorEmailMessage {
+  to: string | string[];
+  from: string;
+  subject: string;
+  text: string;
+}
+
+export interface OpsMonitorEmailBinding {
+  send(message: OpsMonitorEmailMessage): Promise<{ messageId: string }>;
+}
+
 export interface OpsMonitorEnv {
   OPS_MONITOR_STATE: OpsMonitorStateNamespace;
   READYZ_URL?: string;
@@ -31,6 +42,10 @@ export interface OpsMonitorEnv {
   ALERT_STREAK_THRESHOLD?: string | number;
   ALERT_COOLDOWN_MS?: string | number;
   STATE_TTL_SECONDS?: string | number;
+  ALERT_EMAIL?: OpsMonitorEmailBinding;
+  ALERT_EMAIL_FROM?: string;
+  ALERT_EMAIL_TO?: string;
+  ALERT_EMAIL_SUBJECT_PREFIX?: string;
   PAYMENT_EVENTS_QUEUE: QueueMetricsBinding;
   PAYMENT_EVENTS_DLQ: QueueMetricsBinding;
   ORDER_NOTIFICATIONS_QUEUE: QueueMetricsBinding;
@@ -103,11 +118,26 @@ export interface AlertState {
   status: "ok" | "issue";
   streak: number;
   lastAlertedAt: number | null;
+  firstSeenAt?: number | null;
+  lastSeenAt?: number | null;
 }
 
 export interface AlertDecision {
   state: AlertState;
   shouldAlert: boolean;
+}
+
+export interface AlertingResult {
+  alertCount: number;
+  routedAlertCount: number;
+  deliveryFailureCount: number;
+}
+
+export interface AlertEmailConfig {
+  binding: OpsMonitorEmailBinding;
+  from: string;
+  to: string[];
+  subjectPrefix: string;
 }
 
 export const MONITORED_QUEUES: MonitoredQueue[] = [
@@ -395,12 +425,17 @@ export function nextAlertState(
         status: "ok",
         streak: 0,
         lastAlertedAt: previous?.lastAlertedAt ?? null,
+        firstSeenAt: null,
+        lastSeenAt: null,
       },
       shouldAlert: false,
     };
   }
 
   const streak = previous?.status === "issue" ? previous.streak + 1 : 1;
+  const firstSeenAt = previous?.status === "issue" && Number.isFinite(previous.firstSeenAt)
+    ? previous.firstSeenAt
+    : now;
   const cooldownElapsed = previous?.lastAlertedAt === undefined
     || previous.lastAlertedAt === null
     || now - previous.lastAlertedAt >= config.alertCooldownMs;
@@ -411,6 +446,8 @@ export function nextAlertState(
       status: "issue",
       streak,
       lastAlertedAt: shouldAlert ? now : previous?.lastAlertedAt ?? null,
+      firstSeenAt,
+      lastSeenAt: now,
     },
     shouldAlert,
   };
@@ -435,12 +472,19 @@ function parseAlertState(raw: string | null): AlertState | null {
         status: parsed.status,
         streak,
         lastAlertedAt: parsed.lastAlertedAt ?? null,
+        firstSeenAt: Number.isFinite(parsed.firstSeenAt) ? parsed.firstSeenAt ?? null : null,
+        lastSeenAt: Number.isFinite(parsed.lastSeenAt) ? parsed.lastSeenAt ?? null : null,
       };
     }
   } catch {
     return null;
   }
   return null;
+}
+
+function formatIsoTimestamp(value: number | null | undefined): string | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return new Date(value).toISOString();
 }
 
 function safeAlertPayload(issue: MonitorIssue, state: AlertState, runId: string): Record<string, unknown> {
@@ -452,6 +496,8 @@ function safeAlertPayload(issue: MonitorIssue, state: AlertState, runId: string)
     checkName: issue.name,
     status: issue.status,
     streak: state.streak,
+    firstSeenAt: formatIsoTimestamp(state.firstSeenAt),
+    lastSeenAt: formatIsoTimestamp(state.lastSeenAt),
     durationMs: issue.durationMs,
     requestId: issue.requestId,
     queueName: issue.queueName,
@@ -461,6 +507,133 @@ function safeAlertPayload(issue: MonitorIssue, state: AlertState, runId: string)
   };
 }
 
+function parseAlertEmailRecipients(value: string | undefined): string[] {
+  if (!value) return [];
+  return value.split(",").map((recipient) => recipient.trim()).filter(Boolean).slice(0, 50);
+}
+
+export function loadAlertEmailConfig(env: Partial<OpsMonitorEnv>): AlertEmailConfig | null {
+  const from = typeof env.ALERT_EMAIL_FROM === "string" ? env.ALERT_EMAIL_FROM.trim() : "";
+  const to = parseAlertEmailRecipients(env.ALERT_EMAIL_TO);
+  if (!env.ALERT_EMAIL || !from || to.length === 0) return null;
+  return {
+    binding: env.ALERT_EMAIL,
+    from,
+    to,
+    subjectPrefix: typeof env.ALERT_EMAIL_SUBJECT_PREFIX === "string" && env.ALERT_EMAIL_SUBJECT_PREFIX.trim()
+      ? env.ALERT_EMAIL_SUBJECT_PREFIX.trim()
+      : "[Scalius ops]",
+  };
+}
+
+function formatMaybeNumber(value: number | null | undefined): string {
+  return value === null || value === undefined ? "null" : String(value);
+}
+
+function buildAlertEmailSubject(config: AlertEmailConfig, issue: MonitorIssue): string {
+  return `${config.subjectPrefix} ${issue.status} ${issue.name}`
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+}
+
+function buildAlertEmailText(
+  issue: MonitorIssue,
+  state: AlertState,
+  runId: string,
+  queueSummaries: QueueMetricSummary[] = [],
+): string {
+  const lines = [
+    "Scalius ops monitor alert",
+    `key: ${issue.id}`,
+    `type: ${issue.kind}`,
+    `name: ${issue.name}`,
+    `status: ${issue.status}`,
+    `runId: ${runId}`,
+    `requestId: ${issue.requestId ?? "n/a"}`,
+    `streak: ${state.streak}`,
+    `firstSeenAt: ${formatIsoTimestamp(state.firstSeenAt) ?? "n/a"}`,
+    `lastSeenAt: ${formatIsoTimestamp(state.lastSeenAt) ?? "n/a"}`,
+    `durationMs: ${issue.durationMs}`,
+  ];
+
+  if (issue.queueName) lines.push(`queueName: ${issue.queueName}`);
+  if (issue.backlogCount !== undefined) lines.push(`backlogCount: ${issue.backlogCount}`);
+  if (issue.oldestMessageAgeMs !== undefined) {
+    lines.push(`oldestMessageAgeMs: ${formatMaybeNumber(issue.oldestMessageAgeMs)}`);
+  }
+  if (issue.failedChecks?.length) lines.push(`failedChecks: ${issue.failedChecks.join(",")}`);
+  if (queueSummaries.length > 0) {
+    lines.push("queues:");
+    for (const queue of queueSummaries) {
+      lines.push(
+        `- ${queue.queueName} ${queue.kind} ${queue.status} backlog=${formatMaybeNumber(queue.backlogCount)} `
+          + `oldestAgeMs=${formatMaybeNumber(queue.oldestMessageAgeMs)} durationMs=${queue.durationMs}`,
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function safeAlertDeliveryFailurePayload(
+  issue: MonitorIssue,
+  state: AlertState,
+  runId: string,
+  error: unknown,
+): Record<string, unknown> {
+  const errorRecord = isRecord(error) ? error : {};
+  return {
+    event: "ops_monitor.alert_delivery_failed",
+    monitorId: issue.id,
+    runId,
+    checkKind: issue.kind,
+    checkName: issue.name,
+    status: issue.status,
+    streak: state.streak,
+    firstSeenAt: formatIsoTimestamp(state.firstSeenAt),
+    lastSeenAt: formatIsoTimestamp(state.lastSeenAt),
+    requestId: issue.requestId,
+    errorName: error instanceof Error ? error.name : typeof error,
+    errorCode: typeof errorRecord.code === "string" ? errorRecord.code.slice(0, 80) : undefined,
+  };
+}
+
+async function sendAlertEmail({
+  emailConfig,
+  issue,
+  state,
+  runId,
+  queueSummaries,
+  logger,
+}: {
+  emailConfig: AlertEmailConfig | null;
+  issue: MonitorIssue;
+  state: AlertState;
+  runId: string;
+  queueSummaries?: QueueMetricSummary[];
+  logger: Pick<Console, "error">;
+}): Promise<"not_configured" | "sent" | "failed"> {
+  if (!emailConfig) return "not_configured";
+
+  try {
+    await emailConfig.binding.send({
+      to: emailConfig.to,
+      from: emailConfig.from,
+      subject: buildAlertEmailSubject(emailConfig, issue),
+      text: buildAlertEmailText(issue, state, runId, queueSummaries),
+    });
+    return "sent";
+  } catch (error) {
+    logger.error(
+      "[ops-monitor-alert-delivery-failed]",
+      JSON.stringify(safeAlertDeliveryFailurePayload(issue, state, runId, error)),
+    );
+    return "failed";
+  }
+}
+
 export async function applyAlerting({
   state,
   issues,
@@ -468,6 +641,8 @@ export async function applyAlerting({
   config,
   now,
   runId,
+  emailConfig = null,
+  queueSummaries = [],
   logger = console,
 }: {
   state: OpsMonitorStateNamespace;
@@ -476,10 +651,14 @@ export async function applyAlerting({
   config: Pick<MonitorConfig, "alertStreakThreshold" | "alertCooldownMs" | "stateTtlSeconds">;
   now: number;
   runId: string;
+  emailConfig?: AlertEmailConfig | null;
+  queueSummaries?: QueueMetricSummary[];
   logger?: Pick<Console, "error">;
-}): Promise<number> {
+}): Promise<AlertingResult> {
   const issuesById = new Map(issues.map((issue) => [issue.id, issue]));
   let alertCount = 0;
+  let deliveredAlertCount = 0;
+  let deliveryFailureCount = 0;
 
   await Promise.all(monitorIds.map(async (monitorId) => {
     const issue = issuesById.get(monitorId);
@@ -489,6 +668,20 @@ export async function applyAlerting({
     if (issue && decision.shouldAlert) {
       alertCount += 1;
       logger.error("[ops-monitor-alert]", JSON.stringify(safeAlertPayload(issue, decision.state, runId)));
+      const emailResult = await sendAlertEmail({
+        emailConfig,
+        issue,
+        state: decision.state,
+        runId,
+        queueSummaries,
+        logger,
+      });
+      if (emailResult === "sent") {
+        deliveredAlertCount += 1;
+      }
+      if (emailResult === "failed") {
+        deliveryFailureCount += 1;
+      }
     }
 
     await state.put(stateKey(monitorId), JSON.stringify(decision.state), {
@@ -496,7 +689,11 @@ export async function applyAlerting({
     });
   }));
 
-  return alertCount;
+  return {
+    alertCount,
+    routedAlertCount: deliveredAlertCount,
+    deliveryFailureCount,
+  };
 }
 
 export async function runScheduledMonitor(
@@ -514,6 +711,7 @@ export async function runScheduledMonitor(
   const runId = createRequestId(new Date(now));
   const startedAt = Date.now();
   const config = loadConfig(env);
+  const emailConfig = loadAlertEmailConfig(env);
   const [readiness, queueChecks] = await Promise.all([
     checkReadiness({ readyzUrl: config.readyzUrl, fetchImpl, now }),
     collectQueueChecks(env, config, now),
@@ -521,13 +719,15 @@ export async function runScheduledMonitor(
   const queueIssues = queueChecks.issues;
   const issues = readiness.issue ? [readiness.issue, ...queueIssues] : queueIssues;
   const monitorIds = ["readyz", ...MONITORED_QUEUES.map((queue) => `queue:${queue.name}`)];
-  const alertCount = await applyAlerting({
+  const alerting = await applyAlerting({
     state: env.OPS_MONITOR_STATE,
     issues,
     monitorIds,
     config,
     now,
     runId,
+    emailConfig,
+    queueSummaries: queueChecks.summaries,
     logger,
   });
 
@@ -538,7 +738,9 @@ export async function runScheduledMonitor(
     status: issues.length === 0 ? "ok" : "issues",
     durationMs: Date.now() - startedAt,
     issueCount: issues.length,
-    alertCount,
+    alertCount: alerting.alertCount,
+    routedAlertCount: alerting.routedAlertCount,
+    deliveryFailureCount: alerting.deliveryFailureCount,
     requestId: readiness.requestId,
     queues: queueChecks.summaries,
   }));

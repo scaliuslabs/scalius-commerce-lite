@@ -7,6 +7,10 @@ interface Env {
   ALERT_STREAK_THRESHOLD: string;
   ALERT_COOLDOWN_MS: string;
   STATE_TTL_SECONDS: string;
+  ALERT_EMAIL?: SendEmail;
+  ALERT_EMAIL_FROM?: string;
+  ALERT_EMAIL_TO?: string;
+  ALERT_EMAIL_SUBJECT_PREFIX?: string;
 
   PAYMENT_EVENTS_QUEUE: Queue<unknown>;
   PAYMENT_EVENTS_DLQ: Queue<unknown>;

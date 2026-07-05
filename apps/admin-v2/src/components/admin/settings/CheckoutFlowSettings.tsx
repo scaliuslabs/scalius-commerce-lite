@@ -317,7 +317,7 @@ export default function CheckoutFlowSettings() {
                             <AlertTriangle className="h-4 w-4 text-amber-500" />
                             <AlertDescription className="flex flex-col gap-3 text-sm text-amber-700 dark:text-amber-400 sm:flex-row sm:items-center sm:justify-between">
                                 <span className="min-w-0">
-                                    <span className="block font-medium">Payment method readiness could not be loaded.</span>
+                                    <span className="block font-medium">Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.</span>
                                     {paymentMethodsError && paymentMethodsErrorMessage && (
                                         <span className="mt-1 block text-xs opacity-85">{paymentMethodsErrorMessage}</span>
                                     )}

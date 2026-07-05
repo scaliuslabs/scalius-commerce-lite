@@ -11,8 +11,10 @@ import {
   nextAlertState,
   runScheduledMonitor,
   type AlertState,
+  type AlertEmailConfig,
   type MonitorConfig,
   type OpsMonitorEnv,
+  type OpsMonitorEmailBinding,
   type OpsMonitorStateNamespace,
   type QueueMetricsBinding,
 } from "./worker";
@@ -29,6 +31,21 @@ const config: MonitorConfig = {
 function createQueue(metrics: Awaited<ReturnType<QueueMetricsBinding["metrics"]>>): QueueMetricsBinding {
   return {
     metrics: vi.fn(async () => metrics),
+  };
+}
+
+function createEmailBinding(
+  send: OpsMonitorEmailBinding["send"] = vi.fn(async () => ({ messageId: "email-safe" })),
+): OpsMonitorEmailBinding {
+  return { send };
+}
+
+function createEmailConfig(binding = createEmailBinding()): AlertEmailConfig {
+  return {
+    binding,
+    from: "ops-alerts@example.test",
+    to: ["oncall@example.test"],
+    subjectPrefix: "[Scalius ops]",
   };
 }
 
@@ -232,10 +249,16 @@ describe("streak and cooldown alerting", () => {
       config,
       now: 20_000,
       runId: "run-safe",
+      emailConfig: createEmailConfig(),
       logger,
-    })).resolves.toBe(0);
+    })).resolves.toMatchObject({
+      alertCount: 0,
+      routedAlertCount: 0,
+      deliveryFailureCount: 0,
+    });
     expect(logger.error).not.toHaveBeenCalled();
 
+    const emailConfig = createEmailConfig();
     await expect(applyAlerting({
       state,
       issues: [issue],
@@ -243,8 +266,13 @@ describe("streak and cooldown alerting", () => {
       config,
       now: 310_000,
       runId: "run-safe",
+      emailConfig,
       logger,
-    })).resolves.toBe(1);
+    })).resolves.toMatchObject({
+      alertCount: 1,
+      routedAlertCount: 1,
+      deliveryFailureCount: 0,
+    });
     expect(logger.error).toHaveBeenCalledTimes(1);
     expect(logger.error.mock.calls[0]?.[0]).toBe("[ops-monitor-alert]");
     expect(JSON.parse(logger.error.mock.calls[0]?.[1] as string)).toMatchObject({
@@ -269,6 +297,146 @@ describe("streak and cooldown alerting", () => {
     expect(JSON.parse(state.values.get("ops-monitor:v1:readyz") ?? "{}")).toMatchObject({
       status: "ok",
       streak: 0,
+    });
+  });
+
+  it("sends a compact redacted email when the routed alert channel is configured", async () => {
+    const state = createState();
+    const send = vi.fn(async (_message: Parameters<OpsMonitorEmailBinding["send"]>[0]) => ({
+      messageId: "email-safe",
+    }));
+    const issue = {
+      id: "queue:payment-events",
+      kind: "queue" as const,
+      name: "payment-events",
+      status: "threshold" as const,
+      durationMs: 12,
+      queueName: "payment-events",
+      backlogCount: 3,
+      oldestMessageAgeMs: 310_000,
+    };
+    const oneStrikeConfig = { ...config, alertStreakThreshold: 1 };
+    const logger = { error: vi.fn() };
+
+    await expect(applyAlerting({
+      state,
+      issues: [issue],
+      monitorIds: ["queue:payment-events"],
+      config: oneStrikeConfig,
+      now: Date.UTC(2026, 0, 1, 0, 5, 0),
+      runId: "run-safe",
+      emailConfig: createEmailConfig(createEmailBinding(send)),
+      queueSummaries: [{
+        queueName: "payment-events",
+        kind: "normal",
+        status: "threshold",
+        durationMs: 12,
+        backlogCount: 3,
+        oldestMessageAgeMs: 310_000,
+      }],
+      logger,
+    })).resolves.toMatchObject({
+      alertCount: 1,
+      routedAlertCount: 1,
+      deliveryFailureCount: 0,
+    });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const message = send.mock.calls[0]?.[0];
+    expect(message).toMatchObject({
+      from: "ops-alerts@example.test",
+      to: ["oncall@example.test"],
+      subject: "[Scalius ops] threshold payment-events",
+    });
+    expect(message?.text).toContain("key: queue:payment-events");
+    expect(message?.text).toContain("streak: 1");
+    expect(message?.text).toContain("firstSeenAt: 2026-01-01T00:05:00.000Z");
+    expect(message?.text).toContain("- payment-events normal threshold backlog=3 oldestAgeMs=310000 durationMs=12");
+    expect(message?.text).not.toContain("provider payload");
+    expect(message?.text).not.toContain("customer");
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(logger.error.mock.calls[0]?.[1] as string)).toMatchObject({
+      event: "ops_monitor.alert",
+      monitorId: "queue:payment-events",
+      streak: 1,
+    });
+  });
+
+  it("keeps missing email config log-only without reporting a routed alert success", async () => {
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        success: false,
+        status: "degraded",
+        checks: { d1: { status: "error" } },
+      }, { status: 503 }));
+
+    await runScheduledMonitor(createEnv({
+      ALERT_STREAK_THRESHOLD: "1",
+    }), {
+      now: Date.UTC(2026, 0, 1),
+      fetchImpl,
+      logger,
+    });
+
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(logger.error.mock.calls[0]?.[1] as string)).toMatchObject({
+      event: "ops_monitor.alert",
+      monitorId: "readyz",
+    });
+    const payload = JSON.parse(logger.log.mock.calls[0]?.[1] as string);
+    expect(payload).toMatchObject({
+      event: "ops_monitor.run_completed",
+      status: "issues",
+      issueCount: 1,
+      alertCount: 1,
+      routedAlertCount: 0,
+      deliveryFailureCount: 0,
+    });
+  });
+
+  it("logs delivery failures compactly and continues the run", async () => {
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const send = vi.fn(async () => {
+      const error = new Error("do not log oncall@example.test or provider payload");
+      (error as Error & { code: string }).code = "EMAIL_SEND_FAILED";
+      throw error;
+    });
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        success: false,
+        status: "degraded",
+        checks: { runtime_config: { status: "missing" } },
+      }, { status: 503 }));
+
+    await runScheduledMonitor(createEnv({
+      ALERT_STREAK_THRESHOLD: "1",
+      ALERT_EMAIL: createEmailBinding(send),
+      ALERT_EMAIL_FROM: "ops-alerts@example.test",
+      ALERT_EMAIL_TO: "oncall@example.test",
+    }), {
+      now: Date.UTC(2026, 0, 1),
+      fetchImpl,
+      logger,
+    });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledTimes(2);
+    const deliveryFailure = JSON.parse(logger.error.mock.calls[1]?.[1] as string);
+    expect(deliveryFailure).toMatchObject({
+      event: "ops_monitor.alert_delivery_failed",
+      monitorId: "readyz",
+      errorName: "Error",
+      errorCode: "EMAIL_SEND_FAILED",
+    });
+    expect(JSON.stringify(deliveryFailure)).not.toContain("oncall@example.test");
+    expect(JSON.stringify(deliveryFailure)).not.toContain("provider payload");
+    expect(JSON.parse(logger.log.mock.calls[0]?.[1] as string)).toMatchObject({
+      event: "ops_monitor.run_completed",
+      status: "issues",
+      alertCount: 1,
+      routedAlertCount: 0,
+      deliveryFailureCount: 1,
     });
   });
 
