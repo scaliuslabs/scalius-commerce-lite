@@ -19,7 +19,7 @@ import {
     orders,
 } from "@scalius/database/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ServiceUnavailableError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,
@@ -34,6 +34,7 @@ import {
     activeRefundOperationSchema,
     orderDetailSchema,
     orderItemSchema,
+    orderPaymentRecoverySchema,
     orderRefundAttemptSchema,
     orderSummarySchema,
     productVariantSchema,
@@ -100,6 +101,8 @@ const paymentRecoveryQuerySchema = z.enum([
     "needs_attention",
 ]);
 
+const recoveryLinkPaymentTypeSchema = z.enum(["full", "deposit", "balance"]);
+
 const PAYMENT_RECOVERY_EXPORT_MAX_ROWS = 5_000;
 const PAYMENT_RECOVERY_EXPORT_PAGE_SIZE = 100;
 
@@ -163,6 +166,58 @@ function buildPaymentRecoveryCsv(ordersList: PaymentRecoveryExportOrder[]): stri
         toCsvRow(headers),
         ...rows.map(toCsvRow),
     ].join("\n");
+}
+
+function resolveStorefrontUrl(env: Env): URL {
+    const configuredUrl = env.STOREFRONT_URL?.trim();
+    if (!configuredUrl) {
+        throw new ServiceUnavailableError("Storefront URL is not configured.");
+    }
+
+    try {
+        const url = new URL(configuredUrl);
+        if (url.protocol !== "https:" && url.protocol !== "http:") {
+            throw new Error("Unsupported storefront URL protocol");
+        }
+        return url;
+    } catch {
+        throw new ServiceUnavailableError("Storefront URL is invalid.");
+    }
+}
+
+function buildPaymentRecoveryUrl(
+    storefrontUrl: URL,
+    result: OrdersService.OrderPaymentRecoveryLink,
+): string {
+    const url = new URL("/order-success", storefrontUrl);
+    url.searchParams.set("orderId", result.orderId);
+    url.searchParams.set("token", result.receiptToken);
+    url.searchParams.set("payment", result.gateway);
+    url.searchParams.set("result", "failed");
+    if (result.paymentType) url.searchParams.set("paymentType", result.paymentType);
+    if (typeof result.depositAmount === "number" && Number.isFinite(result.depositAmount)) {
+        url.searchParams.set("depositAmount", String(result.depositAmount));
+    }
+    return url.toString();
+}
+
+async function writePaymentRecoveryReceiptHint(
+    kv: KVNamespace | undefined,
+    result: OrdersService.OrderPaymentRecoveryLink,
+): Promise<void> {
+    if (!kv) return;
+
+    await kv.put(
+        `${OrdersService.ORDER_RECEIPT_TOKEN_PREFIX}${result.receiptToken}`,
+        JSON.stringify({ orderId: result.orderId }),
+        { expirationTtl: OrdersService.ORDER_RECEIPT_TOKEN_TTL_SECONDS },
+    ).catch((error: unknown) => {
+        console.error("[Admin Orders] Failed to write payment recovery receipt KV hint:", {
+            orderId: result.orderId,
+            tokenHash: result.tokenHash.slice(0, 12),
+            error,
+        });
+    });
 }
 
 function isSuccessfulOrderResult(result: unknown): result is { success: true; orderId: string } {
@@ -282,6 +337,16 @@ const paymentSessionAttemptSchema = z.object({
     activeProcessing: z.boolean(),
     staleProcessing: z.boolean(),
 });
+
+const paymentRecoveryLinkResponseSchema = successEnvelope(z.object({
+    orderId: z.string(),
+    url: z.string().url(),
+    expiresAt: timestampSchema,
+    gateway: z.enum(["sslcommerz", "polar"]),
+    paymentType: recoveryLinkPaymentTypeSchema.nullable(),
+    depositAmount: z.number().nullable(),
+    paymentRecovery: orderPaymentRecoverySchema,
+}));
 
 const orderFormDataSchema = z.object({
     id: z.string(),
@@ -646,6 +711,45 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
         results
     });
 }) as unknown as AdminRouteHandler<typeof bulkShipRoute>);
+
+// ─── POST /:id/payment-recovery-link ─────────────────────────────────────────
+
+const createPaymentRecoveryLinkRoute = createRoute({
+    method: "post",
+    path: "/{id}/payment-recovery-link",
+    tags: ["Admin - Orders"],
+    summary: "Issue a hosted-payment receipt recovery link",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        201: {
+            description: "Hosted-payment recovery link issued",
+            content: { "application/json": { schema: paymentRecoveryLinkResponseSchema } },
+        },
+        ...adminOrderResourceMutationErrorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
+    const db = c.get("db");
+    const orderId = c.req.valid("param").id;
+    const storefrontUrl = resolveStorefrontUrl(c.env);
+    const recoveryLink = await OrdersService.createOrderPaymentRecoveryLink(db, orderId);
+    const url = buildPaymentRecoveryUrl(storefrontUrl, recoveryLink);
+    await writePaymentRecoveryReceiptHint(c.env.CACHE, recoveryLink);
+
+    return created(c, {
+        orderId: recoveryLink.orderId,
+        url,
+        expiresAt: new Date(recoveryLink.expiresAt * 1000).toISOString(),
+        gateway: recoveryLink.gateway,
+        paymentType: recoveryLink.paymentType,
+        depositAmount: recoveryLink.depositAmount,
+        paymentRecovery: recoveryLink.paymentRecovery,
+    });
+});
 
 // ─── GET /:id ────────────────────────────────────────────────────────────────
 

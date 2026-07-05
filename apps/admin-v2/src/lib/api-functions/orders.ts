@@ -35,6 +35,7 @@ import type {
   PostApiV1AdminOrdersByIdCodResponse,
   PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendData,
   PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponse,
+  PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponse,
   PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponse,
 } from "@scalius/api-client/types";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
@@ -102,6 +103,11 @@ export interface ReconcileRefundAttemptInput {
 }
 export type ReconcileRefundAttemptPayload =
   ApiData<PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponse>;
+export interface IssueOrderPaymentRecoveryLinkInput {
+  orderId: string;
+}
+export type IssueOrderPaymentRecoveryLinkPayload =
+  ApiData<PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponse>;
 export type BulkDeleteOrdersInput =
   ApiBody<PostApiV1AdminOrdersBulkDeleteData>;
 export type OrderPaymentsPayload =
@@ -319,6 +325,14 @@ export const getOrderPayments = createServerFn({ method: "GET" })
   .validator((data: { orderId: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<OrderPaymentsPayload>(`/orders/${data.orderId}/payments`);
+  });
+
+export const issueOrderPaymentRecoveryLink = createServerFn({ method: "POST" })
+  .validator((data: IssueOrderPaymentRecoveryLinkInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<IssueOrderPaymentRecoveryLinkPayload>(
+      `/orders/${data.orderId}/payment-recovery-link`,
+    );
   });
 
 export const getOrderNotifications = createServerFn({ method: "GET" })

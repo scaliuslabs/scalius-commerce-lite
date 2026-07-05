@@ -12,6 +12,13 @@ describe("route permissions", () => {
       .toEqual({ permission: PERMISSIONS.ORDERS_VIEW });
   });
 
+  it("gates buyer payment recovery link issuance behind order edit permission", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/orders/order_1/payment-recovery-link",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
+  });
+
   it("keeps order notification history read-only and retry mutation gated", () => {
     expect(getRoutePermission("/api/v1/admin/orders/order_1/notifications", "GET"))
       .toEqual({ permission: PERMISSIONS.ORDERS_VIEW });

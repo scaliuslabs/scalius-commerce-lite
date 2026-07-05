@@ -1,6 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { checkoutAttempts, orderReceipts } from "@scalius/database/schema";
 import { and, eq, or, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
 
 export const ORDER_RECEIPT_TOKEN_PREFIX = "order_receipt:";
 export const ORDER_RECEIPT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -14,6 +15,10 @@ export type OrderReceiptValidationResult = {
 
 export function isOrderReceiptToken(value: string | undefined): value is string {
   return typeof value === "string" && value.startsWith("chk_");
+}
+
+export function createOrderReceiptToken(): string {
+  return `chk_${nanoid()}`;
 }
 
 export async function hashOrderReceiptToken(token: string): Promise<string> {

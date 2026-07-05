@@ -27500,6 +27500,117 @@ export type PostApiV1AdminOrdersBulkShipResponses = {
 
 export type PostApiV1AdminOrdersBulkShipResponse = PostApiV1AdminOrdersBulkShipResponses[keyof PostApiV1AdminOrdersBulkShipResponses];
 
+export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/payment-recovery-link';
+};
+
+export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkError = PostApiV1AdminOrdersByIdPaymentRecoveryLinkErrors[keyof PostApiV1AdminOrdersByIdPaymentRecoveryLinkErrors];
+
+export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses = {
+    /**
+     * Hosted-payment recovery link issued
+     */
+    201: {
+        success: true;
+        data: {
+            orderId: string;
+            url: string;
+            expiresAt: string | number;
+            gateway: 'sslcommerz' | 'polar';
+            paymentType: 'full' | 'deposit' | 'balance' | null;
+            depositAmount: number | null;
+            paymentRecovery: {
+                state: 'none' | 'awaiting_payment' | 'processing' | 'needs_attention';
+                label: string;
+                message: string | null;
+                gateway: string | null;
+                paymentType: string | null;
+                status: string | null;
+                attempts: number;
+                activeProcessing: boolean;
+                staleProcessing: boolean;
+                updatedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponse = PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses[keyof PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses];
+
 export type DeleteApiV1AdminOrdersByIdData = {
     body?: never;
     path: {

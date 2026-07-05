@@ -82,6 +82,21 @@ export interface ShipmentRecovery {
   updatedAt: OrderTimestamp | null;
 }
 
+export interface PaymentRecovery {
+  state: "none" | "awaiting_payment" | "processing" | "needs_attention";
+  label: string;
+  message: string | null;
+  gateway: string | null;
+  paymentType: string | null;
+  status: string | null;
+  attempts: number;
+  activeProcessing: boolean;
+  staleProcessing: boolean;
+  updatedAt: OrderTimestamp | null;
+  canIssueRecoveryLink?: boolean;
+  recoveryLinkBlockedReason?: string | null;
+}
+
 export interface OrderSupportRequest {
   id: string;
   orderId: string;
@@ -133,6 +148,7 @@ export interface Order {
   refundAttempts?: OrderRefundAttempt[];
   activeRefundOperation?: ActiveRefundOperation | null;
   shipmentRecovery?: ShipmentRecovery;
+  paymentRecovery?: PaymentRecovery;
   supportRequests?: OrderSupportRequest[];
 }
 

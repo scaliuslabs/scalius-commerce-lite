@@ -100,6 +100,22 @@ describe("admin orders route boundaries", () => {
         expect(csvBuilder).not.toContain("lastError");
     });
 
+    it("declares payment recovery link issuance before the dynamic order route", () => {
+        const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
+        const recoveryLinkRoute = source.split("const createPaymentRecoveryLinkRoute = createRoute")[1]?.split("// ─── GET /:id")[0] ?? "";
+
+        expect(source.indexOf("const createPaymentRecoveryLinkRoute = createRoute"))
+            .toBeLessThan(source.indexOf("const getOrderRoute = createRoute"));
+        expect(recoveryLinkRoute).toContain('path: "/{id}/payment-recovery-link"');
+        expect(recoveryLinkRoute).toContain('summary: "Issue a hosted-payment receipt recovery link"');
+        expect(recoveryLinkRoute).toContain("OrdersService.createOrderPaymentRecoveryLink");
+        expect(recoveryLinkRoute).toContain("buildPaymentRecoveryUrl");
+        expect(recoveryLinkRoute).toContain("writePaymentRecoveryReceiptHint");
+        expect(recoveryLinkRoute).not.toContain("ORDER_NOTIFICATIONS_QUEUE");
+        expect(recoveryLinkRoute).not.toContain("createSSLCommerzPaymentSession");
+        expect(recoveryLinkRoute).not.toContain("createPolarPaymentSession");
+    });
+
     it("exposes sanitized payment-session attempt visibility on order payments", () => {
         const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
         const attemptSchema = source.split("const paymentSessionAttemptSchema = z.object")[1]?.split("const getItemsRoute = createRoute")[0] ?? "";

@@ -39,6 +39,7 @@ import {
   ChevronDown,
   ChevronUp,
   ReceiptText,
+  Copy,
 } from "lucide-react";
 import type { ActiveRefundOperation, Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -50,6 +51,7 @@ import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
 import { queryKeys } from "@/lib/query-keys";
 import {
   useReconcileRefundAttempt,
+  useIssueOrderPaymentRecoveryLink,
   useRefundOrder,
   useUpdateOrderCod,
 } from "@/lib/api-mutations/orders";
@@ -183,6 +185,8 @@ const MANUAL_REFUND_RECOVERY_STATUSES = new Set([
   "pending",
 ]);
 
+const RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz", "polar"]);
+
 function getSessionAttemptView(attempt: PaymentSessionAttempt): {
   label: string;
   message: string;
@@ -221,6 +225,63 @@ function getSessionAttemptView(attempt: PaymentSessionAttempt): {
     message: "Payment session attempt state was recorded by the checkout system.",
     badgeVariant: "outline",
   };
+}
+
+function isRecoveryLinkGateway(value: string | null | undefined): boolean {
+  return typeof value === "string" && RECOVERY_LINK_GATEWAYS.has(value.trim().toLowerCase());
+}
+
+function isRecoverablePaymentState(
+  state: NonNullable<Order["paymentRecovery"]>["state"] | undefined,
+): boolean {
+  return state === "awaiting_payment" || state === "needs_attention";
+}
+
+function inferRecoveryLinkEligibility(
+  order: Order,
+  attempts: PaymentSessionAttempt[],
+  payments: OrderPayment[],
+): boolean {
+  const gateway = order.paymentRecovery?.gateway ?? order.paymentMethod;
+  if (!isRecoveryLinkGateway(gateway)) return false;
+  if (order.status !== "incomplete") return false;
+  if (Number(order.paidAmount ?? 0) > 0) return false;
+  const hasUnsafePaymentEvidence = payments.some((payment) =>
+    payment.status === "pending" ||
+    payment.status === "confirmed" ||
+    payment.status === "succeeded"
+  );
+  if (hasUnsafePaymentEvidence) return false;
+  const hasFailedPaymentEvidence = payments.some((payment) => payment.status === "failed")
+    || attempts.some((attempt) => attempt.status === "failed" || attempt.staleProcessing);
+
+  const recoveryState = order.paymentRecovery?.state;
+  if (recoveryState) {
+    return isRecoverablePaymentState(recoveryState)
+      && (recoveryState !== "needs_attention" || hasFailedPaymentEvidence);
+  }
+
+  if (order.status === "incomplete" && order.paymentStatus === "unpaid") {
+    return true;
+  }
+
+  if (order.paymentStatus === "failed" && hasFailedPaymentEvidence) {
+    return true;
+  }
+
+  return attempts.some(
+    (attempt) =>
+      isRecoveryLinkGateway(attempt.gateway)
+      && !attempt.activeProcessing
+      && (attempt.status === "failed" || attempt.staleProcessing),
+  );
+}
+
+async function copyRecoveryUrlToClipboard(url: string): Promise<void> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    throw new Error("Clipboard unavailable");
+  }
+  await navigator.clipboard.writeText(url);
 }
 
 function formatTimestamp(value: OrderTimestamp | null | undefined): string | null {
@@ -277,6 +338,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const { symbol } = useCurrency();
   const isHydrated = useHydrated();
   const orderActions = useOrderActionPermissions();
+  const canIssuePaymentRecoveryLink = orderActions.canEditOrders;
   const canRefund = orderActions.canRefundOrders;
   const canUpdateCod = orderActions.canUpdateOrderCod;
   const [historyExpanded, setHistoryExpanded] = React.useState(false);
@@ -324,6 +386,15 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const payments = paymentsResult?.payments ?? [];
   const plan = paymentsResult?.plan ?? null;
   const paymentSessionAttempts = paymentsResult?.paymentSessionAttempts ?? [];
+  const paymentRecovery = order.paymentRecovery ?? null;
+  const hasRecoveryLinkDecision =
+    typeof paymentRecovery?.canIssueRecoveryLink === "boolean";
+  const canShowRecoveryLinkAction =
+    canIssuePaymentRecoveryLink
+    && isRecoveryLinkGateway(paymentRecovery?.gateway ?? order.paymentMethod)
+    && (hasRecoveryLinkDecision
+      ? paymentRecovery?.canIssueRecoveryLink === true
+      : inferRecoveryLinkEligibility(order, paymentSessionAttempts, payments));
   const refundAttempts = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
   const activeRefundOperation = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
   const paymentWebhookIssues = paymentsResult?.paymentWebhookIssues ?? [];
@@ -349,6 +420,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const codMutation = useUpdateOrderCod();
   const refundMutation = useRefundOrder();
   const refundRecoveryMutation = useReconcileRefundAttempt();
+  const recoveryLinkMutation = useIssueOrderPaymentRecoveryLink();
 
   function submitCODAction() {
     if (!codAction) return;
@@ -450,6 +522,49 @@ export function PaymentCard({ order }: PaymentCardProps) {
         },
       },
     );
+  }
+
+  async function handleCopyRecoveryLink() {
+    if (!canIssuePaymentRecoveryLink) {
+      toast.error("Recovery link unavailable", {
+        description: "Your role can view orders but cannot create payment recovery links.",
+      });
+      return;
+    }
+
+    if (!canShowRecoveryLinkAction) {
+      toast.error("Recovery link unavailable", {
+        description:
+          paymentRecovery?.recoveryLinkBlockedReason
+          ?? "This order is not eligible for a hosted payment recovery link.",
+      });
+      return;
+    }
+
+    let recoveryLink: Awaited<
+      ReturnType<typeof recoveryLinkMutation.mutateAsync>
+    >;
+    try {
+      recoveryLink = await recoveryLinkMutation.mutateAsync({ orderId: order.id });
+    } catch {
+      return;
+    }
+
+    try {
+      await copyRecoveryUrlToClipboard(recoveryLink.url);
+    } catch {
+      toast.error("Could not copy recovery link", {
+        description: "The browser did not allow clipboard access. Try again from a focused admin tab.",
+      });
+      return;
+    }
+
+    const expiresAt = formatTimestamp(recoveryLink.expiresAt);
+    toast.success("Recovery link copied", {
+      description: expiresAt
+        ? `Share it with the buyer before ${expiresAt}.`
+        : "Share it with the buyer before it expires.",
+    });
   }
 
   const paymentStatusCfg = PAYMENT_STATUS_CONFIG[order.paymentStatus ?? "unpaid"] ?? PAYMENT_STATUS_CONFIG.unpaid;
@@ -596,6 +711,33 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   Retry
                 </Button>
               </div>
+            </div>
+          )}
+
+          {canShowRecoveryLinkAction && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 p-3 text-xs">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">Hosted payment recovery</p>
+                <p className="mt-1 text-muted-foreground">
+                  {paymentRecovery?.message
+                    ?? "Copy a fresh buyer link for the current hosted payment state."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 shrink-0 px-2 text-xs"
+                onClick={() => void handleCopyRecoveryLink()}
+                disabled={recoveryLinkMutation.isPending}
+              >
+                {recoveryLinkMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <Copy className="mr-1 h-3 w-3" />
+                )}
+                Copy recovery link
+              </Button>
             </div>
           )}
 

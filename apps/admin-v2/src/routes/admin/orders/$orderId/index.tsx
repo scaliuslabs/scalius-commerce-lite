@@ -116,6 +116,7 @@ function toOrderViewModel(
     refundAttempts: order.refundAttempts,
     activeRefundOperation: order.activeRefundOperation,
     shipmentRecovery: order.shipmentRecovery,
+    paymentRecovery: order.paymentRecovery,
     supportRequests: order.supportRequests ?? [],
   };
 }
