@@ -5,6 +5,7 @@ import {
 } from "../../integrations/meta/conversions-api";
 import {
   CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC,
+  analyticsScriptTypes,
   createAnalyticsSchema,
   normalizeCloudflareWebAnalyticsConfig,
 } from "./analytics.validation";
@@ -14,6 +15,21 @@ import {
 } from "./meta-pixel-parity";
 
 describe("analytics validation", () => {
+  it("accepts Google Tag Manager as a first-class script type", () => {
+    expect(analyticsScriptTypes).toContain("google_tag_manager");
+
+    const result = createAnalyticsSchema.safeParse({
+      name: "Google Tag Manager",
+      type: "google_tag_manager",
+      isActive: true,
+      usePartytown: true,
+      config: "<script>window.dataLayer = window.dataLayer || [];</script>",
+      location: "head",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it("accepts a Cloudflare Web Analytics token", () => {
     const result = createAnalyticsSchema.safeParse({
       name: "Cloudflare Web Analytics",

@@ -16,18 +16,26 @@ import {
   escapeXmlCategory,
 } from "@/lib/category-mapping";
 import { getLayoutData, getSeoSettings } from "@/lib/api";
-import {
-  getRuntimeStorefrontUrl,
-  setRuntimeImageCdnPolicy,
-} from "@/lib/api/runtime-env";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
-import { xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
+import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 export const prerender = false;
 
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 5000;
+const FEED_IMAGE_OPTIONS = {
+  width: 1200,
+  quality: 90,
+  format: "auto",
+  fit: "scale-down",
+} as const;
+
+type FeedProduct = {
+  product: Product;
+  imageLink: string;
+};
 
 /**
  * Escapes XML special characters
@@ -69,14 +77,58 @@ function getAvailability(product: Product): "in stock" | "out of stock" {
   return product.availableForSale === false ? "out of stock" : "in stock";
 }
 
+function getPrimaryImageLink(product: Product, baseUrl: string): string | null {
+  const sourceImage = product.imageUrl?.trim();
+  if (!sourceImage) {
+    return null;
+  }
+
+  const imageLink = getOptimizedImageUrl(sourceImage, FEED_IMAGE_OPTIONS).trim();
+  if (!imageLink) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(imageLink, baseUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function toFeedProduct(product: Product, baseUrl: string): FeedProduct | null {
+  if (product.isActive === false) {
+    return null;
+  }
+
+  const imageLink = getPrimaryImageLink(product, baseUrl);
+  if (!imageLink) {
+    return null;
+  }
+
+  return { product, imageLink };
+}
+
+function toFeedProducts(products: Product[], baseUrl: string): FeedProduct[] {
+  return products.flatMap((product) => {
+    const feedProduct = toFeedProduct(product, baseUrl);
+    return feedProduct ? [feedProduct] : [];
+  });
+}
+
 /**
  * Generates a single product item for the feed
  */
 function generateProductItem(
-  product: Product,
+  feedProduct: FeedProduct,
   baseUrl: string,
   currencyCode: string,
 ): string {
+  const { product, imageLink } = feedProduct;
   const productUrl = `${baseUrl}/products/${product.slug}`;
   const availability = getAvailability(product);
 
@@ -99,15 +151,7 @@ function generateProductItem(
   item += `    <g:price>${formatFeedPrice(product.discountedPrice || product.price, currencyCode)}</g:price>\n`;
 
   // Image (required)
-  if (product.imageUrl) {
-    const imageUrl = getOptimizedImageUrl(product.imageUrl, {
-      width: 1200,
-      quality: 90,
-      format: "auto",
-      fit: "scale-down",
-    });
-    item += `    <g:image_link>${escapeXml(imageUrl)}</g:image_link>\n`;
-  }
+  item += `    <g:image_link>${escapeXml(imageLink)}</g:image_link>\n`;
 
   // Brand - try to get from attributes
   const brandAttribute = product.attributes?.find(
@@ -171,7 +215,7 @@ function generateProductItem(
  * Generates the complete Facebook product feed
  */
 function generateFacebookFeed(
-  products: Product[],
+  products: FeedProduct[],
   baseUrl: string,
   currencyCode: string,
 ): string {
@@ -193,9 +237,12 @@ function generateFacebookFeed(
 
 export const GET: APIRoute = async ({ url }: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl();
-    if (!baseUrl) {
-      return new Response("STOREFRONT_URL not configured", { status: 500 });
+    let baseUrl: string;
+    try {
+      baseUrl = getBaseUrl();
+    } catch (error) {
+      console.error("Facebook product feed base URL is not configured:", error);
+      return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
     }
     const seo = await getSeoSettings();
     if (!seo) {
@@ -239,7 +286,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     const requiredApiPages = Math.ceil(limit / limitParams);
     const startApiPage = (page - 1) * requiredApiPages + 1;
 
-    const allProducts: Product[] = [];
+    const allProducts: FeedProduct[] = [];
 
     // Fetch first page to get totalPages
     const firstResponse = await getAllProducts({
@@ -261,7 +308,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       });
     }
 
-    allProducts.push(...firstResponse.data.filter((p) => p.isActive !== false));
+    allProducts.push(...toFeedProducts(firstResponse.data, baseUrl));
     const totalPages = firstResponse.pagination.totalPages;
 
     // Limit requiredApiPages if we hit the end of the total products early
@@ -293,7 +340,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
           return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
         }
         if (res && res.data) {
-          allProducts.push(...res.data.filter((p) => p.isActive !== false));
+          allProducts.push(...toFeedProducts(res.data, baseUrl));
         }
       }
     }
@@ -318,6 +365,6 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     });
   } catch (error: unknown) {
     console.error("Error generating Facebook product feed:", error);
-    return new Response("Internal Server Error", { status: 500 });
+    return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
   }
 };

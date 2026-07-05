@@ -1,7 +1,10 @@
 const TRACKING_QUERY_PARAMS = [
   "fbclid",
   "gclid",
+  "gbraid",
+  "wbraid",
   "msclkid",
+  "ttclid",
   "utm_source",
   "utm_medium",
   "utm_campaign",

@@ -53711,6 +53711,7 @@
                     "type": "string",
                     "enum": [
                       "google_analytics",
+                      "google_tag_manager",
                       "facebook_pixel",
                       "cloudflare_web_analytics",
                       "custom"
@@ -54401,6 +54402,7 @@
                     "type": "string",
                     "enum": [
                       "google_analytics",
+                      "google_tag_manager",
                       "facebook_pixel",
                       "cloudflare_web_analytics",
                       "custom"

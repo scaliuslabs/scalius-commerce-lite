@@ -48,13 +48,21 @@ const CLOUDFLARE_WEB_ANALYTICS_EXAMPLE =
   `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN"}'></script>`;
 
 const ANALYTICS_CONFIG_EXAMPLES: Record<AnalyticsScriptType, string> = {
-  google_analytics: `<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+  google_analytics: `<!-- Google Analytics 4 (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'GA_MEASUREMENT_ID');
+  gtag('config', 'G-XXXXXXXXXX');
+</script>`,
+  google_tag_manager: `<!-- Google Tag Manager -->
+<script>
+  (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-XXXXXXX');
 </script>`,
   facebook_pixel: `<!-- Facebook Pixel Code -->
 <script>
@@ -163,6 +171,25 @@ export function AnalyticsForm({
   const selectedType = form.watch("type");
   const isCloudflareWebAnalytics =
     selectedType === "cloudflare_web_analytics";
+  const isGoogleAnalytics = selectedType === "google_analytics";
+  const isGoogleTagManager = selectedType === "google_tag_manager";
+  const namePlaceholder = isGoogleTagManager
+    ? "Google Tag Manager"
+    : isGoogleAnalytics
+      ? "Google Analytics 4"
+      : "Analytics Script";
+  const locationDescription = isCloudflareWebAnalytics
+    ? "Cloudflare recommends installing the beacon before the closing body tag."
+    : isGoogleTagManager
+      ? "Google recommends the GTM script in the head. Add the optional noscript iframe separately at Body Start if needed."
+      : "Where in the HTML document to place this script.";
+  const configDescription = isCloudflareWebAnalytics
+    ? "Paste the Cloudflare Web Analytics site token or the official beacon snippet."
+    : isGoogleAnalytics
+      ? "Paste the GA4 gtag.js snippet that uses a G- measurement ID, not a GTM container snippet."
+      : isGoogleTagManager
+        ? "Paste the Google Tag Manager web container script that uses a GTM- container ID. Add the noscript iframe as a separate Body Start custom script if needed."
+        : "The actual script code that will be inserted into your site.";
 
   return (
     <FormContainer
@@ -191,7 +218,7 @@ export function AnalyticsForm({
               <FormItem>
                 <FormLabel>Name</FormLabel>
                 <FormControl>
-                  <Input placeholder="Google Analytics" {...field} />
+                  <Input placeholder={namePlaceholder} {...field} />
                 </FormControl>
                 <FormDescription>
                   A descriptive name for this analytics script.
@@ -218,7 +245,10 @@ export function AnalyticsForm({
                   </FormControl>
                   <SelectContent className="rounded-xl bg-background">
                     <SelectItem value="google_analytics">
-                      Google Analytics
+                      Google Analytics 4 (gtag.js)
+                    </SelectItem>
+                    <SelectItem value="google_tag_manager">
+                      Google Tag Manager
                     </SelectItem>
                     <SelectItem value="facebook_pixel">
                       Facebook Pixel
@@ -230,7 +260,8 @@ export function AnalyticsForm({
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  Choose the provider this script belongs to.
+                  Use Google Analytics for GA4 snippets with G- measurement IDs,
+                  or Google Tag Manager for GTM containers with GTM- IDs.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -265,10 +296,7 @@ export function AnalyticsForm({
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  Where in the HTML document to place this script.
-                  {isCloudflareWebAnalytics
-                    ? " Cloudflare recommends installing the beacon before the closing body tag."
-                    : ""}
+                  {locationDescription}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -289,9 +317,7 @@ export function AnalyticsForm({
                   />
                 </FormControl>
                 <FormDescription>
-                  {isCloudflareWebAnalytics
-                    ? "Paste the Cloudflare Web Analytics site token or the official beacon snippet."
-                    : "The actual script code that will be inserted into your site."}
+                  {configDescription}
                 </FormDescription>
                 <FormMessage />
               </FormItem>

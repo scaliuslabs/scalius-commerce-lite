@@ -88,6 +88,11 @@ type AnalyticsValue =
   | { [key: string]: AnalyticsValue };
 
 type ZarazParameters = Record<string, AnalyticsValue>;
+type FbCommerceContent = {
+  id: string;
+  quantity: number;
+  item_price?: number;
+};
 
 function cleanAnalyticsValue(value: AnalyticsValue): AnalyticsValue {
   if (Array.isArray(value)) {
@@ -106,7 +111,9 @@ function cleanAnalyticsValue(value: AnalyticsValue): AnalyticsValue {
   return value === undefined ? undefined : value;
 }
 
-function cleanAnalyticsParams(params: ZarazParameters): Record<string, unknown> {
+function cleanAnalyticsParams(
+  params: ZarazParameters,
+): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(params)
       .map(([key, value]) => [key, cleanAnalyticsValue(value)])
@@ -114,21 +121,18 @@ function cleanAnalyticsParams(params: ZarazParameters): Record<string, unknown> 
   );
 }
 
-function sendZarazEcommerce(
-  eventName: string,
-  params: ZarazParameters,
-): void {
+function sendZarazEcommerce(eventName: string, params: ZarazParameters): void {
   const ecommerce = window.zaraz?.ecommerce;
   if (typeof ecommerce !== "function") {
     return;
   }
 
   try {
-    void Promise.resolve(ecommerce(eventName, cleanAnalyticsParams(params))).catch(
-      (error: unknown) => {
-        console.warn("Zaraz ecommerce event failed:", error);
-      },
-    );
+    void Promise.resolve(
+      ecommerce(eventName, cleanAnalyticsParams(params)),
+    ).catch((error: unknown) => {
+      console.warn("Zaraz ecommerce event failed:", error);
+    });
   } catch (error) {
     console.warn("Zaraz ecommerce event failed:", error);
   }
@@ -183,14 +187,6 @@ function firstProduct(
   return products?.[0] ?? {};
 }
 
-// --- E-commerce Event Tracking ---
-
-// Helper to ensure dataLayer exists for GA4
-function getGaDataLayer(): Record<string, unknown>[] {
-  window.dataLayer = window.dataLayer || [];
-  return window.dataLayer!;
-}
-
 // --- Event Parameter Interfaces ---
 
 interface ItemParameters {
@@ -213,6 +209,180 @@ interface ItemParameters {
   location_id?: string; // For physical stores
   price?: number; // Unit price
   quantity?: number;
+}
+
+type GA4ParamValue =
+  | string
+  | number
+  | boolean
+  | undefined
+  | null
+  | ItemParameters
+  | ItemParameters[]
+  | GA4ParamValue[];
+
+type DataLayerParameters = Record<string, GA4ParamValue>;
+
+// --- E-commerce Event Tracking ---
+
+// Helper to ensure dataLayer exists for GA4/GTM.
+function getGaDataLayer(): Record<string, unknown>[] {
+  window.dataLayer = window.dataLayer || [];
+  return window.dataLayer!;
+}
+
+function finiteNumber(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function inferCommerceValue(data: {
+  value?: number;
+  contents?: FbCommerceContent[];
+}): number | undefined {
+  const explicitValue = finiteNumber(data.value);
+  if (explicitValue !== undefined) {
+    return explicitValue;
+  }
+
+  let total = 0;
+  let hasPricedItem = false;
+  for (const item of data.contents ?? []) {
+    const price = finiteNumber(item.item_price);
+    const quantity = finiteNumber(item.quantity) ?? 1;
+    if (price === undefined) {
+      continue;
+    }
+    total += price * quantity;
+    hasPricedItem = true;
+  }
+
+  return hasPricedItem ? total : undefined;
+}
+
+function normalizeGa4Items(
+  data: {
+    content_ids?: string[];
+    content_name?: string;
+    content_category?: string;
+    contents?: FbCommerceContent[];
+  },
+  options: { includeContentName?: boolean } = {},
+): ItemParameters[] {
+  const includeContentName = options.includeContentName !== false;
+  const fromContents =
+    data.contents
+      ?.map((item, index) => ({
+        item_id: item.id,
+        item_name:
+          includeContentName && data.contents?.length === 1
+            ? data.content_name
+            : undefined,
+        item_category: data.content_category,
+        price: finiteNumber(item.item_price),
+        quantity: finiteNumber(item.quantity),
+        index,
+      }))
+      .filter((item) => Boolean(item.item_id)) ?? [];
+
+  if (fromContents.length > 0) {
+    return fromContents;
+  }
+
+  return (
+    data.content_ids?.filter(Boolean).map((id, index, ids) => ({
+      item_id: id,
+      item_name:
+        includeContentName && ids.length === 1 ? data.content_name : undefined,
+      item_category: data.content_category,
+      quantity: 1,
+      index,
+    })) ?? []
+  );
+}
+
+function cleanDataLayerParams(
+  params: DataLayerParameters,
+): Record<string, unknown> {
+  return cleanAnalyticsParams(params as unknown as ZarazParameters);
+}
+
+function pushDataLayerEcommerceEvent(
+  eventName: string,
+  params: DataLayerParameters,
+  eventId?: string,
+): void {
+  const dataLayer = getGaDataLayer();
+  const ecommerce = cleanDataLayerParams(
+    eventId ? { ...params, event_id: eventId } : params,
+  );
+  const event: Record<string, unknown> = {
+    event: eventName,
+    ecommerce,
+  };
+
+  if (eventId) {
+    event.event_id = eventId;
+  }
+
+  dataLayer.push({ ecommerce: null });
+  dataLayer.push(event);
+}
+
+function pushDataLayerEvent(
+  eventName: string,
+  params: DataLayerParameters,
+  eventId?: string,
+): void {
+  const dataLayer = getGaDataLayer();
+  dataLayer.push(
+    cleanDataLayerParams(
+      eventId
+        ? { event: eventName, event_id: eventId, ...params }
+        : { event: eventName, ...params },
+    ),
+  );
+}
+
+function bridgeFbCommerceToDataLayer(
+  eventName:
+    | "view_item"
+    | "add_to_cart"
+    | "begin_checkout"
+    | "add_payment_info"
+    | "purchase",
+  data: {
+    content_ids?: string[];
+    content_name?: string;
+    content_category?: string;
+    contents?: FbCommerceContent[];
+    currency?: string;
+    num_items?: number;
+    value?: number;
+    order_id?: string;
+  },
+  eventId: string,
+): void {
+  const currency = data.currency ?? window.__CURRENCY_CODE__;
+  const value = inferCommerceValue(data);
+  const params: DataLayerParameters = {
+    currency,
+    value,
+    items: normalizeGa4Items(data, {
+      includeContentName: eventName !== "purchase",
+    }),
+  };
+
+  if (data.num_items !== undefined) {
+    params.num_items = finiteNumber(data.num_items);
+  }
+
+  if (eventName === "purchase") {
+    params.transaction_id = data.order_id ?? eventId;
+  }
+
+  pushDataLayerEcommerceEvent(eventName, params, eventId);
 }
 
 // --- Facebook Pixel Event Tracking ---
@@ -243,7 +413,7 @@ export function trackFbViewContent(data: {
   content_category?: string;
   content_name?: string;
   content_type?: "product" | "product_group";
-  contents?: Array<{ id: string; quantity: number; item_price?: number }>;
+  contents?: FbCommerceContent[];
   currency?: string;
   value?: number;
 }): void {
@@ -270,6 +440,8 @@ export function trackFbViewContent(data: {
     value: data.value,
   });
 
+  bridgeFbCommerceToDataLayer("view_item", data, eventId);
+
   // CAPI: Server-side Event
   sendServerEvent({
     eventId,
@@ -293,7 +465,7 @@ export function trackFbAddToCart(data: {
   content_ids?: string[];
   content_name?: string;
   content_type?: "product" | "product_group";
-  contents?: Array<{ id: string; quantity: number; item_price?: number }>;
+  contents?: FbCommerceContent[];
   currency?: string;
   value?: number;
 }): void {
@@ -320,6 +492,8 @@ export function trackFbAddToCart(data: {
     value: data.value,
   });
 
+  bridgeFbCommerceToDataLayer("add_to_cart", data, eventId);
+
   // CAPI: Server-side Event
   sendServerEvent({
     eventId,
@@ -342,7 +516,7 @@ export function trackFbInitiateCheckout(data: {
   content_ids?: string[];
   content_category?: string;
   content_name?: string;
-  contents?: Array<{ id: string; quantity: number; item_price?: number }>;
+  contents?: FbCommerceContent[];
   currency?: string;
   num_items?: number;
   value?: number;
@@ -363,6 +537,8 @@ export function trackFbInitiateCheckout(data: {
     value: data.value,
     quantity: data.num_items,
   });
+
+  bridgeFbCommerceToDataLayer("begin_checkout", data, eventId);
 
   // CAPI: Server-side Event
   sendServerEvent({
@@ -386,7 +562,7 @@ export function trackFbInitiateCheckout(data: {
 export function trackFbAddPaymentInfo(data?: {
   content_category?: string;
   content_ids?: string[];
-  contents?: Array<{ id: string; quantity: number; item_price?: number }>;
+  contents?: FbCommerceContent[];
   currency?: string;
   value?: number;
 }): void {
@@ -394,7 +570,12 @@ export function trackFbAddPaymentInfo(data?: {
 
   // Client-side Pixel
   if (typeof window.fbq === "function") {
-    window.fbq("track", "AddPaymentInfo", data || {}, pixelEventOptions(eventId));
+    window.fbq(
+      "track",
+      "AddPaymentInfo",
+      data || {},
+      pixelEventOptions(eventId),
+    );
   }
 
   sendZarazEcommerce("Payment Info Entered", {
@@ -404,6 +585,8 @@ export function trackFbAddPaymentInfo(data?: {
     total: data?.value,
     value: data?.value,
   });
+
+  bridgeFbCommerceToDataLayer("add_payment_info", data ?? {}, eventId);
 
   // CAPI: Server-side Event
   sendServerEvent({
@@ -422,7 +605,7 @@ export function trackFbPurchase(
     content_ids?: string[];
     content_name?: string;
     content_type?: "product" | "product_group";
-    contents?: Array<{ id: string; quantity: number; item_price?: number }>;
+    contents?: FbCommerceContent[];
     currency: string;
     num_items?: number;
     value: number;
@@ -447,6 +630,8 @@ export function trackFbPurchase(
     products: mapFbContentsToZarazProducts(data.contents, data.content_ids),
     quantity: data.num_items,
   });
+
+  bridgeFbCommerceToDataLayer("purchase", data, eventId);
 
   if (options.sendCapi !== false) {
     // CAPI: Server-side Event
@@ -558,6 +743,16 @@ export function trackFbSearch(data: {
     value: data.value,
   });
 
+  pushDataLayerEvent(
+    "search",
+    {
+      search_term: data.search_string,
+      currency: data.currency,
+      value: data.value,
+    },
+    eventId,
+  );
+
   // CAPI: Server-side Event
   sendServerEvent({
     eventId,
@@ -573,244 +768,236 @@ export function trackFbSearch(data: {
  * Generic GA4 event tracking function.
  * All specific GA4 event functions will use this.
  */
-// GA4 ecommerce parameter values — covers all GA4 e-commerce field types
-type GA4ParamValue = string | number | boolean | undefined | null | ItemParameters | ItemParameters[] | GA4ParamValue[];
-
 function trackGA4Event(
-    eventName: string,
-    parameters: Record<string, GA4ParamValue>,
-  ): void {
-    const dataLayer = getGaDataLayer();
-    dataLayer.push({ ecommerce: null }); // Clear previous ecommerce object (recommended by Google)
-    dataLayer.push({
-      event: eventName,
-      ecommerce: parameters,
-    });
-  }
-  
-  /**
-   * Tracks a view_item_list event for GA4.
-   * When a user is presented with a list of items.
-   */
-  export function trackGA4ViewItemList(data: {
-    item_list_id?: string;
-    item_list_name?: string;
-    items: ItemParameters[];
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("view_item_list", data);
-  }
-  
-  /**
-   * Tracks a select_item event for GA4.
-   * When a user selects an item from a list.
-   */
-  export function trackGA4SelectItem(data: {
-    item_list_id?: string;
-    item_list_name?: string;
-    items: ItemParameters[]; // Typically a single item array
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("select_item", data);
-  }
-  
-  /**
-   * Tracks a view_item event for GA4.
-   * Typically used when a user views a product details page.
-   */
-  export function trackGA4ViewItem(data: {
-    currency?: string;
-    value?: number; // Total value of the items viewed
-    items: ItemParameters[]; // Typically a single item array
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("view_item", data);
-  }
-  
-  /**
-   * Tracks an add_to_cart event for GA4.
-   */
-  export function trackGA4AddToCart(data: {
-    currency?: string;
-    value?: number; // Total value of items added
-    items: ItemParameters[];
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("add_to_cart", data);
-  }
-  
-  /**
-   * Tracks a remove_from_cart event for GA4.
-   */
-  export function trackGA4RemoveFromCart(data: {
-    currency?: string;
-    value?: number; // Total value of items removed
-    items: ItemParameters[];
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("remove_from_cart", data);
-  }
-  
-  /**
-   * Tracks a view_cart event for GA4.
-   */
-  export function trackGA4ViewCart(data: {
-    currency?: string;
-    value?: number; // Total value of the cart
-    items: ItemParameters[];
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("view_cart", data);
-  }
-  
-  /**
-   * Tracks a begin_checkout event for GA4.
-   */
-  export function trackGA4BeginCheckout(data: {
-    currency?: string;
-    value?: number; // Total value of items in checkout
-    coupon?: string;
-    items: ItemParameters[];
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("begin_checkout", data);
-  }
-  
-  /**
-   * Tracks an add_shipping_info event for GA4.
-   */
-  export function trackGA4AddShippingInfo(data: {
-    currency?: string;
-    value?: number; // Often the shipping cost itself, or total value if updated
-    coupon?: string;
-    shipping_tier?: string;
-    items: ItemParameters[]; // Items in the cart/checkout
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("add_shipping_info", data);
-  }
-  
-  /**
-   * Tracks an add_payment_info event for GA4.
-   */
-  export function trackGA4AddPaymentInfo(data: {
-    currency?: string;
-    value?: number; // Total value if updated
-    coupon?: string;
-    payment_type?: string;
-    items: ItemParameters[]; // Items in the cart/checkout
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("add_payment_info", data);
-  }
-  
-  /**
-   * Tracks a purchase event for GA4.
-   */
-  export function trackGA4Purchase(data: {
-    transaction_id: string; // Unique ID for the transaction
-    affiliation?: string;
-    value: number; // Total revenue from the transaction (including tax and shipping)
-    tax?: number;
-    shipping?: number;
-    currency: string;
-    coupon?: string;
-    items: ItemParameters[];
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("purchase", data);
-  }
-  
-  /**
-   * Tracks a refund event for GA4.
-   */
-  export function trackGA4Refund(data: {
-    transaction_id: string; // ID of the original transaction being refunded
-    affiliation?: string;
-    value?: number; // Total refund amount. If refunding specific items, GA4 calculates this from items array.
-    currency?: string;
-    items?: ItemParameters[]; // Recommended to include item details for item-level refund reporting
-    [key: string]: GA4ParamValue;
-  }): void {
-    trackGA4Event("refund", data);
-  }
-  
-  /**
-   * Tracks a search event for GA4.
-   */
-  export function trackGA4Search(data: {
-    search_term: string;
-    [key: string]: GA4ParamValue; // Allow other custom parameters like number_of_results
-  }): void {
-    // GA4 search event does not use the 'ecommerce' object structure typically.
-    // It's a direct event with parameters.
-    const dataLayer = getGaDataLayer();
-    dataLayer.push({
-      event: "search",
-      ...data, // Spread other parameters, including search_term
-    });
-  }
-  
-  /**
-   * Tracks a generate_lead event for GA4 (Recommended Event).
-   */
-  export function trackGA4GenerateLead(data?: {
-    value?: number;
-    currency?: string;
-    [key: string]: GA4ParamValue;
-  }): void {
-    const dataLayer = getGaDataLayer();
-    dataLayer.push({
-      event: "generate_lead",
-      ...(data || {}),
-    });
-  }
-  
-  /**
-   * Tracks a sign_up event for GA4 (Recommended Event).
-   */
-  export function trackGA4SignUp(data: {
-    method?: string; // e.g., "Google", "Email", "Facebook"
-    [key: string]: GA4ParamValue;
-  }): void {
-    const dataLayer = getGaDataLayer();
-    dataLayer.push({
-      event: "sign_up",
-      method: data.method,
-      ...data,
-    });
-  }
-  
-  /**
-   * Tracks a login event for GA4 (Recommended Event).
-   */
-  export function trackGA4Login(data: {
-    method?: string;
-    [key: string]: GA4ParamValue;
-  }): void {
-    const dataLayer = getGaDataLayer();
-    dataLayer.push({
-      event: "login",
-      method: data.method,
-      ...data,
-    });
-  }
-  
-  // It's good practice to also offer a generic page_view for GA4 if not automatically handled by config
-  /**
-   * Tracks a page_view event for GA4.
-   * While gtag.js config usually handles initial page_view, this can be used for SPAs
-   * or when needing to send additional parameters with page_view.
-   */
-  export function trackGA4PageView(data?: {
-    page_title?: string;
-    page_location?: string; // Full URL
-    page_path?: string; // Path part of the URL
-    [key: string]: GA4ParamValue;
-  }): void {
-    const dataLayer = getGaDataLayer();
-    dataLayer.push({
-      event: "page_view",
-      ...(data || {}),
-    });
-  }
+  eventName: string,
+  parameters: Record<string, GA4ParamValue>,
+): void {
+  pushDataLayerEcommerceEvent(eventName, parameters);
+}
+
+/**
+ * Tracks a view_item_list event for GA4.
+ * When a user is presented with a list of items.
+ */
+export function trackGA4ViewItemList(data: {
+  item_list_id?: string;
+  item_list_name?: string;
+  items: ItemParameters[];
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("view_item_list", data);
+}
+
+/**
+ * Tracks a select_item event for GA4.
+ * When a user selects an item from a list.
+ */
+export function trackGA4SelectItem(data: {
+  item_list_id?: string;
+  item_list_name?: string;
+  items: ItemParameters[]; // Typically a single item array
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("select_item", data);
+}
+
+/**
+ * Tracks a view_item event for GA4.
+ * Typically used when a user views a product details page.
+ */
+export function trackGA4ViewItem(data: {
+  currency?: string;
+  value?: number; // Total value of the items viewed
+  items: ItemParameters[]; // Typically a single item array
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("view_item", data);
+}
+
+/**
+ * Tracks an add_to_cart event for GA4.
+ */
+export function trackGA4AddToCart(data: {
+  currency?: string;
+  value?: number; // Total value of items added
+  items: ItemParameters[];
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("add_to_cart", data);
+}
+
+/**
+ * Tracks a remove_from_cart event for GA4.
+ */
+export function trackGA4RemoveFromCart(data: {
+  currency?: string;
+  value?: number; // Total value of items removed
+  items: ItemParameters[];
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("remove_from_cart", data);
+}
+
+/**
+ * Tracks a view_cart event for GA4.
+ */
+export function trackGA4ViewCart(data: {
+  currency?: string;
+  value?: number; // Total value of the cart
+  items: ItemParameters[];
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("view_cart", data);
+}
+
+/**
+ * Tracks a begin_checkout event for GA4.
+ */
+export function trackGA4BeginCheckout(data: {
+  currency?: string;
+  value?: number; // Total value of items in checkout
+  coupon?: string;
+  items: ItemParameters[];
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("begin_checkout", data);
+}
+
+/**
+ * Tracks an add_shipping_info event for GA4.
+ */
+export function trackGA4AddShippingInfo(data: {
+  currency?: string;
+  value?: number; // Often the shipping cost itself, or total value if updated
+  coupon?: string;
+  shipping_tier?: string;
+  items: ItemParameters[]; // Items in the cart/checkout
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("add_shipping_info", data);
+}
+
+/**
+ * Tracks an add_payment_info event for GA4.
+ */
+export function trackGA4AddPaymentInfo(data: {
+  currency?: string;
+  value?: number; // Total value if updated
+  coupon?: string;
+  payment_type?: string;
+  items: ItemParameters[]; // Items in the cart/checkout
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("add_payment_info", data);
+}
+
+/**
+ * Tracks a purchase event for GA4.
+ */
+export function trackGA4Purchase(data: {
+  transaction_id: string; // Unique ID for the transaction
+  affiliation?: string;
+  value: number; // Total revenue from the transaction (including tax and shipping)
+  tax?: number;
+  shipping?: number;
+  currency: string;
+  coupon?: string;
+  items: ItemParameters[];
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("purchase", data);
+}
+
+/**
+ * Tracks a refund event for GA4.
+ */
+export function trackGA4Refund(data: {
+  transaction_id: string; // ID of the original transaction being refunded
+  affiliation?: string;
+  value?: number; // Total refund amount. If refunding specific items, GA4 calculates this from items array.
+  currency?: string;
+  items?: ItemParameters[]; // Recommended to include item details for item-level refund reporting
+  [key: string]: GA4ParamValue;
+}): void {
+  trackGA4Event("refund", data);
+}
+
+/**
+ * Tracks a search event for GA4.
+ */
+export function trackGA4Search(data: {
+  search_term: string;
+  [key: string]: GA4ParamValue; // Allow other custom parameters like number_of_results
+}): void {
+  // GA4 search event does not use the 'ecommerce' object structure typically.
+  // It's a direct event with parameters.
+  const dataLayer = getGaDataLayer();
+  dataLayer.push({
+    event: "search",
+    ...data, // Spread other parameters, including search_term
+  });
+}
+
+/**
+ * Tracks a generate_lead event for GA4 (Recommended Event).
+ */
+export function trackGA4GenerateLead(data?: {
+  value?: number;
+  currency?: string;
+  [key: string]: GA4ParamValue;
+}): void {
+  const dataLayer = getGaDataLayer();
+  dataLayer.push({
+    event: "generate_lead",
+    ...(data || {}),
+  });
+}
+
+/**
+ * Tracks a sign_up event for GA4 (Recommended Event).
+ */
+export function trackGA4SignUp(data: {
+  method?: string; // e.g., "Google", "Email", "Facebook"
+  [key: string]: GA4ParamValue;
+}): void {
+  const dataLayer = getGaDataLayer();
+  dataLayer.push({
+    event: "sign_up",
+    method: data.method,
+    ...data,
+  });
+}
+
+/**
+ * Tracks a login event for GA4 (Recommended Event).
+ */
+export function trackGA4Login(data: {
+  method?: string;
+  [key: string]: GA4ParamValue;
+}): void {
+  const dataLayer = getGaDataLayer();
+  dataLayer.push({
+    event: "login",
+    method: data.method,
+    ...data,
+  });
+}
+
+// It's good practice to also offer a generic page_view for GA4 if not automatically handled by config
+/**
+ * Tracks a page_view event for GA4.
+ * While gtag.js config usually handles initial page_view, this can be used for SPAs
+ * or when needing to send additional parameters with page_view.
+ */
+export function trackGA4PageView(data?: {
+  page_title?: string;
+  page_location?: string; // Full URL
+  page_path?: string; // Path part of the URL
+  [key: string]: GA4ParamValue;
+}): void {
+  const dataLayer = getGaDataLayer();
+  dataLayer.push({
+    event: "page_view",
+    ...(data || {}),
+  });
+}
