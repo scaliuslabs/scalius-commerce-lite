@@ -1,15 +1,17 @@
-import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  lazy,
+  Suspense,
+  useCallback,
+  useState,
+  type ComponentType,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Filter, X } from "lucide-react";
 import { DataTableToolbar } from "./DataTableToolbar";
+import type { DiscountTypeFilterMenuProps } from "./DiscountTypeFilterMenu";
 import { getTypeLabel } from "./columns/discount-columns";
 
 interface DiscountTableToolbarProps {
@@ -22,6 +24,19 @@ interface DiscountTableToolbarProps {
   onTypeFilterChange: (type: string | null) => void;
 }
 
+const LazyDiscountTypeFilterMenu = lazy(async () => {
+  const module = await import("./DiscountTypeFilterMenu");
+  return {
+    default: module.DiscountTypeFilterMenu as ComponentType<
+      DiscountTypeFilterMenuProps
+    >,
+  };
+});
+
+function isMenuOpenKey(key: string) {
+  return key === "Enter" || key === " " || key === "ArrowDown";
+}
+
 export function DiscountTableToolbar({
   searchValue,
   onSearchChange,
@@ -31,36 +46,67 @@ export function DiscountTableToolbar({
   activeType,
   onTypeFilterChange,
 }: DiscountTableToolbarProps) {
+  const [isTypeMenuRequested, setIsTypeMenuRequested] = useState(false);
+  const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
+
+  const requestTypeMenuOpen = useCallback(() => {
+    setIsTypeMenuRequested(true);
+    setIsTypeMenuOpen(true);
+  }, []);
+
+  const handleTypeMenuOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      setIsTypeMenuRequested(true);
+    }
+    setIsTypeMenuOpen(open);
+  }, []);
+
+  const handleTypeTriggerKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (!isMenuOpenKey(event.key)) {
+        return;
+      }
+
+      event.preventDefault();
+      requestTypeMenuOpen();
+    },
+    [requestTypeMenuOpen],
+  );
+
+  const typeFilterTrigger = (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-9"
+      data-state={isTypeMenuOpen ? "open" : undefined}
+      aria-haspopup="menu"
+      aria-expanded={isTypeMenuOpen}
+      onClick={isTypeMenuRequested ? undefined : requestTypeMenuOpen}
+      onKeyDown={isTypeMenuRequested ? undefined : handleTypeTriggerKeyDown}
+    >
+      <Filter className="h-4 w-4 mr-1.5" />
+      Type
+      {activeType ? (
+        <span className="ml-1.5 text-xs text-muted-foreground">(1)</span>
+      ) : null}
+    </Button>
+  );
+
   const typeFilter = (
     <div className="flex items-center gap-2">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9">
-            <Filter className="h-4 w-4 mr-1.5" />
-            Type
-            {activeType ? (
-              <span className="ml-1.5 text-xs text-muted-foreground">(1)</span>
-            ) : null}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuRadioGroup
-            value={activeType || ""}
-            onValueChange={(value) => onTypeFilterChange(value || null)}
-          >
-            <DropdownMenuRadioItem value="">All Types</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="amount_off_products">
-              Amount Off Products
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="amount_off_order">
-              Amount Off Order
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="free_shipping">
-              Free Shipping
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {isTypeMenuRequested ? (
+        <Suspense fallback={typeFilterTrigger}>
+          <LazyDiscountTypeFilterMenu
+            open={isTypeMenuOpen}
+            onOpenChange={handleTypeMenuOpenChange}
+            trigger={typeFilterTrigger}
+            activeType={activeType}
+            onTypeFilterChange={onTypeFilterChange}
+          />
+        </Suspense>
+      ) : (
+        typeFilterTrigger
+      )}
       {activeType ? (
         <Badge
           variant="secondary"

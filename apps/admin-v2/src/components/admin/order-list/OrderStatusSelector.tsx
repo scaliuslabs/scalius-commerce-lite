@@ -1,12 +1,17 @@
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "../../ui/dropdown-menu";
+  lazy,
+  Suspense,
+  useCallback,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { LoaderCircle, ChevronDown } from "lucide-react";
-import { getAvailableTransitions } from "../orderview/types";
+
+const LazyOrderStatusSelectorMenu = lazy(() =>
+  import("./OrderStatusSelectorMenu").then((module) => ({
+    default: module.OrderStatusSelectorMenu,
+  })),
+);
 
 interface OrderStatusSelectorProps {
   status: string;
@@ -108,6 +113,10 @@ function getStatusClasses(status: string) {
   }
 }
 
+function isMenuOpenKey(key: string) {
+  return key === "Enter" || key === " " || key === "ArrowDown";
+}
+
 export function OrderStatusSelector({
   status,
   orderId,
@@ -121,7 +130,11 @@ export function OrderStatusSelector({
     "text-xs font-medium transition-all border px-2.5 py-1 shadow-sm rounded-full";
   const hoverClasses = "hover:shadow-md hover:-translate-y-px";
   const { variantClasses, iconColor, dotColor } = getStatusClasses(status);
-  const canOpenMenu = canChangeStatus && !showTrashed && !isLoading;
+  const [isMenuRequested, setIsMenuRequested] = useState(false);
+  const [open, setOpen] = useState(false);
+  const canRenderMenu = canChangeStatus && !showTrashed;
+  const isMenuOpen = canRenderMenu && open;
+  const canOpenMenu = canRenderMenu && !isLoading;
   const disabledReason = showTrashed
     ? "Deleted orders cannot change status."
     : disabledReasonOverride
@@ -129,58 +142,81 @@ export function OrderStatusSelector({
     : !canChangeStatus
       ? "Status changes require order status permission."
       : undefined;
+  const requestMenuOpen = useCallback(() => {
+    if (!canOpenMenu) {
+      return;
+    }
+
+    setIsMenuRequested(true);
+    setOpen(true);
+  }, [canOpenMenu]);
+
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen) {
+      setIsMenuRequested(true);
+    }
+    setOpen(nextOpen);
+  }, []);
+
+  const handleTriggerKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (!isMenuOpenKey(event.key)) {
+        return;
+      }
+
+      event.preventDefault();
+      requestMenuOpen();
+    },
+    [requestMenuOpen],
+  );
+
+  const trigger = (
+    <button
+      type="button"
+      className={`inline-flex items-center ${baseClasses} ${variantClasses} ${canOpenMenu ? hoverClasses + " cursor-pointer group" : "cursor-default"} ${isLoading ? "opacity-75 animate-pulse" : ""}`}
+      aria-haspopup="menu"
+      aria-expanded={isMenuOpen}
+      aria-label={
+        canOpenMenu
+          ? `Current status: ${status}. Click to change status.`
+          : `Current status: ${status}. ${disabledReason ?? "Status change unavailable."}`
+      }
+      title={disabledReason}
+      data-state={isMenuOpen ? "open" : undefined}
+      disabled={!canOpenMenu}
+      onClick={isMenuRequested ? undefined : requestMenuOpen}
+      onKeyDown={isMenuRequested ? undefined : handleTriggerKeyDown}
+    >
+      {isLoading ? (
+        <LoaderCircle className={`animate-spin mr-1.5 h-3 w-3 ${iconColor}`} />
+      ) : (
+        <span
+          className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${dotColor}`}
+        ></span>
+      )}
+      {status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+      {canOpenMenu && (
+        <ChevronDown className="ml-1 h-3 w-3 opacity-70 group-hover:opacity-100 transition-opacity" />
+      )}
+    </button>
+  );
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild disabled={!canOpenMenu}>
-        <button
-          type="button"
-          className={`inline-flex items-center ${baseClasses} ${variantClasses} ${canOpenMenu ? hoverClasses + " cursor-pointer group" : "cursor-default"} ${isLoading ? "opacity-75 animate-pulse" : ""}`}
-          aria-label={
-            canOpenMenu
-              ? `Current status: ${status}. Click to change status.`
-              : `Current status: ${status}. ${disabledReason ?? "Status change unavailable."}`
-          }
-          title={disabledReason}
-        >
-          {isLoading ? (
-            <LoaderCircle
-              className={`animate-spin mr-1.5 h-3 w-3 ${iconColor}`}
-            />
-          ) : (
-            <span
-              className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${dotColor}`}
-            ></span>
-          )}
-          {status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
-          {canOpenMenu && (
-            <ChevronDown className="ml-1 h-3 w-3 opacity-70 group-hover:opacity-100 transition-opacity" />
-          )}
-        </button>
-      </DropdownMenuTrigger>
-      {canChangeStatus && !showTrashed && (
-        <DropdownMenuContent align="start" className="w-48">
-          <DropdownMenuRadioGroup
-            value={status}
-            onValueChange={(newStatus) => onStatusUpdate(orderId, newStatus)}
-          >
-            {getAvailableTransitions(status).map((s) => (
-              <DropdownMenuRadioItem
-                key={s}
-                value={s}
-                className="text-xs cursor-pointer hover:bg-[var(--muted)]"
-              >
-                {s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
-              </DropdownMenuRadioItem>
-            ))}
-            {getAvailableTransitions(status).length === 0 && (
-              <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                No transitions available (terminal state)
-              </div>
-            )}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
+    <>
+      {isMenuRequested && canRenderMenu ? (
+        <Suspense fallback={trigger}>
+          <LazyOrderStatusSelectorMenu
+            status={status}
+            orderId={orderId}
+            open={isMenuOpen}
+            onOpenChange={handleOpenChange}
+            onStatusUpdate={onStatusUpdate}
+            trigger={trigger}
+          />
+        </Suspense>
+      ) : (
+        trigger
       )}
-    </DropdownMenu>
+    </>
   );
 }
