@@ -1422,6 +1422,12 @@ describe("admin route graph boundaries", () => {
     expect(menuBarSource).toContain('aria-label="Insert link"');
     expect(menuBarSource).toContain('aria-label="Insert image URL"');
     expect(menuBarSource).toContain('aria-label="Embed video"');
+    expect(menuBarSource).toContain('triggerLabel="Media Library"');
+    expect(menuBarSource).toContain("trigger={");
+    expect(menuBarSource).toContain('tooltip="Media Library"');
+    expect(menuBarSource).not.toContain("document.getElementById");
+    expect(menuBarSource).not.toContain("tiptap-media-manager-wrapper");
+    expect(menuBarSource).not.toContain('querySelector("button")?.click()');
   });
 
   it("keeps order payment history failures local to the payment card", () => {

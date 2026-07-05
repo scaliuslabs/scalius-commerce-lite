@@ -1,14 +1,15 @@
+import type { MouseEventHandler, ReactNode } from "react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "../button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../tooltip";
 
 interface ToolbarButtonProps {
-  onClick: () => void;
+  onClick: MouseEventHandler<HTMLButtonElement>;
   isActive?: boolean;
   disabled?: boolean;
   tooltip: string;
   buttonSize: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function ToolbarButton({
