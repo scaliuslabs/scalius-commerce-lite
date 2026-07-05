@@ -24,11 +24,9 @@ import {
   useRestoreCustomer,
   useBulkDeleteCustomers,
 } from "~/lib/api-mutations/customers";
-import {
-  DataTable,
-  DataTableToolbar,
-  useServerTable,
-} from "~/components/admin/data-table";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
+import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getCustomerColumns } from "~/components/admin/data-table/columns/customer-columns";
 import type { Customer } from "~/types/api-responses";
 

@@ -138,6 +138,20 @@ describe("admin route graph boundaries", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps admin routes off the broad data-table barrel", () => {
+    const offenders = listSourceFiles(join(ADMIN_SRC_ROOT, "routes", "admin"))
+      .map((path) => ({
+        path: relative(ADMIN_SRC_ROOT, path),
+        source: readFileSync(path, "utf8"),
+      }))
+      .filter(({ source }) =>
+        /from\s+["'](?:[@~]\/components\/admin\/data-table)["']/.test(source),
+      )
+      .map(({ path }) => path);
+
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps notification settings UI off the backend notifications barrel", () => {
     const notificationSource = readFileSync(
       join(

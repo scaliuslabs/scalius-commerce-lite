@@ -35,7 +35,8 @@ import {
   useRestoreOrder,
 } from "~/lib/api-mutations/orders";
 import { useCurrency } from "~/hooks/use-currency";
-import { useServerTable, DataTable } from "~/components/admin/data-table";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getOrderColumns } from "~/components/admin/data-table/columns/order-columns";
 import { OrderToolbar } from "~/components/admin/data-table/toolbars/OrderToolbar";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";

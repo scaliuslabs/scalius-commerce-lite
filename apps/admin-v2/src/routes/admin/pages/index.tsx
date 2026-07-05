@@ -24,11 +24,9 @@ import {
   useRestorePage,
   useBulkDeletePages,
 } from "~/lib/api-mutations/pages";
-import {
-  DataTable,
-  DataTableToolbar,
-  useServerTable,
-} from "~/components/admin/data-table";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
+import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getPageColumns } from "~/components/admin/data-table/columns/page-columns";
 import type { Page } from "~/types/api-responses";
 

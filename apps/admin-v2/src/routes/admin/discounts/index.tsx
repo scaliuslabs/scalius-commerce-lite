@@ -20,10 +20,8 @@ import {
   useToggleDiscountStatus,
   useBulkDeleteDiscounts,
 } from "~/lib/api-mutations/discounts";
-import {
-  DataTable,
-  useServerTable,
-} from "~/components/admin/data-table";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { DiscountTableToolbar } from "~/components/admin/data-table/DiscountTableToolbar";
 import {
   getDiscountColumns,
