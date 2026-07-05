@@ -1530,6 +1530,57 @@ describe("admin route graph boundaries", () => {
     expect(notificationsSource).toContain("recorded attempt");
   });
 
+  it("keeps order detail low-priority panels behind lazy boundaries", () => {
+    const orderViewPath = join(ADMIN_SRC_ROOT, "components", "admin", "OrderView.tsx");
+    const orderViewSource = readFileSync(orderViewPath, "utf8");
+    const supportPath = join(
+      ADMIN_SRC_ROOT,
+      "components",
+      "admin",
+      "orderview",
+      "OrderSupportRequestsCard.tsx",
+    );
+    const notificationsPath = join(
+      ADMIN_SRC_ROOT,
+      "components",
+      "admin",
+      "orderview",
+      "OrderNotificationsCard.tsx",
+    );
+    const paymentPath = join(
+      ADMIN_SRC_ROOT,
+      "components",
+      "admin",
+      "orderview",
+      "PaymentCard.tsx",
+    );
+    const shipmentPath = join(
+      ADMIN_SRC_ROOT,
+      "components",
+      "admin",
+      "orderview",
+      "ShipmentCard.tsx",
+    );
+
+    expect(orderViewSource).toContain("const LazyOrderSupportRequestsCard = lazy(");
+    expect(orderViewSource).toContain('import("./orderview/OrderSupportRequestsCard")');
+    expect(orderViewSource).toContain("(order.supportRequests?.length ?? 0) > 0");
+    expect(orderViewSource).toContain("const LazyOrderNotificationsCard = lazy(");
+    expect(orderViewSource).toContain('import("./orderview/OrderNotificationsCard")');
+    expect(orderViewSource).toContain('import { PaymentCard } from "./orderview/PaymentCard"');
+    expect(orderViewSource).toContain('import { ShipmentCard } from "./orderview/ShipmentCard"');
+    expect(orderViewSource).not.toContain(
+      'import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard"',
+    );
+    expect(orderViewSource).not.toContain(
+      'import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard"',
+    );
+    expect(findStaticImportPathToTarget(orderViewPath, supportPath)).toBeNull();
+    expect(findStaticImportPathToTarget(orderViewPath, notificationsPath)).toBeNull();
+    expect(findStaticImportPathToTarget(orderViewPath, paymentPath)).not.toBeNull();
+    expect(findStaticImportPathToTarget(orderViewPath, shipmentPath)).not.toBeNull();
+  });
+
   it("keeps order-detail refund recovery context as the payment-card fallback", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),

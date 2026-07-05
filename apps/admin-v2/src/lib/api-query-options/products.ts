@@ -6,12 +6,14 @@ import {
   getProductStats,
   getProductVariants,
   getVariantSortOrder,
+  type ProductsByIdsPayload,
   type ProductsQueryInput,
 } from "../api-functions/products";
 import { queryKeys } from "../query-keys";
 
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
+const EMPTY_PRODUCTS_BY_IDS: ProductsByIdsPayload = { products: [] };
 
 function normalizeLookupIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
@@ -30,8 +32,9 @@ export const productsByIdsQueryOptions = (ids: readonly string[]) => {
     queryKey: queryKeys.products.byIds(normalizedIds),
     queryFn: () =>
       normalizedIds.length === 0
-        ? Promise.resolve({ products: [] })
+        ? Promise.resolve(EMPTY_PRODUCTS_BY_IDS)
         : getProductsByIds({ data: { ids: normalizedIds } }),
+    placeholderData: EMPTY_PRODUCTS_BY_IDS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 };

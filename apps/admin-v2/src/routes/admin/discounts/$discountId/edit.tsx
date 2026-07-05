@@ -11,7 +11,7 @@ import {
   productsByIdsQueryOptions,
 } from "~/lib/api-query-options/products";
 import type { Discount } from "~/types/api-responses";
-import type { Product, Collection } from "~/components/admin/discount/amount-off-products/types";
+import type { Collection } from "~/components/admin/discount/amount-off-products/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
 import {
@@ -200,7 +200,7 @@ function AmountOffProductsEditor({
     enabled: allCollectionIds.length > 0,
   });
   const productsMap = new Map(
-    ((productsData as { products?: Product[] }).products || []).map((product) => [
+    (productsData?.products ?? []).map((product) => [
       product.id,
       product,
     ]),
@@ -209,8 +209,7 @@ function AmountOffProductsEditor({
     (productId) => productsMap.get(productId) ?? { id: productId, name: productId, price: 0 },
   );
   const collectionsMap = new Map(
-    ((collectionsData as { collections?: Array<{ id: string; name: string; type?: string }> })
-      .collections || []).map((collection) => [collection.id, collection]),
+    (collectionsData?.collections ?? []).map((collection) => [collection.id, collection]),
   );
   const selectedCollections: Collection[] = allCollectionIds.map((collectionId: string) => {
     const found = collectionsMap.get(collectionId);

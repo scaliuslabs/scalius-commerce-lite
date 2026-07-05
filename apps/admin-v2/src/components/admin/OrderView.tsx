@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "./ErrorBoundary";
 import type { Order } from "./orderview/types";
@@ -9,8 +10,18 @@ import { OrderStatusCard } from "./orderview/OrderStatusCard";
 import { ShipmentCard } from "./orderview/ShipmentCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
 import { PaymentCard } from "./orderview/PaymentCard";
-import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
-import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard";
+
+const LazyOrderSupportRequestsCard = lazy(() =>
+  import("./orderview/OrderSupportRequestsCard").then((module) => ({
+    default: module.OrderSupportRequestsCard,
+  })),
+);
+
+const LazyOrderNotificationsCard = lazy(() =>
+  import("./orderview/OrderNotificationsCard").then((module) => ({
+    default: module.OrderNotificationsCard,
+  })),
+);
 
 interface OrderViewProps {
   order: Order;
@@ -28,9 +39,15 @@ export function OrderView({ order }: OrderViewProps) {
           {/* Left Column for Status, Payment, Shipments, and Notes */}
           <div className="space-y-4 lg:col-span-4">
             <OrderStatusCard order={order} />
-            <OrderSupportRequestsCard order={order} />
+            {(order.supportRequests?.length ?? 0) > 0 && (
+              <Suspense fallback={<OrderPanelSkeleton heightClassName="h-32" />}>
+                <LazyOrderSupportRequestsCard order={order} />
+              </Suspense>
+            )}
             <PaymentCard order={order} />
-            <OrderNotificationsCard order={order} />
+            <Suspense fallback={<OrderPanelSkeleton heightClassName="h-40" />}>
+              <LazyOrderNotificationsCard order={order} />
+            </Suspense>
             <ShipmentCard order={order} />
             <OrderNotesCard order={order} />
           </div>
@@ -44,4 +61,8 @@ export function OrderView({ order }: OrderViewProps) {
     </TooltipProvider>
     </ErrorBoundary>
   );
+}
+
+function OrderPanelSkeleton({ heightClassName }: { heightClassName: string }) {
+  return <div className={`${heightClassName} rounded-lg border border-border bg-muted/40`} />;
 }
