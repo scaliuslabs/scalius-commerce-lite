@@ -28,7 +28,7 @@ import { Button } from "../button";
 import { Input } from "../input";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../tooltip";
-import { MediaManager } from "@/components/admin/media-manager";
+import { MediaManager } from "~/components/admin/media-manager";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ToolbarButton } from "./ToolbarButton";
 import { TiptapTablePopover } from "./TiptapTablePopover";
@@ -221,27 +221,21 @@ export const TiptapMenuBar = ({
           </PopoverContent>
         </Popover>
 
-        {/* Media Manager mapped via DOM interaction to avoid breaking Radix Tooltip composition */}
-        <ToolbarButton
-          onClick={() => {
-            const wrapper = document.getElementById("tiptap-media-manager-wrapper");
-            wrapper?.querySelector("button")?.click();
-          }}
-          tooltip="Media Library"
-          buttonSize={buttonSize}
-        >
-          <FolderOpen className={iconSize} />
-        </ToolbarButton>
-
-        {/* Hidden Media Manager trigger (No onClick bubble traps!) */}
-        <div id="tiptap-media-manager-wrapper" className="hidden">
-          <MediaManager
-            onSelect={handleMediaSelect}
-            triggerLabel="Hidden"
-            acceptedFileTypes="image/*"
-            dialogClassName={isFullscreen ? "z-[10001] !important" : undefined}
-          />
-        </div>
+        <MediaManager
+          onSelect={handleMediaSelect}
+          triggerLabel="Media Library"
+          acceptedFileTypes="image/*"
+          dialogClassName={isFullscreen ? "z-[10001] !important" : undefined}
+          trigger={
+            <ToolbarButton
+              onClick={() => undefined}
+              tooltip="Media Library"
+              buttonSize={buttonSize}
+            >
+              <FolderOpen className={iconSize} />
+            </ToolbarButton>
+          }
+        />
 
         {/* Video */}
         <Popover open={videoOpen} onOpenChange={setVideoOpen}>
