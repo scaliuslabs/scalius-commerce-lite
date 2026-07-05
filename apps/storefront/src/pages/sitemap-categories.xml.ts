@@ -3,7 +3,11 @@
  * Contains all category pages
  */
 
-import { generateSitemap, getSitemapHeaders } from '@/lib/sitemap-utils';
+import {
+  generateSitemap,
+  getSitemapHeaders,
+  xmlDataUnavailableResponse,
+} from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getAllCategories } from '@/lib/api/categories';
 import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
@@ -18,7 +22,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
 
     if (!categories) {
       console.error('Failed to fetch categories for sitemap');
-      return new Response('Failed to fetch categories', { status: 500 });
+      return xmlDataUnavailableResponse('Category sitemap is temporarily unavailable');
     }
 
     const categoryUrls: SitemapUrl[] = categories.map((category) => ({
@@ -36,6 +40,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
     });
   } catch (error: unknown) {
     console.error('Error generating categories sitemap:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return xmlDataUnavailableResponse('Category sitemap is temporarily unavailable');
   }
 };

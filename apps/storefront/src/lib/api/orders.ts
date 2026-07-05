@@ -139,10 +139,11 @@ export async function createOrder(
             : {}),
         },
         body: JSON.stringify(payload),
+        cache: "no-store",
       },
       0, // Do not retry the actual creation to prevent double ingestion
       15000,
-      true,
+      false,
     );
 
     const data = await response.json() as {
@@ -187,7 +188,7 @@ export async function createOrder(
       for (let i = 0; i < pollIntervals.length; i++) {
         await new Promise(resolve => setTimeout(resolve, pollIntervals[i]));
 
-        const statusRes = await fetchWithRetry(createApiUrl(`/orders/status/${checkoutToken}`), {}, 2, 5000, true);
+        const statusRes = await fetchWithRetry(createApiUrl(`/orders/status/${checkoutToken}`), {}, 2, 5000, false);
 
         if (statusRes.ok) {
           const statusJson = (await statusRes.json()) as OrderStatusPayload;
@@ -239,10 +240,11 @@ export async function validateCartItems(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items, ...options }),
+        cache: "no-store",
       },
       1,
       8000,
-      true,
+      false,
     );
 
     const json = await response.json() as {
@@ -288,7 +290,7 @@ export async function getOrderReceipt(
       {},
       2,
       5000,
-      true,
+      false,
     );
     if (!response.ok) return null;
 

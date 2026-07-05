@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
 const { slug } = Astro.params;
@@ -66,6 +67,13 @@ setRuntimeImageCdnPolicy(layoutData?.media);
 const page = pageRenderData?.page ?? null;
 if (!page) {
   return new Response(null, { status: 404 });
+}
+if (!layoutData) {
+  const response = storefrontDataUnavailableResponse(
+    "We could not load this page. Please try again shortly.",
+  );
+  response.headers.set("X-Storefront-Data-State", "unavailable");
+  return response;
 }
 const pageWidgets = pageRenderData?.widgets ?? [];
 

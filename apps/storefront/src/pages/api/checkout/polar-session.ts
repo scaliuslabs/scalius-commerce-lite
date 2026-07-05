@@ -1,5 +1,5 @@
 // src/pages/api/checkout/polar-session.ts
-// Server-side proxy: initializes a Polar checkout session via the backend.
+// Server-side proxy: initializes a Polar checkout session via the public backend route.
 
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
@@ -29,10 +29,11 @@ export const POST: APIRoute = async ({ request }) => {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
+                cache: "no-store",
             },
             0,     // retries; hosted session creation is explicit-user-action only
             PAYMENT_SESSION_PROXY_TIMEOUT_MS,
-            true,  // requiresAuth
+            false,
         );
 
         const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: unknown };

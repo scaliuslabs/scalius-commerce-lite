@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,7 +29,7 @@ export function ScannerTokenGenerator() {
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
 
-  // Generate QR code when token changes
+  // Generate QR code when token changes, keeping the QR runtime off first paint.
   useEffect(() => {
     if (!token) {
       setQrDataUrl(null);
@@ -40,17 +39,30 @@ export function ScannerTokenGenerator() {
 
     const url = `${window.location.origin}/scanner?token=${token}`;
     setScannerUrl(url);
+    setQrDataUrl(null);
 
-    QRCode.toDataURL(url, {
-      width: 280,
-      margin: 2,
-      color: { dark: "#000000", light: "#ffffff" },
-    })
-      .then(setQrDataUrl)
+    let active = true;
+
+    void import("qrcode")
+      .then(({ toDataURL }) =>
+        toDataURL(url, {
+          width: 280,
+          margin: 2,
+          color: { dark: "#000000", light: "#ffffff" },
+        }),
+      )
+      .then((dataUrl) => {
+        if (active) setQrDataUrl(dataUrl);
+      })
       .catch(() => {
+        if (!active) return;
         setQrDataUrl(null);
         toast.error("Failed to generate QR code");
       });
+
+    return () => {
+      active = false;
+    };
   }, [token]);
 
   // Countdown timer

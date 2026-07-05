@@ -79,5 +79,15 @@ describe("checkout payment-session proxies", () => {
     });
     expect(json).not.toHaveProperty("gatewayUrl");
     expect(json).not.toHaveProperty("clientSecret");
+    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
+      expect.stringMatching(/\/payment\/(?:stripe\/intent|sslcommerz\/session|polar\/session)$/),
+      expect.objectContaining({
+        method: "POST",
+        cache: "no-store",
+      }),
+      0,
+      15000,
+      false,
+    );
   });
 });

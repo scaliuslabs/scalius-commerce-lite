@@ -1,5 +1,5 @@
 // src/pages/api/checkout/stripe-intent.ts
-// Server-side proxy: creates a Stripe PaymentIntent via the backend.
+// Server-side proxy: creates a Stripe PaymentIntent via the public backend route.
 
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
@@ -28,10 +28,11 @@ export const POST: APIRoute = async ({ request }) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        cache: "no-store",
       },
       0,
       PAYMENT_SESSION_PROXY_TIMEOUT_MS,
-      true,
+      false,
     );
 
     const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: unknown };

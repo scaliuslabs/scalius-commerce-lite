@@ -248,11 +248,12 @@ describe("checkout create-order proxy Origin guard", () => {
       "https://api.example.test/api/v1/payment/sslcommerz/session",
       expect.objectContaining({
         method: "POST",
+        cache: "no-store",
         body: JSON.stringify({ orderId: "order_1", receiptToken: "receipt_1" }),
       }),
       0,
       15000,
-      true,
+      false,
     );
     expect(json.data?.initialPaymentSession).toEqual({
       gateway: "sslcommerz",

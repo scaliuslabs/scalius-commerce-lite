@@ -211,6 +211,14 @@ describe("storefront page data boundaries", () => {
       `${STOREFRONT_SRC_ROOT}/pages/categories/[slug].astro`,
       "utf8",
     );
+    const cmsPageSource = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/[slug].astro`,
+      "utf8",
+    );
+    const collectionSource = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/collections/[id].astro`,
+      "utf8",
+    );
 
     expect(homepageSource).toContain("storefrontDataUnavailableResponse");
     expect(homepageSource).toContain("if (!layoutData || !homepageData)");
@@ -227,6 +235,16 @@ describe("storefront page data boundaries", () => {
     );
     expect(categorySource).toContain(
       "const response = storefrontDataUnavailableResponse(\n      \"We could not load this category. Please try again shortly.\"",
+    );
+    expect(cmsPageSource).toContain("storefrontDataUnavailableResponse");
+    expect(cmsPageSource).toContain("if (!layoutData)");
+    expect(cmsPageSource).toContain(
+      "const response = storefrontDataUnavailableResponse(\n    \"We could not load this page. Please try again shortly.\"",
+    );
+    expect(collectionSource).toContain("storefrontDataUnavailableResponse");
+    expect(collectionSource).toContain("if (!layoutData)");
+    expect(collectionSource).toContain(
+      "const response = storefrontDataUnavailableResponse(\n    \"We could not load this collection. Please try again shortly.\"",
     );
   });
 

@@ -445,6 +445,37 @@ describe("admin route graph boundaries", () => {
     expect(twoFactorSetupSource).not.toMatch(/from\s+["']qrcode["']/);
   });
 
+  it("keeps admin QR generators behind token/TOTP interaction boundaries", () => {
+    const accountTwoFactorSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "account-settings",
+        "TwoFactorSetup.tsx",
+      ),
+      "utf8",
+    );
+    const scannerTokenSource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "settings",
+        "ScannerTokenGenerator.tsx",
+      ),
+      "utf8",
+    );
+
+    for (const source of [accountTwoFactorSource, scannerTokenSource]) {
+      expect(source).toContain('import("qrcode")');
+      expect(source).toContain("toDataURL");
+      expect(source).not.toMatch(/from\s+["']qrcode["']/);
+    }
+    expect(accountTwoFactorSource).toContain("if (!totpUri)");
+    expect(scannerTokenSource).toContain("if (!token)");
+  });
+
   it("keeps post-auth success navigation inside the hydrated router", () => {
     const loginFormSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "auth", "LoginForm.tsx"),

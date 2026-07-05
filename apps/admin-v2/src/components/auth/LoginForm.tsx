@@ -110,7 +110,6 @@ export function LoginForm() {
               <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="email"
-                name="email"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -138,7 +137,6 @@ export function LoginForm() {
               <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="password"
-                name="password"
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
