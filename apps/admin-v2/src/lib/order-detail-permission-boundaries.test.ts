@@ -52,6 +52,9 @@ describe("order detail permission boundaries", () => {
     const supportRequestsSource = readRepoFile(
       "apps/admin-v2/src/components/admin/orderview/OrderSupportRequestsCard.tsx",
     );
+    const orderDetailRouteSource = readRepoFile(
+      "apps/admin-v2/src/routes/admin/orders/$orderId/index.tsx",
+    );
 
     expect(headerSource).toContain("useOrderActionPermissions");
     expect(headerSource).toContain("orderActions.canManageOrderShipments");
@@ -62,6 +65,13 @@ describe("order detail permission boundaries", () => {
 
     expect(paymentSource).toContain("orderActions.canUpdateOrderCod");
     expect(paymentSource).toContain("orderActions.canRefundOrders");
+    expect(paymentSource).toContain("orderActions.canEditOrders");
+    expect(paymentSource).toContain("useIssueOrderPaymentRecoveryLink");
+    expect(paymentSource).toContain('RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz", "polar"])');
+    expect(paymentSource).toContain("paymentRecovery?.canIssueRecoveryLink === true");
+    expect(paymentSource).toContain("Copy recovery link");
+    expect(paymentSource).toContain("copyRecoveryUrlToClipboard(recoveryLink.url)");
+    expect(orderDetailRouteSource).toContain("paymentRecovery: order.paymentRecovery");
 
     expect(shipmentSource).toContain("useOrderActionPermissions");
     expect(shipmentSource).toContain("orderActions.canManageOrderShipments");

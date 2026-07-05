@@ -5,6 +5,7 @@ import {
   createFulfillmentShipment,
   createOrder,
   createOrderShipment,
+  issueOrderPaymentRecoveryLink,
   reconcileRefundAttempt,
   refundOrder,
   reconcileShipment,
@@ -21,6 +22,7 @@ import {
   type CreateFulfillmentShipmentInput,
   type CreateOrderInput,
   type CreateOrderShipmentInput,
+  type IssueOrderPaymentRecoveryLinkInput,
   type RefundOrderInput,
   type ReconcileShipmentInput,
   type ReconcileRefundAttemptInput,
@@ -172,6 +174,25 @@ export function useRefundOrder() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to process refund")),
+  });
+}
+
+export function useIssueOrderPaymentRecoveryLink() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: IssueOrderPaymentRecoveryLinkInput) =>
+      issueOrderPaymentRecoveryLink({ data }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.payments(variables.orderId),
+      });
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to create recovery link")),
   });
 }
 

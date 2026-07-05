@@ -208,6 +208,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/orders/payment-recovery/export": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
+  "/api/v1/admin/orders/*/payment-recovery-link": {
+    POST: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
   "/api/v1/admin/orders/*": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     PUT: { permission: PERMISSIONS.ORDERS_EDIT },

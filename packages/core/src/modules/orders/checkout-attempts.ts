@@ -1,11 +1,10 @@
 import type { Database } from "@scalius/database/client";
 import { checkoutAttempts } from "@scalius/database/schema";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import type { CreateStorefrontOrderInput } from "./orders.types";
-import { recordOrderReceipt } from "./order-receipts";
+import { createOrderReceiptToken, recordOrderReceipt } from "./order-receipts";
 
 export interface CheckoutAttemptIdentity {
   requestKey: string;
@@ -317,7 +316,7 @@ function createCheckoutAttemptClaimId(): string {
 }
 
 function createCheckoutToken(): string {
-  return `chk_${nanoid()}`;
+  return createOrderReceiptToken();
 }
 
 function normalizeCheckoutRequestId(value: string): string {

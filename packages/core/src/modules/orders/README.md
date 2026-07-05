@@ -209,6 +209,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | PUT | `/:id/status` | `updateOrderStatus()` | Status change with inventory + COD paid-state guard + notifications |
 | GET | `/:id/items` | direct query | Items with product details and images |
 | GET | `/:id/payments` | direct query | Order payments + payment plan |
+| POST | `/:id/payment-recovery-link` | `createOrderPaymentRecoveryLink()` | Issue an RBAC-gated SSLCommerz/Polar private receipt recovery URL without provider calls |
 | GET | `/:id/cod` | direct query | COD tracking record |
 | POST | `/:id/cod` | `processCodAction()` | COD collected/failed/returned |
 | GET | `/:id/fulfill` | `getOrderShipments()` | Fulfillment shipments |
@@ -227,6 +228,8 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 Bulk provider shipment creation uses a durable order-level shipment claim (`orders.shipmentClaimId` / `orders.shipmentClaimExpiresAt`) linked to the insert-first `delivery_shipments` row. Admin order mutations, status changes, manual fulfillment, COD actions, refunds, returns, public payment-session creation, shipment refresh/deletion, and cleanup must reject or skip active claims. Queue/webhook paths must surface retryable failures so external payment or delivery truth is not acknowledged while shipment creation is being finalized. Provider success with failed local finalization leaves the shipment in `reconcile_required` and keeps the order claim active until `reconcileOrderShipment()` repairs local order status, inventory state, shipment status, and then clears only the matching claim. The repair path must use persisted provider evidence on the shipment; it must not create another provider shipment.
 
 Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/delete/refresh/bulk delete/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true. Shipment managers may run the explicit repair action from the recovery notice; view-only users only see the operator copy.
+
+Admin hosted-payment recovery link issuance is intentionally narrow. `POST /api/v1/admin/orders/{id}/payment-recovery-link` is gated by `orders.edit`, supports only SSLCommerz and Polar because those are the receipt-page retry gateways, validates local order/payment/session/shipment evidence before minting proof, stores only the `order_receipts` token hash in D1, and writes the existing `order_receipt:{token}` KV hint only after the full storefront URL can be built. It must not call payment providers, enqueue jobs, or expose raw receipt tokens anywhere except the one returned private URL.
 
 ### Admin Shipments (`/api/v1/admin/shipments`)
 

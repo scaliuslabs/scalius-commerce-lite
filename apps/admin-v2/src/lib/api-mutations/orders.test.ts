@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const reactQueryMocks = vi.hoisted(() => {
   const queryClient = {
@@ -33,6 +33,7 @@ vi.mock("../api-functions/orders", () => ({
   createFulfillmentShipment: vi.fn(),
   createOrder: vi.fn(),
   createOrderShipment: vi.fn(),
+  issueOrderPaymentRecoveryLink: vi.fn(),
   reconcileRefundAttempt: vi.fn(),
   refundOrder: vi.fn(),
   resendOrderNotification: vi.fn(),
@@ -46,8 +47,12 @@ vi.mock("../api-functions/orders", () => ({
 }));
 
 import { queryKeys } from "../query-keys";
-import { resendOrderNotification } from "../api-functions/orders";
 import {
+  issueOrderPaymentRecoveryLink,
+  resendOrderNotification,
+} from "../api-functions/orders";
+import {
+  useIssueOrderPaymentRecoveryLink,
   useReconcileRefundAttempt,
   useResendOrderNotification,
   useRetryOrderNotification,
@@ -58,6 +63,10 @@ type MutationOptions = {
   mutationFn?: (variables: unknown) => unknown;
   onSuccess?: (data: unknown, variables: { orderId: string }) => void;
 };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("order COD mutations", () => {
   it("invalidates order list, detail, payments, and COD queries after successful COD actions", () => {
@@ -136,5 +145,36 @@ describe("order refund recovery mutations", () => {
       queryKey: queryKeys.orders.payments("ord_123"),
     });
     expect(toastMocks.success).toHaveBeenCalledWith("Refund recovery finalized");
+  });
+});
+
+describe("order payment recovery link mutations", () => {
+  it("issues recovery links without success-toasting the private URL", () => {
+    const mutation = useIssueOrderPaymentRecoveryLink() as MutationOptions;
+    const variables = { orderId: "ord_123" };
+
+    mutation.mutationFn?.(variables);
+    mutation.onSuccess?.(
+      {
+        orderId: "ord_123",
+        url: "https://storefront.test/order-success?token=private",
+        expiresAt: 1_800_000_000,
+      },
+      variables,
+    );
+
+    expect(issueOrderPaymentRecoveryLink).toHaveBeenCalledWith({
+      data: variables,
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.list(),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail("ord_123"),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.payments("ord_123"),
+    });
+    expect(toastMocks.success).not.toHaveBeenCalled();
   });
 });

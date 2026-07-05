@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { checkoutAttempts, orderReceipts } from "@scalius/database/schema";
 import {
+  createOrderReceiptToken,
   hashOrderReceiptToken,
   recordOrderReceipt,
   validateOrderReceiptProof,
@@ -66,6 +67,10 @@ function createReceiptDb(options: {
 }
 
 describe("order receipts", () => {
+  it("creates private receipt tokens with the checkout receipt prefix", () => {
+    expect(createOrderReceiptToken()).toMatch(/^chk_/);
+  });
+
   it("records receipt proof with a token hash only", async () => {
     const { db, inserted } = createReceiptDb();
 
