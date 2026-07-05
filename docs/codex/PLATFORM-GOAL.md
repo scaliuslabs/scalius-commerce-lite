@@ -41,3 +41,4 @@ A stable release is credible only when:
 - When an external setup blocks proof, record the exact blocker, required owner action, and safe verification command, then move to the next code-owned risk instead of inventing speculative complexity.
 - Commit after a meaningful verified achievement. Keep unfinished exploratory edits out of unrelated commits.
 - If a context file grows because the codebase is confusing, prefer making the code/test boundary clearer over adding more prose.
+- Keep root agent context as an index. Add detailed guidance only to focused docs or code-adjacent README files with a clear owner, verification note, and removal path when the rule becomes enforceable in code/tests.
