@@ -16,11 +16,9 @@ import {
   useRestoreWidget,
   useBulkDeleteWidgets,
 } from "~/lib/api-mutations/widgets";
-import {
-  DataTable,
-  DataTableToolbar,
-  useServerTable,
-} from "~/components/admin/data-table";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
+import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getWidgetColumns } from "~/components/admin/data-table/columns/widget-columns";
 import type { Widget, WidgetListResponse } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";

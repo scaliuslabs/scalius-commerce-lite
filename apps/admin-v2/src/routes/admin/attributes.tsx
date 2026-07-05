@@ -13,11 +13,9 @@ import {
   useRestoreAttribute,
   useBulkDeleteAttributes,
 } from "~/lib/api-mutations/attributes";
-import {
-  DataTable,
-  DataTableToolbar,
-  useServerTable,
-} from "~/components/admin/data-table";
+import { DataTable } from "~/components/admin/data-table/DataTable";
+import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
+import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import {
   getAttributeColumns,
   type AttributeItem,
