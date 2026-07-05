@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, relative } from "node:path";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
@@ -373,6 +373,19 @@ describe("admin route graph boundaries", () => {
 
     expect(source).toContain("queryKeys.customers.list()");
     expect(source).toContain("queryKeys.dashboard.all");
+  });
+
+  it("keeps the dashboard chart off Recharts and the shared chart wrapper", () => {
+    const source = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "DashboardChart.tsx"),
+      "utf8",
+    );
+
+    expect(source).not.toMatch(/from\s+["']recharts["']/);
+    expect(source).not.toContain("@/components/ui/chart");
+    expect(
+      existsSync(join(ADMIN_SRC_ROOT, "components", "ui", "chart.tsx")),
+    ).toBe(false);
   });
 
   it("keeps analytics list dates hydration-safe", () => {
