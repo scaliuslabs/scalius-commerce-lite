@@ -10,10 +10,38 @@ export type DeliveryProviderActivationBlocker = DeliveryProviderActivationRequir
   message: string;
 };
 
+export type DeliveryProviderReadinessStatus = "draft" | "configured" | "tested" | "active" | "blocked";
+
+export type DeliveryProviderReadinessBlocker = {
+  code: "inactive" | "unconfigured" | "untested" | "test_failed" | "unreadable";
+  message: string;
+};
+
+export type DeliveryProviderReadinessSummary = {
+  status: DeliveryProviderReadinessStatus;
+  configured: boolean;
+  tested: boolean;
+  active: boolean;
+  blockers: DeliveryProviderReadinessBlocker[];
+  activationBlockers: DeliveryProviderActivationBlocker[];
+  lastTestAttemptAt?: Date | number | string | null;
+  lastTestSuccessAt?: Date | number | string | null;
+  lastTestFailureAt?: Date | number | string | null;
+};
+
 type DeliveryProviderReadinessInput = {
   type: string;
   credentials: Record<string, unknown> | string | null | undefined;
   config: Record<string, unknown> | string | null | undefined;
+};
+
+type DeliveryProviderSummaryInput = DeliveryProviderReadinessInput & {
+  isActive?: boolean | null;
+  currentFingerprint?: string | null;
+  lastTestAttemptAt?: Date | number | string | null;
+  lastTestSuccessAt?: Date | number | string | null;
+  lastTestFailureAt?: Date | number | string | null;
+  lastTestSuccessFingerprint?: string | null;
 };
 
 const REQUIRED_ACTIVATION_FIELDS: Record<string, DeliveryProviderActivationRequirement[]> = {
@@ -68,6 +96,42 @@ function hasUsableValue(value: unknown): boolean {
   if (typeof value === "string") return value.trim().length > 0;
   if (typeof value === "number") return Number.isFinite(value);
   return value !== null && value !== undefined;
+}
+
+function stableJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableJson);
+  if (!value || typeof value !== "object") return value;
+
+  return Object.keys(value as Record<string, unknown>)
+    .sort()
+    .reduce<Record<string, unknown>>((acc, key) => {
+      acc[key] = stableJson((value as Record<string, unknown>)[key]);
+      return acc;
+    }, {});
+}
+
+function bytesToHex(bytes: ArrayBuffer): string {
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function keyBytes(fingerprintKey: string): ArrayBuffer {
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(fingerprintKey), (char) => char.charCodeAt(0));
+  } catch {
+    bytes = new TextEncoder().encode(fingerprintKey);
+  }
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function timestampMs(value: Date | number | string | null | undefined): number | null {
+  if (!value) return null;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") {
+    return value > 10_000_000_000 ? value : value * 1000;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function isActivationBlocker(
@@ -135,4 +199,97 @@ export function assertDeliveryProviderReadyForActivation(
     "Delivery provider cannot be activated until required setup is complete.",
     { blockers },
   );
+}
+
+export async function getDeliveryProviderSetupFingerprint(
+  input: DeliveryProviderReadinessInput,
+  fingerprintKey: string,
+): Promise<string> {
+  const parsedCredentials = toRecord(input.credentials, "credentials");
+  const parsedConfig = toRecord(input.config, "config");
+  if (isActivationBlocker(parsedCredentials) || isActivationBlocker(parsedConfig)) {
+    throw new ValidationError("Delivery provider setup could not be fingerprinted until credentials and config are readable.");
+  }
+
+  const material = JSON.stringify(stableJson({
+    type: input.type,
+    credentials: parsedCredentials,
+    config: parsedConfig,
+  }));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes(fingerprintKey),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(material));
+  return `hmac-sha256:${bytesToHex(signature)}`;
+}
+
+export function getDeliveryProviderReadinessSummary(
+  input: DeliveryProviderSummaryInput,
+): DeliveryProviderReadinessSummary {
+  const activationBlockers = getDeliveryProviderActivationBlockers(input);
+  const configured = activationBlockers.length === 0;
+  const successAt = timestampMs(input.lastTestSuccessAt);
+  const failureAt = timestampMs(input.lastTestFailureAt);
+  const successFingerprintMatches = Boolean(
+    input.currentFingerprint
+      && input.lastTestSuccessFingerprint
+      && input.currentFingerprint === input.lastTestSuccessFingerprint,
+  );
+  const failedAfterSuccess = Boolean(failureAt && (!successAt || failureAt > successAt));
+  const tested = configured && successFingerprintMatches && !failedAfterSuccess;
+  const active = Boolean(input.isActive) && tested;
+
+  const blockers: DeliveryProviderReadinessBlocker[] = [];
+  if (!input.isActive) {
+    blockers.push({
+      code: "inactive",
+      message: "Delivery provider is inactive.",
+    });
+  }
+  if (!configured) {
+    blockers.push({
+      code: activationBlockers.some((blocker) => blocker.key === "credentials" || blocker.key === "config")
+        ? "unreadable"
+        : "unconfigured",
+      message: "Delivery provider setup is incomplete or unreadable.",
+    });
+  } else if (!tested) {
+    blockers.push({
+      code: failedAfterSuccess ? "test_failed" : "untested",
+      message: failedAfterSuccess
+        ? "Delivery provider connection test failed after the last successful test."
+        : "Delivery provider must pass a live connection test for the current setup.",
+    });
+  }
+
+  let status: DeliveryProviderReadinessStatus;
+  if (active) {
+    status = "active";
+  } else if (input.isActive && blockers.length > 0) {
+    status = "blocked";
+  } else if (!configured) {
+    status = activationBlockers.length > 0 && activationBlockers.some((blocker) => blocker.key === "type")
+      ? "blocked"
+      : "draft";
+  } else if (tested) {
+    status = "tested";
+  } else {
+    status = "configured";
+  }
+
+  return {
+    status,
+    configured,
+    tested,
+    active,
+    blockers,
+    activationBlockers,
+    lastTestAttemptAt: input.lastTestAttemptAt,
+    lastTestSuccessAt: input.lastTestSuccessAt,
+    lastTestFailureAt: input.lastTestFailureAt,
+  };
 }

@@ -11,7 +11,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `factory.ts` | `createProvider()` -- factory that parses credentials (with optional AES-GCM decryption via `decryptCredentialsGraceful()`) and config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. Read paths tolerate legacy plaintext/JWT-encrypted rows only for migration. |
 | `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
 | `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries |
-| `provider-readiness.ts` | Pure activation-readiness rules for Pathao/Steadfast required fields, shared by API saves and admin UI blockers |
+| `provider-readiness.ts` | Activation/readiness rules for Pathao/Steadfast required fields plus keyed setup fingerprints for durable live-test proof |
 | `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`), `getTrackingUrl()` |
 | `status-mapper.ts` | `mapProviderStatus()` + `ShipmentStatusCode` enum -- normalizes provider-specific statuses to 14 canonical codes |
 | `locations.ts` | Location CRUD and external ID resolution functions |
@@ -26,10 +26,10 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `getDeliveryProviders` | `(db)` | All providers, ordered by updatedAt desc |
 | `getActiveDeliveryProviders` | `(db)` | Active providers only |
 | `getDeliveryProvider` | `(db, id)` | Single provider by ID |
-| `saveDeliveryProvider` | `(db, provider, encryptionKey)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. |
+| `saveDeliveryProvider` | `(db, provider, encryptionKey)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. Preserves live-test proof only when the current setup fingerprint still matches. |
 | `deleteDeliveryProvider` | `(db, id)` | Hard delete |
-| `testDeliveryProvider` | `(db, id, encryptionKey?)` | Tests connection via provider instance |
-| `createShipment` | `(db, orderId, providerId, options?, encryptionKey?)` | Requires an active provider, preflights Pathao city/zone mappings, then uses the insert-first pattern (see below). Enriches with order item names and quantities. |
+| `testDeliveryProvider` | `(db, id, encryptionKey?)` | Records a test attempt, tests connection via provider instance, and stores successful proof for the current provider type/credentials/config fingerprint |
+| `createShipment` | `(db, orderId, providerId, options?, encryptionKey?)` | Requires a provider whose readiness summary is `active`, preflights Pathao city/zone mappings, then uses the insert-first pattern (see below). Enriches with order item names and quantities. |
 | `getShipment` | `(db, id)` | Single shipment by ID |
 | `getLatestShipment` | `(db, orderId)` | Most recent shipment for an order |
 | `getShipments` | `(db, orderId)` | All shipments for an order, ordered by createdAt desc |
@@ -72,7 +72,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 6. On provider rejection: UPDATE to `status: "failed"`, `rawStatus: "provider_rejected"`
 7. On exception: UPDATE to `status: "failed"`, `rawStatus: "exception"`
 
-Provider shipment creation is coordinated by order-level shipment claims in the orders module. `deleteShipmentRecord()` is the deletion gate: do not bypass it when removing shipments, because it protects active claims, reconciliation evidence, and stale claimed rows that still need manual resolution. When provider creation succeeded but local order/inventory finalization failed, the orders module repairs from the persisted shipment evidence and only then clears the matching order claim; delivery providers must not be called a second time for that repair.
+Provider shipment creation is coordinated by order-level shipment claims in the orders module. Bulk shipment creation preflights provider readiness once before the per-order loop; missing, inactive, unconfigured, untested, stale-test, or unreadable providers return one clear failure per requested order without writing order claims or shipment placeholders. `deleteShipmentRecord()` is the deletion gate: do not bypass it when removing shipments, because it protects active claims, reconciliation evidence, and stale claimed rows that still need manual resolution. When provider creation succeeded but local order/inventory finalization failed, the orders module repairs from the persisted shipment evidence and only then clears the matching order claim; delivery providers must not be called a second time for that repair.
 
 For Pathao, positive-integer city and zone `externalIds.pathao` mappings are mandatory before the insert-first placeholder is written. Area mappings remain optional because Pathao accepts some shipments without area IDs, but when present the provider payload includes them.
 
@@ -115,7 +115,7 @@ Delivery webhook verification is active-provider authoritative. `verifyDeliveryW
 
 ## Provider Activation Readiness
 
-Delivery providers are inactive drafts by default on both create and update-as-create paths. Turning a provider active is a local readiness gate, not a live-network test: `assertDeliveryProviderReadyForActivation()` rejects incomplete required fields before DB writes or checkout-cache invalidation, while `testDeliveryProvider()` remains the explicit merchant action for live courier connectivity. Pathao activation requires `baseUrl`, `clientId`, `clientSecret`, `username`, `password`, and `storeId`; Steadfast activation requires `baseUrl`, `apiKey`, and `secretKey`. The admin panel uses the same pure `getDeliveryProviderActivationBlockers()` helper to disable activation and list missing fields, including when masked stored secrets are present.
+Delivery providers are inactive drafts by default on both create and update-as-create paths. Turning a provider active still requires complete local setup through `assertDeliveryProviderReadyForActivation()`, but shipment actions require more: the provider readiness summary must be `active`, meaning the row is enabled and has a successful live connection test for the current provider type, unmasked credentials, and config. The proof is stored as a keyed fingerprint, so editing credentials/config clears stale success evidence unless the fingerprint still matches. A failed test records failure time without replacing successful proof, and a later failure blocks action readiness until a new successful test passes. Pathao activation requires `baseUrl`, `clientId`, `clientSecret`, `username`, `password`, and `storeId`; Steadfast activation requires `baseUrl`, `apiKey`, and `secretKey`. Admin list/get responses include a readiness summary with statuses `draft`, `configured`, `tested`, `active`, or `blocked` while returning masked credentials.
 
 ## Credential Storage
 

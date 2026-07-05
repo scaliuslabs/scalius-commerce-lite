@@ -78,6 +78,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
     credentials: JSON.stringify(DEFAULT_CREDENTIALS.pathao),
     config: JSON.stringify(DEFAULT_CONFIG.pathao),
     isActive: false,
+    readiness: null,
   });
 
   const parseJSON = (jsonString: string, fallback: Record<string, unknown> = {}) => {
@@ -106,6 +107,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
         credentials: provider.credentials,
         config: provider.config,
         isActive: provider.isActive,
+        readiness: provider.readiness ?? null,
       });
     } else {
       setFormData({
@@ -115,6 +117,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
         credentials: JSON.stringify(DEFAULT_CREDENTIALS.pathao),
         config: JSON.stringify(DEFAULT_CONFIG.pathao),
         isActive: false,
+        readiness: null,
       });
     }
   };
@@ -167,8 +170,16 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
     }
     setIsSaving(true);
     try {
+      const providerPayload = {
+        id: formData.id,
+        name: formData.name,
+        type: formData.type,
+        credentials: formData.credentials,
+        config: formData.config,
+        isActive: formData.isActive,
+      };
       const savedProvider = await saveDeliveryProvider({
-        data: { provider: formData },
+        data: { provider: providerPayload },
       }) as DeliveryProviderRecord;
       if (isCreating) {
         setProviders((prev) => [...prev, savedProvider]);

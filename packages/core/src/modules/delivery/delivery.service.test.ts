@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   deliveryShipments,
   orderPayments,
@@ -7,12 +7,23 @@ import {
   refundAttempts,
   ShipmentStatus,
 } from "@scalius/database/schema";
+
+const mocks = vi.hoisted(() => ({
+  createProvider: vi.fn(),
+}));
+
+vi.mock("./factory", () => ({
+  createProvider: mocks.createProvider,
+}));
+
 import {
   checkShipmentStatus,
   createShipment,
   deleteShipmentRecord,
   saveDeliveryProvider,
+  testDeliveryProvider,
 } from "./delivery.service";
+import { getDeliveryProviderSetupFingerprint } from "./provider-readiness";
 
 function createDeleteShipmentDb({
   shipment,
@@ -143,6 +154,44 @@ function createSequentialSelectDb(results: unknown[][]) {
   };
 
   return { db, inserts, updates };
+}
+
+const TEST_FINGERPRINT_KEY = Buffer.alloc(32, 7).toString("base64");
+
+const completePathaoCredentials = {
+  baseUrl: "https://api-hermes.pathao.com",
+  clientId: "client",
+  clientSecret: "secret",
+  username: "merchant",
+  password: "pass",
+};
+
+const completePathaoConfig = { storeId: "store_1" };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+async function readyPathaoProvider(overrides: Record<string, unknown> = {}) {
+  const credentials = JSON.stringify(completePathaoCredentials);
+  const config = JSON.stringify(completePathaoConfig);
+  const fingerprint = await getDeliveryProviderSetupFingerprint({
+    type: "pathao",
+    credentials,
+    config,
+  }, TEST_FINGERPRINT_KEY);
+
+  return {
+    id: "provider_pathao",
+    type: "pathao",
+    isActive: true,
+    credentials,
+    config,
+    lastTestSuccessAt: 100,
+    lastTestFailureAt: null,
+    lastTestSuccessFingerprint: fingerprint,
+    ...overrides,
+  };
 }
 
 describe("deleteShipmentRecord claim safety", () => {
@@ -315,28 +364,117 @@ describe("saveDeliveryProvider credential storage", () => {
     expect(writes[0]?.credentials).not.toBe(JSON.stringify({ clientSecret: "secret", password: "pass" }));
     expect(writes[0]?.credentials).toContain(":");
   });
+
+  it("preserves successful test proof when the saved setup fingerprint still matches", async () => {
+    const fingerprint = await getDeliveryProviderSetupFingerprint({
+      type: "pathao",
+      credentials: JSON.stringify(completePathaoCredentials),
+      config: JSON.stringify(completePathaoConfig),
+    }, TEST_FINGERPRINT_KEY);
+    const { db, writes } = createSaveProviderDb({
+      id: "provider_pathao",
+      lastTestSuccessFingerprint: fingerprint,
+    });
+
+    await saveDeliveryProvider(db as never, {
+      id: "provider_pathao",
+      name: "Pathao",
+      type: "pathao",
+      isActive: true,
+      credentials: completePathaoCredentials,
+      config: completePathaoConfig,
+    }, TEST_FINGERPRINT_KEY);
+
+    expect(writes[0]).not.toHaveProperty("lastTestAttemptAt");
+    expect(writes[0]).not.toHaveProperty("lastTestSuccessFingerprint");
+  });
+
+  it("clears stale test proof when credentials or config change", async () => {
+    const { db, writes } = createSaveProviderDb({
+      id: "provider_pathao",
+      lastTestAttemptAt: 100,
+      lastTestSuccessAt: 100,
+      lastTestFailureAt: null,
+      lastTestSuccessFingerprint: "hmac-sha256:old",
+    });
+
+    await saveDeliveryProvider(db as never, {
+      id: "provider_pathao",
+      name: "Pathao",
+      type: "pathao",
+      isActive: true,
+      credentials: completePathaoCredentials,
+      config: { storeId: "store_2" },
+    }, TEST_FINGERPRINT_KEY);
+
+    expect(writes[0]).toMatchObject({
+      lastTestAttemptAt: null,
+      lastTestSuccessAt: null,
+      lastTestFailureAt: null,
+      lastTestSuccessFingerprint: null,
+    });
+  });
+});
+
+describe("testDeliveryProvider durable proof", () => {
+  it("records attempt and matching successful fingerprint after a live test passes", async () => {
+    const expectedFingerprint = await getDeliveryProviderSetupFingerprint({
+      type: "pathao",
+      credentials: JSON.stringify(completePathaoCredentials),
+      config: JSON.stringify(completePathaoConfig),
+    }, TEST_FINGERPRINT_KEY);
+    const provider = await readyPathaoProvider({
+      lastTestSuccessAt: null,
+      lastTestSuccessFingerprint: null,
+    });
+    const { db, updates } = createSequentialSelectDb([[provider]]);
+    mocks.createProvider.mockResolvedValueOnce({
+      testConnection: vi.fn(async () => ({ success: true, message: "ok" })),
+    });
+
+    await expect(testDeliveryProvider(db as never, "provider_pathao", TEST_FINGERPRINT_KEY))
+      .resolves.toMatchObject({ success: true });
+
+    expect(updates[0]).toHaveProperty("lastTestAttemptAt");
+    expect(updates[1]).toMatchObject({
+      lastTestFailureAt: null,
+      lastTestSuccessFingerprint: expectedFingerprint,
+    });
+  });
+
+  it("records failure without replacing the successful fingerprint when a live test fails", async () => {
+    const provider = await readyPathaoProvider();
+    const { db, updates } = createSequentialSelectDb([[provider]]);
+    mocks.createProvider.mockResolvedValueOnce({
+      testConnection: vi.fn(async () => ({ success: false, message: "rejected" })),
+    });
+
+    await expect(testDeliveryProvider(db as never, "provider_pathao", TEST_FINGERPRINT_KEY))
+      .resolves.toMatchObject({ success: false, message: "rejected" });
+
+    expect(updates[0]).toHaveProperty("lastTestAttemptAt");
+    expect(updates[1]).toHaveProperty("lastTestFailureAt");
+    expect(updates[1]).not.toHaveProperty("lastTestSuccessFingerprint");
+  });
 });
 
 describe("delivery provider active-state authority", () => {
   it("does not create a shipment through an inactive provider", async () => {
+    const provider = await readyPathaoProvider({ isActive: false });
     const { db, inserts } = createSequentialSelectDb([
       [{ id: "order_1", totalAmount: 100, paidAmount: 0 }],
-      [{
-        id: "provider_pathao",
-        type: "pathao",
-        isActive: false,
-        credentials: "{}",
-        config: "{}",
-      }],
+      [provider],
     ]);
 
     await expect(createShipment(
       db as never,
       "order_1",
       "provider_pathao",
+      undefined,
+      TEST_FINGERPRINT_KEY,
     )).resolves.toMatchObject({
       success: false,
-      message: "Provider with ID provider_pathao is not active",
+      message: "Delivery provider provider_pathao is not ready for shipment creation: Delivery provider is inactive.",
     });
 
     expect(inserts).toHaveLength(0);
@@ -391,6 +529,7 @@ describe("delivery provider active-state authority", () => {
   });
 
   it("rejects Pathao shipment creation before placeholder insert when location mappings are missing", async () => {
+    const provider = await readyPathaoProvider();
     const { db, inserts } = createSequentialSelectDb([
       [{
         id: "order_1",
@@ -400,13 +539,7 @@ describe("delivery provider active-state authority", () => {
         zone: "zone_1",
         area: null,
       }],
-      [{
-        id: "provider_pathao",
-        type: "pathao",
-        isActive: true,
-        credentials: "{}",
-        config: "{}",
-      }],
+      [provider],
       [{ id: "city_1", externalIds: "{}" }],
       [{ id: "zone_1", externalIds: "{}" }],
     ]);
@@ -415,6 +548,8 @@ describe("delivery provider active-state authority", () => {
       db as never,
       "order_1",
       "provider_pathao",
+      undefined,
+      TEST_FINGERPRINT_KEY,
     )).resolves.toMatchObject({
       success: false,
       message: "Pathao requires mapped numeric location IDs before shipment creation. Missing mapping for: city, zone. Configure Pathao IDs in Delivery Locations settings.",
@@ -424,6 +559,7 @@ describe("delivery provider active-state authority", () => {
   });
 
   it("rejects invalid Pathao numeric mappings before provider work", async () => {
+    const provider = await readyPathaoProvider();
     const { db, inserts } = createSequentialSelectDb([
       [{
         id: "order_1",
@@ -433,13 +569,7 @@ describe("delivery provider active-state authority", () => {
         zone: "zone_1",
         area: null,
       }],
-      [{
-        id: "provider_pathao",
-        type: "pathao",
-        isActive: true,
-        credentials: "{}",
-        config: "{}",
-      }],
+      [provider],
       [{ id: "city_1", externalIds: JSON.stringify({ pathao: 0 }) }],
       [{ id: "zone_1", externalIds: JSON.stringify({ pathao: "1.5" }) }],
     ]);
@@ -448,6 +578,8 @@ describe("delivery provider active-state authority", () => {
       db as never,
       "order_1",
       "provider_pathao",
+      undefined,
+      TEST_FINGERPRINT_KEY,
     )).resolves.toMatchObject({
       success: false,
       message: "Pathao requires mapped numeric location IDs before shipment creation. Missing mapping for: city, zone. Configure Pathao IDs in Delivery Locations settings.",

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getDeliveryProviderActivationBlockers } from "@scalius/core/modules/delivery/provider-readiness";
 import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
@@ -53,6 +54,10 @@ import {
   ProviderIcon,
   PROVIDER_VISUAL,
   PROVIDER_TYPES,
+  getProviderReadinessBadgeClass,
+  getProviderReadinessLabel,
+  getProviderReadinessMessage,
+  resolveProviderReadiness,
   type DeliveryProviderRecord,
   type DeliveryProviderType,
 } from "./ProviderIcon";
@@ -121,6 +126,8 @@ export function ProviderDetailPanel({
   });
   const hasActivationBlockers = activationBlockers.length > 0;
   const activeSaveBlocked = formData.isActive && hasActivationBlockers;
+  const readiness = resolveProviderReadiness(selectedProvider ?? formData);
+  const readinessMessage = getProviderReadinessMessage(readiness);
 
   if (!selectedProvider && !isCreating) {
     return (
@@ -141,9 +148,17 @@ export function ProviderDetailPanel({
         <div className="flex items-center gap-3">
           <ProviderIcon type={formData.type} size="md" />
           <div>
-            <CardTitle className="text-base">
-              {isCreating ? "New Provider" : formData.name || "Provider Details"}
-            </CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-base">
+                {isCreating ? "New Provider" : formData.name || "Provider Details"}
+              </CardTitle>
+              <Badge
+                variant="outline"
+                className={`text-xs ${getProviderReadinessBadgeClass(readiness)}`}
+              >
+                {getProviderReadinessLabel(readiness)}
+              </Badge>
+            </div>
             <CardDescription>
               {isCreating
                 ? "Configure a new delivery integration"
@@ -257,9 +272,9 @@ export function ProviderDetailPanel({
               <div className="space-y-0.5">
                 <Label>Status</Label>
                 <p className="text-xs text-muted-foreground">
-                  {hasActivationBlockers
-                    ? "Complete the required setup before turning this on."
-                    : "Available for shipment creation and webhook updates."}
+                  {readiness.canCreateShipment
+                    ? "Available for shipment creation and webhook updates."
+                    : readinessMessage}
                 </p>
               </div>
               <Switch
@@ -283,6 +298,23 @@ export function ProviderDetailPanel({
                         </span>
                       ))}
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {!isEditing && !readiness.canCreateShipment && (
+              <div className="rounded-md border border-amber-200 bg-amber-50/80 p-3 text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100 sm:col-span-2">
+                <div className="flex gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <div className="space-y-1 text-sm">
+                    <p className="font-medium">Shipment creation blocked</p>
+                    <p className="text-xs">{readinessMessage}</p>
+                    {readiness.blockers.length > 1 && (
+                      <p className="text-xs">
+                        {readiness.blockers.length - 1} more setup item
+                        {readiness.blockers.length === 2 ? "" : "s"} need attention.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

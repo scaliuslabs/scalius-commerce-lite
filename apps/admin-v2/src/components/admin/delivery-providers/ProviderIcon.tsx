@@ -35,6 +35,36 @@ export const PROVIDER_TYPES: { value: DeliveryProviderType; label: string }[] = 
   { value: "steadfast", label: "Steadfast" },
 ];
 
+export type DeliveryProviderReadinessStatus =
+  | "draft"
+  | "configured"
+  | "tested"
+  | "active"
+  | "blocked";
+
+export interface DeliveryProviderReadinessBlocker {
+  code: "inactive" | "unconfigured" | "untested" | "test_failed" | "unreadable" | string;
+  message: string;
+}
+
+export interface DeliveryProviderReadiness {
+  status: DeliveryProviderReadinessStatus;
+  configured?: boolean;
+  tested?: boolean;
+  active?: boolean;
+  canCreateShipment: boolean;
+  blockers: DeliveryProviderReadinessBlocker[];
+  activationBlockers?: Array<{
+    source: "credentials" | "config" | string;
+    key: string;
+    label: string;
+    message: string;
+  }>;
+  lastTestAttemptAt?: string | number | null;
+  lastTestSuccessAt?: string | number | null;
+  lastTestFailureAt?: string | number | null;
+}
+
 /** Represents a delivery provider record from the database */
 export interface DeliveryProviderRecord {
   id: string;
@@ -43,8 +73,90 @@ export interface DeliveryProviderRecord {
   isActive: boolean;
   credentials: string;
   config: string;
+  readiness?: DeliveryProviderReadiness | null;
   createdAt?: Date | string | number;
   updatedAt?: Date | string | number;
+}
+
+const READINESS_LABELS: Record<DeliveryProviderReadinessStatus, string> = {
+  draft: "Draft",
+  configured: "Configured",
+  tested: "Tested",
+  active: "Active",
+  blocked: "Blocked",
+};
+
+const FALLBACK_INACTIVE_BLOCKER: DeliveryProviderReadinessBlocker = {
+  code: "inactive",
+  message: "Turn on this provider after setup and testing.",
+};
+
+export function resolveProviderReadiness(
+  provider: Pick<DeliveryProviderRecord, "isActive" | "readiness">,
+): DeliveryProviderReadiness {
+  if (provider.readiness) {
+    const canCreateShipment =
+      provider.readiness.canCreateShipment ?? provider.readiness.active ?? false;
+    return {
+      status: provider.readiness.status,
+      configured: provider.readiness.configured,
+      tested: provider.readiness.tested,
+      active: provider.readiness.active,
+      canCreateShipment,
+      blockers: Array.isArray(provider.readiness.blockers)
+        ? provider.readiness.blockers
+        : [],
+      activationBlockers: provider.readiness.activationBlockers,
+      lastTestAttemptAt: provider.readiness.lastTestAttemptAt ?? null,
+      lastTestSuccessAt: provider.readiness.lastTestSuccessAt ?? null,
+      lastTestFailureAt: provider.readiness.lastTestFailureAt ?? null,
+    };
+  }
+
+  return {
+    status: provider.isActive ? "active" : "draft",
+    canCreateShipment: provider.isActive,
+    blockers: provider.isActive ? [] : [FALLBACK_INACTIVE_BLOCKER],
+    activationBlockers: [],
+    lastTestAttemptAt: null,
+    lastTestSuccessAt: null,
+    lastTestFailureAt: null,
+  };
+}
+
+export function getProviderReadinessLabel(
+  readiness: Pick<DeliveryProviderReadiness, "status">,
+) {
+  return READINESS_LABELS[readiness.status] ?? "Draft";
+}
+
+export function getProviderReadinessBadgeClass(
+  readiness: Pick<DeliveryProviderReadiness, "status" | "canCreateShipment">,
+) {
+  if (!readiness.canCreateShipment || readiness.status === "blocked") {
+    return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
+  }
+  if (readiness.status === "active") {
+    return "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300";
+  }
+  if (readiness.status === "tested") {
+    return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  }
+  if (readiness.status === "configured") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  }
+  return "text-muted-foreground";
+}
+
+export function getProviderReadinessMessage(
+  readiness: Pick<DeliveryProviderReadiness, "canCreateShipment" | "blockers">,
+) {
+  if (readiness.canCreateShipment) {
+    return "Ready to create shipments.";
+  }
+  const blocker = readiness.blockers[0];
+  if (blocker?.message) return blocker.message;
+  return "Complete provider setup before creating shipments.";
 }
 
 export function ProviderIcon({

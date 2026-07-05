@@ -3,6 +3,8 @@ import { ValidationError } from "../../errors";
 import {
   assertDeliveryProviderReadyForActivation,
   getDeliveryProviderActivationBlockers,
+  getDeliveryProviderReadinessSummary,
+  getDeliveryProviderSetupFingerprint,
 } from "./provider-readiness";
 
 describe("delivery provider activation readiness", () => {
@@ -79,5 +81,89 @@ describe("delivery provider activation readiness", () => {
         ],
       });
     }
+  });
+});
+
+describe("delivery provider durable readiness summary", () => {
+  const completeSteadfastCredentials = {
+    baseUrl: "https://portal.steadfast.com.bd/api/v1",
+    apiKey: "api",
+    secretKey: "secret",
+  };
+
+  it("does not count a successful test unless the fingerprint matches the current setup", async () => {
+    const fingerprint = await getDeliveryProviderSetupFingerprint({
+      type: "steadfast",
+      credentials: completeSteadfastCredentials,
+      config: {},
+    }, "fingerprint-key");
+
+    expect(getDeliveryProviderReadinessSummary({
+      type: "steadfast",
+      credentials: { ...completeSteadfastCredentials, apiKey: "changed" },
+      config: {},
+      isActive: true,
+      currentFingerprint: await getDeliveryProviderSetupFingerprint({
+        type: "steadfast",
+        credentials: { ...completeSteadfastCredentials, apiKey: "changed" },
+        config: {},
+      }, "fingerprint-key"),
+      lastTestSuccessAt: 100,
+      lastTestSuccessFingerprint: fingerprint,
+    })).toMatchObject({
+      status: "blocked",
+      configured: true,
+      tested: false,
+      active: false,
+      blockers: [{ code: "untested" }],
+    });
+  });
+
+  it("reports active only when the provider is configured, enabled, and successfully tested", async () => {
+    const fingerprint = await getDeliveryProviderSetupFingerprint({
+      type: "steadfast",
+      credentials: completeSteadfastCredentials,
+      config: {},
+    }, "fingerprint-key");
+
+    expect(getDeliveryProviderReadinessSummary({
+      type: "steadfast",
+      credentials: completeSteadfastCredentials,
+      config: {},
+      isActive: true,
+      currentFingerprint: fingerprint,
+      lastTestSuccessAt: 100,
+      lastTestSuccessFingerprint: fingerprint,
+    })).toMatchObject({
+      status: "active",
+      configured: true,
+      tested: true,
+      active: true,
+      blockers: [],
+    });
+  });
+
+  it("blocks a provider when the latest test failed after a matching success", async () => {
+    const fingerprint = await getDeliveryProviderSetupFingerprint({
+      type: "steadfast",
+      credentials: completeSteadfastCredentials,
+      config: {},
+    }, "fingerprint-key");
+
+    expect(getDeliveryProviderReadinessSummary({
+      type: "steadfast",
+      credentials: completeSteadfastCredentials,
+      config: {},
+      isActive: true,
+      currentFingerprint: fingerprint,
+      lastTestSuccessAt: 100,
+      lastTestFailureAt: 200,
+      lastTestSuccessFingerprint: fingerprint,
+    })).toMatchObject({
+      status: "blocked",
+      tested: false,
+      active: false,
+      blockers: [{ code: "test_failed" }],
+    });
   });
 });

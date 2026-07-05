@@ -19,7 +19,7 @@ import {
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { markCODReturned, recordCODCollection, recordCODFailure, validateCODCollectionDetails } from "../payments/cod";
-import { createShipment, markShipmentReconciliationRequired } from "../delivery/delivery.service";
+import { createShipment, getDeliveryProviderActionReadiness, markShipmentReconciliationRequired } from "../delivery/delivery.service";
 import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
@@ -429,6 +429,15 @@ export async function bulkShipOrders(
     encryptionKey?: string,
 ) {
     const results = [];
+    const providerReadiness = await getDeliveryProviderActionReadiness(db, providerId, encryptionKey);
+    if (!providerReadiness.ready) {
+        return orderIds.map((orderId) => ({
+            orderId,
+            success: false,
+            error: providerReadiness.message,
+        }));
+    }
+
     for (const orderId of orderIds) {
         try {
             const order = await db.select({

@@ -24,6 +24,11 @@ import { queryKeys } from "@/lib/query-keys";
 import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
 import { formatOrderDate } from "./formatters";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+import {
+  getProviderReadinessLabel,
+  getProviderReadinessMessage,
+  resolveProviderReadiness,
+} from "@/components/admin/delivery-providers/ProviderIcon";
 
 interface ShipmentCardProps {
   order: Order;
@@ -38,6 +43,19 @@ const CreateShipmentForm = ({
   const shipmentMutation = useCreateOrderShipment();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
+  const selectedProvider = order.deliveryProviders?.find(
+    (provider) => provider.id === selectedProviderId,
+  );
+  const selectedReadiness = selectedProvider
+    ? resolveProviderReadiness(selectedProvider)
+    : null;
+  const selectedProviderBlocker = selectedReadiness &&
+    !selectedReadiness.canCreateShipment
+      ? getProviderReadinessMessage(selectedReadiness)
+      : "";
+  const readyProviderCount = (order.deliveryProviders ?? []).filter(
+    (provider) => resolveProviderReadiness(provider).canCreateShipment,
+  ).length;
 
   const handleCreateShipment = () => {
     if (refundLocked) {
@@ -50,6 +68,13 @@ const CreateShipmentForm = ({
     }
     if (!selectedProviderId) {
       toast.error("Error", { description: "Please select a delivery provider." });
+      return;
+    }
+    if (!selectedProvider || !selectedReadiness?.canCreateShipment) {
+      toast.error("Provider cannot create shipments", {
+        description: selectedProviderBlocker ||
+          "Complete provider setup before creating shipments.",
+      });
       return;
     }
     shipmentMutation.mutate({
@@ -95,17 +120,35 @@ const CreateShipmentForm = ({
                       <SelectItem
                         key={provider.id}
                         value={provider.id}
+                        disabled={!resolveProviderReadiness(provider).canCreateShipment}
                         className="text-foreground"
                       >
-                        {provider.name}
+                        {provider.name} - {getProviderReadinessLabel(resolveProviderReadiness(provider))}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {selectedProviderBlocker && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50/80 p-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+                    {selectedProviderBlocker}
+                  </p>
+                )}
+                {readyProviderCount === 0 && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50/80 p-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+                    No shipment-ready providers.{" "}
+                    {getProviderReadinessMessage(resolveProviderReadiness(order.deliveryProviders[0]))}
+                  </p>
+                )}
               </div>
               <Button
                 className="w-full"
-                disabled={shipmentMutation.isPending || !selectedProviderId || refundLocked || shipmentLocked}
+                disabled={
+                  shipmentMutation.isPending ||
+                  !selectedProviderId ||
+                  selectedReadiness?.canCreateShipment === false ||
+                  refundLocked ||
+                  shipmentLocked
+                }
                 onClick={handleCreateShipment}
               >
                 {shipmentMutation.isPending && (

@@ -1,6 +1,6 @@
 import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus } from "@scalius/database/schema";
 import { createProvider } from "./factory";
-import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
+import { decryptCredentialsGraceful, encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 import type { Database } from "@scalius/database/client";
 import type { ShipmentOptions, ShipmentResult } from "./types";
@@ -11,10 +11,28 @@ import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "../orders/s
 import { assertNoActiveRefundAttempt } from "../payments/refund-attempt-guard";
 import { assertNoActivePaymentSessionAttempt } from "../payments/payment-session-attempts";
 import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "./locations";
+import {
+  getDeliveryProviderReadinessSummary,
+  getDeliveryProviderSetupFingerprint,
+} from "./provider-readiness";
+import type { DeliveryProviderReadinessSummary } from "./provider-readiness";
 
 type ShipmentInternalOptions = {
   shipmentId?: string;
 };
+
+type DeliveryProviderActionReadiness =
+  | {
+    ready: true;
+    provider: NonNullable<Awaited<ReturnType<typeof getDeliveryProvider>>>;
+    summary: DeliveryProviderReadinessSummary;
+  }
+  | {
+    ready: false;
+    provider: Awaited<ReturnType<typeof getDeliveryProvider>> | null;
+    summary?: DeliveryProviderReadinessSummary;
+    message: string;
+  };
 
 const EXPIRED_CLAIM_DELETABLE_STATUSES = new Set<string>([
   ShipmentStatus.FAILED,
@@ -74,6 +92,61 @@ async function preflightProviderShipmentSetup(
     success: false,
     message: `Pathao requires mapped numeric location IDs before shipment creation. Missing mapping for: ${missingMappings.join(", ")}. Configure Pathao IDs in Delivery Locations settings.`,
   };
+}
+
+function providerActionFailureMessage(
+  providerId: string,
+  summary: DeliveryProviderReadinessSummary,
+): string {
+  const blockerMessages = summary.blockers.map((blocker) => blocker.message);
+  return `Delivery provider ${providerId} is not ready for shipment creation: ${blockerMessages.join(" ")}`;
+}
+
+export async function getDeliveryProviderActionReadiness(
+  db: Database,
+  providerId: string,
+  encryptionKey?: string,
+): Promise<DeliveryProviderActionReadiness> {
+  const provider = await getDeliveryProvider(db, providerId);
+  if (!provider) {
+    return {
+      ready: false,
+      provider: null,
+      message: `Delivery provider ${providerId} was not found.`,
+    };
+  }
+
+  const credentials = await decryptCredentialsGraceful(provider.credentials, encryptionKey);
+  const currentFingerprint = encryptionKey
+    ? await getDeliveryProviderSetupFingerprint({
+      type: provider.type,
+      credentials,
+      config: provider.config,
+    }, encryptionKey).catch(() => null)
+    : null;
+
+  const summary = getDeliveryProviderReadinessSummary({
+    type: provider.type,
+    credentials,
+    config: provider.config,
+    isActive: provider.isActive,
+    currentFingerprint,
+    lastTestAttemptAt: provider.lastTestAttemptAt,
+    lastTestSuccessAt: provider.lastTestSuccessAt,
+    lastTestFailureAt: provider.lastTestFailureAt,
+    lastTestSuccessFingerprint: provider.lastTestSuccessFingerprint,
+  });
+
+  if (!summary.active) {
+    return {
+      ready: false,
+      provider,
+      summary,
+      message: providerActionFailureMessage(providerId, summary),
+    };
+  }
+
+  return { ready: true, provider, summary };
 }
 
 export async function markShipmentReconciliationRequired(
@@ -176,11 +249,25 @@ export async function saveDeliveryProvider(
     typeof provider.config === "string"
       ? provider.config
       : JSON.stringify(provider.config);
+  const currentFingerprint = await getDeliveryProviderSetupFingerprint({
+    type: provider.type,
+    credentials,
+    config,
+  }, encryptionKey);
 
   credentials = await encryptCredentials(credentials, encryptionKey);
 
   // Check if provider exists
   const existingProvider = await getDeliveryProvider(db, providerId);
+  const preserveTestProof = existingProvider?.lastTestSuccessFingerprint === currentFingerprint;
+  const staleTestProofReset = preserveTestProof
+    ? {}
+    : {
+      lastTestAttemptAt: null,
+      lastTestSuccessAt: null,
+      lastTestFailureAt: null,
+      lastTestSuccessFingerprint: null,
+    };
 
   if (existingProvider) {
     // Update
@@ -192,6 +279,7 @@ export async function saveDeliveryProvider(
         isActive: provider.isActive,
         credentials,
         config,
+        ...staleTestProofReset,
         updatedAt: sql`unixepoch()`,
       })
       .where(eq(deliveryProviders.id, providerId));
@@ -230,10 +318,55 @@ export async function testDeliveryProvider(db: Database, id: string, encryptionK
     throw new NotFoundError(`Provider with ID ${id} not found`);
   }
 
+  const testedAt = sql`unixepoch()`;
+  await db
+    .update(deliveryProviders)
+    .set({
+      lastTestAttemptAt: testedAt,
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(eq(deliveryProviders.id, id));
+
   try {
+    if (!encryptionKey) {
+      throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to test provider readiness.");
+    }
+    const credentials = await decryptCredentialsGraceful(provider.credentials, encryptionKey);
+    const fingerprint = await getDeliveryProviderSetupFingerprint({
+      type: provider.type,
+      credentials,
+      config: provider.config,
+    }, encryptionKey);
     const providerInstance = await createProvider(provider, encryptionKey, db);
-    return await providerInstance.testConnection();
+    const result = await providerInstance.testConnection();
+    if (result.success) {
+      await db
+        .update(deliveryProviders)
+        .set({
+          lastTestSuccessAt: sql`unixepoch()`,
+          lastTestFailureAt: null,
+          lastTestSuccessFingerprint: fingerprint,
+          updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(deliveryProviders.id, id));
+    } else {
+      await db
+        .update(deliveryProviders)
+        .set({
+          lastTestFailureAt: sql`unixepoch()`,
+          updatedAt: sql`unixepoch()`,
+        })
+        .where(eq(deliveryProviders.id, id));
+    }
+    return result;
   } catch (error: unknown) {
+    await db
+      .update(deliveryProviders)
+      .set({
+        lastTestFailureAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(eq(deliveryProviders.id, id));
     return {
       success: false,
       message: `Failed to test provider: ${error instanceof Error ? error.message : String(error)}`,
@@ -270,20 +403,14 @@ export async function createShipment(
     };
   }
 
-  // Get provider
-  const provider = await getDeliveryProvider(db, providerId);
-  if (!provider) {
+  const providerReadiness = await getDeliveryProviderActionReadiness(db, providerId, encryptionKey);
+  if (!providerReadiness.ready) {
     return {
       success: false,
-      message: `Provider with ID ${providerId} not found`,
+      message: providerReadiness.message,
     };
   }
-  if (provider.isActive !== true) {
-    return {
-      success: false,
-      message: `Provider with ID ${providerId} is not active`,
-    };
-  }
+  const provider = providerReadiness.provider;
 
   const preflightFailure = await preflightProviderShipmentSetup(db, provider.type, order);
   if (preflightFailure) return preflightFailure;

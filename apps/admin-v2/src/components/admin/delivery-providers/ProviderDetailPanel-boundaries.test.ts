@@ -9,9 +9,12 @@ describe("ProviderDetailPanel activation readiness boundaries", () => {
     const source = readFileSync(PANEL_SOURCE, "utf8");
 
     expect(source).toContain("getDeliveryProviderActivationBlockers");
+    expect(source).toContain("resolveProviderReadiness(selectedProvider ?? formData)");
+    expect(source).toContain("getProviderReadinessLabel(readiness)");
+    expect(source).toContain("Shipment creation blocked");
     expect(source).toContain("const activeSaveBlocked = formData.isActive && hasActivationBlockers");
     expect(source).toContain("Required before activation");
-    expect(source).toContain("Complete the required setup before turning this on.");
+    expect(source).toContain("readiness.canCreateShipment");
     expect(source).toContain("disabled={!isEditing || (!formData.isActive && hasActivationBlockers)}");
     expect(source).toContain("disabled={isSaving || activeSaveBlocked}");
     expect(source).toContain('to="/admin/settings/checkout"');

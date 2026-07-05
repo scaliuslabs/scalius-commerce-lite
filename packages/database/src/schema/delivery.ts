@@ -36,6 +36,10 @@ export const deliveryProviders = sqliteTable("delivery_providers", {
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
     credentials: text("credentials").notNull(),
     config: text("config").notNull(),
+    lastTestAttemptAt: integer("last_test_attempt_at", { mode: "timestamp" }),
+    lastTestSuccessAt: integer("last_test_success_at", { mode: "timestamp" }),
+    lastTestFailureAt: integer("last_test_failure_at", { mode: "timestamp" }),
+    lastTestSuccessFingerprint: text("last_test_success_fingerprint"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),

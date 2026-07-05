@@ -11,6 +11,9 @@ import {
   ProviderIcon,
   PROVIDER_VISUAL,
   PROVIDER_TYPES,
+  getProviderReadinessBadgeClass,
+  getProviderReadinessLabel,
+  resolveProviderReadiness,
   type DeliveryProviderRecord,
 } from "./ProviderIcon";
 
@@ -44,42 +47,45 @@ export function ProviderListSidebar({
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {providers.map((provider) => (
-                <button
-                  key={provider.id}
-                  type="button"
-                  onClick={() => onSelect(provider)}
-                  className={`w-full text-left px-4 py-3 transition-colors hover:bg-muted/50 ${selectedProviderId === provider.id
-                    ? "bg-muted/60 border-l-2 border-l-primary"
-                    : "border-l-2 border-l-transparent"
-                    }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <ProviderIcon type={provider.type} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-sm truncate">
-                          {provider.name}
-                        </span>
-                        <Badge
-                          variant={provider.isActive ? "default" : "secondary"}
-                          className="text-[10px] px-1.5 py-0 flex-shrink-0"
-                        >
-                          {provider.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] px-1.5 py-0 font-normal capitalize ${PROVIDER_VISUAL[provider.type]?.badgeClass || ""}`}
-                        >
-                          {provider.type}
-                        </Badge>
+              {providers.map((provider) => {
+                const readiness = resolveProviderReadiness(provider);
+                return (
+                  <button
+                    key={provider.id}
+                    type="button"
+                    onClick={() => onSelect(provider)}
+                    className={`w-full text-left px-4 py-3 transition-colors hover:bg-muted/50 ${selectedProviderId === provider.id
+                      ? "bg-muted/60 border-l-2 border-l-primary"
+                      : "border-l-2 border-l-transparent"
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <ProviderIcon type={provider.type} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-sm truncate">
+                            {provider.name}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] px-1.5 py-0 flex-shrink-0 ${getProviderReadinessBadgeClass(readiness)}`}
+                          >
+                            {getProviderReadinessLabel(readiness)}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] px-1.5 py-0 font-normal capitalize ${PROVIDER_VISUAL[provider.type]?.badgeClass || ""}`}
+                          >
+                            {provider.type}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </CardContent>

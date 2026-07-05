@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getDeliveryProviders: vi.fn(),
   getDeliveryProvider: vi.fn(),
   saveDeliveryProvider: vi.fn(),
+  testDeliveryProvider: vi.fn(),
   createProvider: vi.fn(),
   deleteWhere: vi.fn(),
 }));
@@ -33,6 +34,7 @@ vi.mock("@scalius/core/modules/delivery/delivery.service", () => ({
   getDeliveryProviders: mocks.getDeliveryProviders,
   getDeliveryProvider: mocks.getDeliveryProvider,
   saveDeliveryProvider: mocks.saveDeliveryProvider,
+  testDeliveryProvider: mocks.testDeliveryProvider,
 }));
 
 vi.mock("@scalius/core/modules/delivery/factory", () => ({
@@ -82,6 +84,7 @@ function createTestApp() {
   mocks.getDeliveryProviders.mockResolvedValue([providerRecord]);
   mocks.getDeliveryProvider.mockResolvedValue(providerRecord);
   mocks.saveDeliveryProvider.mockResolvedValue(providerRecord);
+  mocks.testDeliveryProvider.mockResolvedValue({ success: true, message: "ok" });
   mocks.deleteWhere.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
@@ -333,13 +336,35 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
-    const json = await response.json() as { data: Array<{ credentials: string }> };
+    const json = await response.json() as { data: Array<{ credentials: string; readiness: { status: string } }> };
     expect(JSON.parse(json.data[0]?.credentials ?? "{}")).toEqual({
       clientSecret: "••••••••••••",
       password: "••••••••••••",
       webhookSecret: "••••••••••••",
       baseUrl: "https://api-hermes.pathao.com",
     });
+    expect(json.data[0]?.readiness.status).toBe("blocked");
+  });
+
+  it("records existing-provider test attempts and invalidates checkout caches", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers/provider_pathao",
+      { method: "POST" },
+      env,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.testDeliveryProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      "provider_pathao",
+      "read-key",
+    );
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
+    );
   });
 
   it("fails closed before provider creation when CREDENTIAL_ENCRYPTION_KEY is missing", async () => {

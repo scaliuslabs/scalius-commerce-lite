@@ -15,6 +15,7 @@ import {
 const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
   createShipment: vi.fn(),
+  getDeliveryProviderActionReadiness: vi.fn(),
   markShipmentReconciliationRequired: vi.fn(),
   markCODReturned: vi.fn(),
   recordCODCollection: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("../inventory/inventory-transitions", () => ({
 
 vi.mock("../delivery/delivery.service", () => ({
   createShipment: mocks.createShipment,
+  getDeliveryProviderActionReadiness: mocks.getDeliveryProviderActionReadiness,
   markShipmentReconciliationRequired: mocks.markShipmentReconciliationRequired,
 }));
 
@@ -135,6 +137,11 @@ describe("orders fulfillment side-effect ordering", () => {
     vi.clearAllMocks();
     mocks.applyInventoryForStatusChange.mockResolvedValue("deducted");
     mocks.createShipment.mockResolvedValue({ success: true, data: { id: "provider_shipment" } });
+    mocks.getDeliveryProviderActionReadiness.mockResolvedValue({
+      ready: true,
+      provider: { id: "provider_1" },
+      summary: { active: true },
+    });
     mocks.markShipmentReconciliationRequired.mockResolvedValue(undefined);
     mocks.markCODReturned.mockResolvedValue({ success: true });
     mocks.recordCODCollection.mockResolvedValue({ success: true });
@@ -159,6 +166,36 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(result).toEqual([
       { orderId: "order_1", success: false, error: "Order was modified concurrently" },
     ]);
+    expect(mocks.createShipment).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("does not claim orders or create shipments when the provider is not action-ready", async () => {
+    mocks.getDeliveryProviderActionReadiness.mockResolvedValueOnce({
+      ready: false,
+      provider: { id: "provider_1" },
+      message: "Delivery provider provider_1 is not ready for shipment creation: Delivery provider must pass a live connection test for the current setup.",
+    });
+    const { db, updates } = createDbMock({
+      selectedOrder: { status: OrderStatus.CONFIRMED, version: 7 },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    const result = await bulkShipOrders(db as never, ["order_1", "order_2"], "provider_1", {});
+
+    expect(result).toEqual([
+      {
+        orderId: "order_1",
+        success: false,
+        error: "Delivery provider provider_1 is not ready for shipment creation: Delivery provider must pass a live connection test for the current setup.",
+      },
+      {
+        orderId: "order_2",
+        success: false,
+        error: "Delivery provider provider_1 is not ready for shipment creation: Delivery provider must pass a live connection test for the current setup.",
+      },
+    ]);
+    expect(updates).toHaveLength(0);
     expect(mocks.createShipment).not.toHaveBeenCalled();
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });

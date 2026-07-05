@@ -1,7 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
-import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider } from "@scalius/core/modules/delivery/delivery.service";
-import { assertDeliveryProviderReadyForActivation } from "@scalius/core/modules/delivery/provider-readiness";
+import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider, testDeliveryProvider } from "@scalius/core/modules/delivery/delivery.service";
+import {
+    assertDeliveryProviderReadyForActivation,
+    getDeliveryProviderReadinessSummary,
+    getDeliveryProviderSetupFingerprint,
+} from "@scalius/core/modules/delivery/provider-readiness";
 import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
@@ -126,6 +130,69 @@ async function maskCredentialsForClient(credentialsJson: string, env: Record<str
     }
 }
 
+type DeliveryProviderRouteRecord = NonNullable<Awaited<ReturnType<typeof getDeliveryProvider>>>;
+
+function timestampForClient(value: Date | number | string | null | undefined): string | number | null {
+    if (value instanceof Date) return value.toISOString();
+    return value ?? null;
+}
+
+function requiredTimestampForClient(value: Date | number | string): string | number {
+    if (value instanceof Date) return value.toISOString();
+    return value;
+}
+
+async function serializeProviderForClient(
+    provider: DeliveryProviderRouteRecord,
+    env: Record<string, unknown>,
+) {
+    const credentialsForReadiness = await decryptStoredCredentials(provider.credentials, env).catch(() => null);
+    const maskedCredentials = credentialsForReadiness
+        ? await maskCredentialsForClient(provider.credentials, env).catch(() => "{}")
+        : "{}";
+
+    let currentFingerprint: string | null = null;
+    const fingerprintKey = env.CREDENTIAL_ENCRYPTION_KEY as string | undefined;
+    if (fingerprintKey && credentialsForReadiness) {
+        try {
+            currentFingerprint = await getDeliveryProviderSetupFingerprint({
+                type: provider.type,
+                credentials: credentialsForReadiness,
+                config: provider.config,
+            }, fingerprintKey);
+        } catch { /* unreadable setup remains untested */ }
+    }
+
+    const readiness = getDeliveryProviderReadinessSummary({
+        type: provider.type,
+        credentials: credentialsForReadiness,
+        config: provider.config,
+        isActive: provider.isActive,
+        currentFingerprint,
+        lastTestAttemptAt: provider.lastTestAttemptAt,
+        lastTestSuccessAt: provider.lastTestSuccessAt,
+        lastTestFailureAt: provider.lastTestFailureAt,
+        lastTestSuccessFingerprint: provider.lastTestSuccessFingerprint,
+    });
+
+    return {
+        ...provider,
+        createdAt: requiredTimestampForClient(provider.createdAt),
+        updatedAt: requiredTimestampForClient(provider.updatedAt),
+        lastTestAttemptAt: timestampForClient(provider.lastTestAttemptAt),
+        lastTestSuccessAt: timestampForClient(provider.lastTestSuccessAt),
+        lastTestFailureAt: timestampForClient(provider.lastTestFailureAt),
+        credentials: maskedCredentials,
+        readiness: {
+            ...readiness,
+            canCreateShipment: readiness.active,
+            lastTestAttemptAt: timestampForClient(readiness.lastTestAttemptAt),
+            lastTestSuccessAt: timestampForClient(readiness.lastTestSuccessAt),
+            lastTestFailureAt: timestampForClient(readiness.lastTestFailureAt),
+        },
+    };
+}
+
 // ── List Providers ──
 
 const deliveryProviderSchema = z.object({
@@ -135,6 +202,23 @@ const deliveryProviderSchema = z.object({
     credentials: z.string(),
     config: z.string(),
     isActive: z.boolean(),
+    readiness: z.object({
+        status: z.enum(["draft", "configured", "tested", "active", "blocked"]),
+        configured: z.boolean(),
+        tested: z.boolean(),
+        active: z.boolean(),
+        canCreateShipment: z.boolean(),
+        blockers: z.array(z.object({
+            code: z.string(),
+            message: z.string(),
+        }).passthrough()),
+        activationBlockers: z.array(z.object({
+            source: z.string(),
+            key: z.string(),
+            label: z.string(),
+            message: z.string(),
+        }).passthrough()),
+    }).passthrough().optional(),
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
 }).passthrough();
@@ -154,10 +238,7 @@ app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const providers = await getDeliveryProviders(db);
     const env = c.env as Record<string, unknown>;
-    const maskedProviders = await Promise.all(providers.map(async (provider) => ({
-        ...provider,
-        credentials: await maskCredentialsForClient(provider.credentials, env)
-    })));
+    const maskedProviders = await Promise.all(providers.map((provider) => serializeProviderForClient(provider, env)));
 
     return ok(c, maskedProviders);
 });
@@ -213,13 +294,9 @@ app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProvide
     };
 
     const savedProvider = await saveDeliveryProvider(db, provider, encryptionKey);
-    const savedCredentials = typeof savedProvider.credentials === 'string'
-        ? savedProvider.credentials
-        : JSON.stringify(savedProvider.credentials);
-    const maskedResponse = {
-        ...savedProvider,
-        credentials: await maskCredentialsForClient(savedCredentials, env)
-    };
+    const reloadedProvider = await getDeliveryProvider(db, savedProvider.id);
+    if (!reloadedProvider) throw new NotFoundError("Provider not found after save");
+    const maskedResponse = await serializeProviderForClient(reloadedProvider, env);
 
     await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
     return created(c, maskedResponse);
@@ -281,13 +358,9 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
             credentials: providerCredentials,
             config: providerConfig,
         }, encryptionKey);
-        const newCredentials = typeof savedProvider.credentials === 'string'
-            ? savedProvider.credentials
-            : JSON.stringify(savedProvider.credentials);
-        const maskedResponse = {
-            ...savedProvider,
-            credentials: await maskCredentialsForClient(newCredentials, env)
-        };
+        const reloadedProvider = await getDeliveryProvider(db, savedProvider.id);
+        if (!reloadedProvider) throw new NotFoundError("Provider not found after save");
+        const maskedResponse = await serializeProviderForClient(reloadedProvider, env);
         await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
         return created(c, maskedResponse);
     }
@@ -317,13 +390,9 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
         config: nextConfig,
     }, encryptionKey);
 
-    const updatedCredentials = typeof savedProvider.credentials === 'string'
-        ? savedProvider.credentials
-        : JSON.stringify(savedProvider.credentials);
-    const maskedResponse = {
-        ...savedProvider,
-        credentials: await maskCredentialsForClient(updatedCredentials, env)
-    };
+    const reloadedProvider = await getDeliveryProvider(db, savedProvider.id);
+    if (!reloadedProvider) throw new NotFoundError("Provider not found after save");
+    const maskedResponse = await serializeProviderForClient(reloadedProvider, env);
 
     await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
     return ok(c, maskedResponse);
@@ -367,6 +436,10 @@ app.openapi(createTestRoute, async (c) => {
         isActive: true,
         credentials: typeof credentials === "string" ? credentials : JSON.stringify(credentials),
         config: typeof config === "string" ? config : JSON.stringify(config),
+        lastTestAttemptAt: null,
+        lastTestSuccessAt: null,
+        lastTestFailureAt: null,
+        lastTestSuccessFingerprint: null,
         createdAt: new Date(),
         updatedAt: new Date()
     };
@@ -408,10 +481,7 @@ app.openapi(getProviderRoute, async (c) => {
     const { id } = c.req.valid("param");
     const provider = await getDeliveryProvider(db, id);
     if (!provider) throw new NotFoundError("Provider not found");
-    return ok(c, {
-        ...provider,
-        credentials: await maskCredentialsForClient(provider.credentials, c.env as Record<string, unknown>),
-    });
+    return ok(c, await serializeProviderForClient(provider, c.env as Record<string, unknown>));
 });
 
 // ── Test Existing Provider ──
@@ -435,17 +505,9 @@ app.openapi(testExistingRoute, async (c) => {
     const { id } = c.req.valid("param");
     const provider = await getDeliveryProvider(db, id);
     if (!provider) throw new NotFoundError("Provider not found");
-
-    try {
-        const providerInstance = await createProvider(provider, getEncryptionKey(c.env as Record<string, unknown>), db);
-        const result = await providerInstance.testConnection();
-        return ok(c, result);
-    } catch (error: unknown) {
-        return ok(c, {
-            success: false,
-            message: error instanceof Error ? error.message : "Failed to test provider connection"
-        });
-    }
+    const result = await testDeliveryProvider(db, id, getEncryptionKey(c.env as Record<string, unknown>));
+    await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
+    return ok(c, result);
 });
 
 // ── Delete Provider ──
