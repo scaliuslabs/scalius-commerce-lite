@@ -44,6 +44,24 @@ function uniqueStringList(value: unknown): string[] {
     );
 }
 
+function productIdFromUnknown(value: unknown): string {
+    if (typeof value === "string") return value.trim();
+    if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+
+    const record = value as Record<string, unknown>;
+    if (typeof record.id === "string") return record.id.trim();
+    if (typeof record.productId === "string") return record.productId.trim();
+    return "";
+}
+
+function uniqueProductIdList(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+
+    return Array.from(
+        new Set(value.map(productIdFromUnknown).filter(Boolean)),
+    );
+}
+
 function optionalString(value: unknown): string | undefined {
     if (typeof value !== "string") return undefined;
     const trimmed = value.trim();
@@ -66,12 +84,17 @@ function normalizeMaxProducts(value: unknown): number {
 
 export function normalizeCollectionConfig(value: unknown): NormalizedCollectionConfig {
     const config = parseConfigInput(value);
-    const productIds = uniqueStringList(config.productIds);
-    const legacySpecificProductIds = uniqueStringList(config.specificProductIds);
+    const productIds = uniqueProductIdList(config.productIds);
+    const legacySpecificProductIds = uniqueProductIdList(config.specificProductIds);
+    const legacyProducts = uniqueProductIdList(config.products);
 
     return {
         categoryIds: uniqueStringList(config.categoryIds),
-        productIds: productIds.length > 0 ? productIds : legacySpecificProductIds,
+        productIds: productIds.length > 0
+            ? productIds
+            : legacySpecificProductIds.length > 0
+                ? legacySpecificProductIds
+                : legacyProducts,
         featuredProductId: optionalString(config.featuredProductId),
         maxProducts: normalizeMaxProducts(config.maxProducts),
         title: textValue(config.title),

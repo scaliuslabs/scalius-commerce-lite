@@ -6,6 +6,8 @@ import {
   getCollections,
   getCollectionsByIds,
   type CollectionsByIdsPayload,
+  type CollectionCategoryOptionsPayload,
+  type CollectionFormOptionsPayload,
   type CollectionsQueryInput,
 } from "../api-functions/collections";
 import { queryKeys } from "../query-keys";
@@ -13,9 +15,41 @@ import { queryKeys } from "../query-keys";
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
 const EMPTY_COLLECTIONS_BY_IDS: CollectionsByIdsPayload = { collections: [] };
+const EMPTY_COLLECTION_FORM_OPTIONS: CollectionFormOptionsPayload = {
+  categories: [],
+  products: [],
+};
+const EMPTY_COLLECTION_CATEGORY_OPTIONS: CollectionCategoryOptionsPayload = {
+  categories: [],
+};
 
 function normalizeLookupIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+}
+
+function normalizeCollectionsByIdsPayload(payload: unknown): CollectionsByIdsPayload {
+  const collections = (payload as Partial<CollectionsByIdsPayload> | null | undefined)
+    ?.collections;
+  return { collections: Array.isArray(collections) ? collections : [] };
+}
+
+function normalizeCollectionFormOptionsPayload(
+  payload: unknown,
+): CollectionFormOptionsPayload {
+  const options = payload as Partial<CollectionFormOptionsPayload> | null | undefined;
+  return {
+    categories: Array.isArray(options?.categories) ? options.categories : [],
+    products: Array.isArray(options?.products) ? options.products : [],
+  };
+}
+
+function normalizeCollectionCategoryOptionsPayload(
+  payload: unknown,
+): CollectionCategoryOptionsPayload {
+  const categories = (
+    payload as Partial<CollectionCategoryOptionsPayload> | null | undefined
+  )?.categories;
+  return { categories: Array.isArray(categories) ? categories : [] };
 }
 
 export const collectionsQueryOptions = (params: CollectionsQueryInput) =>
@@ -32,7 +66,9 @@ export const collectionsByIdsQueryOptions = (ids: readonly string[]) => {
     queryFn: () =>
       normalizedIds.length === 0
         ? Promise.resolve(EMPTY_COLLECTIONS_BY_IDS)
-        : getCollectionsByIds({ data: { ids: normalizedIds } }),
+        : getCollectionsByIds({ data: { ids: normalizedIds } }).then(
+            normalizeCollectionsByIdsPayload,
+          ),
     placeholderData: EMPTY_COLLECTIONS_BY_IDS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
@@ -48,13 +84,19 @@ export const collectionQueryOptions = (id: string) =>
 export const collectionFormOptionsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.collections.formOptions(),
-    queryFn: () => getCollectionFormOptions(),
+    queryFn: () =>
+      getCollectionFormOptions().then(normalizeCollectionFormOptionsPayload),
+    placeholderData: EMPTY_COLLECTION_FORM_OPTIONS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 
 export const collectionCategoryOptionsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.collections.categoryOptions(),
-    queryFn: () => getCollectionCategoryOptions(),
+    queryFn: () =>
+      getCollectionCategoryOptions().then(
+        normalizeCollectionCategoryOptionsPayload,
+      ),
+    placeholderData: EMPTY_COLLECTION_CATEGORY_OPTIONS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });

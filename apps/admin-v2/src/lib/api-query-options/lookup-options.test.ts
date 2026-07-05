@@ -32,7 +32,11 @@ vi.mock("../api-functions/collections", () => ({
 }));
 
 import { productsByIdsQueryOptions } from "./products";
-import { collectionsByIdsQueryOptions } from "./collections";
+import {
+  collectionCategoryOptionsQueryOptions,
+  collectionFormOptionsQueryOptions,
+  collectionsByIdsQueryOptions,
+} from "./collections";
 
 function requireQueryFn<T>(options: { queryFn?: unknown }) {
   if (typeof options.queryFn !== "function") {
@@ -71,6 +75,16 @@ describe("lookup query options", () => {
     });
   });
 
+  it("coerces malformed product lookup payloads to an empty list", async () => {
+    mocks.getProductsByIds.mockResolvedValue(undefined);
+
+    const options = productsByIdsQueryOptions(["prod_1"]);
+
+    await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
+      products: [],
+    });
+  });
+
   it("keeps collection lookups shaped while ids are empty or still loading", async () => {
     const options = collectionsByIdsQueryOptions([]);
 
@@ -93,6 +107,39 @@ describe("lookup query options", () => {
     await expect(requireQueryFn(options)({} as never)).resolves.toEqual(payload);
     expect(mocks.getCollectionsByIds).toHaveBeenCalledWith({
       data: { ids: ["col_1"] },
+    });
+  });
+
+  it("coerces malformed collection lookup payloads to an empty list", async () => {
+    mocks.getCollectionsByIds.mockResolvedValue({ collections: undefined });
+
+    const options = collectionsByIdsQueryOptions(["col_1"]);
+
+    await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
+      collections: [],
+    });
+  });
+
+  it("keeps collection form option payloads shaped", async () => {
+    mocks.getCollectionFormOptions.mockResolvedValue({ categories: undefined });
+
+    const options = collectionFormOptionsQueryOptions();
+
+    expect(options.placeholderData).toEqual({ categories: [], products: [] });
+    await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
+      categories: [],
+      products: [],
+    });
+  });
+
+  it("keeps collection category option payloads shaped", async () => {
+    mocks.getCollectionCategoryOptions.mockResolvedValue(undefined);
+
+    const options = collectionCategoryOptionsQueryOptions();
+
+    expect(options.placeholderData).toEqual({ categories: [] });
+    await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
+      categories: [],
     });
   });
 });
