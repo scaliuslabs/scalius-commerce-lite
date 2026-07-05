@@ -56,6 +56,10 @@ describe("manual fulfillment boundaries", () => {
     expect(shipmentCardSource).toContain("ShipmentRecoveryNotice");
     expect(shipmentCardSource).toContain("order.shipmentRecovery?.activeLock === true");
     expect(shipmentCardSource).toContain("Shipment recovery active");
+    expect(shipmentCardSource).toContain("useReconcileShipment");
+    expect(shipmentCardSource).toContain('recovery.state === "needs_attention"');
+    expect(shipmentCardSource).toContain("canManageShipments");
+    expect(shipmentCardSource).toContain("Repair shipment");
     expect(shipmentCardSource).toContain("refreshDisabledReason");
     expect(statusIndicatorSource).toContain("canRefresh");
     expect(statusIndicatorSource).toContain("refreshDisabledReason");

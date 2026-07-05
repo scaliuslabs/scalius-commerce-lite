@@ -25037,6 +25037,88 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses = {
 
 export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses];
 
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileData = {
+    body?: never;
+    path: {
+        id: string;
+        shipmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/reconcile';
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileError = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors];
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses = {
+    /**
+     * Shipment reconciliation repaired
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'repaired';
+            orderId: string;
+            shipmentId: string;
+            orderStatus: string;
+            shipmentStatus: string;
+            orderStatusChanged: boolean;
+            inventoryReconciled: boolean;
+            claimCleared: boolean;
+            trackingId: string | null;
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses];
+
 export type PostApiV1AdminOrdersByIdReturnData = {
     body?: {
         reason?: string;

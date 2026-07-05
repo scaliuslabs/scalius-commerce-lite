@@ -263,6 +263,110 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
+  it("keeps the shipment claim and records repair state when final shipment inventory fails", async () => {
+    const inventoryError = new Error("inventory failed");
+    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(inventoryError);
+    mocks.createShipment.mockResolvedValue({
+      success: true,
+      shipmentId: "shp_claim",
+      data: {
+        externalId: "ext_1",
+        trackingId: "track_1",
+        status: "pending",
+        metadata: { provider: "steadfast" },
+      },
+      message: "created",
+    });
+    const { db, updates } = createDbMock({
+      selectedOrder: { status: OrderStatus.CONFIRMED, version: 7 },
+      updateResults: [[{ id: "order_1" }], [{ id: "order_1" }]],
+    });
+
+    const result = await bulkShipOrders(db as never, ["order_1"], "provider_1", {});
+
+    expect(result).toEqual([
+      {
+        orderId: "order_1",
+        success: false,
+        shipmentId: expect.stringMatching(/^shp_/),
+        reconciliationRequired: true,
+        error: "Shipment was created but inventory reconciliation requires repair",
+      },
+    ]);
+    expect(updates).toContainEqual(expect.objectContaining({
+      shipmentClaimExpiresAt: null,
+    }));
+    expect(updates).not.toContainEqual(expect.objectContaining({
+      shipmentClaimId: null,
+    }));
+    expect(mocks.markShipmentReconciliationRequired).toHaveBeenCalledWith(
+      db,
+      expect.stringMatching(/^shp_/),
+      "order_status_inventory_reconcile_failed",
+      expect.objectContaining({
+        externalId: "ext_1",
+        trackingId: "track_1",
+        status: "pending",
+        metadata: expect.objectContaining({
+          provider: "steadfast",
+          orderStatusSync: {
+            shipmentStatus: "pending",
+            orderStatus: OrderStatus.SHIPPED,
+            failedStep: "inventory_reconciliation",
+          },
+        }),
+      }),
+      inventoryError,
+    );
+  });
+
+  it("repairs a reconcile-required provider shipment without calling the provider again", async () => {
+    const { db, updates } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CONFIRMED,
+        version: 7,
+        fulfillmentStatus: "pending",
+        shipmentClaimId: "shp_claim",
+      },
+      selectedShipment: {
+        id: "shp_claim",
+        orderId: "order_1",
+        status: "reconcile_required",
+        rawStatus: "order_final_cas_conflict",
+        externalId: "ext_1",
+        trackingId: "track_1",
+        metadata: JSON.stringify({
+          reconciliation: { required: true, providerStatus: "pending" },
+          provider: "steadfast",
+        }),
+      },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    const { reconcileOrderShipment } = await import("./orders.fulfillment");
+    const result = await reconcileOrderShipment(db as never, "order_1", "shp_claim");
+
+    expect(result).toMatchObject({
+      status: "repaired",
+      orderId: "order_1",
+      shipmentId: "shp_claim",
+      orderStatus: OrderStatus.SHIPPED,
+      shipmentStatus: "pending",
+      orderStatusChanged: true,
+      inventoryReconciled: true,
+      claimCleared: true,
+      trackingId: "track_1",
+    });
+    expect(mocks.createShipment).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
+    expect(updates).toEqual([
+      expect.objectContaining({ status: OrderStatus.SHIPPED, fulfillmentStatus: "complete" }),
+      expect.objectContaining({ inventoryAction: "deducted" }),
+      expect.objectContaining({ status: "pending", rawStatus: "pending" }),
+      expect.objectContaining({ shipmentClaimId: null, shipmentClaimExpiresAt: null }),
+    ]);
+  });
+
   it("clears the shipment claim when provider shipment creation is rejected", async () => {
     mocks.createShipment.mockResolvedValue({ success: false, shipmentId: "shp_claim", message: "provider rejected" });
     const { db, updates } = createDbMock({
@@ -284,7 +388,7 @@ describe("orders fulfillment side-effect ordering", () => {
 
   it("reconciles inventory instead of calling the provider when bulk ship is retried after status was already shipped", async () => {
     const { db, updates } = createDbMock({
-      selectedOrder: { status: OrderStatus.SHIPPED, version: 9 },
+      selectedOrder: { status: OrderStatus.SHIPPED, version: 9, shipmentClaimId: "shp_claim" },
       updateResults: [],
     });
 
@@ -296,6 +400,7 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.createShipment).not.toHaveBeenCalled();
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
     expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
+    expect(updates[1]).toMatchObject({ shipmentClaimId: null, shipmentClaimExpiresAt: null });
   });
 
   it("does not record COD collection when the delivered status CAS fails", async () => {

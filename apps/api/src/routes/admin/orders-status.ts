@@ -10,7 +10,7 @@ import { assertNoActivePaymentSessionAttempt, assertNoActiveRefundAttempt } from
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created } from "../../utils/api-response";
 import { getEncryptionKey } from "../../utils/encryption-key";
-import { successEnvelope, messageResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, messageResponse, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
@@ -65,6 +65,21 @@ const refreshedShipmentSchema = deliveryShipmentSchema.extend({
     statusChanged: z.boolean(),
     orderStatusUpdate: z.boolean(),
 }).passthrough();
+
+const reconcileShipmentResponseSchema = successEnvelope(z.object({
+    status: z.literal("repaired"),
+    orderId: z.string(),
+    shipmentId: z.string(),
+    orderStatus: z.string(),
+    shipmentStatus: z.string(),
+    orderStatusChanged: z.boolean(),
+    inventoryReconciled: z.boolean(),
+    claimCleared: z.boolean(),
+    trackingId: z.string().nullable(),
+    message: z.string(),
+}));
+
+const RECONCILE_NOTIFICATION_STATUSES = new Set(["shipped", "delivered", "returned", "cancelled"]);
 
 // ─── PUT /:id/status ─────────────────────────────────────────────────────────
 
@@ -583,6 +598,52 @@ app.openapi(refreshShipmentRoute, async (c) => {
     });
 
     return ok(c, result.payload);
+});
+
+// ─── POST /:id/shipments/{shipmentId}/reconcile ─────────────────────────────
+
+const reconcileShipmentRoute = createRoute({
+    method: "post",
+    path: "/{id}/shipments/{shipmentId}/reconcile",
+    tags: ["Admin - Orders"],
+    summary: "Repair a shipment reconciliation lock",
+    request: {
+        params: z.object({ id: z.string(), shipmentId: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Shipment reconciliation repaired",
+            content: { "application/json": { schema: reconcileShipmentResponseSchema } },
+        },
+        400: errorResponses[400],
+        404: errorResponses[404],
+        409: conflictResponse,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(reconcileShipmentRoute, async (c) => {
+    const { id: orderId, shipmentId } = c.req.valid("param");
+    const db = c.get("db");
+
+    const result = await OrdersService.reconcileOrderShipment(db, orderId, shipmentId);
+    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
+
+    if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
+        await enqueueOrderNotificationsForStatus({
+            db,
+            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            orderIds: [orderId],
+            newStatus: result.orderStatus,
+            trackingByOrderId: result.orderStatus === "shipped" && result.trackingId
+                ? { [orderId]: result.trackingId }
+                : undefined,
+            dedupeKeyByOrderId: { [orderId]: `shipment:${shipmentId}:order_${result.orderStatus}` },
+            source: "orders-shipment-reconcile",
+        });
+    }
+
+    return ok(c, result);
 });
 
 export { app as adminOrdersStatusRoutes };

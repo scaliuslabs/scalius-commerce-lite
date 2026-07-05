@@ -34,7 +34,7 @@ import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/err
 import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
 import { normalizeOrderStatus } from "@scalius/shared/order-state";
 import { validateTransition } from "./order-state-machine";
-import type { StatusUpdateResult } from "./orders.types";
+import type { OrderShipmentReconciliationResult, StatusUpdateResult } from "./orders.types";
 import type { OrderNotificationType } from "../notifications/notification-types";
 import { buildOrderStatusNotificationDedupeKey } from "../notifications/order-notification-outbox";
 import {
@@ -53,6 +53,70 @@ async function reconcileInventoryForStatus(
 ): Promise<void> {
     const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
     await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
+}
+
+function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {
+    if (!metadata) return {};
+    if (typeof metadata === "string") {
+        try {
+            const parsed = JSON.parse(metadata) as unknown;
+            return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+                ? parsed as Record<string, unknown>
+                : {};
+        } catch {
+            return {};
+        }
+    }
+
+    return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? metadata as Record<string, unknown>
+        : {};
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : null;
+}
+
+function stringField(record: Record<string, unknown> | null, key: string): string | null {
+    const value = record?.[key];
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function cleanShipmentRecoveryMetadata(metadata: Record<string, unknown>): string | null {
+    const next = { ...metadata };
+    delete next.reconciliation;
+    delete next.orderStatusSync;
+    return Object.keys(next).length > 0 ? JSON.stringify(next) : null;
+}
+
+function safeFinalizedShipmentStatus(
+    shipment: { rawStatus?: string | null },
+    metadata: Record<string, unknown>,
+): { status: string; hasExplicitProviderState: boolean } {
+    const reconciliation = asRecord(metadata.reconciliation);
+    const explicitStatus =
+        stringField(reconciliation, "providerStatus") ??
+        stringField(metadata, "order_status") ??
+        stringField(metadata, "status");
+
+    if (explicitStatus && explicitStatus !== ShipmentStatus.RECONCILE_REQUIRED) {
+        return { status: explicitStatus, hasExplicitProviderState: true };
+    }
+
+    const rawStatus = shipment.rawStatus?.trim();
+    if (
+        rawStatus &&
+        rawStatus !== ShipmentStatus.RECONCILE_REQUIRED &&
+        !rawStatus.endsWith("_failed") &&
+        !rawStatus.includes("reconcile") &&
+        !rawStatus.includes("claim")
+    ) {
+        return { status: rawStatus, hasExplicitProviderState: true };
+    }
+
+    return { status: ShipmentStatus.PENDING, hasExplicitProviderState: false };
 }
 
 function createShipmentClaimId(): string {
@@ -162,6 +226,201 @@ async function resolveExpiredShipmentClaim(
     };
 }
 
+export async function reconcileOrderShipment(
+    db: Database,
+    orderId: string,
+    shipmentId: string,
+): Promise<OrderShipmentReconciliationResult> {
+    const shipment = await db
+        .select({
+            id: deliveryShipments.id,
+            orderId: deliveryShipments.orderId,
+            status: deliveryShipments.status,
+            rawStatus: deliveryShipments.rawStatus,
+            externalId: deliveryShipments.externalId,
+            trackingId: deliveryShipments.trackingId,
+            metadata: deliveryShipments.metadata,
+        })
+        .from(deliveryShipments)
+        .where(eq(deliveryShipments.id, shipmentId))
+        .get();
+
+    if (!shipment) throw new NotFoundError("Shipment not found");
+    if (shipment.orderId !== orderId) {
+        throw new ValidationError("Shipment does not belong to this order");
+    }
+    if (shipment.status !== ShipmentStatus.RECONCILE_REQUIRED) {
+        throw new ValidationError("Shipment does not require reconciliation");
+    }
+
+    const metadata = parseShipmentMetadata(shipment.metadata);
+    const order = await db
+        .select({
+            id: orders.id,
+            status: orders.status,
+            version: orders.version,
+            fulfillmentStatus: orders.fulfillmentStatus,
+            shipmentClaimId: orders.shipmentClaimId,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .get();
+
+    if (!order) throw new NotFoundError("Order not found");
+    if (order.shipmentClaimId && order.shipmentClaimId !== shipmentId) {
+        throw new ConflictError("Another shipment recovery claim is active for this order.");
+    }
+
+    await assertNoActiveRefundAttempt(db, orderId, {
+        message: "Order has an active refund operation. Complete or reconcile the refund before repairing shipment recovery.",
+    });
+    await assertNoActivePaymentSessionAttempt(db, orderId);
+
+    const orderStatusSync = asRecord(metadata.orderStatusSync);
+    const shipmentStatusForSync = stringField(orderStatusSync, "shipmentStatus");
+    if (shipmentStatusForSync) {
+        const targetOrderStatus = stringField(orderStatusSync, "orderStatus") ?? order.status;
+        let orderStatusChanged = false;
+        if (targetOrderStatus !== order.status) {
+            validateTransition("order", order.status, targetOrderStatus);
+            const statusResult = await db
+                .update(orders)
+                .set({
+                    status: targetOrderStatus,
+                    fulfillmentStatus: targetOrderStatus === OrderStatus.SHIPPED || targetOrderStatus === OrderStatus.DELIVERED
+                        ? FulfillmentStatus.COMPLETE
+                        : order.fulfillmentStatus,
+                    version: order.version + 1,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(and(
+                    eq(orders.id, orderId),
+                    eq(orders.version, order.version),
+                    order.shipmentClaimId
+                        ? eq(orders.shipmentClaimId, shipmentId)
+                        : sql`${orders.shipmentClaimId} IS NULL`,
+                    noActiveRefundAttemptForOrderIdCondition(orderId),
+                    noActivePaymentSessionAttemptForOrderIdCondition(orderId),
+                ))
+                .returning({ id: orders.id });
+
+            if (statusResult.length === 0) {
+                throw new ConflictError("Order changed while shipment recovery was being repaired.");
+            }
+            orderStatusChanged = true;
+        }
+
+        await reconcileInventoryForStatus(db, orderId, targetOrderStatus);
+
+        await db
+            .update(deliveryShipments)
+            .set({
+                status: shipmentStatusForSync,
+                rawStatus: shipmentStatusForSync,
+                metadata: cleanShipmentRecoveryMetadata(metadata),
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(
+                eq(deliveryShipments.id, shipmentId),
+                eq(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
+            ));
+
+        if (order.shipmentClaimId === shipmentId) {
+            await clearShipmentClaim(db, orderId, shipmentId);
+        }
+
+        return {
+            status: "repaired",
+            orderId,
+            shipmentId,
+            orderStatus: targetOrderStatus,
+            shipmentStatus: shipmentStatusForSync,
+            orderStatusChanged,
+            inventoryReconciled: true,
+            claimCleared: order.shipmentClaimId === shipmentId,
+            trackingId: shipment.trackingId,
+            message: "Shipment inventory reconciliation repaired.",
+        };
+    }
+    if (order.shipmentClaimId !== shipmentId) {
+        throw new ConflictError("Shipment is no longer the active order shipment recovery claim.");
+    }
+
+    const finalizedShipmentStatus = safeFinalizedShipmentStatus(shipment, metadata);
+    if (!shipment.externalId && !shipment.trackingId && !finalizedShipmentStatus.hasExplicitProviderState) {
+        throw new ConflictError("Shipment recovery has no provider proof to finalize safely.");
+    }
+
+    const finalOrderStatus =
+        order.status === OrderStatus.SHIPPED || order.status === OrderStatus.DELIVERED
+            ? order.status
+            : OrderStatus.SHIPPED;
+    let orderStatusChanged = false;
+
+    if (order.status !== finalOrderStatus) {
+        validateTransition("order", order.status, finalOrderStatus);
+        const statusResult = await db
+            .update(orders)
+            .set({
+                status: finalOrderStatus,
+                fulfillmentStatus: FulfillmentStatus.COMPLETE,
+                version: order.version + 1,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(
+                eq(orders.id, orderId),
+                eq(orders.version, order.version),
+                eq(orders.shipmentClaimId, shipmentId),
+                noActiveRefundAttemptForOrderIdCondition(orderId),
+                noActivePaymentSessionAttemptForOrderIdCondition(orderId),
+            ))
+            .returning({ id: orders.id });
+
+        if (statusResult.length === 0) {
+            throw new ConflictError("Order changed while shipment recovery was being repaired.");
+        }
+        orderStatusChanged = true;
+    } else if (order.fulfillmentStatus !== FulfillmentStatus.COMPLETE) {
+        await db
+            .update(orders)
+            .set({
+                fulfillmentStatus: FulfillmentStatus.COMPLETE,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(eq(orders.id, orderId), eq(orders.shipmentClaimId, shipmentId)));
+    }
+
+    await reconcileInventoryForStatus(db, orderId, finalOrderStatus);
+
+    await db
+        .update(deliveryShipments)
+        .set({
+            status: finalizedShipmentStatus.status,
+            rawStatus: finalizedShipmentStatus.status,
+            metadata: cleanShipmentRecoveryMetadata(metadata),
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(deliveryShipments.id, shipmentId),
+            eq(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
+        ));
+
+    await clearShipmentClaim(db, orderId, shipmentId);
+
+    return {
+        status: "repaired",
+        orderId,
+        shipmentId,
+        orderStatus: finalOrderStatus,
+        shipmentStatus: finalizedShipmentStatus.status,
+        orderStatusChanged,
+        inventoryReconciled: true,
+        claimCleared: true,
+        trackingId: shipment.trackingId,
+        message: "Shipment recovery repaired and order finalization completed.",
+    };
+}
+
 export async function bulkShipOrders(
     db: Database,
     orderIds: string[],
@@ -184,10 +443,10 @@ export async function bulkShipOrders(
             });
             await assertNoActivePaymentSessionAttempt(db, orderId);
             if (order.status === OrderStatus.SHIPPED) {
+                await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
                 if (order.shipmentClaimId) {
                     await clearShipmentClaim(db, orderId, order.shipmentClaimId);
                 }
-                await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
                 results.push({ orderId, success: true, message: "Order already shipped; inventory reconciled" });
                 continue;
             }
@@ -241,8 +500,6 @@ export async function bulkShipOrders(
                 const casResult = await db.update(orders).set({
                     status: OrderStatus.SHIPPED,
                     fulfillmentStatus: FulfillmentStatus.COMPLETE,
-                    shipmentClaimId: null,
-                    shipmentClaimExpiresAt: null,
                     version: order.version + 2,
                     updatedAt: sql`unixepoch()`,
                 }).where(and(
@@ -270,7 +527,39 @@ export async function bulkShipOrders(
                     continue;
                 }
 
-                await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
+                try {
+                    await reconcileInventoryForStatus(db, orderId, OrderStatus.SHIPPED);
+                    await clearShipmentClaim(db, orderId, claimId);
+                } catch (error: unknown) {
+                    await markShipmentReconciliationRequired(
+                        db,
+                        claimId,
+                        "order_status_inventory_reconcile_failed",
+                        {
+                            externalId: shipment.data?.externalId,
+                            trackingId: shipment.data?.trackingId,
+                            status: shipment.data?.status ?? ShipmentStatus.PENDING,
+                            metadata: {
+                                ...(shipment.data?.metadata ?? {}),
+                                orderStatusSync: {
+                                    shipmentStatus: shipment.data?.status ?? ShipmentStatus.PENDING,
+                                    orderStatus: OrderStatus.SHIPPED,
+                                    failedStep: "inventory_reconciliation",
+                                },
+                            },
+                        },
+                        error,
+                    );
+                    await holdShipmentClaimForReconciliation(db, orderId, claimId);
+                    results.push({
+                        orderId,
+                        success: false,
+                        shipmentId: claimId,
+                        reconciliationRequired: true,
+                        error: "Shipment was created but inventory reconciliation requires repair",
+                    });
+                    continue;
+                }
             } else {
                 await clearShipmentClaim(db, orderId, claimId);
             }

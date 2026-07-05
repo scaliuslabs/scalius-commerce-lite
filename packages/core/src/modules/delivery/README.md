@@ -40,7 +40,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `updateOrderStatusFromShipment` | `(db, shipmentId, newStatus)` | Maps shipment status to order status, CAS update on `orders.version` first when status changes, then applies inventory side-effects via `applyInventoryForStatusChange()`. Same-status retries still reconcile stale inventory. Concurrent admin changes take priority (CAS conflict is logged and skipped). |
+| `updateOrderStatusFromShipment` | `(db, shipmentId, newStatus)` | Maps shipment status to order status, CAS update on `orders.version` first when status changes, then applies inventory side-effects via `applyInventoryForStatusChange()`. Same-status retries still reconcile stale inventory. Inventory failures mark the shipment `reconcile_required` with sanitized repair metadata. Concurrent admin changes take priority (CAS conflict is logged and skipped). |
 | `getTrackingUrl` | `(providerType, trackingId)` | Returns tracking URL for Pathao or Steadfast, null for others |
 
 ## Location Functions (`locations.ts`)
@@ -72,7 +72,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 6. On provider rejection: UPDATE to `status: "failed"`, `rawStatus: "provider_rejected"`
 7. On exception: UPDATE to `status: "failed"`, `rawStatus: "exception"`
 
-Provider shipment creation is coordinated by order-level shipment claims in the orders module. `deleteShipmentRecord()` is the deletion gate: do not bypass it when removing shipments, because it protects active claims, reconciliation evidence, and stale claimed rows that still need manual resolution.
+Provider shipment creation is coordinated by order-level shipment claims in the orders module. `deleteShipmentRecord()` is the deletion gate: do not bypass it when removing shipments, because it protects active claims, reconciliation evidence, and stale claimed rows that still need manual resolution. When provider creation succeeded but local order/inventory finalization failed, the orders module repairs from the persisted shipment evidence and only then clears the matching order claim; delivery providers must not be called a second time for that repair.
 
 For Pathao, positive-integer city and zone `externalIds.pathao` mappings are mandatory before the insert-first placeholder is written. Area mappings remain optional because Pathao accepts some shipments without area IDs, but when present the provider payload includes them.
 
@@ -107,7 +107,7 @@ Single format: 11 mappings including `_approval_pending` suffixes. Normalized to
 | `cancelled` | `confirmed` or `cancelled` | If shipped -> confirmed; if pending/processing -> cancelled |
 | `pending`, `on_hold`, `unknown` | No order change | Shipment-only state |
 
-Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects. If the mapped order status already equals the current order status, it still calls `applyInventoryForStatusChange()` so provider retries can repair stale `inventoryAction` left by a prior failure; callers should only send customer notifications when a real order status change is returned.
+Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects. If inventory reconciliation fails after the status CAS, the shipment is marked `reconcile_required` with the carrier status needed for local repair. If the mapped order status already equals the current order status, it still calls `applyInventoryForStatusChange()` so provider retries or the explicit admin repair can fix stale `inventoryAction` left by a prior failure; callers should only send customer notifications when a real order status change is returned.
 
 Delivery webhooks and admin shipment refresh/check paths enqueue customer notifications from the API layer through `ORDER_NOTIFICATIONS_QUEUE` after a committed order status change. The API helper maps only order statuses with existing templates: `shipped`, `delivered`, `returned`, and `cancelled`. Shipment-only states such as `out_for_delivery`, `on_hold`, and `delivery_failed` remain internal unless new notification templates/settings are added. All admin status-check endpoints must use the shared API shipment-status sync helper so provider polling, `lastChecked`, order/inventory reconciliation, availability cache invalidation, and notification enqueue stay in one path.
 

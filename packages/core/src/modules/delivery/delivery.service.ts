@@ -102,6 +102,7 @@ export async function markShipmentReconciliationRequired(
         reconciliation: {
           required: true,
           reason,
+          ...(data?.status ? { providerStatus: data.status } : {}),
           error: errorMessage,
           detectedAt: new Date().toISOString(),
         },
