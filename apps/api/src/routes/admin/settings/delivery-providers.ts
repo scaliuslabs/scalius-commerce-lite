@@ -11,7 +11,7 @@ import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryptio
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 
 import { ok, created } from "../../../utils/api-response";
-import { successEnvelope, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const MASKED_VALUE = "••••••••••••";
@@ -183,6 +183,7 @@ const createProviderRoute = createRoute({
     responses: {
         201: { description: "Provider created", content: { "application/json": { schema: successEnvelope(deliveryProviderSchema) } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 
@@ -245,7 +246,9 @@ const updateProviderRoute = createRoute({
     },
     responses: {
         200: { description: "Provider updated", content: { "application/json": { schema: successEnvelope(deliveryProviderSchema) } } },
+        201: { description: "Provider created", content: { "application/json": { schema: successEnvelope(deliveryProviderSchema) } } },
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 

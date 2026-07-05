@@ -211,6 +211,7 @@ const deleteCustomerRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        404: errorResponses[404],
     }
 });
 

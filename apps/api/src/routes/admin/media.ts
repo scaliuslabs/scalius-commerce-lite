@@ -10,6 +10,7 @@ import {
     messageResponse,
     noContentResponse,
     errorResponses,
+    serviceUnavailableResponse,
 } from "../../schemas/responses";
 import { mediaSchema, mediaFolderSchema } from "../../schemas/entities";
 import {
@@ -229,6 +230,7 @@ const deleteFileRoute = createRoute({
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        503: serviceUnavailableResponse,
     }
 });
 

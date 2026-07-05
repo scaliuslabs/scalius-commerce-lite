@@ -7,7 +7,7 @@ import { getCheckoutReadiness } from "@scalius/core/modules/settings/checkout-re
 import { NotFoundError, ConflictError, ValidationError } from "../../../utils/api-error";
 
 import { ok, created, noContent } from "../../../utils/api-response";
-import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, paginatedEnvelope, messageResponse, noContentResponse, errorResponses, conflictResponse } from "../../../schemas/responses";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
@@ -15,6 +15,17 @@ const CHECKOUT_BREAKING_SHIPPING_MESSAGE =
     "This change would make checkout unavailable. Keep at least one active shipping method.";
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
+
+const adminWriteErrorResponses = {
+    400: errorResponses[400],
+    401: errorResponses[401],
+    403: errorResponses[403],
+} as const;
+
+const shippingMethodResourceErrorResponses = {
+    ...adminWriteErrorResponses,
+    404: errorResponses[404],
+} as const;
 
 async function assertShippingMethodCanBeRemovedFromCheckout(
     db: Parameters<typeof getCheckoutReadiness>[0],
@@ -163,6 +174,7 @@ const createRoute_ = createRoute({
     responses: {
         201: { description: "Shipping method created", content: { "application/json": { schema: successEnvelope(z.object({ shippingMethod: shippingMethodSchema })) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -258,6 +270,7 @@ const updateRoute = createRoute({
     responses: {
         200: { description: "Shipping method updated", content: { "application/json": { schema: successEnvelope(z.object({ shippingMethod: shippingMethodSchema })) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -334,7 +347,7 @@ const deleteRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
-        404: errorResponses[404],
+        ...shippingMethodResourceErrorResponses,
     }
 });
 
@@ -440,7 +453,7 @@ const permanentDeleteRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
-        404: errorResponses[404],
+        ...shippingMethodResourceErrorResponses,
     }
 });
 

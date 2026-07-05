@@ -5214,6 +5214,17 @@ export type PostApiV1CacheStorefrontDlqByIdReplayErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -5228,6 +5239,17 @@ export type PostApiV1CacheStorefrontDlqByIdReplayErrors = {
      * Server error
      */
     500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;
@@ -5324,6 +5346,17 @@ export type PostApiV1CacheStorefrontDlqByIdIgnoreErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -6408,6 +6441,17 @@ export type PostApiV1AdminCategoriesErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -6706,6 +6750,17 @@ export type PutApiV1AdminCategoriesByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -6971,6 +7026,17 @@ export type DeleteApiV1AdminCategoriesByIdPermanentErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -8804,6 +8870,22 @@ export type DeleteApiV1AdminCustomersByIdData = {
     url: '/api/v1/admin/customers/{id}';
 };
 
+export type DeleteApiV1AdminCustomersByIdErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminCustomersByIdError = DeleteApiV1AdminCustomersByIdErrors[keyof DeleteApiV1AdminCustomersByIdErrors];
+
 export type DeleteApiV1AdminCustomersByIdResponses = {
     /**
      * No content
@@ -9418,6 +9500,17 @@ export type PostApiV1AdminPagesErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -10200,6 +10293,17 @@ export type PutApiV1AdminPagesByIdErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -12352,6 +12456,17 @@ export type PostApiV1AdminDiscountsErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -12417,6 +12532,44 @@ export type PostApiV1AdminDiscountsBulkDeleteData = {
     url: '/api/v1/admin/discounts/bulk-delete';
 };
 
+export type PostApiV1AdminDiscountsBulkDeleteErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDiscountsBulkDeleteError = PostApiV1AdminDiscountsBulkDeleteErrors[keyof PostApiV1AdminDiscountsBulkDeleteErrors];
+
 export type PostApiV1AdminDiscountsBulkDeleteResponses = {
     /**
      * No content
@@ -12435,6 +12588,55 @@ export type PostApiV1AdminDiscountsBulkRestoreData = {
     url: '/api/v1/admin/discounts/bulk-restore';
 };
 
+export type PostApiV1AdminDiscountsBulkRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDiscountsBulkRestoreError = PostApiV1AdminDiscountsBulkRestoreErrors[keyof PostApiV1AdminDiscountsBulkRestoreErrors];
+
 export type PostApiV1AdminDiscountsBulkRestoreResponses = {
     /**
      * No content
@@ -12452,6 +12654,33 @@ export type DeleteApiV1AdminDiscountsByIdData = {
     query?: never;
     url: '/api/v1/admin/discounts/{id}';
 };
+
+export type DeleteApiV1AdminDiscountsByIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminDiscountsByIdError = DeleteApiV1AdminDiscountsByIdErrors[keyof DeleteApiV1AdminDiscountsByIdErrors];
 
 export type DeleteApiV1AdminDiscountsByIdResponses = {
     /**
@@ -12647,6 +12876,17 @@ export type PutApiV1AdminDiscountsByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -12710,6 +12950,33 @@ export type DeleteApiV1AdminDiscountsByIdPermanentData = {
     query?: never;
     url: '/api/v1/admin/discounts/{id}/permanent';
 };
+
+export type DeleteApiV1AdminDiscountsByIdPermanentErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminDiscountsByIdPermanentError = DeleteApiV1AdminDiscountsByIdPermanentErrors[keyof DeleteApiV1AdminDiscountsByIdPermanentErrors];
 
 export type DeleteApiV1AdminDiscountsByIdPermanentResponses = {
     /**
@@ -12864,6 +13131,17 @@ export type PostApiV1AdminDiscountsByIdRestoreErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -13257,6 +13535,17 @@ export type DeleteApiV1AdminMediaByIdErrors = {
      * Server error
      */
     500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;
@@ -14194,6 +14483,17 @@ export type PostApiV1AdminInventoryByVariantIdAdjustErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryByVariantIdAdjustError = PostApiV1AdminInventoryByVariantIdAdjustErrors[keyof PostApiV1AdminInventoryByVariantIdAdjustErrors];
@@ -14312,6 +14612,17 @@ export type PostApiV1AdminInventoryStockAdjustErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminInventoryStockAdjustError = PostApiV1AdminInventoryStockAdjustErrors[keyof PostApiV1AdminInventoryStockAdjustErrors];
@@ -14358,6 +14669,17 @@ export type PostApiV1AdminInventoryStockSetErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -15079,6 +15401,17 @@ export type GetApiV1AdminSearchErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type GetApiV1AdminSearchError = GetApiV1AdminSearchErrors[keyof GetApiV1AdminSearchErrors];
@@ -15152,6 +15485,17 @@ export type DeleteApiV1AdminShipmentsByIdErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -15247,6 +15591,28 @@ export type PostApiV1AdminShipmentsByIdCheckStatusErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;
@@ -16268,6 +16634,17 @@ export type PostApiV1AdminFraudCheckerErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminFraudCheckerError = PostApiV1AdminFraudCheckerErrors[keyof PostApiV1AdminFraudCheckerErrors];
@@ -16370,6 +16747,17 @@ export type PutApiV1AdminFraudCheckerErrors = {
      * Server error
      */
     500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;
@@ -16662,6 +17050,17 @@ export type PostApiV1AdminFraudCheckerLookupErrors = {
      * Server error
      */
     500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;
@@ -20688,6 +21087,17 @@ export type PostApiV1AdminSettingsAuthErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminSettingsAuthError = PostApiV1AdminSettingsAuthErrors[keyof PostApiV1AdminSettingsAuthErrors];
@@ -21069,6 +21479,17 @@ export type PostApiV1AdminSettingsEmailErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminSettingsEmailError = PostApiV1AdminSettingsEmailErrors[keyof PostApiV1AdminSettingsEmailErrors];
@@ -21254,6 +21675,17 @@ export type PostApiV1AdminSettingsFirebaseErrors = {
      * Server error
      */
     500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;
@@ -21472,6 +21904,17 @@ export type PostApiV1AdminSettingsShippingMethodsErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -21532,6 +21975,39 @@ export type DeleteApiV1AdminSettingsShippingMethodsByIdData = {
 };
 
 export type DeleteApiV1AdminSettingsShippingMethodsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Not found
      */
@@ -21722,6 +22198,17 @@ export type PutApiV1AdminSettingsShippingMethodsByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -21876,6 +22363,39 @@ export type DeleteApiV1AdminSettingsShippingMethodsByIdPermanentDeleteData = {
 };
 
 export type DeleteApiV1AdminSettingsShippingMethodsByIdPermanentDeleteErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Not found
      */
@@ -22084,6 +22604,17 @@ export type PostApiV1AdminSettingsDeliveryProvidersErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminSettingsDeliveryProvidersError = PostApiV1AdminSettingsDeliveryProvidersErrors[keyof PostApiV1AdminSettingsDeliveryProvidersErrors];
@@ -22195,6 +22726,17 @@ export type PutApiV1AdminSettingsDeliveryProvidersErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PutApiV1AdminSettingsDeliveryProvidersError = PutApiV1AdminSettingsDeliveryProvidersErrors[keyof PutApiV1AdminSettingsDeliveryProvidersErrors];
@@ -22204,6 +22746,23 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
      * Provider updated
      */
     200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            type: string;
+            credentials: string;
+            config: string;
+            isActive: boolean;
+            createdAt: string | number;
+            updatedAt: string | number;
+            [key: string]: unknown;
+        };
+    };
+    /**
+     * Provider created
+     */
+    201: {
         success: true;
         data: {
             id: string;
@@ -22782,6 +23341,17 @@ export type PostApiV1AdminSettingsHeroSlidersErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -23344,6 +23914,17 @@ export type PostApiV1AdminSettingsMetaConversionsErrors = {
      * Server error
      */
     500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;
@@ -24298,6 +24879,17 @@ export type PostApiV1AdminSettingsSmsErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type PostApiV1AdminSettingsSmsError = PostApiV1AdminSettingsSmsErrors[keyof PostApiV1AdminSettingsSmsErrors];
@@ -24534,6 +25126,17 @@ export type PostApiV1AdminSettingsWidgetAiErrors = {
      * Server error
      */
     500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
         success: false;
         error: {
             code: string;
@@ -31920,6 +32523,17 @@ export type PostApiV1AdminAttributesErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -32023,6 +32637,17 @@ export type DeleteApiV1AdminAttributesByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -32109,6 +32734,17 @@ export type PutApiV1AdminAttributesByIdErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -32489,6 +33125,17 @@ export type PostApiV1AdminAttributesByIdRestoreErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -32795,6 +33442,17 @@ export type PostApiV1AdminAttributesByIdValuesErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;

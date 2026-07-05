@@ -5,7 +5,7 @@ import {
   updateWidgetAiSettings,
 } from "@scalius/core/modules/ai";
 import { ok } from "../../../utils/api-response";
-import { errorResponses, successEnvelope } from "../../../schemas/responses";
+import { errorResponses, serviceUnavailableResponse, successEnvelope } from "../../../schemas/responses";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -106,6 +106,7 @@ const updateSettingsRoute = createRoute({
       },
     },
     ...errorResponses,
+    503: serviceUnavailableResponse,
   },
 });
 

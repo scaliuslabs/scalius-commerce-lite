@@ -8,13 +8,28 @@ import { eq, sql } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
-import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses, conflictResponse } from "../../schemas/responses";
 import { discountSchema } from "../../schemas/entities";
 import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
+
+const adminMutationErrorResponses = {
+    401: errorResponses[401],
+    403: errorResponses[403],
+} as const;
+
+const adminValidationMutationErrorResponses = {
+    400: errorResponses[400],
+    ...adminMutationErrorResponses,
+} as const;
+
+const discountConflictMutationErrorResponses = {
+    ...adminValidationMutationErrorResponses,
+    409: conflictResponse,
+} as const;
 
 // ── List Discounts ──
 
@@ -72,6 +87,7 @@ const createDiscountRoute = createRoute({
     responses: {
         201: { description: "Discount created", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -104,6 +120,7 @@ const bulkDeleteRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        ...adminValidationMutationErrorResponses,
     }
 });
 
@@ -134,6 +151,7 @@ const bulkRestoreRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        ...discountConflictMutationErrorResponses,
     }
 });
 
@@ -184,6 +202,7 @@ const updateDiscountRoute = createRoute({
     responses: {
         200: { description: "Discount updated", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -208,6 +227,7 @@ const deleteDiscountRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        ...adminMutationErrorResponses,
     }
 });
 
@@ -231,6 +251,7 @@ const permanentDeleteRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        ...adminMutationErrorResponses,
     }
 });
 
@@ -291,6 +312,7 @@ const restoreDiscountRoute = createRoute({
     responses: {
         200: { description: "Discount restored", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 

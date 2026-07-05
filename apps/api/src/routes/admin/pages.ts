@@ -27,6 +27,7 @@ import {
     idResponse,
     noContentResponse,
     errorResponses,
+    conflictResponse,
 } from "../../schemas/responses";
 import { pageSchema } from "../../schemas/entities";
 import {
@@ -123,6 +124,7 @@ const createPageRoute = createRoute({
             content: { "application/json": { schema: idResponse } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -318,6 +320,7 @@ const updatePageRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({})) } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
