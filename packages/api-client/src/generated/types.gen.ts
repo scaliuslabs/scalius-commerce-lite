@@ -22511,6 +22511,26 @@ export type GetApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
+            readiness?: {
+                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                configured: boolean;
+                tested: boolean;
+                active: boolean;
+                canCreateShipment: boolean;
+                blockers: Array<{
+                    code: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                activationBlockers: Array<{
+                    source: string;
+                    key: string;
+                    label: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                [key: string]: unknown;
+            };
             createdAt: string | number;
             updatedAt: string | number;
             [key: string]: unknown;
@@ -22632,6 +22652,26 @@ export type PostApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
+            readiness?: {
+                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                configured: boolean;
+                tested: boolean;
+                active: boolean;
+                canCreateShipment: boolean;
+                blockers: Array<{
+                    code: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                activationBlockers: Array<{
+                    source: string;
+                    key: string;
+                    label: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                [key: string]: unknown;
+            };
             createdAt: string | number;
             updatedAt: string | number;
             [key: string]: unknown;
@@ -22754,6 +22794,26 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
+            readiness?: {
+                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                configured: boolean;
+                tested: boolean;
+                active: boolean;
+                canCreateShipment: boolean;
+                blockers: Array<{
+                    code: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                activationBlockers: Array<{
+                    source: string;
+                    key: string;
+                    label: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                [key: string]: unknown;
+            };
             createdAt: string | number;
             updatedAt: string | number;
             [key: string]: unknown;
@@ -22771,6 +22831,26 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
+            readiness?: {
+                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                configured: boolean;
+                tested: boolean;
+                active: boolean;
+                canCreateShipment: boolean;
+                blockers: Array<{
+                    code: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                activationBlockers: Array<{
+                    source: string;
+                    key: string;
+                    label: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                [key: string]: unknown;
+            };
             createdAt: string | number;
             updatedAt: string | number;
             [key: string]: unknown;
@@ -23070,6 +23150,26 @@ export type GetApiV1AdminSettingsDeliveryProvidersByIdResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
+            readiness?: {
+                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                configured: boolean;
+                tested: boolean;
+                active: boolean;
+                canCreateShipment: boolean;
+                blockers: Array<{
+                    code: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                activationBlockers: Array<{
+                    source: string;
+                    key: string;
+                    label: string;
+                    message: string;
+                    [key: string]: unknown;
+                }>;
+                [key: string]: unknown;
+            };
             createdAt: string | number;
             updatedAt: string | number;
             [key: string]: unknown;

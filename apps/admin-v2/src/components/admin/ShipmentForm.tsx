@@ -7,6 +7,11 @@ import {
   createOrderShipment,
   type CreateOrderShipmentPayload,
 } from "@/lib/api-functions/orders";
+import {
+  getProviderReadinessLabel,
+  getProviderReadinessMessage,
+  resolveProviderReadiness,
+} from "@/components/admin/delivery-providers/ProviderIcon";
 
 interface ShipmentFormProps {
   orderId: string;
@@ -30,15 +35,14 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
       setIsLoading(true);
       try {
         const data = await getDeliveryProviders();
-        // Only show active providers
-        const activeProviders = data.filter(
-          (p: DeliveryProviderRecord) => p.isActive,
-        );
-        setProviders(activeProviders);
+        setProviders(data);
 
-        // Select the first provider by default if available
-        if (activeProviders.length > 0) {
-          setSelectedProviderId(activeProviders[0].id);
+        const firstReadyProvider = data.find(
+          (p: DeliveryProviderRecord) =>
+            resolveProviderReadiness(p).canCreateShipment,
+        );
+        if (firstReadyProvider) {
+          setSelectedProviderId(firstReadyProvider.id);
         }
       } catch (error: unknown) {
         console.error("Error fetching providers:", error);
@@ -53,9 +57,26 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
+    const selectedProvider = providers.find(
+      (provider) => provider.id === selectedProviderId,
+    );
+    const selectedReadiness = selectedProvider
+      ? resolveProviderReadiness(selectedProvider)
+      : null;
 
     if (!selectedProviderId) {
       toast.error("Please select a delivery provider");
+      return;
+    }
+    if (!selectedProvider || !selectedReadiness?.canCreateShipment) {
+      toast.error(
+        getProviderReadinessMessage(
+          selectedReadiness ?? {
+            canCreateShipment: false,
+            blockers: [],
+          },
+        ),
+      );
       return;
     }
 
@@ -84,10 +105,10 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
   if (providers.length === 0) {
     return (
       <div className="p-4 border rounded bg-yellow-50 text-yellow-800">
-        <h3 className="font-medium">No active delivery providers</h3>
+        <h3 className="font-medium">No delivery providers</h3>
         <p className="text-sm mt-1">
-          Please set up and activate a delivery provider in settings before
-          creating shipments.
+          Please set up a delivery provider in settings before creating
+          shipments.
         </p>
         <button
           onClick={onCancel}
@@ -98,6 +119,20 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
       </div>
     );
   }
+
+  const selectedProvider = providers.find(
+    (provider) => provider.id === selectedProviderId,
+  );
+  const selectedReadiness = selectedProvider
+    ? resolveProviderReadiness(selectedProvider)
+    : null;
+  const selectedBlocker = selectedReadiness &&
+    !selectedReadiness.canCreateShipment
+      ? getProviderReadinessMessage(selectedReadiness)
+      : "";
+  const readyProviderCount = providers.filter(
+    (provider) => resolveProviderReadiness(provider).canCreateShipment,
+  ).length;
 
   return (
     <div className="border rounded p-4">
@@ -114,18 +149,37 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
             disabled={isSubmitting}
           >
             {providers.map((provider) => (
-              <option key={provider.id} value={provider.id}>
-                {provider.name}
+              <option
+                key={provider.id}
+                value={provider.id}
+                disabled={!resolveProviderReadiness(provider).canCreateShipment}
+              >
+                {provider.name} - {getProviderReadinessLabel(resolveProviderReadiness(provider))}
               </option>
             ))}
           </select>
+          {selectedBlocker && (
+            <p className="mt-2 rounded border border-yellow-200 bg-yellow-50 p-2 text-sm text-yellow-800">
+              {selectedBlocker}
+            </p>
+          )}
+          {readyProviderCount === 0 && (
+            <p className="mt-2 rounded border border-yellow-200 bg-yellow-50 p-2 text-sm text-yellow-800">
+              No shipment-ready providers.{" "}
+              {getProviderReadinessMessage(resolveProviderReadiness(providers[0]))}
+            </p>
+          )}
         </div>
 
         <div className="flex space-x-2 pt-2">
           <button
             type="submit"
             className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isSubmitting || !selectedProviderId}
+            disabled={
+              isSubmitting ||
+              !selectedProviderId ||
+              selectedReadiness?.canCreateShipment === false
+            }
           >
             {isSubmitting ? "Creating..." : "Create Shipment"}
           </button>

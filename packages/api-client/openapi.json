@@ -74613,6 +74613,95 @@
                           "isActive": {
                             "type": "boolean"
                           },
+                          "readiness": {
+                            "type": "object",
+                            "properties": {
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "draft",
+                                  "configured",
+                                  "tested",
+                                  "active",
+                                  "blocked"
+                                ]
+                              },
+                              "configured": {
+                                "type": "boolean"
+                              },
+                              "tested": {
+                                "type": "boolean"
+                              },
+                              "active": {
+                                "type": "boolean"
+                              },
+                              "canCreateShipment": {
+                                "type": "boolean"
+                              },
+                              "blockers": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "code": {
+                                      "type": "string"
+                                    },
+                                    "message": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "code",
+                                    "message"
+                                  ],
+                                  "additionalProperties": {
+                                    "nullable": true
+                                  }
+                                }
+                              },
+                              "activationBlockers": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "message": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "source",
+                                    "key",
+                                    "label",
+                                    "message"
+                                  ],
+                                  "additionalProperties": {
+                                    "nullable": true
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "status",
+                              "configured",
+                              "tested",
+                              "active",
+                              "canCreateShipment",
+                              "blockers",
+                              "activationBlockers"
+                            ],
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
                           "createdAt": {
                             "anyOf": [
                               {
@@ -74999,6 +75088,95 @@
                         },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "readiness": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "draft",
+                                "configured",
+                                "tested",
+                                "active",
+                                "blocked"
+                              ]
+                            },
+                            "configured": {
+                              "type": "boolean"
+                            },
+                            "tested": {
+                              "type": "boolean"
+                            },
+                            "active": {
+                              "type": "boolean"
+                            },
+                            "canCreateShipment": {
+                              "type": "boolean"
+                            },
+                            "blockers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "message"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            },
+                            "activationBlockers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "source",
+                                  "key",
+                                  "label",
+                                  "message"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "configured",
+                            "tested",
+                            "active",
+                            "canCreateShipment",
+                            "blockers",
+                            "activationBlockers"
+                          ],
+                          "additionalProperties": {
+                            "nullable": true
+                          }
                         },
                         "createdAt": {
                           "anyOf": [
@@ -75428,6 +75606,95 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "readiness": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "draft",
+                                "configured",
+                                "tested",
+                                "active",
+                                "blocked"
+                              ]
+                            },
+                            "configured": {
+                              "type": "boolean"
+                            },
+                            "tested": {
+                              "type": "boolean"
+                            },
+                            "active": {
+                              "type": "boolean"
+                            },
+                            "canCreateShipment": {
+                              "type": "boolean"
+                            },
+                            "blockers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "message"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            },
+                            "activationBlockers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "source",
+                                  "key",
+                                  "label",
+                                  "message"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "configured",
+                            "tested",
+                            "active",
+                            "canCreateShipment",
+                            "blockers",
+                            "activationBlockers"
+                          ],
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -75505,6 +75772,95 @@
                         },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "readiness": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "draft",
+                                "configured",
+                                "tested",
+                                "active",
+                                "blocked"
+                              ]
+                            },
+                            "configured": {
+                              "type": "boolean"
+                            },
+                            "tested": {
+                              "type": "boolean"
+                            },
+                            "active": {
+                              "type": "boolean"
+                            },
+                            "canCreateShipment": {
+                              "type": "boolean"
+                            },
+                            "blockers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "message"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            },
+                            "activationBlockers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "source",
+                                  "key",
+                                  "label",
+                                  "message"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "configured",
+                            "tested",
+                            "active",
+                            "canCreateShipment",
+                            "blockers",
+                            "activationBlockers"
+                          ],
+                          "additionalProperties": {
+                            "nullable": true
+                          }
                         },
                         "createdAt": {
                           "anyOf": [
@@ -76232,6 +76588,95 @@
                         },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "readiness": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "draft",
+                                "configured",
+                                "tested",
+                                "active",
+                                "blocked"
+                              ]
+                            },
+                            "configured": {
+                              "type": "boolean"
+                            },
+                            "tested": {
+                              "type": "boolean"
+                            },
+                            "active": {
+                              "type": "boolean"
+                            },
+                            "canCreateShipment": {
+                              "type": "boolean"
+                            },
+                            "blockers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "message"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            },
+                            "activationBlockers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "source",
+                                  "key",
+                                  "label",
+                                  "message"
+                                ],
+                                "additionalProperties": {
+                                  "nullable": true
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "configured",
+                            "tested",
+                            "active",
+                            "canCreateShipment",
+                            "blockers",
+                            "activationBlockers"
+                          ],
+                          "additionalProperties": {
+                            "nullable": true
+                          }
                         },
                         "createdAt": {
                           "anyOf": [

@@ -4,6 +4,11 @@ import { toast } from "sonner";
 import { useRouter } from "@tanstack/react-router";
 import { formatDate } from "@scalius/shared/utils";
 import ShipmentStatusIndicator from "./ShipmentStatusIndicator";
+import {
+  getProviderReadinessLabel,
+  getProviderReadinessMessage,
+  resolveProviderReadiness,
+} from "./delivery-providers/ProviderIcon";
 
 // Extend the DeliveryShipment type to include properties used in component
 interface ExtendedDeliveryShipment extends DeliveryShipment {
@@ -88,8 +93,26 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
 
   // Create shipment
   const handleCreateShipment = async () => {
+    const selectedProvider = providers.find(
+      (provider) => provider.id === selectedProviderId,
+    );
+    const selectedReadiness = selectedProvider
+      ? resolveProviderReadiness(selectedProvider)
+      : null;
+
     if (!selectedProviderId) {
       toast.error("Please select a delivery provider");
+      return;
+    }
+    if (!selectedProvider || !selectedReadiness?.canCreateShipment) {
+      toast.error(
+        getProviderReadinessMessage(
+          selectedReadiness ?? {
+            canCreateShipment: false,
+            blockers: [],
+          },
+        ),
+      );
       return;
     }
 
@@ -104,8 +127,6 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
         codAmount: codAmount || 0,
       };
 
-      // Find the provider to log details
-      const provider = providers.find((p) => p.id === selectedProviderId);
       const result = await window.shipmentActions.createShipment(
         order.id,
         selectedProviderId,
@@ -122,7 +143,7 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
       setShipments((prev) => [
         {
           ...shipment,
-          providerName: provider?.name || shipment.providerType,
+          providerName: selectedProvider.name || shipment.providerType,
           trackingNumber: shipment.trackingId,
         },
         ...prev,
@@ -143,6 +164,20 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
       setIsCreating(false);
     }
   };
+
+  const selectedProvider = providers.find(
+    (provider) => provider.id === selectedProviderId,
+  );
+  const selectedReadiness = selectedProvider
+    ? resolveProviderReadiness(selectedProvider)
+    : null;
+  const selectedBlocker = selectedReadiness &&
+    !selectedReadiness.canCreateShipment
+      ? getProviderReadinessMessage(selectedReadiness)
+      : "";
+  const readyProviderCount = providers.filter(
+    (provider) => resolveProviderReadiness(provider).canCreateShipment,
+  ).length;
 
   // Check shipment status
   const handleCheckStatus = async (shipmentId: string) => {
@@ -303,11 +338,26 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
                 >
                   <option value="">-- Select a provider --</option>
                   {providers.map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.name}
+                    <option
+                      key={provider.id}
+                      value={provider.id}
+                      disabled={!resolveProviderReadiness(provider).canCreateShipment}
+                    >
+                      {provider.name} - {getProviderReadinessLabel(resolveProviderReadiness(provider))}
                     </option>
                   ))}
                 </select>
+                {selectedBlocker && (
+                  <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
+                    {selectedBlocker}
+                  </p>
+                )}
+                {readyProviderCount === 0 && (
+                  <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
+                    No shipment-ready providers.{" "}
+                    {getProviderReadinessMessage(resolveProviderReadiness(providers[0]))}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -329,7 +379,11 @@ const DeliveryShipmentManager: FC<DeliveryShipmentManagerProps> = ({
               <button
                 onClick={handleCreateShipment}
                 className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isCreating || !selectedProviderId}
+                disabled={
+                  isCreating ||
+                  !selectedProviderId ||
+                  selectedReadiness?.canCreateShipment === false
+                }
               >
                 {isCreating ? "Creating..." : "Create Shipment"}
               </button>

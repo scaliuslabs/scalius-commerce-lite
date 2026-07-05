@@ -385,6 +385,36 @@ export interface AbandonedCheckout {
 // Delivery domain
 // ---------------------------------------------------------------------------
 
+export type DeliveryProviderReadinessStatus =
+  | "draft"
+  | "configured"
+  | "tested"
+  | "active"
+  | "blocked";
+
+export interface DeliveryProviderReadinessBlocker {
+  code: "inactive" | "unconfigured" | "untested" | "test_failed" | "unreadable" | string;
+  message: string;
+}
+
+export interface DeliveryProviderReadiness {
+  status: DeliveryProviderReadinessStatus;
+  configured?: boolean;
+  tested?: boolean;
+  active?: boolean;
+  canCreateShipment: boolean;
+  blockers: DeliveryProviderReadinessBlocker[];
+  activationBlockers?: Array<{
+    source: "credentials" | "config" | string;
+    key: string;
+    label: string;
+    message: string;
+  }>;
+  lastTestAttemptAt?: string | number | null;
+  lastTestSuccessAt?: string | number | null;
+  lastTestFailureAt?: string | number | null;
+}
+
 export interface DeliveryProviderRecord {
   id: string;
   name: string;
@@ -392,6 +422,7 @@ export interface DeliveryProviderRecord {
   isActive: boolean;
   credentials: string;
   config: string;
+  readiness?: DeliveryProviderReadiness | null;
   createdAt?: Date | string | number;
   updatedAt?: Date | string | number;
 }

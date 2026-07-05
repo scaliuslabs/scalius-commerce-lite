@@ -5,6 +5,36 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonRecord = { [key: string]: JsonValue };
 
+export type DeliveryProviderReadinessStatus =
+  | "draft"
+  | "configured"
+  | "tested"
+  | "active"
+  | "blocked";
+
+export interface DeliveryProviderReadinessBlocker {
+  code: "inactive" | "unconfigured" | "untested" | "test_failed" | "unreadable" | string;
+  message: string;
+}
+
+export interface DeliveryProviderReadiness {
+  status: DeliveryProviderReadinessStatus;
+  configured?: boolean;
+  tested?: boolean;
+  active?: boolean;
+  canCreateShipment: boolean;
+  blockers: DeliveryProviderReadinessBlocker[];
+  activationBlockers?: Array<{
+    source: "credentials" | "config" | string;
+    key: string;
+    label: string;
+    message: string;
+  }>;
+  lastTestAttemptAt?: string | number | null;
+  lastTestSuccessAt?: string | number | null;
+  lastTestFailureAt?: string | number | null;
+}
+
 export interface DeliveryProviderRecord {
   id: string;
   name: string;
@@ -12,6 +42,7 @@ export interface DeliveryProviderRecord {
   credentials: string;
   config: string;
   isActive: boolean;
+  readiness?: DeliveryProviderReadiness | null;
   createdAt?: string | number;
   updatedAt?: string | number;
 }

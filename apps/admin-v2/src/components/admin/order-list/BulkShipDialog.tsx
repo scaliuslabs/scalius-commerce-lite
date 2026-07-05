@@ -20,6 +20,11 @@ import { LoaderCircle, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
 import type { DeliveryProviderRecord } from "~/types/api-responses";
+import {
+  getProviderReadinessLabel,
+  getProviderReadinessMessage,
+  resolveProviderReadiness,
+} from "~/components/admin/delivery-providers/ProviderIcon";
 
 export interface BulkShipResultSummary {
   totalProcessed: number;
@@ -59,15 +64,33 @@ export function BulkShipDialog({
     ...deliveryProvidersQueryOptions(),
     enabled: isOpen,
     select: (data) =>
-      (Array.isArray(data) ? (data as DeliveryProviderRecord[]) : []).filter(
-        (p) => p.isActive,
-      ),
+      (Array.isArray(data) ? (data as DeliveryProviderRecord[]) : []),
   });
+  const selectedProviderRecord = providers.find(
+    (provider) => provider.id === selectedProvider,
+  );
+  const selectedProviderReadiness = selectedProviderRecord
+    ? resolveProviderReadiness(selectedProviderRecord)
+    : null;
+  const selectedProviderBlocker = selectedProviderReadiness &&
+    !selectedProviderReadiness.canCreateShipment
+      ? getProviderReadinessMessage(selectedProviderReadiness)
+      : "";
+  const readyProviderCount = providers.filter(
+    (provider) => resolveProviderReadiness(provider).canCreateShipment,
+  ).length;
 
   const handleSubmit = () => {
     if (isShipping) return;
     if (!selectedProvider) {
       toast.error("Error", { description: "Please select a delivery provider." });
+      return;
+    }
+    if (!selectedProviderRecord || !selectedProviderReadiness?.canCreateShipment) {
+      toast.error("Provider cannot create shipments", {
+        description: selectedProviderBlocker ||
+          "Complete provider setup before shipping orders.",
+      });
       return;
     }
     onConfirm(selectedProvider);
@@ -108,15 +131,24 @@ export function BulkShipDialog({
                 <SelectValue placeholder="Select a delivery provider" />
               </SelectTrigger>
               <SelectContent className="bg-[var(--popover)] border-[var(--border)]">
-                {providers.map((provider) => (
-                  <SelectItem
-                    key={provider.id}
-                    value={provider.id}
-                    className="transition-colors hover:bg-[var(--muted)]"
-                  >
-                    {provider.name}
-                  </SelectItem>
-                ))}
+                {providers.map((provider) => {
+                  const readiness = resolveProviderReadiness(provider);
+                  return (
+                    <SelectItem
+                      key={provider.id}
+                      value={provider.id}
+                      disabled={!readiness.canCreateShipment}
+                      className="transition-colors hover:bg-[var(--muted)]"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>{provider.name}</span>
+                        <span className="text-xs text-[var(--muted-foreground)]">
+                          {getProviderReadinessLabel(readiness)}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
 
@@ -128,8 +160,20 @@ export function BulkShipDialog({
 
             {providers.length === 0 && !isLoadingProviders && (
               <p className="mt-1 rounded-md border border-[var(--border)] bg-[var(--muted)] p-2 text-sm text-[var(--muted-foreground)]">
-                No active delivery providers found. Please add one in the
-                settings.
+                No delivery providers found. Please add one in settings.
+              </p>
+            )}
+
+            {providers.length > 0 && readyProviderCount === 0 && !isLoadingProviders && (
+              <p className="mt-1 rounded-md border border-amber-200 bg-amber-50/80 p-2 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+                No shipment-ready delivery providers.{" "}
+                {getProviderReadinessMessage(resolveProviderReadiness(providers[0]))}
+              </p>
+            )}
+
+            {selectedProviderBlocker && (
+              <p className="mt-1 rounded-md border border-amber-200 bg-amber-50/80 p-2 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+                {selectedProviderBlocker}
               </p>
             )}
           </div>
@@ -175,7 +219,11 @@ export function BulkShipDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isShipping || !selectedProvider}
+            disabled={
+              isShipping ||
+              !selectedProvider ||
+              selectedProviderReadiness?.canCreateShipment === false
+            }
             className="h-10 transition-all duration-200 hover:shadow-md focus:ring-2 focus:ring-primary/40"
           >
             {isShipping ? (
