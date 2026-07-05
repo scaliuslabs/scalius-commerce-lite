@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "@tanstack/react-router";
-import QRCode from "qrcode";
 import { authClient } from "~/lib/auth-client";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -245,17 +244,30 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     toast.success("Backup codes copied to clipboard");
   };
 
-  // Generate QR code locally as data URI
+  // Generate QR code locally as data URI after the TOTP setup flow needs it.
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (totpUri) {
-      QRCode.toDataURL(totpUri, { width: 200, margin: 2 })
-        .then(setQrDataUrl)
-        .catch(() => setQrDataUrl(null));
-    } else {
+    if (!totpUri) {
       setQrDataUrl(null);
+      return;
     }
+
+    let active = true;
+    setQrDataUrl(null);
+
+    void import("qrcode")
+      .then(({ toDataURL }) => toDataURL(totpUri, { width: 200, margin: 2 }))
+      .then((dataUrl) => {
+        if (active) setQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (active) setQrDataUrl(null);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [totpUri]);
 
   const resetState = () => {

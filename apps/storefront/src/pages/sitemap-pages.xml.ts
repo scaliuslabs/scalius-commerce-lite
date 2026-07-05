@@ -3,7 +3,11 @@
  * Contains all published CMS pages
  */
 
-import { generateSitemap, getSitemapHeaders } from '@/lib/sitemap-utils';
+import {
+  generateSitemap,
+  getSitemapHeaders,
+  xmlDataUnavailableResponse,
+} from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getAllPages } from '@/lib/api/pages';
 import type { Page } from '@/lib/api/types';
@@ -27,7 +31,11 @@ export const GET: APIRoute = async (_context: APIContext) => {
         publishedOnly: true,
       });
 
-      if (!response || !response.data || response.data.length === 0) {
+      if (!response || !response.data) {
+        return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
+      }
+
+      if (response.data.length === 0) {
         hasMore = false;
         break;
       }
@@ -71,6 +79,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
     });
   } catch (error: unknown) {
     console.error('Error generating pages sitemap:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
   }
 };

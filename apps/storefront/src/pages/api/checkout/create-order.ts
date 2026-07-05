@@ -1,6 +1,6 @@
 // src/pages/api/checkout/create-order.ts
-// Server-side proxy: creates an order in the backend using the service API token.
-// The API_TOKEN is only available server-side, never exposed to the browser.
+// Server-side proxy: keeps checkout same-origin while calling the public,
+// proof/origin-guarded backend order and payment-session routes.
 
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
@@ -54,10 +54,11 @@ async function createInitialPaymentSession(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, receiptToken }),
+        cache: "no-store",
       },
       0,
       PAYMENT_SESSION_PROXY_TIMEOUT_MS,
-      true,
+      false,
     );
     const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: unknown };
 
