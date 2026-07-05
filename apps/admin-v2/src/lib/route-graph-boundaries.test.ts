@@ -274,6 +274,20 @@ describe("admin route graph boundaries", () => {
     );
   });
 
+  it("keeps scanner-token routing off the broad core auth barrel", () => {
+    const scannerTokenRouteSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "api", "scanner-token.tsx"),
+      "utf8",
+    );
+
+    expect(scannerTokenRouteSource).toContain(
+      "@scalius/core/auth/scanner-token-claims",
+    );
+    expect(scannerTokenRouteSource).not.toMatch(
+      /from\s+["']@scalius\/core\/auth["']/,
+    );
+  });
+
   it("keeps admin shell auth/toast actions behind lazy client boundaries", () => {
     const adminRouteSource = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
