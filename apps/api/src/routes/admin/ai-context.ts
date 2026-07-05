@@ -21,6 +21,7 @@ import * as SettingsService from "@scalius/core/modules/settings/settings.servic
 import { GENERATION_CONFIG } from "@scalius/core/modules/ai";
 import { resolveCollectionProductsBatch } from "@scalius/core/modules/collections/collections.service";
 import type { ResolvedProduct } from "@scalius/core/modules/collections/collections.service";
+import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 import type { Database } from "@scalius/database/client";
 
 import { ok } from "../../utils/api-response";
@@ -72,15 +73,6 @@ interface CategoryContextDetail {
 type CategoryRowForAiContext = Pick<Category, "id" | "name" | "description" | "slug" | "imageUrl">;
 
 type CollectionPlacementRole = "target" | "anchor";
-
-interface CollectionContextConfig {
-    title?: string;
-    subtitle?: string;
-    productIds?: string[];
-    categoryIds?: string[];
-    featuredProductId?: string;
-    maxProducts?: number;
-}
 
 interface CollectionProductContextDetail {
     id: string;
@@ -249,17 +241,6 @@ export function isVariantVisibleForAiContext(variant: Pick<ProductVariant, "dele
 
 export function isAttributeVisibleForAiContext(attribute: Pick<ProductAttribute, "deletedAt">): boolean {
     return attribute.deletedAt == null;
-}
-
-function parseCollectionConfig(value: string): CollectionContextConfig {
-    try {
-        const parsed = JSON.parse(value) as unknown;
-        return parsed && typeof parsed === "object"
-            ? parsed as CollectionContextConfig
-            : {};
-    } catch {
-        return {};
-    }
 }
 
 function toCollectionProductContext(
@@ -595,7 +576,7 @@ export async function resolveAiContextBatchDetails({
 
             const parsedCollections = collectionRows.map((collection) => ({
                 id: collection.id,
-                config: parseCollectionConfig(collection.config),
+                config: normalizeCollectionConfig(collection.config),
             }));
             const resolvedByCollection = await resolveCollectionProductsBatch(db, parsedCollections);
             const collectionPaths = new Set<string>();
@@ -622,7 +603,7 @@ export async function resolveAiContextBatchDetails({
             const collectionUrlMap = new Map(collectionPathList.map((path, index) => [path, resolvedPaths[index]!]));
 
             collectionsData = collectionRows.map((collection) => {
-                const config = parseCollectionConfig(collection.config);
+                const config = normalizeCollectionConfig(collection.config);
                 const resolved = resolvedByCollection.get(collection.id) ?? {
                     products: [],
                     categories: [],
