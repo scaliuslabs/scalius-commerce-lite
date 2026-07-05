@@ -49,4 +49,12 @@ describe("dashboardActivityQueryOptions", () => {
 
     expect(result).toEqual({ dailyActivityData: [] });
   });
+
+  it("normalizes malformed activity payloads to the empty chart state", async () => {
+    mocks.getDashboardActivity.mockResolvedValue({} as never);
+
+    const result = await requireQueryFn(dashboardActivityQueryOptions())({} as never);
+
+    expect(result).toEqual({ dailyActivityData: [] });
+  });
 });

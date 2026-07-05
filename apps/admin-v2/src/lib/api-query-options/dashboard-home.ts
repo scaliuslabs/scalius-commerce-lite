@@ -11,9 +11,19 @@ const EMPTY_DASHBOARD_ACTIVITY: DashboardActivityData = {
   dailyActivityData: [],
 };
 
+function normalizeDashboardActivityData(
+  data: DashboardActivityData | null | undefined,
+): DashboardActivityData {
+  if (!data || !Array.isArray(data.dailyActivityData)) {
+    return EMPTY_DASHBOARD_ACTIVITY;
+  }
+
+  return data;
+}
+
 async function getDashboardActivityForQuery(): Promise<DashboardActivityData> {
   const data = await getDashboardActivity();
-  return data ?? EMPTY_DASHBOARD_ACTIVITY;
+  return normalizeDashboardActivityData(data);
 }
 
 export const dashboardSummaryQueryOptions = () =>

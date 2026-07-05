@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { Minimize2 } from "lucide-react";
 import { Button } from "../button";
-import { RichContent } from "../rich-content";
 import { TiptapMenuBar } from "./TiptapMenuBar";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
@@ -44,6 +44,7 @@ export function TiptapEditor({
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const editorViewportHeight = compact ? "200px" : "300px";
   const hasInitialContent = hasRenderableContent(content);
+  const sanitizedInitialContent = useMemo(() => sanitizeHtml(content), [content]);
 
   // Handle Escape key and body scroll lock for fullscreen
   useEffect(() => {
@@ -245,18 +246,16 @@ export function TiptapEditor({
         )}>
           {editorInstance ? (
             <EditorContent editor={editorInstance} className="max-w-none" />
-          ) : (
+          ) : hasInitialContent ? (
             <div
-              className={cn(
-                "max-w-none p-4 min-h-[200px] text-sm leading-6",
-                hasInitialContent ? "text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {hasInitialContent ? (
-                <RichContent content={content} variant="compact" />
-              ) : (
-                placeholder
-              )}
+              className="ProseMirror max-w-none p-4 min-h-[200px] text-sm"
+              dangerouslySetInnerHTML={{ __html: sanitizedInitialContent }}
+            />
+          ) : (
+            <div className="ProseMirror max-w-none p-4 min-h-[200px] text-sm">
+              <p className="is-editor-empty" data-placeholder={placeholder}>
+                <br />
+              </p>
             </div>
           )}
         </div>

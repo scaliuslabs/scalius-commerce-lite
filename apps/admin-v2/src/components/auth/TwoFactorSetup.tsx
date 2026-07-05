@@ -2,7 +2,6 @@
 // Simple email-based 2FA setup - sends code to email automatically
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { authClient } from "@/lib/auth-client";
 import {
   set2faMethod,
 } from "@/lib/api-functions/auth-management";
@@ -26,6 +25,11 @@ interface TwoFactorSetupProps {
   userEmail: string;
 }
 
+async function loadTwoFactorClient() {
+  const { authClient } = await import("@/lib/auth-client");
+  return authClient.twoFactor;
+}
+
 export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
   const navigate = useNavigate();
   const [step, setStep] = useState<SetupStep>("password");
@@ -41,7 +45,8 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.enable({ password });
+      const twoFactor = await loadTwoFactorClient();
+      const result = await twoFactor.enable({ password });
 
       if (result.error) {
         setError(result.error.message || "Incorrect password");
@@ -51,7 +56,7 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
 
       if (result.data) {
         setBackupCodes(result.data.backupCodes || []);
-        const otpResult = await authClient.twoFactor.sendOtp();
+        const otpResult = await twoFactor.sendOtp();
         if (otpResult?.error) {
           setError(otpResult.error.message || "Failed to send verification code");
           return;
@@ -71,7 +76,8 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const verifyResult = await authClient.twoFactor.verifyOtp({
+      const twoFactor = await loadTwoFactorClient();
+      const verifyResult = await twoFactor.verifyOtp({
         code: verificationCode,
         trustDevice: false,
       });
@@ -100,7 +106,8 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
   const handleResendOtp = async () => {
     setIsLoading(true);
     try {
-      const result = await authClient.twoFactor.sendOtp();
+      const twoFactor = await loadTwoFactorClient();
+      const result = await twoFactor.sendOtp();
       if (result?.error) {
         toast.error(result.error.message || "Failed to send code");
         return;

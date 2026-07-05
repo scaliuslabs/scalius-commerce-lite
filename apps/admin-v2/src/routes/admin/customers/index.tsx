@@ -1,20 +1,9 @@
-import { useState, useMemo, useCallback } from "react";
+import { lazy, Suspense, useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Users, UserPlus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { Users, UserPlus, Trash2 } from "lucide-react";
 import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 import { useCurrency } from "~/hooks/use-currency";
 import { customersQueryOptions } from "~/lib/api-query-options/customers";
 import { warmRouteQuery } from "~/lib/route-query-warming";
@@ -29,6 +18,12 @@ import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getCustomerColumns } from "~/components/admin/data-table/columns/customer-columns";
 import type { Customer } from "~/types/api-responses";
+
+const CustomerDeleteDialog = lazy(() =>
+  import("./-CustomerDeleteDialog").then((module) => ({
+    default: module.CustomerDeleteDialog,
+  })),
+);
 
 const validateCustomerSearch = createListSearchValidator(
   ["name", "totalOrders", "totalSpent", "lastOrderAt", "createdAt", "updatedAt"] as const,
@@ -92,6 +87,8 @@ function CustomersPage() {
       deleteMutation.mutate(id);
     }
   }, [deleteId, showTrashed, deleteMutation, permanentDeleteMutation]);
+
+  const isCustomerDeleteDialogOpen = !!deleteId;
 
   // Column definitions
   const columns = useMemo(
@@ -225,54 +222,17 @@ function CustomersPage() {
         }
       />
 
-      {/* Delete confirmation dialog */}
-      <AlertDialog
-        open={!!deleteId}
-        onOpenChange={(open) => !open && setDeleteId(null)}
-      >
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-base">
-              {showTrashed ? (
-                <>
-                  <AlertTriangle className="h-4 w-4 text-red-500" /> Delete
-                  Permanently?
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4 text-amber-500" /> Move to Trash?
-                </>
-              )}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="pt-1 text-xs">
-              {showTrashed
-                ? "This action cannot be undone. Are you sure you want to permanently delete this customer?"
-                : "Are you sure you want to move this customer to the trash? It can be restored later."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={isActionLoading}
-              className="h-8 text-xs"
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className={cn(
-                "h-8 text-xs",
-                showTrashed ? "bg-destructive hover:bg-destructive/90" : "",
-              )}
-              disabled={isActionLoading}
-            >
-              {isActionLoading ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : null}
-              {showTrashed ? "Delete Permanently" : "Move to Trash"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {isCustomerDeleteDialogOpen && (
+        <Suspense fallback={null}>
+          <CustomerDeleteDialog
+            showTrashed={showTrashed}
+            isOpen={isCustomerDeleteDialogOpen}
+            isActionLoading={isActionLoading}
+            onOpenChange={(open) => !open && setDeleteId(null)}
+            onConfirm={handleConfirmDelete}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

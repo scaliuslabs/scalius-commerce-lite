@@ -425,6 +425,26 @@ describe("admin route graph boundaries", () => {
     expect(authClientSource).not.toContain("adminClient");
   });
 
+  it("keeps first-time 2FA setup off eager Better Auth and QR runtimes", () => {
+    const setup2faRouteSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "auth", "setup-2fa.tsx"),
+      "utf8",
+    );
+    const twoFactorSetupSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "auth", "TwoFactorSetup.tsx"),
+      "utf8",
+    );
+
+    expect(setup2faRouteSource).toContain("TwoFactorSetup");
+    expect(setup2faRouteSource).not.toContain("auth-client");
+    expect(setup2faRouteSource).not.toContain("qrcode");
+    expect(twoFactorSetupSource).toContain('await import("@/lib/auth-client")');
+    expect(twoFactorSetupSource).not.toMatch(
+      /from\s+["'](?:@|~)\/lib\/auth-client["']/,
+    );
+    expect(twoFactorSetupSource).not.toMatch(/from\s+["']qrcode["']/);
+  });
+
   it("keeps post-auth success navigation inside the hydrated router", () => {
     const loginFormSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "auth", "LoginForm.tsx"),
@@ -835,29 +855,52 @@ describe("admin route graph boundaries", () => {
     );
   });
 
-  it("keeps product delete confirmations behind a lazy interaction boundary", () => {
-    const routeSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "products", "index.tsx"),
-      "utf8",
-    );
-    const dialogSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "routes",
-        "admin",
-        "products",
-        "-ProductDeleteDialog.tsx",
-      ),
-      "utf8",
-    );
+  it("keeps list delete confirmations behind lazy interaction boundaries", () => {
+    const cases = [
+      {
+        route: "products",
+        component: "ProductDeleteDialog",
+        file: "-ProductDeleteDialog.tsx",
+        openMarker: "isProductDeleteDialogOpen &&",
+      },
+      {
+        route: "categories",
+        component: "CategoryDeleteDialog",
+        file: "-CategoryDeleteDialog.tsx",
+        openMarker: "isCategoryDeleteDialogOpen &&",
+      },
+      {
+        route: "customers",
+        component: "CustomerDeleteDialog",
+        file: "-CustomerDeleteDialog.tsx",
+        openMarker: "isCustomerDeleteDialogOpen &&",
+      },
+      {
+        route: "pages",
+        component: "PageDeleteDialog",
+        file: "-PageDeleteDialog.tsx",
+        openMarker: "isPageDeleteDialogOpen &&",
+      },
+    ];
 
-    expect(routeSource).toContain("const ProductDeleteDialog = lazy(()");
-    expect(routeSource).toContain('import("./-ProductDeleteDialog")');
-    expect(routeSource).toContain("isProductDeleteDialogOpen &&");
-    expect(routeSource).not.toContain("~/components/ui/alert-dialog");
-    expect(routeSource).not.toContain("AlertDialogContent");
-    expect(dialogSource).toContain("~/components/ui/alert-dialog");
-    expect(dialogSource).toContain("ProductDeleteDialog");
+    for (const { route, component, file, openMarker } of cases) {
+      const routeSource = readFileSync(
+        join(ADMIN_SRC_ROOT, "routes", "admin", route, "index.tsx"),
+        "utf8",
+      );
+      const dialogSource = readFileSync(
+        join(ADMIN_SRC_ROOT, "routes", "admin", route, file),
+        "utf8",
+      );
+
+      expect(routeSource).toContain(`const ${component} = lazy(()`);
+      expect(routeSource).toContain(`import("./${file.replace(/\.tsx$/, "")}")`);
+      expect(routeSource).toContain(openMarker);
+      expect(routeSource).not.toContain("~/components/ui/alert-dialog");
+      expect(routeSource).not.toContain("AlertDialogContent");
+      expect(dialogSource).toContain("~/components/ui/alert-dialog");
+      expect(dialogSource).toContain(component);
+    }
   });
 
   it("keeps dashboard route entry from blocking on summary data", () => {
@@ -1210,7 +1253,11 @@ describe("admin route graph boundaries", () => {
     expect(editorSource).toContain("style={!isFullscreen ? { minHeight: editorViewportHeight, maxHeight: editorViewportHeight } : undefined}");
     expect(editorSource).toContain("import { TiptapToolbarSkeleton } from \"./TiptapToolbarSkeleton\"");
     expect(editorSource).toContain("<TiptapToolbarSkeleton");
-    expect(editorSource).toContain("<RichContent content={content} variant=\"compact\" />");
+    expect(editorSource).toContain("import { sanitizeHtml } from \"@scalius/shared/html-sanitize\"");
+    expect(editorSource).toContain("sanitizeHtml(content)");
+    expect(editorSource).toContain('className="ProseMirror max-w-none p-4 min-h-[200px] text-sm"');
+    expect(editorSource).not.toContain("<RichContent");
+    expect(editorSource).not.toContain("from \"../rich-content\"");
     expect(editorSource).not.toContain("setIsMounted");
     expect(editorSource).not.toContain("if (!isMounted)");
 
