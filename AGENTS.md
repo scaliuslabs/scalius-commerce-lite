@@ -33,11 +33,12 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 ## Work Loop
 
 1. Check `audit/REMEDIATION_TRACKER.md` before choosing or continuing a slice.
-2. Load only the task-specific docs and files needed for the slice.
+2. Load only the task-specific docs and files needed for the slice; if docs conflict, verify against code and runtime before trusting prose.
 3. Prefer small, boring fixes that remove complexity instead of explaining it away.
-4. Add focused tests around the failure mode before broad gates.
-5. For meaningful code changes, verify locally, deploy when required, smoke live behavior, update docs, then commit.
+4. Delegate independent code slices to workers with disjoint file ownership when the active goal asks for parallel execution.
+5. Add focused tests around the failure mode before broad gates.
+6. For meaningful code changes, verify locally, deploy when required, smoke live behavior, update docs, then commit.
 
 ## Context Hygiene
 
-Add to this root file only when the fact is non-obvious, repeatedly trips agents, and cannot be enforced in code/tests. Otherwise fix the code, add a test, or put narrow notes in the relevant domain doc.
+Add to this root file only when the fact is non-obvious, repeatedly trips agents, and cannot be enforced in code/tests. Use it as an index of pointers and production landmines; do not restate product vision or domain docs here. If it grows past roughly one screen, prune or move details into the relevant domain doc.
