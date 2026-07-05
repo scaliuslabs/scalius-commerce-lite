@@ -5,12 +5,12 @@
 
 import {
   generateSitemap,
+  getBaseUrl,
   getSitemapHeaders,
   xmlDataUnavailableResponse,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSeoSettings } from '@/lib/api';
-import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
@@ -18,7 +18,7 @@ export const prerender = false;
 
 export const GET: APIRoute = async (_context: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl();
+    const baseUrl = getBaseUrl();
     const seo = await getSeoSettings();
     if (!seo) {
       return xmlDataUnavailableResponse('Static sitemap is temporarily unavailable');
@@ -52,6 +52,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
     });
   } catch (error: unknown) {
     console.error('Error generating static sitemap:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return xmlDataUnavailableResponse('Static sitemap is temporarily unavailable');
   }
 };

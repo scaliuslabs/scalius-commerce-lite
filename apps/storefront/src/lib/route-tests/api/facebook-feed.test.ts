@@ -72,6 +72,43 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<rss");
   });
 
+  it("uses buyer availability from the product list instead of product active status alone", async () => {
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_available",
+          slug: "always-available",
+          name: "Always Available",
+          description: "Simple untracked SKU",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          availableForSale: true,
+        },
+        {
+          id: "prod_sold_out",
+          slug: "sold-out",
+          name: "Sold Out",
+          description: "Tracked SKU with no stock",
+          price: 1400,
+          discountedPrice: 1400,
+          isActive: true,
+          availableForSale: false,
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 2, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<g:id>prod_available</g:id>");
+    expect(body).toContain("<g:availability>in stock</g:availability>");
+    expect(body).toContain("<g:id>prod_sold_out</g:id>");
+    expect(body).toContain("<g:availability>out of stock</g:availability>");
+  });
+
   it("returns a no-store 404 without fetching products when catalog feed is disabled", async () => {
     mocks.getSeoSettings.mockResolvedValueOnce({
       discovery: {

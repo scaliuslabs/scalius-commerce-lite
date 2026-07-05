@@ -80,7 +80,7 @@ Implements a two-layer edge caching strategy for HTML pages:
 - Product pages (`/products/{slug}`)
 - Category pages (`/categories/{slug}`)
 - Search (`/search`)
-- Sitemaps (`/sitemap.xml`, `/sitemap-*.xml`)
+- Sitemaps (`/sitemap.xml`, `/sitemap-*.xml`); XML generation requires an absolute `STOREFRONT_URL` and returns non-cacheable `503` instead of relative/empty discovery URLs when it is missing
 - Generic pages (any path not matching excluded prefixes)
 
 **Non-cacheable paths**: `/api`, `/cart`, `/checkout`, `/buy`, `/order-success`, `/account`, `/health`, `/robots.txt`
@@ -223,7 +223,7 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |
 | `__ptproxy.ts` | Partytown analytics proxy |
-| `facebook-feed.xml.ts` | Facebook product feed |
+| `facebook-feed.xml.ts` | Facebook/Meta product feed; availability comes from the public product list `availableForSale` SKU projection so feed XML matches product-page structured data and checkout purchasability |
 
 Checkout proxy endpoints unwrap `.data` before returning to the browser -- the checkout page reads top-level fields.
 `checkout/create-order.ts` must preserve structured `details.itemIssues` from the API; checkout gateway handlers use those issues to return buyers to the cart repair UI instead of collapsing catalog freshness failures into a string-only payment error.

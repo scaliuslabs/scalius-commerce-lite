@@ -63,7 +63,16 @@ const saveSeo = async (values: SeoConfig) => {
 };
 
 export function SeoSettingsBuilder() {
-  const { values, setValues, isLoading, isSaving, handleSubmit } =
+  const {
+    values,
+    setValues,
+    isLoading,
+    isLoadError,
+    loadError,
+    isSaving,
+    handleSubmit,
+    refetch,
+  } =
     useSettingsForm<SeoConfig>({
       queryKey: queryKeys.settings.seo(),
       fetchFn: fetchSeo,
@@ -122,6 +131,26 @@ export function SeoSettingsBuilder() {
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (isLoadError) {
+    const message =
+      loadError instanceof Error && loadError.message
+        ? loadError.message
+        : "SEO settings could not be loaded. Existing search settings were not changed.";
+
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>SEO settings unavailable</AlertTitle>
+        <AlertDescription className="space-y-3">
+          <p>{message}</p>
+          <Button type="button" variant="outline" onClick={refetch}>
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 

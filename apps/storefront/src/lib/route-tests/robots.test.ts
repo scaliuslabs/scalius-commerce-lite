@@ -4,13 +4,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getSeoSettings: vi.fn(),
-  cfEnv: { STOREFRONT_URL: "https://storefront.example.test" },
+  getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
 }));
-
-vi.mock("cloudflare:workers", () => ({ env: mocks.cfEnv }));
 
 vi.mock("@/lib/api", () => ({
   getSeoSettings: mocks.getSeoSettings,
+}));
+
+vi.mock("@/lib/api/runtime-env", () => ({
+  getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
 }));
 
 import { GET } from "../../pages/robots.txt";
@@ -18,7 +20,7 @@ import { GET } from "../../pages/robots.txt";
 describe("robots.txt route", () => {
   beforeEach(() => {
     mocks.getSeoSettings.mockReset();
-    mocks.cfEnv.STOREFRONT_URL = "https://storefront.example.test";
+    mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
   });
 
   it("returns non-cacheable 503 when SEO settings cannot be read", async () => {
@@ -29,6 +31,23 @@ describe("robots.txt route", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Retry-After")).toBe("30");
+  });
+
+  it("returns non-cacheable 503 instead of a relative sitemap when the storefront URL is missing", async () => {
+    mocks.getRuntimeStorefrontUrl.mockReturnValueOnce("");
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      siteTitle: "Store",
+      homepageTitle: "Home",
+      homepageMetaDescription: "Description",
+      robotsTxt: "User-agent: *\nAllow: /",
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toContain("Robots policy is temporarily unavailable");
   });
 
   it("appends the sitemap URL to the configured robots policy", async () => {

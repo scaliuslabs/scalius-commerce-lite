@@ -5,6 +5,7 @@
 
 import {
   generateSitemap,
+  getBaseUrl,
   getSitemapHeaders,
   xmlDataUnavailableResponse,
 } from '@/lib/sitemap-utils';
@@ -12,7 +13,6 @@ import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSeoSettings } from '@/lib/api';
 import { getAllPages } from '@/lib/api/pages';
 import type { Page } from '@/lib/api/types';
-import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
@@ -20,7 +20,7 @@ export const prerender = false;
 
 export const GET: APIRoute = async (_context: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl();
+    const baseUrl = getBaseUrl();
     const seo = await getSeoSettings();
     if (!seo) {
       return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
@@ -78,9 +78,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
       .filter((page) => page.isPublished && page.slug) // Extra safety check
       .map((page) => ({
         loc: `${baseUrl}/${page.slug}`,
-        lastmod: page.publishedAt
-          ? new Date(page.publishedAt).toISOString()
-          : new Date(page.updatedAt).toISOString(),
+        lastmod: page.publishedAt ?? page.updatedAt,
         changefreq: 'monthly' as const,
         priority: 0.6,
       }));

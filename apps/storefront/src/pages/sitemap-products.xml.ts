@@ -5,11 +5,10 @@
  * Limit: 50,000 URLs per sitemap page (as per sitemap protocol)
  */
 
-import { generateSitemap, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
+import { generateSitemap, getBaseUrl, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSeoSettings } from '@/lib/api';
 import { getAllProducts } from '@/lib/api/products';
-import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext, APIRoute } from 'astro';
 import type { Product } from '@/lib/api/types';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
@@ -20,7 +19,7 @@ const URLS_PER_SITEMAP = 5000; // Chunk size safe for Cloudflare Workers
 
 export const GET: APIRoute = async ({ url }: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl();
+    const baseUrl = getBaseUrl();
     const seo = await getSeoSettings();
     if (!seo) {
       return xmlDataUnavailableResponse('Product sitemap is temporarily unavailable');
@@ -112,6 +111,6 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     });
   } catch (error: unknown) {
     console.error('Error generating products sitemap:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return xmlDataUnavailableResponse('Product sitemap is temporarily unavailable');
   }
 };

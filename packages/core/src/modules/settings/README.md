@@ -58,8 +58,8 @@ Admin-facing DB operations for site settings. Cache invalidation stays in route 
 | `saveFooterConfig` | `(db, config) => void` | Upserts footerConfig on `siteSettings` singleton |
 | `getThemeSettings` | `(db) => { colors }` | Reads storefront color overrides from `settings` (category=theme, key=storefront_colors) and sanitizes legacy rows through `@scalius/shared/storefront-theme` |
 | `saveThemeSettings` | `(db, colors) => void` | Sanitizes and saves storefront color overrides via `upsertSetting()` |
-| `getSeoSettings` | `(db) => { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, discovery }` | Reads SEO fields from `siteSettings` singleton and the default-on discovery policy from `settings` (`category=seo`, `key=discovery`) |
-| `saveSeoSettings` | `(db, data) => void` | Upserts SEO fields and optional discovery policy. Site fields only update provided values; discovery is normalized and stored via `upsertSetting()` without requiring a `site_settings` migration |
+| `getSeoSettings` | `(db) => { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, discovery }` | Reads SEO fields from `siteSettings` singleton and the default-on discovery policy from `settings` (`category=seo`, `key=discovery`). Admin reads must fail visibly on DB errors; routes must not return default-on settings after a failed read. |
+| `saveSeoSettings` | `(db, data) => void` | Upserts SEO fields and optional discovery policy. Site fields only update provided values; discovery patches are deep-merged with the stored policy and normalized before `upsertSetting()` so partial saves do not reset sibling sitemap/feed/robots/schema toggles |
 | `getStorefrontUrlSetting` | `(db) => { storefrontUrl }` | Reads storefrontUrl from `siteSettings` |
 | `saveStorefrontUrl` | `(db, url?) => void` | Upserts storefrontUrl on `siteSettings` singleton |
 | `getAllowedCountries` | `(db) => { allowedCountries, allowedCountriesMode }` | Reads allowed countries. Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |
@@ -164,8 +164,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/footer` | Save footer config (logo, tagline, description, copyrightText, menus, social). Upserts siteSettings singleton |
 | GET | `/theme` | Get storefront color overrides from `settings` (category=theme, key=storefront_colors) |
 | POST | `/theme` | Save storefront color overrides. Invalidates `api:storefront:layout:*` KV keys |
-| GET | `/seo` | Get siteTitle, homepageTitle, homepageMetaDescription, robotsTxt |
-| POST | `/seo` | Save SEO fields on siteSettings singleton |
+| GET | `/seo` | Get siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, and discovery policy; fails closed on read errors |
+| POST | `/seo` | Save SEO fields and nested partial discovery toggles on siteSettings/settings |
 | GET | `/storefront-url` | Get storefrontUrl from siteSettings |
 | POST | `/storefront-url` | Save storefrontUrl. Invalidates layout cache + site settings KV |
 | GET | `/allowed-countries` | Get allowed countries list and mode (include/exclude). Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |

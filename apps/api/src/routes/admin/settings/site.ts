@@ -480,30 +480,16 @@ const getSeoRoute = createRoute({
 });
 
 app.openapi(getSeoRoute, async (c) => {
-  try {
-    const db = c.get("db");
-    const result = await getSeoSettings(db);
-    return ok(c, result);
-  } catch {
-    return ok(c, {
-      siteTitle: "",
-      homepageTitle: "",
-      homepageMetaDescription: "",
-      robotsTxt: "",
-      discovery: {
-        sitemap: {
-          enabled: true,
-          products: true,
-          categories: true,
-          collections: true,
-          pages: true,
-        },
-        feeds: { productCatalogEnabled: true },
-        robots: { advertiseSitemap: true },
-        structuredData: { organization: true, websiteSearch: true },
-      },
-    });
-  }
+  const db = c.get("db");
+  const result = await getSeoSettings(db);
+  return ok(c, result);
+});
+
+const saveSeoDiscoverySchema = z.object({
+  sitemap: seoSettingsSchema.shape.discovery.shape.sitemap.partial().optional(),
+  feeds: seoSettingsSchema.shape.discovery.shape.feeds.partial().optional(),
+  robots: seoSettingsSchema.shape.discovery.shape.robots.partial().optional(),
+  structuredData: seoSettingsSchema.shape.discovery.shape.structuredData.partial().optional(),
 });
 
 const saveSeoSchema = z.object({
@@ -511,7 +497,7 @@ const saveSeoSchema = z.object({
   homepageTitle: z.string().optional(),
   homepageMetaDescription: z.string().optional(),
   robotsTxt: z.string().optional(),
-  discovery: seoSettingsSchema.shape.discovery.partial().optional(),
+  discovery: saveSeoDiscoverySchema.optional(),
 });
 
 const saveSeoRoute = createRoute({

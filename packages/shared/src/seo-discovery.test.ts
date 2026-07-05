@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SEO_DISCOVERY_SETTINGS,
+  mergeSeoDiscoverySettings,
   normalizeSeoDiscoverySettings,
   parseSeoDiscoverySettings,
 } from "./seo-discovery";
@@ -43,6 +44,40 @@ describe("SEO discovery settings", () => {
         ...DEFAULT_SEO_DISCOVERY_SETTINGS.sitemap,
         categories: false,
       },
+    });
+  });
+
+  it("deep-merges partial patches without resetting sibling discovery toggles", () => {
+    expect(
+      mergeSeoDiscoverySettings(
+        {
+          sitemap: {
+            enabled: true,
+            products: false,
+            categories: false,
+            collections: true,
+            pages: false,
+          },
+          feeds: { productCatalogEnabled: false },
+          robots: { advertiseSitemap: false },
+          structuredData: { organization: false, websiteSearch: true },
+        },
+        {
+          sitemap: { pages: true },
+          structuredData: { websiteSearch: false },
+        },
+      ),
+    ).toEqual({
+      sitemap: {
+        enabled: true,
+        products: false,
+        categories: false,
+        collections: true,
+        pages: true,
+      },
+      feeds: { productCatalogEnabled: false },
+      robots: { advertiseSitemap: false },
+      structuredData: { organization: false, websiteSearch: false },
     });
   });
 });

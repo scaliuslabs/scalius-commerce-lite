@@ -41,6 +41,18 @@ describe("sitemap index route", () => {
     expect(response.headers.get("Cache-Control")).toContain("no-store");
   });
 
+  it("returns non-cacheable 503 instead of relative locs when the storefront URL is missing", async () => {
+    mocks.getRuntimeStorefrontUrl.mockReturnValueOnce("");
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toContain("Sitemap index is temporarily unavailable");
+    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+  });
+
   it("includes sitemap documents and excludes product feeds", async () => {
     mocks.getAllProducts.mockResolvedValueOnce({
       data: [{ id: "prod_1" }],

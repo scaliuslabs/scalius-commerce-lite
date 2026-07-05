@@ -5,13 +5,13 @@
 
 import {
   generateSitemap,
+  getBaseUrl,
   getSitemapHeaders,
   xmlDataUnavailableResponse,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSeoSettings } from '@/lib/api';
 import { getAllCategories } from '@/lib/api/categories';
-import { getRuntimeStorefrontUrl } from '@/lib/api/runtime-env';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
@@ -19,7 +19,7 @@ export const prerender = false;
 
 export const GET: APIRoute = async (_context: APIContext) => {
   try {
-    const baseUrl = getRuntimeStorefrontUrl();
+    const baseUrl = getBaseUrl();
     const seo = await getSeoSettings();
     if (!seo) {
       return xmlDataUnavailableResponse('Category sitemap is temporarily unavailable');

@@ -105,6 +105,37 @@ export function normalizeSeoDiscoverySettings(
   };
 }
 
+export function mergeSeoDiscoverySettings(
+  base: unknown,
+  patch: unknown,
+): SeoDiscoverySettings {
+  const normalizedBase = normalizeSeoDiscoverySettings(base);
+  const patchRoot = asRecord(patch);
+  const patchSitemap = asRecord(patchRoot.sitemap);
+  const patchFeeds = asRecord(patchRoot.feeds);
+  const patchRobots = asRecord(patchRoot.robots);
+  const patchStructuredData = asRecord(patchRoot.structuredData);
+
+  return normalizeSeoDiscoverySettings({
+    sitemap: {
+      ...normalizedBase.sitemap,
+      ...patchSitemap,
+    },
+    feeds: {
+      ...normalizedBase.feeds,
+      ...patchFeeds,
+    },
+    robots: {
+      ...normalizedBase.robots,
+      ...patchRobots,
+    },
+    structuredData: {
+      ...normalizedBase.structuredData,
+      ...patchStructuredData,
+    },
+  });
+}
+
 export function parseSeoDiscoverySettings(
   value: string | null | undefined,
 ): SeoDiscoverySettings {

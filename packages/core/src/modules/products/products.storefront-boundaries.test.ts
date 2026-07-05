@@ -14,11 +14,13 @@ describe("storefront product query boundaries", () => {
         expect(source).toContain("publicProductBaseConditions");
         expect(source).toContain("publicProductHasBuyerResolvableSku");
         expect(source).toContain("publicProductHasCustomerOptions");
+        expect(source).toContain("publicProductHasAvailableBuyerSku");
         expect(source).toContain("const conditions: (SQL | undefined)[] = publicProductBaseConditions();");
         expect(source).toContain("const conditions: SQL[] = publicProductBaseConditions();");
         expect(source).toContain("publicProductHasBuyerResolvableSku(),");
         expect(source).toContain("normalizeDefaultSkuOptions");
         expect(source).toContain("hasCustomerOptions: publicProductHasCustomerOptions(sql`${products.id}`).as(\"hasCustomerOptions\")");
+        expect(source).toContain("availableForSale: publicProductHasAvailableBuyerSku(sql`${products.id}`).as(\"availableForSale\")");
         expect(source).toContain("hasVariants: Boolean(hasCustomerOptions)");
         expect(source).toContain("variant.isDefault !== true");
     });

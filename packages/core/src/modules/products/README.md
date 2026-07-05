@@ -29,7 +29,7 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Discounted price calculation supporting both percentage and flat discount types
 - Feature extraction from description (parses bullet-point lines)
 - SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, logically no customer options); optioned products require an explicit selected SKU; SKU-less or ambiguous no-option products fail closed. Merchant-created variants must include at least one customer option (`size` or `color`) so the hidden simple SKU stays the only no-option SKU. `isDefault` is the protected simple-SKU authority; admin/API/storefront projections normalize legacy default SKU option labels to `null`, and the storefront no longer synthesizes fake `default` variants.
-- Public catalog eligibility is centralized in `products.public-eligibility.ts`: storefront lists/details/search, global search, filterable attributes, and collection/homepage product resolution must all require a buyer-resolvable active SKU topology, while stock availability remains a separate display/checkout concern. Buyer-facing `hasVariants` means at least one non-default SKU with a real customer option, not the protected default SKU.
+- Public catalog eligibility is centralized in `products.public-eligibility.ts`: storefront lists/details/search, global search, filterable attributes, and collection/homepage product resolution must all require a buyer-resolvable active SKU topology, while stock availability remains a separate display/checkout concern. Buyer-facing `hasVariants` means at least one non-default SKU with a real customer option, not the protected default SKU. Public product lists also project `availableForSale` from the same SKU topology (`trackInventory = false` or positive `stock - reservedStock`), so catalog feeds can match product-page JSON-LD and checkout availability without variant N+1 reads.
 - Storefront buyer availability uses `apps/storefront/src/lib/product-sellable-variants.ts` so product detail, JSON-LD, stock badges, and `/buy/{slug}` all classify simple/optioned/unavailable products through one resolver.
 
 ## Data Flow
@@ -125,7 +125,7 @@ Storefront category ([slug].astro)
 
 | Method | Path | Handler | Description |
 |--------|------|---------|-------------|
-| GET | `/` | `getStorefrontProducts` | Paginated list with category, search, price range, freeDelivery, hasDiscount, attribute filters, sort |
+| GET | `/` | `getStorefrontProducts` | Paginated list with category, search, price range, freeDelivery, hasDiscount, attribute filters, sort, `hasVariants`, and SKU-aware `availableForSale` |
 | GET | `/search` | `searchStorefrontProducts` | Lightweight search with variants for cart/checkout |
 | GET | `/{slug}` | `getStorefrontProductBySlug` | Full product detail with variants, images, attributes, additionalInfo, relatedProducts |
 

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
-import { env as cfEnv } from "cloudflare:workers";
 import { getSeoSettings } from "@/lib/api";
+import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 export const prerender = false;
@@ -74,12 +74,12 @@ export const GET: APIRoute = async () => {
 
   const discovery = normalizeSeoDiscoverySettings(seoSettings.discovery);
   if (discovery.sitemap.enabled && discovery.robots.advertiseSitemap) {
-    // Append sitemap reference
-    const env = cfEnv as unknown as Env;
-    const storefrontUrl = (env?.STOREFRONT_URL as string) || "";
-    const sitemapUrl = storefrontUrl
-      ? `${storefrontUrl.replace(/\/$/, "")}/sitemap.xml`
-      : "/sitemap.xml";
+    let sitemapUrl: string;
+    try {
+      sitemapUrl = `${getBaseUrl()}/sitemap.xml`;
+    } catch {
+      return xmlDataUnavailableResponse("Robots policy is temporarily unavailable");
+    }
 
     robotsContent = ensureSitemapDirective(robotsContent, sitemapUrl);
   } else {
