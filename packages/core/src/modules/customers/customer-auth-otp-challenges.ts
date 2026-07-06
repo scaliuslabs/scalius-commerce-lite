@@ -21,6 +21,8 @@ export interface PersistCustomerAuthOtpChallengeInput {
     channel: CustomerAuthOtpChannel;
     intent: CustomerAuthOtpIntent;
     identifier: string;
+    deliveryTarget: string;
+    deliveryName?: string;
     contactEmail?: string;
     phone?: string;
     code: string;
@@ -77,6 +79,16 @@ export async function persistCustomerAuthOtpChallenge(
     const codeHash = await hashOtpCode(input.code, input.otpKey, input.encryptionKey);
     const identifierHash = await hashCustomerAuthOtpIdentifier(input.identifier, input.encryptionKey);
     const identifierMasked = maskOtpIdentifier(input.identifier);
+    const deliveryTargetEncrypted = await encryptPinnedContact(
+        input.deliveryTarget,
+        input.contactEncryptionKey,
+        "Customer OTP delivery target",
+    );
+    const deliveryNameEncrypted = await encryptPinnedContact(
+        input.deliveryName,
+        input.contactEncryptionKey,
+        "Customer OTP delivery name",
+    );
     const contactEmailEncrypted = await encryptPinnedContact(input.contactEmail, input.contactEncryptionKey, "Customer OTP email");
     const phoneEncrypted = await encryptPinnedContact(input.phone, input.contactEncryptionKey, "Customer OTP phone");
 
@@ -88,6 +100,8 @@ export async function persistCustomerAuthOtpChallenge(
         intent: input.intent,
         identifierHash,
         identifierMasked,
+        deliveryTargetEncrypted,
+        deliveryNameEncrypted,
         contactEmailEncrypted,
         phoneEncrypted,
         codeHash,
@@ -112,6 +126,8 @@ export async function persistCustomerAuthOtpChallenge(
                 intent: values.intent,
                 identifierHash: values.identifierHash,
                 identifierMasked: values.identifierMasked,
+                deliveryTargetEncrypted: values.deliveryTargetEncrypted,
+                deliveryNameEncrypted: values.deliveryNameEncrypted,
                 contactEmailEncrypted: values.contactEmailEncrypted,
                 phoneEncrypted: values.phoneEncrypted,
                 codeHash: values.codeHash,

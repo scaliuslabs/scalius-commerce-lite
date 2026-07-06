@@ -9,8 +9,10 @@ import {
     productAttributeValues,
     orderItems,
     discountProducts,
+    inventoryMovements,
+    productLowStockAlerts,
 } from "@scalius/database/schema";
-import { and, sql, desc, eq, asc, inArray, isNull } from "drizzle-orm";
+import { and, sql, desc, eq, asc, inArray, isNull, or } from "drizzle-orm";
 import { sanitizeFtsQuery } from "../../search/fts5";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
@@ -800,6 +802,49 @@ export async function restoreProduct(db: Database, id: string): Promise<void> {
     await safeBatch(db, statements);
 }
 
+async function loadProductVariantIds(db: Database, productIds: string[]): Promise<string[]> {
+    if (productIds.length === 0) return [];
+
+    const variantRows = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(inArray(productVariants.productId, productIds));
+
+    return variantRows.map((variant) => variant.id).filter(Boolean);
+}
+
+async function assertNoVariantInventoryHistory(
+    db: Database,
+    variantIds: string[],
+    message: string,
+): Promise<void> {
+    if (variantIds.length === 0) return;
+
+    const movementCheckArr = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(inventoryMovements)
+        .where(inArray(inventoryMovements.variantId, variantIds));
+
+    if ((movementCheckArr[0]?.count ?? 0) > 0) {
+        throw new ConflictError(message);
+    }
+}
+
+function deleteLowStockAlertsForProductBatch(
+    db: Database,
+    productIds: string[],
+    variantIds: string[],
+): SQLiteBatchItem {
+    const productCondition = inArray(productLowStockAlerts.productId, productIds);
+    const variantCondition = variantIds.length > 0
+        ? inArray(productLowStockAlerts.variantId, variantIds)
+        : undefined;
+
+    return db
+        .delete(productLowStockAlerts)
+        .where(variantCondition ? or(productCondition, variantCondition) : productCondition);
+}
+
 /**
  * Permanently deletes a product and all of its related data (variants, images, attributes, rich content).
  * Throws an error if the product is linked to any existing orders or discounts.
@@ -823,15 +868,21 @@ export async function permanentlyDeleteProduct(db: Database, id: string): Promis
         throw new ConflictError("Cannot delete product. It is linked to one or more discounts.");
     }
 
-    await db.batch([
+    const variantIds = await loadProductVariantIds(db, [id]);
+    await assertNoVariantInventoryHistory(
+        db,
+        variantIds,
+        "Cannot permanently delete product. One or more SKUs have inventory history; move the product to trash instead.",
+    );
+
+    await safeBatch(db, [
+        deleteLowStockAlertsForProductBatch(db, [id], variantIds),
         db.delete(productVariants).where(eq(productVariants.productId, id)),
         db.delete(productImages).where(eq(productImages.productId, id)),
         db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
         db.delete(productRichContent).where(eq(productRichContent.productId, id)),
         db.delete(products).where(eq(products.id, id)),
-    // Drizzle D1 batch() requires specific tuple types — safe to cast
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    ] as any);
+    ]);
 }
 
 /**
@@ -859,7 +910,15 @@ export async function bulkDeleteProducts(db: Database, productIds: string[], per
             throw new ConflictError("Cannot delete products. One or more products are linked to discounts.");
         }
 
+        const variantIds = await loadProductVariantIds(db, productIds);
+        await assertNoVariantInventoryHistory(
+            db,
+            variantIds,
+            "Cannot permanently delete products. One or more SKUs have inventory history; move the products to trash instead.",
+        );
+
         await safeBatch(db, [
+            deleteLowStockAlertsForProductBatch(db, productIds, variantIds),
             db.delete(productVariants).where(inArray(productVariants.productId, productIds)),
             db.delete(productImages).where(inArray(productImages.productId, productIds)),
             db.delete(productAttributeValues).where(inArray(productAttributeValues.productId, productIds)),

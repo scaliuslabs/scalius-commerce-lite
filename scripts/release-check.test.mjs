@@ -38,6 +38,17 @@ function readyResponse() {
   });
 }
 
+function degradedResponse(status = 503) {
+  return jsonResponse({
+    success: false,
+    status: "degraded",
+    checks: {
+      d1: { status: "ok", latencyMs: 12 },
+      api_cache_kv: { status: "timeout", latencyMs: 1_500 },
+    },
+  }, status);
+}
+
 function monitoringApiConfig() {
   return {
     name: "scalius-api",
@@ -275,15 +286,21 @@ describe("release-check discovery evaluators", () => {
 });
 
 describe("runReleaseCheck", () => {
-  it("runs local gates and live read-only checks with fake fetch and exec", async () => {
+  it("runs local gates and live read-only checks after transient API readiness recovers", async () => {
     const feedRequests = [];
+    const readyzResponses = [
+      degradedResponse(),
+      readyResponse(),
+      readyResponse(),
+      readyResponse(),
+    ];
     const fetchImpl = vi.fn(async (url, init) => {
       expect(init.method).toBe("GET");
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
-        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/readyz") return readyzResponses.shift() ?? readyResponse();
         if (parsed.pathname === "/api/v1/openapi.json") {
           return jsonResponse({
             paths: {
@@ -350,7 +367,8 @@ describe("runReleaseCheck", () => {
     expect(result.status).toBe("passed");
     expect(result.checks.apiOps).toMatchObject({
       healthStatusCode: 200,
-      readyCount: 2,
+      readyCount: 3,
+      readySampleCount: 4,
       openApiPathCount: 3,
       deploymentVersionId: "api-version",
     });
@@ -379,7 +397,62 @@ describe("runReleaseCheck", () => {
       "/api/facebook-feed.xml?page=2&limit=5",
     ]);
     expect(result.checks.productRoute.url).toBe("https://storefront.example.test/products/demo-product");
+    expect(fetchImpl.mock.calls.filter(([url]) => new URL(url).pathname === "/api/v1/readyz")).toHaveLength(4);
     expect(execFileImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    {
+      label: "persistent degraded readiness",
+      responses: [degradedResponse(), degradedResponse(), degradedResponse(), degradedResponse()],
+      expectedDetail: "0/4 ready",
+    },
+    {
+      label: "final degraded readiness",
+      responses: [readyResponse(), readyResponse(), readyResponse(), degradedResponse()],
+      expectedDetail: "3/4 ready; final=503",
+    },
+  ])("fails $label during API ops", async ({ responses, expectedDetail }) => {
+    const readyzResponses = [...responses];
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(url);
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyzResponses.shift() ?? degradedResponse();
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    const execFileImpl = vi.fn();
+
+    let thrown;
+    try {
+      await runReleaseCheck(parseReleaseCheckArgs([
+        "--api-base-url", "https://api.example.test",
+        "--storefront-url", "https://storefront.example.test",
+        "--dashboard-url", "https://dashboard.example.test",
+      ]), {
+        apiConfig: monitoringApiConfig(),
+        fetchImpl,
+        execFileImpl,
+        rootDir: "/repo",
+        readFileImpl: () => verifiedTracker(),
+        fileExistsImpl: () => true,
+        pnpmExecutable: "pnpm",
+        logger: null,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toContain("API /readyz remained degraded");
+    expect(thrown.message).toContain(expectedDetail);
+    expect(thrown.result.checks.apiOps).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining(expectedDetail),
+    });
+    expect(fetchImpl.mock.calls.filter(([url]) => new URL(url).pathname === "/api/v1/readyz")).toHaveLength(4);
+    expect(execFileImpl).not.toHaveBeenCalled();
   });
 
   it("skips live checks without calling fetch or exec", async () => {

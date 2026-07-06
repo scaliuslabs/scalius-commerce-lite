@@ -150,6 +150,8 @@ export const orderPaymentRecoveryChallenges = sqliteTable("order_payment_recover
     channel: text("channel", { enum: ["email", "sms", "whatsapp"] }).notNull(),
     identifierHash: text("identifier_hash").notNull(),
     identifierMasked: text("identifier_masked").notNull(),
+    deliveryTargetEncrypted: text("delivery_target_encrypted"),
+    deliveryNameEncrypted: text("delivery_name_encrypted"),
     codeHash: text("code_hash").notNull(),
     status: text("status", { enum: ["pending", "consumed", "locked"] }).notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),

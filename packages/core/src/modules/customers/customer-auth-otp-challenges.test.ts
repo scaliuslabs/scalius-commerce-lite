@@ -93,6 +93,8 @@ describe("customer auth OTP D1 challenges", () => {
       channel: "email",
       intent: "sign_in",
       identifier: "buyer@example.com",
+      deliveryTarget: "buyer@example.com",
+      deliveryName: "Buyer",
       contactEmail: "buyer@example.com",
       phone: "+8801712345678",
       code: "123456",
@@ -118,6 +120,8 @@ describe("customer auth OTP D1 challenges", () => {
     });
     expect((db.calls.insertValues as { identifierHash: string }).identifierHash).toMatch(/^[a-f0-9]{64}$/);
     expect((db.calls.insertValues as { identifierMasked: string }).identifierMasked).toBe("b***@example.com");
+    expect((db.calls.insertValues as { deliveryTargetEncrypted: string }).deliveryTargetEncrypted).toMatch(/^enc:/);
+    expect((db.calls.insertValues as { deliveryNameEncrypted: string }).deliveryNameEncrypted).toMatch(/^enc:/);
     expect((db.calls.insertValues as { contactEmailEncrypted: string }).contactEmailEncrypted).toMatch(/^enc:/);
     expect((db.calls.insertValues as { phoneEncrypted: string }).phoneEncrypted).toMatch(/^enc:/);
     expect((db.calls.insertValues as { codeHash: string }).codeHash).not.toBe("123456");
@@ -125,6 +129,7 @@ describe("customer auth OTP D1 challenges", () => {
     const persistedJson = JSON.stringify(db.calls.insertValues);
     expect(persistedJson).not.toContain("buyer@example.com");
     expect(persistedJson).not.toContain("+8801712345678");
+    expect(persistedJson).not.toContain("Buyer");
     expect(persistedJson).not.toContain("123456");
     expect(db.calls.onConflictDoUpdate).toBeDefined();
   });
@@ -139,7 +144,10 @@ describe("customer auth OTP D1 challenges", () => {
       channel: "email",
       intent: "sign_in",
       identifier: "buyer@example.com",
+      deliveryTarget: "buyer@example.com",
+      deliveryName: "Buyer",
       code: "123456",
+      contactEncryptionKey,
       ttlSeconds: 300,
       resendCooldownSeconds: 120,
       maxAttempts: 5,
@@ -158,8 +166,11 @@ describe("customer auth OTP D1 challenges", () => {
       channel: "email",
       intent: "sign_in",
       identifier: "buyer@example.com",
+      deliveryTarget: "buyer@example.com",
+      deliveryName: "Buyer",
       code: "123456",
       encryptionKey: otpSigningKey,
+      contactEncryptionKey,
       ttlSeconds: 300,
       resendCooldownSeconds: 120,
       maxAttempts: 5,

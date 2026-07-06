@@ -554,6 +554,13 @@
       "when": 1783225000000,
       "tag": "0078_order_payment_recovery_challenges",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "6",
+      "when": 1783310400000,
+      "tag": "0079_auth_otp_delivery_targets",
+      "breakpoints": true
     }
   ]
 }

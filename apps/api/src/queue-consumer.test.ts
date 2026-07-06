@@ -159,6 +159,9 @@ import {
   type StorefrontCacheQueueMessage,
 } from "./queue-consumer";
 import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers/customer-auth.service";
+import { encodeEncryptedCredential, encryptCredentials } from "@scalius/core/utils/credential-encryption";
+
+const otpDeliveryCredentialKey = Buffer.alloc(32, 6).toString("base64");
 
 function createMessage(body: PaymentQueueMessage, attempts?: number): Message<PaymentQueueMessage>;
 function createMessage<T>(body: T, attempts?: number): Message<T>;
@@ -199,6 +202,29 @@ function createDeferred<T = void>() {
     resolve = res;
   });
   return { promise, resolve };
+}
+
+async function encryptOtpDeliveryValue(value: string): Promise<string> {
+  return encodeEncryptedCredential(await encryptCredentials(value, otpDeliveryCredentialKey));
+}
+
+function createOtpChallengeDb(row: {
+  deliveryTargetEncrypted: string | null;
+  deliveryNameEncrypted: string | null;
+  method: "email" | "phone";
+  channel: "email" | "sms" | "whatsapp";
+  expiresAt: number;
+} | null) {
+  return {
+    id: "db",
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          get: vi.fn(async () => row),
+        })),
+      })),
+    })),
+  };
 }
 
 describe("handleQueueBatch payment confirmation retries", () => {
@@ -1539,6 +1565,17 @@ describe("handleQueueBatch payment confirmation retries", () => {
   it("passes env and encryption context to OTP email dispatch", async () => {
     const challengeKey = "cust_otp:email:challenge_hash_1";
     const deliveryKey = "otp_delivery_1";
+    const db = createOtpChallengeDb({
+      deliveryTargetEncrypted: await encryptOtpDeliveryValue("buyer@example.com"),
+      deliveryNameEncrypted: await encryptOtpDeliveryValue("Buyer"),
+      method: "email",
+      channel: "email",
+      expiresAt: 4_102_444_800,
+    });
+    mocks.getDb.mockReturnValueOnce(db);
+    mocks.getCredentialEncryptionKey
+      .mockReturnValueOnce(otpDeliveryCredentialKey)
+      .mockReturnValueOnce(otpDeliveryCredentialKey);
     const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
       otpKey: challengeKey,
       deliveryKey,
@@ -1552,16 +1589,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
       otpExpiresAt: 4_102_444_800,
       method: "email",
       allowedMethod: "email",
-      identifier: "buyer@example.com",
-      name: "Buyer",
     } as const);
     expect(JSON.stringify(message.body)).not.toContain(expectedCode);
+    expect(JSON.stringify(message.body)).not.toContain("buyer@example.com");
+    expect(JSON.stringify(message.body)).not.toContain("Buyer");
     expect(message.body).not.toHaveProperty("code");
+    expect(message.body).not.toHaveProperty("identifier");
+    expect(message.body).not.toHaveProperty("name");
     const env = {
       EMAIL: {
         send: vi.fn(),
       },
-      CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+      CREDENTIAL_ENCRYPTION_KEY: otpDeliveryCredentialKey,
     } as unknown as Env;
 
     await handleQueueBatch(createBatch([message]), env);
@@ -1574,13 +1613,13 @@ describe("handleQueueBatch payment confirmation retries", () => {
         idempotencyKey: deliveryKey,
       }),
       {
-        db: { id: "db" },
+        db,
         env,
-        encryptionKey: "credential-key",
+        encryptionKey: otpDeliveryCredentialKey,
       },
     );
     expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
-      { id: "db" },
+      db,
       {
         id: "aor_1",
         deliveryKey,
@@ -1593,6 +1632,191 @@ describe("handleQueueBatch payment confirmation retries", () => {
         providerStatus: "accepted",
       },
     );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends payment recovery OTPs after resolving encrypted delivery targets from D1", async () => {
+    const challengeKey = "order_payrec:challenge_hash_1";
+    const deliveryKey = "otp_delivery_payrec_1";
+    const db = createOtpChallengeDb({
+      deliveryTargetEncrypted: await encryptOtpDeliveryValue("recovery-buyer@example.com"),
+      deliveryNameEncrypted: await encryptOtpDeliveryValue("Recovery Buyer"),
+      method: "email",
+      channel: "email",
+      expiresAt: 4_102_444_800,
+    });
+    mocks.getDb.mockReturnValueOnce(db);
+    mocks.getCredentialEncryptionKey
+      .mockReturnValueOnce(otpDeliveryCredentialKey)
+      .mockReturnValueOnce(otpDeliveryCredentialKey);
+    const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
+      otpKey: challengeKey,
+      deliveryKey,
+      encryptionKey: "test-key",
+    });
+    const message = createMessage({
+      type: "auth.send_otp",
+      challengeKey,
+      deliveryKey,
+      purpose: "order_payment_recovery",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+      channel: "email",
+    } as const);
+    expect(JSON.stringify(message.body)).not.toContain("recovery-buyer@example.com");
+    expect(JSON.stringify(message.body)).not.toContain("Recovery Buyer");
+    expect(JSON.stringify(message.body)).not.toContain(expectedCode);
+    expect(message.body).not.toHaveProperty("identifier");
+    expect(message.body).not.toHaveProperty("name");
+    expect(message.body).not.toHaveProperty("code");
+
+    const env = {
+      EMAIL: {
+        send: vi.fn(),
+      },
+      CREDENTIAL_ENCRYPTION_KEY: otpDeliveryCredentialKey,
+    } as unknown as Env;
+
+    await handleQueueBatch(createBatch([message]), env);
+
+    expect(mocks.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "recovery-buyer@example.com",
+        subject: "Your payment recovery code",
+        text: `Your payment recovery code: ${expectedCode}\n\nExpires in 5 minutes.`,
+        idempotencyKey: deliveryKey,
+      }),
+      {
+        db,
+        env,
+        encryptionKey: otpDeliveryCredentialKey,
+      },
+    );
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("terminally skips new OTP payloads when the D1 delivery target row is missing", async () => {
+    const challengeKey = "cust_otp:email:missing_target";
+    const deliveryKey = "otp_delivery_missing_target";
+    const db = createOtpChallengeDb(null);
+    mocks.getDb.mockReturnValueOnce(db);
+    mocks.claimAuthOtpDeliveryReceipt.mockResolvedValueOnce({
+      claimed: true,
+      receipt: {
+        id: "aor_missing_target",
+        deliveryKey,
+        claimId: "aorc_missing_target",
+        attempts: 1,
+      },
+    });
+    const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
+      otpKey: challengeKey,
+      deliveryKey,
+      encryptionKey: "test-key",
+    });
+    const message = createMessage({
+      type: "auth.send_otp",
+      challengeKey,
+      deliveryKey,
+      purpose: "customer_login",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(JSON.stringify(message.body)).not.toContain(expectedCode);
+    expect(message.body).not.toHaveProperty("code");
+    expect(message.body).not.toHaveProperty("identifier");
+    expect(message.body).not.toHaveProperty("name");
+    expect(mocks.createAuthOtpDeliveryTarget).toHaveBeenCalledWith(expect.objectContaining({
+      deliveryKey,
+      identifier: `unresolved:${deliveryKey}`,
+    }));
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+    expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
+    expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ id: "aor_missing_target", deliveryKey }),
+      "missing_delivery_target",
+      {
+        provider: "email",
+        providerStatus: "missing_delivery_target",
+      },
+    );
+    expect(mocks.markAuthOtpDeliveryReceiptFailed).not.toHaveBeenCalled();
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("terminally skips new OTP payloads when the encrypted D1 delivery target cannot decrypt", async () => {
+    const challengeKey = "cust_otp:sms:decrypt_failure";
+    const deliveryKey = "otp_delivery_decrypt_failure";
+    const db = createOtpChallengeDb({
+      deliveryTargetEncrypted: await encryptOtpDeliveryValue("+8801712345678"),
+      deliveryNameEncrypted: await encryptOtpDeliveryValue("Decrypt Buyer"),
+      method: "phone",
+      channel: "sms",
+      expiresAt: 4_102_444_800,
+    });
+    mocks.getDb.mockReturnValueOnce(db);
+    mocks.getCredentialEncryptionKey.mockReturnValueOnce(Buffer.alloc(32, 7).toString("base64"));
+    mocks.claimAuthOtpDeliveryReceipt.mockResolvedValueOnce({
+      claimed: true,
+      receipt: {
+        id: "aor_decrypt_failure",
+        deliveryKey,
+        claimId: "aorc_decrypt_failure",
+        attempts: 1,
+      },
+    });
+    const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
+      otpKey: challengeKey,
+      deliveryKey,
+      encryptionKey: "test-key",
+    });
+    const message = createMessage({
+      type: "auth.send_otp",
+      challengeKey,
+      deliveryKey,
+      purpose: "customer_login",
+      otpExpiresAt: 4_102_444_800,
+      method: "phone",
+      allowedMethod: "sms_otp",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), {
+      CREDENTIAL_ENCRYPTION_KEY: otpDeliveryCredentialKey,
+    } as Env);
+
+    expect(JSON.stringify(message.body)).not.toContain(expectedCode);
+    expect(JSON.stringify(message.body)).not.toContain("+8801712345678");
+    expect(JSON.stringify(message.body)).not.toContain("Decrypt Buyer");
+    expect(message.body).not.toHaveProperty("code");
+    expect(message.body).not.toHaveProperty("identifier");
+    expect(message.body).not.toHaveProperty("name");
+    expect(mocks.createAuthOtpDeliveryTarget).toHaveBeenCalledWith(expect.objectContaining({
+      deliveryKey,
+      channel: "sms",
+      identifier: `unresolved:${deliveryKey}`,
+    }));
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+    expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
+    expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
+    expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ id: "aor_decrypt_failure", deliveryKey }),
+      "delivery_target_decrypt_failed",
+      {
+        provider: "sms",
+        providerStatus: "delivery_target_decrypt_failed",
+      },
+    );
+    expect(mocks.markAuthOtpDeliveryReceiptFailed).not.toHaveBeenCalled();
+    expect(message.retry).not.toHaveBeenCalled();
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 

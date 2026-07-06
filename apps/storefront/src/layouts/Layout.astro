@@ -102,9 +102,26 @@ const logoUrl = headerData.logo.src
       }),
     )
   : null;
+
+function toOrganizationSameAsUrl(
+  value: string | null | undefined,
+): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 const socialUrls = (footerData.social || [])
-  .map((s: { url?: string }) => s.url)
-  .filter(Boolean);
+  .map((s: { url?: string }) => toOrganizationSameAsUrl(s.url))
+  .filter((url): url is string => Boolean(url));
 const orgJsonLd = discoverySettings.structuredData.organization && storefrontUrl && logoUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",

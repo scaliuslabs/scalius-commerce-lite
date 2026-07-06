@@ -43,6 +43,8 @@ import {
 } from "./order-payment-recovery";
 import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
 
+const credentialEncryptionKey = Buffer.alloc(32, 8).toString("base64");
+
 type FakeDbOptions = {
   updateRows?: unknown[][];
 };
@@ -160,7 +162,7 @@ describe("order payment recovery OTP service", () => {
       channel: "sms",
       ip: "203.0.113.20",
       encryptionKey: "otp-signing-key",
-      credentialEncryptionKey: "credential-key",
+      credentialEncryptionKey,
     });
 
     expect(result).toMatchObject({
@@ -172,7 +174,6 @@ describe("order payment recovery OTP service", () => {
         purpose: "order_payment_recovery",
         method: "phone",
         channel: "sms",
-        identifier: "+8801775528888",
       },
     });
     expect(mocks.previewOrderPaymentRecoveryLink).toHaveBeenCalledWith(db, "order_1");
@@ -196,10 +197,21 @@ describe("order payment recovery OTP service", () => {
     });
     expect(persistedJson).not.toContain("+8801775528888");
     expect(persistedJson).not.toContain("buyer@example.com");
+    expect(persistedJson).not.toContain("Buyer");
     expect(persistedJson).not.toContain(derivedCode);
     expect(result.queuePayload).not.toHaveProperty("code");
+    expect(result.queuePayload).not.toHaveProperty("identifier");
+    expect(result.queuePayload).not.toHaveProperty("name");
     expect(JSON.stringify(result.queuePayload)).not.toContain(derivedCode);
+    expect(JSON.stringify(result.queuePayload)).not.toContain("+8801775528888");
+    expect(JSON.stringify(result.queuePayload)).not.toContain("Buyer");
+    expect(result.queuePayload).toMatchObject({
+      challengeKey: result.challengeKey,
+      deliveryKey: result.deliveryKey,
+    });
     expect((db.calls.insertValues as { identifierHash: string }).identifierHash).toMatch(/^[a-f0-9]{64}$/);
+    expect((db.calls.insertValues as { deliveryTargetEncrypted: string }).deliveryTargetEncrypted).toMatch(/^enc:/);
+    expect((db.calls.insertValues as { deliveryNameEncrypted: string }).deliveryNameEncrypted).toMatch(/^enc:/);
     expect((db.calls.insertValues as { codeHash: string }).codeHash).toMatch(/^[a-f0-9]{64}$/);
   });
 

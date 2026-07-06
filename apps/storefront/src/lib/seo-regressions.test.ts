@@ -29,9 +29,47 @@ describe("storefront SEO regressions", () => {
     const source = await readFile(join(storefrontRoot, "src/layouts/Layout.astro"), "utf8");
 
     expect(source).toContain("toAbsoluteStorefrontSeoUrl");
-    expect(source).toContain("const orgJsonLd = discoverySettings.structuredData.organization && storefrontUrl && logoUrl");
+    expect(source).toMatch(
+      /const orgJsonLd =\s+discoverySettings\.structuredData\.organization && storefrontUrl && logoUrl/,
+    );
     expect(source).toContain("url: storefrontUrl");
     expect(source).not.toContain("logo: { \"@type\": \"ImageObject\", url: getOptimizedImageUrl");
+  });
+
+  it("keeps Organization sameAs limited to absolute http(s) footer social URLs", async () => {
+    const layoutSource = await readFile(
+      join(storefrontRoot, "src/layouts/Layout.astro"),
+      "utf8",
+    );
+    const footerSource = await readFile(
+      join(storefrontRoot, "src/components/Footer.astro"),
+      "utf8",
+    );
+    const sameAsHelper =
+      layoutSource.match(
+        /function toOrganizationSameAsUrl[\s\S]*?\n}\n\nconst socialUrls/,
+      )?.[0] ?? "";
+
+    expect(sameAsHelper).toContain("const parsed = new URL(trimmed)");
+    expect(sameAsHelper).toContain(
+      'parsed.protocol === "http:" || parsed.protocol === "https:"',
+    );
+    expect(sameAsHelper).toContain("catch {\n    return null;\n  }");
+    expect(sameAsHelper).not.toContain("toAbsoluteStorefrontSeoUrl");
+    expect(layoutSource).toContain(
+      ".map((s: { url?: string }) => toOrganizationSameAsUrl(s.url))",
+    );
+    expect(layoutSource).toContain(
+      ".filter((url): url is string => Boolean(url))",
+    );
+    expect(layoutSource).not.toContain(
+      ".map((s: { url?: string }) => s.url)\n  .filter(Boolean)",
+    );
+    expect(
+      footerSource.match(/const href = item\.url\.startsWith\("http"\)/g)
+        ?.length,
+    ).toBe(2);
+    expect(footerSource).toContain(": `https://${item.url}`;");
   });
 
   it("normalizes Open Graph and Twitter images to absolute storefront URLs", async () => {

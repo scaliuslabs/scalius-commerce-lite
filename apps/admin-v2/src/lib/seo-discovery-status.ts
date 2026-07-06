@@ -283,16 +283,16 @@ export function buildSeoDiscoveryStatus({
     robots: {
       tone: customSitemapLines.length > 0 ? "warning" : "info",
       title: normalized.robots.advertiseSitemap
-        ? "robots.txt advertises sitemap"
+        ? "robots.txt advertises canonical sitemap"
         : "robots.txt sitemap ad off",
       summary: normalized.robots.advertiseSitemap
-        ? "Runtime fills placeholder Sitemap lines when the storefront base URL is available."
-        : "Runtime removes placeholder Sitemap lines but keeps custom Sitemap lines.",
+        ? "Runtime strips saved Sitemap directives and advertises only the canonical current sitemap when the Store URL is absolute; otherwise it emits none."
+        : "Runtime strips all Sitemap directives and advertises no sitemap.",
       advertiseSitemap: normalized.robots.advertiseSitemap,
       customSitemapLines,
       warning:
         customSitemapLines.length > 0
-          ? "Custom Sitemap lines are preserved; confirm they point to the right storefront."
+          ? "Saved custom Sitemap lines are ignored; runtime strips or replaces them with the canonical current sitemap."
           : undefined,
     },
     structuredData: {

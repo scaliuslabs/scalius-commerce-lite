@@ -134,6 +134,12 @@ function createHealthyFeedDiagnostics() {
         samples: [],
       },
       {
+        reason: "storefront_url_unavailable",
+        products: 0,
+        rows: 0,
+        samples: [],
+      },
+      {
         reason: "inactive_deleted_unpublished",
         products: 0,
         rows: 0,
@@ -281,7 +287,7 @@ describe("SeoDiscoveryStatusCard", () => {
     );
 
     expect(host.textContent).toContain(
-      "Custom Sitemap lines are preserved; confirm they point to the right storefront.",
+      "Saved custom Sitemap lines are ignored; runtime strips or replaces them with the canonical current sitemap.",
     );
   });
 

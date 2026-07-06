@@ -66278,6 +66278,7 @@
                                 "type": "string",
                                 "enum": [
                                   "feed_disabled",
+                                  "storefront_url_unavailable",
                                   "inactive_deleted_unpublished",
                                   "no_buyer_sku",
                                   "missing_image",
@@ -66308,6 +66309,7 @@
                                       "type": "string",
                                       "enum": [
                                         "feed_disabled",
+                                        "storefront_url_unavailable",
                                         "inactive_deleted_unpublished",
                                         "no_buyer_sku",
                                         "missing_image",

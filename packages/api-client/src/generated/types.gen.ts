@@ -19897,14 +19897,14 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
                 skippedRows: number;
             };
             reasons: Array<{
-                reason: 'feed_disabled' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
+                reason: 'feed_disabled' | 'storefront_url_unavailable' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
                 products: number;
                 rows: number;
                 samples: Array<{
                     id: string;
                     name: string;
                     slug: string;
-                    reason: 'feed_disabled' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
+                    reason: 'feed_disabled' | 'storefront_url_unavailable' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
                 }>;
             }>;
         };

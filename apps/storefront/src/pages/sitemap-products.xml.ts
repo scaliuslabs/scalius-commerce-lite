@@ -17,6 +17,17 @@ export const prerender = false;
 
 const URLS_PER_SITEMAP = 5000; // Chunk size safe for Cloudflare Workers
 
+function parsePositiveIntegerParam(
+  value: string | null,
+  fallback: number,
+): number | null {
+  if (value === null) return fallback;
+  if (!/^[1-9]\d*$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) return null;
+  return parsed;
+}
+
 export const GET: APIRoute = async ({ url }: APIContext) => {
   try {
     const baseUrl = getBaseUrl();
@@ -34,9 +45,9 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
 
     // Get page number from query params (default to 1)
     const pageParam = url.searchParams.get('page');
-    const sitemapPage = pageParam ? parseInt(pageParam, 10) : 1;
+    const sitemapPage = parsePositiveIntegerParam(pageParam, 1);
 
-    if (isNaN(sitemapPage) || sitemapPage < 1) {
+    if (sitemapPage === null) {
       return new Response('Invalid page parameter', { status: 400 });
     }
 

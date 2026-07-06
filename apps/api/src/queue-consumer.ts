@@ -19,6 +19,11 @@
 //       src/modules/notifications/otp.handler.ts
 
 import { getDb } from "@scalius/database/client";
+import {
+  customerAuthOtpChallenges,
+  orderPaymentRecoveryChallenges,
+} from "@scalius/database/schema";
+import { and, eq } from "drizzle-orm";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
 import { processPolarWebhookRefund } from "@scalius/core/modules/payments/polar";
 import { processExistingMetaPurchaseOutboxForOrder } from "@scalius/core/integrations/meta/purchase-outbox";
@@ -59,6 +64,7 @@ import {
   type AuthOtpDeliveryReceiptResult,
 } from "@scalius/core/modules/customers/otp-delivery-receipts";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import { getCredentialEncryptionKey, getEncryptionKey } from "./utils/encryption-key";
 import {
   createStorefrontCacheWarmMessageForPurge,
@@ -341,15 +347,17 @@ export type AuthOtpQueueMessage =
     challengeKey?: string;
     deliveryKey?: string;
     purpose?: string;
-	    otpExpiresAt?: number;
-	    method: "email" | "phone";
-	    allowedMethod: string;
-	    channel?: "email" | "sms" | "whatsapp";
-	    identifier: string;
+    otpExpiresAt?: number;
+    method: "email" | "phone";
+    allowedMethod: string;
+    channel?: "email" | "sms" | "whatsapp";
+    /** Legacy pre-reference payloads only. New messages resolve the target from D1. */
+    identifier?: string;
     /** Legacy pre-reference payloads only. New messages derive the code from challengeKey + deliveryKey. */
     code?: string;
-    name: string;
-	  };
+    /** Legacy pre-reference payloads only. New messages resolve the display name from D1. */
+    name?: string;
+  };
 
 export type StorefrontCacheQueueMessage = CacheQueueMessage;
 
@@ -881,15 +889,17 @@ async function archiveAuthOtpDlqMessage(
     return { status: "ignored" };
   }
 
-  const channel = resolveAuthOtpDeliveryChannel(payload);
+  const resolution = await resolveAuthOtpQueueDeliveryPayload(payload, msg.id, db, env);
+  const resolvedPayload = resolution.payload;
+  const channel = resolveAuthOtpDeliveryChannel(resolvedPayload);
   const target = await createAuthOtpDeliveryTarget({
-    deliveryKey: payload.deliveryKey ?? `legacy:${msg.id}`,
-    purpose: payload.purpose ?? "customer_login",
-    method: payload.method,
+    deliveryKey: resolvedPayload.deliveryKey,
+    purpose: resolvedPayload.purpose ?? "customer_login",
+    method: resolvedPayload.method,
     channel,
     provider: channel,
-    identifier: payload.identifier,
-    otpExpiresAt: payload.otpExpiresAt ?? null,
+    identifier: resolvedPayload.identifier,
+    otpExpiresAt: resolvedPayload.otpExpiresAt ?? null,
   });
   const acceptedHint = await readAuthOtpAcceptedHint(env, target.deliveryKey);
   if (acceptedHint) {
@@ -1569,21 +1579,191 @@ async function markPaymentWebhookEventFailedOnTerminalAttempt(
   }
 }
 
+type ResolvedAuthOtpQueueMessage = AuthOtpQueueMessage & {
+  deliveryKey: string;
+  identifier: string;
+  name: string;
+};
+
+type AuthOtpDeliveryChallengeRow = {
+  deliveryTargetEncrypted: string | null;
+  deliveryNameEncrypted: string | null;
+  method: "email" | "phone";
+  channel: AuthOtpDeliveryChannel;
+  expiresAt: number;
+};
+
+async function resolveAuthOtpQueueDeliveryPayload(
+  payload: AuthOtpQueueMessage,
+  messageId: string,
+  db: ReturnType<typeof getDb>,
+  env: Env,
+): Promise<{ payload: ResolvedAuthOtpQueueMessage; resolutionError?: AuthOtpDeliveryError }> {
+  const legacyIdentifier = payload.identifier?.trim();
+  const deliveryKey = payload.deliveryKey?.trim() || `legacy:${messageId}`;
+  const legacyName = payload.name?.trim() || "Customer";
+  if (legacyIdentifier) {
+    return {
+      payload: {
+        ...payload,
+        deliveryKey,
+        identifier: legacyIdentifier,
+        name: legacyName,
+      },
+    };
+  }
+
+  const channel = resolveAuthOtpDeliveryChannel(payload);
+  const challengeKey = payload.challengeKey?.trim();
+  const unresolvedPayload: ResolvedAuthOtpQueueMessage = {
+    ...payload,
+    deliveryKey,
+    identifier: `unresolved:${deliveryKey}`,
+    name: "Customer",
+  };
+
+  if (!payload.deliveryKey?.trim() || !challengeKey) {
+    return {
+      payload: unresolvedPayload,
+      resolutionError: createAuthOtpDeliveryError(
+        "OTP delivery target reference is missing",
+        {
+          provider: channel,
+          providerStatus: "missing_delivery_target_reference",
+        },
+        { terminal: true },
+      ),
+    };
+  }
+
+  const row = await selectAuthOtpDeliveryChallengeRow(db, {
+    purpose: payload.purpose ?? "customer_login",
+    challengeKey,
+    deliveryKey,
+  });
+  if (!row) {
+    return {
+      payload: unresolvedPayload,
+      resolutionError: createAuthOtpDeliveryError(
+        "OTP delivery target could not be found",
+        {
+          provider: channel,
+          providerStatus: "missing_delivery_target",
+        },
+        { terminal: true },
+      ),
+    };
+  }
+
+  const rowChannel = row.channel;
+  const credentialKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
+  const target = await readStoredCredentialStrict(
+    row.deliveryTargetEncrypted,
+    credentialKey,
+    "OTP delivery target",
+  );
+  if (target.error || !target.value.trim()) {
+    return {
+      payload: {
+        ...unresolvedPayload,
+        method: row.method,
+        channel: rowChannel,
+        allowedMethod: authOtpAllowedMethodForChannel(rowChannel),
+        otpExpiresAt: row.expiresAt,
+      },
+      resolutionError: createAuthOtpDeliveryError(
+        target.error ?? "OTP delivery target is missing",
+        {
+          provider: rowChannel,
+          providerStatus: target.error ? "delivery_target_decrypt_failed" : "missing_delivery_target",
+        },
+        { terminal: true },
+      ),
+    };
+  }
+
+  const name = await readStoredCredentialStrict(
+    row.deliveryNameEncrypted,
+    credentialKey,
+    "OTP delivery name",
+  );
+
+  return {
+    payload: {
+      ...payload,
+      challengeKey,
+      deliveryKey,
+      purpose: payload.purpose ?? "customer_login",
+      otpExpiresAt: row.expiresAt,
+      method: row.method,
+      channel: rowChannel,
+      allowedMethod: authOtpAllowedMethodForChannel(rowChannel),
+      identifier: target.value.trim(),
+      name: name.error ? "Customer" : name.value.trim() || "Customer",
+    },
+  };
+}
+
+async function selectAuthOtpDeliveryChallengeRow(
+  db: ReturnType<typeof getDb>,
+  input: { purpose: string; challengeKey: string; deliveryKey: string },
+): Promise<AuthOtpDeliveryChallengeRow | null> {
+  if (input.purpose === "order_payment_recovery") {
+    const row = await db.select({
+      deliveryTargetEncrypted: orderPaymentRecoveryChallenges.deliveryTargetEncrypted,
+      deliveryNameEncrypted: orderPaymentRecoveryChallenges.deliveryNameEncrypted,
+      method: orderPaymentRecoveryChallenges.method,
+      channel: orderPaymentRecoveryChallenges.channel,
+      expiresAt: orderPaymentRecoveryChallenges.expiresAt,
+    })
+      .from(orderPaymentRecoveryChallenges)
+      .where(and(
+        eq(orderPaymentRecoveryChallenges.challengeKey, input.challengeKey),
+        eq(orderPaymentRecoveryChallenges.deliveryKey, input.deliveryKey),
+      ))
+      .get();
+    return row ?? null;
+  }
+
+  const row = await db.select({
+    deliveryTargetEncrypted: customerAuthOtpChallenges.deliveryTargetEncrypted,
+    deliveryNameEncrypted: customerAuthOtpChallenges.deliveryNameEncrypted,
+    method: customerAuthOtpChallenges.method,
+    channel: customerAuthOtpChallenges.channel,
+    expiresAt: customerAuthOtpChallenges.expiresAt,
+  })
+    .from(customerAuthOtpChallenges)
+    .where(and(
+      eq(customerAuthOtpChallenges.otpKey, input.challengeKey),
+      eq(customerAuthOtpChallenges.deliveryKey, input.deliveryKey),
+    ))
+    .get();
+  return row ?? null;
+}
+
+function authOtpAllowedMethodForChannel(channel: AuthOtpDeliveryChannel): string {
+  if (channel === "whatsapp") return "whatsapp_otp";
+  if (channel === "sms") return "sms_otp";
+  return "email";
+}
+
 async function processAuthOtpQueueMessage(
   payload: AuthOtpQueueMessage,
   messageId: string,
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<void> {
-  const channel = resolveAuthOtpDeliveryChannel(payload);
+  const resolution = await resolveAuthOtpQueueDeliveryPayload(payload, messageId, db, env);
+  const resolvedPayload = resolution.payload;
+  const channel = resolveAuthOtpDeliveryChannel(resolvedPayload);
   const target = await createAuthOtpDeliveryTarget({
-    deliveryKey: payload.deliveryKey ?? `legacy:${messageId}`,
-    purpose: payload.purpose ?? "customer_login",
-    method: payload.method,
+    deliveryKey: resolvedPayload.deliveryKey,
+    purpose: resolvedPayload.purpose ?? "customer_login",
+    method: resolvedPayload.method,
     channel,
     provider: channel,
-    identifier: payload.identifier,
-    otpExpiresAt: payload.otpExpiresAt ?? null,
+    identifier: resolvedPayload.identifier,
+    otpExpiresAt: resolvedPayload.otpExpiresAt ?? null,
   });
   const claim = await claimAuthOtpDeliveryReceipt(db, target);
 
@@ -1602,6 +1782,10 @@ async function processAuthOtpQueueMessage(
   }
 
   try {
+    if (resolution.resolutionError) {
+      throw resolution.resolutionError;
+    }
+
     if (target.otpExpiresAt && target.otpExpiresAt <= Math.floor(Date.now() / 1000)) {
       await markAuthOtpDeliveryReceiptSkipped(db, claim.receipt, "otp_expired", {
         provider: target.provider,
@@ -1611,8 +1795,8 @@ async function processAuthOtpQueueMessage(
       return;
     }
 
-    const code = await resolveAuthOtpDeliveryCode(payload, target, env);
-    const result = await sendAuthOtpByChannel(payload, code, target, db, env);
+    const code = await resolveAuthOtpDeliveryCode(resolvedPayload, target, env);
+    const result = await sendAuthOtpByChannel(resolvedPayload, code, target, db, env);
     try {
       await markAuthOtpDeliveryReceiptAcceptedWithRetries(db, claim.receipt, result);
       await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
@@ -1668,7 +1852,7 @@ async function processAuthOtpQueueMessage(
 }
 
 async function sendAuthOtpByChannel(
-  payload: AuthOtpQueueMessage,
+  payload: ResolvedAuthOtpQueueMessage,
   code: string,
   target: { deliveryKey: string; channel: AuthOtpDeliveryChannel; identifierHash: string },
   db: ReturnType<typeof getDb>,
@@ -1713,7 +1897,7 @@ async function resolveAuthOtpDeliveryCode(
 }
 
 async function sendAuthOtpEmail(
-  payload: AuthOtpQueueMessage,
+  payload: ResolvedAuthOtpQueueMessage,
   code: string,
   target: { deliveryKey: string; identifierHash: string },
   db: ReturnType<typeof getDb>,
@@ -1786,7 +1970,7 @@ async function sendAuthOtpEmail(
 }
 
 async function sendAuthOtpWhatsApp(
-  payload: AuthOtpQueueMessage,
+  payload: ResolvedAuthOtpQueueMessage,
   code: string,
   target: { deliveryKey: string; identifierHash: string },
   db: ReturnType<typeof getDb>,
@@ -1864,7 +2048,7 @@ async function sendAuthOtpWhatsApp(
 }
 
 async function sendAuthOtpSms(
-  payload: AuthOtpQueueMessage,
+  payload: ResolvedAuthOtpQueueMessage,
   code: string,
   target: { deliveryKey: string; channel: AuthOtpDeliveryChannel; identifierHash: string },
   db: ReturnType<typeof getDb>,

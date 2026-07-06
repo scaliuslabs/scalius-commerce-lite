@@ -74,13 +74,12 @@ describe("order payment recovery routes", () => {
       deliveryKey: "otp_delivery",
       queuePayload: {
         type: "auth.send_otp",
+        challengeKey: "order_payrec:challenge",
         deliveryKey: "otp_delivery",
         purpose: "order_payment_recovery",
         method: "phone",
         allowedMethod: "sms_otp",
         channel: "sms",
-        identifier: "+8801775528888",
-        name: "Buyer",
       },
     });
     mocks.verifyOrderPaymentRecoveryOtp.mockResolvedValue({
@@ -132,8 +131,12 @@ describe("order payment recovery routes", () => {
     expect(JSON.stringify(body)).not.toContain("+8801775528888");
     expect(JSON.stringify(body)).not.toContain("8888");
     expect(JSON.stringify(queue.send.mock.calls)).not.toContain("123456");
+    expect(JSON.stringify(queue.send.mock.calls)).not.toContain("+8801775528888");
+    expect(JSON.stringify(queue.send.mock.calls)).not.toContain("Buyer");
     const queuedPayload = queue.send.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
     expect(queuedPayload).not.toHaveProperty("code");
+    expect(queuedPayload).not.toHaveProperty("identifier");
+    expect(queuedPayload).not.toHaveProperty("name");
     expect(body).toMatchObject({
       success: true,
       data: {

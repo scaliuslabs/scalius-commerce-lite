@@ -25,6 +25,10 @@ import {
     createOrderPaymentRecoveryLink,
     previewOrderPaymentRecoveryLink,
 } from "./orders.admin";
+import {
+    encodeEncryptedCredential,
+    encryptCredentials,
+} from "../../utils/credential-encryption";
 
 const ORDER_PAYMENT_RECOVERY_PURPOSE = "order_payment_recovery";
 const OTP_TTL_SECONDS = 5 * 60;
@@ -112,6 +116,7 @@ export async function sendOrderPaymentRecoveryOtp(
     }
 
     const { channel, method, identifier } = await resolveRecoveryChannel(db, order, input.channel);
+    const deliveryEncryptionKey = requireRecoveryDeliveryEncryptionKey(input.credentialEncryptionKey);
     await assertRecoveryChannelReady(db, {
         channel,
         emailEnv: input.emailEnv,
@@ -143,9 +148,12 @@ export async function sendOrderPaymentRecoveryOtp(
         method,
         channel,
         identifier,
+        deliveryTarget: identifier,
+        deliveryName: order.customerName?.trim() || "Customer",
         code,
         deliveryKey,
         encryptionKey: input.encryptionKey,
+        deliveryEncryptionKey,
         nowSeconds,
     });
 
@@ -157,14 +165,13 @@ export async function sendOrderPaymentRecoveryOtp(
         identifierMasked: challenge.identifierMasked,
         queuePayload: {
             type: "auth.send_otp",
+            challengeKey: challenge.challengeKey,
             deliveryKey,
             purpose: ORDER_PAYMENT_RECOVERY_PURPOSE,
             otpExpiresAt: challenge.expiresAt,
             method,
             allowedMethod: channelToAllowedMethod(channel),
             channel,
-            identifier,
-            name: order.customerName?.trim() || "Customer",
         },
         challengeKey: challenge.challengeKey,
         deliveryKey,
@@ -420,9 +427,12 @@ async function persistOrderPaymentRecoveryChallenge(
         method: RecoveryMethod;
         channel: CustomerAuthOtpChannel;
         identifier: string;
+        deliveryTarget: string;
+        deliveryName?: string;
         code: string;
         deliveryKey: string;
         encryptionKey?: string;
+        deliveryEncryptionKey: string;
         nowSeconds: number;
     },
 ): Promise<{ challengeKey: string; identifierMasked: string; expiresAt: number }> {
@@ -432,6 +442,16 @@ async function persistOrderPaymentRecoveryChallenge(
     const expiresAt = input.nowSeconds + OTP_TTL_SECONDS;
     const resendAvailableAt = input.nowSeconds + OTP_RESEND_COOLDOWN_SECONDS;
     const identifierMasked = maskOtpIdentifier(input.identifier);
+    const deliveryTargetEncrypted = await encryptRecoveryDeliveryValue(
+        input.deliveryTarget,
+        input.deliveryEncryptionKey,
+        "Payment recovery OTP delivery target",
+    );
+    const deliveryNameEncrypted = await encryptRecoveryDeliveryValue(
+        input.deliveryName,
+        input.deliveryEncryptionKey,
+        "Payment recovery OTP delivery name",
+    );
 
     const rows = await db.insert(orderPaymentRecoveryChallenges)
         .values({
@@ -442,6 +462,8 @@ async function persistOrderPaymentRecoveryChallenge(
             channel: input.channel,
             identifierHash,
             identifierMasked,
+            deliveryTargetEncrypted,
+            deliveryNameEncrypted,
             codeHash,
             status: "pending",
             attempts: 0,
@@ -460,6 +482,8 @@ async function persistOrderPaymentRecoveryChallenge(
                 channel: input.channel,
                 identifierHash,
                 identifierMasked,
+                deliveryTargetEncrypted,
+                deliveryNameEncrypted,
                 codeHash,
                 status: "pending",
                 attempts: 0,
@@ -605,6 +629,28 @@ function requireOtpHashKey(encryptionKey: string | undefined): string {
         throw new ServiceUnavailableError("Order payment recovery signing key is not configured.");
     }
     return key;
+}
+
+function requireRecoveryDeliveryEncryptionKey(encryptionKey: string | undefined): string {
+    const key = encryptionKey?.trim();
+    if (!key) {
+        throw new ServiceUnavailableError("Payment recovery OTP delivery target encryption key is not configured.");
+    }
+    return key;
+}
+
+async function encryptRecoveryDeliveryValue(
+    value: string | undefined,
+    encryptionKey: string,
+    label: string,
+): Promise<string | null> {
+    const trimmed = value?.trim();
+    if (!trimmed) return null;
+    try {
+        return encodeEncryptedCredential(await encryptCredentials(trimmed, encryptionKey));
+    } catch {
+        throw new ServiceUnavailableError(`${label} could not be encrypted.`);
+    }
 }
 
 function channelToAllowedMethod(channel: CustomerAuthOtpChannel): string {

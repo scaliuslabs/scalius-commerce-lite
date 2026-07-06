@@ -21,7 +21,7 @@ const DEFAULT_API_BASE_URL = "https://api.scalius.com";
 const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
 const DEFAULT_DASHBOARD_URL = "https://dashboard.scalius.com";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const RELEASE_READYZ_SAMPLES = 2;
+const RELEASE_READYZ_SAMPLES = 4;
 const MAX_BODY_PREVIEW_LENGTH = 180;
 const SITEMAP_ENDPOINTS = [
   "/sitemap.xml",

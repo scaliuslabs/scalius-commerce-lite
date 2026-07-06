@@ -155,6 +155,112 @@ describe("product feed diagnostics", () => {
         expect(report.totals.productsWithIssues).toBe(3);
     });
 
+    it.each([
+        ["missing", null],
+        ["relative", "/shop"],
+        ["non-http", "ftp://store.example.test"],
+    ])("blocks otherwise ready rows when the storefront URL is %s", (_label, storefrontBaseUrl) => {
+        const report = buildProductFeedDiagnosticsFromScan({
+            products: [product("simple"), product("absolute_image")],
+            primaryImageUrls: new Map([
+                ["simple", "/simple.jpg"],
+                ["absolute_image", "https://cdn.example.test/absolute.jpg"],
+            ]),
+            variants: new Map([
+                [
+                    "simple",
+                    [
+                        variant("var_simple", "simple", {
+                            isDefault: true,
+                            trackInventory: false,
+                        }),
+                    ],
+                ],
+                [
+                    "absolute_image",
+                    [
+                        variant("var_absolute", "absolute_image", {
+                            isDefault: true,
+                            trackInventory: false,
+                        }),
+                    ],
+                ],
+            ]),
+            feedsPolicy: baseFeedsPolicy,
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl,
+        });
+
+        expect(report.totals).toMatchObject({
+            emittedRows: 0,
+            skippedRows: 2,
+            productsWithIssues: 2,
+        });
+        expect(reasonCount(report, "storefront_url_unavailable")).toMatchObject({
+            products: 2,
+            rows: 2,
+            samples: [
+                {
+                    id: "simple",
+                    name: "Product simple",
+                    slug: "product-simple",
+                    reason: "storefront_url_unavailable",
+                },
+                {
+                    id: "absolute_image",
+                    name: "Product absolute_image",
+                    slug: "product-absolute_image",
+                    reason: "storefront_url_unavailable",
+                },
+            ],
+        });
+        expect(reasonCount(report, "missing_image")).toMatchObject({
+            products: 0,
+            rows: 0,
+        });
+    });
+
+    it("counts unavailable rows before storefront URL blockers", () => {
+        const report = buildProductFeedDiagnosticsFromScan({
+            products: [product("sold_out")],
+            primaryImageUrls: new Map([["sold_out", "/sold-out.jpg"]]),
+            variants: new Map([
+                [
+                    "sold_out",
+                    [
+                        variant("var_sold_out", "sold_out", {
+                            isDefault: true,
+                            trackInventory: true,
+                            stock: 1,
+                            reservedStock: 1,
+                        }),
+                    ],
+                ],
+            ]),
+            feedsPolicy: baseFeedsPolicy,
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl: null,
+        });
+
+        expect(report.totals).toMatchObject({
+            emittedRows: 0,
+            skippedRows: 1,
+            productsWithIssues: 1,
+        });
+        expect(reasonCount(report, "unavailable_excluded")).toMatchObject({
+            products: 1,
+            rows: 1,
+        });
+        expect(reasonCount(report, "storefront_url_unavailable")).toMatchObject({
+            products: 0,
+            rows: 0,
+        });
+    });
+
     it("marks scanned products as feed disabled without reading row availability", () => {
         const report = buildProductFeedDiagnosticsFromScan({
             products: [product("one"), product("two")],

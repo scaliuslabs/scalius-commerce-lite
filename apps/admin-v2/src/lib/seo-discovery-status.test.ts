@@ -89,10 +89,10 @@ describe("buildSeoDiscoveryStatus", () => {
       "Sitemap: https://old.example.com/sitemap.xml",
     ]);
     expect(status.robots.summary).toBe(
-      "Runtime removes placeholder Sitemap lines but keeps custom Sitemap lines.",
+      "Runtime strips all Sitemap directives and advertises no sitemap.",
     );
     expect(status.robots.warning).toBe(
-      "Custom Sitemap lines are preserved; confirm they point to the right storefront.",
+      "Saved custom Sitemap lines are ignored; runtime strips or replaces them with the canonical current sitemap.",
     );
   });
 
