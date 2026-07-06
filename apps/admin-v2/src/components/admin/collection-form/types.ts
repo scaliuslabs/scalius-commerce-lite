@@ -1,4 +1,16 @@
 import { z } from "zod";
+import {
+  isValidCanonicalPath,
+  normalizeCanonicalPathInput,
+} from "@scalius/shared/seo-canonical";
+
+const canonicalPathSchema = z
+  .string()
+  .nullable()
+  .transform((value) => normalizeCanonicalPathInput(value))
+  .refine((value) => value === null || isValidCanonicalPath(value), {
+    message: "Use a same-store path such as /collections/summer-edit.",
+  });
 
 export interface Category {
   id: string;
@@ -34,6 +46,7 @@ export const collectionFormSchema = z.object({
     .max(100, "Collection name must be less than 100 characters"),
   type: z.enum(["manual", "dynamic"]),
   isActive: z.boolean(),
+  canonicalPath: canonicalPathSchema,
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   config: z.object({

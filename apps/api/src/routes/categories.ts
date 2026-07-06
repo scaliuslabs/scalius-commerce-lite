@@ -78,6 +78,7 @@ const storefrontCategorySchema = z.object({
   updatedAt: z.string().nullable(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
+  canonicalPath: z.string().nullable(),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
 }).passthrough();
@@ -202,6 +203,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     imageUrl: category.imageUrl,
     metaTitle: category.metaTitle,
     metaDescription: category.metaDescription,
+    canonicalPath: category.canonicalPath,
     noIndex: category.noIndex,
     excludeFromSitemap: category.excludeFromSitemap,
     createdAt: category.createdAt,

@@ -69,6 +69,7 @@ function EditCollectionPage() {
           name: c.name,
           type: formType as "manual" | "dynamic",
           isActive: c.isActive,
+          canonicalPath: c.canonicalPath,
           noIndex: c.noIndex,
           excludeFromSitemap: c.excludeFromSitemap,
           config,

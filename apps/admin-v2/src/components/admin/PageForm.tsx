@@ -63,6 +63,7 @@ function toPageInput(values: PageFormValues): CreatePageInput {
     content: values.content,
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription,
+    canonicalPath: values.canonicalPath,
     noIndex: values.noIndex,
     excludeFromSitemap: values.excludeFromSitemap,
     isPublished: values.isPublished,
@@ -91,6 +92,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       content: "",
       metaTitle: null,
       metaDescription: null,
+      canonicalPath: null,
       noIndex: false,
       excludeFromSitemap: false,
       isPublished: true,
@@ -466,6 +468,30 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                   </FormItem>
                   )}
                 />
+
+              <FormField
+                control={form.control}
+                name="canonicalPath"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Canonical Path</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="/about-us"
+                        {...field}
+                        value={field.value || ""}
+                        onChange={(event) => {
+                          field.onChange(event.target.value || null);
+                        }}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Optional same-store path for duplicate or campaign pages. Leave blank to use this page.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <div className="grid gap-2">
                 <FormField

@@ -575,6 +575,13 @@
       "when": 1783400400000,
       "tag": "0081_resource_indexing_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "6",
+      "when": 1783486800000,
+      "tag": "0082_resource_canonical_paths",
+      "breakpoints": true
     }
   ]
 }

@@ -128,6 +128,7 @@ export const SeoSection = memo(function SeoSection({
   const noIndex = form.watch("noIndex");
   const excludeFromSitemap = form.watch("excludeFromSitemap");
   const excludeFromProductFeed = form.watch("excludeFromProductFeed");
+  const canonicalPath = form.watch("canonicalPath");
 
   const diagnostics = useMemo(
     () =>
@@ -135,6 +136,7 @@ export const SeoSection = memo(function SeoSection({
         product: {
           id: productId,
           slug,
+          canonicalPath,
           isActive,
           images,
           noIndex,
@@ -151,6 +153,7 @@ export const SeoSection = memo(function SeoSection({
       discovery,
       images,
       isActive,
+      canonicalPath,
       excludeFromProductFeed,
       excludeFromSitemap,
       noIndex,
@@ -218,6 +221,31 @@ export const SeoSection = memo(function SeoSection({
                   max={200}
                 />
               )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="canonicalPath"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-sm">Canonical Path</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="/products/main-shoe"
+                  className="h-9"
+                  {...field}
+                  value={field.value || ""}
+                  onChange={(event) => {
+                    field.onChange(event.target.value || null);
+                  }}
+                />
+              </FormControl>
+              <FormDescription className="text-xs">
+                Optional same-store path for duplicate or campaign pages. Leave blank to use this product page.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

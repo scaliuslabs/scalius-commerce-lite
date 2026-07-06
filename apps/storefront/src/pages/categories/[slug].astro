@@ -21,7 +21,7 @@ import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
 import {
-  buildAbsoluteStorefrontSeoUrl,
+  buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
@@ -221,7 +221,10 @@ const analyticsProductData = products.map((p) => ({
 // --- SEO: per SEO-03, SEO-04, OG-02 ---
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 // Canonical always points to page 1 -- strips ?page, ?sortBy, and filter params (per CAN-01)
-const canonicalUrl = buildAbsoluteStorefrontSeoUrl(`/categories/${slug}`);
+const canonicalUrl = buildResourceCanonicalSeoUrl(
+  `/categories/${slug}`,
+  category?.canonicalPath,
+);
 const discoverySettings = normalizeSeoDiscoverySettings(
   layoutData?.seo?.discovery,
 );

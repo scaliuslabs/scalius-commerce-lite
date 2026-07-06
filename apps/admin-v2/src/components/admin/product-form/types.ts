@@ -1,5 +1,17 @@
 // src/components/admin/product-form/types.ts
 import { z } from "zod";
+import {
+  isValidCanonicalPath,
+  normalizeCanonicalPathInput,
+} from "@scalius/shared/seo-canonical";
+
+const canonicalPathSchema = z
+  .string()
+  .nullable()
+  .transform((value) => normalizeCanonicalPathInput(value))
+  .refine((value) => value === null || isValidCanonicalPath(value), {
+    message: "Use a same-store path such as /products/main-shoe.",
+  });
 
 export interface Category {
   id: string;
@@ -34,6 +46,7 @@ export const productFormSchema = z.object({
   freeDelivery: z.boolean(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
+  canonicalPath: canonicalPathSchema,
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   excludeFromProductFeed: z.boolean(),

@@ -35,6 +35,7 @@ export const pages = sqliteTable(
         content: text("content").notNull(),
         metaTitle: text("meta_title"),
         metaDescription: text("meta_description"),
+        canonicalPath: text("canonical_path"),
         noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
         excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
         isPublished: integer("is_published", { mode: "boolean" }).notNull().default(true),

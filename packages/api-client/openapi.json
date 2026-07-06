@@ -2074,6 +2074,10 @@
                               "isActive": {
                                 "type": "boolean"
                               },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "noIndex": {
                                 "type": "boolean"
                               },
@@ -2096,6 +2100,7 @@
                               "config",
                               "sortOrder",
                               "isActive",
+                              "canonicalPath",
                               "noIndex",
                               "excludeFromSitemap",
                               "createdAt",
@@ -2220,6 +2225,10 @@
                             "isActive": {
                               "type": "boolean"
                             },
+                            "canonicalPath": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "noIndex": {
                               "type": "boolean"
                             },
@@ -2242,6 +2251,7 @@
                             "config",
                             "sortOrder",
                             "isActive",
+                            "canonicalPath",
                             "noIndex",
                             "excludeFromSitemap",
                             "createdAt",
@@ -4108,6 +4118,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "noIndex": {
                                 "type": "boolean"
                               },
@@ -4247,6 +4261,7 @@
                               "content",
                               "metaTitle",
                               "metaDescription",
+                              "canonicalPath",
                               "noIndex",
                               "excludeFromSitemap",
                               "isPublished",
@@ -4397,6 +4412,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "canonicalPath": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "noIndex": {
                               "type": "boolean"
                             },
@@ -4536,6 +4555,7 @@
                             "content",
                             "metaTitle",
                             "metaDescription",
+                            "canonicalPath",
                             "noIndex",
                             "excludeFromSitemap",
                             "isPublished",
@@ -4741,6 +4761,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "canonicalPath": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "noIndex": {
                               "type": "boolean"
                             },
@@ -4880,6 +4904,7 @@
                             "content",
                             "metaTitle",
                             "metaDescription",
+                            "canonicalPath",
                             "noIndex",
                             "excludeFromSitemap",
                             "isPublished",
@@ -6923,6 +6948,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "canonicalPath": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "noIndex": {
                               "type": "boolean"
                             },
@@ -7062,6 +7091,7 @@
                             "content",
                             "metaTitle",
                             "metaDescription",
+                            "canonicalPath",
                             "noIndex",
                             "excludeFromSitemap",
                             "isPublished",
@@ -15801,6 +15831,10 @@
                               "slug": {
                                 "type": "string"
                               },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "updatedAt": {
                                 "type": "string",
                                 "nullable": true
@@ -15808,6 +15842,7 @@
                             },
                             "required": [
                               "slug",
+                              "canonicalPath",
                               "updatedAt"
                             ]
                           }
@@ -16168,6 +16203,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "noIndex": {
                                 "type": "boolean"
                               },
@@ -16185,6 +16224,7 @@
                               "updatedAt",
                               "metaTitle",
                               "metaDescription",
+                              "canonicalPath",
                               "noIndex",
                               "excludeFromSitemap"
                             ],
@@ -16319,6 +16359,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "canonicalPath": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "noIndex": {
                               "type": "boolean"
                             },
@@ -16336,6 +16380,7 @@
                             "updatedAt",
                             "metaTitle",
                             "metaDescription",
+                            "canonicalPath",
                             "noIndex",
                             "excludeFromSitemap"
                           ],
@@ -16614,6 +16659,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "canonicalPath": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "noIndex": {
                               "type": "boolean"
                             },
@@ -16631,6 +16680,7 @@
                             "updatedAt",
                             "metaTitle",
                             "metaDescription",
+                            "canonicalPath",
                             "noIndex",
                             "excludeFromSitemap"
                           ],
@@ -22833,6 +22883,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "noIndex": {
                                 "type": "boolean"
                               },
@@ -22863,6 +22917,7 @@
                               "imageUrl",
                               "metaTitle",
                               "metaDescription",
+                              "canonicalPath",
                               "noIndex",
                               "excludeFromSitemap",
                               "createdAt",
@@ -23188,6 +23243,10 @@
                     "nullable": true
                   },
                   "metaDescription": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "canonicalPath": {
                     "type": "string",
                     "nullable": true
                   },
@@ -23628,6 +23687,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "canonicalPath": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "noIndex": {
                           "type": "boolean"
                         },
@@ -23649,6 +23712,7 @@
                         "imageUrl",
                         "metaTitle",
                         "metaDescription",
+                        "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
                         "createdAt",
@@ -23952,6 +24016,10 @@
                     "nullable": true
                   },
                   "metaDescription": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "canonicalPath": {
                     "type": "string",
                     "nullable": true
                   },
@@ -26506,6 +26574,10 @@
                               "isActive": {
                                 "type": "boolean"
                               },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "noIndex": {
                                 "type": "boolean"
                               },
@@ -26553,6 +26625,7 @@
                               "config",
                               "sortOrder",
                               "isActive",
+                              "canonicalPath",
                               "noIndex",
                               "excludeFromSitemap",
                               "createdAt",
@@ -26872,6 +26945,10 @@
                   "isActive": {
                     "type": "boolean"
                   },
+                  "canonicalPath": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "noIndex": {
                     "type": "boolean",
                     "default": false
@@ -26964,6 +27041,10 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "canonicalPath": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "noIndex": {
                           "type": "boolean"
                         },
@@ -27011,6 +27092,7 @@
                         "config",
                         "sortOrder",
                         "isActive",
+                        "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
                         "createdAt",
@@ -29381,6 +29463,10 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "canonicalPath": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "noIndex": {
                           "type": "boolean"
                         },
@@ -29428,6 +29514,7 @@
                         "config",
                         "sortOrder",
                         "isActive",
+                        "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
                         "createdAt",
@@ -29527,6 +29614,10 @@
                   "isActive": {
                     "type": "boolean"
                   },
+                  "canonicalPath": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "noIndex": {
                     "type": "boolean"
                   },
@@ -29611,6 +29702,10 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "canonicalPath": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "noIndex": {
                           "type": "boolean"
                         },
@@ -29658,6 +29753,7 @@
                         "config",
                         "sortOrder",
                         "isActive",
+                        "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
                         "createdAt",
@@ -32790,6 +32886,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "noIndex": {
                                 "type": "boolean"
                               },
@@ -32929,6 +33029,7 @@
                               "content",
                               "metaTitle",
                               "metaDescription",
+                              "canonicalPath",
                               "noIndex",
                               "excludeFromSitemap",
                               "isPublished",
@@ -33257,6 +33358,10 @@
                     "nullable": true
                   },
                   "metaDescription": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "canonicalPath": {
                     "type": "string",
                     "nullable": true
                   },
@@ -35179,6 +35284,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "canonicalPath": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "noIndex": {
                           "type": "boolean"
                         },
@@ -35318,6 +35427,7 @@
                         "content",
                         "metaTitle",
                         "metaDescription",
+                        "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
                         "isPublished",
@@ -35626,6 +35736,10 @@
                     "nullable": true
                   },
                   "metaDescription": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "canonicalPath": {
                     "type": "string",
                     "nullable": true
                   },
@@ -100395,6 +100509,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "canonicalPath": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "noIndex": {
                     "type": "boolean",
                     "default": false
@@ -101512,6 +101630,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "canonicalPath": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "isActive": {
                           "type": "boolean"
                         },
@@ -101839,6 +101961,7 @@
                         "categoryId",
                         "metaTitle",
                         "metaDescription",
+                        "canonicalPath",
                         "isActive",
                         "noIndex",
                         "excludeFromSitemap",
@@ -101982,6 +102105,10 @@
                     "nullable": true
                   },
                   "metaDescription": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "canonicalPath": {
                     "type": "string",
                     "nullable": true
                   },

@@ -12,6 +12,7 @@ Scalius Commerce is a lightweight, nearly complete commerce platform for small a
 - Every paid or external service should have a Cloudflare-native default or a first-class Cloudflare path where the platform can reasonably provide one.
 - SEO, AEO, and AIO should mean accurate public commerce truth: crawlable pages, canonical/noindex discipline, Merchant-compatible feeds, structured data matching checkout/SKU reality, and useful merchant-provided content that search engines and assistants can trust. Do not ship gimmick markup that does not reflect real buyer-visible facts.
 - Merchant controls should separate buyer visibility, search indexing, sitemap inclusion, feed inclusion, and structured-data output instead of hiding multiple meanings behind one switch.
+- Resource canonical overrides are same-store path controls only. They must not allow off-origin, query-string, or fragment canonical hacks, and blank values must cleanly fall back to the resource's normal public route.
 - UCP (Universal Commerce Protocol) is the next commerce-discovery surface after SEO/AEO/AIO is proven: expose agent-readable commerce capabilities only from the same checkout, SKU, payment, delivery, and policy authorities that buyers already use.
 
 ## Architecture Bar

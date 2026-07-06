@@ -10,6 +10,7 @@ vi.mock("@/lib/api/runtime-env", () => ({
 
 import {
   buildAbsoluteStorefrontSeoUrl,
+  buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "./seo-base-url";
@@ -46,5 +47,19 @@ describe("SEO base URL helpers", () => {
       "https://cdn.example.com/fish.jpg",
     );
     expect(toAbsoluteStorefrontSeoUrl("data:image/svg+xml,%3Csvg%3E")).toBeNull();
+  });
+
+  it("builds resource canonical URLs from same-store path overrides only", () => {
+    mocks.getRuntimeStorefrontUrl.mockReturnValue("https://shop.example.com/");
+
+    expect(
+      buildResourceCanonicalSeoUrl("/products/fish", "/collections/fish"),
+    ).toBe("https://shop.example.com/collections/fish");
+    expect(
+      buildResourceCanonicalSeoUrl("/products/fish", "https://other.example/fish"),
+    ).toBe("https://shop.example.com/products/fish");
+    expect(
+      buildResourceCanonicalSeoUrl("/products/fish", "/products/fish?ref=ad"),
+    ).toBe("https://shop.example.com/products/fish");
   });
 });

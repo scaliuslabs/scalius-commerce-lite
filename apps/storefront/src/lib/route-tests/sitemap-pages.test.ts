@@ -80,6 +80,7 @@ describe("pages sitemap route", () => {
           slug: "about-us",
           title: "About us",
           isPublished: true,
+          canonicalPath: "/company",
           noIndex: false,
           excludeFromSitemap: false,
           updatedAt: 1782691200,
@@ -93,6 +94,8 @@ describe("pages sitemap route", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
+    expect(body).toContain("<loc>https://storefront.example.test/company</loc>");
+    expect(body).not.toContain("https://storefront.example.test/about-us");
     expect(body).toContain("<lastmod>2026-06-29T00:00:00.000Z</lastmod>");
     expect(body).not.toContain("1970");
   });

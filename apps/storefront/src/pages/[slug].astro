@@ -10,7 +10,7 @@ import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
 import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
-import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
+import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
@@ -112,7 +112,7 @@ const featuredImageAlt =
   featuredImage?.altText || featuredImage?.filename || page.title;
 
 // --- SEO: canonical URL for CMS pages (per OG-03, CAN-01) ---
-const canonicalUrl = buildAbsoluteStorefrontSeoUrl(`/${slug}`);
+const canonicalUrl = buildResourceCanonicalSeoUrl(`/${slug}`, page.canonicalPath);
 const richContentClasses =
   "prose dark:prose-invert prose-lg prose-gray max-w-none w-full prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl";
 ---

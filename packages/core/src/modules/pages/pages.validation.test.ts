@@ -41,4 +41,10 @@ describe("page validation", () => {
 
     expect(parsed).toEqual({ featuredImage: null });
   });
+
+  it("does not clear canonical path on unrelated partial updates", () => {
+    const parsed = updatePageSchema.parse({ title: "Updated Offer" });
+
+    expect(parsed).toEqual({ title: "Updated Offer" });
+  });
 });

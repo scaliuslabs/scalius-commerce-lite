@@ -153,6 +153,7 @@ export async function createCollection(
             name: data.name,
             type: data.type,
             isActive: data.isActive,
+            canonicalPath: data.canonicalPath ?? null,
             noIndex: data.noIndex ?? false,
             excludeFromSitemap: data.excludeFromSitemap ?? false,
             sortOrder: maxSortOrder,
@@ -174,6 +175,7 @@ export async function updateCollection(
     if (data.name !== undefined) updateData.name = data.name;
     if (data.type !== undefined) updateData.type = data.type;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.canonicalPath !== undefined) updateData.canonicalPath = data.canonicalPath;
     if (data.noIndex !== undefined) updateData.noIndex = data.noIndex;
     if (data.excludeFromSitemap !== undefined) updateData.excludeFromSitemap = data.excludeFromSitemap;
     if (data.config !== undefined) updateData.config = stringifyCollectionConfig(data.config);

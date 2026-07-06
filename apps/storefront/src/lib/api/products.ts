@@ -135,6 +135,7 @@ export interface ProductListOptions {
 
 export interface SitemapProduct {
   slug: string;
+  canonicalPath?: string | null;
   updatedAt: string | null;
 }
 
