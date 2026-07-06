@@ -66,7 +66,7 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(links).toEqual([
       "https://shop.example.com/robots.txt",
       "https://shop.example.com/sitemap.xml",
-      "https://shop.example.com/api/facebook-feed.xml",
+      "https://shop.example.com/api/product-feed.xml",
     ]);
   });
 

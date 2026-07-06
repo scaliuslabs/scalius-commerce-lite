@@ -40,6 +40,7 @@ const CACHEABLE_PATHS = [
   /^\/sitemap\.xml$/,
   /^\/sitemap-.*\.xml$/,
   /^\/sitemap\.xsl$/,
+  /^\/api\/product-feed\.xml$/,
   /^\/api\/facebook-feed\.xml$/,
   /^\/(?!api|cart|checkout|buy|order-success|account|health|robots\.txt)[^/.]*$/,
 ];

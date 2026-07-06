@@ -259,7 +259,7 @@ describe("runReleaseCheck", () => {
         if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<!doctype html><html></html>");
         if (parsed.pathname === "/robots.txt") return textResponse(robotsTxt());
         if (parsed.pathname.startsWith("/sitemap-") || parsed.pathname === "/sitemap.xml") return textResponse(sitemapXml());
-        if (parsed.pathname === "/api/facebook-feed.xml" && parsed.search === "?limit=5") return textResponse(feedXml());
+        if (parsed.pathname === "/api/product-feed.xml" && parsed.search === "?limit=5") return textResponse(feedXml());
         if (parsed.pathname === "/products/demo-product") return textResponse("<!doctype html><html></html>");
       }
 
@@ -345,7 +345,7 @@ describe("runReleaseCheck", () => {
         if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
         if (parsed.pathname === "/robots.txt") return textResponse(robotsTxt());
         if (parsed.pathname.startsWith("/sitemap-") || parsed.pathname === "/sitemap.xml") return textResponse(sitemapXml());
-        if (parsed.pathname === "/api/facebook-feed.xml") return textResponse(feedXml());
+        if (parsed.pathname === "/api/product-feed.xml") return textResponse(feedXml());
         if (parsed.pathname === "/products/demo-product") return textResponse("<html></html>");
       }
       throw new Error(`Unexpected URL ${url}`);

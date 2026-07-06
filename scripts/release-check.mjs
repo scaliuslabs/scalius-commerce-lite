@@ -595,14 +595,14 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
     };
   }
 
-  const feed = await fetchText(buildUrlWithSearch(options.storefrontUrl, "/api/facebook-feed.xml?limit=5"), {
+  const feed = await fetchText(buildUrlWithSearch(options.storefrontUrl, "/api/product-feed.xml?limit=5"), {
     fetchImpl,
     timeoutMs: options.timeoutMs,
     accept: "application/xml, text/xml, */*;q=0.8",
   });
-  requireStatus(feed, "Storefront /api/facebook-feed.xml?limit=5", (status) => status >= 200 && status < 300);
+  requireStatus(feed, "Storefront /api/product-feed.xml?limit=5", (status) => status >= 200 && status < 300);
   checks.feed = evaluateFacebookFeedXml(feed.body, { storefrontOrigin });
-  if (!checks.feed.ok) throw new Error(`facebook-feed.xml failed: ${checks.feed.errors.join("; ")}`);
+  if (!checks.feed.ok) throw new Error(`product-feed.xml failed: ${checks.feed.errors.join("; ")}`);
   responses.feed = {
     statusCode: feed.statusCode,
     durationMs: feed.durationMs,

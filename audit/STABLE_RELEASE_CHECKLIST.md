@@ -18,7 +18,7 @@ Use this file before claiming the platform is ready for a stable merchant-facing
 
 Treat "AIO" as crawlable, trustworthy commerce data for search and assistants, not as a magic markup layer.
 
-- `/robots.txt`, `/sitemap.xml`, `/sitemap-static.xml`, `/sitemap-products.xml`, `/sitemap-categories.xml`, `/sitemap-collections.xml`, `/sitemap-pages.xml`, and `/api/facebook-feed.xml?limit=5` return valid XML/text with absolute URLs and production-safe cache headers.
+- `/robots.txt`, `/sitemap.xml`, `/sitemap-static.xml`, `/sitemap-products.xml`, `/sitemap-categories.xml`, `/sitemap-collections.xml`, `/sitemap-pages.xml`, canonical `/api/product-feed.xml?limit=5`, and compatibility `/api/facebook-feed.xml?limit=5` return valid XML/text with absolute URLs and production-safe cache headers.
 - Static sitemap-advertised URLs have canonical URLs; search/listing query, sort, filter, and paginated variants must be canonicalized or noindexed with follow.
 - Product feed availability, Product JSON-LD availability, storefront availability UI, and checkout validation are all derived from buyer-resolvable SKU truth.
 - Feed items must have absolute `http(s)` primary images, non-empty plain descriptions, valid price/currency, SKU-aware availability, and no invalid zero-price fallback unless the catalog policy explicitly supports it.
@@ -36,7 +36,7 @@ Primary references for future changes:
 
 - `SEO-009`: per-resource canonical/noindex/sitemap/feed overrides, Merchant skipped-item diagnostics, SKU/ProductGroup variant feed strategy, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls.
 - SEO dashboard live probes: the current dashboard can preview discovery URLs from the saved Store URL, but should eventually probe the deployed storefront Worker env so a misconfigured `STOREFRONT_URL` is visible before crawlers see `503`.
-- Feed eligibility pagination: `/api/facebook-feed.xml` currently filters unavailable/missing-image products after public product-page fetches, so catalogs with many skipped rows can produce sparse pages. Add eligible-item diagnostics/cursors before marketing feed completeness as perfect.
+- Feed diagnostics: `/api/product-feed.xml` now paginates the final flattened feed rows so skipped products and variant expansion cannot drop rows, but dashboard skipped-item counts/reasons are still preview-only. Add live skipped-item diagnostics before calling Merchant Center readiness perfect.
 - `ANALYTICS-003`: provider health/test-send UX, TikTok Events API/server-side adapter, and broader server-side attribution.
 - `OPS-005`/ops alerting: routed email/notification alerts for production ops signals.
 - Broad admin performance hardening remains ongoing under `PERF-003`; do not let it block a stable release unless a concrete route regresses or stalls.

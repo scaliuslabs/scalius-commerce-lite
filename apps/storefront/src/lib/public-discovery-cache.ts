@@ -9,7 +9,10 @@ const XSL_BROWSER_CACHE_CONTROL =
 export function getPublicDiscoveryCacheControl(
   pathname: string,
 ): string | null {
-  if (pathname === "/api/facebook-feed.xml") {
+  if (
+    pathname === "/api/product-feed.xml" ||
+    pathname === "/api/facebook-feed.xml"
+  ) {
     return FEED_BROWSER_CACHE_CONTROL;
   }
 

@@ -551,7 +551,7 @@ function buildFeedStatus({
     tone: "ok",
     title: "Expected in product feed",
     summary: "Catalog XML should include this product as in stock.",
-    value: "/api/facebook-feed.xml",
+    value: "/api/product-feed.xml",
     inclusion: "included",
     skippedReason: null,
   };

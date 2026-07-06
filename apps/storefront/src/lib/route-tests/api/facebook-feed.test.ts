@@ -207,6 +207,97 @@ describe("Facebook product feed route", () => {
     expect(body).not.toContain("Catalog size");
   });
 
+  it("paginates the flattened feed rows so expanded variants are not dropped", async () => {
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [
+        {
+          id: "prod_bundle",
+          slug: "variant-bundle",
+          name: "Variant Bundle",
+          description: "Three buyer variants",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          hasVariants: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/bundle.jpg",
+          variants: [
+            {
+              id: "var_a",
+              productId: "prod_bundle",
+              size: "A",
+              color: "Red",
+              sku: "SKU-A",
+              price: 1000,
+              stock: 4,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: null,
+              discountAmount: null,
+              discountPercentage: null,
+            },
+            {
+              id: "var_b",
+              productId: "prod_bundle",
+              size: "B",
+              color: "Blue",
+              sku: "SKU-B",
+              price: 1100,
+              stock: 4,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: null,
+              discountAmount: null,
+              discountPercentage: null,
+            },
+            {
+              id: "var_c",
+              productId: "prod_bundle",
+              size: "C",
+              color: "Green",
+              sku: "SKU-C",
+              price: 1200,
+              stock: 4,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: null,
+              discountAmount: null,
+              discountPercentage: null,
+            },
+          ],
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const firstPage = await GET(
+      context("https://storefront.example.test/api/facebook-feed.xml?limit=2"),
+    );
+    const firstBody = await firstPage.text();
+    const secondPage = await GET(
+      context("https://storefront.example.test/api/facebook-feed.xml?page=2&limit=2"),
+    );
+    const secondBody = await secondPage.text();
+
+    expect(firstPage.status).toBe(200);
+    expect(firstBody.match(/<item>/g)).toHaveLength(2);
+    expect(firstBody).toContain("<g:id>SKU-A</g:id>");
+    expect(firstBody).toContain("<g:id>SKU-B</g:id>");
+    expect(firstBody).not.toContain("<g:id>SKU-C</g:id>");
+    expect(secondPage.status).toBe(200);
+    expect(secondBody.match(/<item>/g)).toHaveLength(1);
+    expect(secondBody).not.toContain("<g:id>SKU-A</g:id>");
+    expect(secondBody).not.toContain("<g:id>SKU-B</g:id>");
+    expect(secondBody).toContain("<g:id>SKU-C</g:id>");
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ page: 1, limit: 100 });
+  });
+
   it("keeps product-level rows when the feed variant strategy is products", async () => {
     mocks.getSeoSettings.mockResolvedValueOnce({
       discovery: {

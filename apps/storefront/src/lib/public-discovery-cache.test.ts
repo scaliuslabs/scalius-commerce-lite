@@ -16,6 +16,9 @@ describe("public discovery cache policy", () => {
     expect(getPublicDiscoveryCacheControl("/sitemap-products.xml")).toBe(
       "public, max-age=3600, stale-while-revalidate=86400",
     );
+    expect(getPublicDiscoveryCacheControl("/api/product-feed.xml")).toBe(
+      "public, max-age=3600, stale-while-revalidate=43200",
+    );
     expect(getPublicDiscoveryCacheControl("/api/facebook-feed.xml")).toBe(
       "public, max-age=3600, stale-while-revalidate=43200",
     );
