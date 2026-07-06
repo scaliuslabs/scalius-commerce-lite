@@ -35,6 +35,7 @@ export const ADMIN_PERMISSIONS = {
   ANALYTICS_VIEW: "analytics.view",
   ANALYTICS_CREATE: "analytics.create",
   ANALYTICS_EDIT: "analytics.edit",
+  ANALYTICS_TOGGLE: "analytics.toggle",
   SETTINGS_GENERAL_VIEW: "settings.general.view",
   SETTINGS_NOTIFICATIONS_EDIT: "settings.notifications.edit",
   SETTINGS_HEADER_EDIT: "settings.header.edit",

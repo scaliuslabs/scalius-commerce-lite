@@ -104,6 +104,7 @@ const ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS = [
   /\bGTM-X{4,}\b/i,
   /\bPIXEL_ID\b/i,
   /\bYOUR_[A-Z0-9_]*PIXEL[A-Z0-9_]*ID\b/i,
+  /\bYOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN\b/i,
 ];
 
 function getConfigExample(type: AnalyticsScriptType) {
