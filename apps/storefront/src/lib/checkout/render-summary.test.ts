@@ -2,6 +2,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const analyticsMocks = vi.hoisted(() => ({
+  trackStorefrontAddPaymentInfoOnce: vi.fn(),
+}));
+
+vi.mock("../analytics", () => ({
+  trackStorefrontAddPaymentInfoOnce:
+    analyticsMocks.trackStorefrontAddPaymentInfoOnce,
+}));
+
 import {
   checkoutCartValidationPayload,
   initCheckoutPage,
@@ -24,6 +33,8 @@ const baseConfig: CheckoutConfig = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  window.__CURRENCY_CODE__ = "BDT";
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
     success: true,
     data: {
@@ -41,6 +52,7 @@ afterEach(() => {
   sessionStorage.clear();
   document.body.innerHTML = "";
   delete (window as unknown as { __CHECKOUT_CONFIG__?: CheckoutConfig }).__CHECKOUT_CONFIG__;
+  delete window.__CURRENCY_CODE__;
 });
 
 describe("renderOrderSummaryDetails", () => {
@@ -317,6 +329,93 @@ describe("initCheckoutPage", () => {
     expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
     expect(document.getElementById("payButtonText")?.textContent).toContain("Place Order");
 
+  });
+
+  it("emits safe AddPaymentInfo analytics only when the buyer confirms the selected method", async () => {
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+      <div id="stripeSection" class="hidden"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      checkoutId: "chk_analytics_checkout_1",
+      cartItems: JSON.stringify({
+        line_1: {
+          id: "prod_1",
+          variantId: "var_1",
+          price: 150,
+          quantity: 2,
+          name: "Product One",
+        },
+        line_2: {
+          id: "prod_2",
+          variantId: "default",
+          price: 200,
+          quantity: 1,
+          name: "Product Two",
+        },
+      }),
+      shippingCharge: "60",
+      discountAmount: "25",
+      customerName: "Buyer Name",
+      customerPhone: "+8801700000000",
+      shippingAddress: "Buyer Address",
+    }));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: "cod",
+      gateways: [
+        { id: "cod", name: "Cash on Delivery" },
+        { id: "sslcommerz", name: "SSLCommerz" },
+      ],
+    };
+
+    await initCheckoutPage();
+
+    expect(analyticsMocks.trackStorefrontAddPaymentInfoOnce).not.toHaveBeenCalled();
+
+    (document.getElementById("payButton") as HTMLButtonElement).click();
+
+    expect(analyticsMocks.trackStorefrontAddPaymentInfoOnce).toHaveBeenCalledTimes(1);
+    expect(analyticsMocks.trackStorefrontAddPaymentInfoOnce).toHaveBeenCalledWith({
+      checkoutId: "chk_analytics_checkout_1",
+      paymentMethod: "cod",
+      content_ids: ["var_1", "prod_2"],
+      contents: [
+        { id: "var_1", quantity: 2, item_price: 150 },
+        { id: "prod_2", quantity: 1, item_price: 200 },
+      ],
+      currency: "BDT",
+      value: 535,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    (document.querySelector('[data-method="sslcommerz"]') as HTMLElement).click();
+    expect(analyticsMocks.trackStorefrontAddPaymentInfoOnce).toHaveBeenCalledTimes(1);
+
+    (document.getElementById("payButton") as HTMLButtonElement).click();
+
+    expect(analyticsMocks.trackStorefrontAddPaymentInfoOnce).toHaveBeenCalledTimes(2);
+    expect(analyticsMocks.trackStorefrontAddPaymentInfoOnce).toHaveBeenLastCalledWith({
+      checkoutId: "chk_analytics_checkout_1",
+      paymentMethod: "sslcommerz",
+      content_ids: ["var_1", "prod_2"],
+      contents: [
+        { id: "var_1", quantity: 2, item_price: 150 },
+        { id: "prod_2", quantity: 1, item_price: 200 },
+      ],
+      currency: "BDT",
+      value: 535,
+    });
+
+    const analyticsCalls = JSON.stringify(
+      analyticsMocks.trackStorefrontAddPaymentInfoOnce.mock.calls,
+    );
+    expect(analyticsCalls).not.toContain("Buyer Name");
+    expect(analyticsCalls).not.toContain("+8801700000000");
+    expect(analyticsCalls).not.toContain("Buyer Address");
   });
 
   it("sends stale checkout snapshots back to cart with a one-shot repair payload", async () => {

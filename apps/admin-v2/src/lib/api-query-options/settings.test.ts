@@ -8,6 +8,7 @@ vi.mock("../api-functions/settings", () => ({
   getMetaConversionsLogs: vi.fn(),
   getMetaConversionsSettings: vi.fn(),
   getPaymentMethods: vi.fn(),
+  getSeoSettings: vi.fn(),
   getThemeSettings: vi.fn(),
 }));
 vi.mock("./currency", () => ({
@@ -17,7 +18,8 @@ vi.mock("./storefront-url", () => ({
   storefrontUrlQueryOptions: vi.fn(),
 }));
 
-import { checkoutReadinessQueryOptions } from "./settings";
+import { getSeoSettings } from "../api-functions/settings";
+import { checkoutReadinessQueryOptions, seoSettingsQueryOptions } from "./settings";
 
 function requireQueryFn(options: ReturnType<typeof checkoutReadinessQueryOptions>) {
   if (typeof options.queryFn !== "function") {
@@ -92,5 +94,55 @@ describe("checkoutReadinessQueryOptions", () => {
     await expect(requireQueryFn(options)({} as never)).rejects.toThrow(
       "Admin access required.",
     );
+  });
+});
+
+describe("seoSettingsQueryOptions", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("normalizes discovery settings for shared dashboard cache consumers", async () => {
+    vi.mocked(getSeoSettings).mockResolvedValue({
+      siteTitle: "Scalius",
+      homepageTitle: "",
+      homepageMetaDescription: "Find tea",
+      robotsTxt: null,
+      discovery: {
+        sitemap: { enabled: false },
+        feeds: { productCatalogEnabled: false, title: "  Feed title  " },
+        structuredData: { breadcrumbs: false },
+      },
+    } as never);
+
+    const options = seoSettingsQueryOptions();
+    if (typeof options.queryFn !== "function") {
+      throw new Error("Expected SEO settings queryFn to be configured");
+    }
+
+    const result = await options.queryFn({} as never);
+
+    expect(result).toMatchObject({
+      siteTitle: "Scalius",
+      homepageTitle: "",
+      homepageMetaDescription: "Find tea",
+      robotsTxt: "User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]",
+      discovery: {
+        sitemap: {
+          enabled: false,
+          products: true,
+          staticPages: true,
+        },
+        feeds: {
+          productCatalogEnabled: false,
+          includeUnavailableProducts: true,
+          title: "Feed title",
+        },
+        structuredData: {
+          products: true,
+          breadcrumbs: false,
+        },
+      },
+    });
   });
 });

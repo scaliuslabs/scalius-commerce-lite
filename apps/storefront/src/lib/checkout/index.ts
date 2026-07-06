@@ -14,6 +14,7 @@ import {
 } from "./session-state";
 import { isDepositPaymentRequired } from "./payment-mode";
 import type { CartValidationIssue, CartValidationRequestItem } from "../api/orders";
+import { trackStorefrontAddPaymentInfoOnce } from "../analytics";
 import { writeCartRepairState } from "../cart/repair-state";
 import { getCheckoutStatusErrorMessage } from "./error-messages";
 
@@ -236,6 +237,33 @@ function redirectToCartForRepair(result: CheckoutCartFreshnessResult): void {
     issues: result.issues,
   });
   window.location.href = "/cart?checkoutIssues=1";
+}
+
+function readCheckoutAttemptId(data: Record<string, unknown>): string | undefined {
+  const value = data.checkoutRequestId ?? data.checkoutId;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function trackAddPaymentInfoForSelection(methodId: string): void {
+  if (!checkoutData) return;
+
+  const items = checkoutCartValidationPayload(checkoutData);
+  const contents = items.map((item) => ({
+    id: item.variantId ?? item.productId,
+    quantity: item.quantity,
+    item_price: item.price,
+  }));
+  const contentIds = contents.map((item) => item.id).filter(Boolean);
+  const { total } = getCheckoutTotals(checkoutData);
+
+  trackStorefrontAddPaymentInfoOnce({
+    checkoutId: readCheckoutAttemptId(checkoutData),
+    paymentMethod: methodId,
+    content_ids: contentIds,
+    contents,
+    currency: window.__CURRENCY_CODE__ || "BDT",
+    value: total,
+  });
 }
 
 // ── Load checkout data ────────────────────────────────────────────────────────
@@ -527,6 +555,7 @@ async function processPayment(): Promise<void> {
   isProcessing = true;
   hideError();
   setPayButton("Processing...", true);
+  trackAddPaymentInfoForSelection(selectedMethod);
 
   const loadingOverlay = document.getElementById("loadingOverlay");
   const loadingTitle = document.getElementById("loadingTitle");

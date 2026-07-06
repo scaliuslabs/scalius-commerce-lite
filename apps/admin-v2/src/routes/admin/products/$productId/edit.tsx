@@ -4,6 +4,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { productQueryOptions } from "~/lib/api-query-options/products";
+import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { useHydrated } from "~/hooks/use-hydrated";
 import type { ProductDetail, ProductImageDetail, ProductVariant } from "~/types/api-responses";
 import type { Category } from "~/components/admin/product-form/types";
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/admin/products/$productId/edit")({
     const [productResult] = await Promise.all([
       queryClient.ensureQueryData({ ...productQueryOptions(params.productId), staleTime: Infinity }).catch(() => null),
       queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
+      queryClient.ensureQueryData(seoSettingsQueryOptions()).catch(() => null),
     ]);
     if (!productResult) throw redirect({ to: "/admin/products" });
   },
