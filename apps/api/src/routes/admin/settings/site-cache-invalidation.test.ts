@@ -125,6 +125,7 @@ function createTestApp() {
         websiteSearch: true,
         products: true,
         productGroups: true,
+        offerShippingDetails: true,
         breadcrumbs: true,
         collections: true,
       },

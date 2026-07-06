@@ -142,6 +142,8 @@ export interface ProductVariant {
   reservedStock?: number;
   isDefault?: boolean;
   trackInventory?: boolean;
+  barcode?: string | null;
+  barcodeType?: "ean13" | "upc" | "isbn" | "gtin" | "custom" | string | null;
   discountType: "percentage" | "flat" | null;
   discountPercentage: number | null;
   discountAmount: number | null;

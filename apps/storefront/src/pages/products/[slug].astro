@@ -1,5 +1,5 @@
 ---
-import { getLayoutData, getProductBySlug } from "@/lib/api";
+import { getLayoutData, getProductBySlug, getShippingMethods } from "@/lib/api";
 import Layout from "@/layouts/Layout.astro";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
@@ -16,6 +16,10 @@ import {
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
+import {
+  buildOfferShippingDetails,
+  gtinJsonLdForVariant,
+} from "@/lib/commerce-structured-data";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import {
   getBuyerStockSummary,
@@ -33,14 +37,16 @@ if (!slug) {
 
 const layoutPromise = getLayoutData();
 const productPromise = getProductBySlug(slug);
+const shippingMethodsPromise = getShippingMethods();
 const productWidgetsPromise = productPromise.then((data) =>
   data ? getActiveWidgetsForScope("product", data.product.id) : null,
 );
 
-// Parallel fetch: layout + product + scoped widgets in the first cold-cache wave
-const [layoutData, productData, fetchedProductWidgets] = await Promise.all([
+// Parallel fetch: layout + product + shipping + scoped widgets in the first cold-cache wave
+const [layoutData, productData, shippingMethods, fetchedProductWidgets] = await Promise.all([
   layoutPromise,
   productPromise,
+  shippingMethodsPromise,
   productWidgetsPromise,
 ]);
 setRuntimeImageCdnPolicy(layoutData?.media);
@@ -214,6 +220,20 @@ const shouldEmitProductGroupJsonLd =
 const priceValidUntil = new Date(new Date().getFullYear() + 1, 11, 31)
   .toISOString()
   .split("T")[0];
+const offerShippingDetails = discoverySettings.structuredData.offerShippingDetails
+  ? buildOfferShippingDetails({
+      shippingMethods,
+      currencyCode,
+      freeDelivery: product.freeDelivery,
+      country: layoutData.business?.country,
+    })
+  : [];
+
+function withOfferShippingDetails<T extends Record<string, unknown>>(offer: T): T {
+  return offerShippingDetails.length > 0
+    ? { ...offer, shippingDetails: offerShippingDetails }
+    : offer;
+}
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
 const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
@@ -238,10 +258,11 @@ const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
                 description: (product.description || product.name).replace(/<[^>]+>/g, ""),
                 ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
                 sku: normalizedVariantOption(variant.sku) || variant.id,
+                ...gtinJsonLdForVariant(variant.barcode, variant.barcodeType),
                 ...(size ? { size } : {}),
                 ...(color ? { color } : {}),
                 brand: { "@type": "Brand", name: brandName },
-                offers: {
+                offers: withOfferShippingDetails({
                   "@type": "Offer",
                   url: buildVariantProductUrl(variant) ?? canonicalUrl,
                   priceCurrency: currencyCode,
@@ -252,7 +273,7 @@ const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
                     : "https://schema.org/OutOfStock",
                   itemCondition: "https://schema.org/NewCondition",
                   seller: { "@type": "Organization", name: storeName },
-                },
+                }),
               };
             }),
           }
@@ -263,8 +284,12 @@ const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
             description: (product.description || product.name).replace(/<[^>]+>/g, ""),
             ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
             sku: primarySku,
+            ...gtinJsonLdForVariant(
+              buyerVariants[0]?.barcode,
+              buyerVariants[0]?.barcodeType,
+            ),
             brand: { "@type": "Brand", name: brandName },
-            offers: {
+            offers: withOfferShippingDetails({
               "@type": "Offer",
               url: canonicalUrl,
               priceCurrency: currencyCode,
@@ -275,7 +300,7 @@ const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
                 : "https://schema.org/OutOfStock",
               itemCondition: "https://schema.org/NewCondition",
               seller: { "@type": "Organization", name: storeName },
-            },
+            }),
           },
     )
   : null;

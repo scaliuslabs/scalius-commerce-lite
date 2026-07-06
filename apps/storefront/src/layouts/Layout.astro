@@ -16,6 +16,7 @@ import {
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
+import { buildOnlineStoreJsonLd } from "@/lib/commerce-structured-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
@@ -89,7 +90,13 @@ const faviconUrl = headerData?.favicon?.src
   : "/favicon.svg";
 
 // --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
-const storeName = footerData.copyrightText || headerData.logo.alt || "Store";
+const businessInfo = layoutData?.business;
+const storeName =
+  businessInfo?.companyName ||
+  businessInfo?.legalName ||
+  footerData.copyrightText ||
+  headerData.logo.alt ||
+  "Store";
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 
 // Organization JSON-LD — only emit when we have a logo (per SEO-05)
@@ -103,34 +110,16 @@ const logoUrl = headerData.logo.src
     )
   : null;
 
-function toOrganizationSameAsUrl(
-  value: string | null | undefined,
-): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === "http:" || parsed.protocol === "https:"
-      ? parsed.toString()
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-const socialUrls = (footerData.social || [])
-  .map((s: { url?: string }) => toOrganizationSameAsUrl(s.url))
-  .filter((url): url is string => Boolean(url));
 const orgJsonLd = discoverySettings.structuredData.organization && storefrontUrl && logoUrl
-  ? serializeJsonForInlineScript({
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      name: storeName,
-      url: storefrontUrl,
-      logo: { "@type": "ImageObject", url: logoUrl },
-      ...(socialUrls.length > 0 ? { sameAs: socialUrls } : {}),
-    })
+  ? serializeJsonForInlineScript(
+      buildOnlineStoreJsonLd({
+        storefrontUrl,
+        logoUrl,
+        storeName,
+        business: businessInfo,
+        social: footerData.social,
+      }),
+    )
   : null;
 
 // WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)

@@ -484,6 +484,7 @@ const seoSettingsSchema = z.object({
       websiteSearch: z.boolean(),
       products: z.boolean(),
       productGroups: z.boolean(),
+      offerShippingDetails: z.boolean(),
       breadcrumbs: z.boolean(),
       collections: z.boolean(),
     }),

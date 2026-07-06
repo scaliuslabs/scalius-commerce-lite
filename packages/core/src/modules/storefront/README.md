@@ -36,7 +36,7 @@ Returns: `{ seo, hero, widgets, collections }`.
 
 ### `getLayoutData(db)`
 
-Fetches and shapes all layout data in a **single batched D1 round-trip** (9 parallel queries):
+Fetches and shapes all layout data in a **single batched D1 round-trip** (10 parallel queries):
 
 1. Active analytics scripts -- applies Partytown processing via `processAnalyticsScript()` from `@scalius/core/integrations/analytics`
 2. Site settings (headerConfig, footerConfig JSON)
@@ -47,8 +47,9 @@ Fetches and shapes all layout data in a **single batched D1 round-trip** (9 para
 7. Media/image optimization settings from `settings` table (category = "media", key = "image_optimization")
 8. Meta CAPI browser dispatch readiness from `metaConversionsSettings`
 9. SEO discovery policy from `settings` table (category = "seo", key = "discovery")
+10. Public business identity fields from `settings` table (category = "business_info") for OnlineStore JSON-LD
 
-Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaCapi, seo }`
+Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaCapi, business, seo }`
 
 **Analytics processing**: Each active analytics script is processed -- if `usePartytown` is true and the script matches Partytown criteria (`shouldUsePartytown()`), the config is modified via `processAnalyticsScript()`. Timestamps are converted to ISO 8601 via `unixToISO()`.
 
@@ -60,7 +61,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 
 **Theme**: Reads storefront color overrides from the `settings` table. Returns as `{ colors: Record<string, string> }`.
 
-**SEO discovery**: Reads the default-on sitemap/feed/robots/JSON-LD policy from `settings.seo/discovery`. Layout consumers use this to gate global Organization and WebSite JSON-LD without a second storefront API read.
+**SEO discovery**: Reads the default-on sitemap/feed/robots/JSON-LD policy from `settings.seo/discovery`. Layout consumers use this to gate global OnlineStore and WebSite JSON-LD without a second storefront API read. Product pages use the same policy plus active shipping methods to emit offer-level shipping schema when enabled.
 
 ## API Endpoints
 
@@ -69,7 +70,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 |--------|------|-------------|-------|
 | GET | `/homepage` | Consolidated homepage data (SEO, hero, widgets, collections + products) | `api:storefront:homepage:*` with CACHE_TTLS.STANDARD; product/category/collection/homepage/widget/media writes invalidate it |
 | GET | `/pages/slug/{slug}` | Consolidated CMS page render data (page + active page-scoped widgets) | `api:storefront:page:*` with CACHE_TTLS.STANDARD; page/widget writes invalidate exact page render keys |
-| GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme, media, Meta CAPI readiness, SEO discovery) | `api:storefront:layout:*` with CACHE_TTLS.STANDARD |
+| GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme, media, Meta CAPI readiness, public business identity, SEO discovery) | `api:storefront:layout:*` with CACHE_TTLS.STANDARD |
 | GET | `/csp` | CSP allowed domains from `settings` (category = security) | `api:storefront:csp:*` with CACHE_TTLS.STANDARD |
 
 ### Public Hero (`/api/v1/hero`)

@@ -466,6 +466,158 @@ export function evaluateProductFeedXml(body, { storefrontOrigin } = {}) {
 
 export const evaluateFacebookFeedXml = evaluateProductFeedXml;
 
+function asArray(value) {
+  return Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+}
+
+function schemaTypes(node) {
+  return asArray(node?.["@type"]).filter((type) => typeof type === "string");
+}
+
+function collectSchemaNodes(value) {
+  if (Array.isArray(value)) return value.flatMap(collectSchemaNodes);
+  if (!value || typeof value !== "object") return [];
+  return [
+    value,
+    ...asArray(value["@graph"]).flatMap(collectSchemaNodes),
+  ];
+}
+
+function extractJsonLdScripts(html) {
+  const scripts = [];
+  const pattern = /<script\b(?=[^>]*\btype=(["'])application\/ld\+json\1)[^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = pattern.exec(html)) !== null) {
+    scripts.push(decodeXml((match[2] ?? "").trim()));
+  }
+  return scripts;
+}
+
+function isProductSchema(node) {
+  const types = schemaTypes(node);
+  return types.includes("Product") || types.includes("ProductGroup");
+}
+
+function collectProductOffers(productNode) {
+  const offers = [...asArray(productNode.offers)];
+  for (const variant of asArray(productNode.hasVariant)) {
+    if (variant && typeof variant === "object") {
+      offers.push(...asArray(variant.offers));
+    }
+  }
+  return offers.filter((offer) => offer && typeof offer === "object");
+}
+
+function validateProductSchemaImage(productNode, errors) {
+  const images = asArray(productNode.image);
+  if (images.length === 0) {
+    errors.push("Product JSON-LD must include at least one image.");
+    return;
+  }
+  for (const image of images) {
+    const url = typeof image === "string" ? image : image?.url;
+    if (!isHttpUrl(String(url ?? ""))) {
+      errors.push(`Product JSON-LD image is not absolute http(s): ${String(url ?? "")}`);
+    }
+  }
+}
+
+function validateOfferShippingDetails(offer, errors) {
+  for (const detail of asArray(offer.shippingDetails)) {
+    if (!detail || typeof detail !== "object") {
+      errors.push("Offer shippingDetails must be an object or object array.");
+      continue;
+    }
+    const destination = detail.shippingDestination;
+    const rate = detail.shippingRate;
+    const addressCountry = destination?.addressCountry;
+    const value = rate?.value;
+    const currency = rate?.currency;
+    if (!destination || typeof destination !== "object" || !addressCountry) {
+      errors.push("Offer shippingDetails must include shippingDestination.addressCountry.");
+    }
+    if (!rate || typeof rate !== "object" || value === undefined || !currency) {
+      errors.push("Offer shippingDetails must include shippingRate value and currency.");
+    }
+  }
+}
+
+function validateProductOffer(offer, { storefrontOrigin }, errors) {
+  const url = offer.url;
+  if (!isHttpUrl(String(url ?? ""))) {
+    errors.push(`Offer URL is not absolute http(s): ${String(url ?? "")}`);
+  } else if (storefrontOrigin && !isSameOrigin(url, storefrontOrigin)) {
+    errors.push(`Offer URL is not on storefront origin: ${url}`);
+  }
+
+  if (!offer.priceCurrency || typeof offer.priceCurrency !== "string") {
+    errors.push("Offer must include priceCurrency.");
+  }
+  const price = Number(offer.price);
+  if (!Number.isFinite(price) || price < 0) {
+    errors.push("Offer price must be a non-negative number or numeric string.");
+  }
+  if (
+    offer.availability !== "https://schema.org/InStock" &&
+    offer.availability !== "https://schema.org/OutOfStock"
+  ) {
+    errors.push("Offer availability must be InStock or OutOfStock.");
+  }
+  if (offer.shippingDetails !== undefined) {
+    validateOfferShippingDetails(offer, errors);
+  }
+}
+
+export function evaluateProductJsonLdHtml(html, {
+  storefrontOrigin,
+} = {}) {
+  const errors = [];
+  const scripts = extractJsonLdScripts(html);
+  const parsedRoots = [];
+
+  if (scripts.length === 0) {
+    errors.push("Product page must include at least one application/ld+json script.");
+  }
+
+  for (const script of scripts) {
+    try {
+      parsedRoots.push(JSON.parse(script));
+    } catch (error) {
+      errors.push(`JSON-LD script is invalid JSON: ${errorMessage(error)}`);
+    }
+  }
+
+  const nodes = parsedRoots.flatMap(collectSchemaNodes);
+  const productNodes = nodes.filter(isProductSchema);
+  if (productNodes.length === 0) {
+    errors.push("Product page JSON-LD must include Product or ProductGroup.");
+  }
+
+  let offerCount = 0;
+  let shippingDetailsCount = 0;
+  for (const productNode of productNodes) {
+    validateProductSchemaImage(productNode, errors);
+    const offers = collectProductOffers(productNode);
+    if (offers.length === 0) {
+      errors.push("Product JSON-LD must include at least one Offer.");
+    }
+    for (const offer of offers) {
+      offerCount += 1;
+      shippingDetailsCount += asArray(offer.shippingDetails).length;
+      validateProductOffer(offer, { storefrontOrigin }, errors);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    scriptCount: scripts.length,
+    productSchemaCount: productNodes.length,
+    offerCount,
+    shippingDetailsCount,
+  };
+}
+
 function createCheckError(message, result) {
   const error = new Error(message);
   error.result = result;
@@ -782,12 +934,24 @@ async function checkDiscoveredProductRoute(options, { fetchImpl, productUrl, log
     accept: "text/html, */*;q=0.8",
   });
   requireStatus(response, "Discovered storefront product route", (status) => status >= 200 && status < 300);
-  logger?.log(`PASS product route: ${new URL(productUrl).pathname} returned ${response.statusCode}.`);
+  const schemaEvaluation = evaluateProductJsonLdHtml(response.body, {
+    storefrontOrigin,
+  });
+  if (!schemaEvaluation.ok) {
+    throw new Error(
+      `Discovered product JSON-LD failed: ${schemaEvaluation.errors.join("; ")}`,
+    );
+  }
+  logger?.log(
+    `PASS product route: ${new URL(productUrl).pathname} returned ${response.statusCode} with ` +
+    `${schemaEvaluation.productSchemaCount} product schema and ${schemaEvaluation.offerCount} offers.`,
+  );
 
   return {
     url: redactUrl(productUrl),
     statusCode: response.statusCode,
     durationMs: response.durationMs,
+    schema: schemaEvaluation,
   };
 }
 

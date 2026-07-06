@@ -6,6 +6,7 @@ import {
   Rss,
   Search,
   AlertCircle,
+  Truck,
 } from "lucide-react";
 import {
   DEFAULT_SEO_DISCOVERY_SETTINGS,
@@ -419,6 +420,18 @@ export function SeoSettingsBuilder() {
                   checked={values.discovery.structuredData.productGroups}
                   onCheckedChange={(checked) =>
                     updateDiscovery("structuredData", "productGroups", checked)
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span className="inline-flex items-center gap-2">
+                  <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                  Offer shipping schema
+                </span>
+                <Switch
+                  checked={values.discovery.structuredData.offerShippingDetails}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("structuredData", "offerShippingDetails", checked)
                   }
                 />
               </label>

@@ -7377,6 +7377,12 @@
                             "nullable": true
                           }
                         },
+                        "business": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "nullable": true
+                          }
+                        },
                         "seo": {
                           "type": "object",
                           "additionalProperties": {
@@ -65469,6 +65475,9 @@
                                 "productGroups": {
                                   "type": "boolean"
                                 },
+                                "offerShippingDetails": {
+                                  "type": "boolean"
+                                },
                                 "breadcrumbs": {
                                   "type": "boolean"
                                 },
@@ -65481,6 +65490,7 @@
                                 "websiteSearch",
                                 "products",
                                 "productGroups",
+                                "offerShippingDetails",
                                 "breadcrumbs",
                                 "collections"
                               ]
@@ -65852,6 +65862,9 @@
                             "type": "boolean"
                           },
                           "productGroups": {
+                            "type": "boolean"
+                          },
+                          "offerShippingDetails": {
                             "type": "boolean"
                           },
                           "breadcrumbs": {

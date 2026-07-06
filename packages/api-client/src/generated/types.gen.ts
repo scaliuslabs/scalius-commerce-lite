@@ -2267,6 +2267,9 @@ export type GetApiV1StorefrontLayoutResponses = {
             theme: {
                 [key: string]: unknown;
             };
+            business?: {
+                [key: string]: unknown;
+            };
             seo?: {
                 [key: string]: unknown;
             };
@@ -19655,6 +19658,7 @@ export type GetApiV1AdminSettingsSeoResponses = {
                     websiteSearch: boolean;
                     products: boolean;
                     productGroups: boolean;
+                    offerShippingDetails: boolean;
                     breadcrumbs: boolean;
                     collections: boolean;
                 };
@@ -19695,6 +19699,7 @@ export type PostApiV1AdminSettingsSeoData = {
                 websiteSearch?: boolean;
                 products?: boolean;
                 productGroups?: boolean;
+                offerShippingDetails?: boolean;
                 breadcrumbs?: boolean;
                 collections?: boolean;
             };

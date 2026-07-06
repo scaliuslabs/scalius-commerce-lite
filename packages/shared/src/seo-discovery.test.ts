@@ -68,6 +68,7 @@ describe("SEO discovery settings", () => {
       },
       structuredData: {
         productGroups: true,
+        offerShippingDetails: true,
       },
     });
   });
@@ -114,6 +115,7 @@ describe("SEO discovery settings", () => {
             websiteSearch: true,
             products: true,
             productGroups: true,
+            offerShippingDetails: true,
             breadcrumbs: true,
             collections: true,
           },
@@ -153,6 +155,7 @@ describe("SEO discovery settings", () => {
         websiteSearch: false,
         products: false,
         productGroups: false,
+        offerShippingDetails: true,
         breadcrumbs: true,
         collections: true,
       },
