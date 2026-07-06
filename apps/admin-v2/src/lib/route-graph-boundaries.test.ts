@@ -504,6 +504,28 @@ describe("admin route graph boundaries", () => {
     expect(source).toMatch(/suppressHydrationWarning[^]*formatDate\(script\.createdAt\)/);
   });
 
+  it("keeps analytics list mutations gated by exact RBAC permissions", () => {
+    const listSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "AnalyticsList.tsx"),
+      "utf8",
+    );
+    const permissionsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-permissions.ts"),
+      "utf8",
+    );
+
+    expect(permissionsSource).toContain('ANALYTICS_TOGGLE: "analytics.toggle"');
+    expect(listSource).toContain("usePermissions");
+    expect(listSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_CREATE");
+    expect(listSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_EDIT");
+    expect(listSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_TOGGLE");
+    expect(listSource).toContain("canCreateAnalytics ? (");
+    expect(listSource).toContain("canToggleAnalytics ? (");
+    expect(listSource).toContain("canEditAnalytics ? (");
+    expect(listSource).toContain("aria-label={`Edit ${script.name}`}");
+    expect(listSource).toContain("aria-label={`Delete ${script.name}`}");
+  });
+
   it("keeps the hot login route off the generic Better Auth UI chunk", () => {
     const loginRouteSource = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "auth", "login.tsx"),

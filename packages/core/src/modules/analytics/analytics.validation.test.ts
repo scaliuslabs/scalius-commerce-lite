@@ -58,7 +58,7 @@ describe("analytics validation", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects invalid Cloudflare Web Analytics config", () => {
+  it("rejects invalid or placeholder Cloudflare Web Analytics config", () => {
     const result = createAnalyticsSchema.safeParse({
       name: "Cloudflare Web Analytics",
       type: "cloudflare_web_analytics",
@@ -67,12 +67,40 @@ describe("analytics validation", () => {
       config: '<script src="https://example.com/beacon.js"></script>',
       location: "body_end",
     });
+    const placeholderToken = createAnalyticsSchema.safeParse({
+      name: "Cloudflare Web Analytics",
+      type: "cloudflare_web_analytics",
+      isActive: true,
+      usePartytown: false,
+      config: "YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN",
+      location: "body_end",
+    });
+    const placeholderSnippet = createAnalyticsSchema.safeParse({
+      name: "Cloudflare Web Analytics",
+      type: "cloudflare_web_analytics",
+      isActive: true,
+      usePartytown: false,
+      config: `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN"}'></script>`,
+      location: "body_end",
+    });
 
     expect(result.success).toBe(false);
+    expect(placeholderToken.success).toBe(false);
+    expect(placeholderSnippet.success).toBe(false);
   });
 
   it("normalizes a Cloudflare Web Analytics token into the beacon snippet", () => {
     expect(normalizeCloudflareWebAnalyticsConfig("site_token_123")).toBe(
+      `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
+    );
+  });
+
+  it("canonicalizes pasted Cloudflare Web Analytics beacon snippets", () => {
+    expect(
+      normalizeCloudflareWebAnalyticsConfig(`
+        <script defer data-extra="ignored" src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>
+      `),
+    ).toBe(
       `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
     );
   });
@@ -101,6 +129,11 @@ describe("analytics validation", () => {
         type: "custom",
         config:
           "<script>window.analyticsPixel = 'YOUR_FACEBOOK_PIXEL_ID';</script>",
+      },
+      {
+        type: "cloudflare_web_analytics",
+        config:
+          "<script>window.analyticsToken = 'YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN';</script>",
       },
     ] as const;
 

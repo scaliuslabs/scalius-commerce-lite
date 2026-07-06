@@ -46,10 +46,12 @@ Partytown analytics proxy targets must use HTTPS; HTTP, FTP, and other protocols
 
 Cloudflare Web Analytics is first-class because it is the default Cloudflare-native
 alternative to GA/Facebook page analytics. Admins may paste either the Cloudflare
-site token or the official beacon snippet. Token-only saves are normalized to the
-`https://static.cloudflareinsights.com/beacon.min.js` snippet, `usePartytown` is
-forced off, and the admin UI defaults it to `body_end` so the beacon can read
-browser performance timing directly.
+site token or the official beacon snippet. Valid token-only saves and pasted
+beacon snippets are canonicalized to the platform-generated
+`https://static.cloudflareinsights.com/beacon.min.js` snippet, placeholder
+tokens are blocked before activation and legacy toggles, `usePartytown` is forced
+off, and the admin UI defaults it to `body_end` so the beacon can read browser
+performance timing directly.
 
 ## Dashboard Statistics
 

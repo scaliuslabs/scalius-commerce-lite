@@ -30,11 +30,13 @@ import {
 import { Edit, Trash2, Plus, Power, PowerOff } from "lucide-react";
 import { formatDate } from "@scalius/shared/utils";
 import { toast } from "sonner";
+import { usePermissions } from "@/contexts/PermissionContext";
 import { getServerFnError } from "@/lib/api-helpers";
 import {
   deleteAnalyticsScript,
   toggleAnalyticsScript,
 } from "@/lib/api-functions/analytics";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, Link } from "@tanstack/react-router";
 import { AdminListPagination } from "./shared/AdminListPagination";
@@ -58,6 +60,11 @@ interface AnalyticsListProps {
 export function AnalyticsList({ analytics }: AnalyticsListProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreateAnalytics = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_CREATE);
+  const canEditAnalytics = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_EDIT);
+  const canToggleAnalytics = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_TOGGLE);
+  const canMutateAnalytics = canEditAnalytics || canToggleAnalytics;
   const { isDeleting, handleDelete } = useDeleteHandler({
     deleteFn: (data) => deleteAnalyticsScript({ data }),
     invalidateKeys: [["analytics", "list"]],
@@ -138,12 +145,14 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
             Manage analytics and tracking scripts for your site.
           </CardDescription>
         </div>
-        <Button asChild>
-          <Link to="/admin/analytics/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Script
-          </Link>
-        </Button>
+        {canCreateAnalytics ? (
+          <Button asChild>
+            <Link to="/admin/analytics/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Script
+            </Link>
+          </Button>
+        ) : null}
       </CardHeader>
       <CardContent>
         <Table>
@@ -154,15 +163,19 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
               <TableHead>Location</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Created</TableHead>
-              <TableHead>Actions</TableHead>
+              {canMutateAnalytics ? <TableHead>Actions</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
             {analytics.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">
-                  No analytics scripts found. Add your first script to start
-                  tracking.
+                <TableCell
+                  colSpan={canMutateAnalytics ? 6 : 5}
+                  className="text-center py-8"
+                >
+                  {canCreateAnalytics
+                    ? "No analytics scripts found. Add your first script to start tracking."
+                    : "No analytics scripts found."}
                 </TableCell>
               </TableRow>
             ) : (
@@ -182,68 +195,85 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
                   <TableCell>
                     <span suppressHydrationWarning>{formatDate(script.createdAt)}</span>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() =>
-                          handleToggleActive(script.id, script.isActive)
-                        }
-                        title={
-                          script.isActive
-                            ? "Deactivate script"
-                            : "Activate script"
-                        }
-                      >
-                        {script.isActive ? (
-                          <PowerOff className="h-4 w-4" />
-                        ) : (
-                          <Power className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button variant="outline" size="icon" asChild>
-                        <Link to={`/admin/analytics/${script.id}/edit` as string}>
-                          <Edit className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
+                  {canMutateAnalytics ? (
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        {canToggleAnalytics ? (
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => setSelectedId(script.id)}
+                            onClick={() =>
+                              handleToggleActive(script.id, script.isActive)
+                            }
+                            aria-label={
+                              script.isActive
+                                ? `Deactivate ${script.name}`
+                                : `Activate ${script.name}`
+                            }
+                            title={
+                              script.isActive
+                                ? "Deactivate script"
+                                : "Activate script"
+                            }
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {script.isActive ? (
+                              <PowerOff className="h-4 w-4" />
+                            ) : (
+                              <Power className="h-4 w-4" />
+                            )}
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Delete Analytics Script
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete this analytics
-                              script? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => {
-                                if (selectedId) {
-                                  handleDelete(selectedId);
-                                }
-                              }}
-                              disabled={isDeleting}
-                            >
-                              {isDeleting ? "Deleting..." : "Delete"}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
+                        ) : null}
+                        {canEditAnalytics ? (
+                          <>
+                            <Button variant="outline" size="icon" asChild>
+                              <Link
+                                to={`/admin/analytics/${script.id}/edit` as string}
+                                aria-label={`Edit ${script.name}`}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  aria-label={`Delete ${script.name}`}
+                                  onClick={() => setSelectedId(script.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Delete Analytics Script
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this analytics
+                                    script? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => {
+                                      if (selectedId) {
+                                        handleDelete(selectedId);
+                                      }
+                                    }}
+                                    disabled={isDeleting}
+                                  >
+                                    {isDeleting ? "Deleting..." : "Delete"}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               ))
             )}

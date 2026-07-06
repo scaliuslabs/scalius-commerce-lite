@@ -24,4 +24,26 @@ describe("analytics service", () => {
     ).rejects.toBeInstanceOf(ValidationError);
     expect(db.update).not.toHaveBeenCalled();
   });
+
+  it("rejects activating an existing Cloudflare Web Analytics placeholder", async () => {
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            get: vi.fn(async () => ({
+              id: "analytics_cloudflare",
+              config:
+                "<script defer src=\"https://static.cloudflareinsights.com/beacon.min.js\" data-cf-beacon='{\"token\":\"YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN\"}'></script>",
+            })),
+          })),
+        })),
+      })),
+      update: vi.fn(),
+    };
+
+    await expect(
+      toggleAnalyticsScript(db as never, "analytics_cloudflare", true),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(db.update).not.toHaveBeenCalled();
+  });
 });

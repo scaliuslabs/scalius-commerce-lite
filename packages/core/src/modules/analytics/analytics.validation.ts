@@ -18,6 +18,8 @@ export const CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC =
     "https://static.cloudflareinsights.com/beacon.min.js";
 
 const CLOUDFLARE_WEB_ANALYTICS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
+const CLOUDFLARE_WEB_ANALYTICS_TOKEN_PLACEHOLDER =
+    "YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN";
 
 const ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS: Array<{
     pattern: RegExp;
@@ -27,6 +29,10 @@ const ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS: Array<{
     { pattern: /\bGTM-X{4,}\b/i, label: "Google Tag Manager container ID" },
     { pattern: /\bPIXEL_ID\b/i, label: "pixel ID" },
     { pattern: /\bYOUR_[A-Z0-9_]*PIXEL[A-Z0-9_]*ID\b/i, label: "pixel ID" },
+    {
+        pattern: /\bYOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN\b/i,
+        label: "Cloudflare Web Analytics token",
+    },
 ];
 
 export function isMainThreadOnlyAnalyticsType(type: string): boolean {
@@ -36,10 +42,11 @@ export function isMainThreadOnlyAnalyticsType(type: string): boolean {
 export function normalizeCloudflareWebAnalyticsConfig(config: string): string {
     const trimmedConfig = config.trim();
     if (/<script/i.test(trimmedConfig)) {
-        return trimmedConfig;
+        const token = extractCloudflareWebAnalyticsToken(trimmedConfig);
+        return token ? buildCloudflareWebAnalyticsScript(token) : trimmedConfig;
     }
 
-    return `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='${JSON.stringify({ token: trimmedConfig })}'></script>`;
+    return buildCloudflareWebAnalyticsScript(trimmedConfig);
 }
 
 function isValidCloudflareWebAnalyticsConfig(config: string): boolean {
@@ -49,13 +56,42 @@ function isValidCloudflareWebAnalyticsConfig(config: string): boolean {
     }
 
     if (/<script/i.test(trimmedConfig)) {
-        return (
-            trimmedConfig.includes(CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC) &&
-            /data-cf-beacon\s*=/.test(trimmedConfig)
-        );
+        const token = extractCloudflareWebAnalyticsToken(trimmedConfig);
+        return token !== null && isValidCloudflareWebAnalyticsToken(token);
     }
 
-    return CLOUDFLARE_WEB_ANALYTICS_TOKEN_PATTERN.test(trimmedConfig);
+    return isValidCloudflareWebAnalyticsToken(trimmedConfig);
+}
+
+function buildCloudflareWebAnalyticsScript(token: string): string {
+    return `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='${JSON.stringify({ token })}'></script>`;
+}
+
+function extractCloudflareWebAnalyticsToken(config: string): string | null {
+    if (!config.includes(CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC)) {
+        return null;
+    }
+
+    const beaconMatch = config.match(
+        /data-cf-beacon\s*=\s*(["'])(.*?)\1/is,
+    );
+    if (!beaconMatch?.[2]) {
+        return null;
+    }
+
+    try {
+        const beaconConfig = JSON.parse(beaconMatch[2]) as { token?: unknown };
+        return typeof beaconConfig.token === "string" ? beaconConfig.token : null;
+    } catch {
+        return null;
+    }
+}
+
+function isValidCloudflareWebAnalyticsToken(token: string): boolean {
+    return (
+        token !== CLOUDFLARE_WEB_ANALYTICS_TOKEN_PLACEHOLDER &&
+        CLOUDFLARE_WEB_ANALYTICS_TOKEN_PATTERN.test(token)
+    );
 }
 
 const analyticsFields = {

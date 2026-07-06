@@ -52,4 +52,15 @@ describe("analytics form schema", () => {
     expect(analyticsListSource).toContain('case "tiktok_pixel":');
     expect(analyticsListSource).toContain('return "TikTok Pixel";');
   });
+
+  it("blocks active Cloudflare Web Analytics placeholder tokens in the guided form", () => {
+    const analyticsFormSource = readFileSync(ANALYTICS_FORM_SOURCE, "utf8");
+
+    expect(analyticsFormSource).toContain(
+      "YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN",
+    );
+    expect(analyticsFormSource).toContain(
+      "/\\bYOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN\\b/i",
+    );
+  });
 });
