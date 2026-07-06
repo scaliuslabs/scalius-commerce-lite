@@ -113,6 +113,8 @@ export const productDetailSchema = z
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable(),
     isActive: z.boolean(),
+    excludeFromSitemap: z.boolean(),
+    excludeFromProductFeed: z.boolean(),
     discountPercentage: z.number().nullable(),
     discountType: z.enum(["percentage", "flat"]).nullable(),
     discountAmount: z.number().nullable(),

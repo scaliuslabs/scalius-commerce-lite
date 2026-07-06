@@ -125,6 +125,8 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
       "product_variants_",
       "all_products_",
       "category_products_",
+      "feed_products_",
+      "sitemap_products_",
       "widgets_scope_",
       "storefront_homepage_",
     ],
@@ -1164,6 +1166,7 @@ export function getProductAvailabilityApiCacheKeys(
   return [
     "api:products:/api/v1/products",
     "api:products:/api/v1/products/feed",
+    "api:products:/api/v1/products/sitemap",
     ...normalizedSubjects
       .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
         typeof subject.slug === "string" && subject.slug.length > 0,
@@ -1182,6 +1185,7 @@ export function getProductAvailabilityApiCachePatterns(
   return [
     "api:products:/api/v1/products?*",
     "api:products:/api/v1/products/feed?*",
+    "api:products:/api/v1/products/sitemap?*",
     ...normalizedSubjects
       .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
         typeof subject.slug === "string" && subject.slug.length > 0,
@@ -1200,7 +1204,9 @@ export function getProductAvailabilityStorefrontPrefixes(
     `product_variants_${subject.productId}`,
   ]);
 
-  return prefixes.length > 0 ? [...prefixes, "feed_products_"] : [];
+  return prefixes.length > 0
+    ? [...prefixes, "feed_products_", "sitemap_products_"]
+    : [];
 }
 
 export function collectProductAvailabilityCacheInvalidation(

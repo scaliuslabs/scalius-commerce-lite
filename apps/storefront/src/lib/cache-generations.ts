@@ -3,6 +3,7 @@ const DEFAULT_GENERATION = "0";
 const PRODUCT_SLUG_KEY_PREFIX = "product_slug_";
 const PRODUCT_VARIANTS_KEY_PREFIX = "product_variants_";
 const FEED_PRODUCTS_KEY_PREFIX = "feed_products_";
+const SITEMAP_PRODUCTS_KEY_PREFIX = "sitemap_products_";
 const WIDGET_KEY_PREFIX = "widget_";
 const WIDGET_SCOPE_KEY_PREFIX = "widgets_scope_";
 const PAGE_RENDER_KEY_PREFIX = "page_render_";
@@ -39,6 +40,10 @@ export function buildExactCacheGenerationKey(
 export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | null {
   if (logicalKey.startsWith(FEED_PRODUCTS_KEY_PREFIX)) {
     return FEED_PRODUCTS_KEY_PREFIX;
+  }
+
+  if (logicalKey.startsWith(SITEMAP_PRODUCTS_KEY_PREFIX)) {
+    return SITEMAP_PRODUCTS_KEY_PREFIX;
   }
 
   if (
@@ -100,6 +105,10 @@ export function htmlPathCacheKeyFromPath(path: string): string | null {
       pathname === "/api/facebook-feed.xml"
     ) {
       return FEED_PRODUCTS_KEY_PREFIX;
+    }
+
+    if (pathname === "/sitemap-products.xml") {
+      return SITEMAP_PRODUCTS_KEY_PREFIX;
     }
 
     const isExactEntityPath =

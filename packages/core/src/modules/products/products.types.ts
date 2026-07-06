@@ -168,6 +168,7 @@ export interface StorefrontFeedProduct {
     discountedPrice: number;
     freeDelivery: boolean;
     categoryId: string | null;
+    excludeFromProductFeed: boolean;
     hasVariants: boolean;
     availableForSale: boolean;
     imageUrl: string | null;

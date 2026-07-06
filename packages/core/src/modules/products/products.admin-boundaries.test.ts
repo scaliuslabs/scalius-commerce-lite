@@ -11,6 +11,8 @@ const productUpdate = {
     slug: "strict-sku-product",
     metaTitle: null,
     metaDescription: null,
+    excludeFromSitemap: false,
+    excludeFromProductFeed: false,
     isActive: true,
     discountType: "percentage" as const,
     discountPercentage: 0,

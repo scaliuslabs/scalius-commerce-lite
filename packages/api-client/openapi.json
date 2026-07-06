@@ -15398,6 +15398,9 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "excludeFromProductFeed": {
+                                "type": "boolean"
+                              },
                               "hasVariants": {
                                 "type": "boolean"
                               },
@@ -15558,6 +15561,7 @@
                               "discountedPrice",
                               "freeDelivery",
                               "categoryId",
+                              "excludeFromProductFeed",
                               "hasVariants",
                               "availableForSale",
                               "imageUrl",
@@ -15565,6 +15569,197 @@
                               "category",
                               "attributes",
                               "variants",
+                              "updatedAt"
+                            ]
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "number"
+                            },
+                            "limit": {
+                              "type": "number"
+                            },
+                            "total": {
+                              "type": "number"
+                            },
+                            "totalPages": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "page",
+                            "limit",
+                            "total",
+                            "totalPages"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "products",
+                        "pagination"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products/sitemap": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List storefront products for XML sitemaps",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 1,
+              "description": "Page number"
+            },
+            "required": false,
+            "description": "Page number",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000,
+              "default": 100,
+              "description": "Items per page"
+            },
+            "required": false,
+            "description": "Items per page",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sitemap product list with pagination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "products": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "slug": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "slug",
                               "updatedAt"
                             ]
                           }
@@ -66447,6 +66642,7 @@
                                 "enum": [
                                   "feed_disabled",
                                   "storefront_url_unavailable",
+                                  "product_feed_excluded",
                                   "inactive_deleted_unpublished",
                                   "no_buyer_sku",
                                   "missing_image",
@@ -66478,6 +66674,7 @@
                                       "enum": [
                                         "feed_disabled",
                                         "storefront_url_unavailable",
+                                        "product_feed_excluded",
                                         "inactive_deleted_unpublished",
                                         "no_buyer_sku",
                                         "missing_image",
@@ -100018,6 +100215,14 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "excludeFromSitemap": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "excludeFromProductFeed": {
+                    "type": "boolean",
+                    "default": false
+                  },
                   "slug": {
                     "type": "string",
                     "minLength": 3,
@@ -101126,6 +101331,12 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "excludeFromSitemap": {
+                          "type": "boolean"
+                        },
+                        "excludeFromProductFeed": {
+                          "type": "boolean"
+                        },
                         "discountPercentage": {
                           "type": "number",
                           "nullable": true
@@ -101442,6 +101653,8 @@
                         "metaTitle",
                         "metaDescription",
                         "isActive",
+                        "excludeFromSitemap",
+                        "excludeFromProductFeed",
                         "discountPercentage",
                         "discountType",
                         "discountAmount",
@@ -101583,6 +101796,14 @@
                   "metaDescription": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "excludeFromSitemap": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "excludeFromProductFeed": {
+                    "type": "boolean",
+                    "default": false
                   },
                   "slug": {
                     "type": "string",

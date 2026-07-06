@@ -4573,6 +4573,7 @@ export type GetApiV1ProductsFeedResponses = {
                 discountedPrice: number;
                 freeDelivery: boolean;
                 categoryId: string | null;
+                excludeFromProductFeed: boolean;
                 hasVariants: boolean;
                 availableForSale: boolean;
                 imageUrl: string | null;
@@ -4619,6 +4620,72 @@ export type GetApiV1ProductsFeedResponses = {
 };
 
 export type GetApiV1ProductsFeedResponse = GetApiV1ProductsFeedResponses[keyof GetApiV1ProductsFeedResponses];
+
+export type GetApiV1ProductsSitemapData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        limit?: number;
+    };
+    url: '/api/v1/products/sitemap';
+};
+
+export type GetApiV1ProductsSitemapErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ProductsSitemapError = GetApiV1ProductsSitemapErrors[keyof GetApiV1ProductsSitemapErrors];
+
+export type GetApiV1ProductsSitemapResponses = {
+    /**
+     * Sitemap product list with pagination
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                slug: string;
+                updatedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1ProductsSitemapResponse = GetApiV1ProductsSitemapResponses[keyof GetApiV1ProductsSitemapResponses];
 
 export type GetApiV1ProductsBySlugData = {
     body?: never;
@@ -19930,14 +19997,14 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
                 skippedRows: number;
             };
             reasons: Array<{
-                reason: 'feed_disabled' | 'storefront_url_unavailable' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
+                reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
                 products: number;
                 rows: number;
                 samples: Array<{
                     id: string;
                     name: string;
                     slug: string;
-                    reason: 'feed_disabled' | 'storefront_url_unavailable' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
+                    reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
                 }>;
             }>;
         };
@@ -29533,6 +29600,8 @@ export type PostApiV1AdminProductsData = {
         freeDelivery: boolean;
         metaTitle: string | null;
         metaDescription: string | null;
+        excludeFromSitemap?: boolean;
+        excludeFromProductFeed?: boolean;
         slug: string;
         images: Array<{
             id: string;
@@ -29977,6 +30046,8 @@ export type GetApiV1AdminProductsByIdResponses = {
             metaTitle: string | null;
             metaDescription: string | null;
             isActive: boolean;
+            excludeFromSitemap: boolean;
+            excludeFromProductFeed: boolean;
             discountPercentage: number | null;
             discountType: 'percentage' | 'flat' | null;
             discountAmount: number | null;
@@ -30057,6 +30128,8 @@ export type PutApiV1AdminProductsByIdData = {
         freeDelivery: boolean;
         metaTitle: string | null;
         metaDescription: string | null;
+        excludeFromSitemap?: boolean;
+        excludeFromProductFeed?: boolean;
         slug: string;
         images: Array<{
             id: string;

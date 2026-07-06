@@ -47,6 +47,8 @@ const productBaseSchema = z.object({
     freeDelivery: z.boolean(),
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable(),
+    excludeFromSitemap: z.boolean().optional().default(false),
+    excludeFromProductFeed: z.boolean().optional().default(false),
     slug: z
         .string()
         .min(3)

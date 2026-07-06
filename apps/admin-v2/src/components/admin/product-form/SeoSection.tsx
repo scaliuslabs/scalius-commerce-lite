@@ -14,12 +14,14 @@ import type { LucideIcon } from "lucide-react";
 import { DEFAULT_SEO_DISCOVERY_SETTINGS } from "@scalius/shared/seo-discovery";
 import {
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { Badge } from "@/components/ui/badge";
@@ -123,6 +125,8 @@ export const SeoSection = memo(function SeoSection({
   const slug = form.watch("slug");
   const isActive = form.watch("isActive");
   const images = form.watch("images");
+  const excludeFromSitemap = form.watch("excludeFromSitemap");
+  const excludeFromProductFeed = form.watch("excludeFromProductFeed");
 
   const diagnostics = useMemo(
     () =>
@@ -132,6 +136,8 @@ export const SeoSection = memo(function SeoSection({
           slug,
           isActive,
           images,
+          excludeFromSitemap,
+          excludeFromProductFeed,
         },
         variants,
         variantState,
@@ -143,6 +149,8 @@ export const SeoSection = memo(function SeoSection({
       discovery,
       images,
       isActive,
+      excludeFromProductFeed,
+      excludeFromSitemap,
       policySource,
       productId,
       slug,
@@ -211,6 +219,54 @@ export const SeoSection = memo(function SeoSection({
             </FormItem>
           )}
         />
+
+        <div className="grid gap-2">
+          <FormField
+            control={form.control}
+            name="excludeFromSitemap"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-sm font-medium">
+                    Hide from sitemap
+                  </FormLabel>
+                  <FormDescription className="text-xs">
+                    Keep the product page public, but remove it from product sitemap XML.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="excludeFromProductFeed"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-sm font-medium">
+                    Hide from product feed
+                  </FormLabel>
+                  <FormDescription className="text-xs">
+                    Keep it on the storefront, but remove it from catalog feed XML.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
 
         <div className="border-t border-border pt-3">
           <div className="mb-2 flex items-start justify-between gap-2">

@@ -52,6 +52,8 @@ function EditProductPage() {
     slug: product.slug,
     metaTitle: product.metaTitle,
     metaDescription: product.metaDescription,
+    excludeFromSitemap: product.excludeFromSitemap,
+    excludeFromProductFeed: product.excludeFromProductFeed,
     isActive: product.isActive,
     discountType: (product.discountType || "percentage") as "percentage" | "flat",
     discountPercentage: product.discountPercentage || 0,

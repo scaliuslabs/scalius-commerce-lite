@@ -34,6 +34,8 @@ export const productFormSchema = z.object({
   freeDelivery: z.boolean(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
+  excludeFromSitemap: z.boolean(),
+  excludeFromProductFeed: z.boolean(),
   slug: z
     .string()
     .min(3, "Slug must be at least 3 characters")

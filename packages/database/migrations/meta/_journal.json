@@ -561,6 +561,13 @@
       "when": 1783310400000,
       "tag": "0079_auth_otp_delivery_targets",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "6",
+      "when": 1783396800000,
+      "tag": "0080_product_discovery_controls",
+      "breakpoints": true
     }
   ]
 }

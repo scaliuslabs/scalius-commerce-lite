@@ -18,6 +18,8 @@ const defaultValues = {
   freeDelivery: false,
   metaTitle: null,
   metaDescription: null,
+  excludeFromSitemap: false,
+  excludeFromProductFeed: false,
   slug: "",
   images: [],
 };

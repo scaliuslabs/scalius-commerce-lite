@@ -1,6 +1,6 @@
 # Platform Goal
 
-Last reviewed: 2026-07-06
+Last reviewed: 2026-07-07
 
 Scalius Commerce is a lightweight, nearly complete commerce platform for small and medium businesses in Bangladesh. The product should feel cheaper to run, easier to operate, and more reliable than closed-source ecommerce SaaS.
 
@@ -11,6 +11,7 @@ Scalius Commerce is a lightweight, nearly complete commerce platform for small a
 - Bangladesh-local integrations and UX must stay current with real merchant/buyer behavior: payment gateways, COD, partial payment, SMS, WhatsApp, delivery providers, city/zone/area data, BDT, phone identity, Meta CAPI, and analytics.
 - Every paid or external service should have a Cloudflare-native default or a first-class Cloudflare path where the platform can reasonably provide one.
 - SEO, AEO, and AIO should mean accurate public commerce truth: crawlable pages, canonical/noindex discipline, Merchant-compatible feeds, structured data matching checkout/SKU reality, and useful merchant-provided content that search engines and assistants can trust. Do not ship gimmick markup that does not reflect real buyer-visible facts.
+- Merchant controls should separate buyer visibility, search indexing, sitemap inclusion, feed inclusion, and structured-data output instead of hiding multiple meanings behind one switch.
 - UCP (Universal Commerce Protocol) is the next commerce-discovery surface after SEO/AEO/AIO is proven: expose agent-readable commerce capabilities only from the same checkout, SKU, payment, delivery, and policy authorities that buyers already use.
 
 ## Architecture Bar

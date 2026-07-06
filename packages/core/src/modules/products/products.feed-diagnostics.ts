@@ -11,6 +11,7 @@ export const PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT = 10;
 export const PRODUCT_FEED_DIAGNOSTIC_REASONS = [
     "feed_disabled",
     "storefront_url_unavailable",
+    "product_feed_excluded",
     "inactive_deleted_unpublished",
     "no_buyer_sku",
     "missing_image",
@@ -60,6 +61,7 @@ export interface ProductFeedDiagnosticScanProduct {
     name: string;
     slug: string;
     isActive: boolean;
+    excludeFromProductFeed: boolean;
     deletedAt: number | null;
 }
 
@@ -232,6 +234,11 @@ export function buildProductFeedDiagnosticsFromScan({
             continue;
         }
 
+        if (product.excludeFromProductFeed) {
+            recordIssue(product, "product_feed_excluded", 0);
+            continue;
+        }
+
         if (!product.isActive || product.deletedAt !== null) {
             recordIssue(product, "inactive_deleted_unpublished", 0);
             continue;
@@ -335,6 +342,7 @@ export async function getProductFeedDiagnostics(
             name: products.name,
             slug: products.slug,
             isActive: products.isActive,
+            excludeFromProductFeed: products.excludeFromProductFeed,
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
         })
@@ -348,6 +356,7 @@ export async function getProductFeedDiagnostics(
         name: row.name,
         slug: row.slug,
         isActive: Boolean(row.isActive),
+        excludeFromProductFeed: Boolean(row.excludeFromProductFeed),
         deletedAt: row.deletedAt ?? null,
     }));
     const productIds = productRows.map((product) => product.id);

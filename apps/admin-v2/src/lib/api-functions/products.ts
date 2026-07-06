@@ -107,6 +107,8 @@ export interface ProductWriteInput {
   freeDelivery: boolean;
   metaTitle: string | null;
   metaDescription: string | null;
+  excludeFromSitemap: boolean;
+  excludeFromProductFeed: boolean;
   slug: string;
   images: ProductImageInput[];
   attributes: ProductAttributeInput[];
@@ -172,6 +174,8 @@ export interface ProductDetailDto {
   categoryId: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  excludeFromSitemap: boolean;
+  excludeFromProductFeed: boolean;
   isActive: boolean;
   discountPercentage: number | null;
   discountType: ProductDiscountType | null;

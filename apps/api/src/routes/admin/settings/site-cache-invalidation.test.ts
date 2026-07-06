@@ -63,6 +63,7 @@ vi.mock("@scalius/core/modules/products", () => ({
   PRODUCT_FEED_DIAGNOSTIC_REASONS: [
     "feed_disabled",
     "storefront_url_unavailable",
+    "product_feed_excluded",
     "inactive_deleted_unpublished",
     "no_buyer_sku",
     "missing_image",
