@@ -42,6 +42,7 @@ TikTok Pixel is a first-class browser provider type. Use `tiktok_pixel` for the
 TikTok base code that loads `https://analytics.tiktok.com/i18n/pixel/events.js`,
 calls `ttq.load('PIXEL_ID')`, and calls `ttq.page()`. It remains Partytown-capable
 by default like Facebook Pixel, GA4, and GTM snippets.
+Partytown analytics proxy targets must use HTTPS; HTTP, FTP, and other protocols are rejected before fetch.
 
 Cloudflare Web Analytics is first-class because it is the default Cloudflare-native
 alternative to GA/Facebook page analytics. Admins may paste either the Cloudflare

@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { errorResponses } from "../schemas/responses";
 
-const ALLOWED_PROXY_PROTOCOLS = new Set(["https:", "http:"]);
+const ALLOWED_PROXY_PROTOCOLS = new Set(["https:"]);
 
 async function getAllowedDomainsAsync(c: { env: Env; req: { url: string } }): Promise<string[]> {
   let cspAllowed: string = typeof c.env?.CSP_ALLOWED === "string" ? c.env.CSP_ALLOWED : "";

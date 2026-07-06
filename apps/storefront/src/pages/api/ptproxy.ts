@@ -15,7 +15,7 @@ const ALLOWED_HOSTS = new Set([
   "static.cloudflareinsights.com",
 ]);
 
-const ALLOWED_PROTOCOLS = new Set(["https:", "http:"]);
+const ALLOWED_PROTOCOLS = new Set(["https:"]);
 
 export const GET: APIRoute = async ({ request }) => {
   const { searchParams } = new URL(request.url);
