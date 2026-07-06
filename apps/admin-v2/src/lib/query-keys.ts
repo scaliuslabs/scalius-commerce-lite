@@ -192,6 +192,7 @@ export const queryKeys = {
     storefrontUrl: () => ["settings", "storefront-url"] as const,
     seoDiscoveryLiveProbe: () =>
       ["settings", "seo-discovery-live-probe"] as const,
+    seoFeedDiagnostics: () => ["settings", "seo-feed-diagnostics"] as const,
     currency: () => ["settings", "currency"] as const,
     seo: () => ["settings", "seo"] as const,
     security: () => ["settings", "security"] as const,

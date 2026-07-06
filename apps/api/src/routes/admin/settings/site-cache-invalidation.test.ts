@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   saveMediaOptimizationSettings: vi.fn(),
   getSeoSettings: vi.fn(),
   saveSeoSettings: vi.fn(),
+  getProductFeedDiagnostics: vi.fn(),
   getStorefrontUrlSetting: vi.fn(),
   saveStorefrontUrl: vi.fn(),
   getAllowedCountries: vi.fn(),
@@ -56,6 +57,19 @@ vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
   saveAllowedCountries: mocks.saveAllowedCountries,
 }));
 
+vi.mock("@scalius/core/modules/products", () => ({
+  PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT: 10,
+  PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT: 500,
+  PRODUCT_FEED_DIAGNOSTIC_REASONS: [
+    "feed_disabled",
+    "inactive_deleted_unpublished",
+    "no_buyer_sku",
+    "missing_image",
+    "unavailable_excluded",
+  ],
+  getProductFeedDiagnostics: mocks.getProductFeedDiagnostics,
+}));
+
 import { siteSettingsRoutes } from "./site";
 
 function createTestApp() {
@@ -65,6 +79,7 @@ function createTestApp() {
     CACHE: { id: "api-cache-kv" },
     PURGE_URL: "https://storefront.example.com/api/purge-cache",
     PURGE_TOKEN: "secret-token",
+    STOREFRONT_URL: "https://storefront.example.com",
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
@@ -81,6 +96,73 @@ function createTestApp() {
     canonicalCdnUrl: "cdn.example.com",
     allowedImageHosts: [],
     canonicalHostAliases: [],
+  });
+  mocks.getSeoSettings.mockResolvedValue({
+    siteTitle: "Scalius",
+    homepageTitle: "Scalius",
+    homepageMetaDescription: "",
+    robotsTxt: "",
+    discovery: {
+      sitemap: {
+        enabled: true,
+        staticPages: true,
+        products: true,
+        categories: true,
+        collections: true,
+        pages: true,
+      },
+      feeds: {
+        productCatalogEnabled: true,
+        includeUnavailableProducts: false,
+        variantStrategy: "variants",
+        title: "",
+        description: "",
+      },
+      robots: { advertiseSitemap: true },
+      structuredData: {
+        organization: true,
+        websiteSearch: true,
+        products: true,
+        productGroups: true,
+        breadcrumbs: true,
+        collections: true,
+      },
+    },
+  });
+  mocks.getProductFeedDiagnostics.mockResolvedValue({
+    policy: {
+      productCatalogEnabled: true,
+      includeUnavailableProducts: false,
+      variantStrategy: "variants",
+    },
+    scan: {
+      limit: 25,
+      scannedProducts: 2,
+      truncated: false,
+      sampleLimitPerReason: 2,
+    },
+    totals: {
+      emittedRows: 1,
+      emittedProductRows: 0,
+      emittedVariantRows: 1,
+      productsWithIssues: 1,
+      skippedRows: 1,
+    },
+    reasons: [
+      {
+        reason: "missing_image",
+        products: 1,
+        rows: 1,
+        samples: [
+          {
+            id: "prod_1",
+            name: "Missing image product",
+            slug: "missing-image-product",
+            reason: "missing_image",
+          },
+        ],
+      },
+    ],
   });
   mocks.saveSeoSettings.mockResolvedValue(undefined);
   mocks.saveStorefrontUrl.mockResolvedValue(undefined);
@@ -166,6 +248,41 @@ describe("site settings cache invalidation", () => {
             productGroups: false,
           },
         },
+      },
+    );
+  });
+
+  it("returns bounded product feed diagnostics from the current SEO feed policy", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/seo/feed-diagnostics?scanLimit=25&sampleLimit=2",
+      { method: "GET" },
+      env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      data: {
+        scan: { limit: 25, sampleLimitPerReason: 2 },
+        totals: { emittedRows: 1, skippedRows: 1 },
+      },
+    });
+    expect(mocks.getProductFeedDiagnostics).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        productCatalogEnabled: true,
+        includeUnavailableProducts: false,
+        variantStrategy: "variants",
+        title: "",
+        description: "",
+      },
+      {
+        scanLimit: 25,
+        sampleLimitPerReason: 2,
+        storefrontBaseUrl: "https://storefront.example.com",
       },
     );
   });

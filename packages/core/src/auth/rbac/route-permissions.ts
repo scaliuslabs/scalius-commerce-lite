@@ -640,6 +640,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PUT: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
     POST: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
   },
+  "/api/v1/admin/settings/seo/feed-diagnostics": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
   "/api/v1/admin/settings/firebase": {
     GET: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },

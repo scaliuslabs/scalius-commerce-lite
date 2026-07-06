@@ -21,6 +21,12 @@ import {
   getAllowedCountries,
   saveAllowedCountries,
 } from "@scalius/core/modules/settings/site-settings.service";
+import {
+  PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT,
+  PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT,
+  PRODUCT_FEED_DIAGNOSTIC_REASONS,
+  getProductFeedDiagnostics,
+} from "@scalius/core/modules/products";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 
 import { ok } from "../../../utils/api-response";
@@ -504,6 +510,92 @@ app.openapi(getSeoRoute, async (c) => {
   const db = c.get("db");
   const result = await getSeoSettings(db);
   return ok(c, result);
+});
+
+const productFeedDiagnosticReasonSchema = z.enum(PRODUCT_FEED_DIAGNOSTIC_REASONS);
+
+const productFeedDiagnosticSampleSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  reason: productFeedDiagnosticReasonSchema,
+});
+
+const productFeedDiagnosticReasonSummarySchema = z.object({
+  reason: productFeedDiagnosticReasonSchema,
+  products: z.number(),
+  rows: z.number(),
+  samples: z.array(productFeedDiagnosticSampleSchema),
+});
+
+const productFeedDiagnosticsSchema = z.object({
+  policy: z.object({
+    productCatalogEnabled: z.boolean(),
+    includeUnavailableProducts: z.boolean(),
+    variantStrategy: z.enum(["products", "variants"]),
+  }),
+  scan: z.object({
+    limit: z.number(),
+    scannedProducts: z.number(),
+    truncated: z.boolean(),
+    sampleLimitPerReason: z.number(),
+  }),
+  totals: z.object({
+    emittedRows: z.number(),
+    emittedProductRows: z.number(),
+    emittedVariantRows: z.number(),
+    productsWithIssues: z.number(),
+    skippedRows: z.number(),
+  }),
+  reasons: z.array(productFeedDiagnosticReasonSummarySchema),
+});
+
+const productFeedDiagnosticsQuerySchema = z.object({
+  scanLimit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT)
+    .optional(),
+  sampleLimit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT)
+    .optional(),
+});
+
+const getSeoFeedDiagnosticsRoute = createRoute({
+  method: "get",
+  path: "/seo/feed-diagnostics",
+  tags: ["Admin - Settings"],
+  summary: "Get product feed diagnostics",
+  request: {
+    query: productFeedDiagnosticsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Product feed diagnostics",
+      content: {
+        "application/json": {
+          schema: successEnvelope(productFeedDiagnosticsSchema),
+        },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
+  const db = c.get("db");
+  const query = c.req.valid("query");
+  const seo = await getSeoSettings(db);
+  const diagnostics = await getProductFeedDiagnostics(db, seo.discovery.feeds, {
+    scanLimit: query.scanLimit,
+    sampleLimitPerReason: query.sampleLimit,
+    storefrontBaseUrl: c.env.STOREFRONT_URL,
+  });
+  return ok(c, diagnostics);
 });
 
 const saveSeoDiscoverySchema = z.object({
