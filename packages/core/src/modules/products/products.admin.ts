@@ -21,6 +21,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { checkAndAlertLowStock } from "../inventory/alerts";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import { defaultProductSkuValues, normalizeDefaultSkuOptions } from "./products.public-eligibility";
+import { assertConsistentVariantOptionAxes, assertProductVariantOptionAxes } from "./products.variants";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -690,7 +691,11 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
         batchOps.push(db.insert(productVariants).values(defaultVariantValues(id, data.price)));
     } else if (hasInvalidSkuTopology(normalizedActiveVariants)) {
         throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
-    } else if (isSimpleDefaultSkuSet(normalizedActiveVariants)) {
+    } else {
+        assertConsistentVariantOptionAxes(normalizedActiveVariants);
+    }
+
+    if (isSimpleDefaultSkuSet(normalizedActiveVariants)) {
         batchOps.push(
             db
                 .update(productVariants)
@@ -887,6 +892,7 @@ type BulkVariantUpdate = {
 
 export async function bulkUpdateVariants(db: Database, productId: string, updates: BulkVariantUpdate[], adminUserId?: string) {
     const statements = [];
+    const nextOptionRows: Array<{ id: string; size: string | null; color: string | null }> = [];
     const stockResultPairs: Array<{
         variantId: string;
         movementIndex: number;
@@ -933,6 +939,7 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
         if (!hasVariantOption({ size: nextSize, color: nextColor })) {
             throw new ValidationError("Normal variants must include at least one customer option.");
         }
+        nextOptionRows.push({ id, size: nextSize, color: nextColor });
 
         const normalizedFieldsToUpdate = {
             ...fieldsToUpdate,
@@ -996,6 +1003,7 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
     }
 
     if (statements.length > 0) {
+        await assertProductVariantOptionAxes(db, productId, nextOptionRows, ids);
         const batchResults = await safeBatch(db, statements as never) as Array<Array<{ id: string }> | undefined>;
         for (const pair of stockResultPairs) {
             const movementRows = batchResults[pair.movementIndex];

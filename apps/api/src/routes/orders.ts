@@ -31,6 +31,7 @@ import {
   claimCheckoutAttempt,
   commitStorefrontOrderPayload,
   createStorefrontOrder,
+  getCheckoutAttemptRequestKeyFromStatusToken,
   markCheckoutAttemptCommitted,
   markCheckoutAttemptFailed,
   resolveExistingCheckoutAttempt,
@@ -124,7 +125,8 @@ function scheduleCheckoutRecoveryHint(
 
 function scheduleCheckoutSuccessRecoveryHints(
   env: Env,
-  token: string,
+  statusToken: string,
+  receiptToken: string,
   orderId: string,
   executionCtx: WaitUntilExecutionContext | undefined,
 ): void {
@@ -133,19 +135,19 @@ function scheduleCheckoutSuccessRecoveryHints(
   try {
     scheduleCheckoutRecoveryHint(
       Promise.all([
-        getCheckoutStatusKvKey(token).then((statusKey) =>
+        getCheckoutStatusKvKey(statusToken).then((statusKey) =>
           env.CACHE.put(
             statusKey,
             JSON.stringify({
               status: "completed",
               orderId,
-              receiptToken: token,
+              receiptToken,
               updatedAt: Date.now(),
             }),
             { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
           ),
         ),
-        getReceiptTokenKvKey(token).then((receiptKey) => env.CACHE.put(
+        getReceiptTokenKvKey(receiptToken).then((receiptKey) => env.CACHE.put(
           receiptKey,
           JSON.stringify({ orderId }),
           { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
@@ -160,7 +162,7 @@ function scheduleCheckoutSuccessRecoveryHints(
 
 function scheduleCheckoutFailureStatusHint(
   env: Env,
-  token: string,
+  statusToken: string,
   orderId: string,
   errorMessage: string,
   executionCtx: WaitUntilExecutionContext | undefined,
@@ -169,7 +171,7 @@ function scheduleCheckoutFailureStatusHint(
 
   try {
     scheduleCheckoutRecoveryHint(
-      getCheckoutStatusKvKey(token).then((statusKey) =>
+      getCheckoutStatusKvKey(statusToken).then((statusKey) =>
         env.CACHE.put(
           statusKey,
           JSON.stringify({
@@ -310,7 +312,7 @@ const getOrderStatusRoute = createRoute({
   method: "get",
   path: "/status/{token}",
   tags: ["Orders"],
-  summary: "Check order processing status by checkout token",
+  summary: "Check order processing status by status token",
   request: {
     params: z.object({
       token: z.string(),
@@ -340,13 +342,14 @@ const getOrderStatusRoute = createRoute({
 });
 
 app.openapi(getOrderStatusRoute, async (c) => {
-  const token = c.req.valid("param").token;
+  const statusToken = c.req.valid("param").token;
   c.header("Cache-Control", "no-cache, no-store, must-revalidate");
   c.header("Pragma", "no-cache");
   c.header("Expires", "0");
 
-  if (!token || !token.startsWith("chk_")) {
-    throw new ValidationError("Invalid checkout token");
+  const requestKey = getCheckoutAttemptRequestKeyFromStatusToken(statusToken);
+  if (!requestKey) {
+    throw new ValidationError("Invalid checkout status token");
   }
 
   if (!c.env.CACHE) {
@@ -354,7 +357,7 @@ app.openapi(getOrderStatusRoute, async (c) => {
     return ok(c, { status: "processing" });
   }
 
-  const kvKey = await getCheckoutStatusKvKey(token);
+  const kvKey = await getCheckoutStatusKvKey(statusToken);
   const statusStr = await c.env.CACHE.get(kvKey);
 
   if (!statusStr) {
@@ -367,12 +370,13 @@ app.openapi(getOrderStatusRoute, async (c) => {
         lastError: checkoutAttempts.lastError,
       })
       .from(checkoutAttempts)
-      .where(eq(checkoutAttempts.checkoutToken, token))
+      .where(eq(checkoutAttempts.requestKey, requestKey))
       .get();
 
     if (attempt?.status === "committed") {
       scheduleCheckoutSuccessRecoveryHints(
         c.env,
+        statusToken,
         attempt.checkoutToken,
         attempt.orderId,
         getOptionalExecutionContext(c),
@@ -387,7 +391,7 @@ app.openapi(getOrderStatusRoute, async (c) => {
     if (attempt?.status === "failed") {
       scheduleCheckoutFailureStatusHint(
         c.env,
-        attempt.checkoutToken,
+        statusToken,
         attempt.orderId,
         attempt.lastError || "Order creation failed. Please try again.",
         getOptionalExecutionContext(c),
@@ -409,6 +413,7 @@ app.openapi(getOrderStatusRoute, async (c) => {
       if (orderExists) {
         scheduleCheckoutSuccessRecoveryHints(
           c.env,
+          statusToken,
           attempt.checkoutToken,
           attempt.orderId,
           getOptionalExecutionContext(c),
@@ -437,23 +442,51 @@ app.openapi(getOrderStatusRoute, async (c) => {
 
   if (statusData.status === "processing" && statusData.orderId) {
     const db = c.get("db");
-    const orderExists = await db
-      .select({ id: orders.id })
-      .from(orders)
-      .where(eq(orders.id, statusData.orderId))
-      .limit(1);
+    const [attempt, orderExists] = await Promise.all([
+      db
+        .select({
+          status: checkoutAttempts.status,
+          orderId: checkoutAttempts.orderId,
+          checkoutToken: checkoutAttempts.checkoutToken,
+          lastError: checkoutAttempts.lastError,
+        })
+        .from(checkoutAttempts)
+        .where(eq(checkoutAttempts.requestKey, requestKey))
+        .get(),
+      db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(eq(orders.id, statusData.orderId))
+        .limit(1),
+    ]);
 
-    if (orderExists.length > 0) {
+    if (attempt?.status === "failed") {
+      scheduleCheckoutFailureStatusHint(
+        c.env,
+        statusToken,
+        attempt.orderId,
+        attempt.lastError || "Order creation failed. Please try again.",
+        getOptionalExecutionContext(c),
+      );
+      return ok(c, {
+        status: "failed",
+        orderId: attempt.orderId,
+        error: attempt.lastError || "Order creation failed. Please try again.",
+      });
+    }
+
+    if (attempt && orderExists.length > 0) {
       scheduleCheckoutSuccessRecoveryHints(
         c.env,
-        token,
-        statusData.orderId,
+        statusToken,
+        attempt.checkoutToken,
+        attempt.orderId,
         getOptionalExecutionContext(c),
       );
       return ok(c, {
         status: "completed",
-        orderId: statusData.orderId,
-        receiptToken: token,
+        orderId: attempt.orderId,
+        receiptToken: attempt.checkoutToken,
       });
     }
   }
@@ -1147,6 +1180,7 @@ const createOrderRoute = createRoute({
         data: z.object({
           checkoutToken: z.string(),
           receiptToken: z.string(),
+          statusToken: z.string(),
           orderId: z.string(),
           paymentMethod: z.string(),
           totalAmount: z.number(),
@@ -1159,7 +1193,7 @@ const createOrderRoute = createRoute({
       content: { "application/json": { schema: z.object({
         success: z.literal(true),
         data: z.object({
-          checkoutToken: z.string(),
+          statusToken: z.string(),
           orderId: z.string(),
           status: z.literal("processing"),
           message: z.string(),
@@ -1187,6 +1221,7 @@ app.openapi(createOrderRoute, async (c) => {
     const existingAttempt = await resolveExistingCheckoutAttempt<{
       checkoutToken: string;
       receiptToken: string;
+      statusToken: string;
       orderId: string;
       paymentMethod: string;
       totalAmount: number;
@@ -1201,7 +1236,7 @@ app.openapi(createOrderRoute, async (c) => {
       return c.json({
         success: true,
         data: {
-          checkoutToken: existingAttempt.checkoutToken,
+          statusToken: existingAttempt.statusToken,
           orderId: existingAttempt.orderId,
           status: "processing" as const,
           message: "Order creation is already processing.",
@@ -1272,6 +1307,7 @@ app.openapi(createOrderRoute, async (c) => {
     const attemptClaim = await claimCheckoutAttempt<{
       checkoutToken: string;
       receiptToken: string;
+      statusToken: string;
       orderId: string;
       paymentMethod: string;
       totalAmount: number;
@@ -1286,7 +1322,7 @@ app.openapi(createOrderRoute, async (c) => {
       return c.json({
         success: true,
         data: {
-          checkoutToken: attemptClaim.checkoutToken,
+          statusToken: attemptClaim.statusToken,
           orderId: attemptClaim.orderId,
           status: "processing" as const,
           message: "Order creation is already processing.",
@@ -1326,7 +1362,7 @@ app.openapi(createOrderRoute, async (c) => {
     } catch (commitError) {
       scheduleCheckoutFailureStatusHint(
         c.env,
-        result.checkoutToken,
+        checkoutAttempt.statusToken,
         result.orderId,
         commitError instanceof ValidationError
           ? commitError.message
@@ -1339,6 +1375,7 @@ app.openapi(createOrderRoute, async (c) => {
     const responsePayload = {
       checkoutToken: result.checkoutToken,
       receiptToken: result.checkoutToken,
+      statusToken: checkoutAttempt.statusToken,
       orderId: result.orderId,
       paymentMethod: result.paymentMethod,
       totalAmount: result.totalAmount,
@@ -1352,7 +1389,7 @@ app.openapi(createOrderRoute, async (c) => {
         response: responsePayload,
       });
     } catch (markError) {
-      const checkoutStatusKey = await getCheckoutStatusKvKey(result.checkoutToken);
+      const checkoutStatusKey = await getCheckoutStatusKvKey(checkoutAttempt.statusToken);
       console.error("[Orders] Failed to mark checkout attempt committed after order commit:", {
         orderId: result.orderId,
         checkoutStatusKeyPrefix: checkoutStatusKey.slice(0, 28),
@@ -1360,7 +1397,13 @@ app.openapi(createOrderRoute, async (c) => {
       });
     }
 
-    scheduleCheckoutSuccessRecoveryHints(c.env, result.checkoutToken, result.orderId, executionCtx);
+    scheduleCheckoutSuccessRecoveryHints(
+      c.env,
+      checkoutAttempt.statusToken,
+      result.checkoutToken,
+      result.orderId,
+      executionCtx,
+    );
 
     const sideEffects = Promise.all([
       runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),

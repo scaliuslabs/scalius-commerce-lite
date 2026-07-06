@@ -18927,7 +18927,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Check order processing status by checkout token",
+        "summary": "Check order processing status by status token",
         "parameters": [
           {
             "schema": {
@@ -21334,6 +21334,9 @@
                         "receiptToken": {
                           "type": "string"
                         },
+                        "statusToken": {
+                          "type": "string"
+                        },
                         "orderId": {
                           "type": "string"
                         },
@@ -21350,6 +21353,7 @@
                       "required": [
                         "checkoutToken",
                         "receiptToken",
+                        "statusToken",
                         "orderId",
                         "paymentMethod",
                         "totalAmount",
@@ -21381,7 +21385,7 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "checkoutToken": {
+                        "statusToken": {
                           "type": "string"
                         },
                         "orderId": {
@@ -21398,7 +21402,7 @@
                         }
                       },
                       "required": [
-                        "checkoutToken",
+                        "statusToken",
                         "orderId",
                         "status",
                         "message"

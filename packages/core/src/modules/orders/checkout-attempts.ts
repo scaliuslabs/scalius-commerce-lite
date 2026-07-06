@@ -10,6 +10,7 @@ export interface CheckoutAttemptIdentity {
   requestKey: string;
   requestHash: string;
   checkoutRequestId: string;
+  statusToken: string;
 }
 
 export interface ClaimedCheckoutAttempt {
@@ -19,6 +20,7 @@ export interface ClaimedCheckoutAttempt {
   claimId: string;
   orderId: string;
   checkoutToken: string;
+  statusToken: string;
 }
 
 export type CheckoutAttemptClaimResult<TResponse> =
@@ -27,13 +29,15 @@ export type CheckoutAttemptClaimResult<TResponse> =
   | CheckoutAttemptProcessingResult;
 
 export type CheckoutAttemptReplayResult<TResponse> = { status: "replay"; response: TResponse };
-export type CheckoutAttemptProcessingResult = { status: "processing"; orderId: string; checkoutToken: string };
+export type CheckoutAttemptProcessingResult = { status: "processing"; orderId: string; statusToken: string };
 export type ExistingCheckoutAttemptResult<TResponse> =
   | CheckoutAttemptReplayResult<TResponse>
   | CheckoutAttemptProcessingResult;
 
 const CHECKOUT_ATTEMPT_LEASE_SECONDS = 5 * 60;
 const MAX_ERROR_LENGTH = 500;
+const CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX = "checkout_submit:v1:";
+const CHECKOUT_STATUS_TOKEN_PREFIX = "cst_";
 
 type CheckoutAttemptRow = typeof checkoutAttempts.$inferSelect;
 
@@ -43,12 +47,31 @@ export async function buildCheckoutAttemptIdentity(
   const checkoutRequestId = normalizeCheckoutRequestId(input.checkoutRequestId);
   const requestKeyHash = await sha256Hex(checkoutRequestId);
   const requestHash = await sha256Hex(stableStringify(normalizeCheckoutRequest(input)));
+  const requestKey = `${CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX}${requestKeyHash}`;
 
   return {
-    requestKey: `checkout_submit:v1:${requestKeyHash}`,
+    requestKey,
     requestHash,
     checkoutRequestId,
+    statusToken: buildCheckoutStatusTokenFromRequestKey(requestKey),
   };
+}
+
+export function buildCheckoutStatusTokenFromRequestKey(requestKey: string): string {
+  if (!requestKey.startsWith(CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX)) {
+    throw new Error("Unsupported checkout attempt request key.");
+  }
+
+  return `${CHECKOUT_STATUS_TOKEN_PREFIX}${requestKey.slice(CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX.length)}`;
+}
+
+export function getCheckoutAttemptRequestKeyFromStatusToken(statusToken: string): string | null {
+  if (!statusToken.startsWith(CHECKOUT_STATUS_TOKEN_PREFIX)) return null;
+
+  const requestKeyHash = statusToken.slice(CHECKOUT_STATUS_TOKEN_PREFIX.length);
+  if (!/^[a-f0-9]{64}$/.test(requestKeyHash)) return null;
+
+  return `${CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX}${requestKeyHash}`;
 }
 
 export async function claimCheckoutAttempt<TResponse>(
@@ -94,6 +117,7 @@ export async function claimCheckoutAttempt<TResponse>(
         claimId,
         orderId: inserted[0].orderId,
         checkoutToken: inserted[0].checkoutToken,
+        statusToken: identity.statusToken,
       },
     };
   }
@@ -151,6 +175,7 @@ export async function claimCheckoutAttempt<TResponse>(
         claimId,
         orderId: reclaimed[0].orderId,
         checkoutToken: reclaimed[0].checkoutToken,
+        statusToken: identity.statusToken,
       },
     };
   }
@@ -289,11 +314,11 @@ function isFreshProcessingAttempt(
     row.claimExpiresAt > nowSeconds;
 }
 
-function processingResultFromAttempt(row: Pick<CheckoutAttemptRow, "orderId" | "checkoutToken">): CheckoutAttemptProcessingResult {
+function processingResultFromAttempt(row: Pick<CheckoutAttemptRow, "orderId" | "requestKey">): CheckoutAttemptProcessingResult {
   return {
     status: "processing",
     orderId: row.orderId,
-    checkoutToken: row.checkoutToken,
+    statusToken: buildCheckoutStatusTokenFromRequestKey(row.requestKey),
   };
 }
 

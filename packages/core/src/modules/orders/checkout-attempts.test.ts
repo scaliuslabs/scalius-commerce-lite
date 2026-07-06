@@ -4,7 +4,9 @@ import { orderReceipts } from "@scalius/database/schema";
 import { ConflictError } from "@scalius/core/errors";
 import {
   buildCheckoutAttemptIdentity,
+  buildCheckoutStatusTokenFromRequestKey,
   claimCheckoutAttempt,
+  getCheckoutAttemptRequestKeyFromStatusToken,
   markCheckoutAttemptCommitted,
   markCheckoutAttemptFailed,
   resolveExistingCheckoutAttempt,
@@ -123,8 +125,10 @@ describe("checkout attempts", () => {
     expect(second).toEqual({
       status: "processing",
       orderId: first.attempt.orderId,
-      checkoutToken: first.attempt.checkoutToken,
+      statusToken: identity.statusToken,
     });
+    expect(second.status === "processing" ? second.statusToken : "").toMatch(/^cst_[a-f0-9]{64}$/);
+    expect(second.status === "processing" ? second.statusToken : "").not.toBe(first.attempt.checkoutToken);
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]?.attempts).toBe(1);
     expect(fake.stats.selects).toBe(1);
@@ -141,7 +145,7 @@ describe("checkout attempts", () => {
     await expect(resolveExistingCheckoutAttempt(fake.db, identity)).resolves.toEqual({
       status: "processing",
       orderId: first.attempt.orderId,
-      checkoutToken: first.attempt.checkoutToken,
+      statusToken: identity.statusToken,
     });
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]?.attempts).toBe(1);
@@ -195,6 +199,16 @@ describe("checkout attempts", () => {
     await expect(claimCheckoutAttempt(fake.db, changedIdentity)).rejects.toBeInstanceOf(ConflictError);
     await expect(resolveExistingCheckoutAttempt(fake.db, changedIdentity)).rejects.toBeInstanceOf(ConflictError);
     expect(fake.rows).toHaveLength(1);
+  });
+
+  it("derives a non-receipt status token from the request key", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+
+    expect(identity.statusToken).toMatch(/^cst_[a-f0-9]{64}$/);
+    expect(identity.statusToken).not.toContain("chk_");
+    expect(getCheckoutAttemptRequestKeyFromStatusToken(identity.statusToken)).toBe(identity.requestKey);
+    expect(buildCheckoutStatusTokenFromRequestKey(identity.requestKey)).toBe(identity.statusToken);
+    expect(getCheckoutAttemptRequestKeyFromStatusToken("chk_secret_receipt")).toBeNull();
   });
 });
 
