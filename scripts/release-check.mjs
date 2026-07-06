@@ -1,0 +1,798 @@
+#!/usr/bin/env node
+
+import { execFile as execFileCallback } from "child_process";
+import { existsSync, readFileSync } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath, pathToFileURL } from "url";
+import { promisify } from "util";
+import { resolvePnpmExecutable } from "./dev-local-utils.mjs";
+import {
+  parseOpsCheckArgs,
+  readApiWranglerConfig,
+  runOpsCheck,
+} from "./ops-check.mjs";
+
+const execFileAsync = promisify(execFileCallback);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const defaultRootDir = resolve(__dirname, "..");
+const defaultApiConfigPath = resolve(defaultRootDir, "apps/api/wrangler.jsonc");
+
+const DEFAULT_API_BASE_URL = "https://api.scalius.com";
+const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
+const DEFAULT_DASHBOARD_URL = "https://dashboard.scalius.com";
+const DEFAULT_TIMEOUT_MS = 10_000;
+const RELEASE_READYZ_SAMPLES = 2;
+const MAX_BODY_PREVIEW_LENGTH = 180;
+const SITEMAP_ENDPOINTS = [
+  "/sitemap.xml",
+  "/sitemap-static.xml",
+  "/sitemap-products.xml?page=1",
+  "/sitemap-categories.xml",
+  "/sitemap-collections.xml",
+  "/sitemap-pages.xml",
+];
+
+const closedTrackerStatuses = new Set(["verified", "won't fix", "won’t fix", "wont fix"]);
+const booleanOptions = new Set(["help", "json", "skip-live", "skip-wrangler"]);
+const stringOptions = new Set(["timeout-ms", "api-base-url", "storefront-url", "dashboard-url"]);
+const knownOptions = new Set([...booleanOptions, ...stringOptions]);
+
+const requiredDocs = [
+  "audit/REMEDIATION_TRACKER.md",
+  "audit/VERIFICATION_PLAYBOOK.md",
+  "audit/STABLE_RELEASE_CHECKLIST.md",
+  "docs/codex/PLATFORM-GOAL.md",
+  "docs/codex/README.md",
+  "docs/ARCHITECTURE.md",
+  "README.md",
+  "AGENTS.md",
+];
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function parsePositiveInteger(value, optionName) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 1) {
+    throw new Error(`Option --${optionName} must be a positive integer.`);
+  }
+  return number;
+}
+
+function parseRawOptions(rawArgs) {
+  const options = {};
+
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index];
+    if (arg === "-h") {
+      options.help = true;
+      continue;
+    }
+    if (!arg.startsWith("--")) {
+      throw new Error(`Unknown positional argument: ${arg}`);
+    }
+
+    const withoutPrefix = arg.slice(2);
+    const equalsIndex = withoutPrefix.indexOf("=");
+    const name = equalsIndex >= 0 ? withoutPrefix.slice(0, equalsIndex) : withoutPrefix;
+    if (!knownOptions.has(name)) {
+      throw new Error(`Unknown option --${name}.`);
+    }
+
+    if (booleanOptions.has(name)) {
+      if (equalsIndex >= 0) {
+        throw new Error(`Option --${name} does not take a value.`);
+      }
+      options[name] = true;
+      continue;
+    }
+
+    const value = equalsIndex >= 0 ? withoutPrefix.slice(equalsIndex + 1) : rawArgs[index + 1];
+    if (!value || value.startsWith("--")) {
+      throw new Error(`Option --${name} requires a value.`);
+    }
+    options[name] = value;
+    if (equalsIndex < 0) index += 1;
+  }
+
+  return options;
+}
+
+export function normalizeHttpBaseUrl(value, label = "URL") {
+  let url;
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw new Error(`${label} must be a valid URL: ${errorMessage(error)}`, { cause: error });
+  }
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error(`${label} must use http or https: ${value}`);
+  }
+  if (url.username || url.password) {
+    throw new Error(`${label} must not include credentials.`);
+  }
+  url.hash = "";
+  url.search = "";
+  url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+  return url.toString().replace(/\/$/, "");
+}
+
+export function parseReleaseCheckArgs(rawArgs, {
+  defaultApiBaseUrl = DEFAULT_API_BASE_URL,
+  defaultStorefrontUrl = DEFAULT_STOREFRONT_URL,
+  defaultDashboardUrl = DEFAULT_DASHBOARD_URL,
+} = {}) {
+  const rawOptions = parseRawOptions(rawArgs);
+  if (rawOptions.help) return { help: true };
+
+  return {
+    help: false,
+    json: rawOptions.json === true,
+    skipLive: rawOptions["skip-live"] === true,
+    skipWrangler: rawOptions["skip-wrangler"] === true,
+    timeoutMs: rawOptions["timeout-ms"] === undefined
+      ? DEFAULT_TIMEOUT_MS
+      : parsePositiveInteger(rawOptions["timeout-ms"], "timeout-ms"),
+    apiBaseUrl: normalizeHttpBaseUrl(rawOptions["api-base-url"] ?? defaultApiBaseUrl, "API base URL"),
+    storefrontUrl: normalizeHttpBaseUrl(rawOptions["storefront-url"] ?? defaultStorefrontUrl, "Storefront URL"),
+    dashboardUrl: normalizeHttpBaseUrl(rawOptions["dashboard-url"] ?? defaultDashboardUrl, "Dashboard URL"),
+  };
+}
+
+function buildUrl(baseUrl, path) {
+  const url = new URL(baseUrl);
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}${normalizedPath}`.replace(/\/{2,}/g, "/");
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function buildUrlWithSearch(baseUrl, pathWithSearch) {
+  const [path, search = ""] = pathWithSearch.split("?");
+  const url = new URL(buildUrl(baseUrl, path));
+  if (search) url.search = search;
+  return url.toString();
+}
+
+function redactUrl(value) {
+  const url = new URL(value);
+  url.username = "";
+  url.password = "";
+  for (const key of [...url.searchParams.keys()]) {
+    if (/token|secret|key|proof|password|otp/i.test(key)) {
+      url.searchParams.set(key, "[redacted]");
+    }
+  }
+  return url.toString();
+}
+
+function responsePreview(body) {
+  return body.replace(/\s+/g, " ").trim().slice(0, MAX_BODY_PREVIEW_LENGTH);
+}
+
+function requestHeaders(accept) {
+  return {
+    Accept: accept,
+    "Cache-Control": "no-cache",
+  };
+}
+
+async function fetchText(url, {
+  fetchImpl,
+  timeoutMs,
+  accept = "text/plain, text/html, application/xml, text/xml;q=0.9, */*;q=0.8",
+  redirect = "follow",
+}) {
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(url, {
+      method: "GET",
+      headers: requestHeaders(accept),
+      redirect,
+      signal: controller.signal,
+    });
+    const body = await response.text();
+    return {
+      url,
+      statusCode: response.status,
+      ok: response.ok,
+      body,
+      headers: response.headers,
+      durationMs: Date.now() - startedAt,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function requireStatus(response, label, allowed) {
+  if (!allowed(response.statusCode)) {
+    throw new Error(
+      `${label} returned HTTP ${response.statusCode}: ${responsePreview(response.body)}`,
+    );
+  }
+}
+
+function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isSameOrigin(value, origin) {
+  try {
+    return new URL(value).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+function extractTagValues(xml, tagName) {
+  const escaped = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`<${escaped}\\b[^>]*>([\\s\\S]*?)<\\/${escaped}>`, "gi");
+  const values = [];
+  let match;
+  while ((match = pattern.exec(xml)) !== null) {
+    values.push(decodeXml(match[1].trim()));
+  }
+  return values;
+}
+
+function decodeXml(value) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'");
+}
+
+function normalizeTrackerStatus(value) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function evaluateRemediationTracker(markdown) {
+  const blockers = [];
+  const rows = [];
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const match = line.match(/^\|\s*([^|]+?)\s*\|\s*(P[0-9])\s*\|\s*([^|]+?)\s*\|/);
+    if (!match) continue;
+    const [, id, severity, status] = match;
+    if (id.trim() === "ID") continue;
+
+    const row = {
+      id: id.trim(),
+      severity: severity.trim(),
+      status: status.trim(),
+    };
+    rows.push(row);
+    if ((row.severity === "P0" || row.severity === "P1") &&
+      !closedTrackerStatuses.has(normalizeTrackerStatus(row.status))) {
+      blockers.push(row);
+    }
+  }
+
+  return {
+    ok: blockers.length === 0,
+    checkedRows: rows.length,
+    blockers,
+  };
+}
+
+export function evaluateRequiredDocs({
+  rootDir = defaultRootDir,
+  required = requiredDocs,
+  fileExistsImpl = existsSync,
+} = {}) {
+  const missing = required.filter((path) => !fileExistsImpl(resolve(rootDir, path)));
+  return {
+    ok: missing.length === 0,
+    checkedFiles: required.length,
+    missing,
+  };
+}
+
+export function evaluateRobotsTxt(body, { storefrontOrigin }) {
+  const sitemapUrls = [];
+  const errors = [];
+
+  for (const line of body.split(/\r?\n/)) {
+    const match = line.match(/^\s*Sitemap:\s*(\S+)\s*$/i);
+    if (!match) continue;
+    const value = decodeXml(match[1]);
+    sitemapUrls.push(value);
+    if (!isHttpUrl(value)) {
+      errors.push(`robots sitemap URL is not absolute http(s): ${value}`);
+    } else if (!isSameOrigin(value, storefrontOrigin)) {
+      errors.push(`robots sitemap URL is not on storefront origin: ${value}`);
+    }
+  }
+
+  if (sitemapUrls.length === 0) {
+    errors.push("robots.txt must advertise at least one absolute Sitemap URL.");
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    sitemapUrls,
+  };
+}
+
+export function evaluateSitemapXml(body, {
+  storefrontOrigin,
+  forbidPriority = false,
+  forbidChangefreq = false,
+} = {}) {
+  const locs = extractTagValues(body, "loc");
+  const errors = [];
+
+  if (locs.length === 0) {
+    errors.push("sitemap must include at least one <loc>.");
+  }
+  for (const loc of locs) {
+    if (!isHttpUrl(loc)) {
+      errors.push(`sitemap <loc> is not absolute http(s): ${loc}`);
+    } else if (storefrontOrigin && !isSameOrigin(loc, storefrontOrigin)) {
+      errors.push(`sitemap <loc> is not on storefront origin: ${loc}`);
+    }
+  }
+  if (forbidPriority && /<priority\b/i.test(body)) {
+    errors.push("product sitemap must not include <priority>.");
+  }
+  if (forbidChangefreq && /<changefreq\b/i.test(body)) {
+    errors.push("product sitemap must not include <changefreq>.");
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    locCount: locs.length,
+    locs,
+  };
+}
+
+export function evaluateFacebookFeedXml(body, { storefrontOrigin } = {}) {
+  const itemBlocks = body.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
+  const itemCount = itemBlocks.length;
+  const links = itemBlocks.flatMap((item) => [
+    ...extractTagValues(item, "link"),
+    ...extractTagValues(item, "g:link"),
+  ]).filter(Boolean);
+  const imageLinks = itemBlocks.flatMap((item) => [
+    ...extractTagValues(item, "image_link"),
+    ...extractTagValues(item, "g:image_link"),
+  ]).filter(Boolean);
+  const availabilityMarkers = itemBlocks.flatMap((item) => [
+    ...extractTagValues(item, "availability"),
+    ...extractTagValues(item, "g:availability"),
+  ]).filter(Boolean);
+  const errors = [];
+
+  if (itemCount === 0) {
+    errors.push("Facebook feed must include at least one <item>.");
+  }
+  if (availabilityMarkers.length === 0) {
+    errors.push("Facebook feed must include availability markers.");
+  }
+  for (const link of links) {
+    if (!isHttpUrl(link)) {
+      errors.push(`feed product link is not absolute http(s): ${link}`);
+    } else if (storefrontOrigin && !isSameOrigin(link, storefrontOrigin)) {
+      errors.push(`feed product link is not on storefront origin: ${link}`);
+    }
+  }
+  for (const imageLink of imageLinks) {
+    if (!isHttpUrl(imageLink)) {
+      errors.push(`feed image link is not absolute http(s): ${imageLink}`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    itemCount,
+    linkCount: links.length,
+    imageLinkCount: imageLinks.length,
+    availabilityCount: availabilityMarkers.length,
+    firstStorefrontItemUrl: links.find((link) => storefrontOrigin ? isSameOrigin(link, storefrontOrigin) : isHttpUrl(link)) ?? null,
+  };
+}
+
+function createCheckError(message, result) {
+  const error = new Error(message);
+  error.result = result;
+  return error;
+}
+
+async function runStep(result, name, fn) {
+  try {
+    const stepResult = await fn();
+    const { status = "passed", ...rest } = stepResult ?? {};
+    result.checks[name] = { status, ...rest };
+    return result.checks[name];
+  } catch (error) {
+    const message = errorMessage(error);
+    result.checks[name] = { status: "failed", error: message };
+    throw createCheckError(message, result);
+  }
+}
+
+async function checkTracker({ rootDir, readFileImpl, logger }) {
+  const trackerPath = resolve(rootDir, "audit/REMEDIATION_TRACKER.md");
+  const evaluation = evaluateRemediationTracker(readFileImpl(trackerPath, "utf8"));
+  if (!evaluation.ok) {
+    throw new Error(
+      "Open P0/P1 tracker blockers: " +
+      evaluation.blockers.map((item) => `${item.id} ${item.severity} ${item.status}`).join("; "),
+    );
+  }
+
+  logger?.log(`PASS tracker: ${evaluation.checkedRows} rows checked; no open P0/P1 blockers.`);
+  return evaluation;
+}
+
+async function checkRequiredDocs({ rootDir, fileExistsImpl, logger }) {
+  const evaluation = evaluateRequiredDocs({ rootDir, fileExistsImpl });
+  if (!evaluation.ok) {
+    throw new Error(`Missing release docs: ${evaluation.missing.join(", ")}`);
+  }
+
+  logger?.log(`PASS docs: ${evaluation.checkedFiles} required docs present.`);
+  return evaluation;
+}
+
+async function checkApiOps(options, {
+  apiConfig,
+  fetchImpl,
+  execFileImpl,
+  sleepImpl,
+  pnpmExecutable,
+  rootDir,
+  logger,
+}) {
+  const opsArgs = [
+    "--api-base-url", options.apiBaseUrl,
+    "--samples", String(RELEASE_READYZ_SAMPLES),
+    "--timeout-ms", String(options.timeoutMs),
+  ];
+  if (options.skipWrangler) opsArgs.push("--skip-wrangler");
+
+  const opsOptions = parseOpsCheckArgs(opsArgs, {
+    defaultApiBaseUrl: options.apiBaseUrl,
+  });
+  const result = await runOpsCheck(opsOptions, {
+    apiConfig,
+    fetchImpl,
+    execFileImpl,
+    sleepImpl,
+    pnpmExecutable,
+    rootDir,
+    logger: null,
+    requestId: "release-check",
+  });
+
+  const deployment = result.checks.deployment;
+  const deploymentSummary = deployment?.status === "skipped"
+    ? "deployment skipped"
+    : `deployment ${deployment?.versionId ?? "unknown"}`;
+  logger?.log(
+    `PASS API ops: health ${result.checks.health.statusCode}, ` +
+    `readyz ${result.checks.readyz.readyCount}/${result.checks.readyz.sampleCount}, ` +
+    `openapi ${result.checks.openapi.pathCount} paths, ${deploymentSummary}.`,
+  );
+
+  return {
+    apiBaseUrl: redactUrl(options.apiBaseUrl),
+    healthStatusCode: result.checks.health.statusCode,
+    readyCount: result.checks.readyz.readyCount,
+    readySampleCount: result.checks.readyz.sampleCount,
+    openApiPathCount: result.checks.openapi.pathCount,
+    deploymentStatus: deployment?.status ?? "passed",
+    deploymentVersionId: deployment?.versionId ?? null,
+    monitoringConfigStatus: result.checks.monitoringConfig.status,
+  };
+}
+
+async function checkDashboard(options, { fetchImpl, logger }) {
+  const url = buildUrl(options.dashboardUrl, "/admin");
+  const response = await fetchText(url, {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    accept: "text/html, */*;q=0.8",
+    redirect: "manual",
+  });
+  requireStatus(response, "Dashboard /admin", (status) =>
+    (status >= 200 && status < 400) || status === 401 || status === 403);
+  const location = response.headers.get("location") ?? "";
+  const bodyLower = response.body.toLowerCase();
+  const gateVisible =
+    response.statusCode === 401 ||
+    response.statusCode === 403 ||
+    location.includes("/auth/login") ||
+    location.includes("/login") ||
+    bodyLower.includes("sign in") ||
+    bodyLower.includes("log in") ||
+    bodyLower.includes("login");
+  if (!gateVisible) {
+    throw new Error("Dashboard /admin did not prove an auth gate or login surface.");
+  }
+
+  logger?.log(`PASS dashboard: /admin returned ${response.statusCode}.`);
+  return {
+    url: redactUrl(url),
+    statusCode: response.statusCode,
+    durationMs: response.durationMs,
+    location: location || null,
+  };
+}
+
+async function checkStorefrontPages(options, { fetchImpl, logger }) {
+  const pages = [];
+  for (const path of ["/health", "/", "/search"]) {
+    const url = buildUrl(options.storefrontUrl, path);
+    const response = await fetchText(url, {
+      fetchImpl,
+      timeoutMs: options.timeoutMs,
+      accept: path === "/health" ? "text/plain, */*;q=0.8" : "text/html, */*;q=0.8",
+    });
+    requireStatus(response, `Storefront ${path}`, (status) => status >= 200 && status < 300);
+    pages.push({
+      path,
+      statusCode: response.statusCode,
+      durationMs: response.durationMs,
+    });
+  }
+
+  logger?.log("PASS storefront: /health, /, and /search returned 2xx.");
+  return { pages };
+}
+
+async function checkDiscovery(options, { fetchImpl, logger }) {
+  const storefrontOrigin = new URL(options.storefrontUrl).origin;
+  const responses = {};
+  const checks = {};
+
+  const robots = await fetchText(buildUrl(options.storefrontUrl, "/robots.txt"), {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    accept: "text/plain, */*;q=0.8",
+  });
+  requireStatus(robots, "Storefront /robots.txt", (status) => status >= 200 && status < 300);
+  checks.robots = evaluateRobotsTxt(robots.body, { storefrontOrigin });
+  if (!checks.robots.ok) throw new Error(`robots.txt failed: ${checks.robots.errors.join("; ")}`);
+  responses.robots = { statusCode: robots.statusCode, durationMs: robots.durationMs };
+
+  responses.sitemaps = {};
+  for (const endpoint of SITEMAP_ENDPOINTS) {
+    const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, endpoint), {
+      fetchImpl,
+      timeoutMs: options.timeoutMs,
+      accept: "application/xml, text/xml, */*;q=0.8",
+    });
+    requireStatus(response, `Storefront ${endpoint}`, (status) => status >= 200 && status < 300);
+    const evaluation = evaluateSitemapXml(response.body, {
+      storefrontOrigin,
+      forbidPriority: endpoint.startsWith("/sitemap-products.xml"),
+      forbidChangefreq: endpoint.startsWith("/sitemap-products.xml"),
+    });
+    if (!evaluation.ok) {
+      throw new Error(`${endpoint} failed: ${evaluation.errors.join("; ")}`);
+    }
+    responses.sitemaps[endpoint] = {
+      statusCode: response.statusCode,
+      durationMs: response.durationMs,
+      locCount: evaluation.locCount,
+    };
+  }
+
+  const feed = await fetchText(buildUrlWithSearch(options.storefrontUrl, "/api/facebook-feed.xml?limit=5"), {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    accept: "application/xml, text/xml, */*;q=0.8",
+  });
+  requireStatus(feed, "Storefront /api/facebook-feed.xml?limit=5", (status) => status >= 200 && status < 300);
+  checks.feed = evaluateFacebookFeedXml(feed.body, { storefrontOrigin });
+  if (!checks.feed.ok) throw new Error(`facebook-feed.xml failed: ${checks.feed.errors.join("; ")}`);
+  responses.feed = {
+    statusCode: feed.statusCode,
+    durationMs: feed.durationMs,
+    itemCount: checks.feed.itemCount,
+    availabilityCount: checks.feed.availabilityCount,
+  };
+
+  logger?.log(
+    `PASS discovery: robots, ${SITEMAP_ENDPOINTS.length} sitemaps, ` +
+    `feed (${checks.feed.itemCount} items).`,
+  );
+
+  return {
+    ...responses,
+    firstStorefrontItemUrl: checks.feed.firstStorefrontItemUrl,
+  };
+}
+
+async function checkDiscoveredProductRoute(options, { fetchImpl, productUrl, logger }) {
+  if (!productUrl) {
+    logger?.warn("WARN product route: skipped because the feed did not expose a storefront item URL.");
+    return {
+      status: "skipped",
+      reason: "No storefront item URL discovered from the feed.",
+    };
+  }
+
+  const storefrontOrigin = new URL(options.storefrontUrl).origin;
+  if (!isSameOrigin(productUrl, storefrontOrigin)) {
+    throw new Error(`Discovered product URL is not on storefront origin: ${productUrl}`);
+  }
+
+  const response = await fetchText(productUrl, {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    accept: "text/html, */*;q=0.8",
+  });
+  requireStatus(response, "Discovered storefront product route", (status) => status >= 200 && status < 300);
+  logger?.log(`PASS product route: ${new URL(productUrl).pathname} returned ${response.statusCode}.`);
+
+  return {
+    url: redactUrl(productUrl),
+    statusCode: response.statusCode,
+    durationMs: response.durationMs,
+  };
+}
+
+export async function runReleaseCheck(options, {
+  apiConfig = {},
+  fetchImpl = fetch,
+  execFileImpl = execFileAsync,
+  sleepImpl = async () => undefined,
+  logger = console,
+  pnpmExecutable = resolvePnpmExecutable(),
+  rootDir = defaultRootDir,
+  readFileImpl = readFileSync,
+  fileExistsImpl = existsSync,
+} = {}) {
+  const result = {
+    status: "running",
+    apiBaseUrl: redactUrl(options.apiBaseUrl),
+    storefrontUrl: redactUrl(options.storefrontUrl),
+    dashboardUrl: redactUrl(options.dashboardUrl),
+    checks: {},
+    warnings: [],
+  };
+
+  logger?.log("Release readiness check");
+  await runStep(result, "tracker", () =>
+    checkTracker({ rootDir, readFileImpl, logger }));
+  await runStep(result, "docs", () =>
+    checkRequiredDocs({ rootDir, fileExistsImpl, logger }));
+
+  if (options.skipLive) {
+    result.checks.live = {
+      status: "skipped",
+      reason: "Skipped by --skip-live.",
+    };
+    result.status = "passed";
+    logger?.warn("WARN live checks skipped (--skip-live).");
+    logger?.log("Release readiness check passed.");
+    return result;
+  }
+
+  await runStep(result, "apiOps", () =>
+    checkApiOps(options, {
+      apiConfig,
+      fetchImpl,
+      execFileImpl,
+      sleepImpl,
+      pnpmExecutable,
+      rootDir,
+      logger,
+    }));
+  await runStep(result, "dashboard", () =>
+    checkDashboard(options, { fetchImpl, logger }));
+  await runStep(result, "storefront", () =>
+    checkStorefrontPages(options, { fetchImpl, logger }));
+  const discovery = await runStep(result, "discovery", () =>
+    checkDiscovery(options, { fetchImpl, logger }));
+  await runStep(result, "productRoute", () =>
+    checkDiscoveredProductRoute(options, {
+      fetchImpl,
+      productUrl: discovery.firstStorefrontItemUrl,
+      logger,
+    }));
+
+  result.status = "passed";
+  logger?.log("Release readiness check passed.");
+  return result;
+}
+
+function printUsage() {
+  console.log(`Usage: pnpm release:check [options]
+
+Read-only production release smoke checks. This complements pnpm ops:check with
+storefront, dashboard, discovery XML/feed, tracker, and doc gates.
+
+Options:
+  --api-base-url <url>     API base URL (default ${DEFAULT_API_BASE_URL})
+  --storefront-url <url>   Storefront URL (default ${DEFAULT_STOREFRONT_URL})
+  --dashboard-url <url>    Dashboard URL (default ${DEFAULT_DASHBOARD_URL})
+  --timeout-ms <ms>        Per-request/per-command timeout (default ${DEFAULT_TIMEOUT_MS})
+  --skip-live              Run only local tracker/doc gates
+  --skip-wrangler          Skip read-only Wrangler deployment proof inside API ops
+  --json                   Emit JSON
+  -h, --help               Show this help
+`);
+}
+
+export async function main(rawArgs = process.argv.slice(2), {
+  configPath = defaultApiConfigPath,
+  stdout = console.log,
+  stderr = console.error,
+  fetchImpl = fetch,
+  execFileImpl = execFileAsync,
+  sleepImpl = async () => undefined,
+  pnpmExecutable = resolvePnpmExecutable(),
+  rootDir = defaultRootDir,
+  readFileImpl = readFileSync,
+  fileExistsImpl = existsSync,
+} = {}) {
+  const wantsJson = rawArgs.includes("--json");
+  let options;
+
+  try {
+    const rawOptions = parseRawOptions(rawArgs);
+    if (rawOptions.help) {
+      printUsage();
+      return 0;
+    }
+
+    const apiConfig = readApiWranglerConfig(configPath);
+    options = parseReleaseCheckArgs(rawArgs, {
+      defaultApiBaseUrl: apiConfig.vars?.PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL,
+      defaultStorefrontUrl: apiConfig.vars?.STOREFRONT_URL ?? DEFAULT_STOREFRONT_URL,
+      defaultDashboardUrl: DEFAULT_DASHBOARD_URL,
+    });
+
+    const result = await runReleaseCheck(options, {
+      apiConfig,
+      fetchImpl,
+      execFileImpl,
+      sleepImpl,
+      pnpmExecutable,
+      rootDir,
+      readFileImpl,
+      fileExistsImpl,
+      logger: options.json ? null : console,
+    });
+
+    if (options.json) stdout(JSON.stringify(result, null, 2));
+    return 0;
+  } catch (error) {
+    const message = errorMessage(error);
+    const result = error?.result
+      ? { ...error.result, status: "failed", error: message }
+      : { status: "failed", error: message };
+
+    if (wantsJson || options?.json) {
+      stdout(JSON.stringify(result, null, 2));
+    } else {
+      stderr(`FAIL ${message}`);
+    }
+    return 1;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().then((exitCode) => {
+    process.exitCode = exitCode;
+  });
+}

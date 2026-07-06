@@ -35,6 +35,8 @@ Deep API readiness is exposed at:
 pnpm ops:check
 pnpm ops:check --json
 pnpm ops:check --queues
+pnpm release:check
+pnpm release:check --json
 curl -fsS https://api.scalius.com/api/v1/readyz
 ```
 
@@ -58,7 +60,8 @@ Focused local test:
 
 ```bash
 node --check scripts/ops-check.mjs
-pnpm exec vitest run scripts/ops-check.test.mjs scripts/deploy.test.mjs --passWithNoTests
+node --check scripts/release-check.mjs
+pnpm exec vitest run scripts/ops-check.test.mjs scripts/release-check.test.mjs scripts/deploy.test.mjs --passWithNoTests
 pnpm --filter @scalius/api exec vitest run src/routes/readiness.test.ts --passWithNoTests
 ```
 

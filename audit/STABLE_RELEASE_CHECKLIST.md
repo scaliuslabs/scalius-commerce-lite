@@ -8,6 +8,7 @@ Use this file before claiming the platform is ready for a stable merchant-facing
 
 - No open P0/P1 item in `audit/REMEDIATION_TRACKER.md` for checkout, auth, payments, orders, inventory, notifications, cache freshness, product/variant management, first-admin setup, or dashboard/storefront runtime.
 - Current branch has passed root `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, database migration metadata checks, frozen install, dependency audit, peer checks, and `git diff --check`.
+- Current branch has passed `pnpm release:check` as the compact read-only production release smoke. Use `--skip-wrangler` only when Cloudflare auth is unavailable and record that limitation.
 - Current branch has passed local buyer and merchant smokes for admin login/setup, product create/edit, cart, checkout, order success/receipt, customer auth/profile completion, order detail, notifications, and settings saves.
 - Current branch has been deployed through the normal Cloudflare path and live read-only smokes pass for API health/readyz, OpenAPI, dashboard login/critical routes, storefront home/search/product/category/cart/checkout, queues/ops check, and discovery XML.
 - Dummy or unreadable provider credentials fail closed with clear dashboard copy, no hot retry loops, no raw provider dumps, no noisy queue churn, and no runaway compute.

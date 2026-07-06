@@ -15,6 +15,7 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 
 - Use `pnpm` from the repo root. Deploy through `pnpm run deploy*`, not pnpm's package deploy behavior.
 - Use `pnpm ops:check` for read-only production API ops smokes; add `--queues` when queue metadata matters. It intentionally runs Wrangler through `pnpm --dir apps/api`, so do not rely on root-level `pnpm exec wrangler`.
+- Use `pnpm release:check` for the compact read-only release smoke across tracker/docs, API ops, dashboard auth gate, storefront pages, and discovery XML/feed.
 - Never hand-edit generated files: `apps/admin-v2/src/routeTree.gen.ts` and `packages/api-client/src/generated/**`.
 - After API contract changes, run `pnpm generate:sdk`. After schema changes, run `pnpm db:generate`.
 - Do not touch `.dev.vars`, `.env*`, or other secret-bearing files.
