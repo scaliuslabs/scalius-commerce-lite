@@ -33,7 +33,24 @@ describe("/api/ptproxy", () => {
     );
   });
 
-  it("rejects allowed analytics hosts when the URL uses a disallowed protocol", async () => {
+  it("rejects allowed analytics hosts when the URL uses http", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const target =
+      "http://analytics.tiktok.com/i18n/pixel/events.js?sdkid=C1234567890ABCDEFG&lib=ttq";
+    const response = await GET({
+      request: new Request(
+        `https://store.example.com/api/ptproxy?url=${encodeURIComponent(target)}`,
+      ),
+    } as Parameters<typeof GET>[0]);
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toBe("Protocol not allowed");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects allowed analytics hosts when the URL uses ftp", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 

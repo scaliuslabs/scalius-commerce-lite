@@ -13,7 +13,7 @@ describe("partytown proxy route", () => {
     vi.unstubAllGlobals();
   });
 
-  it("allows configured http and https analytics script URLs", async () => {
+  it("allows configured https analytics script URLs", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response("console.log('pixel')", {
         headers: { "Content-Type": "application/javascript" },
@@ -35,7 +35,25 @@ describe("partytown proxy route", () => {
     );
   });
 
-  it("rejects allowed hosts when the target protocol is not http or https", async () => {
+  it("rejects configured analytics hosts when the target uses http", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const target = "http://analytics.tiktok.com/i18n/pixel/events.js";
+    const response = await partytownProxyRoutes.request(
+      `/?url=${encodeURIComponent(target)}`,
+      {},
+      createEnv(),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: "Proxying this protocol is not allowed",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects allowed hosts when the target protocol is not https", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
