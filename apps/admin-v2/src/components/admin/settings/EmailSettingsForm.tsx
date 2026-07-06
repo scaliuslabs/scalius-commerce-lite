@@ -10,9 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, CheckCircle2, ExternalLink, Info, Cloud, KeyRound, Mail, Send } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useSettingsForm } from "@/hooks/use-settings-form";
+import { AlertCircle, Loader2, Save, CheckCircle2, ExternalLink, Info, Cloud, KeyRound, Mail, Send } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  getSettingsLoadErrorMessage,
+  useSettingsForm,
+} from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
   getEmailSettings,
@@ -31,7 +34,16 @@ interface EmailSettings {
 }
 
 export default function EmailSettingsForm() {
-  const { values, setValue, isLoading, isSaving, handleSubmit } = useSettingsForm<EmailSettings>({
+  const {
+    values,
+    setValue,
+    isLoading,
+    isLoadError,
+    loadError,
+    isSaving,
+    handleSubmit,
+    refetch,
+  } = useSettingsForm<EmailSettings>({
     queryKey: queryKeys.settings.email(),
     fetchFn: () => getEmailSettings() as Promise<Partial<EmailSettings>>,
     saveFn: (v) => {
@@ -60,6 +72,26 @@ export default function EmailSettingsForm() {
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (isLoadError) {
+    return (
+      <Alert variant="destructive" className="max-w-2xl">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Email settings unavailable</AlertTitle>
+        <AlertDescription className="space-y-3">
+          <p>
+            {getSettingsLoadErrorMessage(
+              loadError,
+              "Email settings could not be loaded. Existing email delivery settings were not changed.",
+            )}
+          </p>
+          <Button type="button" variant="outline" onClick={refetch}>
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 

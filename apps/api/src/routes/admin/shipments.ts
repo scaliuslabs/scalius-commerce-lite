@@ -4,7 +4,7 @@ import { getShipment, deleteShipmentRecord } from "@scalius/core/modules/deliver
 import { NotFoundError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
-import { getEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
@@ -123,7 +123,7 @@ app.openapi(checkStatusRoute, (async (c: AdminRouteContext<typeof checkStatusRou
         throw new NotFoundError(`Shipment with ID ${shipmentId} not found`);
     }
 
-    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const result = await checkAndSyncShipmentStatus({
         db,
         shipment: currentShipment,

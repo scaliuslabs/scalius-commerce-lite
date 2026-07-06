@@ -1,0 +1,41 @@
+# Stable Release Checklist
+
+Last reviewed: 2026-07-06
+
+Use this file before claiming the platform is ready for a stable merchant-facing release. The tracker is the source of truth for defects; this checklist is the release gate.
+
+## Non-Negotiable Gates
+
+- No open P0/P1 item in `audit/REMEDIATION_TRACKER.md` for checkout, auth, payments, orders, inventory, notifications, cache freshness, product/variant management, first-admin setup, or dashboard/storefront runtime.
+- Current branch has passed root `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:env`, `pnpm check:dist-secrets`, database migration metadata checks, frozen install, dependency audit, peer checks, and `git diff --check`.
+- Current branch has passed local buyer and merchant smokes for admin login/setup, product create/edit, cart, checkout, order success/receipt, customer auth/profile completion, order detail, notifications, and settings saves.
+- Current branch has been deployed through the normal Cloudflare path and live read-only smokes pass for API health/readyz, OpenAPI, dashboard login/critical routes, storefront home/search/product/category/cart/checkout, queues/ops check, and discovery XML.
+- Dummy or unreadable provider credentials fail closed with clear dashboard copy, no hot retry loops, no raw provider dumps, no noisy queue churn, and no runaway compute.
+- Cache invalidation evidence shows scoped API KV invalidation plus storefront purge/warm for affected content, not accidental global purge behavior.
+
+## SEO, Feed, AEO, And AIO Gate
+
+Treat "AIO" as crawlable, trustworthy commerce data for search and assistants, not as a magic markup layer.
+
+- `/robots.txt`, `/sitemap.xml`, `/sitemap-static.xml`, `/sitemap-products.xml`, `/sitemap-categories.xml`, `/sitemap-collections.xml`, `/sitemap-pages.xml`, and `/api/facebook-feed.xml?limit=5` return valid XML/text with absolute URLs and production-safe cache headers.
+- Static sitemap-advertised URLs have canonical URLs; search/listing query, sort, filter, and paginated variants must be canonicalized or noindexed with follow.
+- Product feed availability, Product JSON-LD availability, storefront availability UI, and checkout validation are all derived from buyer-resolvable SKU truth.
+- Feed items must have absolute `http(s)` primary images, non-empty plain descriptions, valid price/currency, SKU-aware availability, and no invalid zero-price fallback unless the catalog policy explicitly supports it.
+- Dashboard SEO controls must remain the source of truth for sitemap sections, robots sitemap advertising, product-feed exposure, sold-out inclusion, feed title/description, and schema-family toggles.
+- Public schema should match real merchant content: Organization/WebSite/SearchAction, Product/Offer, BreadcrumbList, CollectionPage/category pages. Add richer contact, address, shipping, return policy, FAQ, or ProductGroup/variant schema only when the admin has real fields and tests proving the public output stays accurate.
+
+Primary references for future changes:
+
+- Google Product structured data and variants/ProductGroup: https://developers.google.com/search/docs/appearance/structured-data/product and https://developers.google.com/search/docs/appearance/structured-data/product-variants
+- Google Merchant product data specification: https://support.google.com/merchants/answer/7052112
+- Google canonical and noindex guidance: https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls and https://developers.google.com/search/docs/crawling-indexing/block-indexing
+- Google generative AI Search guidance: https://developers.google.com/search/docs/fundamentals/ai-optimization-guide
+
+## Known P2 Release Follow-Ups
+
+- `SEO-009`: per-resource canonical/noindex/sitemap/feed overrides, Merchant skipped-item diagnostics, SKU/ProductGroup variant feed strategy, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls.
+- SEO dashboard live probes: the current dashboard can preview discovery URLs from the saved Store URL, but should eventually probe the deployed storefront Worker env so a misconfigured `STOREFRONT_URL` is visible before crawlers see `503`.
+- Feed eligibility pagination: `/api/facebook-feed.xml` currently filters unavailable/missing-image products after public product-page fetches, so catalogs with many skipped rows can produce sparse pages. Add eligible-item diagnostics/cursors before marketing feed completeness as perfect.
+- `ANALYTICS-003`: provider health/test-send UX, TikTok Events API/server-side adapter, and broader server-side attribution.
+- `OPS-005`/ops alerting: routed email/notification alerts for production ops signals.
+- Broad admin performance hardening remains ongoing under `PERF-003`; do not let it block a stable release unless a concrete route regresses or stalls.

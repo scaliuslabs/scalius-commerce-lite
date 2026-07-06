@@ -99,8 +99,24 @@ const ANALYTICS_CONFIG_EXAMPLES: Record<AnalyticsScriptType, string> = {
 
 const suggestedConfigs = Object.values(ANALYTICS_CONFIG_EXAMPLES);
 
+const ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS = [
+  /\bG-X{4,}\b/i,
+  /\bGTM-X{4,}\b/i,
+  /\bPIXEL_ID\b/i,
+  /\bYOUR_[A-Z0-9_]*PIXEL[A-Z0-9_]*ID\b/i,
+];
+
 function getConfigExample(type: AnalyticsScriptType) {
   return ANALYTICS_CONFIG_EXAMPLES[type] ?? ANALYTICS_CONFIG_EXAMPLES.custom;
+}
+
+function hasActiveAnalyticsPlaceholder(values: AnalyticsFormValues) {
+  return (
+    values.isActive &&
+    ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS.some((pattern) =>
+      pattern.test(values.config),
+    )
+  );
 }
 
 export function AnalyticsForm({
@@ -144,6 +160,15 @@ export function AnalyticsForm({
   });
 
   const handleSubmit = (values: AnalyticsFormValues) => {
+    if (hasActiveAnalyticsPlaceholder(values)) {
+      form.setError("config", {
+        type: "validate",
+        message: "Replace placeholder IDs before activating this analytics script.",
+      });
+      form.setFocus("config");
+      return;
+    }
+
     submitEntity({
       ...values,
       usePartytown:

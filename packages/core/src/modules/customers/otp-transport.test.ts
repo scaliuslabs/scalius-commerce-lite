@@ -12,59 +12,64 @@ const baseSettings = {
 describe("OTP transports", () => {
   it("includes durable delivery metadata in email payloads", () => {
     const payload = new EmailOtpTransport().buildQueuePayload(
-      "123456",
       "buyer@example.com",
       "Buyer",
       baseSettings,
       "email",
       "otp_delivery_1",
       4_102_444_800,
+      "cust_otp:email:challenge_hash_1",
     );
 
     expect(payload).toMatchObject({
       type: "auth.send_otp",
+      challengeKey: "cust_otp:email:challenge_hash_1",
       deliveryKey: "otp_delivery_1",
       purpose: "customer_login",
       otpExpiresAt: 4_102_444_800,
       method: "email",
       identifier: "buyer@example.com",
     });
+    expect(payload).not.toHaveProperty("code");
   });
 
   it("includes durable delivery metadata in SMS payloads", () => {
     const payload = new SmsOtpTransport().buildQueuePayload(
-      "123456",
       "+8801712345678",
       "Buyer",
       { ...baseSettings, authVerificationMethod: "sms_otp" } as SiteSettings,
       "sms",
       "otp_delivery_sms_1",
       4_102_444_800,
+      "cust_otp:sms:challenge_hash_1",
     );
 
     expect(payload).toMatchObject({
       type: "auth.send_otp",
+      challengeKey: "cust_otp:sms:challenge_hash_1",
       deliveryKey: "otp_delivery_sms_1",
       purpose: "customer_login",
       otpExpiresAt: 4_102_444_800,
       method: "phone",
       allowedMethod: "sms_otp",
     });
+    expect(payload).not.toHaveProperty("code");
   });
 
   it("includes durable metadata without WhatsApp credentials in WhatsApp payloads", () => {
     const payload = new WhatsAppOtpTransport().buildQueuePayload(
-      "123456",
       "+8801712345678",
       "Buyer",
       { ...baseSettings, authVerificationMethod: "whatsapp_otp" } as SiteSettings,
       "whatsapp",
       "otp_delivery_wa_1",
       4_102_444_800,
+      "cust_otp:whatsapp:challenge_hash_1",
     );
 
     expect(payload).toMatchObject({
       type: "auth.send_otp",
+      challengeKey: "cust_otp:whatsapp:challenge_hash_1",
       deliveryKey: "otp_delivery_wa_1",
       purpose: "customer_login",
       otpExpiresAt: 4_102_444_800,
@@ -74,5 +79,6 @@ describe("OTP transports", () => {
     expect(payload).not.toHaveProperty("waToken");
     expect(payload).not.toHaveProperty("waPhoneId");
     expect(payload).not.toHaveProperty("waTemplate");
+    expect(payload).not.toHaveProperty("code");
   });
 });

@@ -245,11 +245,16 @@ function createAdminInviteDbMock() {
 }
 
 function createSetupDbMock(options: { adminExistsResult?: unknown } = {}) {
-  const adminExistsGet = vi.fn(async () =>
+  const adminExistsFirst = vi.fn(async () =>
     Object.prototype.hasOwnProperty.call(options, "adminExistsResult")
       ? options.adminExistsResult
       : null
   );
+  const adminExistsPrepare = vi.fn((query: string) => {
+    void query;
+    return { first: adminExistsFirst };
+  });
+  const adminExistsGet = vi.fn(async () => null);
   const adminExistsLimit = vi.fn(() => ({ get: adminExistsGet }));
   const adminExistsWhere = vi.fn(() => ({ limit: adminExistsLimit }));
   const existingUserGet = vi.fn(async () => ({ id: "existing_user" }));
@@ -261,12 +266,15 @@ function createSetupDbMock(options: { adminExistsResult?: unknown } = {}) {
   return {
     __adminExistsGet: adminExistsGet,
     __adminExistsLimit: adminExistsLimit,
+    __adminExistsPrepare: adminExistsPrepare,
+    __adminExistsFirst: adminExistsFirst,
     __adminExistsWhere: adminExistsWhere,
     __deleteWhere: deleteWhere,
     __existingUserGet: existingUserGet,
     __updateSet: updateSet,
     __updateWhere: updateWhere,
     delete: vi.fn(() => ({ where: deleteWhere })),
+    prepare: adminExistsPrepare,
     select: vi.fn((selection: Record<string, unknown>) => ({
       from: vi.fn(() =>
         "found" in selection
@@ -931,6 +939,41 @@ describe("admin auth management legacy 2FA verification", () => {
 });
 
 describe("first-admin setup recovery", () => {
+  it("treats RBAC-only admin principals as bootstrapped for setup checks", async () => {
+    const db = createSetupDbMock({ adminExistsResult: { found: 1 } });
+    const signUpEmail = vi.fn();
+    mocks.createAuth.mockReturnValue({
+      api: {
+        signUpEmail,
+      },
+    });
+    const app = createSetupTestApp(db);
+
+    const statusResponse = await app.request("/api/v1/setup", {
+      method: "GET",
+    }, {});
+    const statusBody = await statusResponse.json() as { data?: { adminExists?: boolean } };
+    expect(statusResponse.status).toBe(200);
+    expect(statusBody.data?.adminExists).toBe(true);
+
+    const setupResponse = await app.request("/api/v1/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: setupRequestBody(),
+    }, {});
+
+    expect(setupResponse.status).toBe(403);
+    expect(signUpEmail).not.toHaveBeenCalled();
+    expect(mocks.enforceAdminSetupRateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimAdminSetup).not.toHaveBeenCalled();
+    const query = db.__adminExistsPrepare.mock.calls[0]?.[0] ?? "";
+    expect(query).not.toContain("admin_user.role = 'admin'");
+    expect(query).toContain("from user_roles");
+    expect(query).toContain("inner join role_permissions");
+    expect(query).toContain("from user_permissions as granted_permissions");
+    expect(query).toContain("granted_permissions.granted = 1");
+  });
+
   it("treats D1 no-row undefined as no existing admin", async () => {
     const db = createSetupDbMock({ adminExistsResult: undefined });
     const signUpEmail = vi.fn().mockResolvedValue({

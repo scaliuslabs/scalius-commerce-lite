@@ -44,7 +44,7 @@ import { adminOrdersStatusRoutes } from "./orders-status";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 import { adminOrdersInvoiceRoutes } from "./orders-invoice";
 import { adminOrdersSupportRequestRoutes } from "./orders-support-requests";
-import { getEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
     invalidateProductAvailabilityCacheSubjects,
     invalidateProductAvailabilityCaches,
@@ -658,7 +658,7 @@ const bulkShipRoute = createRoute({
 app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey);
     const successCount = results.filter((r) => r.success).length;
     const successfulOrderIds = results.filter(isSuccessfulOrderResult).map((r) => r.orderId);

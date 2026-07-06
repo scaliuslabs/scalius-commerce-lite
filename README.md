@@ -281,9 +281,11 @@ The storefront is an **Astro 7 SSR** application with React 19 islands for inter
 
 ### SEO
 
-- JSON-LD schemas (Product, BreadcrumbList)
-- Open Graph + Twitter Card meta tags
-- Canonical URLs, robots.txt, XML sitemaps
+- Dashboard-governed discovery controls for sitemaps, robots, schema families, and product feed exposure
+- JSON-LD schemas for Organization, WebSite/SearchAction, Product, BreadcrumbList, and collection/category pages
+- Merchant-compatible product feed XML with SKU-aware availability, absolute images, and configurable sold-out inclusion
+- Absolute canonical URLs, robots.txt, XML sitemap index/children, and noindex policy for listing variants
+- Open Graph + Twitter Card meta tags with absolute storefront-safe images
 - Cloudflare Image Resizing for responsive images
 
 ---
@@ -298,7 +300,7 @@ The generated OpenAPI spec and `packages/api-client/openapi.json` are the source
 
 | Namespace | Auth | Purpose |
 |-----------|------|---------|
-| `/api/v1/admin/**` | Session/JWT + RBAC | Admin CRUD operations |
+| `/api/v1/admin/**` | Better Auth session + RBAC | Admin CRUD operations |
 | `/api/v1/products`, `/categories`, etc. | None | Public storefront data |
 | `/api/v1/orders/**` | Customer/session or receipt-token scoped | Customer order creation, status, and receipts |
 | `/api/v1/payment/**` | Receipt-token scoped | Payment session creation |

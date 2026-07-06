@@ -12,7 +12,10 @@ declare const window: {
 } & Record<string, unknown>;
 
 import type { Analytics as AnalyticsConfig } from "@scalius/database/schema";
-import { isMainThreadOnlyAnalyticsType } from "../modules/analytics/analytics.validation";
+import {
+  isMainThreadOnlyAnalyticsType,
+  isPubliclyInjectableAnalyticsConfig,
+} from "../modules/analytics/analytics.validation";
 
 /**
  * Processes an analytics script configuration to add Partytown attributes.
@@ -51,6 +54,10 @@ export function shouldUsePartytown(script: AnalyticsConfig): boolean {
     "tiktok_pixel",
   ];
   return partytownTypes.includes(script.type) || script.type === "custom";
+}
+
+export function shouldInjectAnalyticsScript(script: AnalyticsConfig): boolean {
+  return isPubliclyInjectableAnalyticsConfig(script);
 }
 
 // --- E-commerce Event Tracking ---

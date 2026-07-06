@@ -257,6 +257,15 @@ describe("customer auth service intent handling", () => {
         intent: "sign_up",
       }),
     );
+    const persistedCode = challengeMocks.persistCustomerAuthOtpChallenge.mock.calls[0]?.[1]?.code;
+    expect(typeof persistedCode).toBe("string");
+    expect(result.queuePayload).toMatchObject({
+      type: "auth.send_otp",
+      challengeKey: expect.stringMatching(/^cust_otp:email:[a-f0-9]{64}$/),
+      deliveryKey: expect.stringMatching(/^otp_[a-f0-9]+$/),
+    });
+    expect(result.queuePayload).not.toHaveProperty("code");
+    expect(JSON.stringify(result.queuePayload)).not.toContain(persistedCode);
     expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
     expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(

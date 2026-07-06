@@ -36,7 +36,10 @@ function createAdminExistsDb(counts: number[]) {
     (counts.shift() ?? 0) > 0 ? { found: 1 } : null,
   );
   const bind = vi.fn(() => ({ first }));
-  const prepare = vi.fn(() => ({ bind }));
+  const prepare = vi.fn((query: string) => {
+    void query;
+    return { bind, first };
+  });
 
   return {
     db: { prepare },
@@ -55,7 +58,10 @@ function createDeferredAdminExistsDb() {
       }),
   );
   const bind = vi.fn(() => ({ first }));
-  const prepare = vi.fn(() => ({ bind }));
+  const prepare = vi.fn((query: string) => {
+    void query;
+    return { bind, first };
+  });
 
   return {
     db: { prepare },
@@ -75,7 +81,7 @@ function createAdminGuardDb(sessionRow: Record<string, unknown> | null) {
     if (sql.includes("FROM session s")) {
       return { bind: sessionBind };
     }
-    return { bind: adminBind };
+    return { bind: adminBind, first: adminFirst };
   });
 
   return {
@@ -139,11 +145,28 @@ describe("admin setup guard cache", () => {
     await expect(checkAdminExists()).resolves.toBe(true);
 
     expect(db.prepare).toHaveBeenCalledTimes(1);
-    expect(db.prepare).toHaveBeenCalledWith(
-      "SELECT 1 as found FROM user WHERE role = ? OR is_super_admin = 1 LIMIT 1",
-    );
-    expect(db.bind).toHaveBeenCalledWith("admin");
+    const query = db.prepare.mock.calls[0]?.[0] ?? "";
+    expect(query).not.toContain("admin_user.role = 'admin'");
+    expect(query).toContain("is_super_admin = 1");
+    expect(query).toContain("from user_roles");
+    expect(query).toContain("inner join role_permissions");
+    expect(query).toContain("from user_permissions as granted_permissions");
+    expect(query).toContain("granted_permissions.granted = 1");
+    expect(db.bind).not.toHaveBeenCalled();
     expect(db.first).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat RBAC-only admin state as unbootstrapped on login", async () => {
+    const db = createAdminExistsDb([1]);
+    mocks.cfEnv.DB = db.db;
+    const { loginPageGuard } = await import("./auth.fns");
+
+    await expect(loginPageGuard()).resolves.toBeNull();
+
+    expect(db.prepare).toHaveBeenCalledTimes(1);
+    const query = db.prepare.mock.calls[0]?.[0] ?? "";
+    expect(query).toContain("from user_roles");
+    expect(query).toContain("from user_permissions as granted_permissions");
   });
 
   it("does not cache a missing admin so first setup can recover immediately", async () => {

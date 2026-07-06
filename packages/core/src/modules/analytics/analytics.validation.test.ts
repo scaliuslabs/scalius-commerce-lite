@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  META_GRAPH_API_VERSION,
-} from "../../integrations/meta/conversions-api";
+import { META_GRAPH_API_VERSION } from "../../integrations/meta/conversions-api";
 import {
   CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC,
   analyticsScriptTypes,
   createAnalyticsSchema,
+  isPubliclyInjectableAnalyticsConfig,
   normalizeCloudflareWebAnalyticsConfig,
+  updateAnalyticsSchema,
 } from "./analytics.validation";
 import {
   buildMetaPixelParityDiagnostics,
@@ -38,7 +38,7 @@ describe("analytics validation", () => {
       type: "tiktok_pixel",
       isActive: true,
       usePartytown: true,
-      config: "<script>ttq.load('PIXEL_ID');ttq.page();</script>",
+      config: "<script>ttq.load('C1234567890ABCDEFG');ttq.page();</script>",
       location: "head",
     });
 
@@ -64,7 +64,7 @@ describe("analytics validation", () => {
       type: "cloudflare_web_analytics",
       isActive: true,
       usePartytown: false,
-      config: "<script src=\"https://example.com/beacon.js\"></script>",
+      config: '<script src="https://example.com/beacon.js"></script>',
       location: "body_end",
     });
 
@@ -75,6 +75,88 @@ describe("analytics validation", () => {
     expect(normalizeCloudflareWebAnalyticsConfig("site_token_123")).toBe(
       `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
     );
+  });
+
+  it("rejects active snippets that still contain provider placeholder IDs", () => {
+    const cases = [
+      {
+        type: "google_analytics",
+        config: "<script>gtag('config', 'G-XXXXXXXXXX');</script>",
+      },
+      {
+        type: "google_tag_manager",
+        config:
+          "<script>})(window,document,'script','dataLayer','GTM-XXXXXXX');</script>",
+      },
+      {
+        type: "facebook_pixel",
+        config:
+          "<script>fbq('init', 'PIXEL_ID');fbq('track', 'PageView');</script>",
+      },
+      {
+        type: "tiktok_pixel",
+        config: "<script>ttq.load('PIXEL_ID');ttq.page();</script>",
+      },
+      {
+        type: "custom",
+        config:
+          "<script>window.analyticsPixel = 'YOUR_FACEBOOK_PIXEL_ID';</script>",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const result = createAnalyticsSchema.safeParse({
+        name: "Analytics Script",
+        type: testCase.type,
+        isActive: true,
+        usePartytown: true,
+        config: testCase.config,
+        location: "head",
+      });
+
+      expect(result.success, testCase.type).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toContain("placeholder");
+      }
+    }
+  });
+
+  it("allows placeholder snippets to be saved inactive but not updated active", () => {
+    const inactiveDraft = createAnalyticsSchema.safeParse({
+      name: "Draft Facebook Pixel",
+      type: "facebook_pixel",
+      isActive: false,
+      usePartytown: true,
+      config: "<script>fbq('init', 'PIXEL_ID');</script>",
+      location: "head",
+    });
+    const activeUpdate = updateAnalyticsSchema.safeParse({
+      id: "analytics_1",
+      name: "Draft Facebook Pixel",
+      type: "facebook_pixel",
+      isActive: true,
+      usePartytown: true,
+      config: "<script>fbq('init', 'PIXEL_ID');</script>",
+      location: "head",
+    });
+
+    expect(inactiveDraft.success).toBe(true);
+    expect(activeUpdate.success).toBe(false);
+  });
+
+  it("marks legacy active placeholder configs as unsafe for public injection", () => {
+    expect(
+      isPubliclyInjectableAnalyticsConfig({
+        isActive: true,
+        config: "<script>gtag('config', 'G-XXXXXXXXXX');</script>",
+      }),
+    ).toBe(false);
+    expect(
+      isPubliclyInjectableAnalyticsConfig({
+        isActive: false,
+        config: "<script>gtag('config', 'G-XXXXXXXXXX');</script>",
+      }),
+    ).toBe(true);
   });
 });
 
@@ -138,7 +220,10 @@ describe("Meta Pixel parity diagnostics", () => {
   it("warns when an active Facebook Pixel script has no readable ID", () => {
     expect(
       buildMetaPixelParityDiagnostics("1234567890", [
-        { type: "facebook_pixel", config: "window.fbq && fbq('track', 'PageView');" },
+        {
+          type: "facebook_pixel",
+          config: "window.fbq && fbq('track', 'PageView');",
+        },
       ]),
     ).toMatchObject({
       status: "unreadable_browser_pixel",
@@ -150,7 +235,10 @@ describe("Meta Pixel parity diagnostics", () => {
   it("counts custom snippets only when they include a readable fbq init", () => {
     expect(
       buildMetaPixelParityDiagnostics("1234567890", [
-        { type: "google_analytics", config: "<script>gtag('config', 'G-1')</script>" },
+        {
+          type: "google_analytics",
+          config: "<script>gtag('config', 'G-1')</script>",
+        },
         { type: "custom", config: "fbq('init', '1234567890');" },
       ]),
     ).toMatchObject({

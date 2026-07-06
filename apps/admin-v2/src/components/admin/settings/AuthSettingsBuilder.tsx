@@ -20,7 +20,10 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Save, CheckCircle2, ExternalLink, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useSettingsForm } from "@/hooks/use-settings-form";
+import {
+    getSettingsLoadErrorMessage,
+    useSettingsForm,
+} from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
     getAuthSettings,
@@ -287,7 +290,16 @@ async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
 }
 
 export default function AuthSettingsBuilder() {
-    const { values, setValue, isLoading, isSaving, handleSubmit } = useSettingsForm<AuthAndSmsSettings>({
+    const {
+        values,
+        setValue,
+        isLoading,
+        isLoadError,
+        loadError,
+        isSaving,
+        handleSubmit,
+        refetch,
+    } = useSettingsForm<AuthAndSmsSettings>({
         queryKey: queryKeys.settings.auth(),
         fetchFn: fetchAuthAndSms,
         saveFn: saveAuthAndSms,
@@ -399,6 +411,26 @@ export default function AuthSettingsBuilder() {
             <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+        );
+    }
+
+    if (isLoadError) {
+        return (
+            <Alert variant="destructive" className="max-w-2xl">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Auth settings unavailable</AlertTitle>
+                <AlertDescription className="space-y-3">
+                    <p>
+                        {getSettingsLoadErrorMessage(
+                            loadError,
+                            "Auth settings could not be loaded. Existing customer login and OTP settings were not changed.",
+                        )}
+                    </p>
+                    <Button type="button" variant="outline" onClick={refetch}>
+                        Retry
+                    </Button>
+                </AlertDescription>
+            </Alert>
         );
     }
 
@@ -556,8 +588,8 @@ export default function AuthSettingsBuilder() {
 
                             <Alert>
                                 <AlertDescription className="text-sm">
-                                    Create an approved message template with one variable{" "}
-                                    {"{{1}}"} for the OTP code.{" "}
+                                    Create an approved message template with one body variable{" "}
+                                    {"{{1}}"} for the OTP code; no URL button variable is sent.{" "}
                                     <a
                                         href="https://developers.facebook.com/docs/whatsapp/cloud-api/"
                                         target="_blank"

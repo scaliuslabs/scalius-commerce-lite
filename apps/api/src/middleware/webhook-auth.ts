@@ -4,8 +4,8 @@
 import { and, desc, eq } from "drizzle-orm";
 import { deliveryProviders } from "@scalius/database/schema";
 import { getDb } from "@scalius/database/client";
-import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
-import { getEncryptionKey } from "../utils/encryption-key";
+import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
+import { getCredentialEncryptionKey } from "../utils/encryption-key";
 
 interface WebhookVerificationResult {
   verified: boolean;
@@ -112,10 +112,22 @@ export async function verifyDeliveryWebhook(
 
   const provider = activeProviders[0]!;
 
-  const encryptionKey = getEncryptionKey(env as Record<string, unknown>);
-  const rawCreds = provider.credentials
-    ? await decryptCredentialsGraceful(provider.credentials, encryptionKey)
-    : "{}";
+  const credentialRead = await readStoredCredentialStrict(
+    provider.credentials,
+    getCredentialEncryptionKey(env as Record<string, unknown>),
+    "Delivery provider credentials",
+  );
+  if (credentialRead.error) {
+    console.warn(`[webhook-auth] [${providerType}] ${credentialRead.error}`);
+    return {
+      verified: false,
+      providerId: provider.id,
+      credentials: null,
+      config: null,
+      reason: "Invalid provider credentials",
+    };
+  }
+  const rawCreds = credentialRead.value || "{}";
   const credentials = parseWebhookObject(rawCreds, "credentials", providerType);
   if (!credentials) {
     return {

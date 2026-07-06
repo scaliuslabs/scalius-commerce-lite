@@ -50,18 +50,26 @@ function getBrowserUserData(): Partial<MetaCapiEventPayload["userData"]> {
 function sanitizeEventSourceUrl(url: string): string {
   try {
     const parsed = new URL(url);
-    const sensitiveParams = [
+    const sensitiveParams = new Set([
       "token",
-      "receiptToken",
-      "payment_intent",
-      "payment_intent_client_secret",
-      "redirect_status",
-      "session_id",
-      "val_id",
-      "tran_id",
-    ];
+      "tokenhash",
+      "receipttoken",
+      "paymentintent",
+      "paymentintentclientsecret",
+      "redirectstatus",
+      "sessionid",
+      "valid",
+      "tranid",
+    ]);
 
-    for (const param of sensitiveParams) {
+    for (const param of Array.from(parsed.searchParams.keys())) {
+      const normalizedParam = param.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (
+        !sensitiveParams.has(normalizedParam) &&
+        !normalizedParam.startsWith("receipttoken")
+      ) {
+        continue;
+      }
       parsed.searchParams.delete(param);
     }
 

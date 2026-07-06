@@ -33,6 +33,7 @@ export function useSettingsForm<T extends object>({
     queryKey: queryKey as unknown[],
     queryFn: fetchFn,
   });
+  const hasLoaded = data !== undefined && !isError;
 
   // Local values state that syncs with query data
   const [values, setValues] = useState<T>(defaultValues);
@@ -60,14 +61,19 @@ export function useSettingsForm<T extends object>({
   }, []);
 
   const handleSubmit = useCallback(async () => {
+    if (!hasLoaded) {
+      toast.error("Reload settings before saving.");
+      return;
+    }
     await mutation.mutateAsync(values);
-  }, [values, mutation]);
+  }, [hasLoaded, values, mutation]);
 
   return {
     values,
     setValue,
     setValues,
     isLoading,
+    isLoaded: hasLoaded,
     isLoadError: isError,
     loadError: error,
     isSaving: mutation.isPending,
@@ -75,4 +81,11 @@ export function useSettingsForm<T extends object>({
     refetch: () =>
       queryClient.invalidateQueries({ queryKey: queryKey as unknown[] }),
   };
+}
+
+export function getSettingsLoadErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }

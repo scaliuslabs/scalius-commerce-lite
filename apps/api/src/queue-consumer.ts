@@ -34,6 +34,7 @@ import { sendEmail } from "@scalius/core/integrations/email";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
+import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers/customer-auth.service";
 import {
   getNotificationProviderBlock,
   isNotificationProviderBreakerFailure,
@@ -58,7 +59,7 @@ import {
   type AuthOtpDeliveryReceiptResult,
 } from "@scalius/core/modules/customers/otp-delivery-receipts";
 import { escapeHtml } from "@scalius/shared/html-escape";
-import { getCredentialEncryptionKey } from "./utils/encryption-key";
+import { getCredentialEncryptionKey, getEncryptionKey } from "./utils/encryption-key";
 import {
   createStorefrontCacheWarmMessageForPurge,
   enqueueStorefrontCacheWarm,
@@ -337,6 +338,7 @@ export type PaymentQueueMessage =
 export type AuthOtpQueueMessage =
   | {
     type: "auth.send_otp";
+    challengeKey?: string;
     deliveryKey?: string;
     purpose?: string;
 	    otpExpiresAt?: number;
@@ -344,9 +346,10 @@ export type AuthOtpQueueMessage =
 	    allowedMethod: string;
 	    channel?: "email" | "sms" | "whatsapp";
 	    identifier: string;
-    code: string;
+    /** Legacy pre-reference payloads only. New messages derive the code from challengeKey + deliveryKey. */
+    code?: string;
     name: string;
-  };
+	  };
 
 export type StorefrontCacheQueueMessage = CacheQueueMessage;
 
@@ -1608,7 +1611,8 @@ async function processAuthOtpQueueMessage(
       return;
     }
 
-    const result = await sendAuthOtpByChannel(payload, target, db, env);
+    const code = await resolveAuthOtpDeliveryCode(payload, target, env);
+    const result = await sendAuthOtpByChannel(payload, code, target, db, env);
     try {
       await markAuthOtpDeliveryReceiptAcceptedWithRetries(db, claim.receipt, result);
       await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
@@ -1665,23 +1669,52 @@ async function processAuthOtpQueueMessage(
 
 async function sendAuthOtpByChannel(
   payload: AuthOtpQueueMessage,
+  code: string,
   target: { deliveryKey: string; channel: AuthOtpDeliveryChannel; identifierHash: string },
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
   if (payload.method === "email") {
-    return sendAuthOtpEmail(payload, target, db, env);
+    return sendAuthOtpEmail(payload, code, target, db, env);
   }
 
   if (payload.channel === "whatsapp" || payload.allowedMethod === "whatsapp_otp") {
-    return sendAuthOtpWhatsApp(payload, target, db, env);
+    return sendAuthOtpWhatsApp(payload, code, target, db, env);
   }
 
-  return sendAuthOtpSms(payload, target, db, env);
+  return sendAuthOtpSms(payload, code, target, db, env);
+}
+
+async function resolveAuthOtpDeliveryCode(
+  payload: AuthOtpQueueMessage,
+  target: { deliveryKey: string; channel: AuthOtpDeliveryChannel },
+  env: Env,
+): Promise<string> {
+  const challengeKey = payload.challengeKey?.trim();
+  if (challengeKey && payload.deliveryKey) {
+    return deriveCustomerAuthOtpDeliveryCode({
+      otpKey: challengeKey,
+      deliveryKey: payload.deliveryKey,
+      encryptionKey: getEncryptionKey(env as unknown as Record<string, unknown>),
+    });
+  }
+
+  const legacyCode = payload.code?.trim();
+  if (legacyCode) return legacyCode;
+
+  throw createAuthOtpDeliveryError(
+    "OTP delivery challenge reference is missing",
+    {
+      provider: target.channel,
+      providerStatus: "missing_challenge_reference",
+    },
+    { terminal: true },
+  );
 }
 
 async function sendAuthOtpEmail(
   payload: AuthOtpQueueMessage,
+  code: string,
   target: { deliveryKey: string; identifierHash: string },
   db: ReturnType<typeof getDb>,
   env: Env,
@@ -1704,7 +1737,7 @@ async function sendAuthOtpEmail(
 
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
   const safeName = escapeHtml(payload.name);
-  const safeCode = escapeHtml(payload.code);
+  const safeCode = escapeHtml(code);
   const copy = getAuthOtpMessageCopy(payload);
   const result = await sendEmail({
     to: payload.identifier,
@@ -1719,7 +1752,7 @@ async function sendAuthOtpEmail(
         <p style="color: #888; font-size: 13px;">This code expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
       </div>
     `,
-    text: `${copy.emailTextPrefix}: ${payload.code}\n\nExpires in 5 minutes.`,
+    text: `${copy.emailTextPrefix}: ${code}\n\nExpires in 5 minutes.`,
     idempotencyKey: target.deliveryKey,
   }, {
     db,
@@ -1754,6 +1787,7 @@ async function sendAuthOtpEmail(
 
 async function sendAuthOtpWhatsApp(
   payload: AuthOtpQueueMessage,
+  code: string,
   target: { deliveryKey: string; identifierHash: string },
   db: ReturnType<typeof getDb>,
   env: Env,
@@ -1799,8 +1833,7 @@ async function sendAuthOtpWhatsApp(
     to: payload.identifier,
     templateName: config.authTemplateName,
     languageCode: "en_US",
-    bodyParameters: [payload.code],
-    buttonUrlParameter: payload.code,
+    bodyParameters: [code],
   });
 
   const receiptResult: AuthOtpDeliveryReceiptResult = {
@@ -1832,6 +1865,7 @@ async function sendAuthOtpWhatsApp(
 
 async function sendAuthOtpSms(
   payload: AuthOtpQueueMessage,
+  code: string,
   target: { deliveryKey: string; channel: AuthOtpDeliveryChannel; identifierHash: string },
   db: ReturnType<typeof getDb>,
   env: Env,
@@ -1874,7 +1908,7 @@ async function sendAuthOtpSms(
 
   const result = await smsProvider.sendSms({
     to: payload.identifier,  // Already E.164 from customers.phone
-    message: `${getAuthOtpMessageCopy(payload).smsTextPrefix}: ${payload.code}\n\nValid for 5 minutes. Do not share.`,
+    message: `${getAuthOtpMessageCopy(payload).smsTextPrefix}: ${code}\n\nValid for 5 minutes. Do not share.`,
     clientReference: createAuthOtpProviderClientReference(target),
   });
 

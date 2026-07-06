@@ -49,7 +49,7 @@ Obvious placeholder SMS settings are also readiness blockers. Values such as `du
 
 Sends FCM push notifications to all active admin devices about a new order.
 
-- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) with `CREDENTIAL_ENCRYPTION_KEY`/legacy `JWT_SECRET` read tolerance, then falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var
+- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) with strict `CREDENTIAL_ENCRYPTION_KEY` reads for encrypted rows, then falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var. Legacy plaintext rows remain readable; `JWT_SECRET` is not used for provider credentials.
 - Queries all active tokens from `adminFcmTokens` table
 - Builds notification payload with order ID, customer name (XSS-escaped via `escapeHtml()`), and deep link to order detail page
 - Calls `FCMMessagingService.sendEachForMulticast()` with bounded concurrency. Response order is preserved, so invalid-token cleanup remains aligned with the original active-token query.

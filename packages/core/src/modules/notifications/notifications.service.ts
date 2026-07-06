@@ -120,8 +120,7 @@ const NON_RETRYABLE_DISPATCH_ERROR_PATTERNS = [
 
 function credentialEncryptionKeyFromEnv(env: Env): string | undefined {
     const source = env as unknown as Record<string, unknown>;
-    return (source.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
-        ?? (source.JWT_SECRET as string | undefined);
+    return source.CREDENTIAL_ENCRYPTION_KEY as string | undefined;
 }
 
 function normalizeFcmErrorPart(value: unknown): string {

@@ -8,6 +8,7 @@ import { successEnvelope, errorResponses } from "../schemas/responses";
 import { CACHE_TTLS } from "../utils/cache-ttls";
 import {
   processAnalyticsScript,
+  shouldInjectAnalyticsScript,
   shouldUsePartytown
 } from "@scalius/core/integrations/analytics";
 
@@ -55,8 +56,9 @@ app.openapi(getConfigurationsRoute, async (c) => {
     .where(eq(analytics.isActive, true))
     .all();
 
-  const processedScripts = activeAnalyticsScriptsFromDB.map(
-    (script: Analytics) => {
+  const processedScripts = activeAnalyticsScriptsFromDB
+    .filter(shouldInjectAnalyticsScript)
+    .map((script: Analytics) => {
       let processedConfig = script.config;
       if (shouldUsePartytown(script)) {
         processedConfig = processAnalyticsScript(script);
@@ -65,8 +67,7 @@ app.openapi(getConfigurationsRoute, async (c) => {
         ...script,
         config: processedConfig
       };
-    },
-  );
+    });
 
   return ok(c, { analytics: processedScripts });
 });

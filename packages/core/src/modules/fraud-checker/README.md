@@ -59,7 +59,7 @@ In-memory `Map<string, FraudCheckProvider>`. The `"default"` provider is registe
 
 ## Service Functions (`fraud-checker.service.ts`)
 
-Stores provider configurations in the `settings` table with `category = "fraud-checker"`. Each provider is keyed by a nanoid; new writes encrypt the provider JSON blob with `CREDENTIAL_ENCRYPTION_KEY`, while read paths keep graceful plaintext/JWT-era tolerance for legacy rows.
+Stores provider configurations in the `settings` table with `category = "fraud-checker"`. Each provider is keyed by a nanoid; new writes encrypt the provider JSON blob with `CREDENTIAL_ENCRYPTION_KEY`, while read paths keep legacy plaintext tolerance without falling back to `JWT_SECRET`.
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
@@ -71,7 +71,7 @@ Stores provider configurations in the `settings` table with `category = "fraud-c
 | `fraudLookup` | `(provider, phone)` | Look up a phone number using a specific provider config. Resolves provider implementation via `getFraudCheckProvider(providerType)`. Throws `ServiceUnavailableError` on failure. |
 | `fraudLookupWithActiveProvider` | `(db, phone, encryptionKey?)` | Look up using the first provider where `isActive === true`. Throws `NotFoundError` if no active provider. |
 
-Admin create/update routes call `requireEncryptionKey()` before saving provider credentials and mask `apiKey`/`apiSecret` in responses. List, test, and lookup routes pass `getEncryptionKey()` so encrypted and legacy plaintext rows can be read without exposing raw credentials to the dashboard.
+Admin create/update routes call `requireEncryptionKey()` before saving provider credentials and mask `apiKey`/`apiSecret` in responses. List, masked-update restore, test, and lookup routes pass only `getCredentialEncryptionKey()` output; encrypted rows that cannot be read with `CREDENTIAL_ENCRYPTION_KEY` are treated as unavailable, masked placeholders are not saved back as credentials, and provider lookups fail closed before external fraud APIs are called. Legacy plaintext rows remain readable for migration.
 
 ### Exported Types
 

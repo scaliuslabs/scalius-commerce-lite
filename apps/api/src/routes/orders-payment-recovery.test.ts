@@ -37,7 +37,7 @@ const db = { id: "db" };
 
 function createTestApp() {
   const queue = {
-    send: vi.fn(async () => undefined),
+    send: vi.fn(async (_payload: unknown) => undefined),
   };
   const env = {
     AUTH_OTP_QUEUE: queue,
@@ -80,7 +80,6 @@ describe("order payment recovery routes", () => {
         allowedMethod: "sms_otp",
         channel: "sms",
         identifier: "+8801775528888",
-        code: "123456",
         name: "Buyer",
       },
     });
@@ -132,6 +131,9 @@ describe("order payment recovery routes", () => {
     expect(JSON.stringify(body)).not.toContain("chk_");
     expect(JSON.stringify(body)).not.toContain("+8801775528888");
     expect(JSON.stringify(body)).not.toContain("8888");
+    expect(JSON.stringify(queue.send.mock.calls)).not.toContain("123456");
+    const queuedPayload = queue.send.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+    expect(queuedPayload).not.toHaveProperty("code");
     expect(body).toMatchObject({
       success: true,
       data: {

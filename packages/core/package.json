@@ -28,6 +28,7 @@
     "./modules/*/*": "./src/modules/*/*.ts",
     "./modules/*": "./src/modules/*.ts",
     "./auth": "./src/auth/index.ts",
+    "./auth/admin-setup": "./src/auth/admin-setup.ts",
     "./auth/scanner-token-claims": "./src/auth/scanner-token-claims.ts",
     "./auth/rbac": "./src/auth/rbac/index.ts",
     "./auth/rbac/*": "./src/auth/rbac/*.ts",

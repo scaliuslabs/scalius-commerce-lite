@@ -21,6 +21,7 @@ import { eq, isNull, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   processAnalyticsScript,
+  shouldInjectAnalyticsScript,
   shouldUsePartytown,
 } from "../../integrations/analytics";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
@@ -347,8 +348,9 @@ export async function getLayoutData(db: Database) {
   ] = batchResults;
 
   // Process Analytics
-  const processedAnalytics = (analyticsResults as Analytics[]).map(
-    (script: Analytics) => {
+  const processedAnalytics = (analyticsResults as Analytics[])
+    .filter(shouldInjectAnalyticsScript)
+    .map((script: Analytics) => {
       let processedConfig = script.config;
       if (shouldUsePartytown(script))
         processedConfig = processAnalyticsScript(script);
@@ -363,8 +365,7 @@ export async function getLayoutData(db: Database) {
         createdAt: unixToISO(script.createdAt),
         updatedAt: unixToISO(script.updatedAt),
       };
-    },
-  );
+    });
 
   // Process Header + Navigation
   const siteSettingsData = (settingsResults as Record<string, unknown>[])[0] as

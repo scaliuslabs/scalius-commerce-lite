@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { AlertTriangle, Loader2, Save, Bell, ShieldCheck } from "lucide-react";
 import {
@@ -24,6 +25,7 @@ import {
   type OrderNotificationType,
 } from "@scalius/core/modules/notifications/notification-types";
 import { describeNotificationIssue } from "@/lib/order-notification-display";
+import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
 
 const ORDER_STATUSES = ORDER_NOTIFICATION_TYPES.map((key) => ({
   key,
@@ -175,75 +177,87 @@ export function NotificationChannelsBuilder() {
   const [isSmsConfigured, setIsSmsConfigured] = useState(false);
   const [smsProviderError, setSmsProviderError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [customerLoadError, setCustomerLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const [adminChannels, setAdminChannels] = useState<AdminChannelConfig>(getDefaultAdminConfig());
   const [isPushConfigured, setIsPushConfigured] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
   const [isAdminLoading, setIsAdminLoading] = useState(true);
+  const [adminLoadError, setAdminLoadError] = useState<string | null>(null);
   const [isAdminSaving, setIsAdminSaving] = useState(false);
 
-  useEffect(() => {
-    async function loadCustomerChannels() {
-      try {
-        const data = await getNotificationChannels() as {
-          channels?: Record<string, string[]>;
-          whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
-          emailConfigured?: boolean;
-          emailError?: string | null;
-          whatsappConfigured?: boolean;
-          whatsappError?: string | null;
-          smsProviderConfigured?: boolean;
-          smsProviderError?: string | null;
-        };
-        const emailConfigured = Boolean(data?.emailConfigured);
-        const whatsappConfigured = Boolean(data?.whatsappConfigured);
-        const smsConfigured = Boolean(data?.smsProviderConfigured);
-        setIsEmailConfigured(emailConfigured);
-        setEmailError(data?.emailError ?? null);
-        setIsWhatsAppConfigured(whatsappConfigured);
-        setWhatsAppError(data?.whatsappError ?? null);
-        setIsSmsConfigured(smsConfigured);
-        setSmsProviderError(data?.smsProviderError ?? null);
-        setChannels(buildCustomerChannelConfig(data?.channels, {
-          email: emailConfigured,
-          sms: smsConfigured,
-          whatsapp: whatsappConfigured,
-        }));
-        if (data?.whatsappTemplate) {
-          setWhatsAppTemplate({
-            templateName: data.whatsappTemplate.templateName || DEFAULT_WHATSAPP_TEMPLATE.templateName,
-            languageCode: data.whatsappTemplate.languageCode || DEFAULT_WHATSAPP_TEMPLATE.languageCode,
-          });
-        }
-      } catch {
-        // Use defaults on error
-      } finally {
-        setIsLoading(false);
+  const loadCustomerChannels = useCallback(async () => {
+    setIsLoading(true);
+    setCustomerLoadError(null);
+    try {
+      const data = await getNotificationChannels() as {
+        channels?: Record<string, string[]>;
+        whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
+        emailConfigured?: boolean;
+        emailError?: string | null;
+        whatsappConfigured?: boolean;
+        whatsappError?: string | null;
+        smsProviderConfigured?: boolean;
+        smsProviderError?: string | null;
+      };
+      const emailConfigured = Boolean(data?.emailConfigured);
+      const whatsappConfigured = Boolean(data?.whatsappConfigured);
+      const smsConfigured = Boolean(data?.smsProviderConfigured);
+      setIsEmailConfigured(emailConfigured);
+      setEmailError(data?.emailError ?? null);
+      setIsWhatsAppConfigured(whatsappConfigured);
+      setWhatsAppError(data?.whatsappError ?? null);
+      setIsSmsConfigured(smsConfigured);
+      setSmsProviderError(data?.smsProviderError ?? null);
+      setChannels(buildCustomerChannelConfig(data?.channels, {
+        email: emailConfigured,
+        sms: smsConfigured,
+        whatsapp: whatsappConfigured,
+      }));
+      if (data?.whatsappTemplate) {
+        setWhatsAppTemplate({
+          templateName: data.whatsappTemplate.templateName || DEFAULT_WHATSAPP_TEMPLATE.templateName,
+          languageCode: data.whatsappTemplate.languageCode || DEFAULT_WHATSAPP_TEMPLATE.languageCode,
+        });
       }
+    } catch (error) {
+      setCustomerLoadError(getSettingsLoadErrorMessage(
+        error,
+        "Customer notification channels could not be loaded. Existing notification settings were not changed.",
+      ));
+    } finally {
+      setIsLoading(false);
     }
-
-    async function loadAdminChannels() {
-      try {
-        const data = await getAdminNotificationChannels() as {
-          channels?: Record<string, string[]>;
-          pushConfigured?: boolean;
-          pushError?: string | null;
-        };
-        const pushConfigured = Boolean(data?.pushConfigured);
-        setIsPushConfigured(pushConfigured);
-        setPushError(data?.pushError ?? null);
-        setAdminChannels(buildAdminChannelConfig(data?.channels, pushConfigured));
-      } catch {
-        // Use defaults on error
-      } finally {
-        setIsAdminLoading(false);
-      }
-    }
-
-    loadCustomerChannels();
-    loadAdminChannels();
   }, []);
+
+  const loadAdminChannels = useCallback(async () => {
+    setIsAdminLoading(true);
+    setAdminLoadError(null);
+    try {
+      const data = await getAdminNotificationChannels() as {
+        channels?: Record<string, string[]>;
+        pushConfigured?: boolean;
+        pushError?: string | null;
+      };
+      const pushConfigured = Boolean(data?.pushConfigured);
+      setIsPushConfigured(pushConfigured);
+      setPushError(data?.pushError ?? null);
+      setAdminChannels(buildAdminChannelConfig(data?.channels, pushConfigured));
+    } catch (error) {
+      setAdminLoadError(getSettingsLoadErrorMessage(
+        error,
+        "Admin notification channels could not be loaded. Existing admin notification settings were not changed.",
+      ));
+    } finally {
+      setIsAdminLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCustomerChannels();
+    void loadAdminChannels();
+  }, [loadCustomerChannels, loadAdminChannels]);
 
   const handleToggle = (status: StatusKey, channel: ChannelKey) => {
     if (!channelCanBeEnabled(channel, {
@@ -276,6 +290,10 @@ export function NotificationChannelsBuilder() {
   };
 
   const handleSave = async () => {
+    if (customerLoadError || isLoading) {
+      toast.error("Reload customer notification channels before saving.");
+      return;
+    }
     setIsSaving(true);
     try {
       const effectiveChannels = sanitizeCustomerChannelConfig(channels, {
@@ -316,6 +334,10 @@ export function NotificationChannelsBuilder() {
   };
 
   const handleAdminSave = async () => {
+    if (adminLoadError || isAdminLoading) {
+      toast.error("Reload admin notification channels before saving.");
+      return;
+    }
     setIsAdminSaving(true);
     try {
       const effectiveAdminChannels = sanitizeAdminChannelConfig(adminChannels, isPushConfigured);
@@ -365,6 +387,28 @@ export function NotificationChannelsBuilder() {
           </div>
         </CardHeader>
         <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : customerLoadError ? (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Notification channels unavailable</AlertTitle>
+              <AlertDescription className="space-y-3">
+                <p>{customerLoadError}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadCustomerChannels()}
+                >
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <>
           <div className="mb-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
             <div className="space-y-2">
               <Label htmlFor="order-whatsapp-template">WhatsApp order template</Label>
@@ -492,6 +536,8 @@ export function NotificationChannelsBuilder() {
               Save Changes
             </Button>
           </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -512,6 +558,22 @@ export function NotificationChannelsBuilder() {
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : adminLoadError ? (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Admin notification channels unavailable</AlertTitle>
+              <AlertDescription className="space-y-3">
+                <p>{adminLoadError}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadAdminChannels()}
+                >
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
           ) : (
             <>
               {!isPushConfigured && (

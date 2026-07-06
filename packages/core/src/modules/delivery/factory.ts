@@ -1,6 +1,6 @@
 import { PathaoProvider } from "./providers/pathao";
 import { SteadfastProvider } from "./providers/steadfast";
-import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
+import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import type { Database } from "@scalius/database/client";
 import { ValidationError, NotFoundError, ServiceUnavailableError } from "@scalius/core/errors";
 import type { DeliveryProviderRecord, DeliveryProviderType } from "@scalius/database/schema";
@@ -15,8 +15,8 @@ import type {
 /**
  * Create the appropriate provider instance based on provider type.
  *
- * If an encryptionKey is provided, credentials are decrypted before parsing.
- * Graceful decryption allows plaintext credentials to work during migration.
+ * Credentials are strict-read with CREDENTIAL_ENCRYPTION_KEY when encrypted.
+ * Legacy plaintext credentials remain readable during migration.
  */
 export async function createProvider(
   provider: DeliveryProviderRecord,
@@ -28,10 +28,15 @@ export async function createProvider(
     let credentials, config;
 
     try {
-      const rawCreds = await decryptCredentialsGraceful(
+      const credentialRead = await readStoredCredentialStrict(
         provider.credentials,
         encryptionKey,
+        "Delivery provider credentials",
       );
+      if (credentialRead.error) {
+        throw new Error(credentialRead.error);
+      }
+      const rawCreds = credentialRead.value;
       credentials = JSON.parse(rawCreds);
     } catch (credError: unknown) {
       console.error(

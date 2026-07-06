@@ -3,7 +3,8 @@
 // payload for its delivery channel (email, SMS, WhatsApp).
 // The queue consumer in apps/api/src/queue-consumer.ts dispatches based on
 // the `method` + `channel` fields in the payload. Provider secrets are
-// resolved at send time and must not be serialized into queues.
+// resolved at send time; provider secrets and raw OTP codes must not be
+// serialized into queues.
 
 import type { SiteSettings } from "@scalius/database/schema";
 import {
@@ -18,6 +19,7 @@ import {
 
 export interface OtpQueuePayload {
   type: "auth.send_otp";
+  challengeKey?: string;
   deliveryKey: string;
   purpose?: string;
   otpExpiresAt?: number;
@@ -25,7 +27,8 @@ export interface OtpQueuePayload {
   allowedMethod: string;
   channel?: CustomerAuthOtpChannel;
   identifier: string;
-  code: string;
+  /** Legacy pre-reference payloads only. New OTP queue payloads must omit this. */
+  code?: string;
   name: string;
 }
 
@@ -42,13 +45,13 @@ export interface OtpTransport {
 
   /** Build the queue payload for sending the OTP via this transport */
   buildQueuePayload(
-    code: string,
     identifier: string,
     name: string,
     settings: SiteSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
+    challengeKey: string,
   ): OtpQueuePayload;
 
   /**
@@ -67,16 +70,17 @@ export class EmailOtpTransport implements OtpTransport {
   readonly label = "email";
 
   buildQueuePayload(
-    code: string,
     identifier: string,
     name: string,
     settings: SiteSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
+    challengeKey: string,
   ): OtpQueuePayload {
     return {
       type: "auth.send_otp",
+      challengeKey,
       deliveryKey,
       purpose: "customer_login",
       otpExpiresAt,
@@ -84,7 +88,6 @@ export class EmailOtpTransport implements OtpTransport {
       allowedMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod),
       channel,
       identifier,
-      code,
       name,
     };
   }
@@ -100,16 +103,17 @@ export class SmsOtpTransport implements OtpTransport {
   readonly label = "SMS";
 
   buildQueuePayload(
-    code: string,
     identifier: string,
     name: string,
     settings: SiteSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
+    challengeKey: string,
   ): OtpQueuePayload {
     return {
       type: "auth.send_otp",
+      challengeKey,
       deliveryKey,
       purpose: "customer_login",
       otpExpiresAt,
@@ -117,7 +121,6 @@ export class SmsOtpTransport implements OtpTransport {
       allowedMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod),
       channel,
       identifier,
-      code,
       name,
     };
   }
@@ -133,16 +136,17 @@ export class WhatsAppOtpTransport implements OtpTransport {
   readonly label = "WhatsApp";
 
   buildQueuePayload(
-    code: string,
     identifier: string,
     name: string,
     settings: SiteSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
+    challengeKey: string,
   ): OtpQueuePayload {
     return {
       type: "auth.send_otp",
+      challengeKey,
       deliveryKey,
       purpose: "customer_login",
       otpExpiresAt,
@@ -150,7 +154,6 @@ export class WhatsAppOtpTransport implements OtpTransport {
       allowedMethod: "whatsapp_otp",
       channel,
       identifier,
-      code,
       name,
     };
   }

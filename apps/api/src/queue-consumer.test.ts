@@ -158,6 +158,7 @@ import {
   type PaymentQueueMessage,
   type StorefrontCacheQueueMessage,
 } from "./queue-consumer";
+import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers/customer-auth.service";
 
 function createMessage(body: PaymentQueueMessage, attempts?: number): Message<PaymentQueueMessage>;
 function createMessage<T>(body: T, attempts?: number): Message<T>;
@@ -1536,17 +1537,26 @@ describe("handleQueueBatch payment confirmation retries", () => {
   });
 
   it("passes env and encryption context to OTP email dispatch", async () => {
+    const challengeKey = "cust_otp:email:challenge_hash_1";
+    const deliveryKey = "otp_delivery_1";
+    const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
+      otpKey: challengeKey,
+      deliveryKey,
+      encryptionKey: "test-key",
+    });
     const message = createMessage({
       type: "auth.send_otp",
-      deliveryKey: "otp_delivery_1",
+      challengeKey,
+      deliveryKey,
       purpose: "customer_login",
       otpExpiresAt: 4_102_444_800,
       method: "email",
       allowedMethod: "email",
       identifier: "buyer@example.com",
-      code: "123456",
       name: "Buyer",
     } as const);
+    expect(JSON.stringify(message.body)).not.toContain(expectedCode);
+    expect(message.body).not.toHaveProperty("code");
     const env = {
       EMAIL: {
         send: vi.fn(),
@@ -1560,8 +1570,8 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.objectContaining({
         to: "buyer@example.com",
         subject: "Your login code",
-        text: "Your login code is: 123456\n\nExpires in 5 minutes.",
-        idempotencyKey: "otp_delivery_1",
+        text: `Your login code is: ${expectedCode}\n\nExpires in 5 minutes.`,
+        idempotencyKey: deliveryKey,
       }),
       {
         db: { id: "db" },
@@ -1573,7 +1583,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       { id: "db" },
       {
         id: "aor_1",
-        deliveryKey: "otp_delivery_1",
+        deliveryKey,
         claimId: "aorc_1",
         attempts: 1,
       },
@@ -2006,16 +2016,25 @@ describe("handleQueueBatch payment confirmation retries", () => {
   });
 
   it("records WhatsApp OTP message IDs after resolving encrypted Meta credentials", async () => {
+    const challengeKey = "cust_otp:whatsapp:challenge_hash_1";
+    const deliveryKey = "otp_delivery_wa_1";
+    const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
+      otpKey: challengeKey,
+      deliveryKey,
+      encryptionKey: "test-key",
+    });
     const message = createMessage({
       type: "auth.send_otp",
-      deliveryKey: "otp_delivery_wa_1",
+      challengeKey,
+      deliveryKey,
       otpExpiresAt: 4_102_444_800,
       method: "phone",
       allowedMethod: "whatsapp_otp",
       identifier: "+8801712345678",
-      code: "654321",
       name: "Buyer",
     } as const);
+    expect(JSON.stringify(message.body)).not.toContain(expectedCode);
+    expect(message.body).not.toHaveProperty("code");
 
     await handleQueueBatch(createBatch([message]), {} as Env);
 
@@ -2033,8 +2052,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       to: "+8801712345678",
       templateName: "auth_otp",
       languageCode: "en_US",
-      bodyParameters: ["654321"],
-      buttonUrlParameter: "654321",
+      bodyParameters: [expectedCode],
     });
     expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
       { id: "db" },
