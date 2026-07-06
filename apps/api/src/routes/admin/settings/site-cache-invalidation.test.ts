@@ -62,6 +62,7 @@ vi.mock("@scalius/core/modules/products", () => ({
   PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT: 500,
   PRODUCT_FEED_DIAGNOSTIC_REASONS: [
     "feed_disabled",
+    "storefront_url_unavailable",
     "inactive_deleted_unpublished",
     "no_buyer_sku",
     "missing_image",

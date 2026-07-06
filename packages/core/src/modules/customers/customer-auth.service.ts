@@ -718,6 +718,9 @@ export async function sendOtp(
     const otpKey = await buildCustomerAuthOtpStorageKey(channel, normalizedIdentifier, input.encryptionKey);
     const contactEmail = getPrimaryEmail(method, normalizedIdentifier, input.email);
     const contactPhone = getPrimaryPhone(method, normalizedIdentifier, input.phone, phoneCountryPolicy);
+    if (!input.credentialEncryptionKey?.trim()) {
+        throw new ServiceUnavailableError("Customer OTP delivery target encryption key is not configured.");
+    }
     if (
         intent === "sign_up" &&
         ((method === "email" && contactPhone) || (method === "phone" && contactEmail)) &&
@@ -781,6 +784,8 @@ export async function sendOtp(
         channel,
         intent,
         identifier: normalizedIdentifier,
+        deliveryTarget: normalizedIdentifier,
+        deliveryName: name,
         contactEmail: intent === "sign_up" && method === "phone" ? contactEmail : undefined,
         phone: intent === "sign_up" && method === "email" ? contactPhone : undefined,
         code,
@@ -794,10 +799,8 @@ export async function sendOtp(
     // OTP code is intentionally NOT logged — it would leak secrets in production.
 
     // Build queue payload via transport. The raw OTP is intentionally absent; the
-    // consumer derives it from the challenge and delivery references.
+    // consumer derives the code and recipient target from the challenge and delivery references.
     const queuePayload = transport.buildQueuePayload(
-        normalizedIdentifier,
-        name,
         { ...settings, authVerificationMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod) },
         channel,
         deliveryKey,

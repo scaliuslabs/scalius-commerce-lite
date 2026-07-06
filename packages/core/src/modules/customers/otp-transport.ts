@@ -19,17 +19,19 @@ import {
 
 export interface OtpQueuePayload {
   type: "auth.send_otp";
-  challengeKey?: string;
+  challengeKey: string;
   deliveryKey: string;
   purpose?: string;
   otpExpiresAt?: number;
   method: "email" | "phone";
   allowedMethod: string;
   channel?: CustomerAuthOtpChannel;
-  identifier: string;
+  /** Legacy pre-reference payloads only. New OTP queue payloads must omit this. */
+  identifier?: string;
   /** Legacy pre-reference payloads only. New OTP queue payloads must omit this. */
   code?: string;
-  name: string;
+  /** Legacy pre-reference payloads only. New OTP queue payloads must omit this. */
+  name?: string;
 }
 
 // ─────────────────────────────────────────
@@ -45,8 +47,6 @@ export interface OtpTransport {
 
   /** Build the queue payload for sending the OTP via this transport */
   buildQueuePayload(
-    identifier: string,
-    name: string,
     settings: SiteSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
@@ -70,8 +70,6 @@ export class EmailOtpTransport implements OtpTransport {
   readonly label = "email";
 
   buildQueuePayload(
-    identifier: string,
-    name: string,
     settings: SiteSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
@@ -87,8 +85,6 @@ export class EmailOtpTransport implements OtpTransport {
       method: "email",
       allowedMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod),
       channel,
-      identifier,
-      name,
     };
   }
 
@@ -103,8 +99,6 @@ export class SmsOtpTransport implements OtpTransport {
   readonly label = "SMS";
 
   buildQueuePayload(
-    identifier: string,
-    name: string,
     settings: SiteSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
@@ -120,8 +114,6 @@ export class SmsOtpTransport implements OtpTransport {
       method: "phone",
       allowedMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod),
       channel,
-      identifier,
-      name,
     };
   }
 
@@ -136,8 +128,6 @@ export class WhatsAppOtpTransport implements OtpTransport {
   readonly label = "WhatsApp";
 
   buildQueuePayload(
-    identifier: string,
-    name: string,
     settings: SiteSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
@@ -153,8 +143,6 @@ export class WhatsAppOtpTransport implements OtpTransport {
       method: "phone",
       allowedMethod: "whatsapp_otp",
       channel,
-      identifier,
-      name,
     };
   }
 

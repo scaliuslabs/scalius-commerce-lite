@@ -57,6 +57,28 @@ function getAliasHosts(
   return hosts;
 }
 
+const HTTP_URL_RE = /^https?:\/\//i;
+
+function hasUnsafeMediaSourceChars(value: string): boolean {
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (char === "\\" || code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
+function isSafeBareObjectKey(value: string): boolean {
+  return !value.includes(":") && !hasUnsafeMediaSourceChars(value);
+}
+
+function isSafeLocalPath(value: string): boolean {
+  return (
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !hasUnsafeMediaSourceChars(value)
+  );
+}
+
 /**
  * Resolve a media URL to an absolute CDN URL when possible.
  *
@@ -76,12 +98,15 @@ export function resolveMediaUrl(
 
   const canonicalBase = toCanonicalCdnBase(cdnBase);
 
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+  if (HTTP_URL_RE.test(trimmed)) {
+    if (hasUnsafeMediaSourceChars(trimmed)) return "";
+
     const parsed = toUrl(trimmed);
+    if (!parsed || !/^https?:$/.test(parsed.protocol)) return "";
+
     const aliasHosts = getAliasHosts(options);
 
     if (
-      parsed &&
       canonicalBase &&
       aliasHosts.has(parsed.hostname.toLowerCase())
     ) {
@@ -92,10 +117,16 @@ export function resolveMediaUrl(
   }
 
   // Already a Cloudflare-optimized path
-  if (trimmed.startsWith("/cdn-cgi/")) return trimmed;
+  if (trimmed.startsWith("/cdn-cgi/")) {
+    return isSafeLocalPath(trimmed) ? trimmed : "";
+  }
 
   // Local asset path (e.g. /img/no-image.webp)
-  if (trimmed.startsWith("/")) return trimmed;
+  if (trimmed.startsWith("/")) {
+    return isSafeLocalPath(trimmed) ? trimmed : "";
+  }
+
+  if (!isSafeBareObjectKey(trimmed)) return "";
 
   // Bare R2 object key — prepend CDN base
   const base = cdnBase?.replace(/\/$/, "");

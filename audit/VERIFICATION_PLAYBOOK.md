@@ -44,6 +44,8 @@ Expected healthy result: HTTP `200`, `Cache-Control: no-store`, `success: true`,
 
 Expected degraded result: HTTP `503`, `success: false`, `status: "degraded"`, and a per-check `status` of `missing`, `error`, or `timeout`. The endpoint must stay read-only: D1 uses `SELECT 1`, KV uses a read probe, R2 uses `list({ limit: 1 })`, and Queue/DO checks are binding-shape checks only.
 
+`pnpm ops:check`, `pnpm release:check`, and API deploy verification all use the same four-sample `/readyz` recovery window by default: the final sample must be ready and at least two samples must be ready.
+
 Every API HTTP response should carry `X-Request-Id`; preserve a safe caller-supplied value during smoke tests when you want to match client output to Worker logs. Structured API ops logs include `requestId` and Cloudflare `cfRay` when available. Alert on repeated `api.readyz.degraded` events by required-check status, then use the same request id/CF-Ray to inspect the matching Worker invocation without exposing secrets or buyer data.
 
 Operational runbook: see [OPERATIONAL_RUNBOOK.md](OPERATIONAL_RUNBOOK.md) for concrete alert signals, read-only live smoke commands, queue/DLQ backlog checks, scheduled-maintenance checks, and deploy/rollback investigation pointers. Monitoring contract: see [ops-monitoring-contract.md](ops-monitoring-contract.md) for the Cloudflare-native scheduled ops monitor and completion checklist. The deployed monitor is a tiny scheduled Worker with no public route: call `/readyz`, read queue/DLQ backlog through `Queue.metrics()` bindings, persist KV streak/cooldown state, and emit structured redacted logs. Cloudflare Health Checks are useful outside-in for `/readyz`, but they do not cover queue/DLQ backlog by themselves.

@@ -12,8 +12,6 @@ const baseSettings = {
 describe("OTP transports", () => {
   it("includes durable delivery metadata in email payloads", () => {
     const payload = new EmailOtpTransport().buildQueuePayload(
-      "buyer@example.com",
-      "Buyer",
       baseSettings,
       "email",
       "otp_delivery_1",
@@ -28,15 +26,14 @@ describe("OTP transports", () => {
       purpose: "customer_login",
       otpExpiresAt: 4_102_444_800,
       method: "email",
-      identifier: "buyer@example.com",
     });
     expect(payload).not.toHaveProperty("code");
+    expect(payload).not.toHaveProperty("identifier");
+    expect(payload).not.toHaveProperty("name");
   });
 
   it("includes durable delivery metadata in SMS payloads", () => {
     const payload = new SmsOtpTransport().buildQueuePayload(
-      "+8801712345678",
-      "Buyer",
       { ...baseSettings, authVerificationMethod: "sms_otp" } as SiteSettings,
       "sms",
       "otp_delivery_sms_1",
@@ -54,12 +51,12 @@ describe("OTP transports", () => {
       allowedMethod: "sms_otp",
     });
     expect(payload).not.toHaveProperty("code");
+    expect(payload).not.toHaveProperty("identifier");
+    expect(payload).not.toHaveProperty("name");
   });
 
   it("includes durable metadata without WhatsApp credentials in WhatsApp payloads", () => {
     const payload = new WhatsAppOtpTransport().buildQueuePayload(
-      "+8801712345678",
-      "Buyer",
       { ...baseSettings, authVerificationMethod: "whatsapp_otp" } as SiteSettings,
       "whatsapp",
       "otp_delivery_wa_1",
@@ -80,5 +77,7 @@ describe("OTP transports", () => {
     expect(payload).not.toHaveProperty("waPhoneId");
     expect(payload).not.toHaveProperty("waTemplate");
     expect(payload).not.toHaveProperty("code");
+    expect(payload).not.toHaveProperty("identifier");
+    expect(payload).not.toHaveProperty("name");
   });
 });

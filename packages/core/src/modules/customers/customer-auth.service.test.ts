@@ -253,6 +253,8 @@ describe("customer auth service intent handling", () => {
         method: "email",
         channel: "email",
         identifier: "new@example.com",
+        deliveryTarget: "new@example.com",
+        deliveryName: "New Customer",
         phone: "+8801712345678",
         intent: "sign_up",
       }),
@@ -265,7 +267,12 @@ describe("customer auth service intent handling", () => {
       deliveryKey: expect.stringMatching(/^otp_[a-f0-9]+$/),
     });
     expect(result.queuePayload).not.toHaveProperty("code");
+    expect(result.queuePayload).not.toHaveProperty("identifier");
+    expect(result.queuePayload).not.toHaveProperty("name");
     expect(JSON.stringify(result.queuePayload)).not.toContain(persistedCode);
+    expect(JSON.stringify(result.queuePayload)).not.toContain("new@example.com");
+    expect(JSON.stringify(result.queuePayload)).not.toContain("+8801712345678");
+    expect(JSON.stringify(result.queuePayload)).not.toContain("New Customer");
     expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
     expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(
@@ -305,8 +312,9 @@ describe("customer auth service intent handling", () => {
     expect(result.queuePayload).toMatchObject({
       method: "email",
       channel: "email",
-      identifier: "buyer@example.com",
     });
+    expect(result.queuePayload).not.toHaveProperty("identifier");
+    expect(result.queuePayload).not.toHaveProperty("name");
     expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
       db,
       expect.objectContaining({
@@ -314,6 +322,8 @@ describe("customer auth service intent handling", () => {
         method: "email",
         channel: "email",
         identifier: "buyer@example.com",
+        deliveryTarget: "buyer@example.com",
+        deliveryName: "Buyer",
         intent: "sign_in",
       }),
     );
@@ -385,8 +395,9 @@ describe("customer auth service intent handling", () => {
     expect(result.queuePayload).toMatchObject({
       method: "phone",
       channel: "sms",
-      identifier: "+8801712345678",
     });
+    expect(result.queuePayload).not.toHaveProperty("identifier");
+    expect(result.queuePayload).not.toHaveProperty("name");
     expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
       db,
       expect.objectContaining({
@@ -394,6 +405,8 @@ describe("customer auth service intent handling", () => {
         method: "phone",
         channel: "sms",
         identifier: "+8801712345678",
+        deliveryTarget: "+8801712345678",
+        deliveryName: "Buyer",
       }),
     );
     const persistInput = challengeMocks.persistCustomerAuthOtpChallenge.mock.calls.at(-1)?.[1] as { otpKey: string };

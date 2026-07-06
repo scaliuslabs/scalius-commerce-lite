@@ -77,6 +77,23 @@ describe("products sitemap route", () => {
     expect(body).not.toContain("/products/");
   });
 
+  it("rejects malformed page query parameters", async () => {
+    const badSuffix = await GET(
+      context("https://storefront.example.test/sitemap-products.xml?page=2abc"),
+    );
+    const leadingZero = await GET(
+      context("https://storefront.example.test/sitemap-products.xml?page=05"),
+    );
+
+    expect(badSuffix.status).toBe(400);
+    await expect(badSuffix.text()).resolves.toContain("Invalid page parameter");
+    expect(leadingZero.status).toBe(400);
+    await expect(leadingZero.text()).resolves.toContain(
+      "Invalid page parameter",
+    );
+    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+  });
+
   it("emits product loc and lastmod without ignored priority or changefreq tags", async () => {
     mocks.getAllProducts.mockResolvedValueOnce({
       data: [

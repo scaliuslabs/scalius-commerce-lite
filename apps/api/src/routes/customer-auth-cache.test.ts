@@ -1051,14 +1051,12 @@ describe("customer auth private cache policy", () => {
       deliveryKey: "otp_delivery_1",
       queuePayload: {
         type: "auth.send_otp",
+        challengeKey: "cust_otp:email:opaque_hash",
         deliveryKey: "otp_delivery_1",
         purpose: "customer_login",
         otpExpiresAt: 4_102_444_800,
         method: "email",
         allowedMethod: "email",
-        identifier: "buyer@example.com",
-        code: "123456",
-        name: "Buyer",
       },
     });
 
@@ -1082,8 +1080,12 @@ describe("customer auth private cache policy", () => {
     expect(response.status).toBe(503);
     expect(queueSend).toHaveBeenCalledWith(expect.objectContaining({
       type: "auth.send_otp",
+      challengeKey: "cust_otp:email:opaque_hash",
       deliveryKey: "otp_delivery_1",
     }));
+    expect(JSON.stringify(queueSend.mock.calls[0]?.[0])).not.toContain("buyer@example.com");
+    expect(JSON.stringify(queueSend.mock.calls[0]?.[0])).not.toContain("Buyer");
+    expect(JSON.stringify(queueSend.mock.calls[0]?.[0])).not.toContain("123456");
     expect(mocks.deleteCustomerAuthOtpChallenge).toHaveBeenCalledWith(
       {},
       {

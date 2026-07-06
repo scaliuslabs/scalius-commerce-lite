@@ -71,6 +71,8 @@ export const customerAuthOtpChallenges = sqliteTable("customer_auth_otp_challeng
     intent: text("intent", { enum: ["sign_in", "sign_up"] }).notNull().default("sign_in"),
     identifierHash: text("identifier_hash").notNull(),
     identifierMasked: text("identifier_masked").notNull(),
+    deliveryTargetEncrypted: text("delivery_target_encrypted"),
+    deliveryNameEncrypted: text("delivery_name_encrypted"),
     contactEmailEncrypted: text("contact_email_encrypted"),
     phoneEncrypted: text("phone_encrypted"),
     codeHash: text("code_hash").notNull(),

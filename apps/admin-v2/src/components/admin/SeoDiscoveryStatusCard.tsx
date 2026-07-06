@@ -58,6 +58,7 @@ const TONE_ICONS: Record<SeoDiscoveryTone, LucideIcon> = {
 
 const FEED_REASON_LABELS: Record<ProductFeedDiagnosticReason, string> = {
   feed_disabled: "Feed disabled",
+  storefront_url_unavailable: "Storefront URL unavailable",
   inactive_deleted_unpublished: "Inactive or deleted",
   no_buyer_sku: "No buyer-safe SKU",
   missing_image: "Missing primary image",
