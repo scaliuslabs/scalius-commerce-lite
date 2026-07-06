@@ -17,6 +17,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Accordion, AccordionItem, AccordionContent } from "@/components/ui/accordion";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import {
     MASKED,
@@ -34,6 +35,7 @@ import {
 } from "./payment-gateway-utils";
 import { PolarForm, PolarSetupGuide } from "./PolarSettingsForm";
 import { getServerFnError } from "@/lib/api-helpers";
+import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import { checkoutFlowSettingsQueryOptions } from "@/lib/api-query-options/settings";
 import {
@@ -73,6 +75,7 @@ export default function PaymentGatewaysManager() {
     const [showPolarHelp, setShowPolarHelp] = useState(false);
     const loadedGateways = useRef<Set<string>>(new Set());
     const [loadingGw, setLoadingGw] = useState<string | null>(null);
+    const [gatewayLoadErrors, setGatewayLoadErrors] = useState<Partial<Record<MethodKey, string>>>({});
     const [expanded, setExpanded] = useState<string[]>([]);
 
     // Load only payment-methods on mount (1 API call)
@@ -96,9 +99,14 @@ export default function PaymentGatewaysManager() {
     useEffect(() => { loadMethods(); }, [loadMethods]);
 
     // Lazy-load gateway credentials on accordion expand
-    const loadCreds = useCallback(async (gw: MethodKey) => {
-        if (gw === "cod" || loadedGateways.current.has(gw)) return;
+    const loadCreds = useCallback(async (gw: MethodKey, force = false) => {
+        if (gw === "cod" || (loadedGateways.current.has(gw) && !force)) return;
         setLoadingGw(gw);
+        setGatewayLoadErrors((prev) => {
+            const next = { ...prev };
+            delete next[gw];
+            return next;
+        });
         try {
             const d = await getPaymentGatewaySettings({ data: { gateway: gw } }) as Record<string, unknown>;
             if (gw === "stripe") {
@@ -112,7 +120,15 @@ export default function PaymentGatewaysManager() {
                 setPolar(sd); setPolarConf({ token: !!sd.accessToken, webhook: !!sd.webhookSecret });
             }
             loadedGateways.current.add(gw);
-        } catch { toast.error(`Failed to load ${META[gw].label} settings`); }
+        } catch (err) {
+            loadedGateways.current.delete(gw);
+            const message = getSettingsLoadErrorMessage(
+                err,
+                `Failed to load ${META[gw].label} settings. Existing credentials were not changed.`,
+            );
+            setGatewayLoadErrors((prev) => ({ ...prev, [gw]: message }));
+            toast.error(message);
+        }
         finally { setLoadingGw(null); }
     }, []);
 
@@ -156,6 +172,10 @@ export default function PaymentGatewaysManager() {
     };
 
     const saveGw = async (gw: MethodKey, body: object, setSaving: (v: boolean) => void) => {
+        if (gw !== "cod" && !loadedGateways.current.has(gw)) {
+            toast.error(`Load ${META[gw].label} settings before saving.`);
+            return;
+        }
         setSaving(true);
         try {
             await updatePaymentGatewaySettings({ data: { gateway: gw, settings: body as unknown as SettingsPayload } });
@@ -323,6 +343,8 @@ export default function PaymentGatewaysManager() {
                         const gatewayNotice = getGatewayNotice(method);
                         const selected = enabledMethods.has(method);
                         const status = methods?.gatewayStatus?.[method];
+                        const gatewayLoaded = method === "cod" || loadedGateways.current.has(method);
+                        const gatewayLoadError = gatewayLoadErrors[method];
                         const providerEnabled = status?.providerEnabled ?? status?.enabled === true;
                         const usable = method === "cod"
                             ? true
@@ -371,6 +393,25 @@ export default function PaymentGatewaysManager() {
                                 {method !== "cod" && (
                                     <AccordionContent className="px-4 pb-4">
                                         {loadingGw === method ? (
+                                            <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                                        ) : gatewayLoadError ? (
+                                            <Alert variant="destructive" className="mt-3">
+                                                <AlertTriangle className="h-4 w-4" />
+                                                <AlertTitle>Gateway settings unavailable</AlertTitle>
+                                                <AlertDescription className="space-y-3">
+                                                    <p>{gatewayLoadError}</p>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => void loadCreds(method, true)}
+                                                    >
+                                                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                                                        Retry
+                                                    </Button>
+                                                </AlertDescription>
+                                            </Alert>
+                                        ) : !gatewayLoaded ? (
                                             <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                                         ) : method === "stripe" ? (
                                             <StripeForm s={stripe} set={setStripe} conf={stripeConf} saving={savingStripe}

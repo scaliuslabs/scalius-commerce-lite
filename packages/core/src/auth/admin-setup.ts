@@ -3,6 +3,8 @@ import { adminSetupClaims, adminSetupRateLimits, user } from "@scalius/database/
 import { and, eq, gt, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { ConflictError, ForbiddenError, RateLimitError } from "../errors";
 
+export type AdminPrincipalExistsDb = Pick<D1Database, "prepare">;
+
 export interface ClaimedAdminSetup {
   singletonKey: typeof ADMIN_SETUP_SINGLETON_KEY;
   claimId: string;
@@ -22,6 +24,41 @@ const ADMIN_SETUP_CLAIM_LEASE_SECONDS = 60;
 const ADMIN_SETUP_RATE_LIMIT_ATTEMPTS = 5;
 const ADMIN_SETUP_RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
 const MAX_ERROR_LENGTH = 500;
+const ADMIN_PRINCIPAL_EXISTS_SUBQUERY = `
+  select 1
+  from "user"
+  where is_super_admin = 1
+  union all
+  select 1
+  from user_permissions as granted_permissions
+  where granted_permissions.granted = 1
+  union all
+  select 1
+  from user_roles
+  inner join role_permissions on role_permissions.role_id = user_roles.role_id
+  where not exists (
+    select 1
+    from user_permissions as denied_permissions
+    where denied_permissions.user_id = user_roles.user_id
+      and denied_permissions.permission_id = role_permissions.permission_id
+      and denied_permissions.granted = 0
+    )
+  limit 1
+`;
+
+const ADMIN_PRINCIPAL_EXISTS_QUERY = `select 1 as found where exists (${ADMIN_PRINCIPAL_EXISTS_SUBQUERY}) limit 1`;
+
+function adminPrincipalExistsSql() {
+  return sql.raw(`exists (${ADMIN_PRINCIPAL_EXISTS_SUBQUERY})`);
+}
+
+export async function adminPrincipalExists(db: AdminPrincipalExistsDb): Promise<boolean> {
+  const row = await db
+    .prepare(ADMIN_PRINCIPAL_EXISTS_QUERY)
+    .first<{ found: number }>();
+
+  return row != null;
+}
 
 export async function enforceAdminSetupRateLimit(
   db: Database,
@@ -143,7 +180,7 @@ export async function claimAdminSetup(
         and(
           eq(adminSetupClaims.singletonKey, ADMIN_SETUP_SINGLETON_KEY),
           eq(adminSetupClaims.status, "completed"),
-          sql`not exists (select 1 from "user" where "user"."role" = 'admin')`,
+          sql`not ${adminPrincipalExistsSql()}`,
         ),
       )
       .returning({ singletonKey: adminSetupClaims.singletonKey });

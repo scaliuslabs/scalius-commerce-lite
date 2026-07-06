@@ -8,7 +8,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 |------|---------|
 | `index.ts` | Barrel exports (delivery.service, tracking, factory, locations, types, status-mapper, provider). Excludes pathao-location-import and providers/. |
 | `provider.ts` | `DeliveryProviderInterface` -- contract all providers implement. Extends `ProviderLifecycle` from `@scalius/core/providers/types`. Methods: `getName`, `getType`, `testConnection`, `createShipment`, `checkShipmentStatus`. |
-| `factory.ts` | `createProvider()` -- factory that parses credentials (with optional AES-GCM decryption via `decryptCredentialsGraceful()`) and config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. Read paths tolerate legacy plaintext/JWT-encrypted rows only for migration. |
+| `factory.ts` | `createProvider()` -- factory that strict-reads encrypted credentials with `CREDENTIAL_ENCRYPTION_KEY`, parses credentials/config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. Legacy plaintext rows remain readable for migration; unreadable encrypted rows fail before provider clients are built. |
 | `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
 | `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries |
 | `provider-readiness.ts` | Activation/readiness rules for Pathao/Steadfast required fields plus keyed setup fingerprints for durable live-test proof |
@@ -119,7 +119,7 @@ Delivery providers are inactive drafts by default on both create and update-as-c
 
 ## Credential Storage
 
-Delivery provider credentials are encrypted before storage with the dedicated `CREDENTIAL_ENCRYPTION_KEY`. `saveDeliveryProvider()` is write-strict and must not be called with `getEncryptionKey()` fallback output; route-facing saves use `requireEncryptionKey()` and fail before DB writes or checkout-cache invalidation when the key is missing. Admin list/get/update paths decrypt existing rows before masking or merging masked fields, including `webhookSecret`, so encrypted rows are never returned as ciphertext and masked placeholders are never persisted as real credentials. Provider runtime reads keep graceful plaintext/JWT fallback through `createProvider()` for legacy migration only.
+Delivery provider credentials are encrypted before storage with the dedicated `CREDENTIAL_ENCRYPTION_KEY`. `saveDeliveryProvider()` is write-strict and must not be called with `getEncryptionKey()` fallback output; route-facing saves use `requireEncryptionKey()` and fail before DB writes or checkout-cache invalidation when the key is missing. Admin list/get/update paths strict-read existing rows before masking or merging masked fields, including `webhookSecret`, so encrypted rows are never returned as ciphertext and masked placeholders are never persisted as real credentials. Provider runtime reads, webhook verification, Pathao import, shipment creation, status polling, and live tests pass only `getCredentialEncryptionKey()` output; missing/wrong keys fail closed before courier calls while legacy plaintext rows remain readable for migration.
 
 ### Tracking URLs
 - Pathao: `https://merchant.pathao.com/tracking?consignment_id={trackingId}`
@@ -143,7 +143,7 @@ Upsert logic: match by Pathao external ID first, then by `name+parentId`. Progre
 
 - `@scalius/database` -- `deliveryProviders`, `deliveryShipments`, `deliveryLocations`, `orders`, `orderItems`, `products`
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ServiceUnavailableError`
-- `@scalius/core/utils/credential-encryption` -- `encryptCredentials`, `decryptCredentialsGraceful`
+- `@scalius/core/utils/credential-encryption` -- `encryptCredentials`, `readStoredCredentialStrict`
 - `@scalius/core/modules/inventory/inventory-transitions` -- `applyInventoryForStatusChange`
 - `@scalius/core/providers/types` -- `ProviderLifecycle`, `HealthCheckResult`
 - `@scalius/shared/customer-utils` -- `formatPhoneForProvider` (used by fraud-checker provider, not delivery directly)

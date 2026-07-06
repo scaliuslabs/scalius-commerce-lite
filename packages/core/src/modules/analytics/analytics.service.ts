@@ -5,7 +5,9 @@ import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import type { Analytics } from "@scalius/database/schema";
 import type { z } from "zod";
+import { ValidationError } from "@scalius/core/errors";
 import {
+    getActiveAnalyticsPlaceholderConfigError,
     isMainThreadOnlyAnalyticsType,
     normalizeCloudflareWebAnalyticsConfig,
     type createAnalyticsSchema,
@@ -48,6 +50,16 @@ function normalizeAnalyticsScriptValues(
     };
 }
 
+function assertAnalyticsScriptCanBeActive(data: {
+    config: string;
+    isActive: boolean;
+}) {
+    const error = getActiveAnalyticsPlaceholderConfigError(data);
+    if (error) {
+        throw new ValidationError(error);
+    }
+}
+
 export async function listAnalyticsScripts(db: Database) {
     const results = await db.select().from(analytics).limit(50);
     return results.map(formatScriptResponse);
@@ -66,6 +78,10 @@ export async function getAnalyticsScript(db: Database, id: string) {
 export async function createAnalyticsScript(db: Database, data: CreateAnalyticsInput) {
     const analyticsId = "analytics_" + nanoid();
     const normalized = normalizeAnalyticsScriptValues(data);
+    assertAnalyticsScriptCanBeActive({
+        config: normalized.config,
+        isActive: data.isActive,
+    });
 
     const [script] = await db
         .insert(analytics)
@@ -97,6 +113,10 @@ export async function updateAnalyticsScript(db: Database, id: string, data: Upda
     }
 
     const normalized = normalizeAnalyticsScriptValues(data);
+    assertAnalyticsScriptCanBeActive({
+        config: normalized.config,
+        isActive: data.isActive,
+    });
 
     await db
         .update(analytics)
@@ -116,7 +136,10 @@ export async function updateAnalyticsScript(db: Database, id: string, data: Upda
 
 export async function toggleAnalyticsScript(db: Database, id: string, isActive: boolean) {
     const existingScript = await db
-        .select({ id: analytics.id })
+        .select({
+            id: analytics.id,
+            config: analytics.config,
+        })
         .from(analytics)
         .where(eq(analytics.id, id))
         .get();
@@ -124,6 +147,11 @@ export async function toggleAnalyticsScript(db: Database, id: string, isActive: 
     if (!existingScript) {
         return null;
     }
+
+    assertAnalyticsScriptCanBeActive({
+        config: existingScript.config,
+        isActive,
+    });
 
     await db
         .update(analytics)

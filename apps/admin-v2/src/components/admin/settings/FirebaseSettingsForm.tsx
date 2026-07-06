@@ -18,8 +18,11 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useSettingsForm } from "@/hooks/use-settings-form";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  getSettingsLoadErrorMessage,
+  useSettingsForm,
+} from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
   getFirebaseSettings,
@@ -67,7 +70,17 @@ function validateServiceAccountJson(
 }
 
 export default function FirebaseSettingsForm() {
-  const { values, setValue, setValues, isLoading, isSaving, handleSubmit } = useSettingsForm<FirebaseSettings>({
+  const {
+    values,
+    setValue,
+    setValues,
+    isLoading,
+    isLoadError,
+    loadError,
+    isSaving,
+    handleSubmit,
+    refetch,
+  } = useSettingsForm<FirebaseSettings>({
     queryKey: queryKeys.settings.firebase(),
     fetchFn: () => getFirebaseSettings() as Promise<Partial<FirebaseSettings>>,
     saveFn: (v) => {
@@ -175,6 +188,26 @@ export default function FirebaseSettingsForm() {
       <div className="flex justify-center p-8">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (isLoadError) {
+    return (
+      <Alert variant="destructive" className="max-w-3xl">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Firebase settings unavailable</AlertTitle>
+        <AlertDescription className="space-y-3">
+          <p>
+            {getSettingsLoadErrorMessage(
+              loadError,
+              "Firebase settings could not be loaded. Existing push notification credentials were not changed.",
+            )}
+          </p>
+          <Button type="button" variant="outline" onClick={refetch}>
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 

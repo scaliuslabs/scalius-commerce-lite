@@ -134,6 +134,8 @@ const websiteJsonLd = discoverySettings.structuredData.websiteSearch && storefro
     })
   : null;
 
+const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(ogImage);
+
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const currencyDecimalPlaces =
@@ -311,10 +313,10 @@ const runtimeGlobalsScript = [
     <meta property="og:title" content={title} />
     {description && <meta property="og:description" content={description} />}
     {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
-    {ogImage && <meta property="og:image" content={ogImage} />}
-    {ogImage && <meta property="og:image:width" content="1200" />}
-    {ogImage && <meta property="og:image:height" content="630" />}
-    {ogImage && <meta property="og:image:alt" content={title} />}
+    {absoluteOgImageUrl && <meta property="og:image" content={absoluteOgImageUrl} />}
+    {absoluteOgImageUrl && <meta property="og:image:width" content="1200" />}
+    {absoluteOgImageUrl && <meta property="og:image:height" content="630" />}
+    {absoluteOgImageUrl && <meta property="og:image:alt" content={title} />}
     {ogPrice && <meta property="og:price:amount" content={ogPrice} />}
     {ogCurrency && <meta property="og:price:currency" content={ogCurrency} />}
 
@@ -322,8 +324,8 @@ const runtimeGlobalsScript = [
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     {description && <meta name="twitter:description" content={description} />}
-    {ogImage && <meta name="twitter:image" content={ogImage} />}
-    {ogImage && <meta name="twitter:image:alt" content={title} />}
+    {absoluteOgImageUrl && <meta name="twitter:image" content={absoluteOgImageUrl} />}
+    {absoluteOgImageUrl && <meta name="twitter:image:alt" content={title} />}
 
     {/* Robots — noindex for pages that should be excluded */}
     {noindex && <meta name="robots" content="noindex, nofollow" />}

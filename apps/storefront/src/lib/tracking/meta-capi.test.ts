@@ -95,7 +95,7 @@ describe("sendServerEvent", () => {
     window.history.replaceState(
       null,
       "",
-      "/order-success?orderId=order_1&payment_intent_client_secret=pi_secret&keep=yes",
+      "/order-success?orderId=order_1&receipt_token=chk_private&receipt-token=chk_private_2&receiptTokenHash=hash_private&payment_intent_client_secret=pi_secret&keep=yes",
     );
 
     sendServerEvent({
@@ -110,5 +110,7 @@ describe("sendServerEvent", () => {
     expect(payload.eventSourceUrl).toBe(
       "http://localhost:3000/order-success?orderId=order_1&keep=yes",
     );
+    expect(payload.eventSourceUrl).not.toContain("chk_private");
+    expect(payload.eventSourceUrl).not.toContain("receipt");
   });
 });

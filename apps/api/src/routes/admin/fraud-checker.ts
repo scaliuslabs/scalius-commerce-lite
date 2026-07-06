@@ -4,7 +4,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider, fraudLookupWithActiveProvider } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
 import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/provider";
-import { getEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
+import { ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
@@ -46,7 +47,7 @@ const listRoute = createRoute({
 
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
-    const providers = await getFraudProviders(db, getEncryptionKey(c.env as Record<string, unknown>));
+    const providers = await getFraudProviders(db, getCredentialEncryptionKey(c.env as Record<string, unknown>));
 
     const maskedProviders = providers.map(maskProviderSecrets);
 
@@ -124,22 +125,28 @@ app.openapi(updateProviderRoute, async (c) => {
     const db = c.get("db");
     const validated = c.req.valid("json");
     const env = c.env as Record<string, unknown>;
-    const readKey = getEncryptionKey(env);
+    const readKey = getCredentialEncryptionKey(env);
     const encryptionKey = requireEncryptionKey(env);
     let apiKey = validated.apiKey;
     let apiSecret = validated.apiSecret;
+    const maskedCredentialMessage = "Masked fraud checker credentials could not be restored. Re-enter credentials before saving.";
+    const existingProvider = apiKey === MASKED_VALUE || apiSecret === MASKED_VALUE
+        ? await getFraudProvider(db, validated.id, readKey)
+        : null;
 
     if (apiKey === MASKED_VALUE) {
-        const existingProvider = await getFraudProvider(db, validated.id, readKey);
         if (existingProvider?.apiKey) {
             apiKey = existingProvider.apiKey;
+        } else {
+            throw new ValidationError(maskedCredentialMessage);
         }
     }
 
     if (apiSecret === MASKED_VALUE) {
-        const existingProvider = await getFraudProvider(db, validated.id, readKey);
         if (existingProvider?.apiSecret) {
             apiSecret = existingProvider.apiSecret;
+        } else {
+            throw new ValidationError(maskedCredentialMessage);
         }
     }
 
@@ -192,7 +199,7 @@ const testProviderRoute = createRoute({
 app.openapi(testProviderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const result = await testFraudProvider(db, id, getEncryptionKey(c.env as Record<string, unknown>));
+    const result = await testFraudProvider(db, id, getCredentialEncryptionKey(c.env as Record<string, unknown>));
     return ok(c, result);
 });
 
@@ -238,7 +245,7 @@ const lookupRoute = createRoute({
 app.openapi(lookupRoute, async (c) => {
     const db = c.get("db");
     const { phone } = c.req.valid("json");
-    const result = await fraudLookupWithActiveProvider(db, phone, getEncryptionKey(c.env as Record<string, unknown>));
+    const result = await fraudLookupWithActiveProvider(db, phone, getCredentialEncryptionKey(c.env as Record<string, unknown>));
     return ok(c, {
         ...(result.data ?? {}),
         ...(result.riskLevel ? { riskLevel: result.riskLevel } : {}),

@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { adminSetupClaims, adminSetupRateLimits, user } from "@scalius/database/schema";
 import { ConflictError, ForbiddenError, RateLimitError } from "../errors";
 import {
+  adminPrincipalExists,
   claimAdminSetup,
   completeAdminSetupClaimWithUserPromotion,
   enforceAdminSetupRateLimit,
@@ -35,9 +36,36 @@ type UserRow = {
   role: string | null;
   isSuperAdmin: boolean;
   emailVerified: boolean;
+  hasRbacPermission?: boolean;
 };
 
 describe("admin setup coordination", () => {
+  it("checks admin existence through super-admin and RBAC permission state", async () => {
+    const statement = {
+      first: vi.fn(async () => ({ found: 1 })),
+    };
+    const db = {
+      prepare: vi.fn((query: string) => {
+        void query;
+        return statement;
+      }),
+    };
+
+    await expect(
+      adminPrincipalExists(db as unknown as Parameters<typeof adminPrincipalExists>[0]),
+    ).resolves.toBe(true);
+
+    expect(db.prepare).toHaveBeenCalledTimes(1);
+    const query = db.prepare.mock.calls[0]?.[0] ?? "";
+    expect(query).not.toContain("admin_user.role = 'admin'");
+    expect(query).toContain("is_super_admin = 1");
+    expect(query).toContain("from user_roles");
+    expect(query).toContain("inner join role_permissions");
+    expect(query).toContain("from user_permissions as granted_permissions");
+    expect(query).toContain("granted_permissions.granted = 1");
+    expect(query).toContain("denied_permissions.granted = 0");
+  });
+
   it("allows only one active first-admin setup claim", async () => {
     const fake = createFakeAdminSetupDb(1_000);
 
@@ -77,6 +105,46 @@ describe("admin setup coordination", () => {
 
     await expect(claimAdminSetup(fake.db, { nowSeconds: 1_200 })).rejects.toBeInstanceOf(ForbiddenError);
     expect(fake.claim?.completedUserId).toBe("admin_1");
+  });
+
+  it("blocks setup recovery when an RBAC-only admin principal still exists", async () => {
+    const fake = createFakeAdminSetupDb(1_000);
+    const claim = await claimAdminSetup(fake.db, { nowSeconds: 1_000 });
+    fake.users.set("rbac_admin", {
+      id: "rbac_admin",
+      name: "RBAC Admin",
+      role: "user",
+      isSuperAdmin: false,
+      emailVerified: true,
+      hasRbacPermission: true,
+    });
+
+    await markAdminSetupClaimCompleted(fake.db, claim, "rbac_admin", { nowSeconds: 1_005 });
+
+    await expect(claimAdminSetup(fake.db, { nowSeconds: 1_200 })).rejects.toBeInstanceOf(ForbiddenError);
+    expect(fake.claim?.completedUserId).toBe("rbac_admin");
+  });
+
+  it("reclaims a completed setup claim when only a legacy role-only user remains", async () => {
+    const fake = createFakeAdminSetupDb(1_000);
+    const claim = await claimAdminSetup(fake.db, { nowSeconds: 1_000 });
+    fake.users.set("legacy_admin", {
+      id: "legacy_admin",
+      name: "Legacy Admin",
+      role: "admin",
+      isSuperAdmin: false,
+      emailVerified: true,
+    });
+
+    await markAdminSetupClaimCompleted(fake.db, claim, "legacy_admin", { nowSeconds: 1_005 });
+
+    const nextClaim = await claimAdminSetup(fake.db, { nowSeconds: 1_200 });
+
+    expect(nextClaim.claimId).not.toBe(claim.claimId);
+    expect(fake.claim).toMatchObject({
+      status: "processing",
+      completedUserId: null,
+    });
   });
 
   it("reclaims a completed setup claim when no admin user exists anymore", async () => {
@@ -317,7 +385,9 @@ function updateClaim(
   }
 
   if (values.status === "processing") {
-    const hasAdmin = [...state.users.values()].some((row) => row.role === "admin");
+    const hasAdmin = [...state.users.values()].some((row) =>
+      row.isSuperAdmin || row.hasRbacPermission === true,
+    );
     const stale =
       state.claim.status === "failed" ||
       (state.claim.status === "completed" && !hasAdmin) ||

@@ -33,4 +33,23 @@ describe("storefront SEO regressions", () => {
     expect(source).toContain("url: storefrontUrl");
     expect(source).not.toContain("logo: { \"@type\": \"ImageObject\", url: getOptimizedImageUrl");
   });
+
+  it("normalizes Open Graph and Twitter images to absolute storefront URLs", async () => {
+    const source = await readFile(join(storefrontRoot, "src/layouts/Layout.astro"), "utf8");
+
+    expect(source).toContain("const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(ogImage)");
+    expect(source).toContain('<meta property="og:image" content={absoluteOgImageUrl}');
+    expect(source).toContain('<meta name="twitter:image" content={absoluteOgImageUrl}');
+    expect(source).not.toContain('<meta property="og:image" content={ogImage}');
+    expect(source).not.toContain('<meta name="twitter:image" content={ogImage}');
+  });
+
+  it("keeps sitemap-advertised search canonical and noindexes listing variants", async () => {
+    const source = await readFile(join(storefrontRoot, "src/pages/search/index.astro"), "utf8");
+
+    expect(source).toContain('const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/search")');
+    expect(source).toContain("canonicalUrl={canonicalUrl ?? undefined}");
+    expect(source).toContain("const shouldNoindexSearchPage = Boolean(query) || pagination.page > 1 || sortBy !== \"newest\" || activeFilterCount > 0");
+    expect(source).toContain('name="robots" content="noindex,follow"');
+  });
 });

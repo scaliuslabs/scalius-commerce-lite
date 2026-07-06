@@ -9,9 +9,9 @@ import {
 import { createProvider } from "@scalius/core/modules/delivery/factory";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
-import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
+import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
-import { getEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 
 import { ok, created } from "../../../utils/api-response";
@@ -47,24 +47,15 @@ async function decryptStoredCredentials(
     credentialsJson: string,
     env: Record<string, unknown>,
 ): Promise<string> {
-    const primaryKey = getEncryptionKey(env);
-    const primary = await decryptCredentialsGraceful(credentialsJson, primaryKey);
-    try {
-        parseJsonObject(primary);
-        return primary;
-    } catch {
-        const legacyJwtKey = env.JWT_SECRET as string | undefined;
-        if (legacyJwtKey && legacyJwtKey !== primaryKey) {
-            const legacy = await decryptCredentialsGraceful(credentialsJson, legacyJwtKey);
-            try {
-                parseJsonObject(legacy);
-                return legacy;
-            } catch {
-                return primary;
-            }
-        }
-        return primary;
+    const read = await readStoredCredentialStrict(
+        credentialsJson,
+        getCredentialEncryptionKey(env),
+        "Delivery provider credentials",
+    );
+    if (read.error) {
+        throw new Error(read.error);
     }
+    return read.value;
 }
 
 function hasMaskedCredential(credentials: Record<string, unknown>): boolean {
@@ -445,7 +436,7 @@ app.openapi(createTestRoute, async (c) => {
     };
 
     try {
-        const providerInstance = await createProvider(mockProvider, getEncryptionKey(c.env as Record<string, unknown>), c.get("db"));
+        const providerInstance = await createProvider(mockProvider, getCredentialEncryptionKey(c.env as Record<string, unknown>), c.get("db"));
         const result = await providerInstance.testConnection();
 
         return ok(c, {
@@ -505,7 +496,7 @@ app.openapi(testExistingRoute, async (c) => {
     const { id } = c.req.valid("param");
     const provider = await getDeliveryProvider(db, id);
     if (!provider) throw new NotFoundError("Provider not found");
-    const result = await testDeliveryProvider(db, id, getEncryptionKey(c.env as Record<string, unknown>));
+    const result = await testDeliveryProvider(db, id, getCredentialEncryptionKey(c.env as Record<string, unknown>));
     await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
     return ok(c, result);
 });

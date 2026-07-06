@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { processAnalyticsScript, shouldUsePartytown } from "./analytics";
+import {
+  processAnalyticsScript,
+  shouldInjectAnalyticsScript,
+  shouldUsePartytown,
+} from "./analytics";
 
 const baseScript = {
   id: "analytics_1",
@@ -39,5 +43,15 @@ describe("analytics script processing", () => {
         usePartytown: undefined as unknown as boolean,
       }),
     ).toBe(true);
+  });
+
+  it("does not inject legacy active placeholder snippets", () => {
+    expect(
+      shouldInjectAnalyticsScript({
+        ...baseScript,
+        type: "google_analytics",
+        config: "<script>gtag('config', 'G-XXXXXXXXXX');</script>",
+      }),
+    ).toBe(false);
   });
 });

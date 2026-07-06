@@ -5,7 +5,7 @@ import { ServiceUnavailableError } from "../../utils/api-error";
 import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  getEncryptionKey: vi.fn(),
+  getCredentialEncryptionKey: vi.fn(),
   requireEncryptionKey: vi.fn(),
   getFraudProviders: vi.fn(),
   getFraudProvider: vi.fn(),
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../utils/encryption-key", () => ({
-  getEncryptionKey: mocks.getEncryptionKey,
+  getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
   requireEncryptionKey: mocks.requireEncryptionKey,
 }));
 
@@ -49,7 +49,7 @@ function createTestApp() {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
 
-  mocks.getEncryptionKey.mockReturnValue("read-key");
+  mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
   mocks.requireEncryptionKey.mockReturnValue("credential-key");
   mocks.getFraudProviders.mockResolvedValue([providerRecord]);
   mocks.getFraudProvider.mockResolvedValue(providerRecord);
@@ -79,13 +79,13 @@ describe("admin fraud checker credential handling", () => {
     vi.clearAllMocks();
   });
 
-  it("passes the read encryption key and masks provider secrets in list responses", async () => {
+  it("passes the credential encryption key and masks provider secrets in list responses", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request("/api/v1/admin/fraud-checker", { method: "GET" }, env);
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.getFraudProviders).toHaveBeenCalledWith({ id: "db" }, "read-key");
+    expect(mocks.getFraudProviders).toHaveBeenCalledWith({ id: "db" }, "credential-key");
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       data: [
@@ -155,7 +155,7 @@ describe("admin fraud checker credential handling", () => {
     expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
   });
 
-  it("restores masked update secrets through the read encryption key", async () => {
+  it("restores masked update secrets through the credential encryption key", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request("/api/v1/admin/fraud-checker", {
@@ -174,7 +174,7 @@ describe("admin fraud checker credential handling", () => {
     }, env);
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.getFraudProvider).toHaveBeenCalledWith({ id: "db" }, "provider_fraudbd", "read-key");
+    expect(mocks.getFraudProvider).toHaveBeenCalledWith({ id: "db" }, "provider_fraudbd", "credential-key");
     expect(mocks.saveFraudProvider).toHaveBeenCalledWith(
       { id: "db" },
       expect.objectContaining({ apiKey: "fraudbd-key", apiSecret: "fraudbd-password" }),
@@ -182,7 +182,37 @@ describe("admin fraud checker credential handling", () => {
     );
   });
 
-  it("uses the read encryption key for provider tests and manual lookups", async () => {
+  it("fails closed instead of saving masked placeholders when stored credentials are unreadable", async () => {
+    const { app, env } = createTestApp();
+    mocks.getFraudProvider.mockResolvedValueOnce(null);
+
+    const response = await app.request("/api/v1/admin/fraud-checker", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: "provider_fraudbd",
+        name: "FraudBD",
+        apiUrl: "https://fraudbd.example/api",
+        apiKey: "••••••••••••",
+        apiSecret: "••••••••••••",
+        userId: "merchant-user",
+        isActive: true,
+        providerType: "fraudbd",
+      }),
+    }, env);
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Masked fraud checker credentials could not be restored. Re-enter credentials before saving.",
+      },
+    });
+    expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
+  });
+
+  it("uses the credential encryption key for provider tests and manual lookups", async () => {
     const { app, env } = createTestApp();
 
     await app.request("/api/v1/admin/fraud-checker/provider_fraudbd/test", { method: "POST" }, env);
@@ -192,7 +222,26 @@ describe("admin fraud checker credential handling", () => {
       body: JSON.stringify({ phone: "+8801700000000" }),
     }, env);
 
-    expect(mocks.testFraudProvider).toHaveBeenCalledWith({ id: "db" }, "provider_fraudbd", "read-key");
-    expect(mocks.fraudLookupWithActiveProvider).toHaveBeenCalledWith({ id: "db" }, "+8801700000000", "read-key");
+    expect(mocks.testFraudProvider).toHaveBeenCalledWith({ id: "db" }, "provider_fraudbd", "credential-key");
+    expect(mocks.fraudLookupWithActiveProvider).toHaveBeenCalledWith({ id: "db" }, "+8801700000000", "credential-key");
+  });
+
+  it("does not use JWT_SECRET as the provider read key", async () => {
+    const { app, env } = createTestApp();
+    delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
+    (env as Record<string, unknown>).JWT_SECRET = "legacy-jwt-key";
+    mocks.getCredentialEncryptionKey.mockReturnValue(undefined);
+
+    await app.request("/api/v1/admin/fraud-checker/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: "+8801700000000" }),
+    }, env);
+
+    expect(mocks.fraudLookupWithActiveProvider).toHaveBeenCalledWith(
+      { id: "db" },
+      "+8801700000000",
+      undefined,
+    );
   });
 });

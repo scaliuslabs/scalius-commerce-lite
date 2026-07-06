@@ -591,6 +591,8 @@ describe("checkout status recovery hints", () => {
 
 describe("create order commit/KV ordering", () => {
   it("commits the order before scheduling checkout recovery hints and side effects", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const waitUntilPromises: Promise<unknown>[] = [];
     mocks.createStorefrontOrder.mockResolvedValue({
       checkoutToken: "chk_order_1",
       orderId: "order_1",
@@ -599,13 +601,10 @@ describe("create order commit/KV ordering", () => {
       commitPayload: { orderData: { id: "order_1" } },
     });
     const { app, kv, calls } = createTestApp();
-    const neverSettles = new Promise<never>(() => undefined);
-    kv.put.mockImplementation(async (key: string) => {
-      calls.push(`kv:${key}`);
-      await neverSettles;
-    });
     const executionCtx = {
-      waitUntil: vi.fn(),
+      waitUntil: vi.fn((promise: Promise<unknown>) => {
+        waitUntilPromises.push(promise);
+      }),
       passThroughOnException: vi.fn(),
     };
     mocks.commitStorefrontOrderPayload.mockImplementation(async () => {
@@ -621,76 +620,90 @@ describe("create order commit/KV ordering", () => {
       calls.push("availability");
     });
 
-    const response = await app.request(
-      "/api/v1/orders",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validOrderBody),
-      },
-      { CACHE: kv } as never,
-      executionCtx as never,
-    );
+    try {
+      const response = await app.request(
+        "/api/v1/orders",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(validOrderBody),
+        },
+        { CACHE: kv } as never,
+        executionCtx as never,
+      );
 
-    const responseText = await response.clone().text();
-    expect(response.status, responseText).toBe(201);
-    const statusKey = await getCheckoutStatusKvKey("chk_order_1");
-    const receiptKey = await getReceiptTokenKvKey("chk_order_1");
-    expect(calls.slice(0, 2)).toEqual(["commit", "mark-committed"]);
-    expect(calls).toContain(`kv:${statusKey}`);
-    expect(calls).toContain(`kv:${receiptKey}`);
-    expect(calls).toContain("side-effects");
-    expect(calls).toContain("availability");
-    expect(statusKey).not.toContain("chk_order_1");
-    expect(receiptKey).not.toContain("chk_order_1");
-    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(2);
-    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ orderData: { id: "order_1" } }),
-    );
-    expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ checkoutRequestId: "checkout_req_123456" }),
-      expect.any(String),
-      expect.any(Function),
-      expect.any(Function),
-      {
-        orderId: "order_1",
-        checkoutToken: "chk_order_1",
-      },
-      expect.objectContaining({ valid: true }),
-      expect.objectContaining({
-        shippingCharge: 60,
-        cityName: "Dhaka",
-        zoneName: "Mirpur",
-      }),
-      undefined,
-    );
-    expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        id: "coa_1",
-        claimId: "coac_1",
-        orderId: "order_1",
-        checkoutToken: "chk_order_1",
-      }),
-      expect.objectContaining({
-        paymentMethod: "cod",
-        totalAmount: 100,
-        response: expect.objectContaining({
+      const responseText = await response.clone().text();
+      expect(response.status, responseText).toBe(201);
+      expect(executionCtx.waitUntil).toHaveBeenCalledTimes(2);
+      await Promise.all(waitUntilPromises);
+
+      const statusKey = await getCheckoutStatusKvKey("chk_order_1");
+      const receiptKey = await getReceiptTokenKvKey("chk_order_1");
+      const kvKeys = kv.put.mock.calls.map(([key]) => String(key));
+      const receiptWrite = kv.put.mock.calls.find(([key]) => key === receiptKey) as [string, string, unknown?] | undefined;
+      expect(calls.slice(0, 2)).toEqual(["commit", "mark-committed"]);
+      expect(calls).toContain(`kv:${statusKey}`);
+      expect(calls).toContain(`kv:${receiptKey}`);
+      expect(calls).toContain("side-effects");
+      expect(calls).toContain("availability");
+      expect(kvKeys).toEqual(expect.arrayContaining([statusKey, receiptKey]));
+      expect(statusKey).not.toContain("chk_order_1");
+      expect(receiptKey).not.toContain("chk_order_1");
+      expect(JSON.stringify(kvKeys)).not.toContain("chk_order_1");
+      expect(String(receiptWrite?.[1])).not.toContain("chk_order_1");
+      expect(String(receiptWrite?.[1])).not.toContain("chk_");
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain("chk_order_1");
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain("chk_");
+      expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ orderData: { id: "order_1" } }),
+      );
+      expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ checkoutRequestId: "checkout_req_123456" }),
+        expect.any(String),
+        expect.any(Function),
+        expect.any(Function),
+        {
           orderId: "order_1",
-          receiptToken: "chk_order_1",
+          checkoutToken: "chk_order_1",
+        },
+        expect.objectContaining({ valid: true }),
+        expect.objectContaining({
+          shippingCharge: 60,
+          cityName: "Dhaka",
+          zoneName: "Mirpur",
         }),
-      }),
-    );
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      expect.anything(),
-      { orderIds: ["order_1"] },
-      expect.objectContaining({
-        env: expect.objectContaining({ CACHE: kv }),
-        executionCtx,
-      }),
-    );
+        undefined,
+      );
+      expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          id: "coa_1",
+          claimId: "coac_1",
+          orderId: "order_1",
+          checkoutToken: "chk_order_1",
+        }),
+        expect.objectContaining({
+          paymentMethod: "cod",
+          totalAmount: 100,
+          response: expect.objectContaining({
+            orderId: "order_1",
+            receiptToken: "chk_order_1",
+          }),
+        }),
+      );
+      expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
+        expect.anything(),
+        { orderIds: ["order_1"] },
+        expect.objectContaining({
+          env: expect.objectContaining({ CACHE: kv }),
+          executionCtx,
+        }),
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("does not log raw checkout proof when marking a committed attempt fails", async () => {
@@ -1539,6 +1552,142 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(mocks.rateLimit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for SSLCommerz before claim creation when only JWT fallback could read credentials", async () => {
+    mocks.getActivePaymentMethods.mockImplementation(async (_db, _kv, encryptionKey?: string) => ({
+      enabledMethods: encryptionKey === "jwt-fallback" ? ["sslcommerz"] : [],
+      defaultMethod: encryptionKey === "jwt-fallback" ? "sslcommerz" : "cod",
+    }));
+    const { app, db, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+      },
+      { CACHE: kv, JWT_SECRET: "jwt-fallback" } as never,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "SSLCommerz is not enabled for checkout.",
+      },
+    });
+    expect(mocks.getActivePaymentMethods).toHaveBeenCalledWith(
+      db,
+      kv,
+      undefined,
+      expect.objectContaining({ bypassMemoryCache: true }),
+    );
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["below", 9.99],
+    ["above", 500000.01],
+  ])("rejects SSLCommerz full-payment amounts %s provider bounds before checkout writes", async (_label, subtotal) => {
+    mocks.getActivePaymentMethods.mockResolvedValue({
+      enabledMethods: ["sslcommerz"],
+      defaultMethod: "sslcommerz",
+    });
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: true,
+      issues: [],
+      items: [],
+      subtotal,
+      hasFreeDeliveryProduct: true,
+    });
+    mocks.validateStorefrontDeliveryPreflight.mockResolvedValue({
+      shippingCharge: 0,
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: null,
+    });
+    const { app, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+      },
+      { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "SSLCommerz payment amount must be between 10.00 BDT and 500000.00 BDT.",
+      },
+    });
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects SSLCommerz deposit amounts outside provider bounds before checkout writes", async () => {
+    mocks.getActivePaymentMethods.mockResolvedValue({
+      enabledMethods: ["sslcommerz"],
+      defaultMethod: "sslcommerz",
+    });
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: true,
+      issues: [],
+      items: [],
+      subtotal: 100,
+      hasFreeDeliveryProduct: true,
+    });
+    mocks.validateStorefrontDeliveryPreflight.mockResolvedValue({
+      shippingCharge: 0,
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: null,
+    });
+    const { app, kv } = createTestApp({
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 9.99,
+    });
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+      },
+      { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "SSLCommerz payment amount must be between 10.00 BDT and 500000.00 BDT.",
+      },
+    });
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
+    expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rate limits a new checkout before claim creation or order writes", async () => {

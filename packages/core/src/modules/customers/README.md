@@ -61,7 +61,7 @@ Every create, update, and soft delete writes a snapshot to `customerHistory` wit
 - Email sends pass `deliveryKey` as `idempotencyKey`; Resend forwards it as `Idempotency-Key`, while Cloudflare Email stores the returned `messageId`
 - SMS sends pass `createAuthOtpProviderClientReference()` as deterministic `clientReference`; GenNet maps this to `csms_id`
 - WhatsApp sends parse and store Meta message IDs from successful template-message responses
-- OTP plaintext stays only in the queue payload and provider request body. `customer_auth_otp_challenges` stores opaque HMAC lookup material, a code HMAC, contact masks, and encrypted pinned sign-up contacts only; the delivery receipt stores recipient hash/mask, status, provider refs, bounded response summaries, and OTP expiry, never the code.
+- OTP plaintext is derived only inside the API queue consumer and then used for the provider request body. New queue payloads carry opaque challenge/delivery references, never raw codes. `customer_auth_otp_challenges` stores opaque HMAC lookup material, a code HMAC, contact masks, and encrypted pinned sign-up contacts only; the delivery receipt stores recipient hash/mask, status, provider refs, bounded response summaries, and OTP expiry, never the code.
 
 **Session management:**
 - Cookie name: `cs_tok` (HttpOnly, Secure)

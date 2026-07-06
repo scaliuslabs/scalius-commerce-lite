@@ -9,7 +9,7 @@ import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipme
 import { assertNoActivePaymentSessionAttempt, assertNoActiveRefundAttempt } from "@scalius/core/modules/payments";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created } from "../../utils/api-response";
-import { getEncryptionKey } from "../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
@@ -434,7 +434,7 @@ app.openapi(createShipmentRoute, async (c) => {
     const data = c.req.valid("json");
     const db = c.get("db");
 
-    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const [shipmentResult] = await OrdersService.bulkShipOrders(
         db,
         [orderId],
@@ -573,7 +573,7 @@ app.openapi(checkShipmentStatusRoute, (async (c: AdminRouteContext<typeof checkS
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
 
-    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const result = await checkAndSyncShipmentStatus({
         db,
         shipment,
@@ -611,7 +611,7 @@ app.openapi(refreshShipmentRoute, async (c) => {
     if (!shipment) throw new NotFoundError("Shipment not found");
     if (shipment.orderId !== orderId) throw new ValidationError("Shipment does not belong to this order");
 
-    const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const result = await checkAndSyncShipmentStatus({
         db,
         shipment,

@@ -32,4 +32,21 @@ describe("/api/ptproxy", () => {
       }),
     );
   });
+
+  it("rejects allowed analytics hosts when the URL uses a disallowed protocol", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const target =
+      "ftp://analytics.tiktok.com/i18n/pixel/events.js?sdkid=C1234567890ABCDEFG&lib=ttq";
+    const response = await GET({
+      request: new Request(
+        `https://store.example.com/api/ptproxy?url=${encodeURIComponent(target)}`,
+      ),
+    } as Parameters<typeof GET>[0]);
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toBe("Protocol not allowed");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

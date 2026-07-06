@@ -32,16 +32,14 @@ async function getWorkerEnv(): Promise<Env> {
 }
 
 async function queryAdminExists(db: AdminDb): Promise<boolean> {
-  const { retryTransientD1 } = await import("@scalius/core/utils/transient-d1");
+  const [{ adminPrincipalExists }, { retryTransientD1 }] = await Promise.all([
+    import("@scalius/core/auth/admin-setup"),
+    import("@scalius/core/utils/transient-d1"),
+  ]);
   const result = await retryTransientD1(() =>
-    db
-      .prepare(
-        "SELECT 1 as found FROM user WHERE role = ? OR is_super_admin = 1 LIMIT 1",
-      )
-      .bind("admin")
-      .first<{ found: number }>(),
+    adminPrincipalExists(db),
   );
-  return result !== null;
+  return result;
 }
 
 export function clearAdminExistsCache() {

@@ -1,6 +1,6 @@
 import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus } from "@scalius/database/schema";
 import { createProvider } from "./factory";
-import { decryptCredentialsGraceful, encryptCredentials } from "@scalius/core/utils/credential-encryption";
+import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 
 import type { Database } from "@scalius/database/client";
 import type { ShipmentOptions, ShipmentResult } from "./types";
@@ -38,6 +38,21 @@ const EXPIRED_CLAIM_DELETABLE_STATUSES = new Set<string>([
   ShipmentStatus.FAILED,
   ShipmentStatus.CANCELLED,
 ]);
+
+async function readDeliveryProviderCredentials(
+  storedCredentials: string,
+  encryptionKey?: string,
+): Promise<string> {
+  const read = await readStoredCredentialStrict(
+    storedCredentials,
+    encryptionKey,
+    "Delivery provider credentials",
+  );
+  if (read.error) {
+    throw new ServiceUnavailableError(read.error);
+  }
+  return read.value;
+}
 
 function mergeShipmentMetadata(
   existing: string | null | undefined,
@@ -116,7 +131,17 @@ export async function getDeliveryProviderActionReadiness(
     };
   }
 
-  const credentials = await decryptCredentialsGraceful(provider.credentials, encryptionKey);
+  let credentials: string;
+  try {
+    credentials = await readDeliveryProviderCredentials(provider.credentials, encryptionKey);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ready: false,
+      provider,
+      message: `Delivery provider ${providerId} is not ready for shipment creation: ${message}`,
+    };
+  }
   const currentFingerprint = encryptionKey
     ? await getDeliveryProviderSetupFingerprint({
       type: provider.type,
@@ -331,7 +356,7 @@ export async function testDeliveryProvider(db: Database, id: string, encryptionK
     if (!encryptionKey) {
       throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to test provider readiness.");
     }
-    const credentials = await decryptCredentialsGraceful(provider.credentials, encryptionKey);
+    const credentials = await readDeliveryProviderCredentials(provider.credentials, encryptionKey);
     const fingerprint = await getDeliveryProviderSetupFingerprint({
       type: provider.type,
       credentials,

@@ -19,6 +19,16 @@ export const CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC =
 
 const CLOUDFLARE_WEB_ANALYTICS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
 
+const ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS: Array<{
+    pattern: RegExp;
+    label: string;
+}> = [
+    { pattern: /\bG-X{4,}\b/i, label: "GA4 measurement ID" },
+    { pattern: /\bGTM-X{4,}\b/i, label: "Google Tag Manager container ID" },
+    { pattern: /\bPIXEL_ID\b/i, label: "pixel ID" },
+    { pattern: /\bYOUR_[A-Z0-9_]*PIXEL[A-Z0-9_]*ID\b/i, label: "pixel ID" },
+];
+
 export function isMainThreadOnlyAnalyticsType(type: string): boolean {
     return type === "cloudflare_web_analytics";
 }
@@ -58,12 +68,45 @@ const analyticsFields = {
 type AnalyticsConfigInput = {
     type: AnalyticsScriptType;
     config: string;
+    isActive?: boolean;
 };
+
+export function getActiveAnalyticsPlaceholderConfigError(
+    data: Pick<AnalyticsConfigInput, "config" | "isActive">,
+): string | null {
+    if (data.isActive !== true) {
+        return null;
+    }
+
+    const matchedPlaceholder = ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS.find(
+        ({ pattern }) => pattern.test(data.config),
+    );
+    if (!matchedPlaceholder) {
+        return null;
+    }
+
+    return `Replace the placeholder ${matchedPlaceholder.label} before activating this analytics script.`;
+}
+
+export function isPubliclyInjectableAnalyticsConfig(
+    data: Pick<AnalyticsConfigInput, "config" | "isActive">,
+): boolean {
+    return getActiveAnalyticsPlaceholderConfigError(data) === null;
+}
 
 function validateAnalyticsConfig(
     data: AnalyticsConfigInput,
     ctx: z.RefinementCtx,
 ) {
+    const placeholderError = getActiveAnalyticsPlaceholderConfigError(data);
+    if (placeholderError) {
+        ctx.addIssue({
+            code: "custom",
+            path: ["config"],
+            message: placeholderError,
+        });
+    }
+
     if (
         data.type === "cloudflare_web_analytics" &&
         !isValidCloudflareWebAnalyticsConfig(data.config)

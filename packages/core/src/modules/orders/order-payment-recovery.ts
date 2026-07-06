@@ -20,7 +20,7 @@ import type { OtpQueuePayload } from "../customers/otp-transport";
 import {
     enforceCustomerAuthOtpIpRateLimit,
 } from "../customers/customer-auth-rate-limit";
-import { generateOtpCode } from "../customers/customer-auth.service";
+import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
 import {
     createOrderPaymentRecoveryLink,
     previewOrderPaymentRecoveryLink,
@@ -125,9 +125,20 @@ export async function sendOrderPaymentRecoveryOtp(
     });
 
     const nowSeconds = currentUnixSeconds();
-    const code = generateOtpCode();
     const deliveryKey = createAuthOtpDeliveryKey();
+    const challengeKey = await buildRecoveryChallengeKey({
+        orderId,
+        channel,
+        identifier,
+        encryptionKey: input.encryptionKey,
+    });
+    const code = await deriveCustomerAuthOtpDeliveryCode({
+        otpKey: challengeKey,
+        deliveryKey,
+        encryptionKey: input.encryptionKey,
+    });
     const challenge = await persistOrderPaymentRecoveryChallenge(db, {
+        challengeKey,
         orderId,
         method,
         channel,
@@ -153,7 +164,6 @@ export async function sendOrderPaymentRecoveryOtp(
             allowedMethod: channelToAllowedMethod(channel),
             channel,
             identifier,
-            code,
             name: order.customerName?.trim() || "Customer",
         },
         challengeKey: challenge.challengeKey,
@@ -406,6 +416,7 @@ async function persistOrderPaymentRecoveryChallenge(
     db: Database,
     input: {
         orderId: string;
+        challengeKey: string;
         method: RecoveryMethod;
         channel: CustomerAuthOtpChannel;
         identifier: string;
@@ -415,7 +426,7 @@ async function persistOrderPaymentRecoveryChallenge(
         nowSeconds: number;
     },
 ): Promise<{ challengeKey: string; identifierMasked: string; expiresAt: number }> {
-    const challengeKey = await buildRecoveryChallengeKey(input);
+    const challengeKey = input.challengeKey;
     const identifierHash = await hashRecoveryIdentifier(input.identifier, input.encryptionKey);
     const codeHash = await hashRecoveryOtpCode(input.code, challengeKey, input.encryptionKey);
     const expiresAt = input.nowSeconds + OTP_TTL_SECONDS;

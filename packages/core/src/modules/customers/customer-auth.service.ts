@@ -172,6 +172,36 @@ export function generateOtpCode(): string {
     return String(num);
 }
 
+export async function deriveCustomerAuthOtpDeliveryCode(input: {
+    otpKey: string;
+    deliveryKey: string;
+    encryptionKey?: string;
+}): Promise<string> {
+    const secret = requireCustomerOtpDeliveryKey(input.encryptionKey);
+    const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"],
+    );
+    const signature = await crypto.subtle.sign(
+        "HMAC",
+        key,
+        new TextEncoder().encode(`customer-auth-otp-delivery:${input.otpKey}:${input.deliveryKey}`),
+    );
+    const num = (new DataView(signature).getUint32(0) % 900000) + 100000;
+    return String(num);
+}
+
+function requireCustomerOtpDeliveryKey(encryptionKey: string | undefined): string {
+    const key = encryptionKey?.trim();
+    if (!key) {
+        throw new ServiceUnavailableError("Customer OTP signing key is not configured.");
+    }
+    return key;
+}
+
 export function getSessionCookie(cookieHeader: string | null): string | null {
     if (!cookieHeader) return null;
     const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`));
@@ -738,8 +768,12 @@ export async function sendOtp(
 
     // Generate and persist an atomic D1 challenge. KV is intentionally not the
     // OTP authority; it cannot safely count attempts or consume one-time codes.
-    const code = generateOtpCode();
     const deliveryKey = createAuthOtpDeliveryKey();
+    const code = await deriveCustomerAuthOtpDeliveryCode({
+        otpKey,
+        deliveryKey,
+        encryptionKey: input.encryptionKey,
+    });
     const challenge = await persistCustomerAuthOtpChallenge(db, {
         otpKey,
         deliveryKey,
@@ -759,15 +793,16 @@ export async function sendOtp(
 
     // OTP code is intentionally NOT logged — it would leak secrets in production.
 
-    // Build queue payload via transport — use original identifier for delivery (user-facing)
+    // Build queue payload via transport. The raw OTP is intentionally absent; the
+    // consumer derives it from the challenge and delivery references.
     const queuePayload = transport.buildQueuePayload(
-        code,
         normalizedIdentifier,
         name,
         { ...settings, authVerificationMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod) },
         channel,
         deliveryKey,
         challenge.expiresAt,
+        otpKey,
     );
 
     return {

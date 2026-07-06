@@ -41,6 +41,7 @@ import {
   sendOrderPaymentRecoveryOtp,
   verifyOrderPaymentRecoveryOtp,
 } from "./order-payment-recovery";
+import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
 
 type FakeDbOptions = {
   updateRows?: unknown[][];
@@ -188,9 +189,16 @@ describe("order payment recovery OTP service", () => {
       maxAttempts: 5,
     });
     const persistedJson = JSON.stringify(db.calls.insertValues);
+    const derivedCode = await deriveCustomerAuthOtpDeliveryCode({
+      otpKey: result.challengeKey ?? "",
+      deliveryKey: result.deliveryKey ?? "",
+      encryptionKey: "otp-signing-key",
+    });
     expect(persistedJson).not.toContain("+8801775528888");
     expect(persistedJson).not.toContain("buyer@example.com");
-    expect(persistedJson).not.toContain(String(result.queuePayload?.code));
+    expect(persistedJson).not.toContain(derivedCode);
+    expect(result.queuePayload).not.toHaveProperty("code");
+    expect(JSON.stringify(result.queuePayload)).not.toContain(derivedCode);
     expect((db.calls.insertValues as { identifierHash: string }).identifierHash).toMatch(/^[a-f0-9]{64}$/);
     expect((db.calls.insertValues as { codeHash: string }).codeHash).toMatch(/^[a-f0-9]{64}$/);
   });

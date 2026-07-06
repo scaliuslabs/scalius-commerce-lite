@@ -6,7 +6,7 @@ import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { decryptCredentialsGraceful, encryptCredentials } from "@scalius/core/utils/credential-encryption";
+import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import {
   NotFoundError,
   ValidationError,
@@ -66,7 +66,13 @@ async function parseStoredProvider(
   encryptionKey?: string,
 ): Promise<Omit<FraudCheckerProvider, "id"> | null> {
   try {
-    return JSON.parse(await decryptCredentialsGraceful(value, encryptionKey));
+    const read = await readStoredCredentialStrict(
+      value,
+      encryptionKey,
+      "Fraud checker provider credentials",
+    );
+    if (read.error) return null;
+    return JSON.parse(read.value);
   } catch {
     return null;
   }

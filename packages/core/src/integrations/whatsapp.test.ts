@@ -67,7 +67,7 @@ describe("WhatsApp Cloud API integration", () => {
     });
   });
 
-  it("includes URL button parameters when provided", async () => {
+  it("sends auth OTP templates with only the body code parameter", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({
         messages: [{ id: "wamid.otp.1", message_status: "accepted" }],
@@ -83,7 +83,40 @@ describe("WhatsApp Cloud API integration", () => {
       to: "+8801712345678",
       templateName: "auth_otp",
       bodyParameters: ["654321"],
-      buttonUrlParameter: "654321",
+    }, fetchMock);
+
+    const payload = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(payload).toMatchObject({
+      template: {
+        components: [
+          {
+            type: "body",
+            parameters: [{ type: "text", text: "654321" }],
+          },
+        ],
+      },
+    });
+    expect(payload.template.components).toHaveLength(1);
+    expect(JSON.stringify(payload)).not.toContain('"button"');
+  });
+
+  it("includes URL button parameters when explicitly provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        messages: [{ id: "wamid.order.link.1", message_status: "accepted" }],
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await sendWhatsAppTemplateMessage({
+      accessToken: "wa_token",
+      phoneNumberId: "phone_id_1",
+      to: "+8801712345678",
+      templateName: "order_status_with_tracking_link",
+      bodyParameters: ["TRACK123"],
+      buttonUrlParameter: "TRACK123",
     }, fetchMock);
 
     expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)).toMatchObject({
@@ -91,13 +124,13 @@ describe("WhatsApp Cloud API integration", () => {
         components: [
           {
             type: "body",
-            parameters: [{ type: "text", text: "654321" }],
+            parameters: [{ type: "text", text: "TRACK123" }],
           },
           {
             type: "button",
             sub_type: "url",
             index: "0",
-            parameters: [{ type: "text", text: "654321" }],
+            parameters: [{ type: "text", text: "TRACK123" }],
           },
         ],
       },

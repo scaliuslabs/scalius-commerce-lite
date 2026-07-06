@@ -5,7 +5,8 @@ import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
 import { createLocation, getLocationById } from "@scalius/core/modules/delivery/locations";
 import { getCheckoutReadiness } from "@scalius/core/modules/settings/checkout-readiness";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
-import { getEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
+import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
@@ -429,7 +430,6 @@ import {
     resetPathaoImportProgress,
     getPathaoImportStatus,
 } from "@scalius/core/modules/delivery/pathao-location-import";
-import { decryptCredentialsGraceful } from "@scalius/core/utils/credential-encryption";
 import { deliveryProviders } from "@scalius/database/schema";
 
 /**
@@ -458,8 +458,15 @@ app.post("/import-pathao", async (c) => {
 
     let creds: { baseUrl: string; clientId: string; clientSecret: string; username: string; password: string };
     try {
-        const encryptionKey = getEncryptionKey(c.env as Record<string, unknown>);
-        const rawCreds = await decryptCredentialsGraceful(provider.credentials, encryptionKey);
+        const credentialRead = await readStoredCredentialStrict(
+            provider.credentials,
+            getCredentialEncryptionKey(c.env as Record<string, unknown>),
+            "Delivery provider credentials",
+        );
+        if (credentialRead.error) {
+            throw new Error(credentialRead.error);
+        }
+        const rawCreds = credentialRead.value;
         creds = JSON.parse(rawCreds);
     } catch {
         throw new ValidationError("Invalid Pathao credentials. Check your provider settings.");

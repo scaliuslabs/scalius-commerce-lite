@@ -6,9 +6,9 @@ import { ServiceUnavailableError } from "../../../utils/api-error";
 
 const mocks = vi.hoisted(() => ({
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
-  getEncryptionKey: vi.fn(),
+  getCredentialEncryptionKey: vi.fn(),
   requireEncryptionKey: vi.fn(),
-  decryptCredentialsGraceful: vi.fn(),
+  readStoredCredentialStrict: vi.fn(),
   getDeliveryProviders: vi.fn(),
   getDeliveryProvider: vi.fn(),
   saveDeliveryProvider: vi.fn(),
@@ -22,12 +22,12 @@ vi.mock("../../../utils/cache-invalidation", () => ({
 }));
 
 vi.mock("../../../utils/encryption-key", () => ({
-  getEncryptionKey: mocks.getEncryptionKey,
+  getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
   requireEncryptionKey: mocks.requireEncryptionKey,
 }));
 
 vi.mock("@scalius/core/utils/credential-encryption", () => ({
-  decryptCredentialsGraceful: mocks.decryptCredentialsGraceful,
+  readStoredCredentialStrict: mocks.readStoredCredentialStrict,
 }));
 
 vi.mock("@scalius/core/modules/delivery/delivery.service", () => ({
@@ -78,9 +78,13 @@ function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
-  mocks.getEncryptionKey.mockReturnValue("read-key");
+  mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
   mocks.requireEncryptionKey.mockReturnValue("credential-key");
-  mocks.decryptCredentialsGraceful.mockImplementation(async (value: string) => value);
+  mocks.readStoredCredentialStrict.mockImplementation(async (value: string) => ({
+    value,
+    encrypted: false,
+    error: null,
+  }));
   mocks.getDeliveryProviders.mockResolvedValue([providerRecord]);
   mocks.getDeliveryProvider.mockResolvedValue(providerRecord);
   mocks.saveDeliveryProvider.mockResolvedValue(providerRecord);
@@ -269,11 +273,13 @@ describe("delivery provider cache invalidation", () => {
       ...providerRecord,
       credentials: "encrypted-provider-credentials",
     });
-    mocks.decryptCredentialsGraceful.mockImplementation(async (value: string) => (
-      value === "encrypted-provider-credentials"
+    mocks.readStoredCredentialStrict.mockImplementation(async (value: string) => ({
+      value: value === "encrypted-provider-credentials"
         ? JSON.stringify({ clientSecret: "decrypted-secret", password: "decrypted-pass", webhookSecret: "hook-secret" })
-        : value
-    ));
+        : value,
+      encrypted: value === "encrypted-provider-credentials",
+      error: null,
+    }));
 
     const response = await app.request(
       "/api/v1/admin/settings/delivery-providers",
@@ -318,16 +324,18 @@ describe("delivery provider cache invalidation", () => {
         credentials: "encrypted-provider-credentials",
       },
     ]);
-    mocks.decryptCredentialsGraceful.mockImplementation(async (value: string) => (
-      value === "encrypted-provider-credentials"
+    mocks.readStoredCredentialStrict.mockImplementation(async (value: string) => ({
+      value: value === "encrypted-provider-credentials"
         ? JSON.stringify({
           clientSecret: "decrypted-secret",
           password: "decrypted-pass",
           webhookSecret: "hook-secret",
           baseUrl: "https://api-hermes.pathao.com",
         })
-        : value
-    ));
+        : value,
+      encrypted: value === "encrypted-provider-credentials",
+      error: null,
+    }));
 
     const response = await app.request(
       "/api/v1/admin/settings/delivery-providers",
@@ -359,12 +367,46 @@ describe("delivery provider cache invalidation", () => {
     expect(mocks.testDeliveryProvider).toHaveBeenCalledWith(
       expect.anything(),
       "provider_pathao",
-      "read-key",
+      "credential-key",
     );
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["checkout"],
       expect.objectContaining({ env }),
     );
+  });
+
+  it("does not fall back to JWT_SECRET when encrypted credentials cannot be strict-read", async () => {
+    const { app, env } = createTestApp();
+    delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
+    (env as Record<string, unknown>).JWT_SECRET = "legacy-jwt-key";
+    mocks.getCredentialEncryptionKey.mockReturnValue(undefined);
+    mocks.getDeliveryProviders.mockResolvedValueOnce([
+      {
+        ...providerRecord,
+        credentials: "encrypted-provider-credentials",
+      },
+    ]);
+    mocks.readStoredCredentialStrict.mockResolvedValue({
+      value: "",
+      encrypted: true,
+      error: "Delivery provider credentials is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.",
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/settings/delivery-providers",
+      { method: "GET" },
+      env,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.readStoredCredentialStrict).toHaveBeenCalledWith(
+      "encrypted-provider-credentials",
+      undefined,
+      "Delivery provider credentials",
+    );
+    const json = await response.json() as { data: Array<{ credentials: string; readiness: { active: boolean } }> };
+    expect(json.data[0]?.credentials).toBe("{}");
+    expect(json.data[0]?.readiness.active).toBe(false);
   });
 
   it("fails closed before provider creation when CREDENTIAL_ENCRYPTION_KEY is missing", async () => {

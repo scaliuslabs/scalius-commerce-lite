@@ -428,8 +428,8 @@ export async function resolveCollectionProducts(
 }
 
 /**
- * Batch-resolve products for multiple collections in two D1 round-trips.
- * Used by the homepage endpoint to avoid N+1 queries.
+ * Batch-resolve products for multiple collections.
+ * Used by the homepage endpoint to avoid unbounded category product reads.
  *
  * Returns a Map from collection ID to resolved products/categories/featured.
  */
@@ -442,29 +442,44 @@ export async function resolveCollectionProductsBatch(
 ): Promise<Map<string, CollectionProductResult>> {
     // Gather all IDs across collections
     const allProductIds = new Set<string>();
-    const allCategoryIds = new Set<string>();
+    const categoryProductLimitsById = new Map<string, number>();
     const allFeaturedIds = new Set<string>();
 
     for (const col of parsedCollections) {
         const cfg = normalizeCollectionConfig(col.config);
         cfg.productIds.forEach((id) => allProductIds.add(id));
-        cfg.categoryIds.forEach((id) => allCategoryIds.add(id));
+        if (cfg.productIds.length === 0) {
+            cfg.categoryIds.forEach((id) => {
+                categoryProductLimitsById.set(
+                    id,
+                    Math.max(categoryProductLimitsById.get(id) ?? 0, cfg.maxProducts),
+                );
+            });
+        }
         if (cfg.featuredProductId) allFeaturedIds.add(cfg.featuredProductId);
     }
 
     const productIdsArr = Array.from(allProductIds);
-    const categoryIdsArr = Array.from(allCategoryIds);
+    const categoryProductLimits = Array.from(
+        categoryProductLimitsById.entries(),
+        ([categoryId, maxProducts]) => ({ categoryId, maxProducts }),
+    );
+    const categoryIdsArr = categoryProductLimits.map(({ categoryId }) => categoryId);
     const featuredIdsArr = Array.from(allFeaturedIds);
 
     const noopQuery = db.select({ id: sql`NULL` }).from(products).where(sql`1 = 0`);
 
-    const batchResults = await db.batch([
+    const batchResults = await safeBatch(db, [
         productIdsArr.length > 0
             ? db.select(buildCollectionProductSelect()).from(products).where(and(...publicCollectionProductConditions(inArray(products.id, productIdsArr))))
             : noopQuery,
-        categoryIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect()).from(products).where(and(...publicCollectionProductConditions(inArray(products.categoryId, categoryIdsArr))))
-            : noopQuery,
+        ...categoryProductLimits.map(({ categoryId, maxProducts }) =>
+            db.select(buildCollectionProductSelect())
+                .from(products)
+                .where(and(...publicCollectionProductConditions(eq(products.categoryId, categoryId))))
+                .orderBy(desc(products.createdAt), asc(products.id))
+                .limit(maxProducts),
+        ),
         categoryIdsArr.length > 0
             ? db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(and(inArray(categories.id, categoryIdsArr), isNull(categories.deletedAt)))
             : noopQuery,
@@ -472,6 +487,9 @@ export async function resolveCollectionProductsBatch(
             ? db.select(buildCollectionProductSelect()).from(products).where(and(...publicCollectionProductConditions(inArray(products.id, featuredIdsArr))))
             : noopQuery,
     ]);
+    const categoryProductsStartIndex = 1;
+    const categoryMetadataIndex = categoryProductsStartIndex + categoryProductLimits.length;
+    const featuredProductsIndex = categoryMetadataIndex + 1;
 
     // Build lookup maps
     const specificProductsById = new Map<string, ResolvedProduct>();
@@ -480,20 +498,23 @@ export async function resolveCollectionProductsBatch(
     }
 
     const categoryProductsByCategoryId = new Map<string, ResolvedProduct[]>();
-    for (const prod of batchResults[1] as RawProduct[]) {
-        if (prod.categoryId) {
-            if (!categoryProductsByCategoryId.has(prod.categoryId)) categoryProductsByCategoryId.set(prod.categoryId, []);
-            categoryProductsByCategoryId.get(prod.categoryId)!.push(enrichProduct(prod));
+    categoryProductLimits.forEach(({ categoryId }, index) => {
+        const productsData = batchResults[categoryProductsStartIndex + index] as RawProduct[];
+        const resolvedProducts = productsData
+            .filter((prod) => prod.id && prod.categoryId === categoryId)
+            .map(enrichProduct);
+        if (resolvedProducts.length > 0) {
+            categoryProductsByCategoryId.set(categoryId, resolvedProducts);
         }
-    }
+    });
 
     const categoryMetadataById = new Map<string, { id: string; name: string; slug: string }>();
-    for (const cat of batchResults[2] as { id: string; name: string; slug: string }[]) {
+    for (const cat of batchResults[categoryMetadataIndex] as { id: string; name: string; slug: string }[]) {
         if (cat.id) categoryMetadataById.set(cat.id, cat);
     }
 
     const featuredProductsById = new Map<string, ResolvedProduct>();
-    for (const prod of batchResults[3] as RawProduct[]) {
+    for (const prod of batchResults[featuredProductsIndex] as RawProduct[]) {
         if (prod.id) featuredProductsById.set(prod.id, enrichProduct(prod));
     }
 

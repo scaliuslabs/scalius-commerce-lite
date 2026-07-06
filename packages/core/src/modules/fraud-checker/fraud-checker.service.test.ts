@@ -4,6 +4,7 @@ import {
   getFraudProviders,
   saveFraudProvider,
 } from "./fraud-checker.service";
+import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 function selectableRows(rows: Array<Record<string, unknown>>) {
   return {
@@ -112,5 +113,35 @@ describe("fraud checker provider credential storage", () => {
       id: "provider_legacy",
       apiKey: "legacy-key",
     });
+  });
+
+  it("does not return encrypted providers without CREDENTIAL_ENCRYPTION_KEY", async () => {
+    const key = credentialKey();
+    const storedValue = await encryptCredentials(JSON.stringify({
+      name: "FraudBD",
+      apiUrl: "https://fraudbd.example/api",
+      apiKey: "fraudbd-key",
+      isActive: true,
+      providerType: "fraudbd",
+    }), key);
+    const { db } = createFraudDb([{ key: "provider_fraudbd", value: storedValue }]);
+
+    await expect(getFraudProvider(db as never, "provider_fraudbd")).resolves.toBeNull();
+    await expect(getFraudProviders(db as never)).resolves.toEqual([]);
+  });
+
+  it("does not return encrypted providers when the credential key is wrong", async () => {
+    const storedValue = await encryptCredentials(JSON.stringify({
+      name: "FraudBD",
+      apiUrl: "https://fraudbd.example/api",
+      apiKey: "fraudbd-key",
+      isActive: true,
+      providerType: "fraudbd",
+    }), credentialKey());
+    const { db } = createFraudDb([{ key: "provider_fraudbd", value: storedValue }]);
+    const wrongKey = Buffer.alloc(32, 12).toString("base64");
+
+    await expect(getFraudProvider(db as never, "provider_fraudbd", wrongKey)).resolves.toBeNull();
+    await expect(getFraudProviders(db as never, wrongKey)).resolves.toEqual([]);
   });
 });

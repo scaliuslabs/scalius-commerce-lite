@@ -24,6 +24,7 @@ import {
   testDeliveryProvider,
 } from "./delivery.service";
 import { getDeliveryProviderSetupFingerprint } from "./provider-readiness";
+import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 function createDeleteShipmentDb({
   shipment,
@@ -456,6 +457,26 @@ describe("testDeliveryProvider durable proof", () => {
     expect(updates[1]).toHaveProperty("lastTestFailureAt");
     expect(updates[1]).not.toHaveProperty("lastTestSuccessFingerprint");
   });
+
+  it("does not call providers when encrypted test credentials have no dedicated key", async () => {
+    const provider = await readyPathaoProvider({
+      credentials: await encryptCredentials(
+        JSON.stringify(completePathaoCredentials),
+        TEST_FINGERPRINT_KEY,
+      ),
+    });
+    const { db, updates } = createSequentialSelectDb([[provider]]);
+
+    await expect(testDeliveryProvider(db as never, "provider_pathao"))
+      .resolves.toMatchObject({
+        success: false,
+        message: expect.stringContaining("CREDENTIAL_ENCRYPTION_KEY"),
+      });
+
+    expect(mocks.createProvider).not.toHaveBeenCalled();
+    expect(updates[0]).toHaveProperty("lastTestAttemptAt");
+    expect(updates[1]).toHaveProperty("lastTestFailureAt");
+  });
 });
 
 describe("delivery provider active-state authority", () => {
@@ -477,6 +498,31 @@ describe("delivery provider active-state authority", () => {
       message: "Delivery provider provider_pathao is not ready for shipment creation: Delivery provider is inactive.",
     });
 
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("does not create a shipment when encrypted provider credentials lack the dedicated key", async () => {
+    const provider = await readyPathaoProvider({
+      credentials: await encryptCredentials(
+        JSON.stringify(completePathaoCredentials),
+        TEST_FINGERPRINT_KEY,
+      ),
+    });
+    const { db, inserts } = createSequentialSelectDb([
+      [{ id: "order_1", totalAmount: 100, paidAmount: 0 }],
+      [provider],
+    ]);
+
+    await expect(createShipment(
+      db as never,
+      "order_1",
+      "provider_pathao",
+    )).resolves.toMatchObject({
+      success: false,
+      message: expect.stringContaining("CREDENTIAL_ENCRYPTION_KEY"),
+    });
+
+    expect(mocks.createProvider).not.toHaveBeenCalled();
     expect(inserts).toHaveLength(0);
   });
 

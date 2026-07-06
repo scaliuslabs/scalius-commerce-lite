@@ -15,6 +15,8 @@ const ALLOWED_HOSTS = new Set([
   "static.cloudflareinsights.com",
 ]);
 
+const ALLOWED_PROTOCOLS = new Set(["https:", "http:"]);
+
 export const GET: APIRoute = async ({ request }) => {
   const { searchParams } = new URL(request.url);
   const targetUrl = searchParams.get("url");
@@ -34,8 +36,12 @@ export const GET: APIRoute = async ({ request }) => {
     return new Response("Host not allowed", { status: 403 });
   }
 
+  if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
+    return new Response("Protocol not allowed", { status: 403 });
+  }
+
   try {
-    const upstream = await fetch(targetUrl, {
+    const upstream = await fetch(parsed.toString(), {
       headers: {
         "User-Agent": request.headers.get("User-Agent") || "",
       },

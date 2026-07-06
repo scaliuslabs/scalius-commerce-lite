@@ -28,6 +28,7 @@ import {
   hasDynamicProductListFilterParams,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
+import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 
 const params = Astro.url.searchParams;
@@ -158,6 +159,8 @@ function generatePaginationLinks(
 const activeFilterCount = Object.keys(currentFilters).filter(
   (key) => !PRODUCT_LIST_NAVIGATION_PARAMS.includes(key as typeof PRODUCT_LIST_NAVIGATION_PARAMS[number]) && currentFilters[key]
 ).length;
+const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/search");
+const shouldNoindexSearchPage = Boolean(query) || pagination.page > 1 || sortBy !== "newest" || activeFilterCount > 0;
 
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
@@ -170,8 +173,13 @@ const analyticsProductData = products.map((p) => ({
 }));
 ---
 
-<Layout title={pageTitle} description={pageDescription} layoutData={layoutData}>
-  {query && <meta slot="head" name="robots" content="noindex,nofollow" />}
+<Layout
+  title={pageTitle}
+  description={pageDescription}
+  layoutData={layoutData}
+  canonicalUrl={canonicalUrl ?? undefined}
+>
+  {shouldNoindexSearchPage && <meta slot="head" name="robots" content="noindex,follow" />}
   <div
     class="min-h-screen bg-gray-50"
     data-search-query={query}

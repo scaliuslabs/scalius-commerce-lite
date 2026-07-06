@@ -1325,6 +1325,61 @@ describe("order notification dispatch", () => {
         );
     });
 
+    it("does not use JWT_SECRET to decrypt Firebase service accounts for FCM", async () => {
+        const legacyJwtKey = Buffer.alloc(32, 20).toString("base64");
+        const serviceAccountJson = JSON.stringify({
+            client_email: "firebase-adminsdk@example.iam.gserviceaccount.com",
+            private_key: "-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----\\n",
+            project_id: "scalius-test",
+        });
+        const tokenRows = [{ token: "fcm_token_1" }];
+        let selectCount = 0;
+        const db = {
+            select: vi.fn(() => {
+                selectCount += 1;
+                if (selectCount === 1) {
+                    return {
+                        from: vi.fn(() => ({
+                            where: vi.fn(() => ({
+                                get: vi.fn(async () => ({
+                                    value: `enc:${await encryptCredentials(serviceAccountJson, legacyJwtKey)}`,
+                                })),
+                            })),
+                        })),
+                    };
+                }
+
+                return {
+                    from: vi.fn(() => ({
+                        where: vi.fn(() => ({
+                            then: (resolve: (value: typeof tokenRows) => void) => Promise.resolve(tokenRows).then(resolve),
+                        })),
+                    })),
+                };
+            }),
+        } as unknown as Database;
+        const env = {
+            PUBLIC_API_BASE_URL: "https://api.example.test",
+            JWT_SECRET: legacyJwtKey,
+        } as Env;
+
+        await sendOrderNotification(
+            db,
+            {
+                id: "order_2",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            env,
+            "https://api.example.test",
+        );
+
+        expect(mocks.getFirebaseAdminMessaging).toHaveBeenCalledWith(
+            env,
+            undefined,
+        );
+    });
+
     it("treats provider stale-device FCM errors as skipped receipts and deactivates tokens", async () => {
         const pushDb = createPushDb([
             { token: "dead_fcm_token" },

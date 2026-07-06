@@ -1,6 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { errorResponses } from "../schemas/responses";
 
+const ALLOWED_PROXY_PROTOCOLS = new Set(["https:", "http:"]);
+
 async function getAllowedDomainsAsync(c: { env: Env; req: { url: string } }): Promise<string[]> {
   let cspAllowed: string = typeof c.env?.CSP_ALLOWED === "string" ? c.env.CSP_ALLOWED : "";
   try {
@@ -88,6 +90,15 @@ app.openapi(proxyRoute, async (c) => {
     targetUrl = new URL(urlParam);
   } catch {
     return c.json({ error: "Invalid url parameter" }, 400, {
+      "Access-Control-Allow-Origin": "*"
+    });
+  }
+
+  if (!ALLOWED_PROXY_PROTOCOLS.has(targetUrl.protocol)) {
+    console.warn(
+      `Blocked proxy attempt to disallowed protocol: ${targetUrl.protocol}`,
+    );
+    return c.json({ error: "Proxying this protocol is not allowed" }, 403, {
       "Access-Control-Allow-Origin": "*"
     });
   }

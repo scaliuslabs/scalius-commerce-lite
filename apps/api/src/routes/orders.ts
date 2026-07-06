@@ -13,8 +13,10 @@ import {
   siteSettings
 } from "@scalius/database/schema";
 import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
+import { getSSLCommerzBdtAmountLimitIssue } from "@scalius/core/modules/payments/sslcommerz";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/customer-utils";
+import { addPrices, roundPrice, subtractPrice } from "@scalius/shared/price-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
 import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@scalius/core/modules/payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
@@ -74,6 +76,15 @@ type CheckoutCustomerIdentity = {
   customerId: string;
   source: "authenticated";
 } | null;
+type CheckoutSettingsSnapshot = {
+  checkoutMode: "guest_cod_only" | "gateways_only" | "all";
+  partialPaymentEnabled: boolean;
+  partialPaymentAmount: number;
+};
+type CheckoutOrderPolicyResult = {
+  customerIdentity: CheckoutCustomerIdentity;
+  checkoutSettings: CheckoutSettingsSnapshot;
+};
 
 async function invalidateStorefrontOrderAvailabilityCaches(
   db: Database,
@@ -197,7 +208,7 @@ async function assertCheckoutOrderPolicy(
   },
   customerPhone: string,
   paymentMethod: CheckoutPaymentMethodId,
-): Promise<CheckoutCustomerIdentity> {
+): Promise<CheckoutOrderPolicyResult> {
   const db = c.get("db");
   const [checkoutSettings, allowedCountriesConfig] = await Promise.all([
     db
@@ -212,6 +223,11 @@ async function assertCheckoutOrderPolicy(
       .then((rows) => rows[0] ?? null),
     getAllowedCountries(db),
   ]);
+  const checkoutSettingsSnapshot: CheckoutSettingsSnapshot = {
+    checkoutMode: checkoutSettings?.checkoutMode ?? "all",
+    partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
+    partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
+  };
 
   try {
     assertPhoneCountryAllowed(customerPhone, {
@@ -227,7 +243,7 @@ async function assertCheckoutOrderPolicy(
     activePaymentMethods = await getActivePaymentMethods(
       db,
       c.env.CACHE,
-      getEncryptionKey(c.env as Record<string, unknown>),
+      getCredentialEncryptionKey(c.env as Record<string, unknown>),
       FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
     );
   } catch (error) {
@@ -241,9 +257,9 @@ async function assertCheckoutOrderPolicy(
 
   if (!isCheckoutGatewayUsableForFlow({
     gatewayId: paymentMethod,
-    checkoutMode: checkoutSettings?.checkoutMode,
-    partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
-    partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
+    checkoutMode: checkoutSettingsSnapshot.checkoutMode,
+    partialPaymentEnabled: checkoutSettingsSnapshot.partialPaymentEnabled,
+    partialPaymentAmount: checkoutSettingsSnapshot.partialPaymentAmount,
   })) {
     throw new ValidationError(`${PAYMENT_METHOD_LABELS[paymentMethod]} is not available for the current checkout settings.`);
   }
@@ -251,7 +267,7 @@ async function assertCheckoutOrderPolicy(
   const sessionToken = getCustomerSessionTokenFromRequest(c);
   if (!sessionToken) {
     if (checkoutSettings?.guestCheckoutEnabled ?? true) {
-      return null;
+      return { customerIdentity: null, checkoutSettings: checkoutSettingsSnapshot };
     }
 
     throw new UnauthorizedError("Please sign in before checkout.");
@@ -275,8 +291,11 @@ async function assertCheckoutOrderPolicy(
   }
 
   return {
-    customerId: session.customerId,
-    source: "authenticated",
+    customerIdentity: {
+      customerId: session.customerId,
+      source: "authenticated",
+    },
+    checkoutSettings: checkoutSettingsSnapshot,
   };
 }
 
@@ -1023,6 +1042,89 @@ const createOrderSchema = z.object({
     .default(InventoryPool.REGULAR)
 });
 
+type CreateOrderInput = z.infer<typeof createOrderSchema>;
+type CheckoutCartValidationResult = Awaited<ReturnType<typeof validateStorefrontCartItems>>;
+type CheckoutDeliveryPreflightResult = Awaited<ReturnType<typeof validateStorefrontDeliveryPreflight>>;
+type DiscountValidationResult = {
+  valid?: unknown;
+  discount?: unknown;
+};
+type CartItemForDiscount = { id: string; price: number; quantity: number; variantId?: string };
+
+async function resolveCheckoutTotalForPrecommit(
+  db: Database,
+  data: CreateOrderInput,
+  cartValidation: CheckoutCartValidationResult,
+  deliveryPreflight: CheckoutDeliveryPreflightResult,
+): Promise<number> {
+  const subtotal = roundPrice(Number(cartValidation.subtotal));
+  const shippingCharge = roundPrice(Number(deliveryPreflight.shippingCharge));
+  const totalBeforeDiscount = addPrices(subtotal, shippingCharge);
+  const normalizedDiscountCode = data.discountCode?.trim().toUpperCase();
+  if (!normalizedDiscountCode) return totalBeforeDiscount;
+
+  const validationResponse = await isDiscountValid(
+    db,
+    normalizedDiscountCode,
+    totalBeforeDiscount,
+    data.items as unknown as CartItemForDiscount[],
+    data.customerPhone,
+  );
+  const validResult = validationResponse as DiscountValidationResult | null;
+  if (!validResult?.valid || !validResult.discount) {
+    throw new ValidationError(`Discount code ${normalizedDiscountCode} is invalid or expired.`);
+  }
+
+  const discountAmount = await calculateDiscountAmount(
+    db,
+    validResult.discount as { id: string; type: string; valueType: string; discountValue: number },
+    totalBeforeDiscount,
+    data.items as unknown as CartItemForDiscount[],
+    shippingCharge,
+  );
+  return subtractPrice(totalBeforeDiscount, roundPrice(Number(discountAmount)));
+}
+
+function resolveSSLCommerzPrecommitChargeAmount(
+  totalAmount: number,
+  checkoutSettings: CheckoutSettingsSnapshot,
+): number {
+  const checkoutTotal = roundPrice(Number(totalAmount));
+  const configuredDeposit = roundPrice(Number(checkoutSettings.partialPaymentAmount));
+  if (
+    checkoutSettings.partialPaymentEnabled &&
+    Number.isFinite(configuredDeposit) &&
+    configuredDeposit > 0 &&
+    configuredDeposit < checkoutTotal
+  ) {
+    return configuredDeposit;
+  }
+
+  return checkoutTotal;
+}
+
+async function assertSSLCommerzPrecommitReadiness(
+  db: Database,
+  data: CreateOrderInput,
+  checkoutSettings: CheckoutSettingsSnapshot,
+  cartValidation: CheckoutCartValidationResult,
+  deliveryPreflight: CheckoutDeliveryPreflightResult,
+): Promise<void> {
+  if (data.paymentMethod !== PaymentMethod.SSLCOMMERZ) return;
+
+  const totalAmount = await resolveCheckoutTotalForPrecommit(
+    db,
+    data,
+    cartValidation,
+    deliveryPreflight,
+  );
+  const chargeAmount = resolveSSLCommerzPrecommitChargeAmount(totalAmount, checkoutSettings);
+  const amountIssue = getSSLCommerzBdtAmountLimitIssue(chargeAmount);
+  if (amountIssue) {
+    throw new ValidationError(amountIssue);
+  }
+}
+
 const createOrderRoute = createRoute({
   method: "post",
   path: "/",
@@ -1137,10 +1239,21 @@ app.openapi(createOrderRoute, async (c) => {
       cartValidation,
     );
 
-    const checkoutCustomerIdentity = await assertCheckoutOrderPolicy(
+    const {
+      customerIdentity: checkoutCustomerIdentity,
+      checkoutSettings,
+    } = await assertCheckoutOrderPolicy(
       c,
       data.customerPhone,
       data.paymentMethod as CheckoutPaymentMethodId,
+    );
+
+    await assertSSLCommerzPrecommitReadiness(
+      db,
+      data,
+      checkoutSettings,
+      cartValidation,
+      deliveryPreflight,
     );
 
     // Rate limit new or reclaimable order attempts without punishing legitimate shared-IP buyers.

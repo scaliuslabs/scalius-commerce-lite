@@ -3,8 +3,16 @@ import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
-  decryptCredentialsGraceful: vi.fn(async (value: string) => value),
-  getEncryptionKey: vi.fn(() => "test-key"),
+  readStoredCredentialStrict: vi.fn<(
+    value: string,
+    key?: string,
+    label?: string,
+  ) => Promise<{ value: string; encrypted: boolean; error: string | null }>>(async (value: string) => ({
+    value,
+    encrypted: false,
+    error: null,
+  })),
+  getCredentialEncryptionKey: vi.fn<() => string | undefined>(() => "credential-key"),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -12,11 +20,11 @@ vi.mock("@scalius/database/client", () => ({
 }));
 
 vi.mock("@scalius/core/utils/credential-encryption", () => ({
-  decryptCredentialsGraceful: mocks.decryptCredentialsGraceful,
+  readStoredCredentialStrict: mocks.readStoredCredentialStrict,
 }));
 
 vi.mock("../utils/encryption-key", () => ({
-  getEncryptionKey: mocks.getEncryptionKey,
+  getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
 }));
 
 import { verifyDeliveryWebhook } from "./webhook-auth";
@@ -107,6 +115,38 @@ describe("delivery webhook auth", () => {
       verified: false,
       reason: "Missing X-PATHAO-Signature header",
     });
+  });
+
+  it("does not fall back to JWT_SECRET for encrypted webhook credentials", async () => {
+    const env = { JWT_SECRET: "legacy-jwt-key" } as unknown as Env;
+    mocks.getCredentialEncryptionKey.mockReturnValueOnce(undefined);
+    mocks.readStoredCredentialStrict.mockResolvedValueOnce({
+      value: "",
+      encrypted: true,
+      error: "Delivery provider credentials is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.",
+    });
+    mocks.getDb.mockReturnValue(createDb({
+      id: "provider_pathao",
+      type: "pathao",
+      credentials: "encrypted-provider-credentials",
+      config: "{}",
+    }));
+
+    await expect(verifyDeliveryWebhook(
+      env,
+      "pathao",
+      new Request("https://api.example.test/webhook", { method: "POST" }),
+      "{}",
+    )).resolves.toMatchObject({
+      verified: false,
+      reason: "Invalid provider credentials",
+    });
+
+    expect(mocks.readStoredCredentialStrict).toHaveBeenCalledWith(
+      "encrypted-provider-credentials",
+      undefined,
+      "Delivery provider credentials",
+    );
   });
 
   it("looks up only active providers when verifying webhook credentials", async () => {
