@@ -1,4 +1,6 @@
 const DEFAULT_READYZ_URL = "https://api.scalius.com/api/v1/readyz";
+const DEFAULT_READYZ_TIMEOUT_MS = 10_000;
+const DEFAULT_QUEUE_METRICS_TIMEOUT_MS = 5_000;
 const DEFAULT_DLQ_BACKLOG_THRESHOLD = 0;
 const DEFAULT_QUEUE_OLDEST_AGE_THRESHOLD_MS = 300_000;
 const DEFAULT_ALERT_STREAK_THRESHOLD = 3;
@@ -37,6 +39,8 @@ export interface OpsMonitorEmailBinding {
 export interface OpsMonitorEnv {
   OPS_MONITOR_STATE: OpsMonitorStateNamespace;
   READYZ_URL?: string;
+  READYZ_TIMEOUT_MS?: string | number;
+  QUEUE_METRICS_TIMEOUT_MS?: string | number;
   DLQ_BACKLOG_THRESHOLD?: string | number;
   QUEUE_OLDEST_AGE_THRESHOLD_MS?: string | number;
   ALERT_STREAK_THRESHOLD?: string | number;
@@ -58,6 +62,8 @@ export interface OpsMonitorEnv {
 
 export interface MonitorConfig {
   readyzUrl: string;
+  readyzTimeoutMs: number;
+  queueMetricsTimeoutMs: number;
   dlqBacklogThreshold: number;
   queueOldestAgeThresholdMs: number;
   alertStreakThreshold: number;
@@ -92,6 +98,12 @@ export interface MonitorIssue {
   backlogCount?: number;
   oldestMessageAgeMs?: number | null;
   failedChecks?: string[];
+}
+
+export interface ReadinessSummary {
+  status: "ok" | "degraded" | "error";
+  durationMs: number;
+  failedChecks: string[];
 }
 
 export interface QueueMetricSummary {
@@ -168,6 +180,8 @@ function parsePositiveInteger(value: unknown, fallback: number): number {
 export function loadConfig(env: Partial<OpsMonitorEnv>): MonitorConfig {
   return {
     readyzUrl: typeof env.READYZ_URL === "string" && env.READYZ_URL ? env.READYZ_URL : DEFAULT_READYZ_URL,
+    readyzTimeoutMs: parsePositiveInteger(env.READYZ_TIMEOUT_MS, DEFAULT_READYZ_TIMEOUT_MS),
+    queueMetricsTimeoutMs: parsePositiveInteger(env.QUEUE_METRICS_TIMEOUT_MS, DEFAULT_QUEUE_METRICS_TIMEOUT_MS),
     dlqBacklogThreshold: parseNumber(env.DLQ_BACKLOG_THRESHOLD, DEFAULT_DLQ_BACKLOG_THRESHOLD),
     queueOldestAgeThresholdMs: parseNumber(
       env.QUEUE_OLDEST_AGE_THRESHOLD_MS,
@@ -177,6 +191,42 @@ export function loadConfig(env: Partial<OpsMonitorEnv>): MonitorConfig {
     alertCooldownMs: parseNumber(env.ALERT_COOLDOWN_MS, DEFAULT_ALERT_COOLDOWN_MS),
     stateTtlSeconds: parsePositiveInteger(env.STATE_TTL_SECONDS, DEFAULT_STATE_TTL_SECONDS),
   };
+}
+
+class DependencyTimeoutError extends Error {
+  constructor() {
+    super("dependency timeout");
+    this.name = "DependencyTimeoutError";
+  }
+}
+
+function isDependencyTimeoutError(error: unknown): boolean {
+  return error instanceof DependencyTimeoutError;
+}
+
+async function runWithDependencyTimeout<T>({
+  timeoutMs,
+  start,
+}: {
+  timeoutMs: number;
+  start: (signal: AbortSignal) => Promise<T>;
+}): Promise<T> {
+  const controller = new AbortController();
+  const timeoutError = new DependencyTimeoutError();
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const operation = Promise.resolve().then(() => start(controller.signal));
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort(timeoutError);
+      reject(timeoutError);
+    }, Math.max(1, Math.floor(timeoutMs)));
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId !== null) clearTimeout(timeoutId);
+  }
 }
 
 export function createRequestId(now = new Date()): string {
@@ -224,30 +274,47 @@ export async function checkReadiness({
   readyzUrl,
   fetchImpl,
   now,
+  timeoutMs = DEFAULT_READYZ_TIMEOUT_MS,
 }: {
   readyzUrl: string;
   fetchImpl: typeof fetch;
   now: number;
-}): Promise<{ issue: MonitorIssue | null; requestId: string }> {
+  timeoutMs?: number;
+}): Promise<{ issue: MonitorIssue | null; requestId: string; summary: ReadinessSummary }> {
   const requestId = createRequestId(new Date(now));
   const startedAt = Date.now();
 
   try {
-    const response = await fetchImpl(readyzUrl, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "Cache-Control": "no-cache",
-        "X-Request-Id": requestId,
+    const { response, body } = await runWithDependencyTimeout({
+      timeoutMs,
+      start: async (signal) => {
+        const response = await fetchImpl(readyzUrl, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "Cache-Control": "no-cache",
+            "X-Request-Id": requestId,
+          },
+          signal,
+        });
+        return {
+          response,
+          body: await response.json().catch(() => null),
+        };
       },
     });
-    const body = await response.json().catch(() => null);
     const evaluation = evaluateReadinessResponse(response.status, body);
     const durationMs = Date.now() - startedAt;
-    if (evaluation.ready) return { issue: null, requestId };
+    const summary: ReadinessSummary = {
+      status: evaluation.status,
+      durationMs,
+      failedChecks: evaluation.failedChecks,
+    };
+    if (evaluation.ready) return { issue: null, requestId, summary };
 
     return {
       requestId,
+      summary,
       issue: {
         id: "readyz",
         kind: "readyz",
@@ -258,17 +325,24 @@ export async function checkReadiness({
         failedChecks: evaluation.failedChecks,
       },
     };
-  } catch {
+  } catch (error) {
+    const failedChecks = [isDependencyTimeoutError(error) ? "fetch:timeout" : "fetch:error"];
+    const durationMs = Date.now() - startedAt;
     return {
       requestId,
+      summary: {
+        status: "error",
+        durationMs,
+        failedChecks,
+      },
       issue: {
         id: "readyz",
         kind: "readyz",
         name: "api.readyz",
         status: "error",
-        durationMs: Date.now() - startedAt,
+        durationMs,
         requestId,
-        failedChecks: ["fetch:error"],
+        failedChecks,
       },
     };
   }
@@ -348,19 +422,22 @@ function summarizeQueueMetrics(
 async function checkQueueWithSummary(
   env: OpsMonitorEnv,
   queue: MonitoredQueue,
-  config: Pick<MonitorConfig, "dlqBacklogThreshold" | "queueOldestAgeThresholdMs">,
+  config: Pick<MonitorConfig, "dlqBacklogThreshold" | "queueOldestAgeThresholdMs" | "queueMetricsTimeoutMs">,
   now: number,
 ): Promise<QueueCheckResult> {
   const startedAt = Date.now();
   try {
-    const metrics = await env[queue.binding].metrics();
+    const metrics = await runWithDependencyTimeout({
+      timeoutMs: config.queueMetricsTimeoutMs,
+      start: () => env[queue.binding].metrics(),
+    });
     const durationMs = Date.now() - startedAt;
     const issue = evaluateQueueMetrics(queue, metrics, config, now, durationMs);
     return {
       issue,
       summary: summarizeQueueMetrics(queue, metrics, issue, now, durationMs),
     };
-  } catch {
+  } catch (error) {
     const durationMs = Date.now() - startedAt;
     const issue: MonitorIssue = {
       id: `queue:${queue.name}`,
@@ -369,6 +446,7 @@ async function checkQueueWithSummary(
       status: "error",
       durationMs,
       queueName: queue.name,
+      failedChecks: [isDependencyTimeoutError(error) ? "metrics:timeout" : "metrics:error"],
     };
     return {
       issue,
@@ -387,7 +465,7 @@ async function checkQueueWithSummary(
 export async function checkQueue(
   env: OpsMonitorEnv,
   queue: MonitoredQueue,
-  config: Pick<MonitorConfig, "dlqBacklogThreshold" | "queueOldestAgeThresholdMs">,
+  config: Pick<MonitorConfig, "dlqBacklogThreshold" | "queueOldestAgeThresholdMs" | "queueMetricsTimeoutMs">,
   now: number,
 ): Promise<MonitorIssue | null> {
   return (await checkQueueWithSummary(env, queue, config, now)).issue;
@@ -395,7 +473,7 @@ export async function checkQueue(
 
 export async function collectQueueChecks(
   env: OpsMonitorEnv,
-  config: Pick<MonitorConfig, "dlqBacklogThreshold" | "queueOldestAgeThresholdMs">,
+  config: Pick<MonitorConfig, "dlqBacklogThreshold" | "queueOldestAgeThresholdMs" | "queueMetricsTimeoutMs">,
   now: number,
 ): Promise<{ issues: MonitorIssue[]; summaries: QueueMetricSummary[] }> {
   const results = await Promise.all(MONITORED_QUEUES.map((queue) => checkQueueWithSummary(env, queue, config, now)));
@@ -407,7 +485,7 @@ export async function collectQueueChecks(
 
 export async function checkQueues(
   env: OpsMonitorEnv,
-  config: Pick<MonitorConfig, "dlqBacklogThreshold" | "queueOldestAgeThresholdMs">,
+  config: Pick<MonitorConfig, "dlqBacklogThreshold" | "queueOldestAgeThresholdMs" | "queueMetricsTimeoutMs">,
   now: number,
 ): Promise<MonitorIssue[]> {
   return (await collectQueueChecks(env, config, now)).issues;
@@ -713,7 +791,7 @@ export async function runScheduledMonitor(
   const config = loadConfig(env);
   const emailConfig = loadAlertEmailConfig(env);
   const [readiness, queueChecks] = await Promise.all([
-    checkReadiness({ readyzUrl: config.readyzUrl, fetchImpl, now }),
+    checkReadiness({ readyzUrl: config.readyzUrl, fetchImpl, now, timeoutMs: config.readyzTimeoutMs }),
     collectQueueChecks(env, config, now),
   ]);
   const queueIssues = queueChecks.issues;
@@ -742,6 +820,7 @@ export async function runScheduledMonitor(
     routedAlertCount: alerting.routedAlertCount,
     deliveryFailureCount: alerting.deliveryFailureCount,
     requestId: readiness.requestId,
+    readyz: readiness.summary,
     queues: queueChecks.summaries,
   }));
 }

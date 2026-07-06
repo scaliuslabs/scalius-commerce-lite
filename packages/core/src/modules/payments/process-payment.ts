@@ -21,6 +21,7 @@ import { getCurrencyConfig } from "../settings/settings.service";
 import { validateTransition } from "../orders/order-state-machine";
 import { roundPrice, pricesEqual } from "@scalius/shared/price-utils";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../orders/shipment-claim";
+import { buildMetaPurchaseOutboxClaimInsert } from "../../integrations/meta/purchase-outbox";
 import {
   getUnpayableOrderReason,
   PAYMENT_BLOCKED_ORDER_STATUSES,
@@ -54,6 +55,58 @@ function computedBalanceDue(order: {
   const storedBalance = Number(order.balanceDue);
   if (Number.isFinite(storedBalance)) return roundPrice(storedBalance);
   return roundPrice(Math.max(0, order.totalAmount - paidAmount));
+}
+
+function isMetaPurchaseEligibleAfterPayment(input: {
+  status: string;
+  paymentStatus: string;
+  paidAmount: number;
+  deletedAt?: Date | string | number | null;
+}): boolean {
+  if (input.deletedAt) return false;
+  if (
+    input.status === OrderStatus.INCOMPLETE ||
+    input.status === OrderStatus.CANCELLED ||
+    input.status === OrderStatus.REFUNDED ||
+    input.status === OrderStatus.RETURNED
+  ) {
+    return false;
+  }
+
+  return (
+    input.paymentStatus === PaymentStatus.PAID ||
+    input.paymentStatus === PaymentStatus.PARTIAL ||
+    Number(input.paidAmount) > 0
+  );
+}
+
+function buildSuccessfulPaymentMetaOutboxCondition(input: {
+  orderId: string;
+  paymentId: string;
+  nextVersion: number;
+  newStatus: string;
+  newPaidAmount: number;
+  newBalanceDue: number;
+  newPaymentStatus: string;
+}) {
+  return sql`
+    EXISTS (
+      SELECT 1 FROM orders
+      WHERE id = ${input.orderId}
+        AND version = ${input.nextVersion}
+        AND status = ${input.newStatus}
+        AND paid_amount = ${input.newPaidAmount}
+        AND balance_due = ${input.newBalanceDue}
+        AND payment_status = ${input.newPaymentStatus}
+        AND deleted_at IS NULL
+    )
+    AND EXISTS (
+      SELECT 1 FROM order_payments
+      WHERE id = ${input.paymentId}
+        AND order_id = ${input.orderId}
+        AND status = ${PaymentRecordStatus.SUCCEEDED}
+    )
+  `;
 }
 
 function validateFullPaymentState(
@@ -519,6 +572,27 @@ export async function processPaymentConfirmed(
             ))
             .returning({ id: paymentPlans.id }),
         );
+      }
+
+      if (isMetaPurchaseEligibleAfterPayment({
+        status: newStatus,
+        paymentStatus: newPaymentStatus,
+        paidAmount: newPaidAmount,
+        deletedAt: order.deletedAt,
+      })) {
+        batchStatements.push(buildMetaPurchaseOutboxClaimInsert(db, {
+          orderId: params.orderId,
+          source: `payment-${params.paymentGateway}-confirmed`,
+          onlyIf: buildSuccessfulPaymentMetaOutboxCondition({
+            orderId: params.orderId,
+            paymentId: paymentId!,
+            nextVersion,
+            newStatus,
+            newPaidAmount,
+            newBalanceDue,
+            newPaymentStatus,
+          }),
+        }));
       }
 
       const batchResult = await safeBatch(db, batchStatements) as unknown[];

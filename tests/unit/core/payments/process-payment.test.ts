@@ -310,14 +310,21 @@ function createPaymentDb(options: {
     ...(options.extraSelects ?? []),
   ];
   let updateCount = 0;
+  const outboxStatement = { label: "meta-purchase-outbox-claim" };
   return {
     select: vi.fn(() => createSelectQuery(selectValues.shift() ?? null)),
-    insert: vi.fn(() => ({ values: vi.fn(() => Promise.resolve(undefined)) })),
+    insert: vi.fn(() => ({
+      values: vi.fn(() => Promise.resolve(undefined)),
+      select: vi.fn(() => ({
+        onConflictDoNothing: vi.fn(() => outboxStatement),
+      })),
+    })),
     update: vi.fn(() => {
       updateCount += 1;
       return createUpdateQuery(`update-${updateCount}`);
     }),
     batch: vi.fn(() => Promise.resolve(options.batchResults.shift())),
+    outboxStatement,
   };
 }
 
@@ -363,7 +370,8 @@ describe("processPaymentConfirmed atomic persistence", () => {
 
     expect(result).toEqual({ success: true });
     expect(db.batch).toHaveBeenCalledOnce();
-    expect(vi.mocked(db.batch).mock.calls[0]?.[0]).toHaveLength(3);
+    expect(vi.mocked(db.batch).mock.calls[0]?.[0]).toHaveLength(4);
+    expect(vi.mocked(db.batch).mock.calls[0]?.[0]).toContain(db.outboxStatement);
   });
 
   it("retries the guarded batch when both order and payment guards lose the race", async () => {

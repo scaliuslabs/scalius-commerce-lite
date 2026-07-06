@@ -69,7 +69,12 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
 
 function createDbMock(options: {
   activeCustomer?: { id: string } | null;
-} = {}): Database {
+} = {}): Database & {
+  insertValues: unknown[];
+  conflictIgnoredInserts: unknown[];
+} {
+  const insertValues: unknown[] = [];
+  const conflictIgnoredInserts: unknown[] = [];
   const createReadQuery = (projection: Record<string, unknown>) => ({
     where: vi.fn(() => ({
       get: vi.fn(async () => {
@@ -101,9 +106,23 @@ function createDbMock(options: {
       })),
     })),
     insert: vi.fn(() => ({
-      values: vi.fn(() => ({ kind: "insert" })),
+      values: vi.fn((values: unknown) => {
+        insertValues.push(values);
+        return {
+          kind: "insert",
+          onConflictDoNothing: vi.fn(() => {
+            conflictIgnoredInserts.push(values);
+            return { kind: "insert-on-conflict" };
+          }),
+        };
+      }),
     })),
-  } as unknown as Database;
+    insertValues,
+    conflictIgnoredInserts,
+  } as unknown as Database & {
+    insertValues: unknown[];
+    conflictIgnoredInserts: unknown[];
+  };
 }
 
 describe("commitStorefrontOrderPayload discount trigger failures", () => {
@@ -151,6 +170,35 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(db.update).not.toHaveBeenCalled();
     expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
+  });
+
+  it("includes a durable Meta Purchase outbox claim in the order batch for final-at-create COD orders", async () => {
+    const db = createDbMock();
+    mocks.safeBatch.mockResolvedValue([]);
+
+    await commitStorefrontOrderPayload(
+      db,
+      createPayload({
+        discountUsage: null,
+        orderData: {
+          ...createPayload().orderData,
+          status: "pending",
+          paymentMethod: "cod",
+          paymentStatus: "unpaid",
+          inventoryAction: "none",
+        },
+      }),
+    );
+
+    expect(db.conflictIgnoredInserts).toContainEqual(expect.objectContaining({
+      orderId: "order_discount",
+      eventId: "Purchase:order_discount",
+      source: "storefront-order",
+      status: "pending",
+      attempts: 0,
+    }));
+    expect(JSON.stringify(db.conflictIgnoredInserts)).not.toContain("buyer@example.com");
+    expect(JSON.stringify(db.conflictIgnoredInserts)).not.toContain("+8801712345678");
   });
 
   it("rejects authenticated checkout payloads when the customer account is no longer active", async () => {

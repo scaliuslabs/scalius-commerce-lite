@@ -32,6 +32,7 @@ function createDbMock({
   const operations: string[] = [];
   const inserts: Array<Record<string, unknown>> = [];
   const updates: Array<Record<string, unknown>> = [];
+  const outboxClaimStatements: unknown[] = [];
   const batch = vi.fn(async () => batchResults.shift() ?? []);
 
   const db = {
@@ -55,6 +56,15 @@ function createDbMock({
           inserts.push(values);
           if (insertError) throw insertError;
         },
+        select: (query: unknown) => ({
+          type: "insert-select",
+          query,
+          onConflictDoNothing: () => {
+            const statement = { type: "insert-select-on-conflict", query };
+            outboxClaimStatements.push(statement);
+            return statement;
+          },
+        }),
       };
     },
     update() {
@@ -75,7 +85,7 @@ function createDbMock({
     batch,
   };
 
-  return { db, operations, inserts, updates, batch };
+  return { db, operations, inserts, updates, outboxClaimStatements, batch };
 }
 
 function createPaymentOrder(overrides: Record<string, unknown> = {}) {
@@ -102,7 +112,7 @@ describe("payment processing idempotency", () => {
   });
 
   it("promotes a failed gateway attempt when the same Stripe intent later succeeds", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
+    const { db, inserts, updates, outboxClaimStatements, batch } = createDbMock({
       selectGetResults: [
         { shipmentClaimId: null, shipmentClaimExpiresAt: null },
         { id: "pay_1", amount: 0, status: PaymentRecordStatus.FAILED },
@@ -148,10 +158,14 @@ describe("payment processing idempotency", () => {
       stripeChargeId: "ch_1",
       metadata: JSON.stringify({ currency: "bdt" }),
     }));
+    expect(outboxClaimStatements).toHaveLength(1);
+    const batchCalls = (batch as unknown as { mock: { calls: Array<[unknown[]]> } }).mock.calls;
+    const firstBatch = batchCalls[0]?.[0];
+    expect(firstBatch).toContain(outboxClaimStatements[0]);
   });
 
   it("applies SSLCommerz balance payments with a distinct val_id even when tran_id is reused", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
+    const { db, inserts, updates, outboxClaimStatements, batch } = createDbMock({
       selectGetResults: [
         { shipmentClaimId: null, shipmentClaimExpiresAt: null },
         null,
@@ -206,10 +220,11 @@ describe("payment processing idempotency", () => {
     expect(updates).toContainEqual(expect.objectContaining({
       status: PaymentPlanStatus.COMPLETED,
     }));
+    expect(outboxClaimStatements).toHaveLength(1);
   });
 
   it("applies a deposit payment only when the pending plan matches the incoming amount", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
+    const { db, inserts, updates, outboxClaimStatements, batch } = createDbMock({
       selectGetResults: [
         { shipmentClaimId: null, shipmentClaimExpiresAt: null },
         null,
@@ -258,6 +273,7 @@ describe("payment processing idempotency", () => {
     expect(updates).toContainEqual(expect.objectContaining({
       status: PaymentPlanStatus.DEPOSIT_PAID,
     }));
+    expect(outboxClaimStatements).toHaveLength(1);
   });
 
   it("rejects balance confirmations before the deposit plan is marked paid", async () => {

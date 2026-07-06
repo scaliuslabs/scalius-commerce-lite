@@ -7,13 +7,15 @@ import {
     PaymentStatus,
     OrderStatus,
 } from "@scalius/database/schema";
-import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, or, sql, type SQL } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 
 import { getCurrencyConfig } from "../../modules/settings/settings.service";
 import { sendCapiEvent, type SendCapiEventResult } from "./conversions-api";
 
 type PurchaseOutboxRow = typeof metaCapiPurchaseOutbox.$inferSelect;
 type PurchaseOutboxInsert = typeof metaCapiPurchaseOutbox.$inferInsert;
+type SQLiteBatchItem = BatchItem<"sqlite">;
 type PurchaseOrder = Pick<
     typeof orders.$inferSelect,
     | "id"
@@ -59,6 +61,16 @@ interface BuildMetaPurchaseEventOptions {
 interface ProcessMetaPurchaseOptions {
     storefrontUrl?: string | null;
     encryptionKey?: string;
+}
+
+export interface MetaPurchaseOutboxClaimInput {
+    orderId: string;
+    source: string;
+    nowSeconds?: number;
+}
+
+export interface MetaPurchaseOutboxClaimBatchInput extends MetaPurchaseOutboxClaimInput {
+    onlyIf?: SQL;
 }
 
 const PROCESSING_LEASE_SECONDS = 5 * 60;
@@ -133,6 +145,58 @@ export function buildMetaPurchaseEvent(options: BuildMetaPurchaseEventOptions) {
     };
 }
 
+export function createMetaPurchaseOutboxClaimInsertValues(
+    input: MetaPurchaseOutboxClaimInput,
+): PurchaseOutboxInsert {
+    const now = input.nowSeconds ?? Math.floor(Date.now() / 1000);
+    return {
+        id: createOutboxId(),
+        orderId: input.orderId,
+        eventId: createMetaPurchaseEventId(input.orderId),
+        source: input.source,
+        status: "pending",
+        attempts: 0,
+        nextAttemptAt: Math.max(0, now - 1),
+        createdAt: now,
+        updatedAt: now,
+    };
+}
+
+export function buildMetaPurchaseOutboxClaimInsert(
+    db: Database,
+    input: MetaPurchaseOutboxClaimBatchInput,
+): SQLiteBatchItem {
+    const values = createMetaPurchaseOutboxClaimInsertValues(input);
+    if (input.onlyIf) {
+        return db
+            .insert(metaCapiPurchaseOutbox)
+            .select(sql`
+                SELECT
+                    ${values.id},
+                    ${values.orderId},
+                    ${values.eventId},
+                    ${values.source},
+                    ${values.status},
+                    ${values.attempts},
+                    ${values.nextAttemptAt},
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL,
+                    ${values.createdAt},
+                    ${values.updatedAt}
+                WHERE ${input.onlyIf}
+            `)
+            .onConflictDoNothing() as SQLiteBatchItem;
+    }
+
+    return db
+        .insert(metaCapiPurchaseOutbox)
+        .values(values)
+        .onConflictDoNothing() as SQLiteBatchItem;
+}
+
 export async function ensureAndProcessMetaPurchaseForOrder(options: {
     db: Database;
     orderId: string;
@@ -164,6 +228,55 @@ export async function ensureAndProcessMetaPurchaseForOrder(options: {
     return {
         outboxId: recorded.row.id,
         created: recorded.created,
+        processed: result.processed,
+        status: result.status,
+    };
+}
+
+export async function processExistingMetaPurchaseOutboxForOrder(options: {
+    db: Database;
+    orderId: string;
+} & MetaPurchaseRuntimeOptions): Promise<
+    | {
+        outboxId: string;
+        missing: false;
+        processed: boolean;
+        status: MetaCapiPurchaseOutboxStatus;
+    }
+    | {
+        outboxId: null;
+        missing: true;
+        processed: false;
+        status: "missing";
+    }
+> {
+    const row = await selectOutboxByOrderId(options.db, options.orderId);
+    if (!row) {
+        return {
+            outboxId: null,
+            missing: true,
+            processed: false,
+            status: "missing",
+        };
+    }
+
+    if (row.status === "sent" || row.status === "skipped") {
+        return {
+            outboxId: row.id,
+            missing: false,
+            processed: false,
+            status: row.status as MetaCapiPurchaseOutboxStatus,
+        };
+    }
+
+    const result = await processMetaPurchaseOutboxById(options.db, row.id, {
+        storefrontUrl: options.storefrontUrl,
+        encryptionKey: options.encryptionKey,
+    });
+
+    return {
+        outboxId: row.id,
+        missing: false,
         processed: result.processed,
         status: result.status,
     };
@@ -218,7 +331,7 @@ async function recordMetaPurchaseOutbox(
     db: Database,
     input: { orderId: string; source: string },
 ): Promise<{ row: PurchaseOutboxRow; created: boolean }> {
-    const values = createMetaPurchaseOutboxInsertValues(input);
+    const values = createMetaPurchaseOutboxClaimInsertValues(input);
 
     try {
         await db.insert(metaCapiPurchaseOutbox).values(values);
@@ -482,21 +595,6 @@ async function selectOutboxByOrderId(db: Database, orderId: string): Promise<Pur
         .from(metaCapiPurchaseOutbox)
         .where(eq(metaCapiPurchaseOutbox.orderId, orderId))
         .get();
-}
-
-function createMetaPurchaseOutboxInsertValues(input: { orderId: string; source: string }): PurchaseOutboxInsert {
-    const now = Math.floor(Date.now() / 1000);
-    return {
-        id: createOutboxId(),
-        orderId: input.orderId,
-        eventId: createMetaPurchaseEventId(input.orderId),
-        source: input.source,
-        status: "pending",
-        attempts: 0,
-        nextAttemptAt: Math.max(0, now - 1),
-        createdAt: now,
-        updatedAt: now,
-    };
 }
 
 function valuesToRow(values: PurchaseOutboxInsert): PurchaseOutboxRow {
