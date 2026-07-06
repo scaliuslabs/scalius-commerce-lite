@@ -72,6 +72,20 @@ describe("sitemap index route", () => {
     expect(body).not.toContain("/api/facebook-feed.xml");
   });
 
+  it("does not stamp sitemap index entries with render-time lastmod values", async () => {
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [{ id: "prod_1" }],
+      pagination: { page: 1, limit: 1, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<sitemapindex");
+    expect(body).not.toContain("<lastmod>");
+  });
+
   it("omits disabled sitemap sections without reading product counts", async () => {
     mocks.getSeoSettings.mockResolvedValueOnce({
       discovery: {

@@ -18,7 +18,6 @@ const PRODUCTS_PER_SITEMAP = 5000;
 export const GET: APIRoute = async (_context: APIContext) => {
   try {
     const baseUrl = getBaseUrl();
-    const now = new Date().toISOString();
     const seo = await getSeoSettings();
     if (!seo) {
       return xmlDataUnavailableResponse('Sitemap index is temporarily unavailable');
@@ -38,28 +37,24 @@ export const GET: APIRoute = async (_context: APIContext) => {
     if (sitemapPolicy.staticPages) {
       sitemaps.push({
         loc: `${baseUrl}/sitemap-static.xml`,
-        lastmod: now,
       });
     }
 
     if (sitemapPolicy.categories) {
       sitemaps.push({
         loc: `${baseUrl}/sitemap-categories.xml`,
-        lastmod: now,
       });
     }
 
     if (sitemapPolicy.collections) {
       sitemaps.push({
         loc: `${baseUrl}/sitemap-collections.xml`,
-        lastmod: now,
       });
     }
 
     if (sitemapPolicy.pages) {
       sitemaps.push({
         loc: `${baseUrl}/sitemap-pages.xml`,
-        lastmod: now,
       });
     }
 
@@ -85,7 +80,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
     for (let i = 1; i <= totalSitemaps; i++) {
       sitemaps.push({
         loc: `${baseUrl}/sitemap-products.xml?page=${i}`,
-        lastmod: now,
       });
     }
 
