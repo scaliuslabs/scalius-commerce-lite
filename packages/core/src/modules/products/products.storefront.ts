@@ -13,7 +13,13 @@ import { and, sql, desc, eq, isNull, inArray, or, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
-import type { StorefrontProductFilterInput } from "./products.types";
+import type {
+    StorefrontFeedProduct,
+    StorefrontFeedProductAttribute,
+    StorefrontFeedProductFilterInput,
+    StorefrontFeedProductVariant,
+    StorefrontProductFilterInput,
+} from "./products.types";
 import type { Database } from "@scalius/database/client";
 import {
     publicProductBaseConditions,
@@ -43,6 +49,26 @@ type StorefrontProductListRow = {
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
     hasCustomerOptions: boolean;
     availableForSale: boolean;
+};
+
+type StorefrontFeedProductListRow = {
+    id: string;
+    name: string;
+    description: string | null;
+    price: number;
+    slug: string;
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+    freeDelivery: boolean;
+    categoryId: string | null;
+    updatedAt: number;
+    hasCustomerOptions: boolean;
+    availableForSale: boolean;
+};
+
+type StorefrontFeedVariantRow = Omit<StorefrontFeedProductVariant, "deletedAt"> & {
+    deletedAt: number | null;
 };
 
 export interface StorefrontCategoryProductCategory {
@@ -208,6 +234,90 @@ async function readPrimaryProductImageMap(
     return new Map(images.map((img) => [img.productId, { url: img.url, alt: img.alt }]));
 }
 
+async function readStorefrontFeedAttributeMap(
+    db: Database,
+    productIds: string[],
+): Promise<Map<string, StorefrontFeedProductAttribute[]>> {
+    if (productIds.length === 0) {
+        return new Map();
+    }
+
+    const rows = await db
+        .select({
+            productId: productAttributeValues.productId,
+            name: productAttributes.name,
+            slug: productAttributes.slug,
+            value: productAttributeValues.value,
+        })
+        .from(productAttributeValues)
+        .innerJoin(
+            productAttributes,
+            and(
+                eq(productAttributeValues.attributeId, productAttributes.id),
+                eq(productAttributes.filterable, true),
+                isNull(productAttributes.deletedAt),
+            ),
+        )
+        .where(inArray(productAttributeValues.productId, productIds))
+        .all();
+
+    const attributeMap = new Map<string, StorefrontFeedProductAttribute[]>();
+    for (const row of rows) {
+        const attributes = attributeMap.get(row.productId) ?? [];
+        attributes.push({ name: row.name, slug: row.slug, value: row.value });
+        attributeMap.set(row.productId, attributes);
+    }
+
+    return attributeMap;
+}
+
+async function readStorefrontFeedVariantMap(
+    db: Database,
+    productIds: string[],
+): Promise<Map<string, StorefrontFeedProductVariant[]>> {
+    if (productIds.length === 0) {
+        return new Map();
+    }
+
+    const rows = await db
+        .select({
+            id: productVariants.id,
+            productId: productVariants.productId,
+            size: productVariants.size,
+            color: productVariants.color,
+            weight: productVariants.weight,
+            sku: productVariants.sku,
+            price: productVariants.price,
+            stock: productVariants.stock,
+            reservedStock: productVariants.reservedStock,
+            isDefault: productVariants.isDefault,
+            trackInventory: productVariants.trackInventory,
+            discountType: productVariants.discountType,
+            discountPercentage: productVariants.discountPercentage,
+            discountAmount: productVariants.discountAmount,
+            colorSortOrder: productVariants.colorSortOrder,
+            sizeSortOrder: productVariants.sizeSortOrder,
+            deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
+        })
+        .from(productVariants)
+        .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
+        .orderBy(productVariants.productId, productVariants.colorSortOrder, productVariants.sizeSortOrder)
+        .all() as StorefrontFeedVariantRow[];
+
+    const variantMap = new Map<string, StorefrontFeedProductVariant[]>();
+    for (const row of rows) {
+        const variant = normalizeDefaultSkuOptions({
+            ...row,
+            deletedAt: row.deletedAt ? unixToDate(row.deletedAt)?.toISOString() ?? null : null,
+        });
+        const variants = variantMap.get(row.productId) ?? [];
+        variants.push(variant);
+        variantMap.set(row.productId, variants);
+    }
+
+    return variantMap;
+}
+
 // ─────────────────────────────────────────
 // Storefront queries
 // ─────────────────────────────────────────
@@ -302,6 +412,105 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
 
     return {
         products: productsWithImages,
+        pagination: getPagination(page, limit, totalCount?.count || 0),
+    };
+}
+
+/**
+ * Returns a paginated feed projection for catalog exporters.
+ * This keeps normal storefront listings card-light while letting feed callers
+ * read attributes and SKU data in page-wide bulk queries.
+ */
+export async function getStorefrontFeedProducts(
+    db: Database,
+    params: StorefrontFeedProductFilterInput,
+) {
+    const {
+        page = 1,
+        limit = 100,
+        sort = "newest",
+    } = params;
+    const conditions = buildStorefrontProductConditions({});
+    const orderBy = getStorefrontProductOrderBy(sort);
+    const offset = (page - 1) * limit;
+
+    const query = db
+        .select({
+            id: products.id,
+            name: products.name,
+            description: products.description,
+            price: products.price,
+            slug: products.slug,
+            discountType: products.discountType,
+            discountPercentage: products.discountPercentage,
+            discountAmount: products.discountAmount,
+            freeDelivery: products.freeDelivery,
+            categoryId: products.categoryId,
+            updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
+            hasCustomerOptions: publicProductHasCustomerOptions(sql`${products.id}`).as("hasCustomerOptions"),
+            availableForSale: publicProductHasAvailableBuyerSku(sql`${products.id}`).as("availableForSale"),
+        })
+        .from(products)
+        .where(and(...conditions));
+
+    const countQuery = db
+        .select({ count: sql<number>`count(*)` })
+        .from(products)
+        .where(and(...conditions));
+
+    const [productsList, totalCount] = await Promise.all([
+        query.orderBy(orderBy).limit(limit).offset(offset).all(),
+        countQuery.get(),
+    ]);
+    const productIds = productsList.map((product) => product.id);
+    const categoryIds = [...new Set(productsList.map((product) => product.categoryId).filter(Boolean))] as string[];
+
+    const [imageMap, categoriesData, attributeMap, variantMap] = await Promise.all([
+        readPrimaryProductImageMap(db, productIds),
+        categoryIds.length > 0
+            ? db
+                .select({ id: categories.id, name: categories.name, slug: categories.slug })
+                .from(categories)
+                .where(inArray(categories.id, categoryIds))
+                .all() as Promise<Array<{ id: string; name: string; slug: string }>>
+            : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
+        readStorefrontFeedAttributeMap(db, productIds),
+        readStorefrontFeedVariantMap(db, productIds),
+    ]);
+    const categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
+
+    const feedProducts: StorefrontFeedProduct[] = productsList.map((product: StorefrontFeedProductListRow) => {
+        const imgData = imageMap.get(product.id);
+        return {
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            description: product.description,
+            price: product.price,
+            discountType: product.discountType,
+            discountPercentage: product.discountPercentage,
+            discountAmount: product.discountAmount,
+            discountedPrice: calculateDiscountedPrice(
+                product.price,
+                product.discountType,
+                product.discountPercentage,
+                product.discountAmount,
+            ),
+            freeDelivery: product.freeDelivery,
+            categoryId: product.categoryId,
+            hasVariants: Boolean(product.hasCustomerOptions),
+            availableForSale: Boolean(product.availableForSale),
+            imageUrl: imgData?.url || null,
+            imageAlt: imgData?.alt || null,
+            category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,
+            attributes: attributeMap.get(product.id) ?? [],
+            variants: variantMap.get(product.id) ?? [],
+            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
+        };
+    });
+
+    return {
+        products: feedProducts,
         pagination: getPagination(page, limit, totalCount?.count || 0),
     };
 }

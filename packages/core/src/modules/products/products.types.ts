@@ -123,3 +123,57 @@ export interface StorefrontProductFilterInput {
     ids?: string;
     attributeFilters?: { slug: string; value: string }[];
 }
+
+export interface StorefrontFeedProductFilterInput {
+    page?: number;
+    limit?: number;
+    sort?: StorefrontProductFilterInput["sort"];
+}
+
+export interface StorefrontFeedProductAttribute {
+    name: string;
+    slug: string;
+    value: string;
+}
+
+export interface StorefrontFeedProductVariant {
+    id: string;
+    productId: string;
+    size: string | null;
+    color: string | null;
+    weight: number | null;
+    sku: string;
+    price: number;
+    stock: number;
+    reservedStock: number;
+    isDefault: boolean;
+    trackInventory: boolean;
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+    colorSortOrder: number | null;
+    sizeSortOrder: number | null;
+    deletedAt: string | null;
+}
+
+export interface StorefrontFeedProduct {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    price: number;
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+    discountedPrice: number;
+    freeDelivery: boolean;
+    categoryId: string | null;
+    hasVariants: boolean;
+    availableForSale: boolean;
+    imageUrl: string | null;
+    imageAlt: string | null;
+    category: { id: string; name: string; slug: string } | null;
+    attributes: StorefrontFeedProductAttribute[];
+    variants: StorefrontFeedProductVariant[];
+    updatedAt: string | null;
+}

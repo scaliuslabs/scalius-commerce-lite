@@ -132,6 +132,23 @@ export interface ProductListOptions {
   [key: string]: string | number | boolean | string[] | undefined;
 }
 
+type ProductListPayload = {
+  products?: Product[];
+  data?: Product[];
+  pagination?: PaginatedResponse<Product>["pagination"];
+};
+
+type OptionalFeedProductsSdk = {
+  getApiV1ProductsFeed?: (args: {
+    client: unknown;
+    query: Record<string, unknown>;
+  }) => Promise<{ data?: unknown; error?: unknown }>;
+};
+
+type DedicatedFeedProductsResult =
+  | { status: "missing" }
+  | { status: "read"; data: PaginatedResponse<Product> | null };
+
 function emptyProductPagination(
   options: ProductListOptions = {},
 ): PaginatedResponse<Product>["pagination"] {
@@ -156,6 +173,52 @@ function normalizeProductListOptions(
     }
   }
   return normalized;
+}
+
+function normalizeProductListPayload(
+  payload: unknown,
+): PaginatedResponse<Product> | null {
+  const candidate =
+    unwrapData<ProductListPayload>(payload) ??
+    unwrapEnvelope<ProductListPayload>(payload) ??
+    (payload as ProductListPayload | null);
+  if (!candidate || typeof candidate !== "object") return null;
+
+  const products = Array.isArray(candidate.products)
+    ? candidate.products
+    : Array.isArray(candidate.data)
+      ? candidate.data
+      : null;
+  if (!products || !candidate.pagination) return null;
+
+  return {
+    data: products,
+    pagination: candidate.pagination,
+  };
+}
+
+async function readDedicatedFeedProducts(
+  options: ProductListOptions,
+): Promise<DedicatedFeedProductsResult> {
+  const sdk = (await import("@scalius/api-client/sdk")) as OptionalFeedProductsSdk;
+  if (typeof sdk.getApiV1ProductsFeed !== "function") {
+    return { status: "missing" };
+  }
+
+  try {
+    const { data, error } = await sdk.getApiV1ProductsFeed({
+      client: getConfiguredSdkClient(),
+      query: options as Record<string, unknown>,
+    });
+    if (error) {
+      console.error("Error fetching feed products:", error);
+      return { status: "read", data: null };
+    }
+    return { status: "read", data: normalizeProductListPayload(data) };
+  } catch (error: unknown) {
+    console.error("Error fetching feed products:", error);
+    return { status: "read", data: null };
+  }
 }
 
 /**
@@ -261,6 +324,39 @@ export async function getAllProducts(
         console.error("Error fetching all products:", error);
         return null;
       }
+    },
+    { ttlSeconds: CACHE_TTL.MEDIUM },
+  );
+}
+
+/**
+ * Fetches the product projection used by public catalog feeds.
+ *
+ * The dedicated API projection is optional while backend support rolls out. When
+ * the generated SDK exposes it, use that richer endpoint. Until then, fall back
+ * to the normal product list with variant inclusion explicitly requested.
+ */
+export async function getFeedProducts(
+  options: ProductListOptions = {},
+): Promise<PaginatedResponse<Product> | null> {
+  const normalizedOptions = normalizeProductListOptions({
+    ...options,
+    includeVariants: "true",
+  });
+  const queryString = buildCanonicalQueryString(normalizedOptions, {
+    defaultParams: { page: 1, limit: 20, sort: "newest" },
+  });
+  const cacheKey = `feed_products_${queryString || "default"}`;
+
+  return withEdgeCache(
+    cacheKey,
+    async () => {
+      const dedicatedResponse = await readDedicatedFeedProducts(normalizedOptions);
+      if (dedicatedResponse.status === "read") {
+        return dedicatedResponse.data;
+      }
+
+      return getAllProducts(normalizedOptions);
     },
     { ttlSeconds: CACHE_TTL.MEDIUM },
   );

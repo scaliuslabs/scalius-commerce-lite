@@ -146,7 +146,11 @@ describe("site settings cache invalidation", () => {
     const response = await requestJson(app, env, "POST", "/seo", {
       discovery: {
         sitemap: { pages: false },
-        structuredData: { websiteSearch: false },
+        feeds: { variantStrategy: "products" },
+        structuredData: {
+          websiteSearch: false,
+          productGroups: false,
+        },
       },
     });
 
@@ -156,7 +160,11 @@ describe("site settings cache invalidation", () => {
       {
         discovery: {
           sitemap: { pages: false },
-          structuredData: { websiteSearch: false },
+          feeds: { variantStrategy: "products" },
+          structuredData: {
+            websiteSearch: false,
+            productGroups: false,
+          },
         },
       },
     );

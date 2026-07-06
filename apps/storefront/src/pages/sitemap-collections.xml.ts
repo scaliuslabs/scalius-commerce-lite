@@ -42,8 +42,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
     const collectionUrls: SitemapUrl[] = collections.map((collection) => ({
       loc: `${baseUrl}/collections/${encodeURIComponent(collection.id)}`,
       lastmod: collection.updatedAt ?? collection.createdAt ?? undefined,
-      changefreq: 'weekly' as const,
-      priority: 0.7,
     }));
 
     const xml = generateSitemap(collectionUrls, baseUrl);

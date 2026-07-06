@@ -15,7 +15,7 @@ app.use(
     ttl: CACHE_TTLS.STANDARD,
     // Bump the nested namespace when the public SEO payload shape changes.
     // The broader api:seo: invalidation group still clears versioned entries.
-    keyPrefix: "api:seo:v2:",
+    keyPrefix: "api:seo:v3:",
     methods: ["GET"]
   }),
 );
@@ -39,6 +39,7 @@ const discoverySchema = z.object({
   feeds: z.object({
     productCatalogEnabled: z.boolean(),
     includeUnavailableProducts: z.boolean(),
+    variantStrategy: z.enum(["products", "variants"]),
     title: z.string(),
     description: z.string(),
   }),
@@ -49,6 +50,7 @@ const discoverySchema = z.object({
     organization: z.boolean(),
     websiteSearch: z.boolean(),
     products: z.boolean(),
+    productGroups: z.boolean(),
     breadcrumbs: z.boolean(),
     collections: z.boolean(),
   }),

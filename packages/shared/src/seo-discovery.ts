@@ -1,3 +1,5 @@
+export type SeoFeedVariantStrategy = "products" | "variants";
+
 export interface SeoDiscoverySettings {
   sitemap: {
     enabled: boolean;
@@ -10,6 +12,7 @@ export interface SeoDiscoverySettings {
   feeds: {
     productCatalogEnabled: boolean;
     includeUnavailableProducts: boolean;
+    variantStrategy: SeoFeedVariantStrategy;
     title: string;
     description: string;
   };
@@ -20,6 +23,7 @@ export interface SeoDiscoverySettings {
     organization: boolean;
     websiteSearch: boolean;
     products: boolean;
+    productGroups: boolean;
     breadcrumbs: boolean;
     collections: boolean;
   };
@@ -37,6 +41,7 @@ export const DEFAULT_SEO_DISCOVERY_SETTINGS: SeoDiscoverySettings = {
   feeds: {
     productCatalogEnabled: true,
     includeUnavailableProducts: true,
+    variantStrategy: "variants",
     title: "",
     description: "",
   },
@@ -47,6 +52,7 @@ export const DEFAULT_SEO_DISCOVERY_SETTINGS: SeoDiscoverySettings = {
     organization: true,
     websiteSearch: true,
     products: true,
+    productGroups: true,
     breadcrumbs: true,
     collections: true,
   },
@@ -64,6 +70,13 @@ function boolOrDefault(value: unknown, fallback: boolean): boolean {
 
 function stringOrDefault(value: unknown, fallback: string): string {
   return typeof value === "string" ? value.trim() : fallback;
+}
+
+function feedVariantStrategyOrDefault(
+  value: unknown,
+  fallback: SeoFeedVariantStrategy,
+): SeoFeedVariantStrategy {
+  return value === "products" || value === "variants" ? value : fallback;
 }
 
 export function normalizeSeoDiscoverySettings(
@@ -111,6 +124,10 @@ export function normalizeSeoDiscoverySettings(
         feeds.includeUnavailableProducts,
         DEFAULT_SEO_DISCOVERY_SETTINGS.feeds.includeUnavailableProducts,
       ),
+      variantStrategy: feedVariantStrategyOrDefault(
+        feeds.variantStrategy,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.feeds.variantStrategy,
+      ),
       title: stringOrDefault(
         feeds.title,
         DEFAULT_SEO_DISCOVERY_SETTINGS.feeds.title,
@@ -138,6 +155,10 @@ export function normalizeSeoDiscoverySettings(
       products: boolOrDefault(
         structuredData.products,
         DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.products,
+      ),
+      productGroups: boolOrDefault(
+        structuredData.productGroups,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.productGroups,
       ),
       breadcrumbs: boolOrDefault(
         structuredData.breadcrumbs,

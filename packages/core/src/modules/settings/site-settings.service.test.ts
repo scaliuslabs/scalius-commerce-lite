@@ -59,6 +59,7 @@ describe("site SEO settings", () => {
         feeds: {
           productCatalogEnabled: true,
           includeUnavailableProducts: true,
+          variantStrategy: "variants",
           title: "",
           description: "",
         },
@@ -67,6 +68,7 @@ describe("site SEO settings", () => {
           organization: true,
           websiteSearch: true,
           products: true,
+          productGroups: true,
           breadcrumbs: true,
           collections: true,
         },
@@ -95,6 +97,7 @@ describe("site SEO settings", () => {
         feeds: {
           productCatalogEnabled: true,
           includeUnavailableProducts: true,
+          variantStrategy: "variants",
           title: "",
           description: "",
         },
@@ -103,6 +106,7 @@ describe("site SEO settings", () => {
           organization: true,
           websiteSearch: false,
           products: true,
+          productGroups: true,
           breadcrumbs: true,
           collections: true,
         },
@@ -172,6 +176,7 @@ describe("site SEO settings", () => {
       feeds: {
         productCatalogEnabled: false,
         includeUnavailableProducts: true,
+        variantStrategy: "variants",
         title: "",
         description: "",
       },
@@ -180,6 +185,7 @@ describe("site SEO settings", () => {
         organization: false,
         websiteSearch: true,
         products: true,
+        productGroups: true,
         breadcrumbs: true,
         collections: true,
       },

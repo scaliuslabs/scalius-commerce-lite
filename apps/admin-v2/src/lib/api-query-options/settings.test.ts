@@ -136,10 +136,12 @@ describe("seoSettingsQueryOptions", () => {
         feeds: {
           productCatalogEnabled: false,
           includeUnavailableProducts: true,
+          variantStrategy: "variants",
           title: "Feed title",
         },
         structuredData: {
           products: true,
+          productGroups: true,
           breadcrumbs: false,
         },
       },

@@ -34,13 +34,9 @@ export const GET: APIRoute = async (_context: APIContext) => {
     const staticPages: SitemapUrl[] = [
       {
         loc: `${baseUrl}/`,
-        changefreq: 'daily',
-        priority: 1.0,
       },
       {
         loc: `${baseUrl}/search`,
-        changefreq: 'weekly',
-        priority: 0.8,
       },
     ];
 

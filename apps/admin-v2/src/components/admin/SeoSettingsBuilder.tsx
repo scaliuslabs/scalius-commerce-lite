@@ -10,6 +10,7 @@ import {
 import {
   DEFAULT_SEO_DISCOVERY_SETTINGS,
   normalizeSeoDiscoverySettings,
+  type SeoFeedVariantStrategy,
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
 import { Button } from "../ui/button";
@@ -19,6 +20,13 @@ import { Textarea } from "../ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { Switch } from "../ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { SeoDiscoveryStatusCard } from "./SeoDiscoveryStatusCard";
 import {
   getSeoSettings,
@@ -296,6 +304,29 @@ export function SeoSettingsBuilder() {
                 />
               </label>
               <div className="grid gap-2">
+                <Label htmlFor="feed-variant-strategy" className="text-xs">
+                  Feed output mode
+                </Label>
+                <Select
+                  value={values.discovery.feeds.variantStrategy}
+                  onValueChange={(value) =>
+                    updateDiscovery(
+                      "feeds",
+                      "variantStrategy",
+                      value as SeoFeedVariantStrategy,
+                    )
+                  }
+                >
+                  <SelectTrigger id="feed-variant-strategy">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="variants">SKU / variant rows</SelectItem>
+                    <SelectItem value="products">Product rows</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
                 <Label htmlFor="feed-title" className="text-xs">
                   Feed title
                 </Label>
@@ -375,6 +406,15 @@ export function SeoSettingsBuilder() {
                   checked={values.discovery.structuredData.products}
                   onCheckedChange={(checked) =>
                     updateDiscovery("structuredData", "products", checked)
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>ProductGroup variant schema</span>
+                <Switch
+                  checked={values.discovery.structuredData.productGroups}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("structuredData", "productGroups", checked)
                   }
                 />
               </label>

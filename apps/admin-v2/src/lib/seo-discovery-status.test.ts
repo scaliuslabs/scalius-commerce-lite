@@ -16,6 +16,7 @@ describe("buildSeoDiscoveryStatus", () => {
         feeds: {
           productCatalogEnabled: true,
           includeUnavailableProducts: false,
+          variantStrategy: "products",
           title: "  Merchant feed  ",
           description: "  Fresh catalog  ",
         },
@@ -24,6 +25,7 @@ describe("buildSeoDiscoveryStatus", () => {
           organization: true,
           websiteSearch: false,
           products: true,
+          productGroups: true,
           breadcrumbs: true,
           collections: false,
         },
@@ -47,16 +49,18 @@ describe("buildSeoDiscoveryStatus", () => {
       "absolute http(s) primary image",
     );
     expect(status.productFeed.summary).toBe(
-      "Catalog XML includes only active products currently available for sale.",
+      "Product rows; only items currently available for sale are included.",
     );
+    expect(status.productFeed.variantStrategy).toBe("products");
+    expect(status.productFeed.variantStrategyLabel).toBe("Product rows");
     expect(status.productFeed.feedTitle).toBe("Merchant feed");
     expect(status.productFeed.feedDescription).toBe("Fresh catalog");
     expect(status.robots.warning).toBeUndefined();
     expect(status.structuredData.summary).toBe(
-      "Organization; site search off; products; breadcrumbs; collections off",
+      "Organization; site search off; products; ProductGroup variants; breadcrumbs; collections off",
     );
     expect(status.structuredData.organizationNote).toBe(
-      "Organization schema needs a logo; product and collection schema follow their matching page toggles.",
+      "Organization schema needs a logo; ProductGroup schema describes optioned products and SKU variants when product schema is emitted.",
     );
     expect(status.storefront.mode).toBe("absolute");
     expect(status.storefront.links).toContainEqual({
@@ -100,6 +104,10 @@ describe("buildSeoDiscoveryStatus", () => {
     });
 
     expect(relative.storefront.mode).toBe("path-only");
+    expect(relative.productFeed.variantStrategy).toBe("variants");
+    expect(relative.productFeed.summary).toBe(
+      "SKU / variant rows; sold-out catalog items are marked out of stock.",
+    );
     expect(relative.storefront.links.every((link) => link.href === null)).toBe(
       true,
     );
@@ -118,6 +126,7 @@ describe("buildSeoDiscoveryStatus", () => {
           organization: false,
           websiteSearch: false,
           products: false,
+          productGroups: false,
           breadcrumbs: false,
           collections: false,
         },

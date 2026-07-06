@@ -79,8 +79,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
       .map((page) => ({
         loc: `${baseUrl}/${page.slug}`,
         lastmod: page.publishedAt ?? page.updatedAt,
-        changefreq: 'monthly' as const,
-        priority: 0.6,
       }));
 
     const xml = generateSitemap(pageUrls, baseUrl);
