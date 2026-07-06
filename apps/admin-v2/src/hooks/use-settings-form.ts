@@ -9,6 +9,7 @@ interface UseSettingsFormOptions<T extends object> {
   defaultValues: T;
   successMessage?: string;
   errorMessage?: string;
+  invalidateQueryKeys?: readonly (readonly unknown[])[];
 }
 
 /**
@@ -26,6 +27,7 @@ export function useSettingsForm<T extends object>({
   defaultValues,
   successMessage = "Settings saved",
   errorMessage = "Failed to save settings",
+  invalidateQueryKeys = [],
 }: UseSettingsFormOptions<T>) {
   const queryClient = useQueryClient();
 
@@ -49,6 +51,9 @@ export function useSettingsForm<T extends object>({
     mutationFn: saveFn,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKey as unknown[] });
+      invalidateQueryKeys.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key as unknown[] });
+      });
       toast.success(successMessage);
     },
     onError: (error) => {

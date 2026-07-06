@@ -183,6 +183,18 @@ function getFeedVariantStrategy(
   return value === "products" || value === "product" ? "products" : "variants";
 }
 
+function parsePositiveIntegerParam(
+  value: string | null,
+  fallback: number,
+  max: number,
+): number | null {
+  if (value === null) return fallback;
+  if (!/^[1-9]\d*$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) return null;
+  return Math.min(parsed, max);
+}
+
 function getProductVariants(product: Product): ProductVariant[] {
   return Array.isArray(product.variants) ? product.variants : [];
 }
@@ -615,16 +627,14 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     const pageParam = url.searchParams.get("page");
     const limitParam = url.searchParams.get("limit");
 
-    const page = pageParam ? parseInt(pageParam, 10) : 1;
-    const limit = limitParam
-      ? Math.min(parseInt(limitParam, 10), MAX_LIMIT)
-      : DEFAULT_LIMIT;
+    const page = parsePositiveIntegerParam(pageParam, 1, Number.MAX_SAFE_INTEGER);
+    const limit = parsePositiveIntegerParam(limitParam, DEFAULT_LIMIT, MAX_LIMIT);
 
-    if (isNaN(page) || page < 1) {
+    if (page === null) {
       return new Response("Invalid page parameter", { status: 400 });
     }
 
-    if (isNaN(limit) || limit < 1) {
+    if (limit === null) {
       return new Response("Invalid limit parameter", { status: 400 });
     }
 

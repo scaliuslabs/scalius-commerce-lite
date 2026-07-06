@@ -2,6 +2,7 @@ const EXACT_CACHE_GENERATION_PREFIX = "g:";
 const DEFAULT_GENERATION = "0";
 const PRODUCT_SLUG_KEY_PREFIX = "product_slug_";
 const PRODUCT_VARIANTS_KEY_PREFIX = "product_variants_";
+const FEED_PRODUCTS_KEY_PREFIX = "feed_products_";
 const WIDGET_KEY_PREFIX = "widget_";
 const WIDGET_SCOPE_KEY_PREFIX = "widgets_scope_";
 const PAGE_RENDER_KEY_PREFIX = "page_render_";
@@ -36,6 +37,10 @@ export function buildExactCacheGenerationKey(
 }
 
 export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | null {
+  if (logicalKey.startsWith(FEED_PRODUCTS_KEY_PREFIX)) {
+    return FEED_PRODUCTS_KEY_PREFIX;
+  }
+
   if (
     logicalKey.startsWith(PRODUCT_SLUG_KEY_PREFIX) ||
     logicalKey.startsWith(PRODUCT_VARIANTS_KEY_PREFIX) ||

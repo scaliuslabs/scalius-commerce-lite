@@ -309,7 +309,7 @@ describe("runReleaseCheck", () => {
         }
         if (
           (parsed.pathname === "/api/product-feed.xml" || parsed.pathname === "/api/facebook-feed.xml") &&
-          parsed.search === "?limit=5"
+          (parsed.search === "?limit=5" || parsed.search === "?page=2&limit=5")
         ) {
           feedRequests.push(`${parsed.pathname}${parsed.search}`);
           return discoveryResponse(feedXml(), FEED_CACHE_CONTROL);
@@ -374,7 +374,9 @@ describe("runReleaseCheck", () => {
     });
     expect(feedRequests).toEqual([
       "/api/product-feed.xml?limit=5",
+      "/api/product-feed.xml?page=2&limit=5",
       "/api/facebook-feed.xml?limit=5",
+      "/api/facebook-feed.xml?page=2&limit=5",
     ]);
     expect(result.checks.productRoute.url).toBe("https://storefront.example.test/products/demo-product");
     expect(execFileImpl).toHaveBeenCalledTimes(1);
@@ -420,7 +422,7 @@ describe("runReleaseCheck", () => {
         }
         if (
           (parsed.pathname === "/api/product-feed.xml" || parsed.pathname === "/api/facebook-feed.xml") &&
-          parsed.search === "?limit=5"
+          (parsed.search === "?limit=5" || parsed.search === "?page=2&limit=5")
         ) {
           return discoveryResponse(feedXml(), FEED_CACHE_CONTROL);
         }

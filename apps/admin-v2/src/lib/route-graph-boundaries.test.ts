@@ -439,6 +439,22 @@ describe("admin route graph boundaries", () => {
     expect(eagerCommandPaths).toEqual([]);
   });
 
+  it("refreshes SEO live-proof and feed diagnostics after SEO settings save", () => {
+    const seoSettingsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "SeoSettingsBuilder.tsx"),
+      "utf8",
+    );
+    const settingsFormSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "hooks", "use-settings-form.ts"),
+      "utf8",
+    );
+
+    expect(settingsFormSource).toContain("invalidateQueryKeys?:");
+    expect(seoSettingsSource).toContain("invalidateQueryKeys:");
+    expect(seoSettingsSource).toContain("queryKeys.settings.seoDiscoveryLiveProbe()");
+    expect(seoSettingsSource).toContain("queryKeys.settings.seoFeedDiagnostics()");
+  });
+
   it("keeps admin shell nav data local and aligned with core RBAC names", () => {
     const adminNavSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminNav.ts"),
