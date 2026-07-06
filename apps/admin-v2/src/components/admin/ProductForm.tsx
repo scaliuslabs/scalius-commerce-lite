@@ -109,6 +109,8 @@ export function ProductForm({
       freeDelivery: false,
       metaTitle: null,
       metaDescription: null,
+      excludeFromSitemap: false,
+      excludeFromProductFeed: false,
       slug: "",
       images: [],
       slugEdited: false,

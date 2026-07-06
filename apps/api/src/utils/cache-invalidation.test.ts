@@ -1019,6 +1019,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
       apiKeys: [
         "api:products:/api/v1/products",
         "api:products:/api/v1/products/feed",
+        "api:products:/api/v1/products/sitemap",
         "api:products:/api/v1/products/phone",
         "api:products:/api/v1/products/phone-case",
         "api:products:/api/v1/products/search",
@@ -1026,6 +1027,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
       apiPatterns: [
         "api:products:/api/v1/products?*",
         "api:products:/api/v1/products/feed?*",
+        "api:products:/api/v1/products/sitemap?*",
         "api:products:/api/v1/products/phone?*",
         "api:products:/api/v1/products/phone-case?*",
         "api:products:/api/v1/products/search?*",
@@ -1037,6 +1039,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "product_slug_phone-case",
         "product_variants_prod_2",
         "feed_products_",
+        "sitemap_products_",
       ],
       storefrontHtmlPaths: ["/products/phone", "/products/phone-case"],
     });
@@ -1044,6 +1047,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(getProductAvailabilityApiCacheKeys(subjects)).toEqual([
       "api:products:/api/v1/products",
       "api:products:/api/v1/products/feed",
+      "api:products:/api/v1/products/sitemap",
       "api:products:/api/v1/products/phone",
       "api:products:/api/v1/products/phone-case",
       "api:products:/api/v1/products/search",
@@ -1051,6 +1055,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(getProductAvailabilityApiCachePatterns(subjects)).toEqual([
       "api:products:/api/v1/products?*",
       "api:products:/api/v1/products/feed?*",
+      "api:products:/api/v1/products/sitemap?*",
       "api:products:/api/v1/products/phone?*",
       "api:products:/api/v1/products/phone-case?*",
       "api:products:/api/v1/products/search?*",
@@ -1062,6 +1067,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
       "product_slug_phone-case",
       "product_variants_prod_2",
       "feed_products_",
+      "sitemap_products_",
     ]);
   });
 
@@ -1121,12 +1127,16 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/phone");
     expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products");
     expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/feed");
+    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/sitemap");
     expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/search");
     expect(kv.list).toHaveBeenCalledWith({
       prefix: "sc:api:products:/api/v1/products?",
     });
     expect(kv.list).toHaveBeenCalledWith({
       prefix: "sc:api:products:/api/v1/products/feed?",
+    });
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: "sc:api:products:/api/v1/products/sitemap?",
     });
     expect(kv.list).toHaveBeenCalledWith({
       prefix: "sc:api:products:/api/v1/products/phone?",
@@ -1145,7 +1155,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       groups: ["products"],
       prefixes: [],
-      exactKeys: ["product_slug_phone", "product_variants_prod_1", "feed_products_"],
+      exactKeys: [
+        "product_slug_phone",
+        "product_variants_prod_1",
+        "feed_products_",
+        "sitemap_products_",
+      ],
       htmlPaths: ["/products/phone"],
       bumpVersion: false,
     });
@@ -1201,7 +1216,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       groups: ["products"],
       prefixes: ["page_render_stock-alert_"],
-      exactKeys: ["product_slug_phone", "product_variants_prod_1", "feed_products_"],
+      exactKeys: [
+        "product_slug_phone",
+        "product_variants_prod_1",
+        "feed_products_",
+        "sitemap_products_",
+      ],
       htmlPaths: ["/products/phone", "/stock-alert"],
       bumpVersion: false,
     });

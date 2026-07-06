@@ -37,6 +37,8 @@ export interface ProductSeoDiagnosticsInput {
     slug?: string | null;
     isActive?: boolean | null;
     images?: ProductSeoDiagnosticImage[] | null;
+    excludeFromSitemap?: boolean | null;
+    excludeFromProductFeed?: boolean | null;
   };
   variants?: ProductSeoDiagnosticVariant[] | null;
   variantState?: ProductSeoVariantState;
@@ -364,12 +366,14 @@ function buildSitemapStatus({
   canonical,
   availability,
   absoluteStorefrontUrl,
+  excludeFromSitemap,
 }: {
   discovery: SeoDiscoverySettings;
   isActive: boolean;
   canonical: ProductSeoDiagnostics["canonical"];
   availability: ProductSeoAvailabilityStatus;
   absoluteStorefrontUrl: URL | null;
+  excludeFromSitemap: boolean;
 }): ProductSeoDiagnosticRow {
   if (!canonical.path) {
     return {
@@ -392,6 +396,15 @@ function buildSitemapStatus({
       tone: "disabled",
       title: "Product sitemap off",
       summary: "The product sitemap section is disabled globally.",
+    };
+  }
+
+  if (excludeFromSitemap) {
+    return {
+      tone: "disabled",
+      title: "Excluded from product sitemap",
+      summary:
+        "The product page stays public, but this product is removed from product sitemap XML.",
     };
   }
 
@@ -442,6 +455,7 @@ function buildFeedStatus({
   availability,
   feedImage,
   absoluteStorefrontUrl,
+  excludeFromProductFeed,
 }: {
   discovery: SeoDiscoverySettings;
   isActive: boolean;
@@ -449,6 +463,7 @@ function buildFeedStatus({
   availability: ProductSeoAvailabilityStatus;
   feedImage: ProductSeoDiagnostics["feedImage"];
   absoluteStorefrontUrl: URL | null;
+  excludeFromProductFeed: boolean;
 }): ProductSeoDiagnostics["feed"] {
   const feeds = discovery.feeds;
 
@@ -469,6 +484,17 @@ function buildFeedStatus({
       summary: "Feed inclusion can be estimated after a valid product slug.",
       inclusion: "draft",
       skippedReason: null,
+    };
+  }
+
+  if (excludeFromProductFeed) {
+    return {
+      tone: "disabled",
+      title: "Excluded from product feed",
+      summary:
+        "The product page stays public, but this product is removed from catalog feed XML.",
+      inclusion: "skipped",
+      skippedReason: "Product feed exclusion is on.",
     };
   }
 
@@ -638,6 +664,8 @@ export function buildProductSeoDiagnostics({
   const absoluteStorefrontUrl = parseAbsoluteHttpUrl(storefrontUrl);
   const slug = normalizeSlug(product.slug);
   const isActive = product.isActive === true;
+  const excludeFromSitemap = product.excludeFromSitemap === true;
+  const excludeFromProductFeed = product.excludeFromProductFeed === true;
   const availability = buildAvailabilityStatus(variants, variantState);
   const canonical = buildCanonicalStatus({ slug, absoluteStorefrontUrl });
   const feedImage = buildFeedImageStatus({
@@ -666,6 +694,7 @@ export function buildProductSeoDiagnostics({
       canonical,
       availability,
       absoluteStorefrontUrl,
+      excludeFromSitemap,
     }),
     feedImage,
     feed: buildFeedStatus({
@@ -675,6 +704,7 @@ export function buildProductSeoDiagnostics({
       availability,
       feedImage,
       absoluteStorefrontUrl,
+      excludeFromProductFeed,
     }),
     structuredData: buildStructuredDataStatus({
       discovery: normalizedDiscovery,

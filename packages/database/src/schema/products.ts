@@ -19,6 +19,8 @@ export const products = sqliteTable(
         slug: text("slug").notNull(),
         metaTitle: text("meta_title"),
         metaDescription: text("meta_description"),
+        excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
+        excludeFromProductFeed: integer("exclude_from_product_feed", { mode: "boolean" }).notNull().default(false),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),

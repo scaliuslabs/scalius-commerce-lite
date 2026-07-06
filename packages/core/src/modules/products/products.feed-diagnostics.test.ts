@@ -24,6 +24,7 @@ function product(
         name: `Product ${id}`,
         slug: `product-${id}`,
         isActive: true,
+        excludeFromProductFeed: false,
         deletedAt: null,
         ...overrides,
     };
@@ -106,6 +107,41 @@ describe("product feed diagnostics", () => {
             products: 1,
             rows: 1,
         });
+    });
+
+    it("reports product-level feed exclusions before other product blockers", () => {
+        const report = buildProductFeedDiagnosticsFromScan({
+            products: [
+                product("excluded", {
+                    excludeFromProductFeed: true,
+                    isActive: false,
+                }),
+            ],
+            primaryImageUrls: new Map(),
+            variants: new Map(),
+            feedsPolicy: baseFeedsPolicy,
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl: "https://store.example.test",
+        });
+
+        expect(reasonCount(report, "product_feed_excluded")).toMatchObject({
+            products: 1,
+            rows: 0,
+            samples: [
+                {
+                    id: "excluded",
+                    name: "Product excluded",
+                    slug: "product-excluded",
+                    reason: "product_feed_excluded",
+                },
+            ],
+        });
+        expect(reasonCount(report, "inactive_deleted_unpublished")).toMatchObject({
+            products: 0,
+        });
+        expect(report.totals.productsWithIssues).toBe(1);
     });
 
     it("counts product-level feed blockers with safe samples", () => {

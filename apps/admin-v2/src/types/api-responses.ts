@@ -122,6 +122,8 @@ export interface Product {
   slug: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  excludeFromSitemap: boolean;
+  excludeFromProductFeed: boolean;
   createdAt: Date | string | number;
   updatedAt: Date | string | number;
   deletedAt: Date | string | number | null;

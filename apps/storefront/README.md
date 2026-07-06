@@ -80,7 +80,7 @@ Implements a two-layer edge caching strategy for HTML pages:
 - Product pages (`/products/{slug}`)
 - Category pages (`/categories/{slug}`)
 - Search (`/search`)
-- Discovery assets (`/robots.txt`, `/sitemap.xml`, `/sitemap-*.xml`, `/sitemap.xsl`, `/api/product-feed.xml`, `/api/facebook-feed.xml`); XML generation requires an absolute `STOREFRONT_URL` and returns non-cacheable `503` instead of relative/empty discovery URLs when it is missing. Feed XML cache keys use the `feed_products_` generation family so stock/availability invalidation reaches the rendered public XML. Sitemap index entries intentionally omit `lastmod` until a truthful child-sitemap modified timestamp is available, while child URL sitemaps emit only absolute `loc` plus truthful `lastmod`.
+- Discovery assets (`/robots.txt`, `/sitemap.xml`, `/sitemap-*.xml`, `/sitemap.xsl`, `/api/product-feed.xml`, `/api/facebook-feed.xml`); XML generation requires an absolute `STOREFRONT_URL` and returns non-cacheable `503` instead of relative/empty discovery URLs when it is missing. Feed XML cache keys use the `feed_products_` generation family and product sitemap XML uses `sitemap_products_`, so stock/availability and product discovery-exclusion invalidation reach rendered public XML. Sitemap index entries intentionally omit `lastmod` until a truthful child-sitemap modified timestamp is available, while child URL sitemaps emit only absolute `loc` plus truthful `lastmod`.
 - Generic pages (any path not matching excluded prefixes)
 
 **Non-cacheable paths**: `/api` routes except documented public discovery/proxy routes, `/cart`, `/checkout`, `/buy`, `/order-success`, `/account`, `/health`
@@ -267,7 +267,7 @@ Browser helpers in `src/lib/api/customer-auth.ts` use bounded same-origin proxy 
 - **Open Graph tags**: Full OG meta tags (og:title, og:description, og:image, og:url, og:site_name, og:type) in `Layout.astro`
 - **JSON-LD**: OnlineStore and WebSite structured data on all pages when enabled, with OnlineStore identity sourced from business settings and optional MerchantReturnPolicy sourced from saved SEO return-policy settings
 - **Product SEO**: Product pages emit Product/ProductGroup JSON-LD with price, availability, SKU, brand, seller, safe images, GTINs from variant barcodes, active-method shipping details, and aggregate offer data
-- **Discovery XML**: Robots, sitemap index/children, and product feeds are dashboard-policy governed. Sitemap XML stays loc/lastmod-only, and the browser XSL preview mirrors that contract.
+- **Discovery XML**: Robots, sitemap index/children, and product feeds are dashboard-policy governed. Product-level sitemap/feed exclusions keep the product page public while removing it from matching XML output. Sitemap XML stays loc/lastmod-only, and the browser XSL preview mirrors that contract.
 
 ## Search
 

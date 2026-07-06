@@ -86,6 +86,38 @@ describe("buildProductSeoDiagnostics", () => {
     });
   });
 
+  it("treats product-level XML exclusions as discovery-only controls", () => {
+    const diagnostics = buildProductSeoDiagnostics({
+      product: {
+        ...activeProduct,
+        excludeFromSitemap: true,
+        excludeFromProductFeed: true,
+      },
+      variants: availableSimpleSku,
+      variantState: "loaded",
+      discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+      storefrontUrl: "https://shop.example.com",
+      policySource: "current",
+    });
+
+    expect(diagnostics.canonical).toMatchObject({
+      tone: "ok",
+      path: "/products/green-tea",
+    });
+    expect(diagnostics.sitemap).toMatchObject({
+      tone: "disabled",
+      title: "Excluded from product sitemap",
+    });
+    expect(diagnostics.feed).toMatchObject({
+      tone: "disabled",
+      inclusion: "skipped",
+      skippedReason: "Product feed exclusion is on.",
+    });
+    expect(diagnostics.structuredData.title).toBe(
+      "Product + Breadcrumb JSON-LD on",
+    );
+  });
+
   it("honors sold-out inclusion policy for the product feed", () => {
     const soldOutSku = [
       {

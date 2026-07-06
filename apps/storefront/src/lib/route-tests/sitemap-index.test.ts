@@ -3,13 +3,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getAllProducts: vi.fn(),
+  getSitemapProducts: vi.fn(),
   getSeoSettings: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
 }));
 
 vi.mock("@/lib/api/products", () => ({
-  getAllProducts: mocks.getAllProducts,
+  getSitemapProducts: mocks.getSitemapProducts,
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -24,7 +24,7 @@ import { GET } from "../../pages/sitemap.xml";
 
 describe("sitemap index route", () => {
   beforeEach(() => {
-    mocks.getAllProducts.mockReset();
+    mocks.getSitemapProducts.mockReset();
     mocks.getSeoSettings.mockReset();
     mocks.getSeoSettings.mockResolvedValue({
       discovery: undefined,
@@ -33,7 +33,7 @@ describe("sitemap index route", () => {
   });
 
   it("returns non-cacheable 503 when product count cannot be read", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce(null);
+    mocks.getSitemapProducts.mockResolvedValueOnce(null);
 
     const response = await GET({} as never);
 
@@ -50,12 +50,12 @@ describe("sitemap index route", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(body).toContain("Sitemap index is temporarily unavailable");
-    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+    expect(mocks.getSitemapProducts).not.toHaveBeenCalled();
   });
 
   it("includes sitemap documents and excludes product feeds", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
-      data: [{ id: "prod_1" }],
+    mocks.getSitemapProducts.mockResolvedValueOnce({
+      data: [{ slug: "hilsa", updatedAt: "2026-06-23T00:00:00.000Z" }],
       pagination: { page: 1, limit: 1, total: 1, totalPages: 1 },
     });
 
@@ -73,8 +73,8 @@ describe("sitemap index route", () => {
   });
 
   it("does not stamp sitemap index entries with render-time lastmod values", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
-      data: [{ id: "prod_1" }],
+    mocks.getSitemapProducts.mockResolvedValueOnce({
+      data: [{ slug: "hilsa", updatedAt: "2026-06-23T00:00:00.000Z" }],
       pagination: { page: 1, limit: 1, total: 1, totalPages: 1 },
     });
 
@@ -104,7 +104,7 @@ describe("sitemap index route", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+    expect(mocks.getSitemapProducts).not.toHaveBeenCalled();
     expect(body).toContain("https://storefront.example.test/sitemap-collections.xml");
     expect(body).not.toContain("sitemap-static.xml");
     expect(body).not.toContain("sitemap-products.xml");

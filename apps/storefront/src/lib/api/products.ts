@@ -16,6 +16,7 @@ import {
   getApiV1Products,
   getApiV1CategoriesBySlugProducts,
   getApiV1ProductsSearch,
+  getApiV1ProductsSitemap,
 } from "@scalius/api-client/sdk";
 import { buildCanonicalQueryString } from "@/lib/cache-key";
 import { normalizeSearchQuery } from "@/lib/search-query";
@@ -132,10 +133,21 @@ export interface ProductListOptions {
   [key: string]: string | number | boolean | string[] | undefined;
 }
 
+export interface SitemapProduct {
+  slug: string;
+  updatedAt: string | null;
+}
+
 type ProductListPayload = {
   products?: Product[];
   data?: Product[];
   pagination?: PaginatedResponse<Product>["pagination"];
+};
+
+type SitemapProductListPayload = {
+  products?: SitemapProduct[];
+  data?: SitemapProduct[];
+  pagination?: PaginatedResponse<SitemapProduct>["pagination"];
 };
 
 type OptionalFeedProductsSdk = {
@@ -182,6 +194,28 @@ function normalizeProductListPayload(
     unwrapData<ProductListPayload>(payload) ??
     unwrapEnvelope<ProductListPayload>(payload) ??
     (payload as ProductListPayload | null);
+  if (!candidate || typeof candidate !== "object") return null;
+
+  const products = Array.isArray(candidate.products)
+    ? candidate.products
+    : Array.isArray(candidate.data)
+      ? candidate.data
+      : null;
+  if (!products || !candidate.pagination) return null;
+
+  return {
+    data: products,
+    pagination: candidate.pagination,
+  };
+}
+
+function normalizeSitemapProductListPayload(
+  payload: unknown,
+): PaginatedResponse<SitemapProduct> | null {
+  const candidate =
+    unwrapData<SitemapProductListPayload>(payload) ??
+    unwrapEnvelope<SitemapProductListPayload>(payload) ??
+    (payload as SitemapProductListPayload | null);
   if (!candidate || typeof candidate !== "object") return null;
 
   const products = Array.isArray(candidate.products)
@@ -357,6 +391,40 @@ export async function getFeedProducts(
       }
 
       return getAllProducts(normalizedOptions);
+    },
+    { ttlSeconds: CACHE_TTL.MEDIUM },
+  );
+}
+
+export async function getSitemapProducts(
+  options: Pick<ProductListOptions, "page" | "limit"> = {},
+): Promise<PaginatedResponse<SitemapProduct> | null> {
+  const normalizedOptions = normalizeProductListOptions(options);
+  const queryString = buildCanonicalQueryString(normalizedOptions, {
+    defaultParams: { page: 1, limit: 100 },
+  });
+  const cacheKey = `sitemap_products_${queryString || "default"}`;
+
+  return withEdgeCache(
+    cacheKey,
+    async () => {
+      try {
+        const { data, error } = await getApiV1ProductsSitemap({
+          client: getConfiguredSdkClient(),
+          query: {
+            page: normalizedOptions.page,
+            limit: normalizedOptions.limit,
+          },
+        });
+        if (error) {
+          console.error("Error fetching sitemap products:", error);
+          return null;
+        }
+        return normalizeSitemapProductListPayload(data);
+      } catch (error: unknown) {
+        console.error("Error fetching sitemap products:", error);
+        return null;
+      }
     },
     { ttlSeconds: CACHE_TTL.MEDIUM },
   );

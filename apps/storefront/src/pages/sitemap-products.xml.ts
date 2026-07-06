@@ -8,9 +8,8 @@
 import { generateSitemap, getBaseUrl, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSeoSettings } from '@/lib/api';
-import { getAllProducts } from '@/lib/api/products';
+import { getSitemapProducts } from '@/lib/api/products';
 import type { APIContext, APIRoute } from 'astro';
-import type { Product } from '@/lib/api/types';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
@@ -51,7 +50,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       return new Response('Invalid page parameter', { status: 400 });
     }
 
-    const allProducts: Product[] = [];
+    const allProducts: Array<{ slug: string; updatedAt: string | null }> = [];
     const limitParams = 100; // Fetch 100 products per API call
 
     // We need 50 API pages to fulfill 1 sitemap chunk of 5000 products.
@@ -60,7 +59,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     const requiredApiPages = URLS_PER_SITEMAP / limitParams;
 
     // We can fetch the first page to figure out totalPages so we don't over-fetch
-    const firstResponse = await getAllProducts({
+    const firstResponse = await getSitemapProducts({
       page: startApiPage,
       limit: limitParams,
     });
@@ -76,7 +75,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       return new Response(generateSitemap([], baseUrl), { status: 200, headers: getSitemapHeaders() });
     }
 
-    allProducts.push(...firstResponse.data.filter((p) => p.isActive !== false));
+    allProducts.push(...firstResponse.data);
     const totalPages = firstResponse.pagination.totalPages;
 
     // Limit requiredApiPages if we hit the end of the total products early
@@ -89,7 +88,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       const endBatchPage = Math.min(currentApiPage + BATCH_SIZE - 1, maxApiPage);
 
       for (let p = currentApiPage; p <= endBatchPage; p++) {
-        fetchPromises.push(getAllProducts({ page: p, limit: limitParams }));
+        fetchPromises.push(getSitemapProducts({ page: p, limit: limitParams }));
       }
 
       const batchResponses = await Promise.all(fetchPromises);
@@ -98,7 +97,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
           return xmlDataUnavailableResponse('Product sitemap is temporarily unavailable');
         }
         if (res && res.data) {
-          allProducts.push(...res.data.filter((p) => p.isActive !== false));
+          allProducts.push(...res.data);
         }
       }
     }
@@ -109,7 +108,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
 
     const productUrls: SitemapUrl[] = allProducts.map((product) => ({
       loc: `${baseUrl}/products/${product.slug}`,
-      lastmod: product.updatedAt,
+      lastmod: product.updatedAt ?? undefined,
     }));
 
     const xml = generateSitemap(productUrls, baseUrl);

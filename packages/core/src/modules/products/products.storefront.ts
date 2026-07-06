@@ -62,9 +62,15 @@ type StorefrontFeedProductListRow = {
     discountAmount: number | null;
     freeDelivery: boolean;
     categoryId: string | null;
+    excludeFromProductFeed: boolean;
     updatedAt: number;
     hasCustomerOptions: boolean;
     availableForSale: boolean;
+};
+
+type StorefrontSitemapProductRow = {
+    slug: string;
+    updatedAt: number;
 };
 
 type StorefrontFeedVariantRow = Omit<StorefrontFeedProductVariant, "deletedAt"> & {
@@ -431,6 +437,7 @@ export async function getStorefrontFeedProducts(
         sort = "newest",
     } = params;
     const conditions = buildStorefrontProductConditions({});
+    conditions.push(eq(products.excludeFromProductFeed, false));
     const orderBy = getStorefrontProductOrderBy(sort);
     const offset = (page - 1) * limit;
 
@@ -446,6 +453,7 @@ export async function getStorefrontFeedProducts(
             discountAmount: products.discountAmount,
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
+            excludeFromProductFeed: products.excludeFromProductFeed,
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             hasCustomerOptions: publicProductHasCustomerOptions(sql`${products.id}`).as("hasCustomerOptions"),
             availableForSale: publicProductHasAvailableBuyerSku(sql`${products.id}`).as("availableForSale"),
@@ -498,6 +506,7 @@ export async function getStorefrontFeedProducts(
             ),
             freeDelivery: product.freeDelivery,
             categoryId: product.categoryId,
+            excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
             hasVariants: Boolean(product.hasCustomerOptions),
             availableForSale: Boolean(product.availableForSale),
             imageUrl: imgData?.url || null,
@@ -511,6 +520,48 @@ export async function getStorefrontFeedProducts(
 
     return {
         products: feedProducts,
+        pagination: getPagination(page, limit, totalCount?.count || 0),
+    };
+}
+
+export async function getStorefrontSitemapProducts(
+    db: Database,
+    params: Pick<StorefrontProductFilterInput, "page" | "limit">,
+) {
+    const {
+        page = 1,
+        limit = 100,
+    } = params;
+    const conditions = [
+        ...buildStorefrontProductConditions({}),
+        eq(products.excludeFromSitemap, false),
+    ];
+    const offset = (page - 1) * limit;
+
+    const [productsList, totalCount] = await Promise.all([
+        db
+            .select({
+                slug: products.slug,
+                updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
+            })
+            .from(products)
+            .where(and(...conditions))
+            .orderBy(desc(products.createdAt), products.id)
+            .limit(limit)
+            .offset(offset)
+            .all() as Promise<StorefrontSitemapProductRow[]>,
+        db
+            .select({ count: sql<number>`count(*)` })
+            .from(products)
+            .where(and(...conditions))
+            .get(),
+    ]);
+
+    return {
+        products: productsList.map((product) => ({
+            slug: product.slug,
+            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
+        })),
         pagination: getPagination(page, limit, totalCount?.count || 0),
     };
 }

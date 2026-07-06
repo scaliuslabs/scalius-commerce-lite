@@ -144,6 +144,8 @@ export const formatFormValuesForSubmission = (
     freeDelivery: values.freeDelivery,
     metaTitle: values.metaTitle,
     metaDescription,
+    excludeFromSitemap: values.excludeFromSitemap,
+    excludeFromProductFeed: values.excludeFromProductFeed,
     discountPercentage,
     discountAmount,
     slug: values.slug,

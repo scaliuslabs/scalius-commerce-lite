@@ -4,6 +4,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cacheMiddleware } from "../middleware/cache";
 import {
   getStorefrontFeedProducts,
+  getStorefrontSitemapProducts,
   getStorefrontProducts,
   getStorefrontProductBySlug,
   searchStorefrontProducts,
@@ -25,6 +26,7 @@ import {
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const PRODUCT_FEED_QUERY_KEYS = new Set(["page", "limit", "sort"]);
+const PRODUCT_SITEMAP_QUERY_KEYS = new Set(["page", "limit"]);
 const PRODUCT_FEED_SORT_VALUES = new Set([
   "newest",
   "price-asc",
@@ -61,6 +63,18 @@ function isStorefrontFeedProductsCacheable(url: string): boolean {
   );
 }
 
+function isStorefrontSitemapProductsCacheable(url: string): boolean {
+  const params = new URL(url).searchParams;
+  for (const [key, value] of params.entries()) {
+    if (!PRODUCT_SITEMAP_QUERY_KEYS.has(key) || value.trim() === "") return false;
+  }
+
+  return (
+    hasOptionalIntegerParamInRange(params, "page", 1, 1000) &&
+    hasOptionalIntegerParamInRange(params, "limit", 1, 5000)
+  );
+}
+
 app.use(
   "*",
   cacheMiddleware({
@@ -74,6 +88,9 @@ app.use(
       }
       if (normalizedPath.endsWith("/products/feed")) {
         return { page: 1, limit: 100, sort: "newest" };
+      }
+      if (normalizedPath.endsWith("/products/sitemap")) {
+        return { page: 1, limit: 100 };
       }
       if (normalizedPath.endsWith("/products")) {
         return { page: 1, limit: 20, sort: "newest" };
@@ -94,6 +111,9 @@ app.use(
       }
       if (normalizedPath.endsWith("/products/feed")) {
         return isStorefrontFeedProductsCacheable(c.req.url);
+      }
+      if (normalizedPath.endsWith("/products/sitemap")) {
+        return isStorefrontSitemapProductsCacheable(c.req.url);
       }
       if (normalizedPath.endsWith("/products")) {
         return isPublicProductListCacheable(c.req.url);
@@ -135,6 +155,11 @@ const productFeedSchema = z.object({
     .optional()
     .default("newest")
     .openapi({ description: "Sort order" }),
+});
+
+const productSitemapSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
+  limit: z.coerce.number().int().min(1).max(5000).optional().default(100).openapi({ description: "Items per page" }),
 });
 
 // Storefront product list item
@@ -195,6 +220,7 @@ const storefrontFeedProductSchema = z.object({
   discountedPrice: z.number(),
   freeDelivery: z.boolean(),
   categoryId: z.string().nullable(),
+  excludeFromProductFeed: z.boolean(),
   hasVariants: z.boolean(),
   availableForSale: z.boolean(),
   imageUrl: z.string().nullable(),
@@ -202,6 +228,11 @@ const storefrontFeedProductSchema = z.object({
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   attributes: z.array(storefrontFeedAttributeSchema),
   variants: z.array(storefrontFeedVariantSchema),
+  updatedAt: z.string().nullable(),
+});
+
+const storefrontSitemapProductSchema = z.object({
+  slug: z.string(),
   updatedAt: z.string().nullable(),
 });
 
@@ -316,6 +347,35 @@ app.openapi(feedProductsRoute, async (c) => {
   const db = c.get("db");
   const params = c.req.valid("query");
   const result = await getStorefrontFeedProducts(db, params);
+  return ok(c, result);
+});
+
+// GET /api/v1/products/sitemap
+const sitemapProductsRoute = createRoute({
+  method: "get",
+  path: "/sitemap",
+  tags: ["Products"],
+  summary: "List storefront products for XML sitemaps",
+  request: {
+    query: productSitemapSchema
+  },
+  responses: {
+    200: {
+      description: "Sitemap product list with pagination",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        products: z.array(storefrontSitemapProductSchema),
+        pagination: paginationSchema,
+      })) } },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  }
+});
+
+app.openapi(sitemapProductsRoute, async (c) => {
+  const db = c.get("db");
+  const params = c.req.valid("query");
+  const result = await getStorefrontSitemapProducts(db, params);
   return ok(c, result);
 });
 

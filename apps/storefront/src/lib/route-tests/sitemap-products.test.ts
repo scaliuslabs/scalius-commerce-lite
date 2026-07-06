@@ -3,13 +3,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getAllProducts: vi.fn(),
+  getSitemapProducts: vi.fn(),
   getSeoSettings: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
 }));
 
 vi.mock("@/lib/api/products", () => ({
-  getAllProducts: mocks.getAllProducts,
+  getSitemapProducts: mocks.getSitemapProducts,
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -28,14 +28,14 @@ function context(url = "https://storefront.example.test/sitemap-products.xml") {
 
 describe("products sitemap route", () => {
   beforeEach(() => {
-    mocks.getAllProducts.mockReset();
+    mocks.getSitemapProducts.mockReset();
     mocks.getSeoSettings.mockReset();
     mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
   });
 
   it("returns non-cacheable 503 when the first product page cannot be read", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce(null);
+    mocks.getSitemapProducts.mockResolvedValueOnce(null);
 
     const response = await GET(context());
 
@@ -45,7 +45,7 @@ describe("products sitemap route", () => {
   });
 
   it("keeps legitimate empty catalogs as empty XML", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getSitemapProducts.mockResolvedValueOnce({
       data: [],
       pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
     });
@@ -72,7 +72,7 @@ describe("products sitemap route", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+    expect(mocks.getSitemapProducts).not.toHaveBeenCalled();
     expect(body).toContain("<urlset");
     expect(body).not.toContain("/products/");
   });
@@ -91,17 +91,15 @@ describe("products sitemap route", () => {
     await expect(leadingZero.text()).resolves.toContain(
       "Invalid page parameter",
     );
-    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+    expect(mocks.getSitemapProducts).not.toHaveBeenCalled();
   });
 
   it("emits product loc and lastmod without ignored priority or changefreq tags", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getSitemapProducts.mockResolvedValueOnce({
       data: [
         {
-          id: "prod_1",
           slug: "hilsa",
           updatedAt: "2026-06-23T00:00:00.000Z",
-          isActive: true,
         },
       ],
       pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
@@ -118,14 +116,12 @@ describe("products sitemap route", () => {
   });
 
   it("fails closed when a later sitemap product page cannot be read", async () => {
-    mocks.getAllProducts
+    mocks.getSitemapProducts
       .mockResolvedValueOnce({
         data: [
           {
-            id: "prod_1",
             slug: "hilsa",
             updatedAt: "2026-06-23T00:00:00.000Z",
-            isActive: true,
           },
         ],
         pagination: { page: 1, limit: 100, total: 101, totalPages: 2 },

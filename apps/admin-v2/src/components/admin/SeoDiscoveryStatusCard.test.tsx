@@ -141,6 +141,12 @@ function createHealthyFeedDiagnostics() {
         samples: [],
       },
       {
+        reason: "product_feed_excluded",
+        products: 0,
+        rows: 0,
+        samples: [],
+      },
+      {
         reason: "inactive_deleted_unpublished",
         products: 0,
         rows: 0,
