@@ -2,7 +2,7 @@ import { type Database } from "@scalius/database/client";
 import { metaConversionsSettings, metaConversionsLogs, type MetaConversionsSettings } from "@scalius/database/schema";
 import { eq, lt } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { decryptCredentialsGraceful } from "../../utils/credential-encryption";
+import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 
 /**
  * Fetches the Meta Conversions API settings from the database.
@@ -21,11 +21,18 @@ export async function getCapiSettings(
             return null;
         }
 
+        const accessTokenRead = await readStoredCredentialStrict(
+            settings.accessToken,
+            encryptionKey,
+            "Meta Conversions API access token",
+        );
+        if (accessTokenRead.error) {
+            console.warn("[Meta CAPI] Access token is not ready:", accessTokenRead.error);
+        }
+
         return {
             ...settings,
-            accessToken: settings.accessToken
-                ? await decryptCredentialsGraceful(settings.accessToken, encryptionKey)
-                : settings.accessToken,
+            accessToken: accessTokenRead.value || null,
         };
     } catch (error: unknown) {
         console.error("Error fetching Meta CAPI settings:", error);

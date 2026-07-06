@@ -64,7 +64,7 @@ Validated by Zod schema in the API route:
 
 ### `conversions-api.ts` -- Event Sending
 
-- `sendCapiEvent(db, event, { encryptionKey })` -- Main function. Fetches settings via `getCapiSettings()`, gracefully decrypts encrypted access tokens when a key is supplied, hashes user data, sends to Meta Graph API, and logs redacted results via `logCapiEvent()`. Response data typed as `Record<string, unknown>`. Error objects typed via `error instanceof Error` checks.
+- `sendCapiEvent(db, event, { encryptionKey })` -- Main function. Fetches settings via `getCapiSettings()`, strictly decrypts encrypted access tokens with the dedicated credential key, skips cheaply when credentials are unreadable or missing, hashes user data, sends to Meta Graph API, and logs redacted results via `logCapiEvent()`. Response data typed as `Record<string, unknown>`. Error objects typed via `error instanceof Error` checks.
 - `redactCapiPayloadForLog(payload)` -- Removes event source query strings and replaces all `user_data` values plus `test_event_code` with redaction markers before storage or admin display.
 - `prepareUserData(userData)` -- Hashes PII fields per Meta's formatting rules:
   - `em` (email): lowercase, trim, SHA-256
@@ -110,7 +110,7 @@ Event logs are stored in `metaConversionsLogs` table:
 ## Service Layer (`packages/core/src/modules/analytics/meta.service.ts`)
 
 Standalone functions (not a class):
-- `getCapiSettings(db, encryptionKey?)` -- Fetches singleton settings row and gracefully decrypts `accessToken` when possible
+- `getCapiSettings(db, encryptionKey?)` -- Fetches singleton settings row, tolerates legacy plaintext tokens, and returns no access token when an encrypted token cannot be decrypted with `CREDENTIAL_ENCRYPTION_KEY`
 - `logCapiEvent(db, logData, retentionHours)` -- Inserts or updates a diagnostic log entry and triggers lazy cleanup
 - Cleanup runs based on retention hours derived from `logRetentionDays * 24`
 

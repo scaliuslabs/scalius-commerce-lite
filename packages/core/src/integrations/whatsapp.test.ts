@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "./whatsapp";
+import {
+  getWhatsAppCloudApiSettings,
+  saveWhatsAppAccessToken,
+  sendWhatsAppTemplateMessage,
+} from "./whatsapp";
 import { decryptCredentials, encryptCredentials } from "../utils/credential-encryption";
 
 describe("WhatsApp Cloud API integration", () => {
@@ -183,6 +187,46 @@ describe("WhatsApp Cloud API integration", () => {
       accessTokenSource: "none",
     });
     expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("does not report placeholder WhatsApp credentials as configured", async () => {
+    const db = createSettingsDb({
+      site: {
+        id: "site_settings_1",
+        whatsappAccessToken: "dummy",
+        whatsappPhoneNumberId: "123456",
+        whatsappTemplateName: "test",
+      },
+      tokenRow: null,
+    });
+
+    const result = await getWhatsAppCloudApiSettings(db);
+
+    expect(result).toMatchObject({
+      accessToken: undefined,
+      accessTokenConfigured: false,
+      phoneNumberId: undefined,
+      authTemplateName: "",
+      accessTokenSource: "none",
+    });
+  });
+
+  it("rejects placeholder WhatsApp access tokens before saving", async () => {
+    const db = createSettingsDb({
+      site: {
+        id: "site_settings_1",
+        whatsappAccessToken: null,
+        whatsappPhoneNumberId: "phone_id_1",
+        whatsappTemplateName: "auth_otp",
+      },
+      tokenRow: null,
+    });
+    const key = Buffer.alloc(32, 30).toString("base64");
+
+    await expect(saveWhatsAppAccessToken(db, "your-token-here", key)).rejects.toThrow(
+      "WhatsApp access token looks like a placeholder",
+    );
+    expect(db.insert).not.toHaveBeenCalled();
   });
 
   it("does not use bare encrypted legacy tokens as plaintext when the key is wrong", async () => {

@@ -19,6 +19,10 @@ export async function getReceiptTokenKvKey(token: string): Promise<string> {
   return getReceiptTokenKvKeyFromHash(await hashOrderReceiptToken(token));
 }
 
+export async function getCheckoutStatusKvKey(token: string): Promise<string> {
+  return `checkout_status:${await hashOrderReceiptToken(token)}`;
+}
+
 export async function validateReceiptToken(
   kv: KVNamespace | undefined,
   orderId: string,

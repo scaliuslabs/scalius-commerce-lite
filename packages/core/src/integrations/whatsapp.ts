@@ -7,6 +7,7 @@ import {
   readStoredCredentialStrict,
 } from "../utils/credential-encryption";
 import { META_GRAPH_API_VERSION } from "./meta/conversions-api";
+import { ValidationError } from "../errors";
 
 export interface SendWhatsAppTemplateMessageInput {
   accessToken: string;
@@ -73,6 +74,39 @@ interface WhatsAppCloudApiSettingsOptions {
 const WHATSAPP_SETTINGS_CATEGORY = "whatsapp";
 const WHATSAPP_ACCESS_TOKEN_KEY = "access_token";
 const ENCRYPTED_VALUE_PREFIX = "enc:";
+const PLACEHOLDER_EXACT_VALUES = new Set([
+  "000000",
+  "111111",
+  "123456",
+  "123456789",
+  "accesstoken",
+  "authtoken",
+  "changeme",
+  "changeit",
+  "demo",
+  "dummy",
+  "example",
+  "placeholder",
+  "sample",
+  "secret",
+  "test",
+  "testing",
+  "token",
+  "youraccesstoken",
+  "yourphoneid",
+  "yourphonenumberid",
+  "yourtemplate",
+  "yourtoken",
+  "yourtokenhere",
+]);
+
+const PLACEHOLDER_WORD_VALUES = new Set([
+  "changeme",
+  "dummy",
+  "example",
+  "placeholder",
+  "sample",
+]);
 
 export function normalizeWhatsAppRecipient(input: string): string {
   return validateAndFormatPhone(input).replace(/^\+/, "");
@@ -103,12 +137,26 @@ export async function getWhatsAppCloudApiSettings(
     ? await readStoredWhatsAppAccessToken(tokenRow.value, encryptionKey)
     : undefined;
   const legacyAccessToken = site?.whatsappAccessToken?.trim() || undefined;
-  const accessToken = encryptedAccessToken ?? legacyAccessToken;
-  const accessTokenSource = encryptedAccessToken
+  const rawAccessToken = encryptedAccessToken ?? legacyAccessToken;
+  const accessToken = looksLikeWhatsAppPlaceholderCredential(rawAccessToken)
+    ? undefined
+    : rawAccessToken;
+  const accessTokenSource = encryptedAccessToken && accessToken
     ? "encrypted"
-    : legacyAccessToken
+    : legacyAccessToken && accessToken
       ? "legacy"
       : "none";
+  const rawPhoneNumberId = site?.whatsappPhoneNumberId?.trim() || undefined;
+  const phoneNumberId = looksLikeWhatsAppPlaceholderCredential(rawPhoneNumberId)
+    ? undefined
+    : rawPhoneNumberId;
+  const rawTemplateName = site?.whatsappTemplateName?.trim();
+  const authTemplateName =
+    rawTemplateName === undefined || rawTemplateName === ""
+      ? "auth_otp"
+      : looksLikeWhatsAppPlaceholderCredential(rawTemplateName)
+        ? ""
+        : rawTemplateName;
 
   if (site?.id && legacyAccessToken && options.migrationEncryptionKey && options.migrateLegacy && !tokenRow?.value) {
     await migrateLegacyWhatsAppAccessToken(db, site.id, legacyAccessToken, options.migrationEncryptionKey);
@@ -119,8 +167,8 @@ export async function getWhatsAppCloudApiSettings(
   return {
     accessToken,
     accessTokenConfigured: Boolean(accessToken),
-    phoneNumberId: site?.whatsappPhoneNumberId ?? undefined,
-    authTemplateName: site?.whatsappTemplateName || "auth_otp",
+    phoneNumberId,
+    authTemplateName,
     accessTokenSource,
   };
 }
@@ -144,6 +192,11 @@ export async function saveWhatsAppAccessToken(
   if (!encryptionKey) {
     throw new Error("CREDENTIAL_ENCRYPTION_KEY is required to store WhatsApp credentials.");
   }
+
+  const placeholderError = firstWhatsAppPlaceholderConfigError([
+    ["WhatsApp access token", trimmed],
+  ]);
+  if (placeholderError) throw new ValidationError(placeholderError);
 
   const encrypted = `${ENCRYPTED_VALUE_PREFIX}${await encryptCredentials(trimmed, encryptionKey)}`;
   await db.insert(settings)
@@ -268,6 +321,44 @@ function truncateProviderResponse(value: string): string {
 
 function isRetryableWhatsAppStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+export function looksLikeWhatsAppPlaceholderCredential(
+  value: string | null | undefined,
+): boolean {
+  const trimmed = value?.trim();
+  if (!trimmed) return false;
+
+  const normalized = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (!normalized) return false;
+  if (PLACEHOLDER_EXACT_VALUES.has(normalized)) return true;
+  if (/^([0-9])\1{3,}$/.test(normalized)) return true;
+  if (/^1234567890?$/.test(normalized)) return true;
+
+  const words = trimmed.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  if (words.some((word) => PLACEHOLDER_WORD_VALUES.has(word))) return true;
+  if (words.length <= 2 && words.some((word) => word === "test" || word === "demo")) {
+    return true;
+  }
+  if (
+    words[0] === "your" &&
+    words.some((word) => word === "token" || word === "phone" || word === "template" || word === "id")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function firstWhatsAppPlaceholderConfigError(
+  fields: Array<[label: string, value: string | null | undefined]>,
+): string | null {
+  for (const [label, value] of fields) {
+    if (looksLikeWhatsAppPlaceholderCredential(value)) {
+      return `${label} looks like a placeholder. Save real Meta WhatsApp Cloud API credentials before enabling WhatsApp.`;
+    }
+  }
+  return null;
 }
 
 async function readStoredWhatsAppAccessToken(

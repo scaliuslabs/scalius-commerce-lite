@@ -14,7 +14,7 @@ const SITEMAP_SECTIONS = [
 const PREVIEW_ENDPOINTS = [
   ["robots", "robots.txt", "/robots.txt"] as const,
   ["sitemap", "Sitemap index", "/sitemap.xml"] as const,
-  ["feed", "Product feed", "/api/facebook-feed.xml"] as const,
+  ["feed", "Catalog feed XML", "/api/facebook-feed.xml"] as const,
 ];
 
 export type SeoDiscoveryTone = "ok" | "warning" | "disabled" | "info";
@@ -181,7 +181,7 @@ export function buildSeoDiscoveryStatus({
         normalized.feeds.description ||
         "Complete product catalog for feed tools.",
       imagePolicy:
-        "Active products without an absolute http(s) primary image are skipped.",
+        "Active products without an absolute http(s) primary image are skipped; rich-text descriptions are flattened to plain catalog text.",
     },
     robots: {
       tone: customSitemapLines.length > 0 ? "warning" : "info",

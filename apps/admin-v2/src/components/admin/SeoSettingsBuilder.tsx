@@ -274,11 +274,11 @@ export function SeoSettingsBuilder() {
           <div className="border-b border-border p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium">
               <Rss className="h-4 w-4 text-muted-foreground" />
-              Product Feed
+              Product Catalog Feed
             </div>
             <div className="space-y-3">
               <label className="flex items-center justify-between gap-4 text-sm">
-                <span>Catalog feed XML</span>
+                <span>Generate product feed XML</span>
                 <Switch
                   checked={values.discovery.feeds.productCatalogEnabled}
                   onCheckedChange={(checked) =>
@@ -322,7 +322,8 @@ export function SeoSettingsBuilder() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Controls `/api/facebook-feed.xml` for Meta, Merchant Center,
+                Controls the Google/Base RSS product catalog at
+                `/api/facebook-feed.xml`, accepted by Meta, Merchant Center,
                 and catalog sync tools.
               </p>
             </div>
@@ -347,7 +348,7 @@ export function SeoSettingsBuilder() {
           <div className="p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium">
               <Braces className="h-4 w-4 text-muted-foreground" />
-              JSON-LD
+              Structured Data
             </div>
             <div className="space-y-3">
               <label className="flex items-center justify-between gap-4 text-sm">
