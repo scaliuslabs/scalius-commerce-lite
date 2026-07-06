@@ -14366,10 +14366,22 @@
                               "properties": {
                                 "productCatalogEnabled": {
                                   "type": "boolean"
+                                },
+                                "includeUnavailableProducts": {
+                                  "type": "boolean"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
                                 }
                               },
                               "required": [
-                                "productCatalogEnabled"
+                                "productCatalogEnabled",
+                                "includeUnavailableProducts",
+                                "title",
+                                "description"
                               ]
                             },
                             "robots": {
@@ -14391,11 +14403,23 @@
                                 },
                                 "websiteSearch": {
                                   "type": "boolean"
+                                },
+                                "products": {
+                                  "type": "boolean"
+                                },
+                                "breadcrumbs": {
+                                  "type": "boolean"
+                                },
+                                "collections": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
                                 "organization",
-                                "websiteSearch"
+                                "websiteSearch",
+                                "products",
+                                "breadcrumbs",
+                                "collections"
                               ]
                             }
                           },
@@ -64972,10 +64996,22 @@
                               "properties": {
                                 "productCatalogEnabled": {
                                   "type": "boolean"
+                                },
+                                "includeUnavailableProducts": {
+                                  "type": "boolean"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
                                 }
                               },
                               "required": [
-                                "productCatalogEnabled"
+                                "productCatalogEnabled",
+                                "includeUnavailableProducts",
+                                "title",
+                                "description"
                               ]
                             },
                             "robots": {
@@ -64997,11 +65033,23 @@
                                 },
                                 "websiteSearch": {
                                   "type": "boolean"
+                                },
+                                "products": {
+                                  "type": "boolean"
+                                },
+                                "breadcrumbs": {
+                                  "type": "boolean"
+                                },
+                                "collections": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
                                 "organization",
-                                "websiteSearch"
+                                "websiteSearch",
+                                "products",
+                                "breadcrumbs",
+                                "collections"
                               ]
                             }
                           },
@@ -65331,6 +65379,15 @@
                         "properties": {
                           "productCatalogEnabled": {
                             "type": "boolean"
+                          },
+                          "includeUnavailableProducts": {
+                            "type": "boolean"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
                           }
                         }
                       },
@@ -65349,6 +65406,15 @@
                             "type": "boolean"
                           },
                           "websiteSearch": {
+                            "type": "boolean"
+                          },
+                          "products": {
+                            "type": "boolean"
+                          },
+                          "breadcrumbs": {
+                            "type": "boolean"
+                          },
+                          "collections": {
                             "type": "boolean"
                           }
                         }

@@ -21,3 +21,19 @@ export function buildAbsoluteStorefrontSeoUrl(path: string): string | null {
 
   return new URL(path, `${baseUrl}/`).toString();
 }
+
+export function toAbsoluteStorefrontSeoUrl(
+  value: string | null | undefined,
+): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return buildAbsoluteStorefrontSeoUrl(trimmed);
+  }
+}

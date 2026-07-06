@@ -20,7 +20,11 @@ import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
-import { buildAbsoluteStorefrontSeoUrl, getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
+import {
+  buildAbsoluteStorefrontSeoUrl,
+  getAbsoluteStorefrontSeoBaseUrl,
+  toAbsoluteStorefrontSeoUrl,
+} from "@/lib/seo-base-url";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
@@ -31,6 +35,7 @@ import {
 } from "@/lib/product-list-query";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
   SlidersHorizontal,
   X,
@@ -217,20 +222,29 @@ const analyticsProductData = products.map((p) => ({
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 // Canonical always points to page 1 -- strips ?page, ?sortBy, and filter params (per CAN-01)
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl(`/categories/${slug}`);
+const discoverySettings = normalizeSeoDiscoverySettings(
+  layoutData?.seo?.discovery,
+);
 
 // OG image from category image (per OG-02, OG-05)
 const ogImageUrl = category?.imageUrl
-  ? getOptimizedImageUrl(category.imageUrl, {
-      width: 1200,
-      height: 630,
-      quality: 85,
-      format: "auto",
-      fit: "cover",
-    })
+  ? toAbsoluteStorefrontSeoUrl(
+      getOptimizedImageUrl(category.imageUrl, {
+        width: 1200,
+        height: 630,
+        quality: 85,
+        format: "auto",
+        fit: "cover",
+      }),
+    )
   : null;
 
 // CollectionPage JSON-LD with embedded BreadcrumbList (per SEO-03, SEO-04)
-const collectionJsonLd = category && canonicalUrl && storefrontUrl
+const collectionJsonLd =
+  discoverySettings.structuredData.collections &&
+  category &&
+  canonicalUrl &&
+  storefrontUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "CollectionPage",
@@ -239,23 +253,27 @@ const collectionJsonLd = category && canonicalUrl && storefrontUrl
         category.metaDescription || `Browse products in ${category.name}`,
       url: canonicalUrl,
       numberOfItems: pagination.total,
-      breadcrumb: {
-        "@type": "BreadcrumbList",
-        itemListElement: [
-          {
-            "@type": "ListItem",
-            position: 1,
-            name: "Home",
-            item: `${storefrontUrl}/`,
-          },
-          {
-            "@type": "ListItem",
-            position: 2,
-            name: category.name,
-            item: canonicalUrl,
-          },
-        ],
-      },
+      ...(discoverySettings.structuredData.breadcrumbs
+        ? {
+            breadcrumb: {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: "Home",
+                  item: `${storefrontUrl}/`,
+                },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: category.name,
+                  item: canonicalUrl,
+                },
+              ],
+            },
+          }
+        : {}),
     })
   : null;
 ---

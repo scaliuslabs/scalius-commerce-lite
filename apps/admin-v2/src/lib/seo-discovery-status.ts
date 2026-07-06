@@ -42,6 +42,9 @@ export interface SeoDiscoveryStatus {
     title: string;
     summary: string;
     enabled: boolean;
+    includesUnavailableProducts: boolean;
+    feedTitle: string;
+    feedDescription: string;
     imagePolicy: string;
   };
   robots: {
@@ -58,6 +61,9 @@ export interface SeoDiscoveryStatus {
     summary: string;
     organizationEnabled: boolean;
     websiteSearchEnabled: boolean;
+    productsEnabled: boolean;
+    breadcrumbsEnabled: boolean;
+    collectionsEnabled: boolean;
     organizationNote: string;
   };
   storefront: {
@@ -164,9 +170,16 @@ export function buildSeoDiscoveryStatus({
         ? "Product feed on"
         : "Product feed off",
       summary: normalized.feeds.productCatalogEnabled
-        ? "Catalog XML can be used by product feed tools."
+        ? normalized.feeds.includeUnavailableProducts
+          ? "Catalog XML includes active products and marks sold-out items as out of stock."
+          : "Catalog XML includes only active products currently available for sale."
         : "Catalog XML is not advertised for feed tools.",
       enabled: normalized.feeds.productCatalogEnabled,
+      includesUnavailableProducts: normalized.feeds.includeUnavailableProducts,
+      feedTitle: normalized.feeds.title || "Product Catalog",
+      feedDescription:
+        normalized.feeds.description ||
+        "Complete product catalog for feed tools.",
       imagePolicy:
         "Active products without an absolute http(s) primary image are skipped.",
     },
@@ -188,14 +201,20 @@ export function buildSeoDiscoveryStatus({
     structuredData: {
       tone:
         normalized.structuredData.organization ||
-        normalized.structuredData.websiteSearch
+        normalized.structuredData.websiteSearch ||
+        normalized.structuredData.products ||
+        normalized.structuredData.breadcrumbs ||
+        normalized.structuredData.collections
           ? "ok"
           : "disabled",
       title:
         normalized.structuredData.organization ||
-        normalized.structuredData.websiteSearch
-          ? "Global JSON-LD on"
-          : "Global JSON-LD off",
+        normalized.structuredData.websiteSearch ||
+        normalized.structuredData.products ||
+        normalized.structuredData.breadcrumbs ||
+        normalized.structuredData.collections
+          ? "Structured data on"
+          : "Structured data off",
       summary: [
         normalized.structuredData.organization
           ? "Organization"
@@ -203,11 +222,21 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.websiteSearch
           ? "site search"
           : "site search off",
+        normalized.structuredData.products ? "products" : "products off",
+        normalized.structuredData.breadcrumbs
+          ? "breadcrumbs"
+          : "breadcrumbs off",
+        normalized.structuredData.collections
+          ? "collections"
+          : "collections off",
       ].join("; "),
       organizationEnabled: normalized.structuredData.organization,
       websiteSearchEnabled: normalized.structuredData.websiteSearch,
+      productsEnabled: normalized.structuredData.products,
+      breadcrumbsEnabled: normalized.structuredData.breadcrumbs,
+      collectionsEnabled: normalized.structuredData.collections,
       organizationNote:
-        "Organization schema is emitted only when a logo is available.",
+        "Organization schema needs a logo; product and collection schema follow their matching page toggles.",
     },
     storefront: {
       tone: absoluteStorefrontUrl

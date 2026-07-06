@@ -184,9 +184,21 @@ export function SeoDiscoveryStatusCard({
         title={status.productFeed.title}
         summary={status.productFeed.summary}
       >
-        <p className="text-xs leading-5 text-muted-foreground">
-          {status.productFeed.imagePolicy}
-        </p>
+        <div className="space-y-1 text-xs leading-5 text-muted-foreground">
+          <p>{status.productFeed.imagePolicy}</p>
+          <p>
+            XML title:{" "}
+            <span className="font-medium text-foreground">
+              {status.productFeed.feedTitle}
+            </span>
+          </p>
+          <p>
+            XML description:{" "}
+            <span className="font-medium text-foreground">
+              {status.productFeed.feedDescription}
+            </span>
+          </p>
+        </div>
       </StatusRow>
 
       <StatusRow

@@ -11,10 +11,15 @@ import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
-import { buildAbsoluteStorefrontSeoUrl, getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
+import {
+  buildAbsoluteStorefrontSeoUrl,
+  getAbsoluteStorefrontSeoBaseUrl,
+  toAbsoluteStorefrontSeoUrl,
+} from "@/lib/seo-base-url";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import { resolveBuyerVariants, getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 const { slug } = Astro.params;
 if (!slug) {
@@ -105,6 +110,9 @@ const quickBuyNotice = quickBuyNoticeByError[Astro.url.searchParams.get("error")
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl(`/products/${product.slug}`);
+const discoverySettings = normalizeSeoDiscoverySettings(
+  layoutData?.seo?.discovery,
+);
 
 // OG image: 1200x630 for social sharing (per OG-05)
 const primaryImageUrl =
@@ -118,13 +126,15 @@ const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, {
   fit: "contain",
 });
 const ogImageUrl = primaryImageUrl
-  ? getProductImageUrl(primaryImageUrl, {
-      width: 1200,
-      height: 630,
-      quality: 85,
-      format: "auto",
-      fit: "cover",
-    })
+  ? toAbsoluteStorefrontSeoUrl(
+      getProductImageUrl(primaryImageUrl, {
+        width: 1200,
+        height: 630,
+        quality: 85,
+        format: "auto",
+        fit: "cover",
+      }),
+    )
   : null;
 
 // Description for OG and JSON-LD -- strip HTML (per research constraint)
@@ -155,7 +165,7 @@ const priceValidUntil = new Date(new Date().getFullYear() + 1, 11, 31)
   .split("T")[0];
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
-const productJsonLd = canonicalUrl
+const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "Product",
@@ -199,7 +209,8 @@ const breadcrumbItems = [
     item: canonicalUrl,
   },
 ];
-const breadcrumbJsonLd = storefrontUrl && canonicalUrl
+const breadcrumbJsonLd =
+  discoverySettings.structuredData.breadcrumbs && storefrontUrl && canonicalUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",

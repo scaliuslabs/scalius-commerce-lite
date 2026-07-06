@@ -13,7 +13,9 @@ app.use(
   "*",
   cacheMiddleware({
     ttl: CACHE_TTLS.STANDARD,
-    keyPrefix: "api:seo:",
+    // Bump the nested namespace when the public SEO payload shape changes.
+    // The broader api:seo: invalidation group still clears versioned entries.
+    keyPrefix: "api:seo:v2:",
     methods: ["GET"]
   }),
 );
@@ -36,6 +38,9 @@ const discoverySchema = z.object({
   }),
   feeds: z.object({
     productCatalogEnabled: z.boolean(),
+    includeUnavailableProducts: z.boolean(),
+    title: z.string(),
+    description: z.string(),
   }),
   robots: z.object({
     advertiseSitemap: z.boolean(),
@@ -43,6 +48,9 @@ const discoverySchema = z.object({
   structuredData: z.object({
     organization: z.boolean(),
     websiteSearch: z.boolean(),
+    products: z.boolean(),
+    breadcrumbs: z.boolean(),
+    collections: z.boolean(),
   }),
 });
 

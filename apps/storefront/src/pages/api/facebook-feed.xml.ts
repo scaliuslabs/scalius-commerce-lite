@@ -19,7 +19,10 @@ import { getLayoutData, getSeoSettings } from "@/lib/api";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
-import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import {
+  normalizeSeoDiscoverySettings,
+  type SeoDiscoverySettings,
+} from "@scalius/shared/seo-discovery";
 
 export const prerender = false;
 
@@ -113,8 +116,19 @@ function toFeedProduct(product: Product, baseUrl: string): FeedProduct | null {
   return { product, imageLink };
 }
 
-function toFeedProducts(products: Product[], baseUrl: string): FeedProduct[] {
+function toFeedProducts(
+  products: Product[],
+  baseUrl: string,
+  feedsPolicy: SeoDiscoverySettings["feeds"],
+): FeedProduct[] {
   return products.flatMap((product) => {
+    if (
+      !feedsPolicy.includeUnavailableProducts &&
+      getAvailability(product) !== "in stock"
+    ) {
+      return [];
+    }
+
     const feedProduct = toFeedProduct(product, baseUrl);
     return feedProduct ? [feedProduct] : [];
   });
@@ -219,13 +233,19 @@ function generateFacebookFeed(
   products: FeedProduct[],
   baseUrl: string,
   currencyCode: string,
+  feedsPolicy: SeoDiscoverySettings["feeds"],
 ): string {
+  const title = feedsPolicy.title || "Product Catalog";
+  const description =
+    feedsPolicy.description ||
+    "Complete product catalog for Facebook/Instagram shopping";
+
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   xml += '<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">\n';
   xml += "<channel>\n";
-  xml += `<title>${escapeXml("Product Catalog")}</title>\n`;
+  xml += `<title>${escapeXml(title)}</title>\n`;
   xml += `<link>${escapeXml(baseUrl)}</link>\n`;
-  xml += `<description>${escapeXml("Complete product catalog for Facebook/Instagram shopping")}</description>\n`;
+  xml += `<description>${escapeXml(description)}</description>\n`;
 
   for (const product of products) {
     xml += generateProductItem(product, baseUrl, currencyCode);
@@ -249,8 +269,8 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     if (!seo) {
       return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
     }
-    const discovery = normalizeSeoDiscoverySettings(seo.discovery);
-    if (!discovery.feeds.productCatalogEnabled) {
+    const feedsPolicy = normalizeSeoDiscoverySettings(seo.discovery).feeds;
+    if (!feedsPolicy.productCatalogEnabled) {
       return new Response("Product catalog feed is disabled", {
         status: 404,
         headers: {
@@ -303,13 +323,13 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       if (page > 1) {
         return new Response("Page not found", { status: 404 });
       }
-      return new Response(generateFacebookFeed([], baseUrl, currencyCode), {
+      return new Response(generateFacebookFeed([], baseUrl, currencyCode, feedsPolicy), {
         status: 200,
         headers: { "Content-Type": "application/xml; charset=utf-8" },
       });
     }
 
-    allProducts.push(...toFeedProducts(firstResponse.data, baseUrl));
+    allProducts.push(...toFeedProducts(firstResponse.data, baseUrl, feedsPolicy));
     const totalPages = firstResponse.pagination.totalPages;
 
     // Limit requiredApiPages if we hit the end of the total products early
@@ -341,7 +361,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
           return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
         }
         if (res && res.data) {
-          allProducts.push(...toFeedProducts(res.data, baseUrl));
+          allProducts.push(...toFeedProducts(res.data, baseUrl, feedsPolicy));
         }
       }
     }
@@ -355,6 +375,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       allProducts.slice(0, limit),
       baseUrl,
       currencyCode,
+      feedsPolicy,
     );
 
     return new Response(xml, {

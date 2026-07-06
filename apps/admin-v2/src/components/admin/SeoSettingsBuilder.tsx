@@ -276,18 +276,56 @@ export function SeoSettingsBuilder() {
               <Rss className="h-4 w-4 text-muted-foreground" />
               Product Feed
             </div>
-            <label className="flex items-center justify-between gap-4 text-sm">
-              <span>Catalog feed XML</span>
-              <Switch
-                checked={values.discovery.feeds.productCatalogEnabled}
-                onCheckedChange={(checked) =>
-                  updateDiscovery("feeds", "productCatalogEnabled", checked)
-                }
-              />
-            </label>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Controls `/api/facebook-feed.xml` for catalog sync tools.
-            </p>
+            <div className="space-y-3">
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Catalog feed XML</span>
+                <Switch
+                  checked={values.discovery.feeds.productCatalogEnabled}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("feeds", "productCatalogEnabled", checked)
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Include sold-out items</span>
+                <Switch
+                  checked={values.discovery.feeds.includeUnavailableProducts}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("feeds", "includeUnavailableProducts", checked)
+                  }
+                />
+              </label>
+              <div className="grid gap-2">
+                <Label htmlFor="feed-title" className="text-xs">
+                  Feed title
+                </Label>
+                <Input
+                  id="feed-title"
+                  value={values.discovery.feeds.title}
+                  onChange={(event) =>
+                    updateDiscovery("feeds", "title", event.target.value)
+                  }
+                  placeholder="Product Catalog"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="feed-description" className="text-xs">
+                  Feed description
+                </Label>
+                <Input
+                  id="feed-description"
+                  value={values.discovery.feeds.description}
+                  onChange={(event) =>
+                    updateDiscovery("feeds", "description", event.target.value)
+                  }
+                  placeholder="Complete product catalog for feed tools"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Controls `/api/facebook-feed.xml` for Meta, Merchant Center,
+                and catalog sync tools.
+              </p>
+            </div>
           </div>
 
           <div className="p-4 md:border-r">
@@ -327,6 +365,33 @@ export function SeoSettingsBuilder() {
                   checked={values.discovery.structuredData.websiteSearch}
                   onCheckedChange={(checked) =>
                     updateDiscovery("structuredData", "websiteSearch", checked)
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Product schema</span>
+                <Switch
+                  checked={values.discovery.structuredData.products}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("structuredData", "products", checked)
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Breadcrumb schema</span>
+                <Switch
+                  checked={values.discovery.structuredData.breadcrumbs}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("structuredData", "breadcrumbs", checked)
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Collection schema</span>
+                <Switch
+                  checked={values.discovery.structuredData.collections}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("structuredData", "collections", checked)
                   }
                 />
               </label>
