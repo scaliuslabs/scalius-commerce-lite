@@ -49,6 +49,7 @@ describe("collections sitemap route", () => {
         config: {},
         sortOrder: 1,
         isActive: true,
+        canonicalPath: "/featured/summer",
         noIndex: false,
         excludeFromSitemap: false,
         createdAt: "2026-06-01T00:00:00.000Z",
@@ -63,7 +64,8 @@ describe("collections sitemap route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("application/xml");
     expect(body).toContain("<urlset");
-    expect(body).toContain("https://storefront.example.test/collections/collection%20one");
+    expect(body).toContain("https://storefront.example.test/featured/summer");
+    expect(body).not.toContain("https://storefront.example.test/collections/collection%20one");
     expect(body).toContain("<lastmod>2026-06-20T00:00:00.000Z</lastmod>");
   });
 

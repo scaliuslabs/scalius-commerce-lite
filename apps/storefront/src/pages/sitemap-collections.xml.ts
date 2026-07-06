@@ -13,6 +13,7 @@ import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSeoSettings } from '@/lib/api';
 import { getAllCollections } from '@/lib/api/collections';
 import type { APIContext, APIRoute } from 'astro';
+import { normalizeCanonicalPath } from '@scalius/shared/seo-canonical';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
@@ -42,7 +43,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     const collectionUrls: SitemapUrl[] = collections
       .filter((collection) => !collection.noIndex && !collection.excludeFromSitemap)
       .map((collection) => ({
-        loc: `${baseUrl}/collections/${encodeURIComponent(collection.id)}`,
+        loc: `${baseUrl}${normalizeCanonicalPath(collection.canonicalPath) ?? `/collections/${encodeURIComponent(collection.id)}`}`,
         lastmod: collection.updatedAt ?? collection.createdAt ?? undefined,
       }));
 

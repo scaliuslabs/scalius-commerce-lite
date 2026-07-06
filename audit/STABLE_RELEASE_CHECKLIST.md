@@ -22,7 +22,7 @@ Treat "AIO" as crawlable, trustworthy commerce data for search and assistants, n
 - Static sitemap-advertised URLs have canonical URLs; search/listing query, sort, filter, and paginated variants must be canonicalized or noindexed with follow.
 - Product feed availability, Product JSON-LD availability, storefront availability UI, and checkout validation are all derived from buyer-resolvable SKU truth.
 - Feed items must have absolute `http(s)` primary images, non-empty plain descriptions, valid price/currency, SKU-aware availability, and no invalid zero-price fallback unless the catalog policy explicitly supports it.
-- Dashboard SEO controls must remain the source of truth for sitemap sections, robots sitemap advertising, product-feed exposure, sold-out inclusion, feed title/description, schema-family toggles, product-level sitemap/feed XML exclusions, and product/category/collection/page `noindex` plus sitemap-exclusion controls.
+- Dashboard SEO controls must remain the source of truth for sitemap sections, robots sitemap advertising, product-feed exposure, sold-out inclusion, feed title/description, schema-family toggles, product-level sitemap/feed XML exclusions, and product/category/collection/page `noindex`, sitemap-exclusion, plus same-store canonical path controls.
 - Resource `noindex` means public-but-not-indexed: page renders `noindex,follow`, sitemap XML excludes it, and resource-specific JSON-LD is suppressed. Sitemap exclusion alone is XML-only and must not hide or noindex the page.
 - Public schema should match real merchant content: Organization/WebSite/SearchAction, Product/Offer, BreadcrumbList, CollectionPage/category pages. Do not invent Product/Offer facts such as price expiry, item condition, seller, or brand when the merchant has not provided that data. Add richer contact, address, shipping, return policy, FAQ, or ProductGroup/variant schema only when the admin has real fields and tests proving the public output stays accurate.
 
@@ -35,7 +35,7 @@ Primary references for future changes:
 
 ## Known P2 Release Follow-Ups
 
-- `SEO-011`: remaining per-resource canonical overrides, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls.
+- `SEO-011`: remaining structured-data preview UX, live child-sitemap/dashboard refinement, seller/OnlineStore identity hardening, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls where dashboard-owned data exists.
 - SEO dashboard live probes now cover `robots.txt`, the sitemap index, canonical product feed, and compatibility Facebook feed from the saved Store URL. The dashboard also has bounded aggregate product-feed diagnostics for emitted rows, skipped rows, reason counts, and safe product samples; latest live smoke showed `77` emitted rows, `0` skipped rows, `2` products to fix, `29` scanned products, and live proof checks OK.
 - Feed diagnostics: `/api/product-feed.xml` paginates the final flattened feed rows so skipped products and variant expansion cannot drop rows, while admin diagnostics explain which bounded catalog rows are skipped and why.
 - `ANALYTICS-003`: provider health/test-send UX, TikTok Events API/server-side adapter, and broader server-side attribution.

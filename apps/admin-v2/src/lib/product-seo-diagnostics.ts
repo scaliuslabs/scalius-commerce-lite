@@ -2,6 +2,10 @@ import {
   normalizeSeoDiscoverySettings,
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
+import {
+  isValidCanonicalPath,
+  normalizeCanonicalPathInput,
+} from "@scalius/shared/seo-canonical";
 
 export type ProductSeoDiagnosticTone =
   | "ok"
@@ -35,6 +39,7 @@ export interface ProductSeoDiagnosticsInput {
   product: {
     id?: string | null;
     slug?: string | null;
+    canonicalPath?: string | null;
     isActive?: boolean | null;
     images?: ProductSeoDiagnosticImage[] | null;
     noIndex?: boolean | null;
@@ -318,9 +323,11 @@ function buildFeedImageStatus({
 
 function buildCanonicalStatus({
   slug,
+  canonicalPath,
   absoluteStorefrontUrl,
 }: {
   slug: string;
+  canonicalPath: string | null | undefined;
   absoluteStorefrontUrl: URL | null;
 }): ProductSeoDiagnostics["canonical"] {
   if (!slug) {
@@ -344,17 +351,38 @@ function buildCanonicalStatus({
     };
   }
 
-  const path = `/products/${slug}`;
+  const normalizedCanonicalPath = normalizeCanonicalPathInput(canonicalPath);
+  if (normalizedCanonicalPath && !isValidCanonicalPath(normalizedCanonicalPath)) {
+    return {
+      tone: "warning",
+      title: "Canonical path needs cleanup",
+      summary: "Use a same-store path without query strings, fragments, spaces, or another domain.",
+      value: normalizedCanonicalPath,
+      path: null,
+      url: null,
+    };
+  }
+
+  const fallbackPath = `/products/${slug}`;
+  const path = normalizedCanonicalPath ?? fallbackPath;
   const url = absoluteStorefrontUrl
     ? buildAbsoluteUrl(absoluteStorefrontUrl, path)
     : null;
 
   return {
     tone: url ? "ok" : "info",
-    title: url ? "Canonical URL ready" : "Canonical path ready",
-    summary: url
-      ? "Product page should use this absolute canonical URL after save."
-      : "Full canonical URLs need an absolute Store URL setting.",
+    title: normalizedCanonicalPath
+      ? url
+        ? "Canonical override ready"
+        : "Canonical override path ready"
+      : url
+        ? "Canonical URL ready"
+        : "Canonical path ready",
+    summary: normalizedCanonicalPath
+      ? "Product page should point search engines to this same-store canonical path after save."
+      : url
+        ? "Product page should use this absolute canonical URL after save."
+        : "Full canonical URLs need an absolute Store URL setting.",
     value: url ?? path,
     path,
     url,
@@ -692,7 +720,11 @@ export function buildProductSeoDiagnostics({
   const excludeFromSitemap = product.excludeFromSitemap === true;
   const excludeFromProductFeed = product.excludeFromProductFeed === true;
   const availability = buildAvailabilityStatus(variants, variantState);
-  const canonical = buildCanonicalStatus({ slug, absoluteStorefrontUrl });
+  const canonical = buildCanonicalStatus({
+    slug,
+    canonicalPath: product.canonicalPath,
+    absoluteStorefrontUrl,
+  });
   const feedImage = buildFeedImageStatus({
     imageUrl: pickPrimaryImage(product.images),
     hasCanonicalDraft: !canonical.path,

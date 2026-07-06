@@ -64,6 +64,7 @@ function toCategoryInput(values: CategoryFormValues): CreateCategoryInput {
     slug: values.slug,
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription,
+    canonicalPath: values.canonicalPath,
     noIndex: values.noIndex,
     excludeFromSitemap: values.excludeFromSitemap,
     image: serializeCategoryImage(values.image),
@@ -84,6 +85,7 @@ export function CategoryForm({
       slug: "",
       metaTitle: null,
       metaDescription: null,
+      canonicalPath: null,
       noIndex: false,
       excludeFromSitemap: false,
       image: null,
@@ -348,6 +350,30 @@ export function CategoryForm({
                       max={200}
                     />
                   )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="canonicalPath"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Canonical Path</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="/categories/shoes"
+                      {...field}
+                      value={field.value || ""}
+                      onChange={(event) => {
+                        field.onChange(event.target.value || null);
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription className="text-xs">
+                    Optional same-store path for duplicate or campaign pages. Leave blank to use this category page.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

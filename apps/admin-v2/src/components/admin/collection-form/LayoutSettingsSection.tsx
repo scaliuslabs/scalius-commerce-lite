@@ -78,6 +78,31 @@ export const LayoutSettingsSection = React.memo(
                     />
                   </FormControl>
                 </FormItem>
+                )}
+            />
+            <FormField
+              control={form.control}
+              name="canonicalPath"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">
+                    Canonical Path
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="/collections/summer-edit"
+                      {...field}
+                      value={field.value || ""}
+                      onChange={(event) => {
+                        field.onChange(event.target.value || null);
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription className="text-xs">
+                    Optional same-store path for duplicate or campaign pages. Leave blank to use this collection page.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
               )}
             />
             <FormField

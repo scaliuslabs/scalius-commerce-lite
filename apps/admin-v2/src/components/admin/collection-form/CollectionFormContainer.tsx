@@ -52,6 +52,7 @@ export function CollectionForm({
       name: "",
       type: "manual",
       isActive: true,
+      canonicalPath: null,
       noIndex: false,
       excludeFromSitemap: false,
       config: { ...DEFAULT_CONFIG },

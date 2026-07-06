@@ -12,7 +12,7 @@ import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
 import {
-  buildAbsoluteStorefrontSeoUrl,
+  buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
@@ -121,7 +121,10 @@ const quickBuyNotice = quickBuyNoticeByError[Astro.url.searchParams.get("error")
 // --- SEO: per SEO-01, SEO-02, OG-01, OG-05 ---
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
-const canonicalUrl = buildAbsoluteStorefrontSeoUrl(`/products/${product.slug}`);
+const canonicalUrl = buildResourceCanonicalSeoUrl(
+  `/products/${product.slug}`,
+  product.canonicalPath,
+);
 const discoverySettings = normalizeSeoDiscoverySettings(
   layoutData?.seo?.discovery,
 );

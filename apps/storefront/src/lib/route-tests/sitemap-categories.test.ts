@@ -80,6 +80,7 @@ describe("categories sitemap route", () => {
         imageUrl: null,
         metaTitle: null,
         metaDescription: null,
+        canonicalPath: "/shop/visible-category",
         noIndex: false,
         excludeFromSitemap: false,
         createdAt: "2026-06-01T00:00:00.000Z",
@@ -117,7 +118,8 @@ describe("categories sitemap route", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("/categories/visible");
+    expect(body).toContain("/shop/visible-category");
+    expect(body).not.toContain("/categories/visible");
     expect(body).not.toContain("/categories/noindex");
     expect(body).not.toContain("/categories/excluded");
   });

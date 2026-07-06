@@ -64,6 +64,26 @@ describe("buildProductSeoDiagnostics", () => {
     expect(diagnostics.policy.label).toBe("Default SEO policy");
   });
 
+  it("previews same-store canonical path overrides", () => {
+    const diagnostics = buildProductSeoDiagnostics({
+      product: {
+        ...activeProduct,
+        canonicalPath: "/campaigns/green-tea",
+      },
+      variants: availableSimpleSku,
+      variantState: "loaded",
+      discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+      storefrontUrl: "https://shop.example.com",
+    });
+
+    expect(diagnostics.canonical).toMatchObject({
+      tone: "ok",
+      title: "Canonical override ready",
+      path: "/campaigns/green-tea",
+      url: "https://shop.example.com/campaigns/green-tea",
+    });
+  });
+
   it("reports the required feed image skip reason without blocking sitemap", () => {
     const diagnostics = buildProductSeoDiagnostics({
       product: { ...activeProduct, images: [] },

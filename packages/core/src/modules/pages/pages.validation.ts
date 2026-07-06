@@ -3,6 +3,27 @@
 // Imported by admin API routes and PageService.
 
 import { z } from "zod";
+import {
+    isValidCanonicalPath,
+    normalizeCanonicalPathInput,
+} from "@scalius/shared/seo-canonical";
+
+const canonicalPathSchema = z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => normalizeCanonicalPathInput(value))
+    .refine((value) => value === null || isValidCanonicalPath(value), {
+        message: "Canonical path must be a clean same-store path without query strings or fragments.",
+    });
+const canonicalPathUpdateSchema = z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value === undefined ? undefined : normalizeCanonicalPathInput(value))
+    .refine((value) => value === undefined || value === null || isValidCanonicalPath(value), {
+        message: "Canonical path must be a clean same-store path without query strings or fragments.",
+    });
 
 export const pageFeaturedImageSchema = z.object({
     id: z.string().min(1),
@@ -24,6 +45,7 @@ const pageFieldSchemas = {
     content: z.string(),
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable(),
+    canonicalPath: canonicalPathSchema,
     noIndex: z.boolean().default(false),
     excludeFromSitemap: z.boolean().default(false),
     featuredImage: pageFeaturedImageSchema.nullable().optional(),
@@ -55,6 +77,7 @@ export const updatePageSchema = z.object({
     content: pageFieldSchemas.content.optional(),
     metaTitle: pageFieldSchemas.metaTitle.optional(),
     metaDescription: pageFieldSchemas.metaDescription.optional(),
+    canonicalPath: canonicalPathUpdateSchema,
     noIndex: z.boolean().optional(),
     excludeFromSitemap: z.boolean().optional(),
     isPublished: z.boolean().optional(),

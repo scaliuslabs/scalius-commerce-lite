@@ -25,6 +25,7 @@ export interface PageDto {
   content: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;
   isPublished: boolean;
@@ -68,6 +69,7 @@ export interface CreatePageInput {
   content: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;
   isPublished: boolean;

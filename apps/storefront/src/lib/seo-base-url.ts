@@ -1,4 +1,5 @@
 import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import { normalizeCanonicalPath } from "@scalius/shared/seo-canonical";
 
 export function getAbsoluteStorefrontSeoBaseUrl(): string | null {
   const rawUrl = getRuntimeStorefrontUrl().trim();
@@ -20,6 +21,15 @@ export function buildAbsoluteStorefrontSeoUrl(path: string): string | null {
   if (!baseUrl) return null;
 
   return new URL(path, `${baseUrl}/`).toString();
+}
+
+export function buildResourceCanonicalSeoUrl(
+  fallbackPath: string,
+  canonicalPath?: string | null,
+): string | null {
+  return buildAbsoluteStorefrontSeoUrl(
+    normalizeCanonicalPath(canonicalPath) ?? fallbackPath,
+  );
 }
 
 export function toAbsoluteStorefrontSeoUrl(

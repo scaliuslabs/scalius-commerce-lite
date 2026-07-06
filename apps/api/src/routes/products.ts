@@ -233,6 +233,7 @@ const storefrontFeedProductSchema = z.object({
 
 const storefrontSitemapProductSchema = z.object({
   slug: z.string(),
+  canonicalPath: z.string().nullable(),
   updatedAt: z.string().nullable(),
 });
 

@@ -10,6 +10,7 @@ import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSeoSettings } from '@/lib/api';
 import { getSitemapProducts } from '@/lib/api/products';
 import type { APIContext, APIRoute } from 'astro';
+import { normalizeCanonicalPath } from '@scalius/shared/seo-canonical';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
@@ -50,7 +51,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       return new Response('Invalid page parameter', { status: 400 });
     }
 
-    const allProducts: Array<{ slug: string; updatedAt: string | null }> = [];
+    const allProducts: Array<{ slug: string; canonicalPath?: string | null; updatedAt: string | null }> = [];
     const limitParams = 100; // Fetch 100 products per API call
 
     // We need 50 API pages to fulfill 1 sitemap chunk of 5000 products.
@@ -107,7 +108,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     }
 
     const productUrls: SitemapUrl[] = allProducts.map((product) => ({
-      loc: `${baseUrl}/products/${product.slug}`,
+      loc: `${baseUrl}${normalizeCanonicalPath(product.canonicalPath) ?? `/products/${product.slug}`}`,
       lastmod: product.updatedAt ?? undefined,
     }));
 

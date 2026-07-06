@@ -39,6 +39,7 @@ function toPageFormValues(page: PageDto): PageFormValues {
     content: page.content,
     metaTitle: page.metaTitle,
     metaDescription: page.metaDescription,
+    canonicalPath: page.canonicalPath,
     noIndex: page.noIndex,
     excludeFromSitemap: page.excludeFromSitemap,
     isPublished: page.isPublished,

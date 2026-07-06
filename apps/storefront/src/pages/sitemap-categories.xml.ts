@@ -13,6 +13,7 @@ import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSeoSettings } from '@/lib/api';
 import { getAllCategories } from '@/lib/api/categories';
 import type { APIContext, APIRoute } from 'astro';
+import { normalizeCanonicalPath } from '@scalius/shared/seo-canonical';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
@@ -42,7 +43,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     const categoryUrls: SitemapUrl[] = categories
       .filter((category) => !category.noIndex && !category.excludeFromSitemap)
       .map((category) => ({
-        loc: `${baseUrl}/categories/${category.slug}`,
+        loc: `${baseUrl}${normalizeCanonicalPath(category.canonicalPath) ?? `/categories/${category.slug}`}`,
         lastmod: category.updatedAt ?? category.createdAt ?? undefined,
       }));
 

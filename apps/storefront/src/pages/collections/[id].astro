@@ -9,7 +9,7 @@ import {
 } from "@/lib/api";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import {
-  buildAbsoluteStorefrontSeoUrl,
+  buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
@@ -58,7 +58,10 @@ const title = config.title || collection.name;
 const subtitle = config.subtitle || "";
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const collectionPath = `/collections/${encodeURIComponent(collection.id)}`;
-const canonicalUrl = buildAbsoluteStorefrontSeoUrl(collectionPath);
+const canonicalUrl = buildResourceCanonicalSeoUrl(
+  collectionPath,
+  collection.canonicalPath,
+);
 const discoverySettings = normalizeSeoDiscoverySettings(
   layoutData?.seo?.discovery,
 );

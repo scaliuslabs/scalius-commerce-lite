@@ -1,5 +1,26 @@
 // src/modules/collections/collections.validation.ts
 import { z } from "zod";
+import {
+    isValidCanonicalPath,
+    normalizeCanonicalPathInput,
+} from "@scalius/shared/seo-canonical";
+
+const canonicalPathSchema = z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => normalizeCanonicalPathInput(value))
+    .refine((value) => value === null || isValidCanonicalPath(value), {
+        message: "Canonical path must be a clean same-store path without query strings or fragments.",
+    });
+const canonicalPathUpdateSchema = z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value === undefined ? undefined : normalizeCanonicalPathInput(value))
+    .refine((value) => value === undefined || value === null || isValidCanonicalPath(value), {
+        message: "Canonical path must be a clean same-store path without query strings or fragments.",
+    });
 
 const collectionConfigSchema = z.object({
     categoryIds: z.array(z.string()).optional().default([]),
@@ -14,6 +35,7 @@ export const createCollectionSchema = z.object({
     name: z.string().min(3).max(100),
     type: z.enum(["manual", "dynamic"]),
     isActive: z.boolean(),
+    canonicalPath: canonicalPathSchema,
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
     config: collectionConfigSchema,
@@ -23,6 +45,7 @@ export const updateCollectionSchema = z.object({
     name: z.string().min(3).max(100).optional(),
     type: z.enum(["manual", "dynamic"]).optional(),
     isActive: z.boolean().optional(),
+    canonicalPath: canonicalPathUpdateSchema,
     noIndex: z.boolean().optional(),
     excludeFromSitemap: z.boolean().optional(),
     config: collectionConfigSchema.optional(),

@@ -3,6 +3,19 @@
 // Imported by both admin API routes and service methods.
 
 import { z } from "zod";
+import {
+    isValidCanonicalPath,
+    normalizeCanonicalPathInput,
+} from "@scalius/shared/seo-canonical";
+
+const canonicalPathSchema = z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => normalizeCanonicalPathInput(value))
+    .refine((value) => value === null || isValidCanonicalPath(value), {
+        message: "Canonical path must be a clean same-store path without query strings or fragments.",
+    });
 
 /** Shared image schema used in create and update */
 const productImageSchema = z.object({
@@ -47,6 +60,7 @@ const productBaseSchema = z.object({
     freeDelivery: z.boolean(),
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable(),
+    canonicalPath: canonicalPathSchema,
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
     excludeFromProductFeed: z.boolean().optional().default(false),

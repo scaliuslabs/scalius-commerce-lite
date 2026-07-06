@@ -29,6 +29,7 @@ export interface PageData {
   content: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;
   isPublished: boolean;

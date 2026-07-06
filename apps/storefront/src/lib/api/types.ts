@@ -115,6 +115,7 @@ export interface Product {
   isActive: boolean;
   metaTitle: string | null;
   metaDescription: string | null;
+  canonicalPath?: string | null;
   noIndex?: boolean;
   features?: string[];
   additionalInfo?: ProductRichContent[];
@@ -173,6 +174,7 @@ export interface Category {
   imageUrl: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  canonicalPath?: string | null;
   noIndex?: boolean;
   excludeFromSitemap?: boolean;
   createdAt: string | null;
@@ -210,6 +212,7 @@ export interface Collection {
   config: CollectionConfig;
   sortOrder: number;
   isActive: boolean;
+  canonicalPath?: string | null;
   noIndex?: boolean;
   excludeFromSitemap?: boolean;
   createdAt: string;
@@ -280,6 +283,7 @@ export interface Page {
   content: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  canonicalPath?: string | null;
   noIndex?: boolean;
   excludeFromSitemap?: boolean;
   isPublished: boolean;

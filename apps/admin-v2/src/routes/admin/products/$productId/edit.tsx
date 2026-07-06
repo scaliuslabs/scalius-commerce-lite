@@ -52,6 +52,7 @@ function EditProductPage() {
     slug: product.slug,
     metaTitle: product.metaTitle,
     metaDescription: product.metaDescription,
+    canonicalPath: product.canonicalPath,
     noIndex: product.noIndex,
     excludeFromSitemap: product.excludeFromSitemap,
     excludeFromProductFeed: product.excludeFromProductFeed,

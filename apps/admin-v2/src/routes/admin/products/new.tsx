@@ -18,6 +18,7 @@ const defaultValues = {
   freeDelivery: false,
   metaTitle: null,
   metaDescription: null,
+  canonicalPath: null,
   noIndex: false,
   excludeFromSitemap: false,
   excludeFromProductFeed: false,

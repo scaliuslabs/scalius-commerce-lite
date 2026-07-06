@@ -22,6 +22,7 @@ export interface CollectionDto {
   config: string;
   sortOrder: number;
   isActive: boolean;
+  canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;
   createdAt: NullableTimestamp;
@@ -70,6 +71,7 @@ export interface CreateCollectionInput {
   name: string;
   type: CollectionType;
   isActive: boolean;
+  canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;
   config: CollectionConfigInput;
