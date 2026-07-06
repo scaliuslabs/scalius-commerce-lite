@@ -121,7 +121,7 @@ describe("robots.txt route", () => {
     expect(body).not.toContain("[your-sitemap-url]");
   });
 
-  it("strips invalid custom sitemap directives when sitemap advertising is off", async () => {
+  it("strips sitemap directives when sitemap advertising is off", async () => {
     mocks.getSeoSettings.mockResolvedValueOnce({
       siteTitle: "Store",
       homepageTitle: "Home",
@@ -139,6 +139,40 @@ describe("robots.txt route", () => {
 
     expect(response.status).toBe(200);
     expect(body).not.toContain("Sitemap: /sitemap.xml");
-    expect(body).toContain("Sitemap: https://old.example.com/sitemap.xml");
+    expect(body).not.toContain("Sitemap:");
+  });
+
+  it("replaces off-origin sitemap directives with the canonical storefront sitemap", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      siteTitle: "Store",
+      homepageTitle: "Home",
+      homepageMetaDescription: "Description",
+      robotsTxt:
+        "User-agent: *\nAllow: /\nSitemap: https://old.example.com/sitemap.xml",
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Sitemap: https://storefront.example.test/sitemap.xml");
+    expect(body).not.toContain("https://old.example.com/sitemap.xml");
+  });
+
+  it("replaces same-origin non-canonical sitemap directives with the canonical storefront sitemap", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      siteTitle: "Store",
+      homepageTitle: "Home",
+      homepageMetaDescription: "Description",
+      robotsTxt:
+        "User-agent: *\nAllow: /\nSitemap: https://storefront.example.test/old-sitemap.xml",
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Sitemap: https://storefront.example.test/sitemap.xml");
+    expect(body).not.toContain("old-sitemap.xml");
   });
 });

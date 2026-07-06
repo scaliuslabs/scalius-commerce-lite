@@ -1162,6 +1162,8 @@ export function getProductAvailabilityApiCacheKeys(
   if (normalizedSubjects.length === 0) return [];
 
   return [
+    "api:products:/api/v1/products",
+    "api:products:/api/v1/products/feed",
     ...normalizedSubjects
       .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
         typeof subject.slug === "string" && subject.slug.length > 0,
@@ -1178,6 +1180,8 @@ export function getProductAvailabilityApiCachePatterns(
   if (normalizedSubjects.length === 0) return [];
 
   return [
+    "api:products:/api/v1/products?*",
+    "api:products:/api/v1/products/feed?*",
     ...normalizedSubjects
       .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
         typeof subject.slug === "string" && subject.slug.length > 0,
@@ -1191,10 +1195,12 @@ export function getProductAvailabilityApiCachePatterns(
 export function getProductAvailabilityStorefrontPrefixes(
   subjects: readonly ProductAvailabilityCacheSubject[],
 ): string[] {
-  return uniqueAvailabilitySubjects(subjects).flatMap((subject) => [
+  const prefixes = uniqueAvailabilitySubjects(subjects).flatMap((subject) => [
     ...(subject.slug ? [`product_slug_${subject.slug}`] : []),
     `product_variants_${subject.productId}`,
   ]);
+
+  return prefixes.length > 0 ? [...prefixes, "feed_products_"] : [];
 }
 
 export function collectProductAvailabilityCacheInvalidation(

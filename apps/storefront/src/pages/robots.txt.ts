@@ -15,10 +15,9 @@ function isPlaceholderSitemapValue(value: string): boolean {
   );
 }
 
-function isAbsoluteHttpUrl(value: string): boolean {
+function isCanonicalSitemapUrl(value: string, sitemapUrl: string): boolean {
   try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    return new URL(value).href === new URL(sitemapUrl).href;
   } catch {
     return false;
   }
@@ -40,9 +39,10 @@ function normalizeSitemapDirectives(
 
     const value = match[1]?.trim() ?? "";
     const isPlaceholder = isPlaceholderSitemapValue(value);
-    const isValidAbsoluteUrl = isAbsoluteHttpUrl(value);
+    const isCanonicalSitemap =
+      sitemapUrl !== undefined && isCanonicalSitemapUrl(value, sitemapUrl);
 
-    if (advertise && sitemapUrl && (isPlaceholder || !isValidAbsoluteUrl)) {
+    if (advertise && sitemapUrl && (isPlaceholder || !isCanonicalSitemap)) {
       if (!canonicalSitemapEmitted) {
         lines.push(`Sitemap: ${sitemapUrl}`);
         canonicalSitemapEmitted = true;
@@ -50,7 +50,7 @@ function normalizeSitemapDirectives(
       continue;
     }
 
-    if (!isValidAbsoluteUrl) {
+    if (!isCanonicalSitemap) {
       continue;
     }
 

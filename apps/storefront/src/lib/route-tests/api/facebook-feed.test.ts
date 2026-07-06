@@ -86,6 +86,21 @@ describe("Facebook product feed route", () => {
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({ page: 1, limit: 100 });
   });
 
+  it("rejects malformed page and limit query parameters", async () => {
+    const badPage = await GET(
+      context("https://storefront.example.test/api/facebook-feed.xml?page=2abc"),
+    );
+    const badLimit = await GET(
+      context("https://storefront.example.test/api/facebook-feed.xml?limit=05"),
+    );
+
+    expect(badPage.status).toBe(400);
+    await expect(badPage.text()).resolves.toContain("Invalid page parameter");
+    expect(badLimit.status).toBe(400);
+    await expect(badLimit.text()).resolves.toContain("Invalid limit parameter");
+    expect(mocks.getFeedProducts).not.toHaveBeenCalled();
+  });
+
   it("uses buyer availability from the product list instead of product active status alone", async () => {
     mocks.getFeedProducts.mockResolvedValueOnce({
       data: [

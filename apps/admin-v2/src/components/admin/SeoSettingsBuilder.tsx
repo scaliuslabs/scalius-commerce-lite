@@ -90,6 +90,10 @@ export function SeoSettingsBuilder() {
       fetchFn: fetchSeo,
       saveFn: saveSeo,
       defaultValues: defaultConfig,
+      invalidateQueryKeys: [
+        queryKeys.settings.seoDiscoveryLiveProbe(),
+        queryKeys.settings.seoFeedDiagnostics(),
+      ],
       successMessage: "SEO settings saved successfully.",
       errorMessage: "Failed to save SEO settings.",
     });

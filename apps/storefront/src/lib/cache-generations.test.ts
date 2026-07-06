@@ -13,6 +13,7 @@ describe("exact cache generations", () => {
   it("recognizes product exact cache keys and product HTML paths", () => {
     expect(shouldUseExactCacheGeneration("product_slug_fish")).toBe(true);
     expect(shouldUseExactCacheGeneration("product_variants_prod_1")).toBe(true);
+    expect(shouldUseExactCacheGeneration("feed_products_page=2&limit=5")).toBe(true);
     expect(shouldUseExactCacheGeneration("widget_wid_1")).toBe(true);
     expect(shouldUseExactCacheGeneration("widgets_scope_product_prod_1")).toBe(true);
     expect(shouldUseExactCacheGeneration("page_render_about-us_build")).toBe(true);
@@ -27,6 +28,9 @@ describe("exact cache generations", () => {
     );
     expect(cacheGenerationKeyForLogicalKey("shipping_areas_zone_1")).toBe(
       "shipping_areas_",
+    );
+    expect(cacheGenerationKeyForLogicalKey("feed_products_page=2&limit=5")).toBe(
+      "feed_products_",
     );
 
     expect(productSlugCacheKeyFromPath("/products/fish?size=m")).toBe(
@@ -89,6 +93,27 @@ describe("exact cache generations", () => {
     );
     expect(store.put).toHaveBeenCalledWith(
       buildExactCacheGenerationKey("storefront.example.com", "product_variants_prod_1"),
+      expect.any(String),
+    );
+  });
+
+  it("bumps all feed product cache pages as one generation family", async () => {
+    const store = {
+      get: vi.fn(),
+      put: vi.fn(async () => undefined),
+    };
+
+    const result = await bumpExactCacheGenerations({
+      store,
+      hostname: "storefront.example.com",
+      logicalKeys: ["feed_products_page=1", "feed_products_page=2"],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.logicalKey).toBe("feed_products_");
+    expect(store.put).toHaveBeenCalledOnce();
+    expect(store.put).toHaveBeenCalledWith(
+      buildExactCacheGenerationKey("storefront.example.com", "feed_products_"),
       expect.any(String),
     );
   });

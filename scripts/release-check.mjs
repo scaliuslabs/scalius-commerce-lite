@@ -36,11 +36,13 @@ const FEED_ENDPOINTS = [
     endpoint: "/api/product-feed.xml?limit=5",
     resultKey: "feed",
     label: "canonical product feed",
+    page2Endpoint: "/api/product-feed.xml?page=2&limit=5",
   },
   {
     endpoint: "/api/facebook-feed.xml?limit=5",
     resultKey: "compatibilityFeed",
     label: "compatibility Facebook feed",
+    page2Endpoint: "/api/facebook-feed.xml?page=2&limit=5",
   },
 ];
 
@@ -663,7 +665,7 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
   }
 
   responses.feeds = {};
-  for (const { endpoint, resultKey, label } of FEED_ENDPOINTS) {
+  for (const { endpoint, resultKey, label, page2Endpoint } of FEED_ENDPOINTS) {
     const responseLabel = `Storefront ${label} (${endpoint})`;
     const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, endpoint), {
       fetchImpl,
@@ -692,6 +694,60 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
     checks[resultKey] = evaluation;
     responses[resultKey] = feedResult;
     responses.feeds[endpoint] = feedResult;
+
+    if (page2Endpoint) {
+      const page2Response = await fetchText(
+        buildUrlWithSearch(options.storefrontUrl, page2Endpoint),
+        {
+          fetchImpl,
+          timeoutMs: options.timeoutMs,
+          accept: "application/xml, text/xml, */*;q=0.8",
+        },
+      );
+      requireStatus(
+        page2Response,
+        `Storefront ${label} page 2 (${page2Endpoint})`,
+        (status) => (status >= 200 && status < 300) || status === 404,
+      );
+      if (page2Response.statusCode >= 200 && page2Response.statusCode < 300) {
+        const page2CacheEvaluation = evaluateDiscoveryCacheHeaders(
+          page2Response.headers,
+          { label: page2Endpoint },
+        );
+        if (!page2CacheEvaluation.ok) {
+          throw new Error(
+            `${page2Endpoint} cache headers failed: ${page2CacheEvaluation.errors.join("; ")}`,
+          );
+        }
+        const page2Evaluation = evaluateProductFeedXml(page2Response.body, {
+          storefrontOrigin,
+        });
+        if (!page2Evaluation.ok) {
+          throw new Error(`${page2Endpoint} failed: ${page2Evaluation.errors.join("; ")}`);
+        }
+        responses.feeds[page2Endpoint] = {
+          statusCode: page2Response.statusCode,
+          durationMs: page2Response.durationMs,
+          cacheControl: page2CacheEvaluation.cacheControl,
+          itemCount: page2Evaluation.itemCount,
+          linkCount: page2Evaluation.linkCount,
+          imageLinkCount: page2Evaluation.imageLinkCount,
+          availabilityCount: page2Evaluation.availabilityCount,
+          firstStorefrontItemUrl: page2Evaluation.firstStorefrontItemUrl,
+        };
+      } else {
+        responses.feeds[page2Endpoint] = {
+          statusCode: page2Response.statusCode,
+          durationMs: page2Response.durationMs,
+          cacheControl: page2Response.headers.get("Cache-Control") ?? "",
+          itemCount: 0,
+          linkCount: 0,
+          imageLinkCount: 0,
+          availabilityCount: 0,
+          firstStorefrontItemUrl: null,
+        };
+      }
+    }
   }
 
   logger?.log(
