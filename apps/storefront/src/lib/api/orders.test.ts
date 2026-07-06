@@ -19,6 +19,33 @@ beforeEach(() => {
   mocks.fetchWithRetry.mockReset();
 });
 
+function buildOrderPayload() {
+  return {
+    checkoutRequestId: "checkout_req_123456",
+    customerName: "Test Customer",
+    customerPhone: "+8801712345678",
+    customerEmail: null,
+    shippingAddress: "123 Test Street",
+    city: "city_1",
+    zone: "zone_1",
+    area: null,
+    notes: null,
+    items: [],
+    shippingCharge: 0,
+    discountAmount: null,
+    paymentMethod: "cod" as const,
+  };
+}
+
+function mockImmediatePollingTimers() {
+  return vi.spyOn(globalThis, "setTimeout").mockImplementation(((handler: Parameters<typeof setTimeout>[0]) => {
+    if (typeof handler === "function") {
+      handler();
+    }
+    return 0 as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout);
+}
+
 describe("storefront orders API client", () => {
   it("creates public checkout orders without minting a service JWT", async () => {
     mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
@@ -31,21 +58,7 @@ describe("storefront orders API client", () => {
       },
     }), { status: 201 }));
 
-    const result = await createOrder({
-      checkoutRequestId: "checkout_req_123456",
-      customerName: "Test Customer",
-      customerPhone: "+8801712345678",
-      customerEmail: null,
-      shippingAddress: "123 Test Street",
-      city: "city_1",
-      zone: "zone_1",
-      area: null,
-      notes: null,
-      items: [],
-      shippingCharge: 0,
-      discountAmount: null,
-      paymentMethod: "cod",
-    }, { customerSessionToken: "customer_session_1" });
+    const result = await createOrder(buildOrderPayload(), { customerSessionToken: "customer_session_1" });
 
     expect(result).toMatchObject({
       success: true,
@@ -68,6 +81,78 @@ describe("storefront orders API client", () => {
       15000,
       false,
     );
+  });
+
+  it("polls duplicate processing orders with a status token instead of receipt proof", async () => {
+    const timers = mockImmediatePollingTimers();
+    mocks.fetchWithRetry
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          statusToken: "cst_poll_token",
+          checkoutToken: "chk_must_not_be_polled",
+          orderId: "order_processing",
+          status: "processing",
+        },
+      }), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          status: "completed",
+          orderId: "order_processing",
+          receiptToken: "chk_receipt_ready",
+        },
+      }), { status: 200 }));
+
+    try {
+      const result = await createOrder(buildOrderPayload());
+
+      expect(result).toMatchObject({
+        success: true,
+        orderId: "order_processing",
+        receiptToken: "chk_receipt_ready",
+        statusToken: "cst_poll_token",
+      });
+      expect(result.receiptToken).not.toBe(result.statusToken);
+      expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toBe("https://api.example.test/api/v1/orders/status/cst_poll_token");
+      expect(JSON.stringify(mocks.fetchWithRetry.mock.calls.map((call) => call[0]))).not.toContain("/orders/status/chk_");
+      expect(JSON.stringify(mocks.fetchWithRetry.mock.calls.map((call) => call[0]))).not.toContain("chk_must_not_be_polled");
+    } finally {
+      timers.mockRestore();
+    }
+  });
+
+  it("does not use the status token as receipt proof when polling completes without a receipt token", async () => {
+    const timers = mockImmediatePollingTimers();
+    mocks.fetchWithRetry
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          statusToken: "cst_poll_without_receipt",
+          orderId: "order_processing",
+          status: "processing",
+        },
+      }), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          status: "completed",
+          orderId: "order_processing",
+        },
+      }), { status: 200 }));
+
+    try {
+      const result = await createOrder(buildOrderPayload());
+
+      expect(result).toMatchObject({
+        success: false,
+        error: "Order completed but receipt proof is unavailable. Please check your order history.",
+      });
+      expect(result.receiptToken).toBeUndefined();
+      expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toBe("https://api.example.test/api/v1/orders/status/cst_poll_without_receipt");
+    } finally {
+      timers.mockRestore();
+    }
   });
 
   it("fetches private receipts with header proof instead of URL proof", async () => {
@@ -115,5 +200,49 @@ describe("storefront orders API client", () => {
       false,
     );
     expect(mocks.fetchWithRetry.mock.calls[0]?.[0]).not.toContain("token=");
+  });
+
+  it("polls duplicate checkout status with non-bearer status token", async () => {
+    mocks.fetchWithRetry
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          status: "processing",
+          statusToken: "cst_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          orderId: "order_1",
+        },
+      }), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          status: "completed",
+          orderId: "order_1",
+          receiptToken: "chk_private_receipt",
+        },
+      }), { status: 200 }));
+
+    const result = await createOrder({
+      checkoutRequestId: "checkout_req_123456",
+      customerName: "Test Customer",
+      customerPhone: "+8801712345678",
+      customerEmail: null,
+      shippingAddress: "123 Test Street",
+      city: "city_1",
+      zone: "zone_1",
+      area: null,
+      notes: null,
+      items: [],
+      shippingCharge: 0,
+      discountAmount: null,
+      paymentMethod: "cod",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      orderId: "order_1",
+      receiptToken: "chk_private_receipt",
+    });
+    expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toContain("/orders/status/cst_");
+    expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).not.toContain("/orders/status/chk_");
   });
 });

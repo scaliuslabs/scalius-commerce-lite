@@ -6378,6 +6378,7 @@ export type PostApiV1OrdersResponses = {
         data: {
             checkoutToken: string;
             receiptToken: string;
+            statusToken: string;
             orderId: string;
             paymentMethod: string;
             totalAmount: number;
@@ -6390,7 +6391,7 @@ export type PostApiV1OrdersResponses = {
     202: {
         success: true;
         data: {
-            checkoutToken: string;
+            statusToken: string;
             orderId: string;
             status: 'processing';
             message: string;

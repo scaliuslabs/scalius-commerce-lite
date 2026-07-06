@@ -533,7 +533,7 @@ export const postApiV1CacheClearGroup = <ThrowOnError extends boolean = false>(o
 });
 
 /**
- * Check order processing status by checkout token
+ * Check order processing status by status token
  */
 export const getApiV1OrdersStatusByToken = <ThrowOnError extends boolean = false>(options: Options<GetApiV1OrdersStatusByTokenData, ThrowOnError>): RequestResult<GetApiV1OrdersStatusByTokenResponses, GetApiV1OrdersStatusByTokenErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1OrdersStatusByTokenResponses, GetApiV1OrdersStatusByTokenErrors, ThrowOnError>({ url: '/api/v1/orders/status/{token}', ...options });
 

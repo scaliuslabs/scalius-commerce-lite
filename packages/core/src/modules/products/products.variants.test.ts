@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ValidationError } from "@scalius/core/errors";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
 import {
     bulkCreateVariants,
     bulkDeleteVariants,
@@ -79,11 +79,7 @@ describe("product variant SKU rules", () => {
                 return {
                     from() {
                         return {
-                            where() {
-                                return {
-                                    get: async () => ({ id: "var_default" }),
-                                };
-                            },
+                            where: async () => [{ id: "var_default", isDefault: true, reservedStock: 0 }],
                         };
                     },
                 };
@@ -109,13 +105,22 @@ describe("product variant SKU rules", () => {
                 return {
                     from() {
                         return {
+                            innerJoin() {
+                                return {
+                                    where() {
+                                        return {
+                                            get: async () => ({ count: 0 }),
+                                        };
+                                    },
+                                };
+                            },
                             where() {
                                 return {
                                     get: async () => {
                                         if (selectCount === 1) {
                                             return { id: "var_option", isDefault: false };
                                         }
-                                        if (selectCount === 2) {
+                                        if (selectCount === 3) {
                                             return { isActive: true };
                                         }
                                         return { count: 0 };
@@ -147,11 +152,25 @@ describe("product variant SKU rules", () => {
                 return {
                     from() {
                         return {
+                            innerJoin() {
+                                return {
+                                    where() {
+                                        return {
+                                            groupBy: async () => [],
+                                        };
+                                    },
+                                };
+                            },
                             where() {
+                                if (selectCount === 1) {
+                                    return Promise.resolve([
+                                        { id: "var_option", isDefault: false, reservedStock: 0 },
+                                    ]);
+                                }
+
                                 return {
                                     get: async () => {
-                                        if (selectCount === 1) return null;
-                                        if (selectCount === 2) return { isActive: true };
+                                        if (selectCount === 3) return { isActive: true };
                                         return { count: 0 };
                                     },
                                 };
@@ -170,6 +189,421 @@ describe("product variant SKU rules", () => {
             bulkDeleteVariants(dbWithFinalOption as never, "prod_1", ["var_option"]),
         ).rejects.toBeInstanceOf(ValidationError);
         expect(deleteCalled).toBe(false);
+    });
+
+    it("rejects deleting a SKU with active reserved stock", async () => {
+        let updateCalled = false;
+        let deleteCalled = false;
+        const dbWithReservedSku = {
+            select() {
+                return {
+                    from() {
+                        return {
+                            where() {
+                                return {
+                                    get: async () => ({
+                                        id: "var_reserved",
+                                        isDefault: false,
+                                        reservedStock: 2,
+                                    }),
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            update() {
+                updateCalled = true;
+                return {};
+            },
+            delete() {
+                deleteCalled = true;
+                return {};
+            },
+        };
+
+        await expect(
+            deleteVariant(dbWithReservedSku as never, "prod_1", "var_reserved"),
+        ).rejects.toBeInstanceOf(ConflictError);
+        expect(updateCalled).toBe(false);
+        expect(deleteCalled).toBe(false);
+    });
+
+    it("rejects deleting a SKU while a non-terminal order still references it", async () => {
+        let updateCalled = false;
+        let deleteCalled = false;
+        const dbWithOpenOrder = {
+            select() {
+                return {
+                    from() {
+                        return {
+                            innerJoin() {
+                                return {
+                                    where() {
+                                        return {
+                                            get: async () => ({ count: 1 }),
+                                        };
+                                    },
+                                };
+                            },
+                            where() {
+                                return {
+                                    get: async () => ({ id: "var_open", isDefault: false, reservedStock: 0 }),
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            update() {
+                updateCalled = true;
+                return {};
+            },
+            delete() {
+                deleteCalled = true;
+                return {};
+            },
+        };
+
+        await expect(
+            deleteVariant(dbWithOpenOrder as never, "prod_1", "var_open"),
+        ).rejects.toBeInstanceOf(ConflictError);
+        expect(updateCalled).toBe(false);
+        expect(deleteCalled).toBe(false);
+    });
+
+    it("soft-deletes a SKU with order item history instead of hard-deleting it", async () => {
+        let selectCount = 0;
+        let softDeleteValues: Record<string, unknown> | undefined;
+        let hardDeleteCalled = false;
+        const dbWithOrderHistory = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            innerJoin() {
+                                return {
+                                    where() {
+                                        return {
+                                            get: async () => ({ count: 0 }),
+                                        };
+                                    },
+                                };
+                            },
+                            where() {
+                                return {
+                                    get: async () => {
+                                        if (selectCount === 1) {
+                                            return { id: "var_ordered", isDefault: false, reservedStock: 0 };
+                                        }
+                                        if (selectCount === 3) return { isActive: false };
+                                        if (selectCount === 4) return { count: 0 };
+                                        return { count: 1 };
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            update() {
+                return {
+                    set(values: Record<string, unknown>) {
+                        softDeleteValues = values;
+                        return {
+                            where() {
+                                return {
+                                    returning: async () => [{ id: "var_ordered" }],
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            delete() {
+                hardDeleteCalled = true;
+                return {};
+            },
+        };
+
+        await deleteVariant(dbWithOrderHistory as never, "prod_1", "var_ordered");
+
+        expect(softDeleteValues).toMatchObject({
+            deletedAt: expect.anything(),
+            updatedAt: expect.anything(),
+        });
+        expect(hardDeleteCalled).toBe(false);
+    });
+
+    it("soft-deletes a SKU with inventory movement history instead of hard-deleting it", async () => {
+        let selectCount = 0;
+        let softDeleteValues: Record<string, unknown> | undefined;
+        let hardDeleteCalled = false;
+        const dbWithMovementHistory = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            innerJoin() {
+                                return {
+                                    where() {
+                                        return {
+                                            get: async () => ({ count: 0 }),
+                                        };
+                                    },
+                                };
+                            },
+                            where() {
+                                return {
+                                    get: async () => {
+                                        if (selectCount === 1) {
+                                            return { id: "var_moved", isDefault: false, reservedStock: 0 };
+                                        }
+                                        if (selectCount === 3) return { isActive: false };
+                                        if (selectCount === 4) return { count: 0 };
+                                        if (selectCount === 5) return { count: 0 };
+                                        return { count: 1 };
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            update() {
+                return {
+                    set(values: Record<string, unknown>) {
+                        softDeleteValues = values;
+                        return {
+                            where() {
+                                return {
+                                    returning: async () => [{ id: "var_moved" }],
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            delete() {
+                hardDeleteCalled = true;
+                return {};
+            },
+        };
+
+        await deleteVariant(dbWithMovementHistory as never, "prod_1", "var_moved");
+
+        expect(softDeleteValues).toMatchObject({
+            deletedAt: expect.anything(),
+            updatedAt: expect.anything(),
+        });
+        expect(hardDeleteCalled).toBe(false);
+    });
+
+    it("bulk delete rejects SKUs with active reserved stock", async () => {
+        let batchCalled = false;
+        const dbWithReservedSku = {
+            select() {
+                return {
+                    from() {
+                        return {
+                            where: async () => [
+                                { id: "var_reserved", isDefault: false, reservedStock: 1 },
+                            ],
+                        };
+                    },
+                };
+            },
+            batch: async () => {
+                batchCalled = true;
+                return [];
+            },
+        };
+
+        await expect(
+            bulkDeleteVariants(dbWithReservedSku as never, "prod_1", ["var_reserved"]),
+        ).rejects.toBeInstanceOf(ConflictError);
+        expect(batchCalled).toBe(false);
+    });
+
+    it("bulk delete soft-deletes history-backed SKUs and hard-deletes only unused SKUs", async () => {
+        let selectCount = 0;
+        const statements: unknown[] = [];
+        const dbWithMixedHistory = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            innerJoin() {
+                                return {
+                                    where() {
+                                        return {
+                                            groupBy: async () => [],
+                                        };
+                                    },
+                                };
+                            },
+                            where() {
+                                if (selectCount === 1) {
+                                    return Promise.resolve([
+                                        { id: "var_ordered", isDefault: false, reservedStock: 0 },
+                                        { id: "var_moved", isDefault: false, reservedStock: 0 },
+                                        { id: "var_unused", isDefault: false, reservedStock: 0 },
+                                    ]);
+                                }
+                                if (selectCount === 5) {
+                                    return {
+                                        groupBy: async () => [{ variantId: "var_ordered" }],
+                                    };
+                                }
+                                if (selectCount === 6) {
+                                    return {
+                                        groupBy: async () => [{ variantId: "var_moved" }],
+                                    };
+                                }
+
+                                return {
+                                    get: async () => {
+                                        if (selectCount === 3) return { isActive: false };
+                                        return { count: 0 };
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            update() {
+                return {
+                    set(values: Record<string, unknown>) {
+                        return {
+                            where() {
+                                return {
+                                    returning() {
+                                        return { kind: "soft-delete", values };
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            delete() {
+                return {
+                    where() {
+                        return {
+                            returning() {
+                                return { kind: "hard-delete" };
+                            },
+                        };
+                    },
+                };
+            },
+            batch: async (batchStatements: unknown[]) => {
+                statements.push(...batchStatements);
+                return [[{ id: "var_ordered" }, { id: "var_moved" }], [{ id: "var_unused" }]];
+            },
+        };
+
+        await bulkDeleteVariants(
+            dbWithMixedHistory as never,
+            "prod_1",
+            ["var_ordered", "var_moved", "var_unused"],
+        );
+
+        expect(statements).toEqual([
+            expect.objectContaining({ kind: "soft-delete" }),
+            expect.objectContaining({ kind: "hard-delete" }),
+        ]);
+    });
+
+    it("rejects creating a SKU that mixes option axes with existing SKUs", async () => {
+        let insertCalled = false;
+        const dbWithSizeOnlySku = {
+            select() {
+                return {
+                    from() {
+                        return {
+                            where: async () => [
+                                { id: "var_size", size: "M", color: null },
+                            ],
+                        };
+                    },
+                };
+            },
+            insert() {
+                insertCalled = true;
+                return {};
+            },
+        };
+
+        await expect(createVariant(dbWithSizeOnlySku as never, "prod_1", {
+            ...baseVariant,
+            size: null,
+            color: "Red",
+        })).rejects.toBeInstanceOf(ValidationError);
+        expect(insertCalled).toBe(false);
+    });
+
+    it("rejects bulk-created SKUs with mixed option axes before reading the database", async () => {
+        const dbShouldNotBeRead = {
+            select() {
+                throw new Error("unexpected database read");
+            },
+        };
+
+        await expect(bulkCreateVariants(dbShouldNotBeRead as never, "prod_1", [
+            { ...baseVariant, sku: "SKU-1", size: "M", color: null },
+            { ...baseVariant, sku: "SKU-2", size: null, color: "Red" },
+        ])).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("rejects variant updates that would mix option axes with sibling SKUs", async () => {
+        let selectCount = 0;
+        let updateCalled = false;
+        const dbWithSiblingSizeSku = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            where() {
+                                if (selectCount === 2) {
+                                    return Promise.resolve([
+                                        { id: "var_size", size: "M", color: null },
+                                    ]);
+                                }
+
+                                return {
+                                    get: async () => ({
+                                        id: "var_color",
+                                        isDefault: false,
+                                        size: null,
+                                        color: "Blue",
+                                        stock: 5,
+                                        stockVersion: 1,
+                                        trackInventory: true,
+                                    }),
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            update() {
+                updateCalled = true;
+                return {};
+            },
+        };
+
+        await expect(updateVariant(dbWithSiblingSizeSku as never, "prod_1", "var_color", {
+            ...baseVariant,
+            size: "L",
+            color: "Blue",
+        })).rejects.toBeInstanceOf(ValidationError);
+        expect(updateCalled).toBe(false);
     });
 
     it("rejects non-default SKUs that still have no customer option", async () => {

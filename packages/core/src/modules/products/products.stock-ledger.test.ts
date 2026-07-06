@@ -34,10 +34,22 @@ describe("product variant stock ledger routing", () => {
           from() {
             return {
               where() {
+                if (selectCount === 2) {
+                  return Promise.resolve([]);
+                }
+
                 return {
                   get: async () => (
                     selectCount === 1
-                      ? { id: "variant_1", isDefault: false, stock: 5, stockVersion: 3 }
+                      ? {
+                          id: "variant_1",
+                          isDefault: false,
+                          size: "M",
+                          color: "Black",
+                          stock: 5,
+                          stockVersion: 3,
+                          trackInventory: true,
+                        }
                       : null
                   ),
                 };

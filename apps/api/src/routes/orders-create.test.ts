@@ -1,13 +1,18 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { checkoutAttempts, orders } from "@scalius/database/schema";
 
 import { ConflictError, NotFoundError } from "@scalius/core/errors";
+import { buildCheckoutStatusTokenFromRequestKey } from "@scalius/core/modules/orders";
 import { ValidationError } from "../utils/api-error";
 import { errorResponseFromError } from "../utils/api-response";
 import {
   getCheckoutStatusKvKey,
   getReceiptTokenKvKey,
 } from "../utils/order-receipt-token";
+
+const DEFAULT_STATUS_REQUEST_KEY = `checkout_submit:v1:${"a".repeat(64)}`;
+const DEFAULT_STATUS_TOKEN = buildCheckoutStatusTokenFromRequestKey(DEFAULT_STATUS_REQUEST_KEY);
 
 const mocks = vi.hoisted(() => ({
   createStorefrontOrder: vi.fn(),
@@ -106,6 +111,7 @@ beforeEach(() => {
       claimId: "coac_1",
       orderId: "order_1",
       checkoutToken: "chk_order_1",
+      statusToken: DEFAULT_STATUS_TOKEN,
     },
   });
   mocks.markCheckoutAttemptCommitted.mockResolvedValue(undefined);
@@ -212,31 +218,42 @@ function createStatusTestApp(options: {
     status: "committed" | "failed" | "processing";
     orderId: string;
     checkoutToken: string;
+    requestKey?: string;
     lastError?: string | null;
   } | null;
   orderExists?: boolean;
 }) {
-  let selectCount = 0;
+  const statusToken = options.attempt?.requestKey
+    ? buildCheckoutStatusTokenFromRequestKey(options.attempt.requestKey)
+    : DEFAULT_STATUS_TOKEN;
   const kv = {
     get: vi.fn(async (key: string): Promise<string | null> => {
-      if (key !== await getCheckoutStatusKvKey("chk_status")) return null;
+      if (key !== await getCheckoutStatusKvKey(statusToken)) return null;
       return options.kvStatus ? JSON.stringify(options.kvStatus) : null;
     }),
     put: vi.fn(async (_key: string, _value: string, _options?: { expirationTtl: number }) => undefined),
   };
   const db = {
     select: vi.fn(() => {
-      selectCount += 1;
+      let selectedTable: unknown;
       const query = {
-        from: vi.fn(() => query),
+        from: vi.fn((table: unknown) => {
+          selectedTable = table;
+          return query;
+        }),
         where: vi.fn(() => query),
         get: vi.fn(async () => {
-          if (!options.kvStatus && selectCount === 1) {
-            return options.attempt ?? null;
+          if (selectedTable === checkoutAttempts) {
+            return options.attempt
+              ? { requestKey: DEFAULT_STATUS_REQUEST_KEY, ...options.attempt }
+              : null;
           }
-          return options.orderExists ? { id: options.attempt?.orderId ?? "order_1" } : null;
+          if (selectedTable === orders) {
+            return options.orderExists ? { id: options.attempt?.orderId ?? "order_1" } : null;
+          }
+          return null;
         }),
-        limit: vi.fn(async () => options.orderExists ? [{ id: "order_1" }] : []),
+        limit: vi.fn(async () => options.orderExists ? [{ id: options.attempt?.orderId ?? "order_1" }] : []),
       };
       return query;
     }),
@@ -252,7 +269,7 @@ function createStatusTestApp(options: {
   });
   app.route("/orders", orderRoutes);
 
-  return { app, db, kv };
+  return { app, db, kv, statusToken };
 }
 
 function createWaitUntilContext() {
@@ -428,8 +445,34 @@ describe("cart validation preflight", () => {
 });
 
 describe("checkout status recovery hints", () => {
+  it("rejects receipt proof in the status URL before KV or D1 reads", async () => {
+    const { app, db, kv } = createStatusTestApp({
+      attempt: {
+        status: "committed",
+        orderId: "order_1",
+        checkoutToken: "chk_status",
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/orders/status/chk_status",
+      {},
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Invalid checkout status token",
+      },
+    });
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
   it("repairs checkout status and receipt KV after a committed D1 fallback", async () => {
-    const { app, kv } = createStatusTestApp({
+    const { app, kv, statusToken } = createStatusTestApp({
       attempt: {
         status: "committed",
         orderId: "order_1",
@@ -439,7 +482,7 @@ describe("checkout status recovery hints", () => {
     const executionCtx = createWaitUntilContext();
 
     const response = await app.request(
-      "/api/v1/orders/status/chk_status",
+      `/api/v1/orders/status/${statusToken}`,
       {},
       { CACHE: kv } as never,
       executionCtx as never,
@@ -456,11 +499,12 @@ describe("checkout status recovery hints", () => {
     });
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     await executionCtx.waitUntil.mock.calls[0]?.[0];
-    const statusKey = await getCheckoutStatusKvKey("chk_status");
+    const statusKey = await getCheckoutStatusKvKey(statusToken);
     const receiptKey = await getReceiptTokenKvKey("chk_status");
     const statusWrite = kv.put.mock.calls.find(([key]) => key === statusKey);
     const receiptWrite = kv.put.mock.calls.find(([key]) => key === receiptKey);
     expect(statusKey).not.toContain("chk_status");
+    expect(statusKey).not.toContain(statusToken);
     expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
       status: "completed",
       orderId: "order_1",
@@ -473,7 +517,7 @@ describe("checkout status recovery hints", () => {
   });
 
   it("repairs success hints when a processing D1 attempt already has an order", async () => {
-    const { app, kv } = createStatusTestApp({
+    const { app, kv, statusToken } = createStatusTestApp({
       attempt: {
         status: "processing",
         orderId: "order_1",
@@ -484,7 +528,7 @@ describe("checkout status recovery hints", () => {
     const executionCtx = createWaitUntilContext();
 
     const response = await app.request(
-      "/api/v1/orders/status/chk_status",
+      `/api/v1/orders/status/${statusToken}`,
       {},
       { CACHE: kv } as never,
       executionCtx as never,
@@ -501,28 +545,34 @@ describe("checkout status recovery hints", () => {
     });
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     await executionCtx.waitUntil.mock.calls[0]?.[0];
-    const statusKey = await getCheckoutStatusKvKey("chk_status");
+    const statusKey = await getCheckoutStatusKvKey(statusToken);
     const receiptKey = await getReceiptTokenKvKey("chk_status");
     expect(statusKey).not.toContain("chk_status");
-    expect(kv.put.mock.calls.map(([key]) => key)).toEqual([
+    expect(statusKey).not.toContain(statusToken);
+    expect(kv.put.mock.calls.map(([key]) => key)).toEqual(expect.arrayContaining([
       statusKey,
       receiptKey,
-    ]);
+    ]));
   });
 
   it("repairs stale processing KV when the order is already committed", async () => {
-    const { app, kv } = createStatusTestApp({
+    const { app, kv, statusToken } = createStatusTestApp({
       kvStatus: {
         status: "processing",
         orderId: "order_1",
         updatedAt: Date.now() - 60_000,
+      },
+      attempt: {
+        status: "processing",
+        orderId: "order_1",
+        checkoutToken: "chk_status",
       },
       orderExists: true,
     });
     const executionCtx = createWaitUntilContext();
 
     const response = await app.request(
-      "/api/v1/orders/status/chk_status",
+      `/api/v1/orders/status/${statusToken}`,
       {},
       { CACHE: kv } as never,
       executionCtx as never,
@@ -539,9 +589,10 @@ describe("checkout status recovery hints", () => {
     });
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     await executionCtx.waitUntil.mock.calls[0]?.[0];
-    const statusKey = await getCheckoutStatusKvKey("chk_status");
+    const statusKey = await getCheckoutStatusKvKey(statusToken);
     const statusWrite = kv.put.mock.calls.find(([key]) => key === statusKey);
     expect(statusKey).not.toContain("chk_status");
+    expect(statusKey).not.toContain(statusToken);
     expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
       status: "completed",
       orderId: "order_1",
@@ -549,7 +600,7 @@ describe("checkout status recovery hints", () => {
   });
 
   it("repairs failed checkout status after a failed D1 fallback", async () => {
-    const { app, kv } = createStatusTestApp({
+    const { app, kv, statusToken } = createStatusTestApp({
       attempt: {
         status: "failed",
         orderId: "order_1",
@@ -560,7 +611,7 @@ describe("checkout status recovery hints", () => {
     const executionCtx = createWaitUntilContext();
 
     const response = await app.request(
-      "/api/v1/orders/status/chk_status",
+      `/api/v1/orders/status/${statusToken}`,
       {},
       { CACHE: kv } as never,
       executionCtx as never,
@@ -577,9 +628,10 @@ describe("checkout status recovery hints", () => {
     });
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     await executionCtx.waitUntil.mock.calls[0]?.[0];
-    const statusKey = await getCheckoutStatusKvKey("chk_status");
+    const statusKey = await getCheckoutStatusKvKey(statusToken);
     const statusWrite = kv.put.mock.calls.find(([key]) => key === statusKey);
     expect(statusKey).not.toContain("chk_status");
+    expect(statusKey).not.toContain(statusToken);
     expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
       status: "failed",
       orderId: "order_1",
@@ -637,7 +689,7 @@ describe("create order commit/KV ordering", () => {
       expect(executionCtx.waitUntil).toHaveBeenCalledTimes(2);
       await Promise.all(waitUntilPromises);
 
-      const statusKey = await getCheckoutStatusKvKey("chk_order_1");
+      const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
       const receiptKey = await getReceiptTokenKvKey("chk_order_1");
       const kvKeys = kv.put.mock.calls.map(([key]) => String(key));
       const receiptWrite = kv.put.mock.calls.find(([key]) => key === receiptKey) as [string, string, unknown?] | undefined;
@@ -648,6 +700,7 @@ describe("create order commit/KV ordering", () => {
       expect(calls).toContain("availability");
       expect(kvKeys).toEqual(expect.arrayContaining([statusKey, receiptKey]));
       expect(statusKey).not.toContain("chk_order_1");
+      expect(statusKey).not.toContain(DEFAULT_STATUS_TOKEN);
       expect(receiptKey).not.toContain("chk_order_1");
       expect(JSON.stringify(kvKeys)).not.toContain("chk_order_1");
       expect(String(receiptWrite?.[1])).not.toContain("chk_order_1");
@@ -690,6 +743,7 @@ describe("create order commit/KV ordering", () => {
           response: expect.objectContaining({
             orderId: "order_1",
             receiptToken: "chk_order_1",
+            statusToken: DEFAULT_STATUS_TOKEN,
           }),
         }),
       );
@@ -738,6 +792,7 @@ describe("create order commit/KV ordering", () => {
       response: {
         checkoutToken: "chk_replay",
         receiptToken: "chk_replay",
+        statusToken: DEFAULT_STATUS_TOKEN,
         orderId: "order_replay",
         paymentMethod: "cod",
         totalAmount: 100,
@@ -789,7 +844,7 @@ describe("create order commit/KV ordering", () => {
     mocks.resolveExistingCheckoutAttempt.mockResolvedValue({
       status: "processing",
       orderId: "order_processing",
-      checkoutToken: "chk_processing",
+      statusToken: DEFAULT_STATUS_TOKEN,
     });
     mocks.rateLimit.mockResolvedValue({ allowed: false });
     const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
@@ -804,14 +859,16 @@ describe("create order commit/KV ordering", () => {
       { CACHE: kv } as never,
     );
 
-    const json = await response.json() as { data: { checkoutToken: string; orderId: string; status: string } };
+    const json = await response.json() as { data: { checkoutToken?: string; statusToken: string; orderId: string; status: string } };
     expect(response.status).toBe(202);
     expect(json.data).toEqual({
-      checkoutToken: "chk_processing",
+      statusToken: DEFAULT_STATUS_TOKEN,
       orderId: "order_processing",
       status: "processing",
       message: "Order creation is already processing.",
     });
+    expect(json.data.statusToken).not.toMatch(/^chk_/);
+    expect(json.data).not.toHaveProperty("checkoutToken");
     expect(mocks.buildCheckoutAttemptIdentity).toHaveBeenCalledOnce();
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
@@ -829,6 +886,7 @@ describe("create order commit/KV ordering", () => {
       response: {
         checkoutToken: "chk_race_replay",
         receiptToken: "chk_race_replay",
+        statusToken: DEFAULT_STATUS_TOKEN,
         orderId: "order_race_replay",
         paymentMethod: "cod",
         totalAmount: 100,
@@ -864,7 +922,7 @@ describe("create order commit/KV ordering", () => {
     mocks.claimCheckoutAttempt.mockResolvedValue({
       status: "processing",
       orderId: "order_race_processing",
-      checkoutToken: "chk_race_processing",
+      statusToken: DEFAULT_STATUS_TOKEN,
     });
     const { app, kv } = createTestApp();
 
@@ -878,14 +936,16 @@ describe("create order commit/KV ordering", () => {
       { CACHE: kv } as never,
     );
 
-    const json = await response.json() as { data: { checkoutToken: string; orderId: string; status: string } };
+    const json = await response.json() as { data: { checkoutToken?: string; statusToken: string; orderId: string; status: string } };
     expect(response.status).toBe(202);
     expect(json.data).toEqual({
-      checkoutToken: "chk_race_processing",
+      statusToken: DEFAULT_STATUS_TOKEN,
       orderId: "order_race_processing",
       status: "processing",
       message: "Order creation is already processing.",
     });
+    expect(json.data.statusToken).not.toMatch(/^chk_/);
+    expect(json.data).not.toHaveProperty("checkoutToken");
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.claimCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
@@ -1104,7 +1164,7 @@ describe("create order commit/KV ordering", () => {
     );
 
     expect(response.status).toBe(500);
-    const statusKey = await getCheckoutStatusKvKey("chk_order_2");
+    const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
     expect(calls).toEqual([
       "commit",
       `kv:${statusKey}`,
@@ -1161,7 +1221,7 @@ describe("create order commit/KV ordering", () => {
       expect.objectContaining({ id: "coa_1", claimId: "coac_1" }),
       discountError,
     );
-    const statusKey = await getCheckoutStatusKvKey("chk_order_discount_limit");
+    const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
     const failedStatusWrite = kv.put.mock.calls.at(-1) as [string, string] | undefined;
     expect(failedStatusWrite?.[0]).toBe(statusKey);
     expect(statusKey).not.toContain("chk_order_discount_limit");

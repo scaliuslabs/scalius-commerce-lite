@@ -14,7 +14,7 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Product attributes: many-to-many via `productAttributeValues`, linked to global `productAttributes` definitions
 - Variant CRUD: size, color, weight, SKU (unique), price, stock, barcode, barcode type, discount (percentage or flat)
 - Variant duplicate with auto-incrementing SKU suffix (`-COPY`, `-COPY2`, etc.)
-- Bulk variant create (chunked at 50 per insert), bulk delete, bulk update
+- Bulk variant create (chunked for D1 parameter limits), guarded bulk delete, bulk update
 - Variant sort order: separate `colorSortOrder` and `sizeSortOrder` columns, updated per-value across all variants of a product
 - Soft-deleted variants filtered out: all variant queries use `isNull(deletedAt)` or `deletedAt IS NULL` conditions
 - Discount type support: both percentage and flat amount discounts at product and variant level
@@ -28,7 +28,7 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Storefront search: lightweight variant-aware product search for cart/checkout use
 - Discounted price calculation supporting both percentage and flat discount types
 - Feature extraction from description (parses bullet-point lines)
-- SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, logically no customer options); optioned products require an explicit selected SKU; SKU-less or ambiguous no-option products fail closed. Merchant-created variants must include at least one customer option (`size` or `color`) so the hidden simple SKU stays the only no-option SKU. `isDefault` is the protected simple-SKU authority; admin/API/storefront projections normalize legacy default SKU option labels to `null`, and the storefront no longer synthesizes fake `default` variants.
+- SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, logically no customer options); optioned products require an explicit selected SKU; SKU-less or ambiguous no-option products fail closed. Merchant-created variants must include at least one customer option (`size` or `color`) so the hidden simple SKU stays the only no-option SKU. All customer-option SKUs for one product must use the same option axes: Option 1 only, Option 2 only, or both options on every SKU. `isDefault` is the protected simple-SKU authority; admin/API/storefront projections normalize legacy default SKU option labels to `null`, and the storefront no longer synthesizes fake `default` variants.
 - Public catalog eligibility is centralized in `products.public-eligibility.ts`: storefront lists/details/search, global search, filterable attributes, and collection/homepage product resolution must all require a buyer-resolvable active SKU topology, while stock availability remains a separate display/checkout concern. Buyer-facing `hasVariants` means at least one non-default SKU with a real customer option, not the protected default SKU. Public product lists also project `availableForSale` from the same SKU topology (`trackInventory = false` or positive `stock - reservedStock`), so catalog feeds can match product-page JSON-LD and checkout availability without variant N+1 reads.
 - Storefront buyer availability uses `apps/storefront/src/lib/product-sellable-variants.ts` so product detail, JSON-LD, stock badges, and `/buy/{slug}` all classify simple/optioned/unavailable products through one resolver.
 
@@ -75,7 +75,7 @@ Storefront category ([slug].astro)
 | `products.public-eligibility.ts` | Shared public catalog predicates and default simple-SKU values. Any storefront/catalog/search surface that exposes buyer product cards must use these predicates instead of checking only `products.isActive` and `products.deletedAt`. |
 | `products.admin.ts` | Admin read queries (`getProducts`, `getProductDetails`, `getProductStats`, `getCategoryStats`) and write mutations (`createProduct`, `updateProduct`, `deleteProduct`, `restoreProduct`, `permanentDeleteProduct`, `bulkDeleteProducts`, `bulkUpdateVariants`). `getProducts` returns `discountType` and `discountAmount`. `getProductDetails` fetches `productRichContent` and `productAttributeValues`. All variant queries filter `deletedAt IS NULL`. |
 | `products.storefront.ts` | Storefront read queries (`getStorefrontProducts`, `getStorefrontProductBySlug`, `searchStorefrontProducts`) with discount calculation (percentage and flat), feature extraction, SKU/default-SKU metadata, and attribute-based filtering. All variant queries filter `isNull(deletedAt)`; buyer purchase flows must use real variant rows and cart validation as inventory proof. |
-| `products.variants.ts` | Variant-specific operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`, `duplicateVariant`, `bulkCreateVariants`, `bulkDeleteVariants`, `getVariantSortOrder`, `updateVariantSortOrder`). All queries filter soft-deleted variants. Normal variants must have a customer option; hidden/simple default SKUs cannot be duplicated or converted into option rows through this API. |
+| `products.variants.ts` | Variant-specific operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`, `duplicateVariant`, `bulkCreateVariants`, `bulkDeleteVariants`, `getVariantSortOrder`, `updateVariantSortOrder`). All queries filter soft-deleted variants. Normal variants must have a customer option and consistent option axes; hidden/simple default SKUs cannot be duplicated or converted into option rows through this API. Variant delete rejects active reservations/open order references and soft-deletes terminal-order/movement-backed SKUs instead of breaking history. |
 
 ## API Endpoints
 
@@ -96,9 +96,9 @@ Storefront category ([slug].astro)
 | POST | `/{id}/variants` | `createVariant` | Create single variant |
 | GET | `/{id}/variants` | `getProductVariants` | List variants for product (soft-deleted filtered) |
 | PUT | `/{id}/variants/{variantId}` | `updateVariant` | Update single variant |
-| DELETE | `/{id}/variants/{variantId}` | `deleteVariant` | Hard delete variant |
-| POST | `/{id}/variants/bulk-create` | `bulkCreateVariants` | Bulk create (chunked at 50) |
-| POST | `/{id}/variants/bulk-delete` | `bulkDeleteVariants` | Bulk hard delete |
+| DELETE | `/{id}/variants/{variantId}` | `deleteVariant` | Delete unused variant, or soft-delete when terminal order/inventory history exists; rejects reserved stock/open orders |
+| POST | `/{id}/variants/bulk-create` | `bulkCreateVariants` | Bulk create (chunked for D1 parameter limits) |
+| POST | `/{id}/variants/bulk-delete` | `bulkDeleteVariants` | Bulk guarded delete; terminal-history-backed SKUs are soft-deleted and reserved/open-order SKUs are rejected |
 | POST | `/{id}/variants/bulk-update` | `bulkUpdateVariants` | Bulk update fields |
 | POST | `/{id}/variants/{variantId}/duplicate` | `duplicateVariant` | Clone variant with new SKU |
 | GET | `/{id}/variants/sort-order` | `getVariantSortOrder` | Get color/size sort order |
@@ -160,6 +160,8 @@ Storefront category ([slug].astro)
 
 - Migration `0055_default_sku_inventory_tracking` established the SKU-first columns/backfill. Migration `0057_simple_sku_legacy_repair` gave active SKU-less products a protected untracked default SKU. Migration `0062_default_sku_option_cleanup` clears legacy size/color labels from default SKUs. Current runtime rules are strict: `isDefault` default SKUs are treated and projected as optionless, and every non-default SKU must expose at least one customer option.
 - Product variant edit and bulk edit split `stock` out of ordinary metadata writes. Existing-SKU stock changes must batch the movement claim with the guarded variant stock/`stockVersion` update so `inventory_movements`, stock, and low-stock checks stay in sync.
+- Variant delete and bulk delete must preserve order/inventory history. SKUs with `reservedStock > 0` or non-terminal order references are rejected; SKUs referenced only by terminal `order_items` history or `inventory_movements` are soft-deleted with a zero-reservation guard; only unused, unreserved SKUs may be hard-deleted.
+- Optioned SKUs for one product must not mix option axes. A product can be Option 1 only, Option 2 only, or Option 1 + Option 2, but not a mix of those shapes across active non-default SKUs.
 - Variant duplication copies merchandising fields only. The new SKU starts with zero physical stock; merchants must perform an explicit stocktake/adjustment to add sellable quantity.
 
 ## Dependencies

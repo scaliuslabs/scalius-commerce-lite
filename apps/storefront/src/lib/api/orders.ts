@@ -9,6 +9,7 @@ type CreateOrderResult = {
   success: boolean;
   orderId?: string;
   receiptToken?: string;
+  statusToken?: string;
   totalAmount?: number;
   paymentMethod?: string;
   status?: number;
@@ -156,6 +157,7 @@ export async function createOrder(
         orderId?: string;
         checkoutToken?: string;
         receiptToken?: string;
+        statusToken?: string;
         totalAmount?: number;
         paymentMethod?: string;
       };
@@ -171,8 +173,8 @@ export async function createOrder(
     }
 
     // Capture the 202 Async Accepted queue payload and poll for completion!
-    if (response.status === 202 && data.success && data.data?.checkoutToken) {
-      const checkoutToken = data.data.checkoutToken;
+    if (response.status === 202 && data.success && data.data?.statusToken) {
+      const statusToken = data.data.statusToken;
       const initialOrderId = data.data.orderId;
 
       // Adaptive polling: start fast (200ms), back off gradually.
@@ -188,19 +190,28 @@ export async function createOrder(
       for (let i = 0; i < pollIntervals.length; i++) {
         await new Promise(resolve => setTimeout(resolve, pollIntervals[i]));
 
-        const statusRes = await fetchWithRetry(createApiUrl(`/orders/status/${checkoutToken}`), {}, 2, 5000, false);
+        const statusRes = await fetchWithRetry(
+          createApiUrl(`/orders/status/${encodeURIComponent(statusToken)}`),
+          {},
+          2,
+          5000,
+          false,
+        );
 
         if (statusRes.ok) {
           const statusJson = (await statusRes.json()) as OrderStatusPayload;
           // Status endpoint uses ok() wrapper: { success: true, data: { status, orderId } }
           // But 202 responses use raw c.json(): { status: "processing" }
           const statusData = statusJson.data ?? statusJson;
-          if (statusData.status === "completed") {
+          if (statusData.status === "completed" && statusData.receiptToken) {
             return {
               success: true,
               orderId: statusData.orderId || initialOrderId,
-              receiptToken: statusData.receiptToken || checkoutToken,
+              receiptToken: statusData.receiptToken,
+              statusToken,
             };
+          } else if (statusData.status === "completed") {
+            return { success: false, error: "Order completed but receipt proof is unavailable. Please check your order history." };
           } else if (statusData.status === "failed") {
             return { success: false, error: statusData.error || "Order ingestion failed during high traffic. Please try again." };
           }
@@ -214,7 +225,8 @@ export async function createOrder(
     return {
       success: true,
       orderId: data.data?.id || data.data?.orderId,
-      receiptToken: data.data?.receiptToken || data.data?.checkoutToken,
+      receiptToken: data.data?.receiptToken,
+      statusToken: data.data?.statusToken,
       totalAmount: typeof data.data?.totalAmount === "number" ? data.data.totalAmount : undefined,
       paymentMethod: data.data?.paymentMethod,
       status: response.status,

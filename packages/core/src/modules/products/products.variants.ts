@@ -3,6 +3,10 @@
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@scalius/database/schema";
 import {
+    inventoryMovements,
+    orders,
+    orderItems,
+    OrderStatus,
     products,
     productVariants,
 } from "@scalius/database/schema";
@@ -30,6 +34,66 @@ function hasCustomerOption(value: { size?: string | null; color?: string | null 
     return Boolean(normalizeOptionValue(value.size) || normalizeOptionValue(value.color));
 }
 
+type VariantOptionAxis = "size" | "color" | "size_color";
+const ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT = [
+    OrderStatus.COMPLETED,
+    OrderStatus.CANCELLED,
+    OrderStatus.RETURNED,
+    OrderStatus.REFUNDED,
+    OrderStatus.PARTIALLY_REFUNDED,
+];
+
+function getVariantOptionAxis(value: { size?: string | null; color?: string | null }): VariantOptionAxis | null {
+    const hasSize = Boolean(normalizeOptionValue(value.size));
+    const hasColor = Boolean(normalizeOptionValue(value.color));
+
+    if (hasSize && hasColor) return "size_color";
+    if (hasSize) return "size";
+    if (hasColor) return "color";
+    return null;
+}
+
+export function assertConsistentVariantOptionAxes(variants: Array<{ size?: string | null; color?: string | null }>) {
+    const axes = new Set<VariantOptionAxis>();
+    for (const variant of variants) {
+        const axis = getVariantOptionAxis(variant);
+        if (axis) axes.add(axis);
+    }
+
+    if (axes.size > 1) {
+        throw new ValidationError("Use the same option fields for every SKU on this product: Option 1 only, Option 2 only, or both options on every SKU.");
+    }
+}
+
+export async function assertProductVariantOptionAxes(
+    db: DrizzleD1Database<typeof schema>,
+    productId: string,
+    changedVariants: Array<{ id?: string; size?: string | null; color?: string | null }>,
+    excludedVariantIds: string[] = [],
+) {
+    assertConsistentVariantOptionAxes(changedVariants);
+
+    const conditions = [
+        eq(productVariants.productId, productId),
+        eq(productVariants.isDefault, false),
+        isNull(productVariants.deletedAt),
+    ];
+    if (excludedVariantIds.length > 0) {
+        conditions.push(not(inArray(productVariants.id, excludedVariantIds)));
+    }
+
+    const existingVariants = await db
+        .select({
+            id: productVariants.id,
+            size: productVariants.size,
+            color: productVariants.color,
+        })
+        .from(productVariants)
+        .where(and(...conditions));
+
+    assertConsistentVariantOptionAxes([...existingVariants, ...changedVariants]);
+}
+
 function assertNormalVariantHasCustomerOption(value: { size?: string | null; color?: string | null }) {
     if (!hasCustomerOption(value)) {
         throw new ValidationError("Add at least one customer option. Products without options use the built-in simple SKU.");
@@ -38,6 +102,78 @@ function assertNormalVariantHasCustomerOption(value: { size?: string | null; col
 
 function customerOptionPredicate() {
     return sql`(trim(coalesce(${productVariants.size}, '')) <> '' OR trim(coalesce(${productVariants.color}, '')) <> '')`;
+}
+
+async function variantHasOrderOrInventoryHistory(db: DrizzleD1Database<typeof schema>, variantId: string): Promise<boolean> {
+    const orderReference = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(orderItems)
+        .where(eq(orderItems.variantId, variantId))
+        .get();
+    if ((orderReference?.count ?? 0) > 0) return true;
+
+    const movementReference = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(inventoryMovements)
+        .where(eq(inventoryMovements.variantId, variantId))
+        .get();
+
+    return (movementReference?.count ?? 0) > 0;
+}
+
+async function variantHasOpenOrderReference(db: DrizzleD1Database<typeof schema>, variantId: string): Promise<boolean> {
+    const openOrderReference = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(orderItems)
+        .innerJoin(orders, eq(orderItems.orderId, orders.id))
+        .where(and(
+            eq(orderItems.variantId, variantId),
+            isNull(orders.deletedAt),
+            not(inArray(orders.status, ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT)),
+        ))
+        .get();
+
+    return (openOrderReference?.count ?? 0) > 0;
+}
+
+async function loadHistoryBackedVariantIds(db: DrizzleD1Database<typeof schema>, variantIds: string[]): Promise<Set<string>> {
+    const [orderReferences, movementReferences] = await Promise.all([
+        db
+            .select({ variantId: orderItems.variantId })
+            .from(orderItems)
+            .where(inArray(orderItems.variantId, variantIds))
+            .groupBy(orderItems.variantId),
+        db
+            .select({ variantId: inventoryMovements.variantId })
+            .from(inventoryMovements)
+            .where(inArray(inventoryMovements.variantId, variantIds))
+            .groupBy(inventoryMovements.variantId),
+    ]);
+
+    return new Set(
+        [...orderReferences, ...movementReferences]
+            .map((row) => row.variantId)
+            .filter((id): id is string => Boolean(id)),
+    );
+}
+
+async function loadOpenOrderBackedVariantIds(db: DrizzleD1Database<typeof schema>, variantIds: string[]): Promise<Set<string>> {
+    const openOrderReferences = await db
+        .select({ variantId: orderItems.variantId })
+        .from(orderItems)
+        .innerJoin(orders, eq(orderItems.orderId, orders.id))
+        .where(and(
+            inArray(orderItems.variantId, variantIds),
+            isNull(orders.deletedAt),
+            not(inArray(orders.status, ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT)),
+        ))
+        .groupBy(orderItems.variantId);
+
+    return new Set(openOrderReferences.map((row) => row.variantId).filter((id): id is string => Boolean(id)));
+}
+
+function uniqueVariantIds(variantIds: string[]): string[] {
+    return Array.from(new Set(variantIds.map((id) => id.trim()).filter(Boolean)));
 }
 
 // ─────────────────────────────────────────
@@ -157,6 +293,8 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
     assertNormalVariantHasCustomerOption(data);
     const size = normalizeOptionValue(data.size);
     const color = normalizeOptionValue(data.color);
+    await assertProductVariantOptionAxes(db, productId, [{ size, color }]);
+
     const existingVariant = await db
         .select({ id: productVariants.id })
         .from(productVariants)
@@ -221,6 +359,7 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
         }
     } else {
         assertNormalVariantHasCustomerOption({ size, color });
+        await assertProductVariantOptionAxes(db, productId, [{ id: variantId, size, color }], [variantId]);
     }
 
     const existingSkuVariant = await db
@@ -327,6 +466,7 @@ export async function deleteVariant(db: DrizzleD1Database<typeof schema>, produc
         .select({
             id: productVariants.id,
             isDefault: productVariants.isDefault,
+            reservedStock: productVariants.reservedStock,
         })
         .from(productVariants)
         .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
@@ -338,6 +478,14 @@ export async function deleteVariant(db: DrizzleD1Database<typeof schema>, produc
 
     if (existingVariant.isDefault) {
         throw new ValidationError("The protected simple product SKU cannot be deleted from the generic option editor.");
+    }
+
+    if (existingVariant.reservedStock > 0) {
+        throw new ConflictError("Cannot delete a SKU while stock is reserved for open orders.");
+    }
+
+    if (await variantHasOpenOrderReference(db, variantId)) {
+        throw new ConflictError("Cannot delete a SKU while open orders still reference it.");
     }
 
     const product = await db
@@ -359,7 +507,31 @@ export async function deleteVariant(db: DrizzleD1Database<typeof schema>, produc
         throw new ValidationError("Add another customer option, or deactivate this product, before removing its final customer option.");
     }
 
-    await db.delete(productVariants).where(eq(productVariants.id, variantId));
+    const hasHistory = await variantHasOrderOrInventoryHistory(db, variantId);
+    const deleteGuard = and(
+        eq(productVariants.id, variantId),
+        eq(productVariants.productId, productId),
+        isNull(productVariants.deletedAt),
+        eq(productVariants.reservedStock, 0),
+    );
+
+    const affectedRows = hasHistory
+        ? await db
+            .update(productVariants)
+            .set({
+                deletedAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(deleteGuard)
+            .returning({ id: productVariants.id })
+        : await db
+            .delete(productVariants)
+            .where(deleteGuard)
+            .returning({ id: productVariants.id });
+
+    if ((affectedRows?.length ?? 0) === 0) {
+        throw new ConflictError("Variant changed before it could be deleted. Refresh and try again.");
+    }
 }
 
 export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string) {
@@ -425,6 +597,15 @@ export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, pro
 
 export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, productId: string, variants: z.infer<typeof bulkVariantSchema>[]) {
     variants.forEach(assertNormalVariantHasCustomerOption);
+    await assertProductVariantOptionAxes(
+        db,
+        productId,
+        variants.map((variant) => ({
+            size: normalizeOptionValue(variant.size),
+            color: normalizeOptionValue(variant.color),
+        })),
+    );
+
     const skus = variants.map((v) => v.sku);
     const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
 
@@ -488,20 +669,40 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
 }
 
 export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, productId: string, variantIds: string[]) {
-    if (variantIds.length === 0) throw new ValidationError("No variant IDs provided");
+    const ids = uniqueVariantIds(variantIds);
+    if (ids.length === 0) throw new ValidationError("No variant IDs provided");
 
-    const protectedVariant = await db
-        .select({ id: productVariants.id })
+    const variantsToDelete = await db
+        .select({
+            id: productVariants.id,
+            isDefault: productVariants.isDefault,
+            reservedStock: productVariants.reservedStock,
+        })
         .from(productVariants)
         .where(and(
             eq(productVariants.productId, productId),
-            inArray(productVariants.id, variantIds),
-            eq(productVariants.isDefault, true),
+            inArray(productVariants.id, ids),
             isNull(productVariants.deletedAt),
-        ))
-        .get();
+        ));
+    const foundIds = new Set(variantsToDelete.map((variant) => variant.id));
+    const missingIds = ids.filter((id) => !foundIds.has(id));
+    if (missingIds.length > 0) {
+        throw new NotFoundError("Variant not found");
+    }
+
+    const protectedVariant = variantsToDelete.find((variant) => variant.isDefault);
     if (protectedVariant) {
         throw new ValidationError("The protected simple product SKU cannot be deleted from the generic option editor.");
+    }
+
+    const reservedVariant = variantsToDelete.find((variant) => variant.reservedStock > 0);
+    if (reservedVariant) {
+        throw new ConflictError("Cannot delete SKUs while stock is reserved for open orders.");
+    }
+
+    const openOrderBackedVariantIds = await loadOpenOrderBackedVariantIds(db, ids);
+    if (openOrderBackedVariantIds.size > 0) {
+        throw new ConflictError("Cannot delete SKUs while open orders still reference them.");
     }
 
     const product = await db
@@ -514,7 +715,7 @@ export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, p
         .from(productVariants)
         .where(and(
             eq(productVariants.productId, productId),
-            not(inArray(productVariants.id, variantIds)),
+            not(inArray(productVariants.id, ids)),
             isNull(productVariants.deletedAt),
             customerOptionPredicate(),
         ))
@@ -523,9 +724,50 @@ export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, p
         throw new ValidationError("Add another customer option, or deactivate this product, before removing the final customer option.");
     }
 
-    await db
-        .delete(productVariants)
-        .where(and(inArray(productVariants.id, variantIds), eq(productVariants.productId, productId)));
+    const historyBackedVariantIds = await loadHistoryBackedVariantIds(db, ids);
+    const softDeleteIds = ids.filter((id) => historyBackedVariantIds.has(id));
+    const hardDeleteIds = ids.filter((id) => !historyBackedVariantIds.has(id));
+    const statements = [];
+
+    if (softDeleteIds.length > 0) {
+        statements.push(
+            db
+                .update(productVariants)
+                .set({
+                    deletedAt: sql`unixepoch()`,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(and(
+                    eq(productVariants.productId, productId),
+                    inArray(productVariants.id, softDeleteIds),
+                    isNull(productVariants.deletedAt),
+                    eq(productVariants.reservedStock, 0),
+                ))
+                .returning({ id: productVariants.id }),
+        );
+    }
+
+    if (hardDeleteIds.length > 0) {
+        statements.push(
+            db
+                .delete(productVariants)
+                .where(and(
+                    eq(productVariants.productId, productId),
+                    inArray(productVariants.id, hardDeleteIds),
+                    isNull(productVariants.deletedAt),
+                    eq(productVariants.reservedStock, 0),
+                ))
+                .returning({ id: productVariants.id }),
+        );
+    }
+
+    const results = statements.length > 0
+        ? await safeBatch(db, statements as never) as Array<Array<{ id: string }> | undefined>
+        : [];
+    const affectedCount = results.reduce((count, rows) => count + (rows?.length ?? 0), 0);
+    if (affectedCount !== ids.length) {
+        throw new ConflictError("One or more variants changed before they could be deleted. Refresh and try again.");
+    }
 }
 
 export async function getVariantSortOrder(db: DrizzleD1Database<typeof schema>, productId: string) {

@@ -1,18 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 
+type TestPolarPayload = {
+  id?: string;
+  type: string;
+  data: {
+    id: string;
+    status: string;
+    checkout_id?: string;
+    amount?: number;
+    total_amount?: number;
+    refunded_amount?: number;
+    currency?: string;
+    metadata?: Record<string, string>;
+  };
+};
+
 const mocks = vi.hoisted(() => ({
   payload: {
     id: "evt_polar_1",
     type: "order.paid",
     data: {
-      id: "checkout_1",
+      id: "polar_order_1",
+      checkout_id: "checkout_1",
       status: "paid",
-      amount: 1200,
+      total_amount: 1200,
       currency: "usd",
       metadata: { orderId: "ord_1", paymentType: "full" },
     },
-  },
+  } as TestPolarPayload,
   getPolarSettings: vi.fn(),
   verifyPolarWebhook: vi.fn(),
   claimWebhookEvent: vi.fn(),
@@ -81,9 +97,10 @@ describe("Polar webhook route", () => {
       id: "evt_polar_1",
       type: "order.paid",
       data: {
-        id: "checkout_1",
+        id: "polar_order_1",
+        checkout_id: "checkout_1",
         status: "paid",
-        amount: 1200,
+        total_amount: 1200,
         currency: "usd",
         metadata: { orderId: "ord_1", paymentType: "full" },
       },
@@ -132,6 +149,7 @@ describe("Polar webhook route", () => {
       type: "payment.polar.confirmed",
       orderId: "ord_1",
       checkoutId: "checkout_1",
+      amount: 1200,
     }));
     expect(mocks.markWebhookEventQueued).toHaveBeenCalledWith(
       { id: "db" },
@@ -139,6 +157,93 @@ describe("Polar webhook route", () => {
       expect.objectContaining({ eventType: "order.paid" }),
     );
     expect(mocks.markWebhookEventFailed).not.toHaveBeenCalled();
+  });
+
+  it("falls back to a legacy checkout-shaped data.id and amount only when checkout_id and total_amount are absent", async () => {
+    mocks.payload = {
+      id: "evt_polar_legacy_paid",
+      type: "order.paid",
+      data: {
+        id: "co_legacy_checkout",
+        status: "paid",
+        amount: 900,
+        currency: "usd",
+        metadata: { orderId: "ord_legacy", paymentType: "full" },
+      },
+    };
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp({ id: "db" }, queue);
+
+    const response = await postWebhook(app, {
+      PAYMENT_EVENTS_QUEUE: queue as unknown as Queue,
+    });
+
+    expect(response.status).toBe(200);
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: "payment.polar.confirmed",
+      orderId: "ord_legacy",
+      checkoutId: "co_legacy_checkout",
+      amount: 900,
+    }));
+  });
+
+  it("does not fall back to a Polar order id when order.paid is missing checkout_id", async () => {
+    mocks.payload = {
+      id: "evt_polar_missing_checkout",
+      type: "order.paid",
+      data: {
+        id: "polar_order_missing_checkout",
+        status: "paid",
+        total_amount: 1200,
+        currency: "usd",
+        metadata: { orderId: "ord_missing_checkout", paymentType: "full" },
+      },
+    };
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp({ id: "db" }, queue);
+
+    const response = await postWebhook(app, {
+      PAYMENT_EVENTS_QUEUE: queue as unknown as Queue,
+    });
+
+    expect(response.status).toBe(200);
+    expect(queue.send).not.toHaveBeenCalled();
+    expect(mocks.markWebhookEventProcessed).toHaveBeenCalledWith(
+      { id: "db" },
+      "polar:order-paid:evt_polar_missing_checkout",
+      expect.objectContaining({ eventType: "order.paid", enqueued: false }),
+    );
+  });
+
+  it("maps Polar order refunds through checkout_id so they reconcile with the stored polarCheckoutId", async () => {
+    mocks.payload = {
+      id: "evt_polar_refund_1",
+      type: "order.refunded",
+      data: {
+        id: "polar_order_1",
+        checkout_id: "checkout_1",
+        status: "refunded",
+        refunded_amount: 1200,
+        total_amount: 1200,
+        currency: "usd",
+        metadata: { orderId: "ord_1" },
+      },
+    };
+    const queue = { send: vi.fn().mockResolvedValue(undefined) };
+    const app = createApp({ id: "db" }, queue);
+
+    const response = await postWebhook(app, {
+      PAYMENT_EVENTS_QUEUE: queue as unknown as Queue,
+    });
+
+    expect(response.status).toBe(200);
+    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: "payment.polar.refunded",
+      orderId: "ord_1",
+      polarCheckoutId: "checkout_1",
+      amountRefunded: 1200,
+      totalAmount: 1200,
+    }));
   });
 
   it("returns retryable failure without claiming when fresh settings cannot be read", async () => {

@@ -11,8 +11,7 @@ function getEmailRuntimeContext(env?: Env | NodeJS.ProcessEnv) {
   const source = (env ?? process.env) as Record<string, unknown>;
   return {
     env: source,
-    encryptionKey: (source.CREDENTIAL_ENCRYPTION_KEY as string | undefined)
-      ?? (source.JWT_SECRET as string | undefined),
+    encryptionKey: source.CREDENTIAL_ENCRYPTION_KEY as string | undefined,
   };
 }
 
