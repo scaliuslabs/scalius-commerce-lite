@@ -95,6 +95,13 @@ export function htmlPathCacheKeyFromPath(path: string): string | null {
   try {
     const url = new URL(path, "https://cache.local");
     const pathname = url.pathname;
+    if (
+      pathname === "/api/product-feed.xml" ||
+      pathname === "/api/facebook-feed.xml"
+    ) {
+      return FEED_PRODUCTS_KEY_PREFIX;
+    }
+
     const isExactEntityPath =
       /^\/categories\/[^/]+$/.test(pathname) ||
       /^\/collections\/[^/]+$/.test(pathname) ||

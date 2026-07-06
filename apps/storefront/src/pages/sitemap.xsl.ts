@@ -349,7 +349,7 @@ export const GET: APIRoute = async () => {
           <tr>
             <th style="width: 50%;">Sitemap</th>
             <th style="width: 20%;">Type</th>
-            <th style="width: 30%; text-align: right;">Last Updated</th>
+            <th style="width: 30%; text-align: right;">Last Modified</th>
           </tr>
         </thead>
         <tbody>
@@ -386,11 +386,6 @@ export const GET: APIRoute = async () => {
                           <line x1="9" y1="21" x2="9" y2="9"></line>
                         </svg>
                       </xsl:when>
-                      <xsl:when test="contains(sitemap:loc, 'facebook-feed')">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
-                        </svg>
-                      </xsl:when>
                       <xsl:otherwise>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -410,14 +405,16 @@ export const GET: APIRoute = async () => {
               </td>
               <td>
                 <span class="badge">
-                  <xsl:choose>
-                    <xsl:when test="contains(sitemap:loc, 'facebook-feed')">Feed</xsl:when>
-                    <xsl:otherwise>Sitemap</xsl:otherwise>
-                  </xsl:choose>
+                  Sitemap
                 </span>
               </td>
               <td style="text-align: right;">
-                <xsl:value-of select="concat(substring(sitemap:lastmod, 9, 2), ' ', substring(sitemap:lastmod, 6, 2), ' ', substring(sitemap:lastmod, 1, 4))"/>
+                <xsl:choose>
+                  <xsl:when test="string-length(sitemap:lastmod) &gt; 0">
+                    <xsl:value-of select="concat(substring(sitemap:lastmod, 9, 2), ' ', substring(sitemap:lastmod, 6, 2), ' ', substring(sitemap:lastmod, 1, 4))"/>
+                  </xsl:when>
+                  <xsl:otherwise>Not provided</xsl:otherwise>
+                </xsl:choose>
               </td>
             </tr>
           </xsl:for-each>
@@ -453,9 +450,7 @@ export const GET: APIRoute = async () => {
       <table>
         <thead>
           <tr>
-            <th style="width: 50%;">URL</th>
-            <th style="width: 15%;">Priority</th>
-            <th style="width: 15%;">Change Freq</th>
+            <th style="width: 80%;">URL</th>
             <th style="width: 20%; text-align: right;">Last Modified</th>
           </tr>
         </thead>
@@ -478,14 +473,13 @@ export const GET: APIRoute = async () => {
                   </span>
                 </a>
               </td>
-              <td>
-                <span class="badge">
-                  <xsl:value-of select="sitemap:priority"/>
-                </span>
-              </td>
-              <td><xsl:value-of select="sitemap:changefreq"/></td>
               <td style="text-align: right;">
-                <xsl:value-of select="concat(substring(sitemap:lastmod, 9, 2), ' ', substring(sitemap:lastmod, 6, 2), ' ', substring(sitemap:lastmod, 1, 4))"/>
+                <xsl:choose>
+                  <xsl:when test="string-length(sitemap:lastmod) &gt; 0">
+                    <xsl:value-of select="concat(substring(sitemap:lastmod, 9, 2), ' ', substring(sitemap:lastmod, 6, 2), ' ', substring(sitemap:lastmod, 1, 4))"/>
+                  </xsl:when>
+                  <xsl:otherwise>Not provided</xsl:otherwise>
+                </xsl:choose>
               </td>
             </tr>
           </xsl:for-each>

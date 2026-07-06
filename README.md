@@ -283,9 +283,9 @@ The storefront is an **Astro 7 SSR** application with React 19 islands for inter
 
 - Dashboard-governed discovery controls for sitemaps, robots, schema families, and product feed exposure
 - JSON-LD schemas for OnlineStore, WebSite/SearchAction, Product/ProductGroup, BreadcrumbList, collection/category pages, active offer shipping details, GTINs from variant barcodes, and merchant-saved return policy facts
-- Merchant-compatible product feed XML (`/api/product-feed.xml`, with `/api/facebook-feed.xml` compatibility) with SKU-aware availability, absolute images, and configurable sold-out inclusion
+- Merchant-compatible product feed XML (`/api/product-feed.xml`, with `/api/facebook-feed.xml` compatibility) with SKU-aware availability, absolute images, configurable sold-out inclusion, and stock-change invalidation that reaches the rendered XML cache
 - Bounded dashboard diagnostics for product-feed emitted rows, skipped rows, reason counts, and safe product samples
-- Absolute canonical URLs, robots.txt, XML sitemap index/children, and noindex policy for listing variants
+- Absolute canonical URLs, robots.txt, XML sitemap index/children, and noindex policy for listing variants. Sitemap XML is loc/lastmod-only: child URL sitemaps use truthful content timestamps, and the sitemap index omits `lastmod` rather than stamping render time.
 - Open Graph + Twitter Card meta tags with absolute storefront-safe images
 - Cloudflare Image Resizing for responsive images
 

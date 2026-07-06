@@ -48,6 +48,15 @@ describe("exact cache generations", () => {
       "html_path_/collections/col_1",
     );
     expect(htmlPathCacheKeyFromPath("/about-us")).toBe("html_path_/about-us");
+    expect(htmlPathCacheKeyFromPath("/api/product-feed.xml")).toBe(
+      "feed_products_",
+    );
+    expect(htmlPathCacheKeyFromPath("/api/product-feed.xml?page=2&limit=50")).toBe(
+      "feed_products_",
+    );
+    expect(htmlPathCacheKeyFromPath("/api/facebook-feed.xml")).toBe(
+      "feed_products_",
+    );
     expect(htmlPathCacheKeyFromPath("/")).toBeNull();
     expect(htmlPathCacheKeyFromPath("/search?q=fish")).toBeNull();
     expect(htmlPathCacheKeyFromPath("/sitemap.xml")).toBeNull();
