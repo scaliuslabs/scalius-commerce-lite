@@ -49,6 +49,63 @@ function getApiBaseUrl(): string {
   );
 }
 
+const SERVICE_BINDING_READ_TIMEOUT_MS = 2_000;
+
+class StorefrontFetchTimeoutError extends Error {
+  constructor(label: string, timeout: number) {
+    super(`${label} timed out after ${timeout}ms`);
+    this.name = "StorefrontFetchTimeoutError";
+  }
+}
+
+function isSafeReadMethod(method: string | undefined): boolean {
+  const normalized = (method ?? "GET").toUpperCase();
+  return normalized === "GET" || normalized === "HEAD";
+}
+
+function hasSensitiveRequestHeaders(headers: Headers): boolean {
+  for (const name of headers.keys()) {
+    if (/authorization|cookie|token|session|proof|secret|key/i.test(name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isPublicApiReadUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return !/^\/api\/v1\/(auth|customer|checkout|orders?|payments?|refunds?|webhooks?|scanner|setup)\b/i.test(
+      url.pathname,
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function runFetchWithHardTimeout(
+  fetcher: (signal: AbortSignal) => Promise<Response>,
+  timeout: number,
+  label: string,
+): Promise<Response> {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const fetchPromise = fetcher(controller.signal);
+  const timeoutPromise = new Promise<Response>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new StorefrontFetchTimeoutError(label, timeout));
+    }, timeout);
+  });
+
+  try {
+    return await Promise.race([fetchPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    fetchPromise.catch(() => undefined);
+  }
+}
+
 // --- JWT Token Management ---
 
 let jwtToken: string | null = null;
@@ -143,6 +200,12 @@ export async function fetchWithRetry(
 ): Promise<Response> {
   try {
     const headers = new Headers(options.headers || {});
+    const method = (options.method ?? "GET").toUpperCase();
+    const canFallbackToHttp =
+      !requiresAuth &&
+      isSafeReadMethod(method) &&
+      !hasSensitiveRequestHeaders(headers) &&
+      isPublicApiReadUrl(url);
     if (requiresAuth) {
       const token = await getJwtToken();
       if (token) {
@@ -174,18 +237,52 @@ export async function fetchWithRetry(
 
     let response: Response;
     if (import.meta.env.SSR && backendApi && url.startsWith(getApiBaseUrl())) {
-      const request = new Request(url, {
-        ...options,
-        headers,
-        signal: AbortSignal.timeout(timeout),
-      });
-      response = await backendApi.fetch(request);
+      const serviceBindingTimeout = canFallbackToHttp
+        ? Math.min(timeout, SERVICE_BINDING_READ_TIMEOUT_MS)
+        : timeout;
+      try {
+        response = await runFetchWithHardTimeout(
+          (signal) => {
+            const request = new Request(url, {
+              ...options,
+              headers,
+              signal,
+            });
+            return backendApi.fetch(request);
+          },
+          serviceBindingTimeout,
+          "Storefront API service binding",
+        );
+      } catch (error: unknown) {
+        if (!canFallbackToHttp) {
+          throw error;
+        }
+        console.warn(
+          `Storefront API service binding read failed for ${url}; falling back to HTTPS API.`,
+          error,
+        );
+        response = await runFetchWithHardTimeout(
+          (signal) =>
+            fetch(url, {
+              ...options,
+              headers,
+              signal,
+            }),
+          timeout,
+          "Storefront API HTTPS fallback",
+        );
+      }
     } else {
-      response = await fetch(url, {
-        ...options,
-        headers,
-        signal: AbortSignal.timeout(timeout),
-      });
+      response = await runFetchWithHardTimeout(
+        (signal) =>
+          fetch(url, {
+            ...options,
+            headers,
+            signal,
+          }),
+        timeout,
+        "Storefront API fetch",
+      );
     }
 
     const newToken = response.headers.get("X-New-Token");
