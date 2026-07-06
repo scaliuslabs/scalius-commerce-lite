@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { Database } from "@scalius/database/client";
 import { OrderStatus, PaymentMethod, PaymentStatus } from "@scalius/database/schema";
 
 import {
     buildMetaPurchaseEvent,
+    buildMetaPurchaseOutboxClaimInsert,
+    createMetaPurchaseOutboxClaimInsertValues,
     createMetaPurchaseEventId,
     isOrderEligibleForMetaPurchase,
 } from "./purchase-outbox";
@@ -64,6 +67,47 @@ describe("Meta Purchase outbox event building", () => {
                 num_items: 3,
             },
         });
+    });
+
+    it("builds an idempotent non-PII outbox claim insert for D1 batches", () => {
+        const values = createMetaPurchaseOutboxClaimInsertValues({
+            orderId: "order_claim_1",
+            source: "storefront-order",
+            nowSeconds: 1_800_000_000,
+        });
+
+        expect(values).toMatchObject({
+            orderId: "order_claim_1",
+            eventId: "Purchase:order_claim_1",
+            source: "storefront-order",
+            status: "pending",
+            attempts: 0,
+            nextAttemptAt: 1_799_999_999,
+            createdAt: 1_800_000_000,
+            updatedAt: 1_800_000_000,
+        });
+        expect(String(values.id)).toMatch(/^mcp_/);
+        expect(values).not.toHaveProperty("customerName");
+        expect(values).not.toHaveProperty("customerPhone");
+        expect(values).not.toHaveProperty("customerEmail");
+
+        const statement = { kind: "outbox-claim" };
+        const onConflictDoNothing = vi.fn(() => statement);
+        const valuesFn = vi.fn(() => ({ onConflictDoNothing }));
+        const insert = vi.fn(() => ({ values: valuesFn }));
+        const db = { insert } as unknown as Database;
+
+        expect(buildMetaPurchaseOutboxClaimInsert(db, {
+            orderId: "order_claim_1",
+            source: "storefront-order",
+            nowSeconds: 1_800_000_000,
+        })).toBe(statement);
+        expect(valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+            orderId: "order_claim_1",
+            eventId: "Purchase:order_claim_1",
+            source: "storefront-order",
+        }));
+        expect(onConflictDoNothing).toHaveBeenCalledTimes(1);
     });
 
     it("treats COD placement and paid online orders as purchases, but not incomplete or cancelled orders", () => {

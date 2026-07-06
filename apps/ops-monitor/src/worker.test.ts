@@ -8,6 +8,7 @@ import {
   collectQueueChecks,
   evaluateQueueMetrics,
   evaluateReadinessResponse,
+  loadConfig,
   nextAlertState,
   runScheduledMonitor,
   type AlertState,
@@ -21,6 +22,8 @@ import {
 
 const config: MonitorConfig = {
   readyzUrl: "https://api.example.test/api/v1/readyz",
+  readyzTimeoutMs: 10_000,
+  queueMetricsTimeoutMs: 5_000,
   dlqBacklogThreshold: 0,
   queueOldestAgeThresholdMs: 300_000,
   alertStreakThreshold: 3,
@@ -65,6 +68,8 @@ function createEnv(overrides: Partial<OpsMonitorEnv> = {}): OpsMonitorEnv {
   return {
     OPS_MONITOR_STATE: createState(),
     READYZ_URL: config.readyzUrl,
+    READYZ_TIMEOUT_MS: "10000",
+    QUEUE_METRICS_TIMEOUT_MS: "5000",
     DLQ_BACKLOG_THRESHOLD: "0",
     QUEUE_OLDEST_AGE_THRESHOLD_MS: "300000",
     ALERT_STREAK_THRESHOLD: "3",
@@ -81,6 +86,29 @@ function createEnv(overrides: Partial<OpsMonitorEnv> = {}): OpsMonitorEnv {
     ...overrides,
   };
 }
+
+describe("config loading", () => {
+  it("loads conservative timeout defaults and accepts configured positive values", () => {
+    expect(loadConfig({})).toMatchObject({
+      readyzTimeoutMs: 10_000,
+      queueMetricsTimeoutMs: 5_000,
+    });
+    expect(loadConfig({
+      READYZ_TIMEOUT_MS: "2500",
+      QUEUE_METRICS_TIMEOUT_MS: 750,
+    })).toMatchObject({
+      readyzTimeoutMs: 2_500,
+      queueMetricsTimeoutMs: 750,
+    });
+    expect(loadConfig({
+      READYZ_TIMEOUT_MS: "0",
+      QUEUE_METRICS_TIMEOUT_MS: "not-a-number",
+    })).toMatchObject({
+      readyzTimeoutMs: 10_000,
+      queueMetricsTimeoutMs: 5_000,
+    });
+  });
+});
 
 describe("readiness evaluation", () => {
   it("requires 200, success true, ready status, and every check ok", () => {
@@ -137,6 +165,36 @@ describe("readiness evaluation", () => {
       status: "degraded",
       failedChecks: ["http:503", "success:false", "status:degraded", "d1:error"],
     });
+    expect(result.summary).toMatchObject({
+      status: "degraded",
+      failedChecks: ["http:503", "success:false", "status:degraded", "d1:error"],
+    });
+  });
+
+  it("times out hung readiness fetches with a safe dependency issue", async () => {
+    const fetchImpl = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.signal).toBeDefined();
+      return new Promise<Response>(() => undefined);
+    });
+
+    const result = await checkReadiness({
+      readyzUrl: config.readyzUrl,
+      fetchImpl,
+      now: Date.UTC(2026, 0, 1),
+      timeoutMs: 1,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result.issue).toMatchObject({
+      id: "readyz",
+      kind: "readyz",
+      status: "error",
+      failedChecks: ["fetch:timeout"],
+    });
+    expect(result.summary).toMatchObject({
+      status: "error",
+      failedChecks: ["fetch:timeout"],
+    });
   });
 });
 
@@ -185,9 +243,40 @@ describe("queue issue detection", () => {
         name: "auth-otp",
         status: "error",
         queueName: "auth-otp",
+        failedChecks: ["metrics:error"],
       }),
     ]);
     expect(JSON.stringify(issues)).not.toContain("provider payload");
+  });
+
+  it("times out one stuck queue metrics read without blocking other queues", async () => {
+    const env = createEnv({
+      AUTH_OTP_QUEUE: {
+        metrics: vi.fn(() => new Promise<never>(() => undefined)),
+      },
+    });
+
+    const checks = await collectQueueChecks(env, {
+      ...config,
+      queueMetricsTimeoutMs: 1,
+    }, Date.UTC(2026, 0, 1));
+
+    expect(checks.issues).toEqual([
+      expect.objectContaining({
+        id: "queue:auth-otp",
+        kind: "monitor",
+        status: "error",
+        failedChecks: ["metrics:timeout"],
+      }),
+    ]);
+    expect(checks.summaries).toHaveLength(8);
+    expect(checks.summaries.find((summary) => summary.queueName === "auth-otp")).toMatchObject({
+      queueName: "auth-otp",
+      status: "error",
+      backlogCount: null,
+      oldestMessageAgeMs: null,
+    });
+    expect(checks.summaries.filter((summary) => summary.status === "ok")).toHaveLength(7);
   });
 
   it("returns safe summaries for every queue even when there are no issues", async () => {
@@ -392,7 +481,41 @@ describe("streak and cooldown alerting", () => {
       alertCount: 1,
       routedAlertCount: 0,
       deliveryFailureCount: 0,
+      readyz: {
+        status: "degraded",
+        failedChecks: ["http:503", "success:false", "status:degraded", "d1:error"],
+      },
     });
+  });
+
+  it("emits run completion when readiness fetch hangs", async () => {
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const fetchImpl = vi.fn(() => new Promise<Response>(() => undefined));
+
+    await runScheduledMonitor(createEnv({
+      READYZ_TIMEOUT_MS: "1",
+      ALERT_STREAK_THRESHOLD: "1",
+    }), {
+      now: Date.UTC(2026, 0, 1),
+      fetchImpl,
+      logger,
+    });
+
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.log).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(logger.log.mock.calls[0]?.[1] as string);
+    expect(payload).toMatchObject({
+      event: "ops_monitor.run_completed",
+      status: "issues",
+      issueCount: 1,
+      alertCount: 1,
+      readyz: {
+        status: "error",
+        failedChecks: ["fetch:timeout"],
+      },
+    });
+    expect(payload.queues).toHaveLength(8);
+    expect(JSON.stringify(payload)).not.toContain("provider payload");
   });
 
   it("logs delivery failures compactly and continues the run", async () => {
@@ -463,6 +586,10 @@ describe("streak and cooldown alerting", () => {
       status: "ok",
       issueCount: 0,
       alertCount: 0,
+      readyz: {
+        status: "ok",
+        failedChecks: [],
+      },
     });
     expect(payload.queues).toHaveLength(8);
     expect(payload.queues[0]).toMatchObject({

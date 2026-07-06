@@ -21,7 +21,7 @@
 import { getDb } from "@scalius/database/client";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
 import { processPolarWebhookRefund } from "@scalius/core/modules/payments/polar";
-import { ensureAndProcessMetaPurchaseForOrder } from "@scalius/core/integrations/meta/purchase-outbox";
+import { processExistingMetaPurchaseOutboxForOrder } from "@scalius/core/integrations/meta/purchase-outbox";
 import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
 import type { OrderNotificationQueueMessage, OrderNotificationType } from "@scalius/core/modules/notifications";
 import {
@@ -196,7 +196,7 @@ function scheduleMetaPurchaseAfterPaymentConfirmed(
     gateway: "stripe" | "sslcommerz" | "polar";
   },
 ): void {
-  const task = ensureAndProcessMetaPurchaseForOrder({
+  const task = processExistingMetaPurchaseOutboxForOrder({
     db,
     orderId: options.orderId,
     source: `payment-${options.gateway}-confirmed`,

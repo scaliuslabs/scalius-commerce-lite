@@ -16,7 +16,11 @@ import { nanoid } from "nanoid";
 
 import { ServiceUnavailableError, ValidationError } from "../../errors";
 import { reserveStockBatch, releaseReservedStockBatch } from "../inventory";
-import { ensureAndProcessMetaPurchaseForOrder } from "../../integrations/meta/purchase-outbox";
+import {
+    buildMetaPurchaseOutboxClaimInsert,
+    isOrderEligibleForMetaPurchase,
+    processExistingMetaPurchaseOutboxForOrder,
+} from "../../integrations/meta/purchase-outbox";
 import { initCODTracking } from "../payments/cod";
 import {
     buildOrderCreatedNotificationDedupeKey,
@@ -334,7 +338,36 @@ function buildOrderWriteBatch(
         );
     }
 
+    if (isStorefrontOrderPayloadEligibleForMetaPurchase(payload, customerId)) {
+        writes.push(buildMetaPurchaseOutboxClaimInsert(db, {
+            orderId: od.id,
+            source: "storefront-order",
+        }));
+    }
+
     return writes;
+}
+
+function isStorefrontOrderPayloadEligibleForMetaPurchase(
+    payload: StorefrontOrderCommitPayload,
+    customerId: string | null,
+): boolean {
+    const od = payload.orderData;
+    return isOrderEligibleForMetaPurchase({
+        id: od.id,
+        customerId,
+        customerName: od.customerName,
+        customerPhone: od.customerPhone,
+        customerEmail: od.customerEmail,
+        city: od.city,
+        cityName: od.cityName,
+        totalAmount: od.totalAmount,
+        status: od.status,
+        paymentMethod: od.paymentMethod,
+        paymentStatus: od.paymentStatus,
+        paidAmount: od.paidAmount,
+        deletedAt: null,
+    });
 }
 
 export async function commitStorefrontOrderPayload(
@@ -381,11 +414,7 @@ export async function runStorefrontOrderPostCommitSideEffects(
         );
     }
 
-    if (!shouldCreateOrderCreatedNotification(payload.orderData)) {
-        return;
-    }
-
-    await ensureAndProcessMetaPurchaseForOrder({
+    await processExistingMetaPurchaseOutboxForOrder({
         db,
         orderId: payload.orderData.id,
         source: "storefront-order",
@@ -394,6 +423,10 @@ export async function runStorefrontOrderPostCommitSideEffects(
     }).catch((error: unknown) => {
         console.error("[orders/commit] Meta Purchase CAPI side effect failed for order", payload.orderData.id, error);
     });
+
+    if (!shouldCreateOrderCreatedNotification(payload.orderData)) {
+        return;
+    }
 
     try {
         const notificationResult = await recordAndEnqueueOrderNotification({

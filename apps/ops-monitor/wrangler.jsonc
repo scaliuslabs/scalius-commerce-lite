@@ -58,6 +58,8 @@
   },
   "vars": {
     "READYZ_URL": "https://api.scalius.com/api/v1/readyz",
+    "READYZ_TIMEOUT_MS": "10000",
+    "QUEUE_METRICS_TIMEOUT_MS": "5000",
     "DLQ_BACKLOG_THRESHOLD": "0",
     "QUEUE_OLDEST_AGE_THRESHOLD_MS": "300000",
     "ALERT_STREAK_THRESHOLD": "3",

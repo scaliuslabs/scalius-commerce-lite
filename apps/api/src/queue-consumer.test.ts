@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   getDb: vi.fn(() => ({ id: "db" })),
   processPaymentConfirmed: vi.fn(),
   processPaymentFailed: vi.fn(),
-  ensureAndProcessMetaPurchaseForOrder: vi.fn(),
+  processExistingMetaPurchaseOutboxForOrder: vi.fn(),
   releaseOrderInventory: vi.fn(),
   processPolarWebhookRefund: vi.fn(),
   sendOrderNotificationEmail: vi.fn(),
@@ -59,7 +59,7 @@ vi.mock("@scalius/core/modules/payments/process-payment", () => ({
 }));
 
 vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
-  ensureAndProcessMetaPurchaseForOrder: mocks.ensureAndProcessMetaPurchaseForOrder,
+  processExistingMetaPurchaseOutboxForOrder: mocks.processExistingMetaPurchaseOutboxForOrder,
 }));
 
 vi.mock("@scalius/core/modules/payments/polar", () => ({
@@ -316,9 +316,9 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.archiveStorefrontCacheQueueFailure.mockResolvedValue({
       id: "scqf_1",
     });
-    mocks.ensureAndProcessMetaPurchaseForOrder.mockResolvedValue({
+    mocks.processExistingMetaPurchaseOutboxForOrder.mockResolvedValue({
       outboxId: "mcp_order_1",
-      created: true,
+      missing: false,
       processed: true,
       status: "sent",
     });
@@ -462,7 +462,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
         retryOnQueueFailure: true,
       }),
     );
-    expect(mocks.ensureAndProcessMetaPurchaseForOrder).toHaveBeenCalledWith({
+    expect(mocks.processExistingMetaPurchaseOutboxForOrder).toHaveBeenCalledWith({
       db: { id: "db" },
       orderId: "order-stripe",
       source: "payment-stripe-confirmed",

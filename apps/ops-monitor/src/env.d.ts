@@ -2,6 +2,8 @@ interface Env {
   OPS_MONITOR_STATE: KVNamespace;
 
   READYZ_URL: string;
+  READYZ_TIMEOUT_MS: string;
+  QUEUE_METRICS_TIMEOUT_MS: string;
   DLQ_BACKLOG_THRESHOLD: string;
   QUEUE_OLDEST_AGE_THRESHOLD_MS: string;
   ALERT_STREAK_THRESHOLD: string;
