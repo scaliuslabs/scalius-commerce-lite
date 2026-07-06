@@ -29,6 +29,8 @@ export interface PageData {
   content: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   isPublished: boolean;
   hideHeader: boolean;
   hideFooter: boolean;

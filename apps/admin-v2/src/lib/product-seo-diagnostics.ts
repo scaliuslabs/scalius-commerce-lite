@@ -37,6 +37,7 @@ export interface ProductSeoDiagnosticsInput {
     slug?: string | null;
     isActive?: boolean | null;
     images?: ProductSeoDiagnosticImage[] | null;
+    noIndex?: boolean | null;
     excludeFromSitemap?: boolean | null;
     excludeFromProductFeed?: boolean | null;
   };
@@ -367,12 +368,14 @@ function buildSitemapStatus({
   availability,
   absoluteStorefrontUrl,
   excludeFromSitemap,
+  noIndex,
 }: {
   discovery: SeoDiscoverySettings;
   isActive: boolean;
   canonical: ProductSeoDiagnostics["canonical"];
   availability: ProductSeoAvailabilityStatus;
   absoluteStorefrontUrl: URL | null;
+  noIndex: boolean;
   excludeFromSitemap: boolean;
 }): ProductSeoDiagnosticRow {
   if (!canonical.path) {
@@ -396,6 +399,15 @@ function buildSitemapStatus({
       tone: "disabled",
       title: "Product sitemap off",
       summary: "The product sitemap section is disabled globally.",
+    };
+  }
+
+  if (noIndex) {
+    return {
+      tone: "disabled",
+      title: "Noindexed",
+      summary:
+        "The product page stays public, but it is removed from product sitemap XML while search indexing is prevented.",
     };
   }
 
@@ -588,11 +600,13 @@ function buildStructuredDataStatus({
   isActive,
   canonical,
   absoluteStorefrontUrl,
+  noIndex,
 }: {
   discovery: SeoDiscoverySettings;
   isActive: boolean;
   canonical: ProductSeoDiagnostics["canonical"];
   absoluteStorefrontUrl: URL | null;
+  noIndex: boolean;
 }): ProductSeoDiagnostics["structuredData"] {
   const productsEnabled = discovery.structuredData.products;
   const breadcrumbsEnabled = discovery.structuredData.breadcrumbs;
@@ -604,6 +618,16 @@ function buildStructuredDataStatus({
       summary: "Product and Breadcrumb JSON-LD are disabled globally.",
       productsEnabled,
       breadcrumbsEnabled,
+    };
+  }
+
+  if (noIndex) {
+    return {
+      tone: "disabled",
+      title: "JSON-LD off while noindexed",
+      summary: "Public product schema is suppressed because search indexing is prevented.",
+      productsEnabled: false,
+      breadcrumbsEnabled: false,
     };
   }
 
@@ -664,6 +688,7 @@ export function buildProductSeoDiagnostics({
   const absoluteStorefrontUrl = parseAbsoluteHttpUrl(storefrontUrl);
   const slug = normalizeSlug(product.slug);
   const isActive = product.isActive === true;
+  const noIndex = product.noIndex === true;
   const excludeFromSitemap = product.excludeFromSitemap === true;
   const excludeFromProductFeed = product.excludeFromProductFeed === true;
   const availability = buildAvailabilityStatus(variants, variantState);
@@ -694,6 +719,7 @@ export function buildProductSeoDiagnostics({
       canonical,
       availability,
       absoluteStorefrontUrl,
+      noIndex,
       excludeFromSitemap,
     }),
     feedImage,
@@ -711,6 +737,7 @@ export function buildProductSeoDiagnostics({
       isActive,
       canonical,
       absoluteStorefrontUrl,
+      noIndex,
     }),
     availability,
     discovery: normalizedDiscovery,

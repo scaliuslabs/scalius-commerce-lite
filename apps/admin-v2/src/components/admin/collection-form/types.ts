@@ -34,6 +34,8 @@ export const collectionFormSchema = z.object({
     .max(100, "Collection name must be less than 100 characters"),
   type: z.enum(["manual", "dynamic"]),
   isActive: z.boolean(),
+  noIndex: z.boolean(),
+  excludeFromSitemap: z.boolean(),
   config: z.object({
     categoryIds: z.array(z.string()),
     productIds: z.array(z.string()),

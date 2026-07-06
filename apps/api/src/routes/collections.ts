@@ -46,6 +46,8 @@ const storefrontCollectionSchema = z.object({
   config: z.record(z.string(), z.unknown()),
   sortOrder: z.number(),
   isActive: z.boolean(),
+  noIndex: z.boolean(),
+  excludeFromSitemap: z.boolean(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
 }).passthrough();
@@ -87,6 +89,8 @@ app.openapi(listCollectionsRoute, async (c) => {
       config: collections.config,
       sortOrder: collections.sortOrder,
       isActive: collections.isActive,
+      noIndex: collections.noIndex,
+      excludeFromSitemap: collections.excludeFromSitemap,
       createdAt: collections.createdAt,
       updatedAt: collections.updatedAt
     })

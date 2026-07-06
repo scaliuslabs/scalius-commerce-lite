@@ -158,15 +158,18 @@ const seoDescription = (
   .replace(/<[^>]+>/g, "")
   .slice(0, 200);
 
-// Store name for JSON-LD seller and brand fallback
-const storeName =
-  layoutData?.footer?.copyrightText || layoutData?.header?.logo?.alt || "Store";
+const sellerName =
+  layoutData.business?.companyName ||
+  layoutData.business?.legalName ||
+  layoutData?.footer?.copyrightText ||
+  layoutData?.header?.logo?.alt ||
+  "Store";
 
 // Brand from product attributes (mirrors facebook-feed.xml.ts pattern)
 const brandAttribute = product.attributes?.find(
   (a: { name: string }) => a.name.toLowerCase() === "brand",
 );
-const brandName = brandAttribute?.value || storeName;
+const brandName = brandAttribute?.value?.trim() || null;
 
 // Primary SKU
 const primarySku = buyerVariants[0]?.sku || product.id;
@@ -217,10 +220,6 @@ const shouldEmitProductGroupJsonLd =
   buyerVariantResolution.mode === "optioned" &&
   buyerVariants.length > 0;
 
-// priceValidUntil -- end of next year, ISO 8601 date
-const priceValidUntil = new Date(new Date().getFullYear() + 1, 11, 31)
-  .toISOString()
-  .split("T")[0];
 const offerShippingDetails = discoverySettings.structuredData.offerShippingDetails
   ? buildOfferShippingDetails({
       shippingMethods,
@@ -248,7 +247,7 @@ function withOfferCommerceDetails<T extends Record<string, unknown>>(offer: T): 
 }
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
-const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
+const productJsonLd = discoverySettings.structuredData.products && !product.noIndex && canonicalUrl
   ? serializeJsonForInlineScript(
       shouldEmitProductGroupJsonLd
         ? {
@@ -258,7 +257,7 @@ const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
             description: (product.description || product.name).replace(/<[^>]+>/g, ""),
             ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
             productGroupID: product.id,
-            brand: { "@type": "Brand", name: brandName },
+            ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
             ...(productGroupVariesBy.length > 0 ? { variesBy: productGroupVariesBy } : {}),
             hasVariant: buyerVariants.map((variant) => {
               const size = normalizedVariantOption(variant.size);
@@ -273,18 +272,16 @@ const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
                 ...gtinJsonLdForVariant(variant.barcode, variant.barcodeType),
                 ...(size ? { size } : {}),
                 ...(color ? { color } : {}),
-                brand: { "@type": "Brand", name: brandName },
+                ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
                 offers: withOfferCommerceDetails({
                   "@type": "Offer",
                   url: buildVariantProductUrl(variant) ?? canonicalUrl,
                   priceCurrency: currencyCode,
                   price: variantPrice.toFixed(2),
-                  priceValidUntil: priceValidUntil,
                   availability: isVariantAvailable(variant)
                     ? "https://schema.org/InStock"
                     : "https://schema.org/OutOfStock",
-                  itemCondition: "https://schema.org/NewCondition",
-                  seller: { "@type": "Organization", name: storeName },
+                  seller: { "@type": "Organization", name: sellerName },
                 }),
               };
             }),
@@ -300,18 +297,16 @@ const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
               buyerVariants[0]?.barcode,
               buyerVariants[0]?.barcodeType,
             ),
-            brand: { "@type": "Brand", name: brandName },
+            ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
             offers: withOfferCommerceDetails({
               "@type": "Offer",
               url: canonicalUrl,
               priceCurrency: currencyCode,
               price: product.discountedPrice.toFixed(2),
-              priceValidUntil: priceValidUntil,
               availability: buyerStockSummary.canPurchaseAny
                 ? "https://schema.org/InStock"
                 : "https://schema.org/OutOfStock",
-              itemCondition: "https://schema.org/NewCondition",
-              seller: { "@type": "Organization", name: storeName },
+              seller: { "@type": "Organization", name: sellerName },
             }),
           },
     )
@@ -338,7 +333,7 @@ const breadcrumbItems = [
   },
 ];
 const breadcrumbJsonLd =
-  discoverySettings.structuredData.breadcrumbs && storefrontUrl && canonicalUrl
+  discoverySettings.structuredData.breadcrumbs && !product.noIndex && storefrontUrl && canonicalUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
@@ -364,6 +359,7 @@ const productCategoryAnalytics = productCategory
   ogType="product"
   ogPrice={product.discountedPrice.toFixed(2)}
   ogCurrency={currencyCode}
+  noindex={product.noIndex === true}
 >
   <Fragment slot="head">
     {

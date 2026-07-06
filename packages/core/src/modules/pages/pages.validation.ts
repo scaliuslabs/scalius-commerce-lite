@@ -24,6 +24,8 @@ const pageFieldSchemas = {
     content: z.string(),
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable(),
+    noIndex: z.boolean().default(false),
+    excludeFromSitemap: z.boolean().default(false),
     featuredImage: pageFeaturedImageSchema.nullable().optional(),
 };
 
@@ -53,6 +55,8 @@ export const updatePageSchema = z.object({
     content: pageFieldSchemas.content.optional(),
     metaTitle: pageFieldSchemas.metaTitle.optional(),
     metaDescription: pageFieldSchemas.metaDescription.optional(),
+    noIndex: z.boolean().optional(),
+    excludeFromSitemap: z.boolean().optional(),
     isPublished: z.boolean().optional(),
     publishedAt: updatePublishedAtSchema,
     sortOrder: z.number().optional(),

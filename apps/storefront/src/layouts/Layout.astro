@@ -342,8 +342,8 @@ const runtimeGlobalsScript = [
     {absoluteOgImageUrl && <meta name="twitter:image" content={absoluteOgImageUrl} />}
     {absoluteOgImageUrl && <meta name="twitter:image:alt" content={title} />}
 
-    {/* Robots — noindex for pages that should be excluded */}
-    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    {/* Robots — public pages can be excluded from indexing while links remain crawlable. */}
+    {noindex && <meta name="robots" content="noindex,follow" />}
 
     {/* Global JSON-LD: Organization + WebSite — per SEO-05, SEO-06 */}
     {orgJsonLd && <script is:inline type="application/ld+json" set:html={orgJsonLd} />}

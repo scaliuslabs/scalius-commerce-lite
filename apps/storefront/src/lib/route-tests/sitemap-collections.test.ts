@@ -49,6 +49,8 @@ describe("collections sitemap route", () => {
         config: {},
         sortOrder: 1,
         isActive: true,
+        noIndex: false,
+        excludeFromSitemap: false,
         createdAt: "2026-06-01T00:00:00.000Z",
         updatedAt: "2026-06-20T00:00:00.000Z",
         deletedAt: null,
@@ -82,5 +84,57 @@ describe("collections sitemap route", () => {
     expect(mocks.getAllCollections).not.toHaveBeenCalled();
     expect(body).toContain("<urlset");
     expect(body).not.toContain("/collections/");
+  });
+
+  it("omits noindexed and sitemap-excluded collections", async () => {
+    mocks.getAllCollections.mockResolvedValueOnce([
+      {
+        id: "visible",
+        name: "Visible",
+        type: "manual",
+        config: {},
+        sortOrder: 1,
+        isActive: true,
+        noIndex: false,
+        excludeFromSitemap: false,
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-02T00:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "noindex",
+        name: "Noindex",
+        type: "manual",
+        config: {},
+        sortOrder: 2,
+        isActive: true,
+        noIndex: true,
+        excludeFromSitemap: false,
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-02T00:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "excluded",
+        name: "Excluded",
+        type: "manual",
+        config: {},
+        sortOrder: 3,
+        isActive: true,
+        noIndex: false,
+        excludeFromSitemap: true,
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-02T00:00:00.000Z",
+        deletedAt: null,
+      },
+    ]);
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("/collections/visible");
+    expect(body).not.toContain("/collections/noindex");
+    expect(body).not.toContain("/collections/excluded");
   });
 });

@@ -19,6 +19,7 @@ export const products = sqliteTable(
         slug: text("slug").notNull(),
         metaTitle: text("meta_title"),
         metaDescription: text("meta_description"),
+        noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
         excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
         excludeFromProductFeed: integer("exclude_from_product_feed", { mode: "boolean" }).notNull().default(false),
         createdAt: integer("created_at", { mode: "timestamp" })
@@ -124,6 +125,8 @@ export const categories = sqliteTable(
         imageUrl: text("image_url"),
         metaTitle: text("meta_title"),
         metaDescription: text("meta_description"),
+        noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
+        excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),
@@ -145,6 +148,8 @@ export const collections = sqliteTable("collections", {
     config: text("config").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
+    excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),

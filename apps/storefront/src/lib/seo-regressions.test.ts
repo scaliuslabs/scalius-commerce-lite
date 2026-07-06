@@ -92,4 +92,11 @@ describe("storefront SEO regressions", () => {
     expect(source).toContain("const shouldNoindexSearchPage = Boolean(query) || pagination.page > 1 || sortBy !== \"newest\" || activeFilterCount > 0");
     expect(source).toContain('name="robots" content="noindex,follow"');
   });
+
+  it("uses noindex,follow for public resource indexing controls", async () => {
+    const source = await readFile(join(storefrontRoot, "src/layouts/Layout.astro"), "utf8");
+
+    expect(source).toContain('content="noindex,follow"');
+    expect(source).not.toContain('content="noindex, nofollow"');
+  });
 });

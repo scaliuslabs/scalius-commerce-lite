@@ -77,6 +77,8 @@ export async function listCategories(
             imageUrl: categories.imageUrl,
             metaTitle: categories.metaTitle,
             metaDescription: categories.metaDescription,
+            noIndex: categories.noIndex,
+            excludeFromSitemap: categories.excludeFromSitemap,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${categories.deletedAt} AS INTEGER)`,
@@ -139,6 +141,8 @@ export async function getCategoryBySlug(db: Database, slug: string) {
             imageUrl: categories.imageUrl,
             metaTitle: categories.metaTitle,
             metaDescription: categories.metaDescription,
+            noIndex: categories.noIndex,
+            excludeFromSitemap: categories.excludeFromSitemap,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
         })
         .from(categories)
@@ -159,6 +163,8 @@ export async function getCategoryById(db: Database, id: string) {
             imageUrl: categories.imageUrl,
             metaTitle: categories.metaTitle,
             metaDescription: categories.metaDescription,
+            noIndex: categories.noIndex,
+            excludeFromSitemap: categories.excludeFromSitemap,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
@@ -198,6 +204,8 @@ export async function createCategory(
         imageUrl: data.image?.url || null,
         metaTitle: data.metaTitle || null,
         metaDescription: data.metaDescription || null,
+        noIndex: data.noIndex ?? false,
+        excludeFromSitemap: data.excludeFromSitemap ?? false,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
         deletedAt: null,
@@ -241,6 +249,8 @@ export async function updateCategory(
             imageUrl: data.image?.url || null,
             metaTitle: data.metaTitle,
             metaDescription: data.metaDescription,
+            noIndex: data.noIndex ?? false,
+            excludeFromSitemap: data.excludeFromSitemap ?? false,
             updatedAt: sql`unixepoch()`,
         })
         .where(eq(categories.id, id));

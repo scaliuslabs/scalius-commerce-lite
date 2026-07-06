@@ -704,6 +704,8 @@ export type GetApiV1CollectionsResponses = {
                 };
                 sortOrder: number;
                 isActive: boolean;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
                 [key: string]: unknown;
@@ -766,6 +768,8 @@ export type GetApiV1CollectionsByIdResponses = {
                 };
                 sortOrder: number;
                 isActive: boolean;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
                 [key: string]: unknown;
@@ -1365,6 +1369,8 @@ export type GetApiV1PagesResponses = {
                 content: string;
                 metaTitle: string | null;
                 metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 isPublished: boolean;
                 hideHeader: boolean;
                 hideFooter: boolean;
@@ -1462,6 +1468,8 @@ export type GetApiV1PagesSlugBySlugResponses = {
                 content: string;
                 metaTitle: string | null;
                 metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 isPublished: boolean;
                 hideHeader: boolean;
                 hideFooter: boolean;
@@ -1542,6 +1550,8 @@ export type GetApiV1PagesByIdResponses = {
                 content: string;
                 metaTitle: string | null;
                 metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 isPublished: boolean;
                 hideHeader: boolean;
                 hideFooter: boolean;
@@ -2158,6 +2168,8 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                 content: string;
                 metaTitle: string | null;
                 metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 isPublished: boolean;
                 hideHeader: boolean;
                 hideFooter: boolean;
@@ -4791,6 +4803,8 @@ export type GetApiV1CategoriesResponses = {
                 updatedAt: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 [key: string]: unknown;
             }>;
         };
@@ -4852,6 +4866,8 @@ export type GetApiV1CategoriesBySlugResponses = {
                 updatedAt: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 [key: string]: unknown;
             };
         };
@@ -4957,6 +4973,8 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 updatedAt: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 [key: string]: unknown;
             };
             products: Array<{
@@ -6809,6 +6827,8 @@ export type GetApiV1AdminCategoriesResponses = {
                 imageUrl: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
                 deletedAt: string | null;
@@ -6833,6 +6853,8 @@ export type PostApiV1AdminCategoriesData = {
         slug: string;
         metaTitle: string | null;
         metaDescription: string | null;
+        noIndex?: boolean;
+        excludeFromSitemap?: boolean;
         image: {
             id: string;
             url: string;
@@ -7125,6 +7147,8 @@ export type GetApiV1AdminCategoriesByIdResponses = {
             imageUrl: string | null;
             metaTitle: string | null;
             metaDescription: string | null;
+            noIndex: boolean;
+            excludeFromSitemap: boolean;
             createdAt: number;
             updatedAt: number;
         };
@@ -7140,6 +7164,8 @@ export type PutApiV1AdminCategoriesByIdData = {
         slug: string;
         metaTitle: string | null;
         metaDescription: string | null;
+        noIndex?: boolean;
+        excludeFromSitemap?: boolean;
         image: {
             id: string;
             url: string;
@@ -7937,6 +7963,8 @@ export type GetApiV1AdminCollectionsResponses = {
                 config: string;
                 sortOrder: number;
                 isActive: boolean;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
@@ -7958,6 +7986,8 @@ export type PostApiV1AdminCollectionsData = {
         name: string;
         type: 'manual' | 'dynamic';
         isActive: boolean;
+        noIndex?: boolean;
+        excludeFromSitemap?: boolean;
         config: {
             categoryIds?: Array<string>;
             productIds?: Array<string>;
@@ -8056,6 +8086,8 @@ export type PostApiV1AdminCollectionsResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
+            noIndex: boolean;
+            excludeFromSitemap: boolean;
             createdAt: string | number | null;
             updatedAt: string | number | null;
             deletedAt: string | number | null;
@@ -8841,6 +8873,8 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
+            noIndex: boolean;
+            excludeFromSitemap: boolean;
             createdAt: string | number | null;
             updatedAt: string | number | null;
             deletedAt: string | number | null;
@@ -8855,6 +8889,8 @@ export type PutApiV1AdminCollectionsByIdData = {
         name?: string;
         type?: 'manual' | 'dynamic';
         isActive?: boolean;
+        noIndex?: boolean;
+        excludeFromSitemap?: boolean;
         config?: {
             categoryIds?: Array<string>;
             productIds?: Array<string>;
@@ -8955,6 +8991,8 @@ export type PutApiV1AdminCollectionsByIdResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
+            noIndex: boolean;
+            excludeFromSitemap: boolean;
             createdAt: string | number | null;
             updatedAt: string | number | null;
             deletedAt: string | number | null;
@@ -9844,6 +9882,8 @@ export type GetApiV1AdminPagesResponses = {
                 content: string;
                 metaTitle: string | null;
                 metaDescription: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
                 isPublished: boolean;
                 hideHeader: boolean;
                 hideFooter: boolean;
@@ -9887,6 +9927,8 @@ export type PostApiV1AdminPagesData = {
         content: string;
         metaTitle: string | null;
         metaDescription: string | null;
+        noIndex?: boolean;
+        excludeFromSitemap?: boolean;
         featuredImage?: {
             id: string;
             url: string;
@@ -10642,6 +10684,8 @@ export type GetApiV1AdminPagesByIdResponses = {
             content: string;
             metaTitle: string | null;
             metaDescription: string | null;
+            noIndex: boolean;
+            excludeFromSitemap: boolean;
             isPublished: boolean;
             hideHeader: boolean;
             hideFooter: boolean;
@@ -10678,6 +10722,8 @@ export type PutApiV1AdminPagesByIdData = {
         content?: string;
         metaTitle?: string | null;
         metaDescription?: string | null;
+        noIndex?: boolean;
+        excludeFromSitemap?: boolean;
         isPublished?: boolean;
         publishedAt?: string | string | null;
         sortOrder?: number;
@@ -29600,6 +29646,7 @@ export type PostApiV1AdminProductsData = {
         freeDelivery: boolean;
         metaTitle: string | null;
         metaDescription: string | null;
+        noIndex?: boolean;
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
         slug: string;
@@ -30046,6 +30093,7 @@ export type GetApiV1AdminProductsByIdResponses = {
             metaTitle: string | null;
             metaDescription: string | null;
             isActive: boolean;
+            noIndex: boolean;
             excludeFromSitemap: boolean;
             excludeFromProductFeed: boolean;
             discountPercentage: number | null;
@@ -30128,6 +30176,7 @@ export type PutApiV1AdminProductsByIdData = {
         freeDelivery: boolean;
         metaTitle: string | null;
         metaDescription: string | null;
+        noIndex?: boolean;
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
         slug: string;

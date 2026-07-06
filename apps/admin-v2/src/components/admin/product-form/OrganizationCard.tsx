@@ -161,6 +161,8 @@ function CategoryCombobox({
           description: null,
           metaTitle: null,
           metaDescription: null,
+          noIndex: false,
+          excludeFromSitemap: false,
           image: null,
         },
       });

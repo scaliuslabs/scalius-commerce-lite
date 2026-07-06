@@ -52,6 +52,8 @@ export function CollectionForm({
       name: "",
       type: "manual",
       isActive: true,
+      noIndex: false,
+      excludeFromSitemap: false,
       config: { ...DEFAULT_CONFIG },
       ...defaultValues,
     },

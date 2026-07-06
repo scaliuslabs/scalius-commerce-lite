@@ -109,6 +109,7 @@ export function ProductForm({
       freeDelivery: false,
       metaTitle: null,
       metaDescription: null,
+      noIndex: false,
       excludeFromSitemap: false,
       excludeFromProductFeed: false,
       slug: "",

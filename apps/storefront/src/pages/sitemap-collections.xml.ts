@@ -39,10 +39,12 @@ export const GET: APIRoute = async (_context: APIContext) => {
       return xmlDataUnavailableResponse('Collections sitemap is temporarily unavailable');
     }
 
-    const collectionUrls: SitemapUrl[] = collections.map((collection) => ({
-      loc: `${baseUrl}/collections/${encodeURIComponent(collection.id)}`,
-      lastmod: collection.updatedAt ?? collection.createdAt ?? undefined,
-    }));
+    const collectionUrls: SitemapUrl[] = collections
+      .filter((collection) => !collection.noIndex && !collection.excludeFromSitemap)
+      .map((collection) => ({
+        loc: `${baseUrl}/collections/${encodeURIComponent(collection.id)}`,
+        lastmod: collection.updatedAt ?? collection.createdAt ?? undefined,
+      }));
 
     const xml = generateSitemap(collectionUrls, baseUrl);
 

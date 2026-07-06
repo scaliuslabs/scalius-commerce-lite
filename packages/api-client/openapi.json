@@ -2074,6 +2074,12 @@
                               "isActive": {
                                 "type": "boolean"
                               },
+                              "noIndex": {
+                                "type": "boolean"
+                              },
+                              "excludeFromSitemap": {
+                                "type": "boolean"
+                              },
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
@@ -2090,6 +2096,8 @@
                               "config",
                               "sortOrder",
                               "isActive",
+                              "noIndex",
+                              "excludeFromSitemap",
                               "createdAt",
                               "updatedAt"
                             ],
@@ -2212,6 +2220,12 @@
                             "isActive": {
                               "type": "boolean"
                             },
+                            "noIndex": {
+                              "type": "boolean"
+                            },
+                            "excludeFromSitemap": {
+                              "type": "boolean"
+                            },
                             "createdAt": {
                               "type": "string",
                               "nullable": true
@@ -2228,6 +2242,8 @@
                             "config",
                             "sortOrder",
                             "isActive",
+                            "noIndex",
+                            "excludeFromSitemap",
                             "createdAt",
                             "updatedAt"
                           ],
@@ -4092,6 +4108,12 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "noIndex": {
+                                "type": "boolean"
+                              },
+                              "excludeFromSitemap": {
+                                "type": "boolean"
+                              },
                               "isPublished": {
                                 "type": "boolean"
                               },
@@ -4225,6 +4247,8 @@
                               "content",
                               "metaTitle",
                               "metaDescription",
+                              "noIndex",
+                              "excludeFromSitemap",
                               "isPublished",
                               "hideHeader",
                               "hideFooter",
@@ -4373,6 +4397,12 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "noIndex": {
+                              "type": "boolean"
+                            },
+                            "excludeFromSitemap": {
+                              "type": "boolean"
+                            },
                             "isPublished": {
                               "type": "boolean"
                             },
@@ -4506,6 +4536,8 @@
                             "content",
                             "metaTitle",
                             "metaDescription",
+                            "noIndex",
+                            "excludeFromSitemap",
                             "isPublished",
                             "hideHeader",
                             "hideFooter",
@@ -4709,6 +4741,12 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "noIndex": {
+                              "type": "boolean"
+                            },
+                            "excludeFromSitemap": {
+                              "type": "boolean"
+                            },
                             "isPublished": {
                               "type": "boolean"
                             },
@@ -4842,6 +4880,8 @@
                             "content",
                             "metaTitle",
                             "metaDescription",
+                            "noIndex",
+                            "excludeFromSitemap",
                             "isPublished",
                             "hideHeader",
                             "hideFooter",
@@ -6883,6 +6923,12 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "noIndex": {
+                              "type": "boolean"
+                            },
+                            "excludeFromSitemap": {
+                              "type": "boolean"
+                            },
                             "isPublished": {
                               "type": "boolean"
                             },
@@ -7016,6 +7062,8 @@
                             "content",
                             "metaTitle",
                             "metaDescription",
+                            "noIndex",
+                            "excludeFromSitemap",
                             "isPublished",
                             "hideHeader",
                             "hideFooter",
@@ -16119,6 +16167,12 @@
                               "metaDescription": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "noIndex": {
+                                "type": "boolean"
+                              },
+                              "excludeFromSitemap": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
@@ -16130,7 +16184,9 @@
                               "createdAt",
                               "updatedAt",
                               "metaTitle",
-                              "metaDescription"
+                              "metaDescription",
+                              "noIndex",
+                              "excludeFromSitemap"
                             ],
                             "additionalProperties": {
                               "nullable": true
@@ -16262,6 +16318,12 @@
                             "metaDescription": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "noIndex": {
+                              "type": "boolean"
+                            },
+                            "excludeFromSitemap": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -16273,7 +16335,9 @@
                             "createdAt",
                             "updatedAt",
                             "metaTitle",
-                            "metaDescription"
+                            "metaDescription",
+                            "noIndex",
+                            "excludeFromSitemap"
                           ],
                           "additionalProperties": {
                             "nullable": true
@@ -16549,6 +16613,12 @@
                             "metaDescription": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "noIndex": {
+                              "type": "boolean"
+                            },
+                            "excludeFromSitemap": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -16560,7 +16630,9 @@
                             "createdAt",
                             "updatedAt",
                             "metaTitle",
-                            "metaDescription"
+                            "metaDescription",
+                            "noIndex",
+                            "excludeFromSitemap"
                           ],
                           "additionalProperties": {
                             "nullable": true
@@ -22761,6 +22833,12 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "noIndex": {
+                                "type": "boolean"
+                              },
+                              "excludeFromSitemap": {
+                                "type": "boolean"
+                              },
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
@@ -22785,6 +22863,8 @@
                               "imageUrl",
                               "metaTitle",
                               "metaDescription",
+                              "noIndex",
+                              "excludeFromSitemap",
                               "createdAt",
                               "updatedAt",
                               "deletedAt",
@@ -23110,6 +23190,14 @@
                   "metaDescription": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "noIndex": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "excludeFromSitemap": {
+                    "type": "boolean",
+                    "default": false
                   },
                   "image": {
                     "type": "object",
@@ -23540,6 +23628,12 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "noIndex": {
+                          "type": "boolean"
+                        },
+                        "excludeFromSitemap": {
+                          "type": "boolean"
+                        },
                         "createdAt": {
                           "type": "number"
                         },
@@ -23555,6 +23649,8 @@
                         "imageUrl",
                         "metaTitle",
                         "metaDescription",
+                        "noIndex",
+                        "excludeFromSitemap",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -23858,6 +23954,14 @@
                   "metaDescription": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "noIndex": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "excludeFromSitemap": {
+                    "type": "boolean",
+                    "default": false
                   },
                   "image": {
                     "type": "object",
@@ -26402,6 +26506,12 @@
                               "isActive": {
                                 "type": "boolean"
                               },
+                              "noIndex": {
+                                "type": "boolean"
+                              },
+                              "excludeFromSitemap": {
+                                "type": "boolean"
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -26443,6 +26553,8 @@
                               "config",
                               "sortOrder",
                               "isActive",
+                              "noIndex",
+                              "excludeFromSitemap",
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
@@ -26760,6 +26872,14 @@
                   "isActive": {
                     "type": "boolean"
                   },
+                  "noIndex": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "excludeFromSitemap": {
+                    "type": "boolean",
+                    "default": false
+                  },
                   "config": {
                     "type": "object",
                     "properties": {
@@ -26844,6 +26964,12 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "noIndex": {
+                          "type": "boolean"
+                        },
+                        "excludeFromSitemap": {
+                          "type": "boolean"
+                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -26885,6 +27011,8 @@
                         "config",
                         "sortOrder",
                         "isActive",
+                        "noIndex",
+                        "excludeFromSitemap",
                         "createdAt",
                         "updatedAt",
                         "deletedAt"
@@ -29253,6 +29381,12 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "noIndex": {
+                          "type": "boolean"
+                        },
+                        "excludeFromSitemap": {
+                          "type": "boolean"
+                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -29294,6 +29428,8 @@
                         "config",
                         "sortOrder",
                         "isActive",
+                        "noIndex",
+                        "excludeFromSitemap",
                         "createdAt",
                         "updatedAt",
                         "deletedAt"
@@ -29391,6 +29527,12 @@
                   "isActive": {
                     "type": "boolean"
                   },
+                  "noIndex": {
+                    "type": "boolean"
+                  },
+                  "excludeFromSitemap": {
+                    "type": "boolean"
+                  },
                   "config": {
                     "type": "object",
                     "properties": {
@@ -29469,6 +29611,12 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "noIndex": {
+                          "type": "boolean"
+                        },
+                        "excludeFromSitemap": {
+                          "type": "boolean"
+                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -29510,6 +29658,8 @@
                         "config",
                         "sortOrder",
                         "isActive",
+                        "noIndex",
+                        "excludeFromSitemap",
                         "createdAt",
                         "updatedAt",
                         "deletedAt"
@@ -32640,6 +32790,12 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "noIndex": {
+                                "type": "boolean"
+                              },
+                              "excludeFromSitemap": {
+                                "type": "boolean"
+                              },
                               "isPublished": {
                                 "type": "boolean"
                               },
@@ -32773,6 +32929,8 @@
                               "content",
                               "metaTitle",
                               "metaDescription",
+                              "noIndex",
+                              "excludeFromSitemap",
                               "isPublished",
                               "hideHeader",
                               "hideFooter",
@@ -33101,6 +33259,14 @@
                   "metaDescription": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "noIndex": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "excludeFromSitemap": {
+                    "type": "boolean",
+                    "default": false
                   },
                   "featuredImage": {
                     "type": "object",
@@ -35013,6 +35179,12 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "noIndex": {
+                          "type": "boolean"
+                        },
+                        "excludeFromSitemap": {
+                          "type": "boolean"
+                        },
                         "isPublished": {
                           "type": "boolean"
                         },
@@ -35146,6 +35318,8 @@
                         "content",
                         "metaTitle",
                         "metaDescription",
+                        "noIndex",
+                        "excludeFromSitemap",
                         "isPublished",
                         "hideHeader",
                         "hideFooter",
@@ -35454,6 +35628,12 @@
                   "metaDescription": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "noIndex": {
+                    "type": "boolean"
+                  },
+                  "excludeFromSitemap": {
+                    "type": "boolean"
                   },
                   "isPublished": {
                     "type": "boolean"
@@ -100215,6 +100395,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "noIndex": {
+                    "type": "boolean",
+                    "default": false
+                  },
                   "excludeFromSitemap": {
                     "type": "boolean",
                     "default": false
@@ -101331,6 +101515,9 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "noIndex": {
+                          "type": "boolean"
+                        },
                         "excludeFromSitemap": {
                           "type": "boolean"
                         },
@@ -101653,6 +101840,7 @@
                         "metaTitle",
                         "metaDescription",
                         "isActive",
+                        "noIndex",
                         "excludeFromSitemap",
                         "excludeFromProductFeed",
                         "discountPercentage",
@@ -101796,6 +101984,10 @@
                   "metaDescription": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "noIndex": {
+                    "type": "boolean",
+                    "default": false
                   },
                   "excludeFromSitemap": {
                     "type": "boolean",

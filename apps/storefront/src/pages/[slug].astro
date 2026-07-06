@@ -126,6 +126,7 @@ const richContentClasses =
   canonicalUrl={canonicalUrl ?? undefined}
   ogImage={featuredImageUrl || undefined}
   ogType="website"
+  noindex={page.noIndex === true}
 >
   <WidgetPlacementZone
     widgets={pageWidgets}

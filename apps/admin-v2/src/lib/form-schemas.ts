@@ -53,6 +53,8 @@ export const categoryFormSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
+  noIndex: z.boolean(),
+  excludeFromSitemap: z.boolean(),
   image: mediaFileFormSchema.nullable(),
   slugEdited: z.boolean().optional(),
 });
@@ -77,6 +79,8 @@ export const pageFormSchema = z.object({
   content: z.string().min(1, "Content is required"),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
+  noIndex: z.boolean(),
+  excludeFromSitemap: z.boolean(),
   isPublished: z.boolean(),
   publishedAt: z.coerce.date().nullable().optional(),
   sortOrder: z.number(),

@@ -122,6 +122,7 @@ export interface Product {
   slug: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
   createdAt: Date | string | number;
@@ -142,6 +143,8 @@ export interface Category {
   imageUrl: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
@@ -154,6 +157,8 @@ export interface Collection {
   config: string;
   sortOrder: number;
   isActive: boolean;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
@@ -480,6 +485,8 @@ export interface Page {
   content: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   isPublished: boolean;
   hideHeader: boolean;
   hideFooter: boolean;

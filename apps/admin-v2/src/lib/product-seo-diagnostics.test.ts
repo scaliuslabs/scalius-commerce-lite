@@ -118,6 +118,34 @@ describe("buildProductSeoDiagnostics", () => {
     );
   });
 
+  it("treats product noindex as public but not search-discoverable", () => {
+    const diagnostics = buildProductSeoDiagnostics({
+      product: {
+        ...activeProduct,
+        noIndex: true,
+      },
+      variants: availableSimpleSku,
+      variantState: "loaded",
+      discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+      storefrontUrl: "https://shop.example.com",
+    });
+
+    expect(diagnostics.canonical).toMatchObject({
+      tone: "ok",
+      path: "/products/green-tea",
+    });
+    expect(diagnostics.sitemap).toMatchObject({
+      tone: "disabled",
+      title: "Noindexed",
+    });
+    expect(diagnostics.structuredData).toMatchObject({
+      tone: "disabled",
+      title: "JSON-LD off while noindexed",
+      productsEnabled: false,
+      breadcrumbsEnabled: false,
+    });
+  });
+
   it("honors sold-out inclusion policy for the product feed", () => {
     const soldOutSku = [
       {

@@ -11,6 +11,7 @@ const productUpdate = {
     slug: "strict-sku-product",
     metaTitle: null,
     metaDescription: null,
+    noIndex: false,
     excludeFromSitemap: false,
     excludeFromProductFeed: false,
     isActive: true,

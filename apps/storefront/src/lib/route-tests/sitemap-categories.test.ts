@@ -69,4 +69,56 @@ describe("categories sitemap route", () => {
     expect(body).toContain("<urlset");
     expect(body).not.toContain("/categories/");
   });
+
+  it("omits noindexed and sitemap-excluded categories", async () => {
+    mocks.getAllCategories.mockResolvedValueOnce([
+      {
+        id: "cat_1",
+        name: "Visible",
+        slug: "visible",
+        description: null,
+        imageUrl: null,
+        metaTitle: null,
+        metaDescription: null,
+        noIndex: false,
+        excludeFromSitemap: false,
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-02T00:00:00.000Z",
+      },
+      {
+        id: "cat_2",
+        name: "Noindex",
+        slug: "noindex",
+        description: null,
+        imageUrl: null,
+        metaTitle: null,
+        metaDescription: null,
+        noIndex: true,
+        excludeFromSitemap: false,
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-02T00:00:00.000Z",
+      },
+      {
+        id: "cat_3",
+        name: "Excluded",
+        slug: "excluded",
+        description: null,
+        imageUrl: null,
+        metaTitle: null,
+        metaDescription: null,
+        noIndex: false,
+        excludeFromSitemap: true,
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-02T00:00:00.000Z",
+      },
+    ]);
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("/categories/visible");
+    expect(body).not.toContain("/categories/noindex");
+    expect(body).not.toContain("/categories/excluded");
+  });
 });

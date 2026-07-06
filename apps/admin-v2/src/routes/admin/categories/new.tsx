@@ -7,6 +7,8 @@ const defaultValues = {
   slug: "",
   metaTitle: null,
   metaDescription: null,
+  noIndex: false,
+  excludeFromSitemap: false,
   image: null,
 };
 

@@ -80,6 +80,8 @@ describe("pages sitemap route", () => {
           slug: "about-us",
           title: "About us",
           isPublished: true,
+          noIndex: false,
+          excludeFromSitemap: false,
           updatedAt: 1782691200,
           publishedAt: null,
         },
@@ -116,6 +118,8 @@ describe("pages sitemap route", () => {
             slug: "about-us",
             title: "About us",
             isPublished: true,
+            noIndex: false,
+            excludeFromSitemap: false,
             updatedAt: "2026-06-23T00:00:00.000Z",
             publishedAt: null,
           },
@@ -128,5 +132,51 @@ describe("pages sitemap route", () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
+  });
+
+  it("omits noindexed and sitemap-excluded CMS pages", async () => {
+    mocks.getAllPages.mockResolvedValueOnce({
+      data: [
+        {
+          id: "page_1",
+          slug: "visible",
+          title: "Visible",
+          isPublished: true,
+          noIndex: false,
+          excludeFromSitemap: false,
+          updatedAt: "2026-06-23T00:00:00.000Z",
+          publishedAt: null,
+        },
+        {
+          id: "page_2",
+          slug: "noindex",
+          title: "Noindex",
+          isPublished: true,
+          noIndex: true,
+          excludeFromSitemap: false,
+          updatedAt: "2026-06-23T00:00:00.000Z",
+          publishedAt: null,
+        },
+        {
+          id: "page_3",
+          slug: "excluded",
+          title: "Excluded",
+          isPublished: true,
+          noIndex: false,
+          excludeFromSitemap: true,
+          updatedAt: "2026-06-23T00:00:00.000Z",
+          publishedAt: null,
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 3, totalPages: 1 },
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("https://storefront.example.test/visible");
+    expect(body).not.toContain("https://storefront.example.test/noindex");
+    expect(body).not.toContain("https://storefront.example.test/excluded");
   });
 });

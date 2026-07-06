@@ -24,6 +24,8 @@ export const createCategorySchema = z.object({
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable(),
+    noIndex: z.boolean().optional().default(false),
+    excludeFromSitemap: z.boolean().optional().default(false),
     image: imageSchema,
 });
 

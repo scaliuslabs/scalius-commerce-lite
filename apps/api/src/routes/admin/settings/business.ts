@@ -5,8 +5,10 @@ import {
 } from "@scalius/core/modules/settings/business-settings.service";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 
 // ─────────────────────────────────────────
 // Schemas
@@ -95,6 +97,9 @@ app.openapi(saveBusinessRoute, async (c) => {
     const db = c.get("db");
     const body = c.req.valid("json");
     await saveBusinessSettings(db, body);
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c, {
+        htmlPaths: ["/"],
+    });
     return ok(c, { message: "Business settings saved successfully" });
 });
 

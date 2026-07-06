@@ -39,6 +39,8 @@ function toPageFormValues(page: PageDto): PageFormValues {
     content: page.content,
     metaTitle: page.metaTitle,
     metaDescription: page.metaDescription,
+    noIndex: page.noIndex,
+    excludeFromSitemap: page.excludeFromSitemap,
     isPublished: page.isPublished,
     publishedAt: unixToDate(page.publishedAt) ?? null,
     sortOrder: page.sortOrder,

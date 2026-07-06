@@ -125,6 +125,7 @@ export const SeoSection = memo(function SeoSection({
   const slug = form.watch("slug");
   const isActive = form.watch("isActive");
   const images = form.watch("images");
+  const noIndex = form.watch("noIndex");
   const excludeFromSitemap = form.watch("excludeFromSitemap");
   const excludeFromProductFeed = form.watch("excludeFromProductFeed");
 
@@ -136,6 +137,7 @@ export const SeoSection = memo(function SeoSection({
           slug,
           isActive,
           images,
+          noIndex,
           excludeFromSitemap,
           excludeFromProductFeed,
         },
@@ -151,6 +153,7 @@ export const SeoSection = memo(function SeoSection({
       isActive,
       excludeFromProductFeed,
       excludeFromSitemap,
+      noIndex,
       policySource,
       productId,
       slug,
@@ -221,6 +224,29 @@ export const SeoSection = memo(function SeoSection({
         />
 
         <div className="grid gap-2">
+          <FormField
+            control={form.control}
+            name="noIndex"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-sm font-medium">
+                    Prevent search indexing
+                  </FormLabel>
+                  <FormDescription className="text-xs">
+                    Keep the product page public, but ask search engines not to index it.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
           <FormField
             control={form.control}
             name="excludeFromSitemap"

@@ -34,6 +34,7 @@ export const productFormSchema = z.object({
   freeDelivery: z.boolean(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
+  noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   excludeFromProductFeed: z.boolean(),
   slug: z

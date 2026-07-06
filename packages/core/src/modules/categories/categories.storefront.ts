@@ -19,6 +19,8 @@ export async function getPublicCategories(db: Database) {
             imageUrl: categories.imageUrl,
             metaTitle: categories.metaTitle,
             metaDescription: categories.metaDescription,
+            noIndex: categories.noIndex,
+            excludeFromSitemap: categories.excludeFromSitemap,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
@@ -48,6 +50,8 @@ export async function getPublicCategoryBySlug(db: Database, slug: string) {
             imageUrl: categories.imageUrl,
             metaTitle: categories.metaTitle,
             metaDescription: categories.metaDescription,
+            noIndex: categories.noIndex,
+            excludeFromSitemap: categories.excludeFromSitemap,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
@@ -78,6 +82,8 @@ export async function getPublicCategoryById(db: Database, id: string) {
             imageUrl: categories.imageUrl,
             metaTitle: categories.metaTitle,
             metaDescription: categories.metaDescription,
+            noIndex: categories.noIndex,
+            excludeFromSitemap: categories.excludeFromSitemap,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })

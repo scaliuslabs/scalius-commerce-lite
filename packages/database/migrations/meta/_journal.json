@@ -568,6 +568,13 @@
       "when": 1783396800000,
       "tag": "0080_product_discovery_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "6",
+      "when": 1783400400000,
+      "tag": "0081_resource_indexing_controls",
+      "breakpoints": true
     }
   ]
 }
