@@ -80,10 +80,10 @@ Implements a two-layer edge caching strategy for HTML pages:
 - Product pages (`/products/{slug}`)
 - Category pages (`/categories/{slug}`)
 - Search (`/search`)
-- Sitemaps (`/sitemap.xml`, `/sitemap-*.xml`); XML generation requires an absolute `STOREFRONT_URL` and returns non-cacheable `503` instead of relative/empty discovery URLs when it is missing
+- Discovery assets (`/robots.txt`, `/sitemap.xml`, `/sitemap-*.xml`, `/sitemap.xsl`, `/api/facebook-feed.xml`); XML generation requires an absolute `STOREFRONT_URL` and returns non-cacheable `503` instead of relative/empty discovery URLs when it is missing
 - Generic pages (any path not matching excluded prefixes)
 
-**Non-cacheable paths**: `/api`, `/cart`, `/checkout`, `/buy`, `/order-success`, `/account`, `/health`, `/robots.txt`
+**Non-cacheable paths**: `/api` routes except documented public discovery/proxy routes, `/cart`, `/checkout`, `/buy`, `/order-success`, `/account`, `/health`
 
 **Cache key construction**:
 - Strips tracking parameters (fbclid, gclid, UTM params, ref)
@@ -94,9 +94,9 @@ Implements a two-layer edge caching strategy for HTML pages:
 
 **Cache flow**:
 1. Check Cloudflare Cache API for cached HTML (with 500ms timeout)
-2. On HIT: return cached response with browser no-cache headers
-3. On MISS: render page, store in Cache API (with `waitUntil`), return with no-cache headers
-4. Browser always gets `Cache-Control: no-cache, no-store, must-revalidate` (edge cache is internal only)
+2. On HIT: return cached response with browser no-cache headers for HTML, or the route's public TTL for generated discovery XML/text
+3. On MISS: render page, store in Cache API (with `waitUntil`), return with browser no-cache headers for HTML or public discovery TTLs for generated XML/text
+4. Browser HTML always gets `Cache-Control: no-cache, no-store, must-revalidate` (edge cache is internal only)
 5. Edge-stored responses use `Cache-Control: public, max-age=31536000, immutable` (invalidation via KV version bump)
 
 **Cache context**: Wraps all downstream processing in `cacheContextAls.run()` so `withEdgeCache()` calls in API functions read per-request context instead of module-level state.
@@ -222,8 +222,8 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 | `auth/` | Auth proxy routes |
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |
-| `__ptproxy.ts` | Partytown analytics proxy |
-| `facebook-feed.xml.ts` | Facebook/Meta product feed; availability comes from the public product list `availableForSale` SKU projection so feed XML matches product-page structured data and checkout purchasability. Feed links require an absolute storefront URL and product items without a real absolute `http(s)` primary image are skipped because catalog feeds require `image_link`. |
+| `ptproxy.ts` | Partytown analytics proxy |
+| `facebook-feed.xml.ts` | Facebook/Meta product feed; availability comes from the public product list `availableForSale` SKU projection so feed XML matches product-page structured data and checkout purchasability. Feed links require an absolute storefront URL, product items without a real absolute `http(s)` primary image are skipped because catalog feeds require `image_link`, and `0` discounted prices are preserved instead of falling back to the original price. |
 
 Checkout proxy endpoints unwrap `.data` before returning to the browser -- the checkout page reads top-level fields.
 `checkout/create-order.ts` must preserve structured `details.itemIssues` from the API; checkout gateway handlers use those issues to return buyers to the cart repair UI instead of collapsing catalog freshness failures into a string-only payment error.

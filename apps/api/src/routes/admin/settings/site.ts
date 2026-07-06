@@ -445,6 +445,7 @@ const seoSettingsSchema = z.object({
   discovery: z.object({
     sitemap: z.object({
       enabled: z.boolean(),
+      staticPages: z.boolean(),
       products: z.boolean(),
       categories: z.boolean(),
       collections: z.boolean(),

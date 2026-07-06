@@ -1,6 +1,7 @@
 export interface SeoDiscoverySettings {
   sitemap: {
     enabled: boolean;
+    staticPages: boolean;
     products: boolean;
     categories: boolean;
     collections: boolean;
@@ -21,6 +22,7 @@ export interface SeoDiscoverySettings {
 export const DEFAULT_SEO_DISCOVERY_SETTINGS: SeoDiscoverySettings = {
   sitemap: {
     enabled: true,
+    staticPages: true,
     products: true,
     categories: true,
     collections: true,
@@ -66,6 +68,10 @@ export function normalizeSeoDiscoverySettings(
       products: boolOrDefault(
         sitemap.products,
         DEFAULT_SEO_DISCOVERY_SETTINGS.sitemap.products,
+      ),
+      staticPages: boolOrDefault(
+        sitemap.staticPages,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.sitemap.staticPages,
       ),
       categories: boolOrDefault(
         sitemap.categories,

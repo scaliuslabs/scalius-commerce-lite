@@ -30,4 +30,14 @@ describe("analytics script processing", () => {
       '<script type="text/partytown">',
     );
   });
+
+  it("defaults TikTok Pixel scripts into Partytown", () => {
+    expect(
+      shouldUsePartytown({
+        ...baseScript,
+        type: "tiktok_pixel",
+        usePartytown: undefined as unknown as boolean,
+      }),
+    ).toBe(true);
+  });
 });

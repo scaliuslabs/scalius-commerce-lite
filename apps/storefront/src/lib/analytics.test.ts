@@ -20,6 +20,7 @@ vi.mock("./tracking/meta-event-id", () => ({
 
 import {
   shouldUsePartytown,
+  trackFbAddPaymentInfo,
   trackFbAddToCart,
   trackFbInitiateCheckout,
   trackFbPurchase,
@@ -32,6 +33,9 @@ describe("storefront analytics", () => {
     sendServerEventMock.mockClear();
     createMetaEventIdMock.mockClear();
     window.fbq = vi.fn() as unknown as NonNullable<Window["fbq"]>;
+    window.ttq = {
+      track: vi.fn(),
+    };
     window.zaraz = {
       ecommerce: vi.fn().mockResolvedValue(undefined),
       track: vi.fn().mockResolvedValue(undefined),
@@ -53,6 +57,22 @@ describe("storefront analytics", () => {
         updatedAt: new Date(),
       }),
     ).toBe(false);
+  });
+
+  it("defaults TikTok Pixel scripts into Partytown", () => {
+    expect(
+      shouldUsePartytown({
+        id: "analytics_1",
+        name: "TikTok Pixel",
+        type: "tiktok_pixel",
+        isActive: true,
+        usePartytown: undefined as unknown as boolean,
+        config: "",
+        location: "head",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    ).toBe(true);
   });
 
   it("bridges add-to-cart events to Zaraz ecommerce when available", () => {
@@ -299,6 +319,9 @@ describe("storefront analytics", () => {
       },
     ]);
     expect(JSON.stringify(window.dataLayer)).not.toContain("buyer@example.com");
+    expect(JSON.stringify((window.ttq?.track as ReturnType<typeof vi.fn>).mock.calls)).not.toContain(
+      "buyer@example.com",
+    );
     expect(sendServerEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         eventId: "Purchase:order_1",
@@ -334,5 +357,161 @@ describe("storefront analytics", () => {
       expect.objectContaining({ order_id: "order_1" }),
     );
     expect(sendServerEventMock).not.toHaveBeenCalled();
+  });
+
+  it("bridges storefront commerce wrappers to TikTok standard events with event_id and no PII", () => {
+    trackFbViewContent({
+      content_ids: ["sku_view"],
+      content_name: "Product view",
+      content_type: "product",
+      contents: [{ id: "sku_view", quantity: 1, item_price: 1200 }],
+      currency: "BDT",
+      value: 1200,
+    });
+    trackFbAddToCart({
+      content_ids: ["sku_cart"],
+      content_type: "product",
+      contents: [{ id: "sku_cart", quantity: 2, item_price: 300 }],
+      currency: "BDT",
+      value: 600,
+    });
+    trackFbInitiateCheckout({
+      content_ids: ["sku_cart"],
+      contents: [{ id: "sku_cart", quantity: 2, item_price: 300 }],
+      currency: "BDT",
+      num_items: 2,
+      value: 600,
+    });
+    trackFbAddPaymentInfo({
+      content_ids: ["sku_cart"],
+      contents: [{ id: "sku_cart", quantity: 2, item_price: 300 }],
+      currency: "BDT",
+      value: 600,
+    });
+    trackFbPurchase(
+      {
+        content_ids: ["sku_cart"],
+        content_type: "product",
+        contents: [{ id: "sku_cart", quantity: 2, item_price: 300 }],
+        currency: "BDT",
+        num_items: 2,
+        value: 600,
+        order_id: "order_1",
+      },
+      { em: "buyer@example.com", ph: "+8801712345678" },
+    );
+    trackFbSearch({
+      content_ids: ["sku_view"],
+      contents: [{ id: "sku_view", quantity: 1 }],
+      currency: "BDT",
+      search_string: "khaki shoes",
+      value: 1200,
+    });
+
+    expect(window.ttq?.track).toHaveBeenCalledWith("ViewContent", {
+      event_id: "ViewContent:generated",
+      content_type: "product",
+      content_ids: ["sku_view"],
+      contents: [{ content_id: "sku_view", quantity: 1 }],
+      quantity: 1,
+      currency: "BDT",
+      value: 1200,
+    });
+    expect(window.ttq?.track).toHaveBeenCalledWith("AddToCart", {
+      event_id: "AddToCart:generated",
+      content_type: "product",
+      content_ids: ["sku_cart"],
+      contents: [{ content_id: "sku_cart", quantity: 2 }],
+      quantity: 2,
+      currency: "BDT",
+      value: 600,
+    });
+    expect(window.ttq?.track).toHaveBeenCalledWith("InitiateCheckout", {
+      event_id: "InitiateCheckout:generated",
+      content_type: "product",
+      content_ids: ["sku_cart"],
+      contents: [{ content_id: "sku_cart", quantity: 2 }],
+      quantity: 2,
+      currency: "BDT",
+      value: 600,
+    });
+    expect(window.ttq?.track).toHaveBeenCalledWith("AddPaymentInfo", {
+      event_id: "AddPaymentInfo:generated",
+      content_type: "product",
+      content_ids: ["sku_cart"],
+      contents: [{ content_id: "sku_cart", quantity: 2 }],
+      quantity: 2,
+      currency: "BDT",
+      value: 600,
+    });
+    expect(window.ttq?.track).toHaveBeenCalledWith("Purchase", {
+      event_id: "Purchase:order_1",
+      content_type: "product",
+      content_ids: ["sku_cart"],
+      contents: [{ content_id: "sku_cart", quantity: 2 }],
+      quantity: 2,
+      currency: "BDT",
+      value: 600,
+    });
+    expect(window.ttq?.track).toHaveBeenCalledWith("Search", {
+      event_id: "Search:generated",
+      content_type: "product",
+      content_ids: ["sku_view"],
+      contents: [{ content_id: "sku_view", quantity: 1 }],
+      quantity: 1,
+      currency: "BDT",
+      value: 1200,
+      search_string: "khaki shoes",
+    });
+
+    const tiktokPayloads = JSON.stringify(
+      (window.ttq?.track as ReturnType<typeof vi.fn>).mock.calls,
+    );
+    expect(tiktokPayloads).not.toContain("buyer@example.com");
+    expect(tiktokPayloads).not.toContain("+8801712345678");
+  });
+
+  it("keeps TikTok tracking a no-op when ttq is absent", () => {
+    window.ttq = undefined;
+
+    expect(() =>
+      trackFbAddToCart({
+        content_ids: ["sku_1"],
+        contents: [{ id: "sku_1", quantity: 1, item_price: 100 }],
+        currency: "BDT",
+        value: 100,
+      }),
+    ).not.toThrow();
+
+    expect(window.fbq).toHaveBeenCalledWith(
+      "track",
+      "AddToCart",
+      expect.objectContaining({ content_ids: ["sku_1"] }),
+      { eventID: "AddToCart:generated" },
+    );
+  });
+
+  it("does not let TikTok tracking failures break commerce events", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    window.ttq = {
+      track: vi.fn(() => {
+        throw new Error("TikTok unavailable");
+      }),
+    };
+
+    expect(() =>
+      trackFbAddToCart({
+        content_ids: ["sku_1"],
+        contents: [{ id: "sku_1", quantity: 1, item_price: 100 }],
+        currency: "BDT",
+        value: 100,
+      }),
+    ).not.toThrow();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "TikTok Pixel event failed:",
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
   });
 });

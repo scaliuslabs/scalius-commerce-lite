@@ -5,49 +5,68 @@ import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 export const prerender = false;
 
-function ensureSitemapDirective(robotsContent: string, sitemapUrl: string): string {
-  const sitemapLinePattern = /^sitemap:\s*(.*)$/gim;
-  let replacedPlaceholder = false;
-
-  const normalized = robotsContent.replace(sitemapLinePattern, (line, rawValue: string) => {
-    const value = rawValue.trim();
-    const isPlaceholder =
-      value === "" ||
-      value.startsWith("[") ||
-      value.toLowerCase() === "your-sitemap-url" ||
-      value.toLowerCase() === "[your-sitemap-url]";
-
-    if (!isPlaceholder) {
-      return line;
-    }
-
-    replacedPlaceholder = true;
-    return `Sitemap: ${sitemapUrl}`;
-  });
-
-  if (replacedPlaceholder || normalized.toLowerCase().includes("sitemap:")) {
-    return normalized;
-  }
-
-  return `${normalized}\n\nSitemap: ${sitemapUrl}`;
+function isPlaceholderSitemapValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "" ||
+    normalized === "your-sitemap-url" ||
+    normalized === "[your-sitemap-url]" ||
+    (normalized.startsWith("[") && normalized.endsWith("]"))
+  );
 }
 
-function removePlaceholderSitemapDirectives(robotsContent: string): string {
-  return robotsContent
-    .split(/\r?\n/)
-    .filter((line) => {
-      const match = line.match(/^sitemap:\s*(.*)$/i);
-      if (!match) return true;
-      const value = match[1]?.trim() ?? "";
-      return !(
-        value === "" ||
-        value.startsWith("[") ||
-        value.toLowerCase() === "your-sitemap-url" ||
-        value.toLowerCase() === "[your-sitemap-url]"
-      );
-    })
-    .join("\n")
-    .trim();
+function isAbsoluteHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function normalizeSitemapDirectives(
+  robotsContent: string,
+  { advertise, sitemapUrl }: { advertise: boolean; sitemapUrl?: string },
+): string {
+  let canonicalSitemapEmitted = false;
+  const lines: string[] = [];
+
+  for (const line of robotsContent.split(/\r?\n/)) {
+    const match = line.match(/^sitemap:\s*(.*)$/i);
+    if (!match) {
+      lines.push(line);
+      continue;
+    }
+
+    const value = match[1]?.trim() ?? "";
+    const isPlaceholder = isPlaceholderSitemapValue(value);
+    const isValidAbsoluteUrl = isAbsoluteHttpUrl(value);
+
+    if (advertise && sitemapUrl && (isPlaceholder || !isValidAbsoluteUrl)) {
+      if (!canonicalSitemapEmitted) {
+        lines.push(`Sitemap: ${sitemapUrl}`);
+        canonicalSitemapEmitted = true;
+      }
+      continue;
+    }
+
+    if (!isValidAbsoluteUrl) {
+      continue;
+    }
+
+    lines.push(line);
+    if (sitemapUrl && value === sitemapUrl) {
+      canonicalSitemapEmitted = true;
+    }
+  }
+
+  if (advertise && sitemapUrl && !canonicalSitemapEmitted) {
+    const needsSpacer = lines.some((line) => line.trim() !== "");
+    if (needsSpacer) lines.push("");
+    lines.push(`Sitemap: ${sitemapUrl}`);
+  }
+
+  return lines.join("\n").trim();
 }
 
 export const GET: APIRoute = async () => {
@@ -81,9 +100,14 @@ export const GET: APIRoute = async () => {
       return xmlDataUnavailableResponse("Robots policy is temporarily unavailable");
     }
 
-    robotsContent = ensureSitemapDirective(robotsContent, sitemapUrl);
+    robotsContent = normalizeSitemapDirectives(robotsContent, {
+      advertise: true,
+      sitemapUrl,
+    });
   } else {
-    robotsContent = removePlaceholderSitemapDirectives(robotsContent);
+    robotsContent = normalizeSitemapDirectives(robotsContent, {
+      advertise: false,
+    });
   }
 
   return new Response(robotsContent, {

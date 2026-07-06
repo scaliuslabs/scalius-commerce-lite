@@ -18,9 +18,9 @@ import RichContent from "@/components/RichContent.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import {
-  getRuntimeStorefrontUrl,
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
+import { buildAbsoluteStorefrontSeoUrl, getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
@@ -214,9 +214,9 @@ const analyticsProductData = products.map((p) => ({
 }));
 
 // --- SEO: per SEO-03, SEO-04, OG-02 ---
-const storefrontUrl = getRuntimeStorefrontUrl();
+const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 // Canonical always points to page 1 -- strips ?page, ?sortBy, and filter params (per CAN-01)
-const canonicalUrl = `${storefrontUrl}/categories/${slug}`;
+const canonicalUrl = buildAbsoluteStorefrontSeoUrl(`/categories/${slug}`);
 
 // OG image from category image (per OG-02, OG-05)
 const ogImageUrl = category?.imageUrl
@@ -230,7 +230,7 @@ const ogImageUrl = category?.imageUrl
   : null;
 
 // CollectionPage JSON-LD with embedded BreadcrumbList (per SEO-03, SEO-04)
-const collectionJsonLd = category
+const collectionJsonLd = category && canonicalUrl && storefrontUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "CollectionPage",
@@ -264,7 +264,7 @@ const collectionJsonLd = category
   title={pageTitle}
   description={pageDescription}
   layoutData={layoutData}
-  canonicalUrl={canonicalUrl}
+  canonicalUrl={canonicalUrl ?? undefined}
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
 >

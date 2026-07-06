@@ -24,7 +24,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
       return xmlDataUnavailableResponse('Static sitemap is temporarily unavailable');
     }
     const sitemapPolicy = normalizeSeoDiscoverySettings(seo.discovery).sitemap;
-    if (!sitemapPolicy.enabled) {
+    if (!sitemapPolicy.enabled || !sitemapPolicy.staticPages) {
       return new Response(generateSitemap([], baseUrl), {
         status: 200,
         headers: getSitemapHeaders(),

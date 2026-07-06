@@ -1,4 +1,4 @@
-// src/pages/api/__ptproxy.ts
+// src/pages/api/ptproxy.ts
 // Partytown reverse proxy — fetches third-party scripts on behalf of the
 // Partytown web worker so they execute in a same-origin context.
 
@@ -7,6 +7,7 @@ import type { APIRoute } from "astro";
 const ALLOWED_HOSTS = new Set([
   "connect.facebook.net",
   "www.facebook.com",
+  "analytics.tiktok.com",
   "www.googletagmanager.com",
   "www.google-analytics.com",
   "www.googleadservices.com",

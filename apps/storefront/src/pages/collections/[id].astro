@@ -8,7 +8,7 @@ import {
   type CollectionWithProducts,
 } from "@/lib/api";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
-import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import { buildAbsoluteStorefrontSeoUrl, getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { getProductImageUrl } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
@@ -51,9 +51,9 @@ const categories = collection.categories ?? [];
 const config = collection.config ?? {};
 const title = config.title || collection.name;
 const subtitle = config.subtitle || "";
-const storefrontUrl = getRuntimeStorefrontUrl();
+const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const collectionPath = `/collections/${encodeURIComponent(collection.id)}`;
-const canonicalUrl = `${storefrontUrl}${collectionPath}`;
+const canonicalUrl = buildAbsoluteStorefrontSeoUrl(collectionPath);
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const firstProductImage = products.find((product) => product.imageUrl)?.imageUrl ?? null;
 const ogImageUrl = firstProductImage
@@ -66,43 +66,45 @@ const ogImageUrl = firstProductImage
     })
   : undefined;
 
-const collectionJsonLd = serializeJsonForInlineScript({
-  "@context": "https://schema.org",
-  "@type": "CollectionPage",
-  name: title,
-  description: subtitle || `Browse ${collection.name}.`,
-  url: canonicalUrl,
-  numberOfItems: products.length,
-  breadcrumb: {
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Home",
-        item: `${storefrontUrl}/`,
+const collectionJsonLd = canonicalUrl && storefrontUrl
+  ? serializeJsonForInlineScript({
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: title,
+      description: subtitle || `Browse ${collection.name}.`,
+      url: canonicalUrl,
+      numberOfItems: products.length,
+      breadcrumb: {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: `${storefrontUrl}/`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: collection.name,
+            item: canonicalUrl,
+          },
+        ],
       },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: collection.name,
-        item: canonicalUrl,
-      },
-    ],
-  },
-});
+    })
+  : null;
 ---
 
 <Layout
   title={title}
   description={subtitle || `Browse ${collection.name}.`}
   layoutData={layoutData}
-  canonicalUrl={canonicalUrl}
+  canonicalUrl={canonicalUrl ?? undefined}
   ogImage={ogImageUrl}
   ogType="website"
 >
   <Fragment slot="head">
-    <script is:inline type="application/ld+json" set:html={collectionJsonLd} />
+    {collectionJsonLd && <script is:inline type="application/ld+json" set:html={collectionJsonLd} />}
   </Fragment>
 
   <div class="min-h-screen bg-gray-50">

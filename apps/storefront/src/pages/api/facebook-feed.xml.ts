@@ -131,6 +131,7 @@ function generateProductItem(
   const { product, imageLink } = feedProduct;
   const productUrl = `${baseUrl}/products/${product.slug}`;
   const availability = getAvailability(product);
+  const feedPrice = product.discountedPrice ?? product.price;
 
   // Get category mappings
   const categorySlug = product.category?.slug || "";
@@ -148,7 +149,7 @@ function generateProductItem(
   item += `    <g:link>${escapeXml(productUrl)}</g:link>\n`;
   item += `    <g:availability>${availability}</g:availability>\n`;
   item += `    <g:condition>new</g:condition>\n`;
-  item += `    <g:price>${formatFeedPrice(product.discountedPrice || product.price, currencyCode)}</g:price>\n`;
+  item += `    <g:price>${formatFeedPrice(feedPrice, currencyCode)}</g:price>\n`;
 
   // Image (required)
   item += `    <g:image_link>${escapeXml(imageLink)}</g:image_link>\n`;
@@ -163,7 +164,7 @@ function generateProductItem(
   // Optional fields
 
   // Sale price if there's a discount
-  if (product.discountedPrice && product.discountedPrice < product.price) {
+  if (product.discountedPrice != null && product.discountedPrice < product.price) {
     item += `    <g:sale_price>${formatFeedPrice(product.discountedPrice, currencyCode)}</g:sale_price>\n`;
   }
 

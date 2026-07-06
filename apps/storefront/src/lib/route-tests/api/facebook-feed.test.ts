@@ -123,6 +123,33 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:availability>out of stock</g:availability>");
   });
 
+  it("emits zero discounted prices without falling back to the original price", async () => {
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_free",
+          slug: "free-sample",
+          name: "Free Sample",
+          description: "Fully discounted item",
+          price: 1200,
+          discountedPrice: 0,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/free.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<g:price>0.00 BDT</g:price>");
+    expect(body).toContain("<g:sale_price>0.00 BDT</g:sale_price>");
+    expect(body).not.toContain("<g:price>1200.00 BDT</g:price>");
+  });
+
   it("skips image-less products and keeps required image and availability fields on valid items", async () => {
     mocks.getAllProducts.mockResolvedValueOnce({
       data: [

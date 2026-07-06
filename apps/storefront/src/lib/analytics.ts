@@ -2,15 +2,15 @@
 
 /**
  * Utility functions for handling analytics scripts and event tracking
- * with Partytown for Facebook Pixel and Google Analytics 4, plus a passive
- * Cloudflare Zaraz e-commerce bridge when Zaraz is enabled on the zone.
+ * with Partytown for Facebook Pixel, TikTok Pixel, and Google Analytics 4,
+ * plus a passive Cloudflare Zaraz e-commerce bridge when Zaraz is enabled on the zone.
  *
  * NOW INCLUDES SERVER-SIDE EVENT DISPATCHING FOR META CONVERSIONS API (CAPI).
  */
 import { sendServerEvent } from "./tracking/meta-capi";
 import { createMetaEventId } from "./tracking/meta-event-id";
 
-// Window augmentation for dataLayer and fbq is in src/env.d.ts
+// Window augmentation for dataLayer, fbq, ttq, and Zaraz is in src/env.d.ts
 
 // Analytics type definition (from database schema)
 interface AnalyticsConfig {
@@ -75,6 +75,7 @@ export function shouldUsePartytown(script: AnalyticsConfig): boolean {
     "google_analytics",
     "facebook_pixel",
     "google_tag_manager",
+    "tiktok_pixel",
   ];
   return partytownTypes.includes(script.type) || script.type === "custom";
 }
@@ -92,6 +93,34 @@ type FbCommerceContent = {
   id: string;
   quantity: number;
   item_price?: number;
+};
+
+type TikTokStandardEvent =
+  | "ViewContent"
+  | "AddToCart"
+  | "InitiateCheckout"
+  | "AddPaymentInfo"
+  | "Purchase"
+  | "Search";
+
+type TikTokCommerceData = {
+  content_ids?: string[];
+  content_type?: "product" | "product_group";
+  contents?: FbCommerceContent[];
+  currency?: string;
+  num_items?: number;
+  value?: number;
+};
+
+type TikTokParams = {
+  event_id: string;
+  content_type?: "product" | "product_group";
+  content_ids?: string[];
+  contents?: Array<{ content_id: string; quantity: number }>;
+  quantity?: number;
+  currency?: string;
+  value?: number;
+  search_string?: string;
 };
 
 function cleanAnalyticsValue(value: AnalyticsValue): AnalyticsValue {
@@ -261,6 +290,51 @@ function inferCommerceValue(data: {
   return hasPricedItem ? total : undefined;
 }
 
+function getTikTokContentIds(data: TikTokCommerceData): string[] | undefined {
+  const explicitIds = data.content_ids?.filter(Boolean);
+  if (explicitIds?.length) {
+    return explicitIds;
+  }
+
+  const contentIds = data.contents?.map((item) => item.id).filter(Boolean);
+  return contentIds?.length ? contentIds : undefined;
+}
+
+function mapFbContentsToTikTokContents(
+  data: TikTokCommerceData,
+): Array<{ content_id: string; quantity: number }> | undefined {
+  const fromContents =
+    data.contents
+      ?.map((item) => ({
+        content_id: item.id,
+        quantity: finiteNumber(item.quantity) ?? 1,
+      }))
+      .filter((item) => Boolean(item.content_id)) ?? [];
+
+  if (fromContents.length > 0) {
+    return fromContents;
+  }
+
+  return data.content_ids?.filter(Boolean).map((id) => ({
+    content_id: id,
+    quantity: 1,
+  }));
+}
+
+function inferTikTokQuantity(data: TikTokCommerceData): number | undefined {
+  const explicitQuantity = finiteNumber(data.num_items);
+  if (explicitQuantity !== undefined) {
+    return explicitQuantity;
+  }
+
+  const contents = mapFbContentsToTikTokContents(data);
+  if (contents?.length) {
+    return contents.reduce((sum, item) => sum + item.quantity, 0);
+  }
+
+  return undefined;
+}
+
 function normalizeGa4Items(
   data: {
     content_ids?: string[];
@@ -385,6 +459,68 @@ function bridgeFbCommerceToDataLayer(
   pushDataLayerEcommerceEvent(eventName, params, eventId);
 }
 
+function trackTikTokEvent(
+  eventName: TikTokStandardEvent,
+  params: TikTokParams,
+): void {
+  const track = window.ttq?.track;
+  if (typeof track !== "function") {
+    return;
+  }
+
+  try {
+    track.call(
+      window.ttq,
+      eventName,
+      cleanAnalyticsParams(params as unknown as ZarazParameters),
+    );
+  } catch (error) {
+    console.warn("TikTok Pixel event failed:", error);
+  }
+}
+
+function bridgeFbCommerceToTikTok(
+  eventName: Exclude<TikTokStandardEvent, "Search">,
+  data: TikTokCommerceData,
+  eventId: string,
+): void {
+  const contentIds = getTikTokContentIds(data);
+  const contents = mapFbContentsToTikTokContents(data);
+  const hasCatalogContent = Boolean(contentIds?.length || contents?.length);
+
+  trackTikTokEvent(eventName, {
+    event_id: eventId,
+    content_type:
+      data.content_type ?? (hasCatalogContent ? "product" : undefined),
+    content_ids: contentIds,
+    contents,
+    quantity: inferTikTokQuantity(data),
+    currency: data.currency ?? window.__CURRENCY_CODE__,
+    value: inferCommerceValue(data),
+  });
+}
+
+function bridgeFbSearchToTikTok(
+  data: TikTokCommerceData & { search_string: string },
+  eventId: string,
+): void {
+  const contentIds = getTikTokContentIds(data);
+  const contents = mapFbContentsToTikTokContents(data);
+  const hasCatalogContent = Boolean(contentIds?.length || contents?.length);
+
+  trackTikTokEvent("Search", {
+    event_id: eventId,
+    content_type:
+      data.content_type ?? (hasCatalogContent ? "product" : undefined),
+    content_ids: contentIds,
+    contents,
+    quantity: inferTikTokQuantity(data),
+    currency: data.currency ?? window.__CURRENCY_CODE__,
+    value: inferCommerceValue(data),
+    search_string: data.search_string,
+  });
+}
+
 // --- Facebook Pixel Event Tracking ---
 
 /**
@@ -423,6 +559,8 @@ export function trackFbViewContent(data: {
   if (typeof window.fbq === "function") {
     window.fbq("track", "ViewContent", data, pixelEventOptions(eventId));
   }
+
+  bridgeFbCommerceToTikTok("ViewContent", data, eventId);
 
   const products = mapFbContentsToZarazProducts(
     data.contents,
@@ -476,6 +614,8 @@ export function trackFbAddToCart(data: {
     window.fbq("track", "AddToCart", data, pixelEventOptions(eventId));
   }
 
+  bridgeFbCommerceToTikTok("AddToCart", data, eventId);
+
   const products = mapFbContentsToZarazProducts(
     data.contents,
     data.content_ids,
@@ -528,6 +668,8 @@ export function trackFbInitiateCheckout(data: {
     window.fbq("track", "InitiateCheckout", data, pixelEventOptions(eventId));
   }
 
+  bridgeFbCommerceToTikTok("InitiateCheckout", data, eventId);
+
   sendZarazEcommerce("Checkout Started", {
     products: mapFbContentsToZarazProducts(data.contents, data.content_ids),
     category: data.content_category,
@@ -578,6 +720,8 @@ export function trackFbAddPaymentInfo(data?: {
     );
   }
 
+  bridgeFbCommerceToTikTok("AddPaymentInfo", data ?? {}, eventId);
+
   sendZarazEcommerce("Payment Info Entered", {
     products: mapFbContentsToZarazProducts(data?.contents, data?.content_ids),
     category: data?.content_category,
@@ -621,6 +765,8 @@ export function trackFbPurchase(
   if (typeof window.fbq === "function") {
     window.fbq("track", "Purchase", data, pixelEventOptions(eventId));
   }
+
+  bridgeFbCommerceToTikTok("Purchase", data, eventId);
 
   sendZarazEcommerce("Order Completed", {
     order_id: data.order_id,
@@ -728,6 +874,8 @@ export function trackFbSearch(data: {
   if (typeof window.fbq === "function") {
     window.fbq("track", "Search", data, pixelEventOptions(eventId));
   }
+
+  bridgeFbSearchToTikTok(data, eventId);
 
   sendZarazEcommerce("Products Searched", {
     query: data.search_string,

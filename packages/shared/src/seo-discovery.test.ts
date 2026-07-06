@@ -51,12 +51,13 @@ describe("SEO discovery settings", () => {
     expect(
       mergeSeoDiscoverySettings(
         {
-          sitemap: {
-            enabled: true,
-            products: false,
-            categories: false,
-            collections: true,
-            pages: false,
+        sitemap: {
+          enabled: true,
+          staticPages: true,
+          products: false,
+          categories: false,
+          collections: true,
+          pages: false,
           },
           feeds: { productCatalogEnabled: false },
           robots: { advertiseSitemap: false },
@@ -70,6 +71,7 @@ describe("SEO discovery settings", () => {
     ).toEqual({
       sitemap: {
         enabled: true,
+        staticPages: true,
         products: false,
         categories: false,
         collections: true,

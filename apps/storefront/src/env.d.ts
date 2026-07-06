@@ -164,6 +164,15 @@ interface Window {
   __scaliusCartPageAbortController?: AbortController;
   dataLayer?: Record<string, unknown>[];
   fbq?: ((...args: unknown[]) => void) & { q?: unknown[] };
+  ttq?: {
+    load?: (...args: unknown[]) => void;
+    page?: (...args: unknown[]) => void;
+    track?: (
+      eventName: string,
+      parameters?: Record<string, unknown>,
+    ) => void;
+    [key: string]: unknown;
+  };
   zaraz?: {
     ecommerce?: (
       eventName: string,

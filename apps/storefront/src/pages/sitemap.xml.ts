@@ -33,12 +33,14 @@ export const GET: APIRoute = async (_context: APIContext) => {
     }
 
     // Generate sitemap index with all sub-sitemaps
-    const sitemaps = [
-      {
+    const sitemaps = [];
+
+    if (sitemapPolicy.staticPages) {
+      sitemaps.push({
         loc: `${baseUrl}/sitemap-static.xml`,
         lastmod: now,
-      },
-    ];
+      });
+    }
 
     if (sitemapPolicy.categories) {
       sitemaps.push({

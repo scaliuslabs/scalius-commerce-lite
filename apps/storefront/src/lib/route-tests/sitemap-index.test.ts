@@ -77,6 +77,7 @@ describe("sitemap index route", () => {
       discovery: {
         sitemap: {
           enabled: true,
+          staticPages: false,
           products: false,
           categories: false,
           collections: true,
@@ -90,8 +91,8 @@ describe("sitemap index route", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getAllProducts).not.toHaveBeenCalled();
-    expect(body).toContain("https://storefront.example.test/sitemap-static.xml");
     expect(body).toContain("https://storefront.example.test/sitemap-collections.xml");
+    expect(body).not.toContain("sitemap-static.xml");
     expect(body).not.toContain("sitemap-products.xml");
     expect(body).not.toContain("sitemap-categories.xml");
     expect(body).not.toContain("sitemap-pages.xml");
