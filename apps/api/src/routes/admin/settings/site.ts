@@ -44,6 +44,7 @@ const SEO_DISCOVERY_WARM_PATHS = [
   "/sitemap-collections.xml",
   "/sitemap-pages.xml",
   "/sitemap-products.xml?page=1",
+  "/api/product-feed.xml",
   "/api/facebook-feed.xml",
 ] as const;
 

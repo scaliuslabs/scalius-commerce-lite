@@ -36,6 +36,7 @@ describe("storefront HTML cache policy boundaries", () => {
     expect(source).toContain("/^\\/sitemap\\.xml$/");
     expect(source).toContain("/^\\/sitemap-.*\\.xml$/");
     expect(source).toContain("/^\\/sitemap\\.xsl$/");
+    expect(source).toContain("/^\\/api\\/product-feed\\.xml$/");
     expect(source).toContain("/^\\/api\\/facebook-feed\\.xml$/");
     expect(source).toContain("isCacheablePublicResponse(response)");
   });

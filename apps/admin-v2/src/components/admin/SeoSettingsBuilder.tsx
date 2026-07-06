@@ -354,8 +354,8 @@ export function SeoSettingsBuilder() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Controls the Google/Base RSS product catalog at
-                `/api/facebook-feed.xml`, accepted by Meta, Merchant Center,
-                and catalog sync tools.
+                `/api/product-feed.xml`; `/api/facebook-feed.xml` remains as a
+                compatibility alias for existing Meta catalog syncs.
               </p>
             </div>
           </div>

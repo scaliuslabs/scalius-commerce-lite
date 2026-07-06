@@ -33,6 +33,8 @@ export const prerender = false;
 
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 5000;
+const API_FEED_PAGE_SIZE = 100;
+const API_FEED_BATCH_SIZE = 5;
 const FEED_IMAGE_OPTIONS = {
   width: 1200,
   quality: 90,
@@ -489,6 +491,101 @@ function generateFacebookFeed(
   return xml;
 }
 
+type FeedItemWindowResult =
+  | { status: "ok"; items: FeedItem[] }
+  | { status: "unavailable" };
+
+function appendFeedItemsForWindow(
+  pageItems: FeedItem[],
+  state: { seen: number; items: FeedItem[] },
+  targetStart: number,
+  targetEnd: number,
+) {
+  const nextSeen = state.seen + pageItems.length;
+  if (nextSeen <= targetStart) {
+    state.seen = nextSeen;
+    return;
+  }
+
+  const startIndex = Math.max(0, targetStart - state.seen);
+  const endIndex = Math.min(pageItems.length, targetEnd - state.seen);
+  if (endIndex > startIndex) {
+    state.items.push(...pageItems.slice(startIndex, endIndex));
+  }
+  state.seen = nextSeen;
+}
+
+async function readFeedItemWindow({
+  page,
+  limit,
+  baseUrl,
+  feedsPolicy,
+  feedVariantStrategy,
+}: {
+  page: number;
+  limit: number;
+  baseUrl: string;
+  feedsPolicy: SeoDiscoverySettings["feeds"];
+  feedVariantStrategy: ReturnType<typeof getFeedVariantStrategy>;
+}): Promise<FeedItemWindowResult> {
+  const targetStart = (page - 1) * limit;
+  const targetEnd = targetStart + limit;
+  const state = { seen: 0, items: [] as FeedItem[] };
+
+  const firstResponse = await getFeedProducts({
+    page: 1,
+    limit: API_FEED_PAGE_SIZE,
+  });
+  if (!firstResponse) {
+    return { status: "unavailable" };
+  }
+
+  appendFeedItemsForWindow(
+    toFeedItems(firstResponse.data, baseUrl, feedsPolicy, feedVariantStrategy),
+    state,
+    targetStart,
+    targetEnd,
+  );
+
+  const totalPages = firstResponse.pagination.totalPages;
+  for (
+    let currentApiPage = 2;
+    currentApiPage <= totalPages && state.items.length < limit;
+    currentApiPage += API_FEED_BATCH_SIZE
+  ) {
+    const endBatchPage = Math.min(
+      currentApiPage + API_FEED_BATCH_SIZE - 1,
+      totalPages,
+    );
+    const batchResponses = await Promise.all(
+      Array.from(
+        { length: endBatchPage - currentApiPage + 1 },
+        (_, index) =>
+          getFeedProducts({
+            page: currentApiPage + index,
+            limit: API_FEED_PAGE_SIZE,
+          }),
+      ),
+    );
+
+    for (const response of batchResponses) {
+      if (state.items.length >= limit) break;
+      if (!response) {
+        return { status: "unavailable" };
+      }
+
+      appendFeedItemsForWindow(
+        toFeedItems(response.data, baseUrl, feedsPolicy, feedVariantStrategy),
+        state,
+        targetStart,
+        targetEnd,
+      );
+    }
+  }
+
+  return { status: "ok", items: state.items };
+}
+
 export const GET: APIRoute = async ({ url }: APIContext) => {
   try {
     let baseUrl: string;
@@ -536,81 +633,24 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     setRuntimeImageCdnPolicy(layoutData?.media);
     const currencyCode = layoutData?.currency?.code ?? "BDT";
 
-    // We need multiple API pages to fulfill 1 feed chunk depending on limit
-    const limitParams = 100; // Fetch 100 products per API call
-    const requiredApiPages = Math.ceil(limit / limitParams);
-    const startApiPage = (page - 1) * requiredApiPages + 1;
-
-    const allProducts: FeedItem[] = [];
-
-    // Fetch first page to get totalPages
-    const firstResponse = await getFeedProducts({
-      page: startApiPage,
-      limit: limitParams,
+    const feedWindow = await readFeedItemWindow({
+      page,
+      limit,
+      baseUrl,
+      feedsPolicy,
+      feedVariantStrategy,
     });
-
-    if (!firstResponse) {
+    if (feedWindow.status === "unavailable") {
       return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
     }
 
-    if (!firstResponse.data || firstResponse.data.length === 0) {
-      if (page > 1) {
-        return new Response("Page not found", { status: 404 });
-      }
-      return new Response(generateFacebookFeed([], baseUrl, currencyCode, feedsPolicy), {
-        status: 200,
-        headers: FEED_XML_HEADERS,
-      });
-    }
-
-    allProducts.push(
-      ...toFeedItems(firstResponse.data, baseUrl, feedsPolicy, feedVariantStrategy),
-    );
-    const totalPages = firstResponse.pagination.totalPages;
-
-    // Limit requiredApiPages if we hit the end of the total products early
-    const maxApiPage = Math.min(
-      startApiPage + requiredApiPages - 1,
-      totalPages,
-    );
-
-    // Fetch remaining API pages needed for this feed chunk in parallel batches to avoid timeout
-    const BATCH_SIZE = 5;
-    for (
-      let currentApiPage = startApiPage + 1;
-      currentApiPage <= maxApiPage;
-      currentApiPage += BATCH_SIZE
-    ) {
-      const fetchPromises = [];
-      const endBatchPage = Math.min(
-        currentApiPage + BATCH_SIZE - 1,
-        maxApiPage,
-      );
-
-      for (let p = currentApiPage; p <= endBatchPage; p++) {
-        fetchPromises.push(getFeedProducts({ page: p, limit: limitParams }));
-      }
-
-      const batchResponses = await Promise.all(fetchPromises);
-      for (const res of batchResponses) {
-        if (!res) {
-          return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
-        }
-        if (res && res.data) {
-          allProducts.push(
-            ...toFeedItems(res.data, baseUrl, feedsPolicy, feedVariantStrategy),
-          );
-        }
-      }
-    }
-
-    if (allProducts.length === 0 && page > 1) {
+    if (feedWindow.items.length === 0 && page > 1) {
       return new Response("Page not found", { status: 404 });
     }
 
     // Generate feed XML
     const xml = generateFacebookFeed(
-      allProducts.slice(0, limit),
+      feedWindow.items,
       baseUrl,
       currencyCode,
       feedsPolicy,

@@ -14,7 +14,7 @@ const SITEMAP_SECTIONS = [
 const PREVIEW_ENDPOINTS = [
   ["robots", "robots.txt", "/robots.txt"] as const,
   ["sitemap", "Sitemap index", "/sitemap.xml"] as const,
-  ["feed", "Catalog feed XML", "/api/facebook-feed.xml"] as const,
+  ["feed", "Catalog feed XML", "/api/product-feed.xml"] as const,
 ];
 
 export type SeoDiscoveryTone = "ok" | "warning" | "disabled" | "info";
