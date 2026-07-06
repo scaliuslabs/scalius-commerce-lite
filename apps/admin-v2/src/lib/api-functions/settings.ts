@@ -1,5 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { CustomerAuthMethod } from "@scalius/shared/customer-auth-policy";
+import type {
+  GetApiV1AdminSettingsSeoResponses,
+  PostApiV1AdminSettingsSeoData,
+} from "@scalius/api-client/types";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 import type {
   MetaConversionsSettings,
@@ -15,6 +19,9 @@ export {
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type SettingsPayload = { [key: string]: JsonValue };
+type ApiEnvelopeData<T> = T extends { success: true; data: infer D }
+  ? D
+  : never;
 export type MessagePayload = { message?: string };
 export type EmptyPayload = Record<string, never>;
 export type SettingsByCategoryInput = { category: string };
@@ -79,8 +86,12 @@ export interface GeneralSettingsPayload {
   headerConfig: SettingsPayload;
   footerConfig: SettingsPayload;
 }
-export type SeoSettingsPayload = SettingsPayload;
-export type UpdateSeoSettingsInput = SettingsPayload;
+export type SeoSettingsPayload = ApiEnvelopeData<
+  GetApiV1AdminSettingsSeoResponses[200]
+>;
+export type UpdateSeoSettingsInput = NonNullable<
+  PostApiV1AdminSettingsSeoData["body"]
+>;
 export type SecuritySettingsPayload = SettingsPayload;
 export type UpdateSecuritySettingsInput = SettingsPayload;
 export type AuthVerificationMethod = CustomerAuthMethod;

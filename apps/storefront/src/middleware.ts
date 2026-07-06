@@ -17,6 +17,7 @@ import {
 } from "./lib/cache-generations";
 import { resolveCacheNamespace } from "./lib/cache-namespace";
 import { buildHtmlCacheBaseUrl } from "./lib/cache-key";
+import { applyBrowserCachePolicyForPublicResponse } from "./lib/public-discovery-cache";
 
 // Timeout constants to prevent hanging on slow/unavailable services
 const KV_TIMEOUT_MS = 1000;
@@ -238,13 +239,9 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
         const response = new Response(cachedResponse.body, cachedResponse);
         // Override the stored Cache-Control with browser-safe headers.
         // The stored response has `public, max-age=31536000, immutable` for edge storage
-        // but the browser must ALWAYS revalidate to avoid serving stale content.
-        response.headers.set(
-          "Cache-Control",
-          "no-cache, no-store, must-revalidate",
-        );
-        response.headers.set("Pragma", "no-cache");
-        response.headers.set("Expires", "0");
+        // but HTML browsers must always revalidate after deployments. Public discovery
+        // XML/text keeps its route TTL so crawlers and feed fetchers can cache sanely.
+        applyBrowserCachePolicyForPublicResponse(response, url.pathname);
         const generationSuffix = htmlGeneration.generation !== null
           ? `; gen=${htmlGeneration.generation}`
           : "";
@@ -257,14 +254,9 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
 
       if (isCacheablePublicResponse(response)) {
         // Force browsers to ALWAYS revalidate HTML with server.
-        // `no-cache` is more aggressive than `max-age=0, must-revalidate`
-        // and ensures browser never uses stale HTML after deployments.
-        response.headers.set(
-          "Cache-Control",
-          "no-cache, no-store, must-revalidate",
-        );
-        response.headers.set("Pragma", "no-cache");
-        response.headers.set("Expires", "0");
+        // Discovery XML/text keeps public route TTLs; those responses are still
+        // edge-invalidated through the same KV version/build-id cache key.
+        applyBrowserCachePolicyForPublicResponse(response, url.pathname);
         response.headers.set(
           "X-Cache-Status",
           `MISS; v=${cacheVersion}; build=${BUILD_ID}${

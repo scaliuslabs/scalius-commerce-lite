@@ -38,4 +38,11 @@ describe("setPageCspHeader", () => {
       "https://payments.example.com",
     );
   });
+
+  it("allows the TikTok Pixel browser host", async () => {
+    const response = await setPageCspHeader(new Response("ok"), {});
+    const csp = response.headers.get("Content-Security-Policy");
+
+    expect(csp).toContain("https://analytics.tiktok.com");
+  });
 });

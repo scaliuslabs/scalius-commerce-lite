@@ -19,10 +19,11 @@ import { Textarea } from "../ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { Switch } from "../ui/switch";
+import { SeoDiscoveryStatusCard } from "./SeoDiscoveryStatusCard";
 import {
   getSeoSettings,
-  type SettingsPayload,
   updateSeoSettings,
+  type UpdateSeoSettingsInput,
 } from "@/lib/api-functions/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
@@ -44,21 +45,24 @@ const defaultConfig: SeoConfig = {
 };
 
 const fetchSeo = async (): Promise<SeoConfig> => {
-  const data = (await getSeoSettings()) as Record<string, unknown>;
+  const data = await getSeoSettings();
   return {
-    siteTitle: (data.siteTitle as string) || defaultConfig.siteTitle,
-    homepageTitle: (data.homepageTitle as string) || defaultConfig.homepageTitle,
+    siteTitle: data.siteTitle || defaultConfig.siteTitle,
+    homepageTitle: data.homepageTitle || defaultConfig.homepageTitle,
     homepageMetaDescription:
-      (data.homepageMetaDescription as string) ||
-      defaultConfig.homepageMetaDescription,
-    robotsTxt: (data.robotsTxt as string) || defaultConfig.robotsTxt,
+      data.homepageMetaDescription || defaultConfig.homepageMetaDescription,
+    robotsTxt:
+      typeof data.robotsTxt === "string"
+        ? data.robotsTxt
+        : defaultConfig.robotsTxt,
     discovery: normalizeSeoDiscoverySettings(data.discovery),
   };
 };
 
 const saveSeo = async (values: SeoConfig) => {
+  const payload: UpdateSeoSettingsInput = values;
   await updateSeoSettings({
-    data: values as unknown as SettingsPayload,
+    data: payload,
   });
 };
 
@@ -118,6 +122,7 @@ export function SeoSettingsBuilder() {
       title: "Sitemap",
       rows: [
         ["enabled", "Generate sitemap.xml"] as const,
+        ["staticPages", "Home + search"] as const,
         ["products", "Products"] as const,
         ["categories", "Categories"] as const,
         ["collections", "Collections"] as const,
@@ -329,6 +334,11 @@ export function SeoSettingsBuilder() {
           </div>
         </div>
       </div>
+
+      <SeoDiscoveryStatusCard
+        discovery={values.discovery}
+        robotsTxt={values.robotsTxt}
+      />
 
       <div className="space-y-2">
         <Label htmlFor="robots-txt">robots.txt Content</Label>

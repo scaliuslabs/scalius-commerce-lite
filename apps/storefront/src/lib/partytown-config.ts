@@ -1,6 +1,6 @@
 /**
  * Partytown Configuration
- * Uses same-origin reverse proxy at /api/__ptproxy to fetch third-party scripts.
+ * Uses same-origin reverse proxy at /api/ptproxy to fetch third-party scripts.
  */
 
 /**
@@ -16,10 +16,11 @@ function resolveUrl(url: URL, location: Location, type: string): URL {
   if (
     type === "script" &&
     (url.hostname === "connect.facebook.net" ||
+      url.hostname === "analytics.tiktok.com" ||
       url.hostname === "www.googletagmanager.com" ||
       url.hostname === "www.google-analytics.com")
   ) {
-    const proxyUrl = new URL("/api/__ptproxy", location.origin);
+    const proxyUrl = new URL("/api/ptproxy", location.origin);
     proxyUrl.searchParams.set("url", url.href);
     return proxyUrl;
   }
@@ -32,7 +33,15 @@ function resolveUrl(url: URL, location: Location, type: string): URL {
  */
 export const partytownConfig = {
   // Forward these methods to the main thread
-  forward: ["dataLayer.push", "fbq", "ga", "gtag"] as string[],
+  forward: [
+    "dataLayer.push",
+    "fbq",
+    "ga",
+    "gtag",
+    "ttq.load",
+    "ttq.page",
+    "ttq.track",
+  ] as string[],
 
   // Custom URL resolver for proxying scripts
   resolveUrl,

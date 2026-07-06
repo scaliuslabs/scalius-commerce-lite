@@ -50,6 +50,7 @@ describe("site SEO settings", () => {
       discovery: {
         sitemap: {
           enabled: true,
+          staticPages: true,
           products: true,
           categories: true,
           collections: true,
@@ -74,6 +75,7 @@ describe("site SEO settings", () => {
       discovery: {
         sitemap: {
           enabled: true,
+          staticPages: true,
           products: false,
           categories: true,
           collections: true,
@@ -115,6 +117,7 @@ describe("site SEO settings", () => {
         JSON.stringify({
           sitemap: {
             enabled: true,
+            staticPages: true,
             products: false,
             categories: false,
             collections: true,
@@ -138,6 +141,7 @@ describe("site SEO settings", () => {
     expect(JSON.parse(String(rawValue))).toEqual({
       sitemap: {
         enabled: true,
+        staticPages: true,
         products: false,
         categories: false,
         collections: true,

@@ -125,6 +125,8 @@ const COMMON_THIRD_PARTY_DOMAINS = [
   "https://static.cloudflareinsights.com",
   "https://*.cloudflareinsights.com",
   "https://cloudflareinsights.com",
+  // TikTok Pixel
+  "https://analytics.tiktok.com",
   // Stripe payment gateway
   "https://js.stripe.com",
   "https://*.stripe.com",
@@ -152,6 +154,7 @@ function getConnectSrcDirectives(additionalDomains: string[], env?: CspEnv): str
     "https://connect.facebook.net", // For Facebook Pixel script/connections
     "https://www.facebook.com", // For Facebook Pixel (tr endpoint)
     "https://*.facebook.com", // For FB API calls by the pixel
+    "https://analytics.tiktok.com", // For TikTok Pixel script/connections
     ...additionalDomains,
   ];
 
@@ -184,6 +187,7 @@ function getImgSrcDirectives(additionalDomains: string[], platformDomains: strin
   return [
     ...ESSENTIAL_IMG_SRC,
     "https://www.facebook.com", // Facebook Pixel noscript tag
+    "https://analytics.tiktok.com", // TikTok Pixel beacon/image fallbacks
     ...localDevSources,
     ...platformDomains,
     ...additionalDomains,

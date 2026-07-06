@@ -49,4 +49,25 @@ describe("static sitemap route", () => {
     expect(body).toContain("<urlset");
     expect(body).not.toContain("https://storefront.example.test/search");
   });
+
+  it("returns empty XML when the static sitemap section is disabled", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      discovery: {
+        sitemap: {
+          enabled: true,
+          staticPages: false,
+        },
+      },
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<urlset");
+    expect(body).not.toContain("<loc>https://storefront.example.test/</loc>");
+    expect(body).not.toContain(
+      "<loc>https://storefront.example.test/search</loc>",
+    );
+  });
 });

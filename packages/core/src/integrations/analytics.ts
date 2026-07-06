@@ -1,7 +1,7 @@
 // src/lib/analytics.ts
 /**
  * Utility functions for handling analytics scripts and event tracking
- * with Partytown for Facebook Pixel and Google Analytics 4.
+ * with Partytown for Facebook Pixel, TikTok Pixel, and Google Analytics 4.
  */
 
 // Declare window for environments where the DOM lib is not available (e.g. Cloudflare Workers).
@@ -48,6 +48,7 @@ export function shouldUsePartytown(script: AnalyticsConfig): boolean {
     "google_analytics",
     "facebook_pixel",
     "google_tag_manager",
+    "tiktok_pixel",
   ];
   return partytownTypes.includes(script.type) || script.type === "custom";
 }

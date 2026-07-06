@@ -30,6 +30,21 @@ describe("analytics validation", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts TikTok Pixel as a first-class script type", () => {
+    expect(analyticsScriptTypes).toContain("tiktok_pixel");
+
+    const result = createAnalyticsSchema.safeParse({
+      name: "TikTok Pixel",
+      type: "tiktok_pixel",
+      isActive: true,
+      usePartytown: true,
+      config: "<script>ttq.load('PIXEL_ID');ttq.page();</script>",
+      location: "head",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it("accepts a Cloudflare Web Analytics token", () => {
     const result = createAnalyticsSchema.safeParse({
       name: "Cloudflare Web Analytics",

@@ -23,6 +23,9 @@ const ESSENTIAL_DOMAINS = [
   "facebook.net",
   "connect.facebook.net",
 
+  // TikTok Pixel
+  "analytics.tiktok.com",
+
   // Common CDNs
   "jsdelivr.net",
   "unpkg.com",

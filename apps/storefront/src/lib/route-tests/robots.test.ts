@@ -82,6 +82,24 @@ describe("robots.txt route", () => {
     expect(body).not.toContain("[your-sitemap-url]");
   });
 
+  it("replaces invalid custom sitemap directives with the canonical sitemap", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      siteTitle: "Store",
+      homepageTitle: "Home",
+      homepageMetaDescription: "Description",
+      robotsTxt:
+        "User-agent: *\nAllow: /\nSitemap: /sitemap.xml\nSitemap: javascript:alert(1)",
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Sitemap: https://storefront.example.test/sitemap.xml");
+    expect(body).not.toContain("Sitemap: /sitemap.xml");
+    expect(body).not.toContain("javascript:");
+  });
+
   it("does not advertise sitemap when the discovery policy disables it", async () => {
     mocks.getSeoSettings.mockResolvedValueOnce({
       siteTitle: "Store",
@@ -101,5 +119,26 @@ describe("robots.txt route", () => {
     expect(body).toContain("User-agent: *");
     expect(body).not.toContain("Sitemap:");
     expect(body).not.toContain("[your-sitemap-url]");
+  });
+
+  it("strips invalid custom sitemap directives when sitemap advertising is off", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      siteTitle: "Store",
+      homepageTitle: "Home",
+      homepageMetaDescription: "Description",
+      robotsTxt:
+        "User-agent: *\nAllow: /\nSitemap: /sitemap.xml\nSitemap: https://old.example.com/sitemap.xml",
+      discovery: {
+        sitemap: { enabled: true },
+        robots: { advertiseSitemap: false },
+      },
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).not.toContain("Sitemap: /sitemap.xml");
+    expect(body).toContain("Sitemap: https://old.example.com/sitemap.xml");
   });
 });

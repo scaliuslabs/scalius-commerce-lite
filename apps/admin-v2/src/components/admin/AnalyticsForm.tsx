@@ -77,6 +77,19 @@ const ANALYTICS_CONFIG_EXAMPLES: Record<AnalyticsScriptType, string> = {
   fbq('init', 'PIXEL_ID');
   fbq('track', 'PageView');
 </script>`,
+  tiktok_pixel: `<!-- TikTok Pixel Code -->
+<script>
+  !function (w, d, t) {
+    w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];
+    ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"];
+    ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};
+    for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);
+    ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e};
+    ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{};ttq._i[e]=[];ttq._i[e]._u=r;ttq._t=ttq._t||{};ttq._t[e]=+new Date;ttq._o=ttq._o||{};ttq._o[e]=n||{};n=d.createElement("script");n.type="text/javascript";n.async=!0;n.src=r+"?sdkid="+e+"&lib="+t;e=d.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
+    ttq.load('PIXEL_ID');
+    ttq.page();
+  }(window, document, 'ttq');
+</script>`,
   cloudflare_web_analytics: CLOUDFLARE_WEB_ANALYTICS_EXAMPLE,
   custom: `<!-- Custom Script -->
 <script>
@@ -173,11 +186,14 @@ export function AnalyticsForm({
     selectedType === "cloudflare_web_analytics";
   const isGoogleAnalytics = selectedType === "google_analytics";
   const isGoogleTagManager = selectedType === "google_tag_manager";
+  const isTikTokPixel = selectedType === "tiktok_pixel";
   const namePlaceholder = isGoogleTagManager
     ? "Google Tag Manager"
     : isGoogleAnalytics
       ? "Google Analytics 4"
-      : "Analytics Script";
+      : isTikTokPixel
+        ? "TikTok Pixel"
+        : "Analytics Script";
   const locationDescription = isCloudflareWebAnalytics
     ? "Cloudflare recommends installing the beacon before the closing body tag."
     : isGoogleTagManager
@@ -189,7 +205,9 @@ export function AnalyticsForm({
       ? "Paste the GA4 gtag.js snippet that uses a G- measurement ID, not a GTM container snippet."
       : isGoogleTagManager
         ? "Paste the Google Tag Manager web container script that uses a GTM- container ID. Add the noscript iframe as a separate Body Start custom script if needed."
-        : "The actual script code that will be inserted into your site.";
+        : isTikTokPixel
+          ? "Paste the TikTok Pixel base code that loads your PIXEL_ID and calls ttq.page()."
+          : "The actual script code that will be inserted into your site.";
 
   return (
     <FormContainer
@@ -253,6 +271,9 @@ export function AnalyticsForm({
                     <SelectItem value="facebook_pixel">
                       Facebook Pixel
                     </SelectItem>
+                    <SelectItem value="tiktok_pixel">
+                      TikTok Pixel
+                    </SelectItem>
                     <SelectItem value="cloudflare_web_analytics">
                       Cloudflare Web Analytics
                     </SelectItem>
@@ -261,7 +282,8 @@ export function AnalyticsForm({
                 </Select>
                 <FormDescription>
                   Use Google Analytics for GA4 snippets with G- measurement IDs,
-                  or Google Tag Manager for GTM containers with GTM- IDs.
+                  Google Tag Manager for GTM containers with GTM- IDs, or
+                  TikTok Pixel for browser commerce events.
                 </FormDescription>
                 <FormMessage />
               </FormItem>

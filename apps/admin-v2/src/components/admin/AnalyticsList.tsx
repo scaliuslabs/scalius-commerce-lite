@@ -92,6 +92,8 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
         return "Google Tag Manager";
       case "facebook_pixel":
         return "Facebook Pixel";
+      case "tiktok_pixel":
+        return "TikTok Pixel";
       case "cloudflare_web_analytics":
         return "Cloudflare Web Analytics";
       case "custom":

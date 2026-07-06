@@ -9,9 +9,9 @@ import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
-  getRuntimeStorefrontUrl,
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
+import { buildAbsoluteStorefrontSeoUrl, getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import { resolveBuyerVariants, getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
@@ -103,8 +103,8 @@ const quickBuyNotice = quickBuyNoticeByError[Astro.url.searchParams.get("error")
 
 // --- SEO: per SEO-01, SEO-02, OG-01, OG-05 ---
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
-const storefrontUrl = getRuntimeStorefrontUrl();
-const canonicalUrl = `${storefrontUrl}/products/${product.slug}`;
+const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
+const canonicalUrl = buildAbsoluteStorefrontSeoUrl(`/products/${product.slug}`);
 
 // OG image: 1200x630 for social sharing (per OG-05)
 const primaryImageUrl =
@@ -155,27 +155,29 @@ const priceValidUntil = new Date(new Date().getFullYear() + 1, 11, 31)
   .split("T")[0];
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
-const productJsonLd = serializeJsonForInlineScript({
-  "@context": "https://schema.org",
-  "@type": "Product",
-  name: product.name,
-  description: (product.description || product.name).replace(/<[^>]+>/g, ""),
-  ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
-  sku: primarySku,
-  brand: { "@type": "Brand", name: brandName },
-  offers: {
-    "@type": "Offer",
-    url: canonicalUrl,
-    priceCurrency: currencyCode,
-    price: product.discountedPrice.toFixed(2),
-    priceValidUntil: priceValidUntil,
-    availability: buyerStockSummary.canPurchaseAny
-      ? "https://schema.org/InStock"
-      : "https://schema.org/OutOfStock",
-    itemCondition: "https://schema.org/NewCondition",
-    seller: { "@type": "Organization", name: storeName },
-  },
-});
+const productJsonLd = canonicalUrl
+  ? serializeJsonForInlineScript({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: product.name,
+      description: (product.description || product.name).replace(/<[^>]+>/g, ""),
+      ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
+      sku: primarySku,
+      brand: { "@type": "Brand", name: brandName },
+      offers: {
+        "@type": "Offer",
+        url: canonicalUrl,
+        priceCurrency: currencyCode,
+        price: product.discountedPrice.toFixed(2),
+        priceValidUntil: priceValidUntil,
+        availability: buyerStockSummary.canPurchaseAny
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+        itemCondition: "https://schema.org/NewCondition",
+        seller: { "@type": "Organization", name: storeName },
+      },
+    })
+  : null;
 
 // BreadcrumbList JSON-LD -- per SEO-02
 const breadcrumbItems = [
@@ -197,11 +199,13 @@ const breadcrumbItems = [
     item: canonicalUrl,
   },
 ];
-const breadcrumbJsonLd = serializeJsonForInlineScript({
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  itemListElement: breadcrumbItems,
-});
+const breadcrumbJsonLd = storefrontUrl && canonicalUrl
+  ? serializeJsonForInlineScript({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: breadcrumbItems,
+    })
+  : null;
 
 const productCategoryAnalytics = productCategory
   ? {
@@ -216,7 +220,7 @@ const productCategoryAnalytics = productCategory
   title={pageTitle}
   description={seoDescription || pageDescription}
   layoutData={layoutData}
-  canonicalUrl={canonicalUrl}
+  canonicalUrl={canonicalUrl ?? undefined}
   ogImage={ogImageUrl ?? undefined}
   ogType="product"
   ogPrice={product.discountedPrice.toFixed(2)}
@@ -239,8 +243,8 @@ const productCategoryAnalytics = productCategory
         />
       )
     }
-    <script is:inline type="application/ld+json" set:html={productJsonLd} />
-    <script is:inline type="application/ld+json" set:html={breadcrumbJsonLd} />
+    {productJsonLd && <script is:inline type="application/ld+json" set:html={productJsonLd} />}
+    {breadcrumbJsonLd && <script is:inline type="application/ld+json" set:html={breadcrumbJsonLd} />}
   </Fragment>
 
   <div
