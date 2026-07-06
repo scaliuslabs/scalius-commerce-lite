@@ -68,7 +68,7 @@ Injects Cloudflare Worker runtime bindings into AsyncLocalStorage for the reques
 - `PUBLIC_API_URL` -- Full API URL for client-side use
 - `PUBLIC_API_BASE_URL` -- Base URL for image optimization and auth redirects
 - `CDN_DOMAIN_URL` -- CDN domain for image URLs (also set on `globalThis.__SCALIUS_CDN_DOMAIN__` as fallback)
-- `STOREFRONT_URL` -- This storefront's URL (sitemaps, Facebook feed)
+- `STOREFRONT_URL` -- This storefront's URL (sitemaps and catalog feeds)
 - `API_TOKEN` -- Token for protected API operations
 
 ### 2. Caching Middleware (`cachingMiddleware`)
@@ -223,7 +223,8 @@ Proxy routes handle operations that require the `API_TOKEN` secret or need to un
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |
 | `ptproxy.ts` | Partytown analytics proxy |
-| `facebook-feed.xml.ts` | Facebook/Meta product feed; availability comes from the public product list `availableForSale` SKU projection so feed XML matches product-page structured data and checkout purchasability. Feed links require an absolute storefront URL, product items without a real absolute `http(s)` primary image are skipped because catalog feeds require `image_link`, and `0` discounted prices are preserved instead of falling back to the original price. |
+| `product-feed.xml.ts` | Canonical Google/Base product feed. Reuses the shared catalog feed generator with Google availability values (`in_stock`/`out_of_stock`). |
+| `facebook-feed.xml.ts` | Shared catalog feed generator plus Facebook/Meta compatibility endpoint. Availability comes from the public product list `availableForSale` SKU projection so feed XML matches product-page structured data and checkout purchasability. Feed links require an absolute storefront URL, honor valid product canonical path overrides, preserve variant query params, skip product items without a real absolute `http(s)` primary image because catalog feeds require `image_link`, preserve `0` discounted prices instead of falling back to the original price, emit true brand/GTIN data when provided, and never invent a `Generic` brand. |
 
 Checkout proxy endpoints unwrap `.data` before returning to the browser -- the checkout page reads top-level fields.
 `checkout/create-order.ts` must preserve structured `details.itemIssues` from the API; checkout gateway handlers use those issues to return buyers to the cart repair UI instead of collapsing catalog freshness failures into a string-only payment error.

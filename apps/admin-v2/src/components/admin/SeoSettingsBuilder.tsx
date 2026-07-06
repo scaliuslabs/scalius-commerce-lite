@@ -69,7 +69,7 @@ const defaultConfig: SeoConfig = {
   siteTitle: "",
   homepageTitle: "",
   homepageMetaDescription: "",
-  robotsTxt: `User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`,
+  robotsTxt: `User-agent: *\nAllow: /`,
   discovery: {
     ...DEFAULT_SEO_DISCOVERY_SETTINGS,
     returnPolicy: DEFAULT_SEO_RETURN_POLICY_SETTINGS,
@@ -439,6 +439,11 @@ export function SeoSettingsBuilder() {
                     <SelectItem value="products">Product rows</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Use SKU / variant rows for products with options. Use product
+                  rows only when a catalog tool should receive one row per
+                  product.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="feed-title" className="text-xs">
@@ -768,13 +773,13 @@ export function SeoSettingsBuilder() {
           id="robots-txt"
           value={values.robotsTxt}
           onChange={(e) => updateField("robotsTxt", e.target.value)}
-          placeholder={`User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`}
+          placeholder={`User-agent: *\nAllow: /`}
           rows={6}
           className="font-mono text-sm"
         />
         <p className="text-xs text-muted-foreground">
-          Controls which pages search engine crawlers can access. Ensure your
-          sitemap URL is included.
+          Crawler rules only. Sitemap lines are managed by the Advertise
+          sitemap URL switch and normalized to the current Store URL.
         </p>
       </div>
 

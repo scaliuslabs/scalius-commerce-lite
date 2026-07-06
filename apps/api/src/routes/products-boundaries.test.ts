@@ -63,6 +63,7 @@ describe("product route query boundaries", () => {
     expect(listSchema).not.toContain("description:");
     expect(listSchema).not.toContain("attributes:");
     expect(listSchema).not.toContain("variants:");
+    expect(feedSchema).toContain("canonicalPath: z.string().nullable()");
     expect(feedSchema).toContain("description: z.string().nullable()");
     expect(feedSchema).toContain("attributes: z.array(storefrontFeedAttributeSchema)");
     expect(feedSchema).toContain("variants: z.array(storefrontFeedVariantSchema)");
@@ -85,13 +86,14 @@ describe("product route query boundaries", () => {
     expect(variantSchema).toContain("reservedStock: z.number()");
     expect(variantSchema).toContain("isDefault: z.boolean()");
     expect(variantSchema).toContain("trackInventory: z.boolean()");
+    expect(variantSchema).toContain("barcode: z.string().nullable()");
+    expect(variantSchema).toContain("barcodeType: z.string().nullable()");
     expect(variantSchema).toContain("discountType: z.string().nullable()");
     expect(variantSchema).toContain("discountPercentage: z.number().nullable()");
     expect(variantSchema).toContain("discountAmount: z.number().nullable()");
     expect(variantSchema).toContain("colorSortOrder: z.number().nullable()");
     expect(variantSchema).toContain("sizeSortOrder: z.number().nullable()");
     expect(variantSchema).toContain("deletedAt: z.string().nullable()");
-    expect(variantSchema).not.toContain("barcode");
     expect(variantSchema).not.toContain("createdAt");
     expect(variantSchema).not.toContain("updatedAt");
   });

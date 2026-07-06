@@ -30,6 +30,7 @@ vi.mock("@/lib/image-optimizer", () => ({
 }));
 
 import { GET } from "../../../pages/api/facebook-feed.xml";
+import { GET as GOOGLE_FEED_GET } from "../../../pages/api/product-feed.xml";
 
 function context(url = "https://storefront.example.test/api/facebook-feed.xml") {
   return { url: new URL(url) } as never;
@@ -167,6 +168,8 @@ describe("Facebook product feed route", () => {
               size: "M",
               color: "Red",
               sku: "SKU-RED-M",
+              barcode: "012345678905",
+              barcodeType: "upc",
               price: 1000,
               stock: 4,
               reservedStock: 1,
@@ -213,6 +216,7 @@ describe("Facebook product feed route", () => {
     );
     expect(body).toContain("<g:price>900.00 BDT</g:price>");
     expect(body).toContain("<g:sale_price>900.00 BDT</g:sale_price>");
+    expect(body).toContain("<g:gtin>012345678905</g:gtin>");
     expect(body).toContain("<g:availability>in stock</g:availability>");
     expect(body).toContain("<g:availability>out of stock</g:availability>");
     expect(body).toContain("<g:color>Red</g:color>");
@@ -220,6 +224,61 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:material>Cotton</g:material>");
     expect(body).not.toContain("Catalog color");
     expect(body).not.toContain("Catalog size");
+  });
+
+  it("uses Google feed vocabulary and canonical product paths on the canonical product feed", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_shirt",
+          slug: "linen-shirt",
+          canonicalPath: "/shop/linen-shirt",
+          name: "Linen Shirt",
+          description: "Soft shirt",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          hasVariants: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/shirt.jpg",
+          variants: [
+            {
+              id: "var_red_m",
+              productId: "prod_shirt",
+              size: "M",
+              color: "Red",
+              sku: "SKU-RED-M",
+              barcode: null,
+              barcodeType: null,
+              price: 1000,
+              stock: 4,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: null,
+              discountAmount: null,
+              discountPercentage: null,
+            },
+          ],
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(
+      "<g:link>https://storefront.example.test/shop/linen-shirt?size=M&amp;color=Red</g:link>",
+    );
+    expect(body).toContain("<g:availability>in_stock</g:availability>");
+    expect(body).not.toContain("<g:availability>in stock</g:availability>");
+    expect(body).toContain("<g:identifier_exists>no</g:identifier_exists>");
+    expect(body).not.toContain("<g:brand>Generic</g:brand>");
   });
 
   it("paginates the flattened feed rows so expanded variants are not dropped", async () => {
@@ -365,6 +424,58 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:item_group_id>prod_shirt</g:item_group_id>");
     expect(body).toContain("<g:price>1100.00 BDT</g:price>");
     expect(body).not.toContain("SKU-RED-M");
+  });
+
+  it("emits a real GTIN for simple product rows when the default SKU has one", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_simple",
+          slug: "simple-shirt",
+          canonicalPath: null,
+          name: "Simple Shirt",
+          description: "One sellable SKU",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          hasVariants: false,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/simple.jpg",
+          variants: [
+            {
+              id: "var_simple",
+              productId: "prod_simple",
+              size: null,
+              color: null,
+              sku: "SIMPLE-SHIRT",
+              barcode: "8801234567890",
+              barcodeType: "ean13",
+              price: 1200,
+              stock: 0,
+              reservedStock: 0,
+              trackInventory: false,
+              isDefault: true,
+              deletedAt: null,
+              discountType: null,
+              discountAmount: null,
+              discountPercentage: null,
+            },
+          ],
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body.match(/<item>/g)).toHaveLength(1);
+    expect(body).toContain("<g:id>prod_simple</g:id>");
+    expect(body).toContain("<g:gtin>8801234567890</g:gtin>");
+    expect(body).not.toContain("<g:identifier_exists>no</g:identifier_exists>");
   });
 
   it("skips unavailable variant rows when sold-out catalog items are disabled", async () => {

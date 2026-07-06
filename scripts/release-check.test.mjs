@@ -101,7 +101,7 @@ function sitemapXml() {
   ].join("");
 }
 
-function feedXml() {
+function feedXml({ availability = "in_stock" } = {}) {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel>',
@@ -109,7 +109,7 @@ function feedXml() {
     "<g:id>sku_1</g:id>",
     "<g:link>https://storefront.example.test/products/demo-product</g:link>",
     "<g:image_link>https://cloud.example.test/demo.png</g:image_link>",
-    "<g:availability>in stock</g:availability>",
+    `<g:availability>${availability}</g:availability>`,
     "</item>",
     "</channel></rss>",
   ].join("");
@@ -276,6 +276,20 @@ describe("release-check discovery evaluators", () => {
       ok: true,
       itemCount: 1,
     });
+    expect(evaluateProductFeedXml(feedWithChannelLink, {
+      availabilityValues: ["in_stock", "out_of_stock"],
+      storefrontOrigin,
+    })).toMatchObject({
+      ok: true,
+      availabilityValues: ["in_stock"],
+    });
+    expect(evaluateProductFeedXml(feedXml({ availability: "in stock" }), {
+      availabilityValues: ["in_stock", "out_of_stock"],
+      storefrontOrigin,
+    })).toMatchObject({
+      ok: false,
+      errors: ["feed availability value is not allowed: in stock"],
+    });
 
     expect(evaluateProductFeedXml("<rss><channel><item><g:link>/products/demo</g:link></item></channel></rss>", {
       storefrontOrigin,
@@ -391,7 +405,14 @@ describe("runReleaseCheck", () => {
           (parsed.search === "?limit=5" || parsed.search === "?page=2&limit=5")
         ) {
           feedRequests.push(`${parsed.pathname}${parsed.search}`);
-          return discoveryResponse(feedXml(), FEED_CACHE_CONTROL);
+          return discoveryResponse(
+            feedXml({
+              availability: parsed.pathname === "/api/product-feed.xml"
+                ? "in_stock"
+                : "in stock",
+            }),
+            FEED_CACHE_CONTROL,
+          );
         }
         if (parsed.pathname === "/products/demo-product") return textResponse(productHtml());
       }
@@ -564,7 +585,14 @@ describe("runReleaseCheck", () => {
           (parsed.pathname === "/api/product-feed.xml" || parsed.pathname === "/api/facebook-feed.xml") &&
           (parsed.search === "?limit=5" || parsed.search === "?page=2&limit=5")
         ) {
-          return discoveryResponse(feedXml(), FEED_CACHE_CONTROL);
+          return discoveryResponse(
+            feedXml({
+              availability: parsed.pathname === "/api/product-feed.xml"
+                ? "in_stock"
+                : "in stock",
+            }),
+            FEED_CACHE_CONTROL,
+          );
         }
         if (parsed.pathname === "/products/demo-product") return textResponse(productHtml());
       }
