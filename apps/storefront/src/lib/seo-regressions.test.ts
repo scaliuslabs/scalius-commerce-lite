@@ -31,13 +31,35 @@ describe("storefront SEO regressions", () => {
     expect(source).toContain("toAbsoluteStorefrontSeoUrl");
     expect(source).toContain("buildOnlineStoreJsonLd");
     expect(source).toContain("buildMerchantReturnPolicyJsonLd");
+    expect(source).toContain("const storeSchemaName =");
     expect(source).toMatch(
       /const orgJsonLd =\s+discoverySettings\.structuredData\.organization && storefrontUrl && logoUrl/,
     );
+    expect(source).toContain("const websiteJsonLd = discoverySettings.structuredData.websiteSearch && storefrontUrl && storeSchemaName");
     expect(source).toContain("business: businessInfo");
     expect(source).toContain("settings: layoutData?.seo?.returnPolicy");
     expect(source).toContain("returnPolicy: merchantReturnPolicyJsonLd");
+    expect(source).not.toContain("footerData.copyrightText ||");
+    expect(source).not.toContain("headerData.logo.alt ||");
     expect(source).not.toContain("logo: { \"@type\": \"ImageObject\", url: getOptimizedImageUrl");
+  });
+
+  it("keeps category and collection breadcrumbs independent from CollectionPage schema", async () => {
+    const categorySource = await readFile(
+      join(storefrontRoot, "src/pages/categories/[slug].astro"),
+      "utf8",
+    );
+    const collectionSource = await readFile(
+      join(storefrontRoot, "src/pages/collections/[id].astro"),
+      "utf8",
+    );
+
+    expect(categorySource).toContain("const categoryBreadcrumbJsonLd =");
+    expect(categorySource).toContain("categorySchemaDescription");
+    expect(categorySource).toContain("plainText(category.description)");
+    expect(collectionSource).toContain("const collectionBreadcrumbJsonLd =");
+    expect(categorySource).not.toContain("breadcrumb: {");
+    expect(collectionSource).not.toContain("breadcrumb: {");
   });
 
   it("keeps OnlineStore sameAs limited to absolute http(s) footer social URLs", async () => {

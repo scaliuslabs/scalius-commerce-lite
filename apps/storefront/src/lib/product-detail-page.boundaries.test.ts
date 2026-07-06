@@ -43,8 +43,12 @@ describe("product detail page SKU boundaries", () => {
     expect(source).not.toContain("priceValidUntil");
     expect(source).not.toContain("itemCondition");
     expect(source).not.toContain("NewCondition");
-    expect(source).toContain("sellerName");
+    expect(source).toContain("sellerSchemaName");
     expect(source).toContain("layoutData.business?.companyName");
+    expect(source).toContain("layoutData.business?.legalName");
+    expect(source).not.toContain("layoutData?.footer?.copyrightText");
+    expect(source).not.toContain("layoutData?.header?.logo?.alt");
+    expect(source).not.toContain('||\n  "Store"');
     expect(source).toContain("const brandName = brandAttribute?.value?.trim() || null");
     expect(source).not.toContain("brandAttribute?.value || storeName");
   });

@@ -94,12 +94,11 @@ const faviconUrl = headerData?.favicon?.src
 
 // --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
 const businessInfo = layoutData?.business;
-const storeName =
-  businessInfo?.companyName ||
-  businessInfo?.legalName ||
-  footerData.copyrightText ||
-  headerData.logo.alt ||
-  "Store";
+const storeSchemaName =
+  businessInfo?.companyName?.trim() ||
+  businessInfo?.legalName?.trim() ||
+  null;
+const ogSiteName = storeSchemaName ?? "Store";
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData?.seo?.returnPolicy,
@@ -123,7 +122,6 @@ const orgJsonLd = discoverySettings.structuredData.organization && storefrontUrl
       buildOnlineStoreJsonLd({
         storefrontUrl,
         logoUrl,
-        storeName,
         business: businessInfo,
         social: footerData.social,
         returnPolicy: merchantReturnPolicyJsonLd,
@@ -132,11 +130,11 @@ const orgJsonLd = discoverySettings.structuredData.organization && storefrontUrl
   : null;
 
 // WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
-const websiteJsonLd = discoverySettings.structuredData.websiteSearch && storefrontUrl
+const websiteJsonLd = discoverySettings.structuredData.websiteSearch && storefrontUrl && storeSchemaName
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "WebSite",
-      name: storeName,
+      name: storeSchemaName,
       url: storefrontUrl,
       potentialAction: {
         "@type": "SearchAction",
@@ -323,7 +321,7 @@ const runtimeGlobalsScript = [
     {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
 
     {/* Open Graph tags — per OG-01 through OG-05 */}
-    <meta property="og:site_name" content={storeName} />
+    <meta property="og:site_name" content={ogSiteName} />
     <meta property="og:type" content={ogType} />
     <meta property="og:title" content={title} />
     {description && <meta property="og:description" content={description} />}

@@ -161,12 +161,10 @@ const seoDescription = (
   .replace(/<[^>]+>/g, "")
   .slice(0, 200);
 
-const sellerName =
-  layoutData.business?.companyName ||
-  layoutData.business?.legalName ||
-  layoutData?.footer?.copyrightText ||
-  layoutData?.header?.logo?.alt ||
-  "Store";
+const sellerSchemaName =
+  layoutData.business?.companyName?.trim() ||
+  layoutData.business?.legalName?.trim() ||
+  null;
 
 // Brand from product attributes (mirrors facebook-feed.xml.ts pattern)
 const brandAttribute = product.attributes?.find(
@@ -240,6 +238,9 @@ const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
 function withOfferCommerceDetails<T extends Record<string, unknown>>(offer: T): T {
   return {
     ...offer,
+    ...(sellerSchemaName
+      ? { seller: { "@type": "Organization", name: sellerSchemaName } }
+      : {}),
     ...(offerShippingDetails.length > 0
       ? { shippingDetails: offerShippingDetails }
       : {}),
@@ -284,7 +285,6 @@ const productJsonLd = discoverySettings.structuredData.products && !product.noIn
                   availability: isVariantAvailable(variant)
                     ? "https://schema.org/InStock"
                     : "https://schema.org/OutOfStock",
-                  seller: { "@type": "Organization", name: sellerName },
                 }),
               };
             }),
@@ -309,7 +309,6 @@ const productJsonLd = discoverySettings.structuredData.products && !product.noIn
               availability: buyerStockSummary.canPurchaseAny
                 ? "https://schema.org/InStock"
                 : "https://schema.org/OutOfStock",
-              seller: { "@type": "Organization", name: sellerName },
             }),
           },
     )

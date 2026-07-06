@@ -35,7 +35,7 @@ Primary references for future changes:
 
 ## Known P2 Release Follow-Ups
 
-- `SEO-011`: remaining structured-data preview UX, live child-sitemap/dashboard refinement, seller/OnlineStore identity hardening, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls where dashboard-owned data exists.
+- `SEO-011`: remaining structured-data preview UX, live child-sitemap/dashboard refinement, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls where dashboard-owned data exists.
 - SEO dashboard live probes now cover `robots.txt`, the sitemap index, canonical product feed, and compatibility Facebook feed from the saved Store URL. The dashboard also has bounded aggregate product-feed diagnostics for emitted rows, skipped rows, reason counts, and safe product samples; latest live smoke showed `77` emitted rows, `0` skipped rows, `2` products to fix, `29` scanned products, and live proof checks OK.
 - Feed diagnostics: `/api/product-feed.xml` paginates the final flattened feed rows so skipped products and variant expansion cannot drop rows, while admin diagnostics explain which bounded catalog rows are skipped and why.
 - `ANALYTICS-003`: provider health/test-send UX, TikTok Events API/server-side adapter, and broader server-side attribution.

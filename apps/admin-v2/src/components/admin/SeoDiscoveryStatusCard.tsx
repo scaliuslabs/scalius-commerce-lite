@@ -23,6 +23,7 @@ import { seoFeedDiagnosticsQueryOptions } from "../../lib/api-query-options/seo-
 import { seoDiscoveryLiveProbeQueryOptions } from "../../lib/api-query-options/seo-discovery-live-probe";
 import {
   buildSeoDiscoveryStatus,
+  type SeoDiscoveryBusinessIdentity,
   type SeoDiscoverySettingsWithReturnPolicy,
   type SeoDiscoveryLiveProbeResource,
   type SeoDiscoveryLiveProbeResult,
@@ -33,6 +34,7 @@ import {
 interface SeoDiscoveryStatusCardProps {
   discovery: SeoDiscoverySettingsWithReturnPolicy;
   robotsTxt: string;
+  businessIdentity?: SeoDiscoveryBusinessIdentity | null;
 }
 
 const TONE_LABELS: Record<SeoDiscoveryTone, string> = {
@@ -509,6 +511,7 @@ function FeedDiagnosticsPanel({
 export function SeoDiscoveryStatusCard({
   discovery,
   robotsTxt,
+  businessIdentity,
 }: SeoDiscoveryStatusCardProps) {
   const {
     storefrontUrl,
@@ -519,6 +522,7 @@ export function SeoDiscoveryStatusCard({
     discovery,
     robotsTxt,
     storefrontUrl,
+    businessIdentity,
   });
   const liveProbeEnabled =
     status.storefront.mode === "absolute" &&
@@ -618,6 +622,11 @@ export function SeoDiscoveryStatusCard({
       >
         <div className="space-y-1 text-xs leading-5 text-muted-foreground">
           <p>{status.structuredData.organizationNote}</p>
+          {status.structuredData.identityWarning ? (
+            <p className="text-amber-700">
+              {status.structuredData.identityWarning}
+            </p>
+          ) : null}
           <p>
             Return policy:{" "}
             <span className="font-medium text-foreground">

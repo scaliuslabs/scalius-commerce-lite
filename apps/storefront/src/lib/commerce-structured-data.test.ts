@@ -15,7 +15,6 @@ describe("commerce structured data helpers", () => {
       buildOnlineStoreJsonLd({
         storefrontUrl: "https://shop.example.com",
         logoUrl: "https://shop.example.com/logo.png",
-        storeName: "Fallback Store",
         business: {
           companyName: "Scalius Mart",
           legalName: "Scalius Mart Ltd.",
@@ -66,7 +65,12 @@ describe("commerce structured data helpers", () => {
       buildOnlineStoreJsonLd({
         storefrontUrl: "https://shop.example.com",
         logoUrl: null,
-        storeName: "Store",
+      }),
+    ).toBeNull();
+    expect(
+      buildOnlineStoreJsonLd({
+        storefrontUrl: "https://shop.example.com",
+        logoUrl: "https://shop.example.com/logo.png",
       }),
     ).toBeNull();
   });
@@ -101,7 +105,7 @@ describe("commerce structured data helpers", () => {
       buildOnlineStoreJsonLd({
         storefrontUrl: "https://shop.example.com",
         logoUrl: "https://shop.example.com/logo.png",
-        storeName: "Store",
+        business: { companyName: "Scalius Mart" },
         returnPolicy,
       }),
     ).toMatchObject({

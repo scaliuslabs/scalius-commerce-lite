@@ -79,6 +79,28 @@ const ogImageUrl = firstProductImage
     )
   : undefined;
 
+const collectionBreadcrumbJsonLd =
+  discoverySettings.structuredData.breadcrumbs && !collection.noIndex && canonicalUrl && storefrontUrl
+  ? serializeJsonForInlineScript({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: `${storefrontUrl}/`,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: collection.name,
+          item: canonicalUrl,
+        },
+      ],
+    })
+  : null;
+
 const collectionJsonLd =
   discoverySettings.structuredData.collections && !collection.noIndex && canonicalUrl && storefrontUrl
   ? serializeJsonForInlineScript({
@@ -88,27 +110,6 @@ const collectionJsonLd =
       description: subtitle || `Browse ${collection.name}.`,
       url: canonicalUrl,
       numberOfItems: products.length,
-      ...(discoverySettings.structuredData.breadcrumbs
-        ? {
-            breadcrumb: {
-              "@type": "BreadcrumbList",
-              itemListElement: [
-                {
-                  "@type": "ListItem",
-                  position: 1,
-                  name: "Home",
-                  item: `${storefrontUrl}/`,
-                },
-                {
-                  "@type": "ListItem",
-                  position: 2,
-                  name: collection.name,
-                  item: canonicalUrl,
-                },
-              ],
-            },
-          }
-        : {}),
     })
   : null;
 ---
@@ -124,6 +125,7 @@ const collectionJsonLd =
 >
   <Fragment slot="head">
     {collectionJsonLd && <script is:inline type="application/ld+json" set:html={collectionJsonLd} />}
+    {collectionBreadcrumbJsonLd && <script is:inline type="application/ld+json" set:html={collectionBreadcrumbJsonLd} />}
   </Fragment>
 
   <div class="min-h-screen bg-gray-50">
