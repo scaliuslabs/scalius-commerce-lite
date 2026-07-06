@@ -7,13 +7,20 @@ import {
   Search,
   AlertCircle,
   Truck,
+  Undo2,
 } from "lucide-react";
 import {
   DEFAULT_SEO_DISCOVERY_SETTINGS,
-  normalizeSeoDiscoverySettings,
   type SeoFeedVariantStrategy,
-  type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
+import {
+  DEFAULT_SEO_RETURN_POLICY_SETTINGS,
+  normalizeSeoReturnPolicySettings,
+  type SeoReturnPolicyCategory,
+  type SeoReturnPolicyFees,
+  type SeoReturnPolicyMethod,
+  type SeoReturnPolicySettings,
+} from "@scalius/shared/seo-return-policy";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -30,6 +37,10 @@ import {
 } from "../ui/select";
 import { SeoDiscoveryStatusCard } from "./SeoDiscoveryStatusCard";
 import {
+  normalizeSeoDiscoverySettingsWithReturnPolicy,
+  type SeoDiscoverySettingsWithReturnPolicy,
+} from "@/lib/seo-discovery-status";
+import {
   getSeoSettings,
   updateSeoSettings,
   type UpdateSeoSettingsInput,
@@ -42,19 +53,68 @@ interface SeoConfig {
   homepageTitle: string;
   homepageMetaDescription: string;
   robotsTxt: string;
-  discovery: SeoDiscoverySettings;
+  discovery: SeoDiscoverySettingsWithReturnPolicy;
 }
+
+interface SeoSettingsPayloadWithReturnPolicy {
+  discovery?: unknown;
+  returnPolicy?: unknown;
+}
+
+const DEFAULT_RETURN_WINDOW_DAYS = 7;
 
 const defaultConfig: SeoConfig = {
   siteTitle: "",
   homepageTitle: "",
   homepageMetaDescription: "",
   robotsTxt: `User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`,
-  discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+  discovery: {
+    ...DEFAULT_SEO_DISCOVERY_SETTINGS,
+    returnPolicy: DEFAULT_SEO_RETURN_POLICY_SETTINGS,
+  },
 };
+
+function readReturnPolicy(value: unknown): unknown {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as { returnPolicy?: unknown }).returnPolicy
+    : undefined;
+}
+
+function normalizeSeoDiscoveryPayload(
+  data: SeoSettingsPayloadWithReturnPolicy,
+): SeoDiscoverySettingsWithReturnPolicy {
+  const discovery = normalizeSeoDiscoverySettingsWithReturnPolicy(data.discovery);
+  const returnPolicySource =
+    readReturnPolicy(data.discovery) ?? data.returnPolicy ?? discovery.returnPolicy;
+
+  return {
+    ...discovery,
+    returnPolicy: normalizeSeoReturnPolicySettings(returnPolicySource),
+  };
+}
+
+function sanitizeSeoConfig(values: SeoConfig): SeoConfig {
+  return {
+    ...values,
+    discovery: {
+      ...values.discovery,
+      returnPolicy: normalizeSeoReturnPolicySettings(
+        values.discovery.returnPolicy,
+      ),
+    },
+  };
+}
+
+function isInvalidReturnPolicyUrl(value: string): boolean {
+  return (
+    value.trim() !== "" &&
+    normalizeSeoReturnPolicySettings({ policyUrl: value }).policyUrl === ""
+  );
+}
 
 const fetchSeo = async (): Promise<SeoConfig> => {
   const data = await getSeoSettings();
+  const dataWithReturnPolicy = data as SeoSettingsPayloadWithReturnPolicy;
   return {
     siteTitle: data.siteTitle || defaultConfig.siteTitle,
     homepageTitle: data.homepageTitle || defaultConfig.homepageTitle,
@@ -64,12 +124,21 @@ const fetchSeo = async (): Promise<SeoConfig> => {
       typeof data.robotsTxt === "string"
         ? data.robotsTxt
         : defaultConfig.robotsTxt,
-    discovery: normalizeSeoDiscoverySettings(data.discovery),
+    discovery: normalizeSeoDiscoveryPayload(dataWithReturnPolicy),
   };
 };
 
 const saveSeo = async (values: SeoConfig) => {
-  const payload: UpdateSeoSettingsInput = values;
+  const sanitized = sanitizeSeoConfig(values);
+  const { returnPolicy, ...discovery } = sanitized.discovery;
+  const payload: UpdateSeoSettingsInput = {
+    siteTitle: sanitized.siteTitle,
+    homepageTitle: sanitized.homepageTitle,
+    homepageMetaDescription: sanitized.homepageMetaDescription,
+    robotsTxt: sanitized.robotsTxt,
+    discovery,
+    returnPolicy,
+  };
   await updateSeoSettings({
     data: payload,
   });
@@ -108,12 +177,12 @@ export function SeoSettingsBuilder() {
 
   const updateDiscovery = useCallback(
     <
-      Section extends keyof SeoDiscoverySettings,
-      Key extends keyof SeoDiscoverySettings[Section],
+      Section extends keyof SeoDiscoverySettingsWithReturnPolicy,
+      Key extends keyof SeoDiscoverySettingsWithReturnPolicy[Section],
     >(
       section: Section,
       key: Key,
-      value: SeoDiscoverySettings[Section][Key],
+      value: SeoDiscoverySettingsWithReturnPolicy[Section][Key],
     ) => {
       setValues((prev) => ({
         ...prev,
@@ -122,6 +191,22 @@ export function SeoSettingsBuilder() {
           [section]: {
             ...prev.discovery[section],
             [key]: value,
+          },
+        },
+      }));
+    },
+    [setValues],
+  );
+
+  const updateReturnPolicy = useCallback(
+    (patch: Partial<SeoReturnPolicySettings>) => {
+      setValues((prev) => ({
+        ...prev,
+        discovery: {
+          ...prev.discovery,
+          returnPolicy: {
+            ...prev.discovery.returnPolicy,
+            ...patch,
           },
         },
       }));
@@ -143,6 +228,12 @@ export function SeoSettingsBuilder() {
       ],
     },
   ];
+  const returnPolicy = values.discovery.returnPolicy;
+  const isFiniteReturnPolicy = returnPolicy.category === "finite";
+  const isNoReturnsPolicy = returnPolicy.category === "no_returns";
+  const returnPolicyUrlInvalid = isInvalidReturnPolicyUrl(
+    returnPolicy.policyUrl,
+  );
 
   if (isLoading) {
     return (
@@ -453,6 +544,195 @@ export function SeoSettingsBuilder() {
                   }
                 />
               </label>
+            </div>
+          </div>
+
+          <div className="border-t border-border p-4 md:col-span-2">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex min-w-0 items-start gap-2">
+                <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">
+                    Return Policy Schema
+                  </div>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Publishes public return-policy discovery facts when enabled.
+                    It does not change checkout, refunds, or order handling.
+                  </p>
+                </div>
+              </div>
+              <label className="flex shrink-0 items-center justify-between gap-3 text-sm lg:min-w-[220px]">
+                <span>Emit return policy schema</span>
+                <Switch
+                  checked={returnPolicy.enabled}
+                  onCheckedChange={(checked) =>
+                    updateReturnPolicy({
+                      enabled: checked,
+                      ...(checked &&
+                      returnPolicy.category === "finite" &&
+                      returnPolicy.returnWindowDays === null
+                        ? { returnWindowDays: DEFAULT_RETURN_WINDOW_DAYS }
+                        : {}),
+                    })
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-2">
+                <Label htmlFor="return-policy-country" className="text-xs">
+                  Country
+                </Label>
+                <Input
+                  id="return-policy-country"
+                  value={returnPolicy.country}
+                  maxLength={2}
+                  onChange={(event) =>
+                    updateReturnPolicy({
+                      country: event.target.value
+                        .toUpperCase()
+                        .replace(/[^A-Z]/g, "")
+                        .slice(0, 2),
+                    })
+                  }
+                  placeholder="BD"
+                  className="uppercase"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="return-policy-category" className="text-xs">
+                  Return category
+                </Label>
+                <Select
+                  value={returnPolicy.category}
+                  onValueChange={(value) => {
+                    const category = value as SeoReturnPolicyCategory;
+                    updateReturnPolicy({
+                      category,
+                      returnWindowDays:
+                        category === "finite"
+                          ? returnPolicy.returnWindowDays ??
+                            DEFAULT_RETURN_WINDOW_DAYS
+                          : null,
+                    });
+                  }}
+                >
+                  <SelectTrigger id="return-policy-category">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="finite">Finite return window</SelectItem>
+                    <SelectItem value="unlimited">Unlimited returns</SelectItem>
+                    <SelectItem value="no_returns">No returns</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {isFiniteReturnPolicy ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="return-window-days" className="text-xs">
+                    Return window days
+                  </Label>
+                  <Input
+                    id="return-window-days"
+                    type="number"
+                    min={1}
+                    max={365}
+                    step={1}
+                    value={returnPolicy.returnWindowDays ?? ""}
+                    onChange={(event) =>
+                      updateReturnPolicy({
+                        returnWindowDays:
+                          event.target.value === ""
+                            ? null
+                            : Number(event.target.value),
+                      })
+                    }
+                    placeholder="7"
+                  />
+                </div>
+              ) : null}
+
+              <div className="grid gap-2">
+                <Label htmlFor="return-policy-fees" className="text-xs">
+                  Return fees
+                </Label>
+                <Select
+                  value={returnPolicy.returnFees}
+                  onValueChange={(value) =>
+                    updateReturnPolicy({
+                      returnFees: value as SeoReturnPolicyFees,
+                    })
+                  }
+                  disabled={isNoReturnsPolicy}
+                >
+                  <SelectTrigger id="return-policy-fees">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="free">Free returns</SelectItem>
+                    <SelectItem value="customer_responsibility">
+                      Buyer pays return fees
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="return-policy-method" className="text-xs">
+                  Return method
+                </Label>
+                <Select
+                  value={returnPolicy.returnMethod}
+                  onValueChange={(value) =>
+                    updateReturnPolicy({
+                      returnMethod: value as SeoReturnPolicyMethod,
+                    })
+                  }
+                  disabled={isNoReturnsPolicy}
+                >
+                  <SelectTrigger id="return-policy-method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mail">Return by mail</SelectItem>
+                    <SelectItem value="in_store">Return in store</SelectItem>
+                    <SelectItem value="both">
+                      Mail or in-store returns
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2 md:col-span-2 xl:col-span-3">
+                <Label htmlFor="return-policy-url" className="text-xs">
+                  Policy URL
+                </Label>
+                <Input
+                  id="return-policy-url"
+                  value={returnPolicy.policyUrl}
+                  onChange={(event) =>
+                    updateReturnPolicy({ policyUrl: event.target.value })
+                  }
+                  onBlur={(event) =>
+                    updateReturnPolicy({ policyUrl: event.target.value.trim() })
+                  }
+                  placeholder="/returns"
+                />
+                {returnPolicyUrlInvalid ? (
+                  <p className="text-xs leading-5 text-amber-700">
+                    Use a same-origin path like /returns or an absolute http(s)
+                    URL. Invalid policy URLs are omitted on save.
+                  </p>
+                ) : (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Optional. Leave blank until the public return policy page is
+                    ready.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>

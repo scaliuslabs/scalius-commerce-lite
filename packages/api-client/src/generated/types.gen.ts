@@ -4245,9 +4245,19 @@ export type GetApiV1SeoResponses = {
                     websiteSearch: boolean;
                     products: boolean;
                     productGroups: boolean;
+                    offerShippingDetails: boolean;
                     breadcrumbs: boolean;
                     collections: boolean;
                 };
+            };
+            returnPolicy: {
+                enabled: boolean;
+                country: string;
+                category: 'finite' | 'unlimited' | 'no_returns';
+                returnWindowDays: number | null;
+                returnFees: 'free' | 'customer_responsibility';
+                returnMethod: 'mail' | 'in_store' | 'both';
+                policyUrl: string;
             };
         };
     };
@@ -19663,6 +19673,15 @@ export type GetApiV1AdminSettingsSeoResponses = {
                     collections: boolean;
                 };
             };
+            returnPolicy: {
+                enabled: boolean;
+                country: string;
+                category: 'finite' | 'unlimited' | 'no_returns';
+                returnWindowDays: number | null;
+                returnFees: 'free' | 'customer_responsibility';
+                returnMethod: 'mail' | 'in_store' | 'both';
+                policyUrl: string;
+            };
         };
     };
 };
@@ -19703,6 +19722,15 @@ export type PostApiV1AdminSettingsSeoData = {
                 breadcrumbs?: boolean;
                 collections?: boolean;
             };
+        };
+        returnPolicy?: {
+            enabled?: boolean;
+            country?: string;
+            category?: 'finite' | 'unlimited' | 'no_returns';
+            returnWindowDays?: number | null;
+            returnFees?: 'free' | 'customer_responsibility';
+            returnMethod?: 'mail' | 'in_store' | 'both';
+            policyUrl?: string;
         };
     };
     path?: never;

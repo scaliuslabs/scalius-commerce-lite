@@ -14424,6 +14424,9 @@
                                 "productGroups": {
                                   "type": "boolean"
                                 },
+                                "offerShippingDetails": {
+                                  "type": "boolean"
+                                },
                                 "breadcrumbs": {
                                   "type": "boolean"
                                 },
@@ -14436,6 +14439,7 @@
                                 "websiteSearch",
                                 "products",
                                 "productGroups",
+                                "offerShippingDetails",
                                 "breadcrumbs",
                                 "collections"
                               ]
@@ -14447,6 +14451,58 @@
                             "robots",
                             "structuredData"
                           ]
+                        },
+                        "returnPolicy": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": "string",
+                              "enum": [
+                                "finite",
+                                "unlimited",
+                                "no_returns"
+                              ]
+                            },
+                            "returnWindowDays": {
+                              "type": "integer",
+                              "nullable": true,
+                              "minimum": 1,
+                              "maximum": 365
+                            },
+                            "returnFees": {
+                              "type": "string",
+                              "enum": [
+                                "free",
+                                "customer_responsibility"
+                              ]
+                            },
+                            "returnMethod": {
+                              "type": "string",
+                              "enum": [
+                                "mail",
+                                "in_store",
+                                "both"
+                              ]
+                            },
+                            "policyUrl": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "country",
+                            "category",
+                            "returnWindowDays",
+                            "returnFees",
+                            "returnMethod",
+                            "policyUrl"
+                          ]
                         }
                       },
                       "required": [
@@ -14454,7 +14510,8 @@
                         "homepageTitle",
                         "homepageMetaDescription",
                         "robotsTxt",
-                        "discovery"
+                        "discovery",
+                        "returnPolicy"
                       ]
                     }
                   },
@@ -65502,6 +65559,58 @@
                             "robots",
                             "structuredData"
                           ]
+                        },
+                        "returnPolicy": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": "string",
+                              "enum": [
+                                "finite",
+                                "unlimited",
+                                "no_returns"
+                              ]
+                            },
+                            "returnWindowDays": {
+                              "type": "integer",
+                              "nullable": true,
+                              "minimum": 1,
+                              "maximum": 365
+                            },
+                            "returnFees": {
+                              "type": "string",
+                              "enum": [
+                                "free",
+                                "customer_responsibility"
+                              ]
+                            },
+                            "returnMethod": {
+                              "type": "string",
+                              "enum": [
+                                "mail",
+                                "in_store",
+                                "both"
+                              ]
+                            },
+                            "policyUrl": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "country",
+                            "category",
+                            "returnWindowDays",
+                            "returnFees",
+                            "returnMethod",
+                            "policyUrl"
+                          ]
                         }
                       },
                       "required": [
@@ -65509,7 +65618,8 @@
                         "homepageTitle",
                         "homepageMetaDescription",
                         "robotsTxt",
-                        "discovery"
+                        "discovery",
+                        "returnPolicy"
                       ]
                     }
                   },
@@ -65874,6 +65984,51 @@
                             "type": "boolean"
                           }
                         }
+                      }
+                    }
+                  },
+                  "returnPolicy": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "country": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z]{2}$"
+                      },
+                      "category": {
+                        "type": "string",
+                        "enum": [
+                          "finite",
+                          "unlimited",
+                          "no_returns"
+                        ]
+                      },
+                      "returnWindowDays": {
+                        "type": "integer",
+                        "nullable": true,
+                        "minimum": 1,
+                        "maximum": 365
+                      },
+                      "returnFees": {
+                        "type": "string",
+                        "enum": [
+                          "free",
+                          "customer_responsibility"
+                        ]
+                      },
+                      "returnMethod": {
+                        "type": "string",
+                        "enum": [
+                          "mail",
+                          "in_store",
+                          "both"
+                        ]
+                      },
+                      "policyUrl": {
+                        "type": "string",
+                        "maxLength": 2048
                       }
                     }
                   }

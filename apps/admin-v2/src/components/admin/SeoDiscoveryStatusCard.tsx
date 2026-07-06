@@ -11,7 +11,6 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type {
   ProductFeedDiagnosticReason,
   ProductFeedDiagnosticsReport,
@@ -24,6 +23,7 @@ import { seoFeedDiagnosticsQueryOptions } from "../../lib/api-query-options/seo-
 import { seoDiscoveryLiveProbeQueryOptions } from "../../lib/api-query-options/seo-discovery-live-probe";
 import {
   buildSeoDiscoveryStatus,
+  type SeoDiscoverySettingsWithReturnPolicy,
   type SeoDiscoveryLiveProbeResource,
   type SeoDiscoveryLiveProbeResult,
   type SeoDiscoveryStatus,
@@ -31,7 +31,7 @@ import {
 } from "../../lib/seo-discovery-status";
 
 interface SeoDiscoveryStatusCardProps {
-  discovery: SeoDiscoverySettings;
+  discovery: SeoDiscoverySettingsWithReturnPolicy;
   robotsTxt: string;
 }
 
@@ -615,9 +615,15 @@ export function SeoDiscoveryStatusCard({
         title={status.structuredData.title}
         summary={status.structuredData.summary}
       >
-        <p className="text-xs leading-5 text-muted-foreground">
-          {status.structuredData.organizationNote}
-        </p>
+        <div className="space-y-1 text-xs leading-5 text-muted-foreground">
+          <p>{status.structuredData.organizationNote}</p>
+          <p>
+            Return policy:{" "}
+            <span className="font-medium text-foreground">
+              {status.structuredData.returnPolicySummary}
+            </span>
+          </p>
+        </div>
       </StatusRow>
 
       <StatusRow

@@ -130,6 +130,15 @@ function createTestApp() {
         collections: true,
       },
     },
+    returnPolicy: {
+      enabled: true,
+      country: "BD",
+      category: "finite",
+      returnWindowDays: 14,
+      returnFees: "customer_responsibility",
+      returnMethod: "mail",
+      policyUrl: "https://storefront.example.com/returns",
+    },
   });
   mocks.getProductFeedDiagnostics.mockResolvedValue({
     policy: {
@@ -224,6 +233,33 @@ describe("site settings cache invalidation", () => {
     expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
   });
 
+  it("exposes return policy settings on SEO reads", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/settings/seo",
+      { method: "GET" },
+      env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      data: {
+        returnPolicy: {
+          enabled: true,
+          country: "BD",
+          category: "finite",
+          returnWindowDays: 14,
+          returnFees: "customer_responsibility",
+          returnMethod: "mail",
+          policyUrl: "https://storefront.example.com/returns",
+        },
+      },
+    });
+  });
+
   it("accepts nested partial SEO discovery saves for safe merge semantics", async () => {
     const { app, env } = createTestApp();
 
@@ -252,6 +288,62 @@ describe("site settings cache invalidation", () => {
         },
       },
     );
+  });
+
+  it("accepts return policy saves through the SEO settings route", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(app, env, "POST", "/seo", {
+      returnPolicy: {
+        enabled: true,
+        country: "BD",
+        category: "finite",
+        returnWindowDays: 30,
+        returnFees: "free",
+        returnMethod: "both",
+        policyUrl: "/returns",
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.saveSeoSettings).toHaveBeenCalledWith(expect.anything(), {
+      returnPolicy: {
+        enabled: true,
+        country: "BD",
+        category: "finite",
+        returnWindowDays: 30,
+        returnFees: "free",
+        returnMethod: "both",
+        policyUrl: "/returns",
+      },
+    });
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["homepage", "layout"],
+      expect.objectContaining({ env }),
+      expect.objectContaining({
+        htmlPaths: expect.arrayContaining(["/robots.txt", "/sitemap.xml"]),
+      }),
+    );
+  });
+
+  it("rejects invalid return policy payloads before saving or invalidating", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(app, env, "POST", "/seo", {
+      returnPolicy: {
+        enabled: true,
+        country: "BD",
+        category: "finite",
+        returnWindowDays: 30,
+        returnFees: "free",
+        returnMethod: "mail",
+        policyUrl: "//evil.example/returns",
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
   });
 
   it("returns bounded product feed diagnostics from the current SEO feed policy", async () => {

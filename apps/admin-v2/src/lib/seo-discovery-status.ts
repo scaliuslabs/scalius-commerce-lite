@@ -2,6 +2,25 @@ import {
   normalizeSeoDiscoverySettings,
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
+import {
+  DEFAULT_SEO_RETURN_POLICY_SETTINGS,
+  normalizeSeoReturnPolicySettings,
+  type SeoReturnPolicyCategory,
+  type SeoReturnPolicyFees,
+  type SeoReturnPolicyMethod,
+  type SeoReturnPolicySettings,
+} from "@scalius/shared/seo-return-policy";
+
+export type {
+  SeoReturnPolicyCategory,
+  SeoReturnPolicyFees,
+  SeoReturnPolicyMethod,
+  SeoReturnPolicySettings,
+};
+
+export type SeoDiscoverySettingsWithReturnPolicy = SeoDiscoverySettings & {
+  returnPolicy: SeoReturnPolicySettings;
+};
 
 const SITEMAP_SECTIONS = [
   ["staticPages", "Home + search"] as const,
@@ -16,6 +35,23 @@ const PREVIEW_ENDPOINTS = [
   ["sitemap", "Sitemap index", "/sitemap.xml"] as const,
   ["feed", "Catalog feed XML", "/api/product-feed.xml"] as const,
 ];
+
+const RETURN_POLICY_CATEGORY_LABELS: Record<SeoReturnPolicyCategory, string> = {
+  finite: "finite return window",
+  unlimited: "unlimited returns",
+  no_returns: "no returns",
+};
+
+const RETURN_POLICY_FEES_LABELS: Record<SeoReturnPolicyFees, string> = {
+  free: "free returns",
+  customer_responsibility: "buyer pays return fees",
+};
+
+const RETURN_POLICY_METHOD_LABELS: Record<SeoReturnPolicyMethod, string> = {
+  mail: "return by mail",
+  in_store: "return in store",
+  both: "mail or in-store returns",
+};
 
 export type SeoDiscoveryTone = "ok" | "warning" | "disabled" | "info";
 export const SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS = [
@@ -112,6 +148,8 @@ export interface SeoDiscoveryStatus {
     productsEnabled: boolean;
     productGroupsEnabled: boolean;
     offerShippingDetailsEnabled: boolean;
+    returnPolicyEnabled: boolean;
+    returnPolicySummary: string;
     breadcrumbsEnabled: boolean;
     collectionsEnabled: boolean;
     organizationNote: string;
@@ -130,6 +168,48 @@ export interface SeoDiscoveryStatus {
       href: string | null;
     }>;
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+export function normalizeSeoDiscoverySettingsWithReturnPolicy(
+  value: unknown,
+): SeoDiscoverySettingsWithReturnPolicy {
+  const root = asRecord(value);
+
+  return {
+    ...normalizeSeoDiscoverySettings(value),
+    returnPolicy: normalizeSeoReturnPolicySettings(root.returnPolicy),
+  };
+}
+
+function buildReturnPolicySummary(policy: SeoReturnPolicySettings): string {
+  if (!policy.enabled) return "return policy off";
+
+  const categoryLabel = RETURN_POLICY_CATEGORY_LABELS[policy.category];
+  if (policy.category === "no_returns") {
+    return `${policy.country}; ${categoryLabel}`;
+  }
+
+  const windowLabel =
+    policy.category === "finite"
+      ? `${
+          policy.returnWindowDays ??
+          DEFAULT_SEO_RETURN_POLICY_SETTINGS.returnWindowDays
+        } day return window`
+      : categoryLabel;
+
+  return [
+    policy.country,
+    windowLabel,
+    RETURN_POLICY_FEES_LABELS[policy.returnFees],
+    RETURN_POLICY_METHOD_LABELS[policy.returnMethod],
+    policy.policyUrl ? "policy URL set" : "policy URL missing",
+  ].join("; ");
 }
 
 function isPlaceholderSitemapValue(value: string): boolean {
@@ -222,7 +302,7 @@ export function buildSeoDiscoveryStatus({
   robotsTxt,
   storefrontUrl,
 }: SeoDiscoveryStatusInput): SeoDiscoveryStatus {
-  const normalized = normalizeSeoDiscoverySettings(discovery);
+  const normalized = normalizeSeoDiscoverySettingsWithReturnPolicy(discovery);
   const customSitemapLines = findCustomSitemapLines(robotsTxt);
   const absoluteStorefrontUrl = parseSeoDiscoveryStorefrontUrl(storefrontUrl);
   const trimmedStorefrontUrl = storefrontUrl?.trim() ?? "";
@@ -303,6 +383,7 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.products ||
         normalized.structuredData.productGroups ||
         normalized.structuredData.offerShippingDetails ||
+        normalized.returnPolicy.enabled ||
         normalized.structuredData.breadcrumbs ||
         normalized.structuredData.collections
           ? "ok"
@@ -313,6 +394,7 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.products ||
         normalized.structuredData.productGroups ||
         normalized.structuredData.offerShippingDetails ||
+        normalized.returnPolicy.enabled ||
         normalized.structuredData.breadcrumbs ||
         normalized.structuredData.collections
           ? "Structured data on"
@@ -331,6 +413,9 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.offerShippingDetails
           ? "shipping offers"
           : "shipping offers off",
+        normalized.returnPolicy.enabled
+          ? "return policy"
+          : "return policy off",
         normalized.structuredData.breadcrumbs
           ? "breadcrumbs"
           : "breadcrumbs off",
@@ -344,10 +429,12 @@ export function buildSeoDiscoveryStatus({
       productGroupsEnabled: normalized.structuredData.productGroups,
       offerShippingDetailsEnabled:
         normalized.structuredData.offerShippingDetails,
+      returnPolicyEnabled: normalized.returnPolicy.enabled,
+      returnPolicySummary: buildReturnPolicySummary(normalized.returnPolicy),
       breadcrumbsEnabled: normalized.structuredData.breadcrumbs,
       collectionsEnabled: normalized.structuredData.collections,
       organizationNote:
-        "OnlineStore schema needs a logo; ProductGroup schema describes optioned products, and shipping schema uses active shipping methods.",
+        "OnlineStore schema needs a logo; ProductGroup schema describes optioned products, shipping schema uses active shipping methods, and return-policy schema uses only saved public policy fields.",
     },
     storefront: {
       tone: absoluteStorefrontUrl

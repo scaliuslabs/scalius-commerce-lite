@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSeoDiscoveryStatus,
+  normalizeSeoDiscoverySettingsWithReturnPolicy,
   summarizeSeoDiscoveryProbeBody,
 } from "./seo-discovery-status";
 
@@ -33,6 +34,15 @@ describe("buildSeoDiscoveryStatus", () => {
           breadcrumbs: true,
           collections: false,
         },
+        returnPolicy: {
+          enabled: true,
+          country: "bd",
+          category: "finite",
+          returnWindowDays: "14",
+          returnFees: "free",
+          returnMethod: "both",
+          policyUrl: " https://shop.example.com/returns ",
+        },
       },
       robotsTxt: "User-agent: *\nAllow: /\nSitemap: [your-sitemap-url]",
       storefrontUrl: "https://shop.example.com/",
@@ -61,10 +71,13 @@ describe("buildSeoDiscoveryStatus", () => {
     expect(status.productFeed.feedDescription).toBe("Fresh catalog");
     expect(status.robots.warning).toBeUndefined();
     expect(status.structuredData.summary).toBe(
-      "Organization; site search off; products; ProductGroup variants; shipping offers; breadcrumbs; collections off",
+      "Organization; site search off; products; ProductGroup variants; shipping offers; return policy; breadcrumbs; collections off",
+    );
+    expect(status.structuredData.returnPolicySummary).toBe(
+      "BD; 14 day return window; free returns; mail or in-store returns; policy URL set",
     );
     expect(status.structuredData.organizationNote).toBe(
-      "OnlineStore schema needs a logo; ProductGroup schema describes optioned products, and shipping schema uses active shipping methods.",
+      "OnlineStore schema needs a logo; ProductGroup schema describes optioned products, shipping schema uses active shipping methods, and return-policy schema uses only saved public policy fields.",
     );
     expect(status.storefront.mode).toBe("absolute");
     expect(status.storefront.links).toContainEqual({
@@ -142,11 +155,54 @@ describe("buildSeoDiscoveryStatus", () => {
     expect(status.sitemap.tone).toBe("disabled");
     expect(status.productFeed.tone).toBe("disabled");
     expect(status.structuredData.tone).toBe("disabled");
+    expect(status.structuredData.returnPolicySummary).toBe("return policy off");
     expect(status.storefront.mode).toBe("unavailable");
     expect(status.storefront.baseUrl).toBeNull();
     expect(status.storefront.links.every((link) => link.href === null)).toBe(
       true,
     );
+  });
+
+  it("normalizes return-policy discovery facts for schema-safe UI consumers", () => {
+    expect(
+      normalizeSeoDiscoverySettingsWithReturnPolicy({
+        returnPolicy: {
+          enabled: "yes",
+          country: "Bangladesh",
+          category: "finite",
+          returnWindowDays: 900,
+          returnFees: "unknown",
+          returnMethod: "in_store",
+          policyUrl: "javascript:alert(1)",
+        },
+      }).returnPolicy,
+    ).toEqual({
+      enabled: false,
+      country: "BD",
+      category: "finite",
+      returnWindowDays: null,
+      returnFees: "customer_responsibility",
+      returnMethod: "in_store",
+      policyUrl: "",
+    });
+
+    expect(
+      normalizeSeoDiscoverySettingsWithReturnPolicy({
+        returnPolicy: {
+          enabled: true,
+          country: "US",
+          category: "unlimited",
+          returnWindowDays: 30,
+          policyUrl: "https://example.com/returns",
+        },
+      }).returnPolicy,
+    ).toMatchObject({
+      enabled: true,
+      country: "US",
+      category: "unlimited",
+      returnWindowDays: null,
+      policyUrl: "https://example.com/returns",
+    });
   });
 });
 

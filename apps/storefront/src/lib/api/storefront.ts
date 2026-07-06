@@ -15,7 +15,10 @@ import type {
   AnalyticsConfig,
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
-import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
+import type {
+  StorefrontBusinessInfo,
+  StorefrontReturnPolicySettings,
+} from "@/lib/commerce-structured-data";
 import {
   getApiV1StorefrontHomepage,
   getApiV1StorefrontLayout,
@@ -84,6 +87,7 @@ export interface LayoutData {
   business?: StorefrontBusinessInfo;
   seo?: {
     discovery?: SeoDiscoverySettings;
+    returnPolicy?: StorefrontReturnPolicySettings | null;
   };
 }
 

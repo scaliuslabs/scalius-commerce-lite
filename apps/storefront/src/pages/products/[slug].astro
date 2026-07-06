@@ -17,6 +17,7 @@ import {
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
 import {
+  buildMerchantReturnPolicyJsonLd,
   buildOfferShippingDetails,
   gtinJsonLdForVariant,
 } from "@/lib/commerce-structured-data";
@@ -228,11 +229,22 @@ const offerShippingDetails = discoverySettings.structuredData.offerShippingDetai
       country: layoutData.business?.country,
     })
   : [];
+const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
+  settings: layoutData.seo?.returnPolicy,
+  storefrontUrl,
+  fallbackCountry: layoutData.business?.country,
+});
 
-function withOfferShippingDetails<T extends Record<string, unknown>>(offer: T): T {
-  return offerShippingDetails.length > 0
-    ? { ...offer, shippingDetails: offerShippingDetails }
-    : offer;
+function withOfferCommerceDetails<T extends Record<string, unknown>>(offer: T): T {
+  return {
+    ...offer,
+    ...(offerShippingDetails.length > 0
+      ? { shippingDetails: offerShippingDetails }
+      : {}),
+    ...(merchantReturnPolicyJsonLd
+      ? { hasMerchantReturnPolicy: merchantReturnPolicyJsonLd }
+      : {}),
+  } as T;
 }
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
@@ -262,7 +274,7 @@ const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
                 ...(size ? { size } : {}),
                 ...(color ? { color } : {}),
                 brand: { "@type": "Brand", name: brandName },
-                offers: withOfferShippingDetails({
+                offers: withOfferCommerceDetails({
                   "@type": "Offer",
                   url: buildVariantProductUrl(variant) ?? canonicalUrl,
                   priceCurrency: currencyCode,
@@ -289,7 +301,7 @@ const productJsonLd = discoverySettings.structuredData.products && canonicalUrl
               buyerVariants[0]?.barcodeType,
             ),
             brand: { "@type": "Brand", name: brandName },
-            offers: withOfferShippingDetails({
+            offers: withOfferCommerceDetails({
               "@type": "Offer",
               url: canonicalUrl,
               priceCurrency: currencyCode,

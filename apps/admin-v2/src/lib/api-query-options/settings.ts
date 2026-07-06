@@ -1,9 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
+import { DEFAULT_SEO_DISCOVERY_SETTINGS } from "@scalius/shared/seo-discovery";
 import {
-  DEFAULT_SEO_DISCOVERY_SETTINGS,
-  normalizeSeoDiscoverySettings,
-  type SeoDiscoverySettings,
-} from "@scalius/shared/seo-discovery";
+  DEFAULT_SEO_RETURN_POLICY_SETTINGS,
+  normalizeSeoReturnPolicySettings,
+} from "@scalius/shared/seo-return-policy";
+import {
+  normalizeSeoDiscoverySettingsWithReturnPolicy,
+  type SeoDiscoverySettingsWithReturnPolicy,
+} from "../seo-discovery-status";
 import {
   type CheckoutReadinessPayload,
   getAuthSettings,
@@ -29,7 +33,12 @@ export interface SeoSettingsQueryPayload {
   homepageTitle: string;
   homepageMetaDescription: string;
   robotsTxt: string;
-  discovery: SeoDiscoverySettings;
+  discovery: SeoDiscoverySettingsWithReturnPolicy;
+}
+
+interface SeoSettingsQueryRawPayload {
+  discovery?: unknown;
+  returnPolicy?: unknown;
 }
 
 const DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD: SeoSettingsQueryPayload = {
@@ -37,11 +46,36 @@ const DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD: SeoSettingsQueryPayload = {
   homepageTitle: "",
   homepageMetaDescription: "",
   robotsTxt: `User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`,
-  discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+  discovery: {
+    ...DEFAULT_SEO_DISCOVERY_SETTINGS,
+    returnPolicy: DEFAULT_SEO_RETURN_POLICY_SETTINGS,
+  },
 };
+
+function readReturnPolicy(value: unknown): unknown {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as { returnPolicy?: unknown }).returnPolicy
+    : undefined;
+}
+
+function normalizeSeoDiscoveryForQuery(
+  data: SeoSettingsQueryRawPayload,
+): SeoDiscoverySettingsWithReturnPolicy {
+  const discovery = normalizeSeoDiscoverySettingsWithReturnPolicy(data.discovery);
+
+  return {
+    ...discovery,
+    returnPolicy: normalizeSeoReturnPolicySettings(
+      readReturnPolicy(data.discovery) ??
+        data.returnPolicy ??
+        discovery.returnPolicy,
+    ),
+  };
+}
 
 async function getSeoSettingsForQuery(): Promise<SeoSettingsQueryPayload> {
   const data = await getSeoSettings();
+  const rawData = data as SeoSettingsQueryRawPayload;
   return {
     siteTitle: data.siteTitle || DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD.siteTitle,
     homepageTitle:
@@ -53,7 +87,7 @@ async function getSeoSettingsForQuery(): Promise<SeoSettingsQueryPayload> {
       typeof data.robotsTxt === "string"
         ? data.robotsTxt
         : DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD.robotsTxt,
-    discovery: normalizeSeoDiscoverySettings(data.discovery),
+    discovery: normalizeSeoDiscoveryForQuery(rawData),
   };
 }
 

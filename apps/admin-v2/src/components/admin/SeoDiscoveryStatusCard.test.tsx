@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SEO_DISCOVERY_SETTINGS } from "@scalius/shared/seo-discovery";
 
 import { SeoDiscoveryStatusCard } from "./SeoDiscoveryStatusCard";
+import { normalizeSeoDiscoverySettingsWithReturnPolicy } from "../../lib/seo-discovery-status";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -236,7 +237,9 @@ describe("SeoDiscoveryStatusCard", () => {
     act(() => {
       root.render(
         <SeoDiscoveryStatusCard
-          discovery={DEFAULT_SEO_DISCOVERY_SETTINGS}
+          discovery={normalizeSeoDiscoverySettingsWithReturnPolicy(
+            DEFAULT_SEO_DISCOVERY_SETTINGS,
+          )}
           robotsTxt={robotsTxt}
         />,
       );
