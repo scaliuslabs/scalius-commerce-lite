@@ -26,6 +26,8 @@ import {
   trackFbPurchase,
   trackFbSearch,
   trackFbViewContent,
+  trackStorefrontAddPaymentInfoOnce,
+  trackStorefrontSearchResults,
 } from "./analytics";
 
 describe("storefront analytics", () => {
@@ -41,6 +43,9 @@ describe("storefront analytics", () => {
       track: vi.fn().mockResolvedValue(undefined),
     };
     window.dataLayer = [];
+    sessionStorage.clear();
+    delete (window as Window & { __scaliusAnalyticsDedupe?: Set<string> })
+      .__scaliusAnalyticsDedupe;
   });
 
   it("keeps Cloudflare Web Analytics out of Partytown", () => {
@@ -196,6 +201,119 @@ describe("storefront analytics", () => {
         eventName: "Search",
       }),
     );
+  });
+
+  it("tracks normalized storefront search results once as Search", () => {
+    expect(
+      trackStorefrontSearchResults({
+        searchQuery: "  khaki   shoes ",
+        products: [{ id: "sku_1", name: "Khaki High-Top", price: 1200 }],
+        currency: "BDT",
+      }),
+    ).toBe(true);
+    expect(
+      trackStorefrontSearchResults({
+        searchQuery: "khaki shoes",
+        products: [{ id: "sku_1", name: "Khaki High-Top", price: 1200 }],
+        currency: "BDT",
+      }),
+    ).toBe(false);
+    expect(
+      trackStorefrontSearchResults({
+        searchQuery: "   ",
+        products: [{ id: "sku_2", name: "Blank query", price: 500 }],
+        currency: "BDT",
+      }),
+    ).toBe(false);
+    expect(
+      trackStorefrontSearchResults({
+        searchQuery: "no matching products",
+        products: [],
+        currency: "BDT",
+      }),
+    ).toBe(true);
+
+    expect(window.fbq).toHaveBeenCalledTimes(2);
+    expect(window.fbq).toHaveBeenNthCalledWith(
+      1,
+      "track",
+      "Search",
+      {
+        content_ids: ["sku_1"],
+        contents: [{ id: "sku_1", quantity: 1, item_price: 1200 }],
+        currency: "BDT",
+        search_string: "khaki shoes",
+        value: 1200,
+      },
+      { eventID: "Search:generated" },
+    );
+    expect(window.fbq).toHaveBeenNthCalledWith(
+      2,
+      "track",
+      "Search",
+      {
+        content_ids: undefined,
+        contents: undefined,
+        currency: "BDT",
+        search_string: "no matching products",
+        value: undefined,
+      },
+      { eventID: "Search:generated" },
+    );
+    expect(window.fbq).not.toHaveBeenCalledWith(
+      "track",
+      "ViewContent",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(sendServerEventMock).toHaveBeenCalledTimes(2);
+    expect(sendServerEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: "Search:generated",
+        eventName: "Search",
+      }),
+    );
+  });
+
+  it("dedupes AddPaymentInfo per checkout attempt and payment method", () => {
+    const safePayload = {
+      checkoutId: "chk_analytics_1",
+      paymentMethod: "cod",
+      content_ids: ["var_1"],
+      contents: [{ id: "var_1", quantity: 2, item_price: 300 }],
+      currency: "BDT",
+      value: 600,
+    };
+
+    expect(trackStorefrontAddPaymentInfoOnce(safePayload)).toBe(true);
+    expect(trackStorefrontAddPaymentInfoOnce(safePayload)).toBe(false);
+    expect(
+      trackStorefrontAddPaymentInfoOnce({
+        ...safePayload,
+        paymentMethod: "sslcommerz",
+      }),
+    ).toBe(true);
+    expect(
+      trackStorefrontAddPaymentInfoOnce({
+        ...safePayload,
+        checkoutId: "chk_analytics_2",
+      }),
+    ).toBe(true);
+
+    expect(window.fbq).toHaveBeenCalledTimes(3);
+    expect(window.fbq).toHaveBeenCalledWith(
+      "track",
+      "AddPaymentInfo",
+      {
+        content_category: undefined,
+        content_ids: ["var_1"],
+        contents: [{ id: "var_1", quantity: 2, item_price: 300 }],
+        currency: "BDT",
+        value: 600,
+      },
+      { eventID: "AddPaymentInfo:generated" },
+    );
+    expect(sendServerEventMock).toHaveBeenCalledTimes(3);
   });
 
   it("bridges checkout-start events to GA4/GTM dataLayer ecommerce", () => {

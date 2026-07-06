@@ -194,6 +194,20 @@ describe("storefront page data boundaries", () => {
     expect(source.slice(fastPromiseAllIndex)).toContain("attributesPromise");
   });
 
+  it("tracks search result pages with Search analytics instead of ViewContent", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/search/index.astro`,
+      "utf8",
+    );
+
+    expect(source).toContain(
+      'import { trackStorefrontSearchResults } from "@/lib/analytics";',
+    );
+    expect(source).toContain("trackStorefrontSearchResults({");
+    expect(source).not.toContain("trackFbViewContent");
+    expect(source).not.toContain("viewContentTracked");
+  });
+
   it("fails cacheable listing/home pages closed when required backend data is missing", () => {
     const homepageSource = readFileSync(
       `${STOREFRONT_SRC_ROOT}/pages/index.astro`,

@@ -9,6 +9,7 @@
  */
 import { sendServerEvent } from "./tracking/meta-capi";
 import { createMetaEventId } from "./tracking/meta-event-id";
+import { normalizeSearchQuery } from "./search-query";
 
 // Window augmentation for dataLayer, fbq, ttq, and Zaraz is in src/env.d.ts
 
@@ -122,6 +123,20 @@ type TikTokParams = {
   value?: number;
   search_string?: string;
 };
+
+type StorefrontAnalyticsProduct = {
+  id: string;
+  name?: string;
+  price?: number;
+  quantity?: number;
+};
+
+type AnalyticsDedupeWindow = Window & {
+  __scaliusAnalyticsDedupe?: Set<string>;
+};
+
+const ANALYTICS_DEDUPE_STORAGE_KEY = "scalius_analytics_dedupe_v1";
+const MAX_PERSISTED_DEDUPE_KEYS = 100;
 
 function cleanAnalyticsValue(value: AnalyticsValue): AnalyticsValue {
   if (Array.isArray(value)) {
@@ -521,6 +536,162 @@ function bridgeFbSearchToTikTok(
   });
 }
 
+function getAnalyticsDedupeSet(): Set<string> {
+  const browserWindow = window as AnalyticsDedupeWindow;
+  browserWindow.__scaliusAnalyticsDedupe ??= new Set<string>();
+  return browserWindow.__scaliusAnalyticsDedupe;
+}
+
+function readPersistedAnalyticsDedupeKeys(): Set<string> {
+  try {
+    const raw = window.sessionStorage?.getItem(ANALYTICS_DEDUPE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(
+      Array.isArray(parsed)
+        ? parsed.filter((key): key is string => typeof key === "string")
+        : [],
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function writePersistedAnalyticsDedupeKeys(keys: Set<string>): void {
+  try {
+    const boundedKeys = Array.from(keys).slice(-MAX_PERSISTED_DEDUPE_KEYS);
+    window.sessionStorage?.setItem(
+      ANALYTICS_DEDUPE_STORAGE_KEY,
+      JSON.stringify(boundedKeys),
+    );
+  } catch {
+    // Browser storage can be blocked; the in-memory guard still protects this page.
+  }
+}
+
+function claimAnalyticsEventKey(key: string): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  const memoryKeys = getAnalyticsDedupeSet();
+  if (memoryKeys.has(key)) {
+    return false;
+  }
+
+  const persistedKeys = readPersistedAnalyticsDedupeKeys();
+  if (persistedKeys.has(key)) {
+    memoryKeys.add(key);
+    return false;
+  }
+
+  memoryKeys.add(key);
+  persistedKeys.add(key);
+  writePersistedAnalyticsDedupeKeys(persistedKeys);
+  return true;
+}
+
+function normalizeStorefrontAnalyticsProducts(
+  products: StorefrontAnalyticsProduct[] | undefined,
+): FbCommerceContent[] {
+  return (
+    products
+      ?.map((product) => {
+        const id = product.id.trim();
+        if (!id) return null;
+        const quantity = finiteNumber(product.quantity) ?? 1;
+        const item: FbCommerceContent = { id, quantity };
+        const price = finiteNumber(product.price);
+        if (price !== undefined) item.item_price = price;
+        return item;
+      })
+      .filter((product): product is FbCommerceContent => product !== null) ??
+    []
+  );
+}
+
+function contentIdsFromContents(contents: FbCommerceContent[]): string[] {
+  return contents.map((item) => item.id).filter(Boolean);
+}
+
+/**
+ * Tracks a storefront search results page once for each normalized query.
+ */
+export function trackStorefrontSearchResults(data: {
+  searchQuery: string;
+  products?: StorefrontAnalyticsProduct[];
+  currency?: string;
+}): boolean {
+  const searchString = normalizeSearchQuery(data.searchQuery);
+  if (!searchString) {
+    return false;
+  }
+
+  if (!claimAnalyticsEventKey(`Search:${searchString}`)) {
+    return false;
+  }
+
+  const contents = normalizeStorefrontAnalyticsProducts(data.products);
+  const contentIds = contentIdsFromContents(contents);
+  trackFbSearch({
+    content_ids: contentIds.length > 0 ? contentIds : undefined,
+    contents: contents.length > 0 ? contents : undefined,
+    currency: data.currency ?? window.__CURRENCY_CODE__ ?? "BDT",
+    search_string: searchString,
+    value: inferCommerceValue({ contents }),
+  });
+
+  return true;
+}
+
+/**
+ * Tracks AddPaymentInfo once for each checkout attempt and selected method.
+ */
+export function trackStorefrontAddPaymentInfoOnce(data: {
+  checkoutId?: string;
+  paymentMethod: string;
+  content_category?: string;
+  content_ids?: string[];
+  contents?: FbCommerceContent[];
+  currency?: string;
+  value?: number;
+}): boolean {
+  const paymentMethod = data.paymentMethod.trim();
+  if (!paymentMethod) {
+    return false;
+  }
+
+  const checkoutId = data.checkoutId?.trim() || "unknown-checkout";
+  if (!claimAnalyticsEventKey(`AddPaymentInfo:${checkoutId}:${paymentMethod}`)) {
+    return false;
+  }
+
+  const contentIds =
+    data.content_ids?.map((id) => id.trim()).filter(Boolean) ??
+    contentIdsFromContents(data.contents ?? []);
+  const contents =
+    data.contents
+      ?.map((item) => {
+        const normalizedItem: FbCommerceContent = {
+          id: item.id.trim(),
+          quantity: finiteNumber(item.quantity) ?? 1,
+        };
+        const price = finiteNumber(item.item_price);
+        if (price !== undefined) normalizedItem.item_price = price;
+        return normalizedItem;
+      })
+      .filter((item): item is FbCommerceContent => Boolean(item.id)) ?? [];
+
+  trackFbAddPaymentInfo({
+    content_category: data.content_category,
+    content_ids: contentIds.length > 0 ? contentIds : undefined,
+    contents: contents.length > 0 ? contents : undefined,
+    currency: data.currency ?? window.__CURRENCY_CODE__ ?? "BDT",
+    value: inferCommerceValue({ value: data.value, contents }),
+  });
+
+  return true;
+}
+
 // --- Facebook Pixel Event Tracking ---
 
 /**
@@ -863,7 +1034,7 @@ export function trackFbCompleteRegistration(
 export function trackFbSearch(data: {
   content_category?: string;
   content_ids?: string[];
-  contents?: Array<{ id: string; quantity: number }>;
+  contents?: FbCommerceContent[];
   currency?: string;
   search_string: string;
   value?: number;
@@ -879,13 +1050,7 @@ export function trackFbSearch(data: {
 
   sendZarazEcommerce("Products Searched", {
     query: data.search_string,
-    products: mapFbContentsToZarazProducts(
-      data.contents?.map((item) => ({
-        id: item.id,
-        quantity: item.quantity,
-      })),
-      data.content_ids,
-    ),
+    products: mapFbContentsToZarazProducts(data.contents, data.content_ids),
     category: data.content_category,
     currency: data.currency,
     value: data.value,

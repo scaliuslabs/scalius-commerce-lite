@@ -502,7 +502,7 @@ const analyticsProductData = products.map((p) => ({
 </script>
 
 <script>
-  import { trackFbViewContent } from "@/lib/analytics";
+  import { trackStorefrontSearchResults } from "@/lib/analytics";
 
   type ProductAnalyticsData = {
     id: string;
@@ -510,11 +510,11 @@ const analyticsProductData = products.map((p) => ({
     price: number;
   };
 
-  function trackSearchView() {
+  function trackSearchResults() {
     const productListElement = document.querySelector<HTMLElement>(
       "[data-products-for-analytics]"
     );
-    if (!productListElement || productListElement.dataset.viewContentTracked === "true")
+    if (!productListElement || productListElement.dataset.searchTracked === "true")
       return;
 
     try {
@@ -523,32 +523,18 @@ const analyticsProductData = products.map((p) => ({
       );
       const searchQuery = productListElement.dataset.searchQuery || "";
 
-      if (productsData.length === 0) return;
-
-      const content_ids = productsData.map((p) => p.id);
-      const contents = productsData.map((p) => ({
-        id: p.id,
-        item_name: p.name,
-        quantity: 1,
-        item_price: p.price,
-      }));
-      const value = productsData.reduce((sum, p) => sum + p.price, 0);
-
-      trackFbViewContent({
-        content_ids,
-        content_name: `Search Results for "${searchQuery}"`,
-        content_type: "product_group",
-        contents,
+      const tracked = trackStorefrontSearchResults({
+        searchQuery,
+        products: productsData,
         currency: window.__CURRENCY_CODE__ || "BDT",
-        value,
       });
 
-      productListElement.dataset.viewContentTracked = "true";
+      if (tracked) productListElement.dataset.searchTracked = "true";
     } catch (error: unknown) {
-      console.error("Failed to track search view content:", error);
+      console.error("Failed to track search event:", error);
     }
   }
 
-  document.addEventListener("DOMContentLoaded", trackSearchView);
-  document.addEventListener("astro:page-load", trackSearchView);
+  document.addEventListener("DOMContentLoaded", trackSearchResults);
+  document.addEventListener("astro:page-load", trackSearchResults);
 </script>

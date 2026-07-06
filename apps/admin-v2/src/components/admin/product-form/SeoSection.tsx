@@ -1,6 +1,17 @@
 // src/components/admin/product-form/SeoSection.tsx
-import { memo } from "react";
+import { memo, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
+import {
+  Braces,
+  Globe2,
+  Image,
+  Link2,
+  Rss,
+  SearchCheck,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { DEFAULT_SEO_DISCOVERY_SETTINGS } from "@scalius/shared/seo-discovery";
 import {
   FormControl,
   FormField,
@@ -11,14 +22,136 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CharacterCounter } from "@/components/ui/character-counter";
+import { Badge } from "@/components/ui/badge";
+import { queryKeys } from "@/lib/query-keys";
+import {
+  buildProductSeoDiagnostics,
+  type ProductSeoDiagnosticRow,
+  type ProductSeoDiagnosticTone,
+  type ProductSeoDiagnosticVariant,
+  type ProductSeoVariantState,
+} from "@/lib/product-seo-diagnostics";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 
 interface SeoSectionProps {
   form: UseFormReturn<ProductFormValues>;
+  variants?: ProductSeoDiagnosticVariant[];
+  variantState?: ProductSeoVariantState;
+  storefrontUrl?: string | null;
 }
 
-export const SeoSection = memo(function SeoSection({ form }: SeoSectionProps) {
+interface CachedSeoSettings {
+  discovery?: unknown;
+}
+
+const TONE_LABELS: Record<ProductSeoDiagnosticTone, string> = {
+  ok: "Ready",
+  warning: "Check",
+  disabled: "Off",
+  draft: "Draft",
+  info: "Info",
+};
+
+const TONE_CLASSES: Record<ProductSeoDiagnosticTone, string> = {
+  ok: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  warning: "border-amber-200 bg-amber-50 text-amber-700",
+  disabled: "border-border bg-muted text-muted-foreground",
+  draft: "border-border bg-background text-muted-foreground",
+  info: "border-sky-200 bg-sky-50 text-sky-700",
+};
+
+function DiagnosticRow({
+  icon: Icon,
+  label,
+  row,
+  detail,
+}: {
+  icon: LucideIcon;
+  label: string;
+  row: ProductSeoDiagnosticRow;
+  detail?: string | null;
+}) {
+  return (
+    <div className="flex gap-2 py-2">
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-foreground">{label}</p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {row.title}
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className={`h-5 shrink-0 px-1.5 text-[10px] ${TONE_CLASSES[row.tone]}`}
+          >
+            {TONE_LABELS[row.tone]}
+          </Badge>
+        </div>
+        <p className="text-xs leading-5 text-muted-foreground">
+          {row.summary}
+        </p>
+        {row.value ? (
+          <code className="block truncate text-[11px] text-muted-foreground">
+            {row.value}
+          </code>
+        ) : null}
+        {detail ? (
+          <p className="text-xs leading-5 text-muted-foreground">{detail}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export const SeoSection = memo(function SeoSection({
+  form,
+  variants = [],
+  variantState = "unavailable",
+  storefrontUrl,
+}: SeoSectionProps) {
+  const queryClient = useQueryClient();
+  const cachedSeoSettings = queryClient.getQueryData<CachedSeoSettings>(
+    queryKeys.settings.seo(),
+  );
+  const discovery =
+    cachedSeoSettings?.discovery ?? DEFAULT_SEO_DISCOVERY_SETTINGS;
+  const policySource = cachedSeoSettings?.discovery ? "current" : "default";
+  const productId = form.watch("id");
+  const slug = form.watch("slug");
+  const isActive = form.watch("isActive");
+  const images = form.watch("images");
+
+  const diagnostics = useMemo(
+    () =>
+      buildProductSeoDiagnostics({
+        product: {
+          id: productId,
+          slug,
+          isActive,
+          images,
+        },
+        variants,
+        variantState,
+        discovery,
+        storefrontUrl,
+        policySource,
+      }),
+    [
+      discovery,
+      images,
+      isActive,
+      policySource,
+      productId,
+      slug,
+      storefrontUrl,
+      variantState,
+      variants,
+    ],
+  );
+
   return (
     <CollapsibleCard
       title="Search Engine Listing"
@@ -78,6 +211,60 @@ export const SeoSection = memo(function SeoSection({ form }: SeoSectionProps) {
             </FormItem>
           )}
         />
+
+        <div className="border-t border-border pt-3">
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <SearchCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                <h4 className="text-sm font-medium">Discovery Readiness</h4>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Expected after save from product data and global discovery
+                policy.
+              </p>
+            </div>
+            <Badge variant="outline" className="shrink-0 text-[10px]">
+              {diagnostics.policy.label}
+            </Badge>
+          </div>
+
+          <div className="divide-y divide-border">
+            <DiagnosticRow
+              icon={Link2}
+              label="Canonical"
+              row={diagnostics.canonical}
+            />
+            <DiagnosticRow
+              icon={Globe2}
+              label="Sitemap XML"
+              row={diagnostics.sitemap}
+              detail={diagnostics.availability.summary}
+            />
+            <DiagnosticRow
+              icon={Image}
+              label="Feed image"
+              row={diagnostics.feedImage}
+            />
+            <DiagnosticRow
+              icon={Rss}
+              label="Catalog feed"
+              row={diagnostics.feed}
+              detail={diagnostics.feed.skippedReason}
+            />
+            <DiagnosticRow
+              icon={Braces}
+              label="Product JSON-LD"
+              row={diagnostics.structuredData}
+            />
+          </div>
+
+          {diagnostics.policy.source === "default" ? (
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {diagnostics.policy.summary}
+            </p>
+          ) : null}
+        </div>
       </div>
     </CollapsibleCard>
   );

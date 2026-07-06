@@ -49,7 +49,7 @@ export function ProductForm({
   defaultValues,
   isEdit = false,
 }: ProductFormProps) {
-  const { getStorefrontPath } = useStorefrontUrl();
+  const { storefrontUrl, getStorefrontPath } = useStorefrontUrl();
 
   // Clean the meta description to avoid showing the marker to users
   const cleanedDefaultValues = React.useMemo(() => {
@@ -69,7 +69,12 @@ export function ProductForm({
     getVariantImagesAxis(defaultValues?.metaDescription),
   );
 
-  const { uniqueOptionOneValues, uniqueOptionTwoValues } = useProductVariants({
+  const {
+    variants,
+    uniqueOptionOneValues,
+    uniqueOptionTwoValues,
+    isLoading: variantsLoading,
+  } = useProductVariants({
     productId: defaultValues?.id,
     isEdit,
   });
@@ -195,7 +200,14 @@ export function ProductForm({
               <PricingCard form={form} />
 
               {/* SEO */}
-              <SeoSection form={form} />
+              <SeoSection
+                form={form}
+                variants={variants}
+                variantState={
+                  isEdit ? (variantsLoading ? "loading" : "loaded") : "unavailable"
+                }
+                storefrontUrl={storefrontUrl}
+              />
 
               {/* Attributes */}
               <AttributesSection form={form} />

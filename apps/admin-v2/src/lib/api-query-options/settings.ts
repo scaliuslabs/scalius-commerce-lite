@@ -1,5 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
+  DEFAULT_SEO_DISCOVERY_SETTINGS,
+  normalizeSeoDiscoverySettings,
+  type SeoDiscoverySettings,
+} from "@scalius/shared/seo-discovery";
+import {
   type CheckoutReadinessPayload,
   getAuthSettings,
   getCheckoutReadiness,
@@ -8,6 +13,7 @@ import {
   getMetaConversionsLogs,
   getMetaConversionsSettings,
   getPaymentMethods,
+  getSeoSettings,
   getThemeSettings,
 } from "../api-functions/settings";
 import { extractApiError, unwrapEnvelope } from "../api-helpers";
@@ -17,6 +23,39 @@ export { storefrontUrlQueryOptions } from "./storefront-url";
 
 const CONFIG_STALE_TIME_MS = 1000 * 60 * 30;
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
+
+export interface SeoSettingsQueryPayload {
+  siteTitle: string;
+  homepageTitle: string;
+  homepageMetaDescription: string;
+  robotsTxt: string;
+  discovery: SeoDiscoverySettings;
+}
+
+const DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD: SeoSettingsQueryPayload = {
+  siteTitle: "",
+  homepageTitle: "",
+  homepageMetaDescription: "",
+  robotsTxt: `User-agent: *\nAllow: /\n\nSitemap: [your-sitemap-url]`,
+  discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+};
+
+async function getSeoSettingsForQuery(): Promise<SeoSettingsQueryPayload> {
+  const data = await getSeoSettings();
+  return {
+    siteTitle: data.siteTitle || DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD.siteTitle,
+    homepageTitle:
+      data.homepageTitle || DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD.homepageTitle,
+    homepageMetaDescription:
+      data.homepageMetaDescription ||
+      DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD.homepageMetaDescription,
+    robotsTxt:
+      typeof data.robotsTxt === "string"
+        ? data.robotsTxt
+        : DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD.robotsTxt,
+    discovery: normalizeSeoDiscoverySettings(data.discovery),
+  };
+}
 
 async function getCheckoutReadinessForQuery(): Promise<CheckoutReadinessPayload> {
   if (typeof window === "undefined") {
@@ -79,6 +118,13 @@ export const checkoutReadinessQueryOptions = () =>
     refetchOnMount: "always",
     refetchOnWindowFocus: "always",
     retry: 2,
+  });
+
+export const seoSettingsQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.settings.seo(),
+    queryFn: () => getSeoSettingsForQuery(),
+    staleTime: CONFIG_STALE_TIME_MS,
   });
 
 export const firebaseSettingsQueryOptions = () =>
