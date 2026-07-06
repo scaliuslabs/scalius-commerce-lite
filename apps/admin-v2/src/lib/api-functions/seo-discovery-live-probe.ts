@@ -10,7 +10,7 @@ import {
   type SeoDiscoveryLiveProbeResult,
 } from "../seo-discovery-status";
 
-const DEFAULT_PROBE_TIMEOUT_MS = 5_000;
+const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
 
 interface StorefrontUrlPayload {
@@ -190,7 +190,7 @@ export async function runSeoDiscoveryLiveProbe(
 ): Promise<SeoDiscoveryLiveProbeResult> {
   const timeoutMs = Math.min(
     Math.max(Math.trunc(deps.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS), 1_000),
-    6_000,
+    12_000,
   );
   const maxBodyBytes = Math.max(
     1,

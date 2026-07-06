@@ -149,6 +149,61 @@ describe("runSeoDiscoveryLiveProbe", () => {
     ]);
   });
 
+  it("allows cold-but-healthy discovery files to finish within the default budget", async () => {
+    vi.useFakeTimers();
+    mocks.apiGet.mockResolvedValue({
+      storefrontUrl: "https://shop.example.com/",
+    });
+    const fetchMock = vi.fn(
+      (input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          const signal = init?.signal;
+          const url = String(input);
+          const timer = setTimeout(() => {
+            if (url.endsWith("/robots.txt")) {
+              resolve(
+                textResponse(
+                  "User-agent: *\nAllow: /\nSitemap: https://shop.example.com/sitemap.xml",
+                  { contentType: "text/plain" },
+                ),
+              );
+              return;
+            }
+            if (url.endsWith("/sitemap.xml")) {
+              resolve(
+                textResponse(
+                  "<sitemapindex><sitemap><loc>https://shop.example.com/sitemap-products.xml</loc></sitemap></sitemapindex>",
+                  { contentType: "application/xml" },
+                ),
+              );
+              return;
+            }
+            resolve(
+              textResponse(
+                "<rss><channel><item><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item></channel></rss>",
+                { contentType: "application/rss+xml" },
+              ),
+            );
+          }, 6_500);
+
+          signal?.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        }),
+    );
+
+    const resultPromise = runSeoDiscoveryLiveProbe({
+      fetch: fetchMock as unknown as typeof fetch,
+      now: () => new Date("2026-07-06T00:00:00.000Z"),
+    });
+    await vi.advanceTimersByTimeAsync(6_500);
+    const result = await resultPromise;
+
+    expect(result.ok).toBe(true);
+    expect(result.resources.every((resource) => resource.ok)).toBe(true);
+  });
+
   it("blocks redirects and caps response body reads", async () => {
     mocks.apiGet.mockResolvedValue({
       storefrontUrl: "https://shop.example.com",
