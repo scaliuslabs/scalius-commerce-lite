@@ -15447,6 +15447,10 @@
                               "slug": {
                                 "type": "string"
                               },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "description": {
                                 "type": "string",
                                 "nullable": true
@@ -15576,6 +15580,14 @@
                                     "trackInventory": {
                                       "type": "boolean"
                                     },
+                                    "barcode": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "barcodeType": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
                                     "discountType": {
                                       "type": "string",
                                       "nullable": true
@@ -15613,6 +15625,8 @@
                                     "reservedStock",
                                     "isDefault",
                                     "trackInventory",
+                                    "barcode",
+                                    "barcodeType",
                                     "discountType",
                                     "discountPercentage",
                                     "discountAmount",
@@ -15631,6 +15645,7 @@
                               "id",
                               "name",
                               "slug",
+                              "canonicalPath",
                               "description",
                               "price",
                               "discountType",

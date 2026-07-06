@@ -57,6 +57,7 @@ type StorefrontFeedProductListRow = {
     description: string | null;
     price: number;
     slug: string;
+    canonicalPath: string | null;
     discountType: string | null;
     discountPercentage: number | null;
     discountAmount: number | null;
@@ -297,6 +298,8 @@ async function readStorefrontFeedVariantMap(
             color: productVariants.color,
             weight: productVariants.weight,
             sku: productVariants.sku,
+            barcode: productVariants.barcode,
+            barcodeType: productVariants.barcodeType,
             price: productVariants.price,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
@@ -452,6 +455,7 @@ export async function getStorefrontFeedProducts(
             description: products.description,
             price: products.price,
             slug: products.slug,
+            canonicalPath: products.canonicalPath,
             discountType: products.discountType,
             discountPercentage: products.discountPercentage,
             discountAmount: products.discountAmount,
@@ -497,6 +501,7 @@ export async function getStorefrontFeedProducts(
             id: product.id,
             name: product.name,
             slug: product.slug,
+            canonicalPath: product.canonicalPath,
             description: product.description,
             price: product.price,
             discountType: product.discountType,

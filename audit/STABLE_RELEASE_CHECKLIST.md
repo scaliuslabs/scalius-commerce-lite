@@ -18,7 +18,7 @@ Use this file before claiming the platform is ready for a stable merchant-facing
 
 Treat "AIO" as crawlable, trustworthy commerce data for search and assistants, not as a magic markup layer.
 
-- `/robots.txt`, `/sitemap.xml`, `/sitemap-static.xml`, `/sitemap-products.xml`, `/sitemap-categories.xml`, `/sitemap-collections.xml`, `/sitemap-pages.xml`, canonical `/api/product-feed.xml?limit=5`, and compatibility `/api/facebook-feed.xml?limit=5` return valid XML/text with absolute URLs and production-safe cache headers.
+- `/robots.txt`, `/sitemap.xml`, `/sitemap-static.xml`, `/sitemap-products.xml`, `/sitemap-categories.xml`, `/sitemap-collections.xml`, `/sitemap-pages.xml`, canonical `/api/product-feed.xml?limit=5`, and compatibility `/api/facebook-feed.xml?limit=5` return valid XML/text with absolute URLs and production-safe cache headers. The canonical feed must use Google/Base availability values (`in_stock`/`out_of_stock`); the compatibility feed must keep Meta-style values (`in stock`/`out of stock`).
 - Static sitemap-advertised URLs have canonical URLs; search/listing query, sort, filter, and paginated variants must be canonicalized or noindexed with follow.
 - Product feed availability, Product JSON-LD availability, storefront availability UI, and checkout validation are all derived from buyer-resolvable SKU truth.
 - Feed items must have absolute `http(s)` primary images, non-empty plain descriptions, valid price/currency, SKU-aware availability, and no invalid zero-price fallback unless the catalog policy explicitly supports it.

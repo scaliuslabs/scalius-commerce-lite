@@ -96,6 +96,7 @@ describe("storefront product query boundaries", () => {
         expect(source).toContain("StorefrontFeedProductFilterInput");
         expect(source).toContain("StorefrontFeedProductVariant");
         expect(feedBody).toContain("description: products.description");
+        expect(feedBody).toContain("canonicalPath: products.canonicalPath");
         expect(feedBody).toContain("attributes: attributeMap.get(product.id) ?? []");
         expect(feedBody).toContain("variants: variantMap.get(product.id) ?? []");
         expect(listBody).not.toContain("readStorefrontFeedAttributeMap");
@@ -148,6 +149,8 @@ describe("storefront product query boundaries", () => {
         expect(variantHelper).toContain("color: productVariants.color");
         expect(variantHelper).toContain("weight: productVariants.weight");
         expect(variantHelper).toContain("sku: productVariants.sku");
+        expect(variantHelper).toContain("barcode: productVariants.barcode");
+        expect(variantHelper).toContain("barcodeType: productVariants.barcodeType");
         expect(variantHelper).toContain("price: productVariants.price");
         expect(variantHelper).toContain("stock: productVariants.stock");
         expect(variantHelper).toContain("reservedStock: productVariants.reservedStock");
@@ -162,7 +165,6 @@ describe("storefront product query boundaries", () => {
         expect(variantHelper).toContain("inArray(productVariants.productId, productIds)");
         expect(variantHelper).toContain("isNull(productVariants.deletedAt)");
         expect(variantHelper).toContain("normalizeDefaultSkuOptions({");
-        expect(variantHelper).not.toContain("barcode");
         expect(variantHelper).not.toContain("createdAt");
         expect(variantHelper).not.toContain("updatedAt");
         expect(feedBody).not.toContain("eq(productVariants.productId, product.id)");

@@ -1,10 +1,8 @@
 /**
- * Facebook Product Feed Endpoint
- * Generates XML RSS 2.0 feed compatible with Facebook/Meta product catalog
+ * Product Feed Endpoint
+ * Generates XML RSS 2.0 feeds for the canonical Google/Base catalog feed
+ * and the Facebook/Meta compatibility catalog feed.
  * Supports pagination for large product catalogs (?page=1&limit=1000)
- *
- * Feed format follows Meta's product data specifications:
- * https://www.facebook.com/business/help/120325381656392
  */
 
 import type { APIRoute, APIContext } from "astro";
@@ -23,6 +21,7 @@ import {
   normalizeSeoDiscoverySettings,
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
+import { normalizeCanonicalPath } from "@scalius/shared/seo-canonical";
 import {
   isVariantAvailable,
   resolveBuyerVariants,
@@ -60,6 +59,8 @@ type FeedVariantRow = {
 };
 
 type FeedItem = FeedProductRow | FeedVariantRow;
+type FeedFormat = "google" | "meta";
+type FeedAvailability = "in_stock" | "out_of_stock";
 
 /**
  * Escapes XML special characters
@@ -136,23 +137,33 @@ function formatFeedPrice(price: number, currencyCode: string): string {
 /**
  * Determines catalog availability from the storefront buyer availability signal.
  */
-function getAvailability(product: Product): "in stock" | "out of stock" {
+function getAvailability(product: Product): FeedAvailability {
   if (product.isActive === false) {
-    return "out of stock";
+    return "out_of_stock";
   }
 
-  return product.availableForSale === false ? "out of stock" : "in stock";
+  return product.availableForSale === false ? "out_of_stock" : "in_stock";
 }
 
 function getVariantAvailability(
   product: Product,
   variant: ProductVariant,
-): "in stock" | "out of stock" {
+): FeedAvailability {
   if (product.isActive === false) {
-    return "out of stock";
+    return "out_of_stock";
   }
 
-  return isVariantAvailable(variant) ? "in stock" : "out of stock";
+  return isVariantAvailable(variant) ? "in_stock" : "out_of_stock";
+}
+
+function formatFeedAvailability(
+  availability: FeedAvailability,
+  format: FeedFormat,
+): string {
+  if (format === "meta") {
+    return availability === "in_stock" ? "in stock" : "out of stock";
+  }
+  return availability;
 }
 
 function normalizedOption(value: string | null | undefined): string | null {
@@ -258,7 +269,7 @@ function shouldIncludeProductRow(
 ): boolean {
   return (
     feedsPolicy.includeUnavailableProducts ||
-    getAvailability(product) === "in stock"
+    getAvailability(product) === "in_stock"
   );
 }
 
@@ -269,7 +280,7 @@ function shouldIncludeVariantRow(
 ): boolean {
   return (
     feedsPolicy.includeUnavailableProducts ||
-    getVariantAvailability(product, variant) === "in stock"
+    getVariantAvailability(product, variant) === "in_stock"
   );
 }
 
@@ -315,7 +326,10 @@ function toFeedItems(
 }
 
 function buildFeedItemUrl(feedItem: FeedItem, baseUrl: string): string {
-  const productUrl = new URL(`/products/${feedItem.product.slug}`, `${baseUrl}/`);
+  const productPath =
+    normalizeCanonicalPath(feedItem.product.canonicalPath) ??
+    `/products/${feedItem.product.slug}`;
+  const productUrl = new URL(productPath, `${baseUrl}/`);
   if (feedItem.kind === "variant") {
     const size = normalizedOption(feedItem.variant.size);
     const color = normalizedOption(feedItem.variant.color);
@@ -332,11 +346,43 @@ function getFeedItemId(feedItem: FeedItem): string {
   return feedItem.product.id;
 }
 
-function getFeedItemAvailability(feedItem: FeedItem): "in stock" | "out of stock" {
+function getFeedItemAvailability(feedItem: FeedItem): FeedAvailability {
   if (feedItem.kind === "variant") {
     return getVariantAvailability(feedItem.product, feedItem.variant);
   }
   return getAvailability(feedItem.product);
+}
+
+function getSupportedVariantGtin(variant: ProductVariant): string | null {
+  const barcode = variant.barcode?.trim();
+  if (!barcode) {
+    return null;
+  }
+
+  switch (variant.barcodeType) {
+    case "ean13":
+    case "upc":
+    case "isbn":
+    case "gtin":
+      return barcode;
+    default:
+      return null;
+  }
+}
+
+function getFeedItemGtin(feedItem: FeedItem): string | null {
+  if (feedItem.kind === "variant") {
+    return getSupportedVariantGtin(feedItem.variant);
+  }
+
+  const buyerVariantResolution = resolveBuyerVariants(
+    getProductVariants(feedItem.product),
+  );
+  if (buyerVariantResolution.mode !== "simple") {
+    return null;
+  }
+
+  return getSupportedVariantGtin(buyerVariantResolution.variants[0]!);
 }
 
 function getFeedItemPricing(feedItem: FeedItem): {
@@ -374,10 +420,14 @@ function generateProductItem(
   feedItem: FeedItem,
   baseUrl: string,
   currencyCode: string,
+  format: FeedFormat,
 ): string {
   const { product, imageLink } = feedItem;
   const productUrl = buildFeedItemUrl(feedItem, baseUrl);
-  const availability = getFeedItemAvailability(feedItem);
+  const availability = formatFeedAvailability(
+    getFeedItemAvailability(feedItem),
+    format,
+  );
   const { basePrice, feedPrice } = getFeedItemPricing(feedItem);
 
   // Get category mappings
@@ -405,8 +455,17 @@ function generateProductItem(
   const brandAttribute = product.attributes?.find(
     (attr) => attr.name.toLowerCase() === "brand",
   );
-  const brand = brandAttribute?.value || "Generic";
-  item += `    <g:brand>${escapeXml(brand)}</g:brand>\n`;
+  const brand = brandAttribute?.value?.trim() || null;
+  const gtin = getFeedItemGtin(feedItem);
+  if (brand) {
+    item += `    <g:brand>${escapeXml(brand)}</g:brand>\n`;
+  }
+  if (gtin) {
+    item += `    <g:gtin>${escapeXml(gtin)}</g:gtin>\n`;
+  }
+  if (!brand && !gtin) {
+    item += "    <g:identifier_exists>no</g:identifier_exists>\n";
+  }
 
   // Optional fields
 
@@ -474,18 +533,21 @@ function generateProductItem(
 }
 
 /**
- * Generates the complete Facebook product feed
+ * Generates a complete catalog feed.
  */
-function generateFacebookFeed(
+function generateCatalogFeed(
   products: FeedItem[],
   baseUrl: string,
   currencyCode: string,
   feedsPolicy: SeoDiscoverySettings["feeds"],
+  format: FeedFormat,
 ): string {
   const title = feedsPolicy.title || "Product Catalog";
   const description =
     feedsPolicy.description ||
-    "Complete product catalog for Facebook/Instagram shopping";
+    (format === "meta"
+      ? "Complete product catalog for Facebook/Instagram shopping"
+      : "Complete product catalog for shopping feeds");
 
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   xml += '<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">\n';
@@ -495,7 +557,7 @@ function generateFacebookFeed(
   xml += `<description>${escapeXml(description)}</description>\n`;
 
   for (const product of products) {
-    xml += generateProductItem(product, baseUrl, currencyCode);
+    xml += generateProductItem(product, baseUrl, currencyCode, format);
   }
 
   xml += "</channel>\n";
@@ -598,80 +660,104 @@ async function readFeedItemWindow({
   return { status: "ok", items: state.items };
 }
 
-export const GET: APIRoute = async ({ url }: APIContext) => {
-  try {
-    let baseUrl: string;
+export function createCatalogFeedGet(format: FeedFormat): APIRoute {
+  const feedLabel =
+    format === "meta" ? "Facebook product feed" : "Product catalog feed";
+
+  return async ({ url }: APIContext) => {
     try {
-      baseUrl = getBaseUrl();
-    } catch (error) {
-      console.error("Facebook product feed base URL is not configured:", error);
-      return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
-    }
-    const seo = await getSeoSettings();
-    if (!seo) {
-      return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
-    }
-    const feedsPolicy = normalizeSeoDiscoverySettings(seo.discovery).feeds;
-    const feedVariantStrategy = getFeedVariantStrategy(feedsPolicy, seo.discovery);
-    if (!feedsPolicy.productCatalogEnabled) {
-      return new Response("Product catalog feed is disabled", {
-        status: 404,
-        headers: {
-          "Content-Type": "text/plain; charset=utf-8",
-          "Cache-Control": "private, no-cache, no-store, must-revalidate",
-        },
+      let baseUrl: string;
+      try {
+        baseUrl = getBaseUrl();
+      } catch (error) {
+        console.error(`${feedLabel} base URL is not configured:`, error);
+        return xmlDataUnavailableResponse(
+          `${feedLabel} is temporarily unavailable`,
+        );
+      }
+      const seo = await getSeoSettings();
+      if (!seo) {
+        return xmlDataUnavailableResponse(
+          `${feedLabel} is temporarily unavailable`,
+        );
+      }
+      const feedsPolicy = normalizeSeoDiscoverySettings(seo.discovery).feeds;
+      const feedVariantStrategy = getFeedVariantStrategy(
+        feedsPolicy,
+        seo.discovery,
+      );
+      if (!feedsPolicy.productCatalogEnabled) {
+        return new Response("Product catalog feed is disabled", {
+          status: 404,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "private, no-cache, no-store, must-revalidate",
+          },
+        });
+      }
+
+      const pageParam = url.searchParams.get("page");
+      const limitParam = url.searchParams.get("limit");
+
+      const page = parsePositiveIntegerParam(
+        pageParam,
+        1,
+        Number.MAX_SAFE_INTEGER,
+      );
+      const limit = parsePositiveIntegerParam(
+        limitParam,
+        DEFAULT_LIMIT,
+        MAX_LIMIT,
+      );
+
+      if (page === null) {
+        return new Response("Invalid page parameter", { status: 400 });
+      }
+
+      if (limit === null) {
+        return new Response("Invalid limit parameter", { status: 400 });
+      }
+
+      const layoutData = await getLayoutData();
+      setRuntimeImageCdnPolicy(layoutData?.media);
+      const currencyCode = layoutData?.currency?.code ?? "BDT";
+
+      const feedWindow = await readFeedItemWindow({
+        page,
+        limit,
+        baseUrl,
+        feedsPolicy,
+        feedVariantStrategy,
       });
+      if (feedWindow.status === "unavailable") {
+        return xmlDataUnavailableResponse(
+          `${feedLabel} is temporarily unavailable`,
+        );
+      }
+
+      if (feedWindow.items.length === 0 && page > 1) {
+        return new Response("Page not found", { status: 404 });
+      }
+
+      const xml = generateCatalogFeed(
+        feedWindow.items,
+        baseUrl,
+        currencyCode,
+        feedsPolicy,
+        format,
+      );
+
+      return new Response(xml, {
+        status: 200,
+        headers: FEED_XML_HEADERS,
+      });
+    } catch (error: unknown) {
+      console.error(`Error generating ${feedLabel}:`, error);
+      return xmlDataUnavailableResponse(
+        `${feedLabel} is temporarily unavailable`,
+      );
     }
+  };
+}
 
-    // Get pagination parameters
-    const pageParam = url.searchParams.get("page");
-    const limitParam = url.searchParams.get("limit");
-
-    const page = parsePositiveIntegerParam(pageParam, 1, Number.MAX_SAFE_INTEGER);
-    const limit = parsePositiveIntegerParam(limitParam, DEFAULT_LIMIT, MAX_LIMIT);
-
-    if (page === null) {
-      return new Response("Invalid page parameter", { status: 400 });
-    }
-
-    if (limit === null) {
-      return new Response("Invalid limit parameter", { status: 400 });
-    }
-
-    // Fetch layout data for currency settings
-    const layoutData = await getLayoutData();
-    setRuntimeImageCdnPolicy(layoutData?.media);
-    const currencyCode = layoutData?.currency?.code ?? "BDT";
-
-    const feedWindow = await readFeedItemWindow({
-      page,
-      limit,
-      baseUrl,
-      feedsPolicy,
-      feedVariantStrategy,
-    });
-    if (feedWindow.status === "unavailable") {
-      return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
-    }
-
-    if (feedWindow.items.length === 0 && page > 1) {
-      return new Response("Page not found", { status: 404 });
-    }
-
-    // Generate feed XML
-    const xml = generateFacebookFeed(
-      feedWindow.items,
-      baseUrl,
-      currencyCode,
-      feedsPolicy,
-    );
-
-    return new Response(xml, {
-      status: 200,
-      headers: FEED_XML_HEADERS,
-    });
-  } catch (error: unknown) {
-    console.error("Error generating Facebook product feed:", error);
-    return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
-  }
-};
+export const GET = createCatalogFeedGet("meta");

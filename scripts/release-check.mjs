@@ -37,12 +37,14 @@ const FEED_ENDPOINTS = [
     resultKey: "feed",
     label: "canonical product feed",
     page2Endpoint: "/api/product-feed.xml?page=2&limit=5",
+    availabilityValues: ["in_stock", "out_of_stock"],
   },
   {
     endpoint: "/api/facebook-feed.xml?limit=5",
     resultKey: "compatibilityFeed",
     label: "compatibility Facebook feed",
     page2Endpoint: "/api/facebook-feed.xml?page=2&limit=5",
+    availabilityValues: ["in stock", "out of stock"],
   },
 ];
 
@@ -414,7 +416,10 @@ export function evaluateSitemapXml(body, {
   };
 }
 
-export function evaluateProductFeedXml(body, { storefrontOrigin } = {}) {
+export function evaluateProductFeedXml(
+  body,
+  { availabilityValues, storefrontOrigin } = {},
+) {
   const itemBlocks = body.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
   const itemCount = itemBlocks.length;
   const links = itemBlocks.flatMap((item) => [
@@ -440,6 +445,14 @@ export function evaluateProductFeedXml(body, { storefrontOrigin } = {}) {
   if (availabilityMarkers.length === 0) {
     errors.push("Product feed must include availability markers.");
   }
+  if (availabilityValues?.length) {
+    const allowed = new Set(availabilityValues);
+    for (const value of availabilityMarkers) {
+      if (!allowed.has(value)) {
+        errors.push(`feed availability value is not allowed: ${value}`);
+      }
+    }
+  }
   for (const link of links) {
     if (!isHttpUrl(link)) {
       errors.push(`feed product link is not absolute http(s): ${link}`);
@@ -460,6 +473,7 @@ export function evaluateProductFeedXml(body, { storefrontOrigin } = {}) {
     linkCount: links.length,
     imageLinkCount: imageLinks.length,
     availabilityCount: availabilityMarkers.length,
+    availabilityValues: availabilityMarkers,
     firstStorefrontItemUrl: links.find((link) => storefrontOrigin ? isSameOrigin(link, storefrontOrigin) : isHttpUrl(link)) ?? null,
   };
 }
@@ -817,7 +831,13 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
   }
 
   responses.feeds = {};
-  for (const { endpoint, resultKey, label, page2Endpoint } of FEED_ENDPOINTS) {
+  for (const {
+    endpoint,
+    resultKey,
+    label,
+    page2Endpoint,
+    availabilityValues,
+  } of FEED_ENDPOINTS) {
     const responseLabel = `Storefront ${label} (${endpoint})`;
     const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, endpoint), {
       fetchImpl,
@@ -829,7 +849,10 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
     if (!cacheEvaluation.ok) {
       throw new Error(`${endpoint} cache headers failed: ${cacheEvaluation.errors.join("; ")}`);
     }
-    const evaluation = evaluateProductFeedXml(response.body, { storefrontOrigin });
+    const evaluation = evaluateProductFeedXml(response.body, {
+      availabilityValues,
+      storefrontOrigin,
+    });
     if (!evaluation.ok) {
       throw new Error(`${endpoint} failed: ${evaluation.errors.join("; ")}`);
     }
@@ -872,6 +895,7 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
           );
         }
         const page2Evaluation = evaluateProductFeedXml(page2Response.body, {
+          availabilityValues,
           storefrontOrigin,
         });
         if (!page2Evaluation.ok) {

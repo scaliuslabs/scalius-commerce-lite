@@ -148,6 +148,8 @@ export interface StorefrontFeedProductVariant {
     reservedStock: number;
     isDefault: boolean;
     trackInventory: boolean;
+    barcode: string | null;
+    barcodeType: string | null;
     discountType: string | null;
     discountPercentage: number | null;
     discountAmount: number | null;
@@ -160,6 +162,7 @@ export interface StorefrontFeedProduct {
     id: string;
     name: string;
     slug: string;
+    canonicalPath: string | null;
     description: string | null;
     price: number;
     discountType: string | null;
