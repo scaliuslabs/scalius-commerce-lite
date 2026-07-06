@@ -266,8 +266,8 @@ Browser helpers in `src/lib/api/customer-auth.ts` use bounded same-origin proxy 
 - **Canonical URLs**: `<link rel="canonical">` on all pages via `Layout.astro` `canonicalUrl` prop
 - **Open Graph tags**: Full OG meta tags (og:title, og:description, og:image, og:url, og:site_name, og:type) in `Layout.astro`
 - **JSON-LD**: OnlineStore and WebSite structured data on all pages when enabled, with OnlineStore identity sourced from business settings and optional MerchantReturnPolicy sourced from saved SEO return-policy settings
-- **Product SEO**: Product pages emit Product/ProductGroup JSON-LD with price, availability, SKU, brand, seller, safe images, GTINs from variant barcodes, active-method shipping details, and aggregate offer data
-- **Discovery XML**: Robots, sitemap index/children, and product feeds are dashboard-policy governed. Product-level sitemap/feed exclusions keep the product page public while removing it from matching XML output. Sitemap XML stays loc/lastmod-only, and the browser XSL preview mirrors that contract.
+- **Product SEO**: Product pages emit Product/ProductGroup JSON-LD with price, availability, SKU, safe images, GTINs from variant barcodes, active-method shipping details, aggregate offer data, seller identity from business settings, and brand only from explicit product data. Product schema must not fabricate condition or price expiry.
+- **Discovery XML**: Robots, sitemap index/children, and product feeds are dashboard-policy governed. Product-level sitemap/feed exclusions keep the product page public while removing it from matching XML output. Product, category, collection, and CMS page `noindex` controls keep public pages reachable with `noindex,follow`, remove them from sitemap XML, and suppress resource-specific JSON-LD. Sitemap XML stays loc/lastmod-only, and the browser XSL preview mirrors that contract.
 
 ## Search
 

@@ -22,6 +22,8 @@ export interface CollectionDto {
   config: string;
   sortOrder: number;
   isActive: boolean;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   createdAt: NullableTimestamp;
   updatedAt: NullableTimestamp;
   deletedAt: NullableTimestamp;
@@ -68,6 +70,8 @@ export interface CreateCollectionInput {
   name: string;
   type: CollectionType;
   isActive: boolean;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   config: CollectionConfigInput;
 }
 

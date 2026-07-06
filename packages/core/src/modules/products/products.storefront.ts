@@ -85,6 +85,8 @@ export interface StorefrontCategoryProductCategory {
     imageUrl: string | null;
     metaTitle: string | null;
     metaDescription: string | null;
+    noIndex: boolean;
+    excludeFromSitemap: boolean;
     createdAt: string | null;
     updatedAt: string | null;
 }
@@ -534,6 +536,7 @@ export async function getStorefrontSitemapProducts(
     } = params;
     const conditions = [
         ...buildStorefrontProductConditions({}),
+        eq(products.noIndex, false),
         eq(products.excludeFromSitemap, false),
     ];
     const offset = (page - 1) * limit;
@@ -668,6 +671,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             slug: products.slug,
             metaTitle: products.metaTitle,
             metaDescription: products.metaDescription,
+            noIndex: products.noIndex,
             discountType: products.discountType,
             discountPercentage: products.discountPercentage,
             discountAmount: products.discountAmount,
@@ -754,8 +758,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                 id: categories.id, name: categories.name, slug: categories.slug,
                 description: categories.description, imageUrl: categories.imageUrl,
                 metaTitle: categories.metaTitle, metaDescription: categories.metaDescription,
+                noIndex: categories.noIndex, excludeFromSitemap: categories.excludeFromSitemap,
             }).from(categories).where(eq(categories.id, product.categoryId!)).get()
-                .then((res: { id: string; name: string; slug: string; description: string | null; imageUrl: string | null; metaTitle: string | null; metaDescription: string | null } | undefined) => ({ type: "category", data: res })),
+                .then((res: { id: string; name: string; slug: string; description: string | null; imageUrl: string | null; metaTitle: string | null; metaDescription: string | null; noIndex: boolean; excludeFromSitemap: boolean } | undefined) => ({ type: "category", data: res })),
         );
 
         promises.push(

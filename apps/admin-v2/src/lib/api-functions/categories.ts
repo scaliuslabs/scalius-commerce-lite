@@ -26,6 +26,8 @@ export interface CategoryListItemDto {
   imageUrl: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   createdAt: NullableTimestamp;
   updatedAt: NullableTimestamp;
   deletedAt: NullableTimestamp;
@@ -40,6 +42,8 @@ export interface CategoryDetailDto {
   imageUrl: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -73,6 +77,8 @@ export interface CreateCategoryInput {
   slug: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   image: CategoryImageInput | null;
 }
 

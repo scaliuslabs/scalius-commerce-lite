@@ -80,6 +80,50 @@ export const LayoutSettingsSection = React.memo(
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="noIndex"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-sm font-medium">
+                      Prevent search indexing
+                    </FormLabel>
+                    <FormDescription className="text-xs">
+                      Keep the collection page public, but ask search engines not to index it.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="excludeFromSitemap"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-sm font-medium">
+                      Hide from sitemap
+                    </FormLabel>
+                    <FormDescription className="text-xs">
+                      Keep it public, but remove it from collections sitemap XML.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
           </CardContent>
         </Card>
 

@@ -63,6 +63,8 @@ function toPageInput(values: PageFormValues): CreatePageInput {
     content: values.content,
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription,
+    noIndex: values.noIndex,
+    excludeFromSitemap: values.excludeFromSitemap,
     isPublished: values.isPublished,
     publishedAt: values.publishedAt ? values.publishedAt.toISOString() : null,
     sortOrder: values.sortOrder,
@@ -89,6 +91,8 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       content: "",
       metaTitle: null,
       metaDescription: null,
+      noIndex: false,
+      excludeFromSitemap: false,
       isPublished: true,
       publishedAt: null,
       sortOrder: 0,
@@ -460,8 +464,56 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
-                )}
-              />
+                  )}
+                />
+
+              <div className="grid gap-2">
+                <FormField
+                  control={form.control}
+                  name="noIndex"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">
+                          Prevent search indexing
+                        </FormLabel>
+                        <FormDescription className="text-xs">
+                          Keep the page public, but ask search engines not to index it.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="excludeFromSitemap"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-sm font-medium">
+                          Hide from sitemap
+                        </FormLabel>
+                        <FormDescription className="text-xs">
+                          Keep the page public, but remove it from pages sitemap XML.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
             </CollapsibleCard>
           </div>
         </div>

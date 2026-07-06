@@ -19,6 +19,7 @@ import {
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
+import { Switch } from "../ui/switch";
 import { ExternalLink } from "lucide-react";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
@@ -63,6 +64,8 @@ function toCategoryInput(values: CategoryFormValues): CreateCategoryInput {
     slug: values.slug,
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription,
+    noIndex: values.noIndex,
+    excludeFromSitemap: values.excludeFromSitemap,
     image: serializeCategoryImage(values.image),
   };
 }
@@ -81,6 +84,8 @@ export function CategoryForm({
       slug: "",
       metaTitle: null,
       metaDescription: null,
+      noIndex: false,
+      excludeFromSitemap: false,
       image: null,
       slugEdited: false,
       ...defaultValues,
@@ -347,6 +352,54 @@ export function CategoryForm({
                 </FormItem>
               )}
             />
+
+            <div className="grid gap-2">
+              <FormField
+                control={form.control}
+                name="noIndex"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm font-medium">
+                        Prevent search indexing
+                      </FormLabel>
+                      <FormDescription className="text-xs">
+                        Keep the category page public, but ask search engines not to index it.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="excludeFromSitemap"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm font-medium">
+                        Hide from sitemap
+                      </FormLabel>
+                      <FormDescription className="text-xs">
+                        Keep the page public, but remove it from category sitemap XML.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
           </CollapsibleCard>
         </div>
       </div>

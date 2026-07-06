@@ -25,6 +25,8 @@ export interface PageDto {
   content: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   isPublished: boolean;
   hideHeader: boolean;
   hideFooter: boolean;
@@ -66,6 +68,8 @@ export interface CreatePageInput {
   content: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
+  excludeFromSitemap: boolean;
   isPublished: boolean;
   publishedAt?: string | null;
   sortOrder: number;

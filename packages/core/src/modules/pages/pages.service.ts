@@ -192,6 +192,8 @@ export async function createPage(db: Database, data: CreatePageInput): Promise<{
         slug: data.slug,
         metaTitle: data.metaTitle || null,
         metaDescription: data.metaDescription || null,
+        noIndex: data.noIndex ?? false,
+        excludeFromSitemap: data.excludeFromSitemap ?? false,
         isPublished: data.isPublished,
         publishedAt: data.publishedAt ?? null,
         sortOrder: data.sortOrder ?? 0,

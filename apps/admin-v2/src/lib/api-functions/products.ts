@@ -107,6 +107,7 @@ export interface ProductWriteInput {
   freeDelivery: boolean;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
   slug: string;
@@ -174,6 +175,7 @@ export interface ProductDetailDto {
   categoryId: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  noIndex: boolean;
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
   isActive: boolean;

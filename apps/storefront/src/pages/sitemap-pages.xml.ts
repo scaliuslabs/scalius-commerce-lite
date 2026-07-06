@@ -75,7 +75,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     }
 
     const pageUrls: SitemapUrl[] = allPages
-      .filter((page) => page.isPublished && page.slug) // Extra safety check
+      .filter((page) => page.isPublished && page.slug && !page.noIndex && !page.excludeFromSitemap)
       .map((page) => ({
         loc: `${baseUrl}/${page.slug}`,
         lastmod: page.publishedAt ?? page.updatedAt,

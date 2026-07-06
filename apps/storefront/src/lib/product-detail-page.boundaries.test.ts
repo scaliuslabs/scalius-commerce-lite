@@ -40,5 +40,12 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("hasMerchantReturnPolicy: merchantReturnPolicyJsonLd");
     expect(source).toContain("gtinJsonLdForVariant(variant.barcode, variant.barcodeType)");
     expect(source).toContain("buyerVariants[0]?.barcode");
+    expect(source).not.toContain("priceValidUntil");
+    expect(source).not.toContain("itemCondition");
+    expect(source).not.toContain("NewCondition");
+    expect(source).toContain("sellerName");
+    expect(source).toContain("layoutData.business?.companyName");
+    expect(source).toContain("const brandName = brandAttribute?.value?.trim() || null");
+    expect(source).not.toContain("brandAttribute?.value || storeName");
   });
 });

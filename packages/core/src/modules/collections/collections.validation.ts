@@ -14,6 +14,8 @@ export const createCollectionSchema = z.object({
     name: z.string().min(3).max(100),
     type: z.enum(["manual", "dynamic"]),
     isActive: z.boolean(),
+    noIndex: z.boolean().optional().default(false),
+    excludeFromSitemap: z.boolean().optional().default(false),
     config: collectionConfigSchema,
 });
 
@@ -21,6 +23,8 @@ export const updateCollectionSchema = z.object({
     name: z.string().min(3).max(100).optional(),
     type: z.enum(["manual", "dynamic"]).optional(),
     isActive: z.boolean().optional(),
+    noIndex: z.boolean().optional(),
+    excludeFromSitemap: z.boolean().optional(),
     config: collectionConfigSchema.optional(),
 });
 

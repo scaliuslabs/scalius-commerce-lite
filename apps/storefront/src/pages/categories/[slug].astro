@@ -243,6 +243,7 @@ const ogImageUrl = category?.imageUrl
 const collectionJsonLd =
   discoverySettings.structuredData.collections &&
   category &&
+  !category.noIndex &&
   canonicalUrl &&
   storefrontUrl
   ? serializeJsonForInlineScript({
@@ -285,6 +286,7 @@ const collectionJsonLd =
   canonicalUrl={canonicalUrl ?? undefined}
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
+  noindex={category?.noIndex === true}
 >
   <Fragment slot="head">
     {

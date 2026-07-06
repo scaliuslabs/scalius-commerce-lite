@@ -39,10 +39,12 @@ export const GET: APIRoute = async (_context: APIContext) => {
       return xmlDataUnavailableResponse('Category sitemap is temporarily unavailable');
     }
 
-    const categoryUrls: SitemapUrl[] = categories.map((category) => ({
-      loc: `${baseUrl}/categories/${category.slug}`,
-      lastmod: category.updatedAt ?? category.createdAt ?? undefined,
-    }));
+    const categoryUrls: SitemapUrl[] = categories
+      .filter((category) => !category.noIndex && !category.excludeFromSitemap)
+      .map((category) => ({
+        loc: `${baseUrl}/categories/${category.slug}`,
+        lastmod: category.updatedAt ?? category.createdAt ?? undefined,
+      }));
 
     const xml = generateSitemap(categoryUrls, baseUrl);
 

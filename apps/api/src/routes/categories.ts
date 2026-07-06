@@ -78,6 +78,8 @@ const storefrontCategorySchema = z.object({
   updatedAt: z.string().nullable(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
+  noIndex: z.boolean(),
+  excludeFromSitemap: z.boolean(),
 }).passthrough();
 
 type AppliedFilterValue =
@@ -200,6 +202,8 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     imageUrl: category.imageUrl,
     metaTitle: category.metaTitle,
     metaDescription: category.metaDescription,
+    noIndex: category.noIndex,
+    excludeFromSitemap: category.excludeFromSitemap,
     createdAt: category.createdAt,
     updatedAt: category.updatedAt,
   };
