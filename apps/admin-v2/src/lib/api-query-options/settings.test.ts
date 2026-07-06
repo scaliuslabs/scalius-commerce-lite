@@ -112,6 +112,15 @@ describe("seoSettingsQueryOptions", () => {
         sitemap: { enabled: false },
         feeds: { productCatalogEnabled: false, title: "  Feed title  " },
         structuredData: { breadcrumbs: false },
+        returnPolicy: {
+          enabled: true,
+          country: "us",
+          category: "unlimited",
+          returnWindowDays: 30,
+          returnFees: "free",
+          returnMethod: "in_store",
+          policyUrl: " https://shop.example.com/returns ",
+        },
       },
     } as never);
 
@@ -144,6 +153,15 @@ describe("seoSettingsQueryOptions", () => {
           productGroups: true,
           offerShippingDetails: true,
           breadcrumbs: false,
+        },
+        returnPolicy: {
+          enabled: true,
+          country: "US",
+          category: "unlimited",
+          returnWindowDays: null,
+          returnFees: "free",
+          returnMethod: "in_store",
+          policyUrl: "https://shop.example.com/returns",
         },
       },
     });

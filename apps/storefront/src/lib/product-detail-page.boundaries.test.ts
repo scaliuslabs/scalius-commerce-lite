@@ -35,6 +35,9 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("shippingMethods,");
     expect(source).toContain("freeDelivery: product.freeDelivery");
     expect(source).toContain("shippingDetails: offerShippingDetails");
+    expect(source).toContain("buildMerchantReturnPolicyJsonLd({");
+    expect(source).toContain("settings: layoutData.seo?.returnPolicy");
+    expect(source).toContain("hasMerchantReturnPolicy: merchantReturnPolicyJsonLd");
     expect(source).toContain("gtinJsonLdForVariant(variant.barcode, variant.barcodeType)");
     expect(source).toContain("buyerVariants[0]?.barcode");
   });

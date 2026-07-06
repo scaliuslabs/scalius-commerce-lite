@@ -16,7 +16,10 @@ import {
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
-import { buildOnlineStoreJsonLd } from "@/lib/commerce-structured-data";
+import {
+  buildMerchantReturnPolicyJsonLd,
+  buildOnlineStoreJsonLd,
+} from "@/lib/commerce-structured-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
@@ -98,6 +101,11 @@ const storeName =
   headerData.logo.alt ||
   "Store";
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
+const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
+  settings: layoutData?.seo?.returnPolicy,
+  storefrontUrl,
+  fallbackCountry: businessInfo?.country,
+});
 
 // Organization JSON-LD — only emit when we have a logo (per SEO-05)
 const logoUrl = headerData.logo.src
@@ -118,6 +126,7 @@ const orgJsonLd = discoverySettings.structuredData.organization && storefrontUrl
         storeName,
         business: businessInfo,
         social: footerData.social,
+        returnPolicy: merchantReturnPolicyJsonLd,
       }),
     )
   : null;

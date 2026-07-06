@@ -1,5 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
-
 import {
   SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS,
   buildSeoDiscoveryHref,
@@ -13,7 +11,7 @@ import {
 const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
 
-interface StorefrontUrlPayload {
+export interface StorefrontUrlPayload {
   storefrontUrl: string;
 }
 
@@ -28,13 +26,6 @@ export interface SeoDiscoveryLiveProbeDeps {
   maxBodyBytes?: number;
   now?: () => Date;
   timeoutMs?: number;
-}
-
-async function readStorefrontUrlFromAdminSettings(): Promise<
-  StorefrontUrlPayload
-> {
-  const { apiGet } = await import("../api.server");
-  return apiGet<StorefrontUrlPayload>("/settings/storefront-url");
 }
 
 function safeHeaderValue(value: string | null): string | null {
@@ -197,8 +188,16 @@ export async function runSeoDiscoveryLiveProbe(
     Math.trunc(deps.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES),
   );
   const checkedAt = (deps.now?.() ?? new Date()).toISOString();
-  const getStorefrontUrl =
-    deps.getStorefrontUrl ?? readStorefrontUrlFromAdminSettings;
+  const getStorefrontUrl = deps.getStorefrontUrl;
+  if (!getStorefrontUrl) {
+    return {
+      baseUrl: null,
+      checkedAt,
+      ok: false,
+      error: "Store URL lookup is not configured.",
+      resources: [],
+    };
+  }
   const fetchImpl = deps.fetch ?? fetch;
   const { storefrontUrl } = await getStorefrontUrl();
   const baseUrl = parseSeoDiscoveryStorefrontUrl(storefrontUrl);
@@ -232,7 +231,3 @@ export async function runSeoDiscoveryLiveProbe(
     resources,
   };
 }
-
-export const getSeoDiscoveryLiveProbe = createServerFn({
-  method: "GET",
-}).handler(async () => runSeoDiscoveryLiveProbe());

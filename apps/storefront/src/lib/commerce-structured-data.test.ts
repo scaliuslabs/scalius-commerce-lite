@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildMerchantReturnPolicyJsonLd,
   buildOfferShippingDetails,
   buildOnlineStoreJsonLd,
   gtinJsonLdForVariant,
@@ -68,6 +69,141 @@ describe("commerce structured data helpers", () => {
         storeName: "Store",
       }),
     ).toBeNull();
+  });
+
+  it("attaches a normalized merchant return policy to OnlineStore JSON-LD", () => {
+    const returnPolicy = buildMerchantReturnPolicyJsonLd({
+      settings: {
+        enabled: true,
+        category: "finite",
+        returnWindowDays: 7,
+        returnFees: "customer_responsibility",
+        returnMethod: "both",
+        policyUrl: "/returns",
+      },
+      storefrontUrl: "https://shop.example.com",
+      fallbackCountry: "Bangladesh",
+    });
+
+    expect(returnPolicy).toEqual({
+      "@type": "MerchantReturnPolicy",
+      applicableCountry: "BD",
+      merchantReturnDays: 7,
+      merchantReturnLink: "https://shop.example.com/returns",
+      returnFees: "https://schema.org/ReturnFeesCustomerResponsibility",
+      returnMethod: [
+        "https://schema.org/ReturnByMail",
+        "https://schema.org/ReturnInStore",
+      ],
+      returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+    });
+    expect(
+      buildOnlineStoreJsonLd({
+        storefrontUrl: "https://shop.example.com",
+        logoUrl: "https://shop.example.com/logo.png",
+        storeName: "Store",
+        returnPolicy,
+      }),
+    ).toMatchObject({
+      hasMerchantReturnPolicy: returnPolicy,
+    });
+  });
+
+  it("builds finite-window merchant return policy schema only from complete facts", () => {
+    expect(
+      buildMerchantReturnPolicyJsonLd({
+        settings: {
+          enabled: true,
+          category: "finite_return_window",
+          returnWindowDays: "14",
+          returnFees: "free",
+          returnMethod: "in_store",
+          policyUrl: "https://shop.example.com/policies/returns",
+          applicableCountry: ["bd", "NP"],
+          returnPolicyCountry: "Bangladesh",
+        },
+        storefrontUrl: "https://shop.example.com",
+      }),
+    ).toEqual({
+      "@type": "MerchantReturnPolicy",
+      applicableCountry: ["BD", "NP"],
+      merchantReturnDays: 14,
+      merchantReturnLink: "https://shop.example.com/policies/returns",
+      returnFees: "https://schema.org/FreeReturn",
+      returnMethod: "https://schema.org/ReturnInStore",
+      returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+      returnPolicyCountry: "BD",
+    });
+  });
+
+  it("maps no-returns merchant policy without inventing a return window", () => {
+    expect(
+      buildMerchantReturnPolicyJsonLd({
+        settings: {
+          enabled: true,
+          category: "no_returns",
+          country: "BD",
+          returnFees: "free",
+          returnMethod: "mail",
+        },
+        storefrontUrl: "https://shop.example.com",
+      }),
+    ).toEqual({
+      "@type": "MerchantReturnPolicy",
+      applicableCountry: "BD",
+      returnPolicyCategory: "https://schema.org/MerchantReturnNotPermitted",
+    });
+  });
+
+  it("returns null for disabled or incomplete merchant return policy settings", () => {
+    expect(
+      buildMerchantReturnPolicyJsonLd({
+        settings: {
+          enabled: false,
+          category: "finite",
+          returnWindowDays: 14,
+        },
+        storefrontUrl: "https://shop.example.com",
+        fallbackCountry: "Bangladesh",
+      }),
+    ).toBeNull();
+    expect(
+      buildMerchantReturnPolicyJsonLd({
+        settings: {
+          enabled: true,
+          category: "finite",
+        },
+        storefrontUrl: "https://shop.example.com",
+        fallbackCountry: "Bangladesh",
+      }),
+    ).toBeNull();
+  });
+
+  it("filters unsafe merchant return policy URLs", () => {
+    expect(
+      buildMerchantReturnPolicyJsonLd({
+        settings: {
+          enabled: true,
+          policyUrl: "javascript:alert(1)",
+        },
+        storefrontUrl: "https://shop.example.com",
+      }),
+    ).toBeNull();
+    expect(
+      buildMerchantReturnPolicyJsonLd({
+        settings: {
+          enabled: true,
+          category: "unlimited",
+          policyUrl: "//evil.example/returns",
+        },
+        storefrontUrl: "https://shop.example.com",
+        fallbackCountry: "Bangladesh",
+      }),
+    ).toEqual({
+      "@type": "MerchantReturnPolicy",
+      applicableCountry: "BD",
+      returnPolicyCategory: "https://schema.org/MerchantReturnUnlimitedWindow",
+    });
   });
 
   it("builds offer shipping details from active shipping methods", () => {

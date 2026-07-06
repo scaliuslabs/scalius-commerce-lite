@@ -14,15 +14,22 @@ import {
   parseSeoDiscoverySettings,
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
+import {
+  mergeSeoReturnPolicySettings,
+  parseSeoReturnPolicySettings,
+  type SeoReturnPolicySettings,
+} from "@scalius/shared/seo-return-policy";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
 const SEO_SETTINGS_CATEGORY = "seo";
 const DISCOVERY_SETTINGS_KEY = "discovery";
+const RETURN_POLICY_SETTINGS_KEY = "return_policy";
 
 type PartialSeoDiscoverySettings = {
   [Section in keyof SeoDiscoverySettings]?: Partial<SeoDiscoverySettings[Section]>;
 };
+type PartialSeoReturnPolicySettings = Partial<SeoReturnPolicySettings>;
 
 export interface MediaOptimizationSettings {
   enabled: boolean;
@@ -320,7 +327,7 @@ export async function saveMediaOptimizationSettings(
 // ─────────────────────────────────────────
 
 export async function getSeoSettings(db: Database) {
-  const [siteRows, discoveryRows] = await db.batch([
+  const [siteRows, discoveryRows, returnPolicyRows] = await db.batch([
     db
       .select({
         siteTitle: siteSettings.siteTitle,
@@ -340,10 +347,21 @@ export async function getSeoSettings(db: Database) {
         ),
       )
       .limit(1),
+    db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(
+        and(
+          eq(settings.category, SEO_SETTINGS_CATEGORY),
+          eq(settings.key, RETURN_POLICY_SETTINGS_KEY),
+        ),
+      )
+      .limit(1),
   ]);
 
   const row = siteRows[0];
   const discoveryRow = discoveryRows[0];
+  const returnPolicyRow = returnPolicyRows[0];
 
   return {
     siteTitle: row?.siteTitle || "",
@@ -351,6 +369,7 @@ export async function getSeoSettings(db: Database) {
     homepageMetaDescription: row?.homepageMetaDescription || "",
     robotsTxt: row?.robotsTxt || "",
     discovery: parseSeoDiscoverySettings(discoveryRow?.value),
+    returnPolicy: parseSeoReturnPolicySettings(returnPolicyRow?.value),
   };
 }
 
@@ -362,6 +381,7 @@ export async function saveSeoSettings(
     homepageMetaDescription?: string;
     robotsTxt?: string;
     discovery?: PartialSeoDiscoverySettings;
+    returnPolicy?: PartialSeoReturnPolicySettings;
   },
 ) {
   // Filter out undefined values to avoid NULLing existing data
@@ -407,6 +427,22 @@ export async function saveSeoSettings(
         SEO_SETTINGS_CATEGORY,
         DISCOVERY_SETTINGS_KEY,
         JSON.stringify(discovery),
+      ),
+    );
+  }
+
+  if (data.returnPolicy !== undefined) {
+    const current = await getSeoSettings(db);
+    const returnPolicy = mergeSeoReturnPolicySettings(
+      current.returnPolicy,
+      data.returnPolicy,
+    );
+    ops.push(
+      upsertSetting(
+        db,
+        SEO_SETTINGS_CATEGORY,
+        RETURN_POLICY_SETTINGS_KEY,
+        JSON.stringify(returnPolicy),
       ),
     );
   }

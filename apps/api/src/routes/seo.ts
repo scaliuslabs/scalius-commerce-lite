@@ -1,6 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cacheMiddleware } from "../middleware/cache";
 import { getSeoSettings } from "@scalius/core/modules/settings/site-settings.service";
+import {
+  SEO_RETURN_POLICY_CATEGORIES,
+  SEO_RETURN_POLICY_FEES,
+  SEO_RETURN_POLICY_METHODS,
+} from "@scalius/shared/seo-return-policy";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -15,7 +20,7 @@ app.use(
     ttl: CACHE_TTLS.STANDARD,
     // Bump the nested namespace when the public SEO payload shape changes.
     // The broader api:seo: invalidation group still clears versioned entries.
-    keyPrefix: "api:seo:v3:",
+    keyPrefix: "api:seo:v4:",
     methods: ["GET"]
   }),
 );
@@ -51,9 +56,20 @@ const discoverySchema = z.object({
     websiteSearch: z.boolean(),
     products: z.boolean(),
     productGroups: z.boolean(),
+    offerShippingDetails: z.boolean(),
     breadcrumbs: z.boolean(),
     collections: z.boolean(),
   }),
+});
+
+const returnPolicySchema = z.object({
+  enabled: z.boolean(),
+  country: z.string(),
+  category: z.enum(SEO_RETURN_POLICY_CATEGORIES),
+  returnWindowDays: z.number().int().min(1).max(365).nullable(),
+  returnFees: z.enum(SEO_RETURN_POLICY_FEES),
+  returnMethod: z.enum(SEO_RETURN_POLICY_METHODS),
+  policyUrl: z.string(),
 });
 
 // GET /seo — get SEO settings
@@ -71,6 +87,7 @@ const getSeoSettingsRoute = createRoute({
         homepageMetaDescription: z.string().nullable(),
         robotsTxt: z.string().nullable(),
         discovery: discoverySchema,
+        returnPolicy: returnPolicySchema,
       })) } },
     },
     500: errorResponses[500],

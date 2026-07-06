@@ -30,10 +30,13 @@ describe("storefront SEO regressions", () => {
 
     expect(source).toContain("toAbsoluteStorefrontSeoUrl");
     expect(source).toContain("buildOnlineStoreJsonLd");
+    expect(source).toContain("buildMerchantReturnPolicyJsonLd");
     expect(source).toMatch(
       /const orgJsonLd =\s+discoverySettings\.structuredData\.organization && storefrontUrl && logoUrl/,
     );
     expect(source).toContain("business: businessInfo");
+    expect(source).toContain("settings: layoutData?.seo?.returnPolicy");
+    expect(source).toContain("returnPolicy: merchantReturnPolicyJsonLd");
     expect(source).not.toContain("logo: { \"@type\": \"ImageObject\", url: getOptimizedImageUrl");
   });
 

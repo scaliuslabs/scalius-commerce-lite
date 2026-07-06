@@ -8,9 +8,12 @@ vi.mock("../payments/gateway-settings", () => ({
   upsertSetting: mocks.upsertSetting,
 }));
 
-import { getSeoSettings, saveSeoSettings } from "./site-settings.service";
+import {
+  getSeoSettings,
+  saveSeoSettings,
+} from "./site-settings.service";
 
-function createSeoReadDb(discoveryValue?: string) {
+function createSeoReadDb(discoveryValue?: string, returnPolicyValue?: string) {
   const query = {
     from: vi.fn(() => ({
       limit: vi.fn(() => ({})),
@@ -32,6 +35,7 @@ function createSeoReadDb(discoveryValue?: string) {
         },
       ],
       discoveryValue ? [{ value: discoveryValue }] : [],
+      returnPolicyValue ? [{ value: returnPolicyValue }] : [],
     ]),
   };
 }
@@ -74,6 +78,15 @@ describe("site SEO settings", () => {
           collections: true,
         },
       },
+      returnPolicy: {
+        enabled: false,
+        country: "BD",
+        category: "finite",
+        returnWindowDays: null,
+        returnFees: "customer_responsibility",
+        returnMethod: "mail",
+        policyUrl: "",
+      },
     });
   });
 
@@ -112,6 +125,33 @@ describe("site SEO settings", () => {
           breadcrumbs: true,
           collections: true,
         },
+      },
+    });
+  });
+
+  it("returns normalized return policy settings from the generic settings table", async () => {
+    const db = createSeoReadDb(
+      undefined,
+      JSON.stringify({
+        enabled: true,
+        country: "us",
+        category: "finite",
+        returnWindowDays: 30,
+        returnFees: "free",
+        returnMethod: "both",
+        policyUrl: "https://store.example.com/returns",
+      }),
+    );
+
+    await expect(getSeoSettings(db as never)).resolves.toMatchObject({
+      returnPolicy: {
+        enabled: true,
+        country: "US",
+        category: "finite",
+        returnWindowDays: 30,
+        returnFees: "free",
+        returnMethod: "both",
+        policyUrl: "https://store.example.com/returns",
       },
     });
   });
@@ -192,6 +232,78 @@ describe("site SEO settings", () => {
         breadcrumbs: true,
         collections: true,
       },
+    });
+  });
+
+  it("saves return policy changes in the generic settings table", async () => {
+    const db = {
+      ...createSeoReadDb(),
+      insert: vi.fn(),
+    };
+
+    await saveSeoSettings(db as never, {
+      returnPolicy: {
+        enabled: true,
+        country: "bd",
+        category: "finite",
+        returnWindowDays: 7,
+        returnFees: "free",
+        returnMethod: "mail",
+        policyUrl: "https://store.example.com/returns",
+      },
+    });
+
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(mocks.upsertSetting).toHaveBeenCalledTimes(1);
+    const [, category, key, rawValue] = mocks.upsertSetting.mock.calls[0] ?? [];
+    expect({ category, key }).toEqual({
+      category: "seo",
+      key: "return_policy",
+    });
+    expect(JSON.parse(String(rawValue))).toEqual({
+      enabled: true,
+      country: "BD",
+      category: "finite",
+      returnWindowDays: 7,
+      returnFees: "free",
+      returnMethod: "mail",
+      policyUrl: "https://store.example.com/returns",
+    });
+  });
+
+  it("preserves existing return policy details on partial saves", async () => {
+    const db = {
+      ...createSeoReadDb(
+        undefined,
+        JSON.stringify({
+          enabled: true,
+          country: "BD",
+          category: "finite",
+          returnWindowDays: 15,
+          returnFees: "customer_responsibility",
+          returnMethod: "mail",
+          policyUrl: "https://store.example.com/returns",
+        }),
+      ),
+      insert: vi.fn(),
+    };
+
+    await saveSeoSettings(db as never, {
+      returnPolicy: {
+        returnFees: "free",
+        returnMethod: "both",
+      },
+    });
+
+    const [, , , rawValue] = mocks.upsertSetting.mock.calls[0] ?? [];
+    expect(JSON.parse(String(rawValue))).toEqual({
+      enabled: true,
+      country: "BD",
+      category: "finite",
+      returnWindowDays: 15,
+      returnFees: "free",
+      returnMethod: "both",
+      policyUrl: "https://store.example.com/returns",
     });
   });
 });

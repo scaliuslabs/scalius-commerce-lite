@@ -265,8 +265,8 @@ Browser helpers in `src/lib/api/customer-auth.ts` use bounded same-origin proxy 
 
 - **Canonical URLs**: `<link rel="canonical">` on all pages via `Layout.astro` `canonicalUrl` prop
 - **Open Graph tags**: Full OG meta tags (og:title, og:description, og:image, og:url, og:site_name, og:type) in `Layout.astro`
-- **JSON-LD**: Organization and WebSite structured data on all pages (global), Product structured data on product detail pages with offers, availability, and merchant listing spec compliance
-- **Product SEO**: Product pages emit JSON-LD with `@type: Product` including price, availability, SKU, brand, seller, images, and aggregate offer data
+- **JSON-LD**: OnlineStore and WebSite structured data on all pages when enabled, with OnlineStore identity sourced from business settings and optional MerchantReturnPolicy sourced from saved SEO return-policy settings
+- **Product SEO**: Product pages emit Product/ProductGroup JSON-LD with price, availability, SKU, brand, seller, safe images, GTINs from variant barcodes, active-method shipping details, and aggregate offer data
 
 ## Search
 

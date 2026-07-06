@@ -1,20 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  apiGet: vi.fn(),
-}));
-
-vi.mock("../api.server", () => ({
-  apiGet: mocks.apiGet,
-}));
-
-vi.mock("@tanstack/react-start", () => ({
-  createServerFn: () => ({
-    handler: (handler: () => unknown) => handler,
-  }),
-}));
-
 import { runSeoDiscoveryLiveProbe } from "./seo-discovery-live-probe";
+
+const mocks = vi.hoisted(() => ({
+  getStorefrontUrl: vi.fn(),
+}));
+
+function storefrontUrlLookup() {
+  return mocks.getStorefrontUrl();
+}
 
 function textResponse(
   body: string,
@@ -36,11 +30,12 @@ describe("runSeoDiscoveryLiveProbe", () => {
   });
 
   it("does not fetch live URLs when the Store URL is not absolute http(s)", async () => {
-    mocks.apiGet.mockResolvedValue({ storefrontUrl: "/local-store" });
+    mocks.getStorefrontUrl.mockResolvedValue({ storefrontUrl: "/local-store" });
     const fetchMock = vi.fn();
 
     const result = await runSeoDiscoveryLiveProbe({
       fetch: fetchMock as unknown as typeof fetch,
+      getStorefrontUrl: storefrontUrlLookup,
       now: () => new Date("2026-07-06T00:00:00.000Z"),
     });
 
@@ -55,7 +50,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
   });
 
   it("probes only the fixed discovery paths without forwarding credentials", async () => {
-    mocks.apiGet.mockResolvedValue({
+    mocks.getStorefrontUrl.mockResolvedValue({
       storefrontUrl: "https://shop.example.com/",
     });
     const fetchMock = vi.fn(
@@ -92,10 +87,11 @@ describe("runSeoDiscoveryLiveProbe", () => {
 
     const result = await runSeoDiscoveryLiveProbe({
       fetch: fetchMock as unknown as typeof fetch,
+      getStorefrontUrl: storefrontUrlLookup,
       now: () => new Date("2026-07-06T00:00:00.000Z"),
     });
 
-    expect(mocks.apiGet).toHaveBeenCalledWith("/settings/storefront-url");
+    expect(mocks.getStorefrontUrl).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
       "https://shop.example.com/robots.txt",
       "https://shop.example.com/sitemap.xml",
@@ -151,7 +147,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
 
   it("allows cold-but-healthy discovery files to finish within the default budget", async () => {
     vi.useFakeTimers();
-    mocks.apiGet.mockResolvedValue({
+    mocks.getStorefrontUrl.mockResolvedValue({
       storefrontUrl: "https://shop.example.com/",
     });
     const fetchMock = vi.fn(
@@ -195,6 +191,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
 
     const resultPromise = runSeoDiscoveryLiveProbe({
       fetch: fetchMock as unknown as typeof fetch,
+      getStorefrontUrl: storefrontUrlLookup,
       now: () => new Date("2026-07-06T00:00:00.000Z"),
     });
     await vi.advanceTimersByTimeAsync(6_500);
@@ -205,7 +202,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
   });
 
   it("blocks redirects and caps response body reads", async () => {
-    mocks.apiGet.mockResolvedValue({
+    mocks.getStorefrontUrl.mockResolvedValue({
       storefrontUrl: "https://shop.example.com",
     });
     const fetchMock = vi.fn(() =>
@@ -217,6 +214,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
 
     const result = await runSeoDiscoveryLiveProbe({
       fetch: fetchMock as unknown as typeof fetch,
+      getStorefrontUrl: storefrontUrlLookup,
       maxBodyBytes: 8,
     });
 

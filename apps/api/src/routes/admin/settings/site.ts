@@ -4,6 +4,12 @@ import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 import { listInvalidStorefrontThemeColorEntries } from "@scalius/shared/storefront-theme";
 import {
+  SEO_RETURN_POLICY_CATEGORIES,
+  SEO_RETURN_POLICY_FEES,
+  SEO_RETURN_POLICY_METHODS,
+  isValidSeoReturnPolicyUrl,
+} from "@scalius/shared/seo-return-policy";
+import {
   getCurrencySettings,
   saveCurrencySettings,
   getGeneralSettings,
@@ -489,6 +495,15 @@ const seoSettingsSchema = z.object({
       collections: z.boolean(),
     }),
   }),
+  returnPolicy: z.object({
+    enabled: z.boolean(),
+    country: z.string(),
+    category: z.enum(SEO_RETURN_POLICY_CATEGORIES),
+    returnWindowDays: z.number().int().min(1).max(365).nullable(),
+    returnFees: z.enum(SEO_RETURN_POLICY_FEES),
+    returnMethod: z.enum(SEO_RETURN_POLICY_METHODS),
+    policyUrl: z.string(),
+  }),
 });
 
 const getSeoRoute = createRoute({
@@ -606,12 +621,33 @@ const saveSeoDiscoverySchema = z.object({
   structuredData: seoSettingsSchema.shape.discovery.shape.structuredData.partial().optional(),
 });
 
+const saveSeoReturnPolicySchema = z.object({
+  enabled: z.boolean().optional(),
+  country: z
+    .string()
+    .regex(/^[A-Za-z]{2}$/, "Use a two-letter ISO country code")
+    .optional(),
+  category: z.enum(SEO_RETURN_POLICY_CATEGORIES).optional(),
+  returnWindowDays: z.number().int().min(1).max(365).nullable().optional(),
+  returnFees: z.enum(SEO_RETURN_POLICY_FEES).optional(),
+  returnMethod: z.enum(SEO_RETURN_POLICY_METHODS).optional(),
+  policyUrl: z
+    .string()
+    .max(2048)
+    .refine(
+      (value) => isValidSeoReturnPolicyUrl(value),
+      "Policy URL must be blank, a same-origin path, or an absolute http(s) URL",
+    )
+    .optional(),
+});
+
 const saveSeoSchema = z.object({
   siteTitle: z.string().optional(),
   homepageTitle: z.string().optional(),
   homepageMetaDescription: z.string().optional(),
   robotsTxt: z.string().optional(),
   discovery: saveSeoDiscoverySchema.optional(),
+  returnPolicy: saveSeoReturnPolicySchema.optional(),
 });
 
 const saveSeoRoute = createRoute({

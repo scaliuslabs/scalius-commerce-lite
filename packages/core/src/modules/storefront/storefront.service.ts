@@ -25,10 +25,9 @@ import {
   shouldUsePartytown,
 } from "../../integrations/analytics";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
-import {
-  parseMediaOptimizationSettings,
-} from "../settings/site-settings.service";
+import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import {
@@ -339,6 +338,18 @@ export async function getLayoutData(db: Database) {
       .select({ key: settings.key, value: settings.value })
       .from(settings)
       .where(eq(settings.category, "business_info")),
+
+    // 10. Merchant return-policy schema settings
+    db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(
+        and(
+          eq(settings.category, "seo"),
+          eq(settings.key, "return_policy"),
+        ),
+      )
+      .limit(1),
   ]);
 
   const [
@@ -352,6 +363,7 @@ export async function getLayoutData(db: Database) {
     metaCapiResults,
     seoDiscoveryResults,
     businessResults,
+    seoReturnPolicyResults,
   ] = batchResults;
 
   // Process Analytics
@@ -562,6 +574,8 @@ export async function getLayoutData(db: Database) {
   };
   const seoDiscoveryRow = (seoDiscoveryResults as { value?: string }[])[0];
   const discovery = parseSeoDiscoverySettings(seoDiscoveryRow?.value);
+  const seoReturnPolicyRow = (seoReturnPolicyResults as { value?: string }[])[0];
+  const returnPolicy = parseSeoReturnPolicySettings(seoReturnPolicyRow?.value);
   const businessMap = Object.fromEntries(
     (businessResults as { key: string; value: string }[]).map((row) => [
       row.key,
@@ -594,6 +608,7 @@ export async function getLayoutData(db: Database) {
     business,
     seo: {
       discovery,
+      returnPolicy,
     },
   };
 }

@@ -36,7 +36,7 @@ Returns: `{ seo, hero, widgets, collections }`.
 
 ### `getLayoutData(db)`
 
-Fetches and shapes all layout data in a **single batched D1 round-trip** (10 parallel queries):
+Fetches and shapes all layout data in a **single batched D1 round-trip** (11 parallel queries):
 
 1. Active analytics scripts -- applies Partytown processing via `processAnalyticsScript()` from `@scalius/core/integrations/analytics`
 2. Site settings (headerConfig, footerConfig JSON)
@@ -48,6 +48,7 @@ Fetches and shapes all layout data in a **single batched D1 round-trip** (10 par
 8. Meta CAPI browser dispatch readiness from `metaConversionsSettings`
 9. SEO discovery policy from `settings` table (category = "seo", key = "discovery")
 10. Public business identity fields from `settings` table (category = "business_info") for OnlineStore JSON-LD
+11. Merchant return-policy schema settings from `settings` table (category = "seo", key = "return_policy")
 
 Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaCapi, business, seo }`
 
@@ -61,7 +62,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 
 **Theme**: Reads storefront color overrides from the `settings` table. Returns as `{ colors: Record<string, string> }`.
 
-**SEO discovery**: Reads the default-on sitemap/feed/robots/JSON-LD policy from `settings.seo/discovery`. Layout consumers use this to gate global OnlineStore and WebSite JSON-LD without a second storefront API read. Product pages use the same policy plus active shipping methods to emit offer-level shipping schema when enabled.
+**SEO discovery**: Reads the default-on sitemap/feed/robots/JSON-LD policy from `settings.seo/discovery` plus merchant return-policy schema settings from `settings.seo/return_policy`. Layout consumers use this to gate global OnlineStore, WebSite, and MerchantReturnPolicy JSON-LD without a second storefront API read. Product pages use the same policy plus active shipping methods to emit offer-level shipping schema when enabled. Return-policy JSON-LD is emitted only when the saved policy is enabled and has schema-safe country/category/window facts or a safe same-origin/absolute policy URL.
 
 ## API Endpoints
 
@@ -82,7 +83,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 ### Public SEO (`/api/v1/seo`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, default-on discovery policy) | `api:seo:*` with CACHE_TTLS.STANDARD / 3600s |
+| GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, default-on discovery policy, and merchant return-policy schema settings) | `api:seo:*` with CACHE_TTLS.STANDARD / 3600s |
 
 ### Public Checkout (`/api/v1/checkout`)
 | Method | Path | Description |
