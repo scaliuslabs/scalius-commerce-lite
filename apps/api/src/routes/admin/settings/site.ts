@@ -465,6 +465,7 @@ const seoSettingsSchema = z.object({
     feeds: z.object({
       productCatalogEnabled: z.boolean(),
       includeUnavailableProducts: z.boolean(),
+      variantStrategy: z.enum(["products", "variants"]),
       title: z.string(),
       description: z.string(),
     }),
@@ -475,6 +476,7 @@ const seoSettingsSchema = z.object({
       organization: z.boolean(),
       websiteSearch: z.boolean(),
       products: z.boolean(),
+      productGroups: z.boolean(),
       breadcrumbs: z.boolean(),
       collections: z.boolean(),
     }),

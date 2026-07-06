@@ -42,8 +42,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
     const categoryUrls: SitemapUrl[] = categories.map((category) => ({
       loc: `${baseUrl}/categories/${category.slug}`,
       lastmod: category.updatedAt ?? category.createdAt ?? undefined,
-      changefreq: 'weekly' as const,
-      priority: 0.8,
     }));
 
     const xml = generateSitemap(categoryUrls, baseUrl);

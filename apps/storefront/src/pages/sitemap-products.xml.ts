@@ -99,8 +99,6 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     const productUrls: SitemapUrl[] = allProducts.map((product) => ({
       loc: `${baseUrl}/products/${product.slug}`,
       lastmod: product.updatedAt,
-      changefreq: 'daily' as const,
-      priority: 0.9,
     }));
 
     const xml = generateSitemap(productUrls, baseUrl);

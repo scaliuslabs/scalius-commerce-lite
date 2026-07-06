@@ -59,6 +59,7 @@ describe("SeoDiscoveryStatusCard", () => {
     );
 
     expect(host.textContent).toContain("Discovery Status / QA");
+    expect(host.textContent).toContain("Output mode: SKU / variant rows");
     expect(host.textContent).toContain(
       "This is a dashboard preview, not a live probe of the storefront Worker env.",
     );

@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getAllProducts: vi.fn(),
+  getFeedProducts: vi.fn(),
   getLayoutData: vi.fn(),
   getSeoSettings: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/products", () => ({
-  getAllProducts: mocks.getAllProducts,
+  getFeedProducts: mocks.getFeedProducts,
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -37,7 +37,7 @@ function context(url = "https://storefront.example.test/api/facebook-feed.xml") 
 
 describe("Facebook product feed route", () => {
   beforeEach(() => {
-    mocks.getAllProducts.mockReset();
+    mocks.getFeedProducts.mockReset();
     mocks.getLayoutData.mockReset();
     mocks.getSeoSettings.mockReset();
     mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
@@ -49,7 +49,7 @@ describe("Facebook product feed route", () => {
   });
 
   it("returns non-cacheable 503 when the first product page cannot be read", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce(null);
+    mocks.getFeedProducts.mockResolvedValueOnce(null);
 
     const response = await GET(context());
 
@@ -67,11 +67,11 @@ describe("Facebook product feed route", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(body).toContain("Facebook product feed is temporarily unavailable");
-    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+    expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
 
   it("keeps legitimate empty catalogs as empty XML", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getFeedProducts.mockResolvedValueOnce({
       data: [],
       pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
     });
@@ -81,11 +81,13 @@ describe("Facebook product feed route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("application/xml");
+    expect(response.headers.get("Cache-Control")).toContain("max-age=3600");
     expect(body).toContain("<rss");
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ page: 1, limit: 100 });
   });
 
   it("uses buyer availability from the product list instead of product active status alone", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getFeedProducts.mockResolvedValueOnce({
       data: [
         {
           id: "prod_available",
@@ -123,6 +125,206 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:availability>out of stock</g:availability>");
   });
 
+  it("emits one SKU-aware feed item per buyer-resolvable variant by default", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_shirt",
+          slug: "linen-shirt",
+          name: "Linen Shirt",
+          description: "<p>Soft &amp; breezy</p>",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          hasVariants: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/shirt.jpg",
+          attributes: [
+            { name: "Brand", slug: "brand", value: "Acme" },
+            { name: "Color", slug: "color", value: "Catalog color" },
+            { name: "Size", slug: "size", value: "Catalog size" },
+            { name: "Material", slug: "material", value: "Cotton" },
+          ],
+          variants: [
+            {
+              id: "var_red_m",
+              productId: "prod_shirt",
+              size: "M",
+              color: "Red",
+              sku: "SKU-RED-M",
+              price: 1000,
+              stock: 4,
+              reservedStock: 1,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: "flat",
+              discountAmount: 100,
+              discountPercentage: null,
+            },
+            {
+              id: "var_blue_l",
+              productId: "prod_shirt",
+              size: "L",
+              color: "Blue",
+              sku: "SKU-BLUE-L",
+              price: 1100,
+              stock: 0,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: null,
+              discountAmount: null,
+              discountPercentage: null,
+            },
+          ],
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body.match(/<item>/g)).toHaveLength(2);
+    expect(body).toContain("<g:id>SKU-RED-M</g:id>");
+    expect(body).toContain("<g:id>SKU-BLUE-L</g:id>");
+    expect(body).not.toContain("<g:id>prod_shirt</g:id>");
+    expect(body).toContain("<g:item_group_id>prod_shirt</g:item_group_id>");
+    expect(body).toContain(
+      "<g:link>https://storefront.example.test/products/linen-shirt?size=M&amp;color=Red</g:link>",
+    );
+    expect(body).toContain("<g:price>900.00 BDT</g:price>");
+    expect(body).toContain("<g:sale_price>900.00 BDT</g:sale_price>");
+    expect(body).toContain("<g:availability>in stock</g:availability>");
+    expect(body).toContain("<g:availability>out of stock</g:availability>");
+    expect(body).toContain("<g:color>Red</g:color>");
+    expect(body).toContain("<g:size>M</g:size>");
+    expect(body).toContain("<g:material>Cotton</g:material>");
+    expect(body).not.toContain("Catalog color");
+    expect(body).not.toContain("Catalog size");
+  });
+
+  it("keeps product-level rows when the feed variant strategy is products", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      discovery: {
+        feeds: {
+          productCatalogEnabled: true,
+          includeUnavailableProducts: true,
+          variantMode: "products",
+        },
+      },
+    });
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_shirt",
+          slug: "linen-shirt",
+          name: "Linen Shirt",
+          description: "Soft shirt",
+          price: 1200,
+          discountedPrice: 1100,
+          isActive: true,
+          hasVariants: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/shirt.jpg",
+          variants: [
+            {
+              id: "var_red_m",
+              productId: "prod_shirt",
+              size: "M",
+              color: "Red",
+              sku: "SKU-RED-M",
+              price: 1000,
+              stock: 4,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+            },
+          ],
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body.match(/<item>/g)).toHaveLength(1);
+    expect(body).toContain("<g:id>prod_shirt</g:id>");
+    expect(body).toContain("<g:item_group_id>prod_shirt</g:item_group_id>");
+    expect(body).toContain("<g:price>1100.00 BDT</g:price>");
+    expect(body).not.toContain("SKU-RED-M");
+  });
+
+  it("skips unavailable variant rows when sold-out catalog items are disabled", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      discovery: {
+        feeds: {
+          productCatalogEnabled: true,
+          includeUnavailableProducts: false,
+        },
+      },
+    });
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_shirt",
+          slug: "linen-shirt",
+          name: "Linen Shirt",
+          description: "Soft shirt",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          hasVariants: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/shirt.jpg",
+          variants: [
+            {
+              id: "var_red_m",
+              productId: "prod_shirt",
+              size: "M",
+              color: "Red",
+              sku: "SKU-RED-M",
+              price: 1000,
+              stock: 3,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+            },
+            {
+              id: "var_blue_l",
+              productId: "prod_shirt",
+              size: "L",
+              color: "Blue",
+              sku: "SKU-BLUE-L",
+              price: 1100,
+              stock: 0,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+            },
+          ],
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body.match(/<item>/g)).toHaveLength(1);
+    expect(body).toContain("<g:id>SKU-RED-M</g:id>");
+    expect(body).not.toContain("<g:id>SKU-BLUE-L</g:id>");
+  });
+
   it("uses merchant feed title/description and can skip unavailable products", async () => {
     mocks.getSeoSettings.mockResolvedValueOnce({
       discovery: {
@@ -134,7 +336,7 @@ describe("Facebook product feed route", () => {
         },
       },
     });
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getFeedProducts.mockResolvedValueOnce({
       data: [
         {
           id: "prod_available",
@@ -173,7 +375,7 @@ describe("Facebook product feed route", () => {
   });
 
   it("emits zero discounted prices without falling back to the original price", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getFeedProducts.mockResolvedValueOnce({
       data: [
         {
           id: "prod_free",
@@ -200,7 +402,7 @@ describe("Facebook product feed route", () => {
   });
 
   it("flattens rich-text product descriptions into safe catalog text", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getFeedProducts.mockResolvedValueOnce({
       data: [
         {
           id: "prod_rich",
@@ -232,7 +434,7 @@ describe("Facebook product feed route", () => {
   });
 
   it("skips image-less products and keeps required image and availability fields on valid items", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getFeedProducts.mockResolvedValueOnce({
       data: [
         {
           id: "prod_no_image",
@@ -289,7 +491,7 @@ describe("Facebook product feed route", () => {
     mocks.getOptimizedImageUrl.mockReturnValueOnce(
       "/cdn-cgi/image/width=1200/products/valid.jpg",
     );
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getFeedProducts.mockResolvedValueOnce({
       data: [
         {
           id: "prod_valid",
@@ -319,7 +521,7 @@ describe("Facebook product feed route", () => {
     mocks.getOptimizedImageUrl.mockReturnValueOnce(
       "data:image/svg+xml,%3Csvg%3E%3C/svg%3E",
     );
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getFeedProducts.mockResolvedValueOnce({
       data: [
         {
           id: "prod_data_image",
@@ -345,7 +547,7 @@ describe("Facebook product feed route", () => {
   });
 
   it("keeps page one as valid empty XML when every product is image-ineligible", async () => {
-    mocks.getAllProducts.mockResolvedValueOnce({
+    mocks.getFeedProducts.mockResolvedValueOnce({
       data: [
         {
           id: "prod_no_image",
@@ -387,11 +589,11 @@ describe("Facebook product feed route", () => {
     expect(response.status).toBe(404);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(body).toContain("Product catalog feed is disabled");
-    expect(mocks.getAllProducts).not.toHaveBeenCalled();
+    expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
 
   it("fails closed when a later feed product page cannot be read", async () => {
-    mocks.getAllProducts
+    mocks.getFeedProducts
       .mockResolvedValueOnce({
         data: [
           {

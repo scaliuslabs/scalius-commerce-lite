@@ -43,6 +43,8 @@ export interface SeoDiscoveryStatus {
     summary: string;
     enabled: boolean;
     includesUnavailableProducts: boolean;
+    variantStrategy: SeoDiscoverySettings["feeds"]["variantStrategy"];
+    variantStrategyLabel: string;
     feedTitle: string;
     feedDescription: string;
     imagePolicy: string;
@@ -62,6 +64,7 @@ export interface SeoDiscoveryStatus {
     organizationEnabled: boolean;
     websiteSearchEnabled: boolean;
     productsEnabled: boolean;
+    productGroupsEnabled: boolean;
     breadcrumbsEnabled: boolean;
     collectionsEnabled: boolean;
     organizationNote: string;
@@ -126,6 +129,12 @@ function buildPreviewHref(baseUrl: URL, path: string): string {
   return `${normalizedBase}${path}`;
 }
 
+function getFeedVariantStrategyLabel(
+  strategy: SeoDiscoverySettings["feeds"]["variantStrategy"],
+): string {
+  return strategy === "variants" ? "SKU / variant rows" : "Product rows";
+}
+
 export function buildSeoDiscoveryStatus({
   discovery,
   robotsTxt,
@@ -149,6 +158,9 @@ export function buildSeoDiscoveryStatus({
     : trimmedStorefrontUrl
       ? "path-only"
       : "unavailable";
+  const feedVariantStrategyLabel = getFeedVariantStrategyLabel(
+    normalized.feeds.variantStrategy,
+  );
 
   return {
     sitemap: {
@@ -170,18 +182,22 @@ export function buildSeoDiscoveryStatus({
         ? "Product feed on"
         : "Product feed off",
       summary: normalized.feeds.productCatalogEnabled
-        ? normalized.feeds.includeUnavailableProducts
-          ? "Catalog XML includes active products and marks sold-out items as out of stock."
-          : "Catalog XML includes only active products currently available for sale."
+        ? `${feedVariantStrategyLabel}; ${
+            normalized.feeds.includeUnavailableProducts
+              ? "sold-out catalog items are marked out of stock."
+              : "only items currently available for sale are included."
+          }`
         : "Catalog XML is not advertised for feed tools.",
       enabled: normalized.feeds.productCatalogEnabled,
       includesUnavailableProducts: normalized.feeds.includeUnavailableProducts,
+      variantStrategy: normalized.feeds.variantStrategy,
+      variantStrategyLabel: feedVariantStrategyLabel,
       feedTitle: normalized.feeds.title || "Product Catalog",
       feedDescription:
         normalized.feeds.description ||
         "Complete product catalog for feed tools.",
       imagePolicy:
-        "Active products without an absolute http(s) primary image are skipped; rich-text descriptions are flattened to plain catalog text.",
+        "Catalog items without an absolute http(s) primary image are skipped; rich-text descriptions are flattened to plain catalog text.",
     },
     robots: {
       tone: customSitemapLines.length > 0 ? "warning" : "info",
@@ -203,6 +219,7 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.organization ||
         normalized.structuredData.websiteSearch ||
         normalized.structuredData.products ||
+        normalized.structuredData.productGroups ||
         normalized.structuredData.breadcrumbs ||
         normalized.structuredData.collections
           ? "ok"
@@ -211,6 +228,7 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.organization ||
         normalized.structuredData.websiteSearch ||
         normalized.structuredData.products ||
+        normalized.structuredData.productGroups ||
         normalized.structuredData.breadcrumbs ||
         normalized.structuredData.collections
           ? "Structured data on"
@@ -223,6 +241,9 @@ export function buildSeoDiscoveryStatus({
           ? "site search"
           : "site search off",
         normalized.structuredData.products ? "products" : "products off",
+        normalized.structuredData.productGroups
+          ? "ProductGroup variants"
+          : "ProductGroup variants off",
         normalized.structuredData.breadcrumbs
           ? "breadcrumbs"
           : "breadcrumbs off",
@@ -233,10 +254,11 @@ export function buildSeoDiscoveryStatus({
       organizationEnabled: normalized.structuredData.organization,
       websiteSearchEnabled: normalized.structuredData.websiteSearch,
       productsEnabled: normalized.structuredData.products,
+      productGroupsEnabled: normalized.structuredData.productGroups,
       breadcrumbsEnabled: normalized.structuredData.breadcrumbs,
       collectionsEnabled: normalized.structuredData.collections,
       organizationNote:
-        "Organization schema needs a logo; product and collection schema follow their matching page toggles.",
+        "Organization schema needs a logo; ProductGroup schema describes optioned products and SKU variants when product schema is emitted.",
     },
     storefront: {
       tone: absoluteStorefrontUrl

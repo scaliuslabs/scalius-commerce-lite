@@ -77,6 +77,29 @@ describe("products sitemap route", () => {
     expect(body).not.toContain("/products/");
   });
 
+  it("emits product loc and lastmod without ignored priority or changefreq tags", async () => {
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_1",
+          slug: "hilsa",
+          updatedAt: "2026-06-23T00:00:00.000Z",
+          isActive: true,
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<loc>https://storefront.example.test/products/hilsa</loc>");
+    expect(body).toContain("<lastmod>2026-06-23T00:00:00.000Z</lastmod>");
+    expect(body).not.toContain("<priority>");
+    expect(body).not.toContain("<changefreq>");
+  });
+
   it("fails closed when a later sitemap product page cannot be read", async () => {
     mocks.getAllProducts
       .mockResolvedValueOnce({

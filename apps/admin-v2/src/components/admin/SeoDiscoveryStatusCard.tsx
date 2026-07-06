@@ -185,6 +185,12 @@ export function SeoDiscoveryStatusCard({
         summary={status.productFeed.summary}
       >
         <div className="space-y-1 text-xs leading-5 text-muted-foreground">
+          <p>
+            Output mode:{" "}
+            <span className="font-medium text-foreground">
+              {status.productFeed.variantStrategyLabel}
+            </span>
+          </p>
           <p>{status.productFeed.imagePolicy}</p>
           <p>
             XML title:{" "}

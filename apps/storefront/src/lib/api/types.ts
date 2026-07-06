@@ -127,6 +127,7 @@ export interface Product {
   category?: CategorySummary;
   hasVariants: boolean;
   availableForSale?: boolean;
+  variants?: ProductVariant[];
 }
 
 export interface ProductVariant {

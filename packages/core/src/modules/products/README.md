@@ -126,6 +126,7 @@ Storefront category ([slug].astro)
 | Method | Path | Handler | Description |
 |--------|------|---------|-------------|
 | GET | `/` | `getStorefrontProducts` | Paginated list with category, search, price range, freeDelivery, hasDiscount, attribute filters, sort, `hasVariants`, and SKU-aware `availableForSale` |
+| GET | `/feed` | `getStorefrontFeedProducts` | Dedicated feed projection with description, primary image, category summary, filterable attributes, SKU-aware availability, and buyer-safe variants bulk-read for the current page |
 | GET | `/search` | `searchStorefrontProducts` | Lightweight search with variants for cart/checkout |
 | GET | `/{slug}` | `getStorefrontProductBySlug` | Full product detail with variants, images, attributes, additionalInfo, relatedProducts |
 

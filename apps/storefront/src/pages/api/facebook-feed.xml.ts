@@ -8,8 +8,8 @@
  */
 
 import type { APIRoute, APIContext } from "astro";
-import { getAllProducts } from "@/lib/api/products";
-import type { Product } from "@/lib/api/types";
+import { getFeedProducts } from "@/lib/api/products";
+import type { Product, ProductVariant } from "@/lib/api/types";
 import {
   getGoogleCategory,
   getFacebookCategory,
@@ -23,6 +23,11 @@ import {
   normalizeSeoDiscoverySettings,
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
+import {
+  isVariantAvailable,
+  resolveBuyerVariants,
+} from "@/lib/product-sellable-variants";
+import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
 
 export const prerender = false;
 
@@ -34,11 +39,25 @@ const FEED_IMAGE_OPTIONS = {
   format: "auto",
   fit: "scale-down",
 } as const;
+const FEED_XML_HEADERS = {
+  "Content-Type": "application/xml; charset=utf-8",
+  "Cache-Control": "public, max-age=3600, stale-while-revalidate=43200",
+} as const;
 
-type FeedProduct = {
+type FeedProductRow = {
+  kind: "product";
   product: Product;
   imageLink: string;
 };
+
+type FeedVariantRow = {
+  kind: "variant";
+  product: Product;
+  variant: ProductVariant;
+  imageLink: string;
+};
+
+type FeedItem = FeedProductRow | FeedVariantRow;
 
 /**
  * Escapes XML special characters
@@ -123,6 +142,49 @@ function getAvailability(product: Product): "in stock" | "out of stock" {
   return product.availableForSale === false ? "out of stock" : "in stock";
 }
 
+function getVariantAvailability(
+  product: Product,
+  variant: ProductVariant,
+): "in stock" | "out of stock" {
+  if (product.isActive === false) {
+    return "out of stock";
+  }
+
+  return isVariantAvailable(variant) ? "in stock" : "out of stock";
+}
+
+function normalizedOption(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getFeedVariantStrategy(
+  feedsPolicy: SeoDiscoverySettings["feeds"],
+  discovery?: unknown,
+): "products" | "variants" {
+  const rawFeeds = asRecord(asRecord(discovery).feeds);
+  const rawPolicy = feedsPolicy as SeoDiscoverySettings["feeds"] & {
+    variantMode?: unknown;
+    variantStrategy?: unknown;
+  };
+  const value =
+    rawFeeds.variantStrategy ??
+    rawFeeds.variantMode ??
+    rawPolicy.variantStrategy ??
+    rawPolicy.variantMode;
+  return value === "products" || value === "product" ? "products" : "variants";
+}
+
+function getProductVariants(product: Product): ProductVariant[] {
+  return Array.isArray(product.variants) ? product.variants : [];
+}
+
 function getPrimaryImageLink(product: Product, baseUrl: string): string | null {
   const sourceImage = product.imageUrl?.trim();
   if (!sourceImage) {
@@ -146,7 +208,7 @@ function getPrimaryImageLink(product: Product, baseUrl: string): string | null {
   }
 }
 
-function toFeedProduct(product: Product, baseUrl: string): FeedProduct | null {
+function toFeedProductRow(product: Product, baseUrl: string): FeedProductRow | null {
   if (product.isActive === false) {
     return null;
   }
@@ -156,39 +218,153 @@ function toFeedProduct(product: Product, baseUrl: string): FeedProduct | null {
     return null;
   }
 
-  return { product, imageLink };
+  return { kind: "product", product, imageLink };
 }
 
-function toFeedProducts(
+function toFeedVariantRow(
+  product: Product,
+  variant: ProductVariant,
+  baseUrl: string,
+): FeedVariantRow | null {
+  if (product.isActive === false) {
+    return null;
+  }
+
+  const imageLink = getPrimaryImageLink(product, baseUrl);
+  if (!imageLink) {
+    return null;
+  }
+
+  return { kind: "variant", product, variant, imageLink };
+}
+
+function shouldIncludeProductRow(
+  product: Product,
+  feedsPolicy: SeoDiscoverySettings["feeds"],
+): boolean {
+  return (
+    feedsPolicy.includeUnavailableProducts ||
+    getAvailability(product) === "in stock"
+  );
+}
+
+function shouldIncludeVariantRow(
+  product: Product,
+  variant: ProductVariant,
+  feedsPolicy: SeoDiscoverySettings["feeds"],
+): boolean {
+  return (
+    feedsPolicy.includeUnavailableProducts ||
+    getVariantAvailability(product, variant) === "in stock"
+  );
+}
+
+function toFeedItems(
   products: Product[],
   baseUrl: string,
   feedsPolicy: SeoDiscoverySettings["feeds"],
-): FeedProduct[] {
-  return products.flatMap((product) => {
-    if (
-      !feedsPolicy.includeUnavailableProducts &&
-      getAvailability(product) !== "in stock"
-    ) {
+  variantStrategy = getFeedVariantStrategy(feedsPolicy),
+): FeedItem[] {
+  return products.flatMap<FeedItem>((product) => {
+    if (variantStrategy === "products") {
+      if (!shouldIncludeProductRow(product, feedsPolicy)) {
+        return [];
+      }
+
+      const feedProduct = toFeedProductRow(product, baseUrl);
+      return feedProduct ? [feedProduct] : [];
+    }
+
+    const buyerVariantResolution = resolveBuyerVariants(getProductVariants(product));
+    if (buyerVariantResolution.mode === "optioned") {
+      return buyerVariantResolution.variants.flatMap((variant) => {
+        if (!shouldIncludeVariantRow(product, variant, feedsPolicy)) {
+          return [];
+        }
+
+        const feedVariant = toFeedVariantRow(product, variant, baseUrl);
+        return feedVariant ? [feedVariant] : [];
+      });
+    }
+
+    if (product.hasVariants) {
       return [];
     }
 
-    const feedProduct = toFeedProduct(product, baseUrl);
+    if (!shouldIncludeProductRow(product, feedsPolicy)) {
+      return [];
+    }
+
+    const feedProduct = toFeedProductRow(product, baseUrl);
     return feedProduct ? [feedProduct] : [];
   });
+}
+
+function buildFeedItemUrl(feedItem: FeedItem, baseUrl: string): string {
+  const productUrl = new URL(`/products/${feedItem.product.slug}`, `${baseUrl}/`);
+  if (feedItem.kind === "variant") {
+    const size = normalizedOption(feedItem.variant.size);
+    const color = normalizedOption(feedItem.variant.color);
+    if (size) productUrl.searchParams.set("size", size);
+    if (color) productUrl.searchParams.set("color", color);
+  }
+  return productUrl.toString();
+}
+
+function getFeedItemId(feedItem: FeedItem): string {
+  if (feedItem.kind === "variant") {
+    return normalizedOption(feedItem.variant.sku) ?? feedItem.variant.id;
+  }
+  return feedItem.product.id;
+}
+
+function getFeedItemAvailability(feedItem: FeedItem): "in stock" | "out of stock" {
+  if (feedItem.kind === "variant") {
+    return getVariantAvailability(feedItem.product, feedItem.variant);
+  }
+  return getAvailability(feedItem.product);
+}
+
+function getFeedItemPricing(feedItem: FeedItem): {
+  basePrice: number;
+  feedPrice: number;
+} {
+  const { product } = feedItem;
+  if (feedItem.kind === "variant") {
+    const basePrice = feedItem.variant.price ?? product.price;
+    return {
+      basePrice,
+      feedPrice: getVariantDiscountedPrice(
+        feedItem.variant.price,
+        product.price,
+        feedItem.variant.discountType,
+        feedItem.variant.discountPercentage,
+        feedItem.variant.discountAmount,
+        product.discountType,
+        product.discountPercentage,
+        product.discountAmount,
+      ),
+    };
+  }
+
+  return {
+    basePrice: product.price,
+    feedPrice: product.discountedPrice ?? product.price,
+  };
 }
 
 /**
  * Generates a single product item for the feed
  */
 function generateProductItem(
-  feedProduct: FeedProduct,
+  feedItem: FeedItem,
   baseUrl: string,
   currencyCode: string,
 ): string {
-  const { product, imageLink } = feedProduct;
-  const productUrl = `${baseUrl}/products/${product.slug}`;
-  const availability = getAvailability(product);
-  const feedPrice = product.discountedPrice ?? product.price;
+  const { product, imageLink } = feedItem;
+  const productUrl = buildFeedItemUrl(feedItem, baseUrl);
+  const availability = getFeedItemAvailability(feedItem);
+  const { basePrice, feedPrice } = getFeedItemPricing(feedItem);
 
   // Get category mappings
   const categorySlug = product.category?.slug || "";
@@ -200,7 +376,7 @@ function generateProductItem(
   let item = "  <item>\n";
 
   // Required fields
-  item += `    <g:id>${escapeXml(product.id)}</g:id>\n`;
+  item += `    <g:id>${escapeXml(getFeedItemId(feedItem))}</g:id>\n`;
   item += `    <g:title>${escapeXml(product.name)}</g:title>\n`;
   item += `    <g:description>${escapeXml(toPlainFeedDescription(product.description) || product.name)}</g:description>\n`;
   item += `    <g:link>${escapeXml(productUrl)}</g:link>\n`;
@@ -221,12 +397,12 @@ function generateProductItem(
   // Optional fields
 
   // Sale price if there's a discount
-  if (product.discountedPrice != null && product.discountedPrice < product.price) {
-    item += `    <g:sale_price>${formatFeedPrice(product.discountedPrice, currencyCode)}</g:sale_price>\n`;
+  if (feedPrice < basePrice) {
+    item += `    <g:sale_price>${formatFeedPrice(feedPrice, currencyCode)}</g:sale_price>\n`;
   }
 
   // Item group ID for variants
-  if (product.hasVariants) {
+  if (feedItem.kind === "variant" || product.hasVariants) {
     item += `    <g:item_group_id>${escapeXml(product.id)}</g:item_group_id>\n`;
   }
 
@@ -235,14 +411,28 @@ function generateProductItem(
   item += `    <g:fb_product_category>${facebookCategory}</g:fb_product_category>\n`;
   item += `    <g:product_type>${escapeXml(categoryName)}</g:product_type>\n`;
 
+  if (feedItem.kind === "variant") {
+    const color = normalizedOption(feedItem.variant.color);
+    const size = normalizedOption(feedItem.variant.size);
+    if (color) {
+      item += `    <g:color>${escapeXml(color)}</g:color>\n`;
+    }
+    if (size) {
+      item += `    <g:size>${escapeXml(size)}</g:size>\n`;
+    }
+  }
+
   // Additional attributes
   if (product.attributes && product.attributes.length > 0) {
     product.attributes.forEach((attr) => {
       const attrName = attr.name.toLowerCase();
 
-      if (attrName === "color" || attrName === "colour") {
+      if (
+        feedItem.kind !== "variant" &&
+        (attrName === "color" || attrName === "colour")
+      ) {
         item += `    <g:color>${escapeXml(attr.value)}</g:color>\n`;
-      } else if (attrName === "size") {
+      } else if (feedItem.kind !== "variant" && attrName === "size") {
         item += `    <g:size>${escapeXml(attr.value)}</g:size>\n`;
       } else if (attrName === "material") {
         item += `    <g:material>${escapeXml(attr.value)}</g:material>\n`;
@@ -273,7 +463,7 @@ function generateProductItem(
  * Generates the complete Facebook product feed
  */
 function generateFacebookFeed(
-  products: FeedProduct[],
+  products: FeedItem[],
   baseUrl: string,
   currencyCode: string,
   feedsPolicy: SeoDiscoverySettings["feeds"],
@@ -313,6 +503,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
     }
     const feedsPolicy = normalizeSeoDiscoverySettings(seo.discovery).feeds;
+    const feedVariantStrategy = getFeedVariantStrategy(feedsPolicy, seo.discovery);
     if (!feedsPolicy.productCatalogEnabled) {
       return new Response("Product catalog feed is disabled", {
         status: 404,
@@ -350,10 +541,10 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     const requiredApiPages = Math.ceil(limit / limitParams);
     const startApiPage = (page - 1) * requiredApiPages + 1;
 
-    const allProducts: FeedProduct[] = [];
+    const allProducts: FeedItem[] = [];
 
     // Fetch first page to get totalPages
-    const firstResponse = await getAllProducts({
+    const firstResponse = await getFeedProducts({
       page: startApiPage,
       limit: limitParams,
     });
@@ -368,11 +559,13 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       }
       return new Response(generateFacebookFeed([], baseUrl, currencyCode, feedsPolicy), {
         status: 200,
-        headers: { "Content-Type": "application/xml; charset=utf-8" },
+        headers: FEED_XML_HEADERS,
       });
     }
 
-    allProducts.push(...toFeedProducts(firstResponse.data, baseUrl, feedsPolicy));
+    allProducts.push(
+      ...toFeedItems(firstResponse.data, baseUrl, feedsPolicy, feedVariantStrategy),
+    );
     const totalPages = firstResponse.pagination.totalPages;
 
     // Limit requiredApiPages if we hit the end of the total products early
@@ -395,7 +588,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
       );
 
       for (let p = currentApiPage; p <= endBatchPage; p++) {
-        fetchPromises.push(getAllProducts({ page: p, limit: limitParams }));
+        fetchPromises.push(getFeedProducts({ page: p, limit: limitParams }));
       }
 
       const batchResponses = await Promise.all(fetchPromises);
@@ -404,7 +597,9 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
           return xmlDataUnavailableResponse("Facebook product feed is temporarily unavailable");
         }
         if (res && res.data) {
-          allProducts.push(...toFeedProducts(res.data, baseUrl, feedsPolicy));
+          allProducts.push(
+            ...toFeedItems(res.data, baseUrl, feedsPolicy, feedVariantStrategy),
+          );
         }
       }
     }
@@ -423,10 +618,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
 
     return new Response(xml, {
       status: 200,
-      headers: {
-        "Content-Type": "application/xml; charset=utf-8",
-        "Cache-Control": "public, max-age=3600, stale-while-revalidate=43200",
-      },
+      headers: FEED_XML_HEADERS,
     });
   } catch (error: unknown) {
     console.error("Error generating Facebook product feed:", error);

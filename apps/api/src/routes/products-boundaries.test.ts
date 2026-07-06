@@ -36,6 +36,66 @@ describe("product route query boundaries", () => {
     expect(source).toContain("400: errorResponses[400]");
   });
 
+  it("keeps feed projection on a dedicated route without expanding normal product list cards", () => {
+    const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
+    const listSchemaStart = source.indexOf("const storefrontProductSchema = z.object({");
+    const feedSchemaStart = source.indexOf("const storefrontFeedProductSchema = z.object({");
+    const listRouteStart = source.indexOf("const listProductsRoute = createRoute({");
+    const feedRouteStart = source.indexOf("const feedProductsRoute = createRoute({");
+    const slugRouteStart = source.indexOf("const getProductBySlugRoute = createRoute({");
+
+    expect(source).toContain("getStorefrontFeedProducts");
+    expect(source).toContain("const PRODUCT_FEED_QUERY_KEYS = new Set([\"page\", \"limit\", \"sort\"]);");
+    expect(source).toContain("function isStorefrontFeedProductsCacheable(url: string): boolean");
+    expect(source).toContain("if (!PRODUCT_FEED_QUERY_KEYS.has(key) || value.trim() === \"\") return false;");
+    expect(source).toContain("if (normalizedPath.endsWith(\"/products/feed\"))");
+    expect(source).toContain("return { page: 1, limit: 100, sort: \"newest\" };");
+    expect(source).toContain("return isStorefrontFeedProductsCacheable(c.req.url);");
+    expect(source).toContain("const productFeedSchema = z.object({");
+    expect(source).toContain("limit: z.coerce.number().int().min(1).max(100).optional().default(100)");
+    expect(source).toContain("path: \"/feed\"");
+    expect(source).toContain("getStorefrontFeedProducts(db, params)");
+    expect(feedRouteStart).toBeGreaterThan(listRouteStart);
+    expect(slugRouteStart).toBeGreaterThan(feedRouteStart);
+
+    const listSchema = source.slice(listSchemaStart, feedSchemaStart);
+    const feedSchema = source.slice(feedSchemaStart, source.indexOf("const productDetailRecordSchema", feedSchemaStart));
+    expect(listSchema).not.toContain("description:");
+    expect(listSchema).not.toContain("attributes:");
+    expect(listSchema).not.toContain("variants:");
+    expect(feedSchema).toContain("description: z.string().nullable()");
+    expect(feedSchema).toContain("attributes: z.array(storefrontFeedAttributeSchema)");
+    expect(feedSchema).toContain("variants: z.array(storefrontFeedVariantSchema)");
+  });
+
+  it("documents feed variants with only buyer-safe fields", () => {
+    const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
+    const variantSchemaStart = source.indexOf("const storefrontFeedVariantSchema = z.object({");
+    const variantSchemaEnd = source.indexOf("const storefrontFeedAttributeSchema", variantSchemaStart);
+    const variantSchema = source.slice(variantSchemaStart, variantSchemaEnd);
+
+    expect(variantSchema).toContain("id: z.string()");
+    expect(variantSchema).toContain("productId: z.string()");
+    expect(variantSchema).toContain("size: z.string().nullable()");
+    expect(variantSchema).toContain("color: z.string().nullable()");
+    expect(variantSchema).toContain("weight: z.number().nullable()");
+    expect(variantSchema).toContain("sku: z.string()");
+    expect(variantSchema).toContain("price: z.number()");
+    expect(variantSchema).toContain("stock: z.number()");
+    expect(variantSchema).toContain("reservedStock: z.number()");
+    expect(variantSchema).toContain("isDefault: z.boolean()");
+    expect(variantSchema).toContain("trackInventory: z.boolean()");
+    expect(variantSchema).toContain("discountType: z.string().nullable()");
+    expect(variantSchema).toContain("discountPercentage: z.number().nullable()");
+    expect(variantSchema).toContain("discountAmount: z.number().nullable()");
+    expect(variantSchema).toContain("colorSortOrder: z.number().nullable()");
+    expect(variantSchema).toContain("sizeSortOrder: z.number().nullable()");
+    expect(variantSchema).toContain("deletedAt: z.string().nullable()");
+    expect(variantSchema).not.toContain("barcode");
+    expect(variantSchema).not.toContain("createdAt");
+    expect(variantSchema).not.toContain("updatedAt");
+  });
+
   it("normalizes product lookup search before variant-aware storefront search", () => {
     const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
 

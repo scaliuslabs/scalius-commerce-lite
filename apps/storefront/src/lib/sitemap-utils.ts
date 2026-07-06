@@ -7,8 +7,6 @@ import { getRuntimeStorefrontUrl } from "./api/runtime-env";
 export interface SitemapUrl {
   loc: string;
   lastmod?: string | number | Date;
-  changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
-  priority?: number;
 }
 
 export interface SitemapIndexEntry {
@@ -64,14 +62,6 @@ export function generateUrlEntry(url: SitemapUrl): string {
 
   if (url.lastmod) {
     xml += `    <lastmod>${formatDate(url.lastmod)}</lastmod>\n`;
-  }
-
-  if (url.changefreq) {
-    xml += `    <changefreq>${url.changefreq}</changefreq>\n`;
-  }
-
-  if (url.priority !== undefined) {
-    xml += `    <priority>${url.priority.toFixed(1)}</priority>\n`;
   }
 
   xml += '  </url>\n';

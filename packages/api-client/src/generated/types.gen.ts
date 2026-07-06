@@ -4230,6 +4230,7 @@ export type GetApiV1SeoResponses = {
                 feeds: {
                     productCatalogEnabled: boolean;
                     includeUnavailableProducts: boolean;
+                    variantStrategy: 'products' | 'variants';
                     title: string;
                     description: string;
                 };
@@ -4240,6 +4241,7 @@ export type GetApiV1SeoResponses = {
                     organization: boolean;
                     websiteSearch: boolean;
                     products: boolean;
+                    productGroups: boolean;
                     breadcrumbs: boolean;
                     collections: boolean;
                 };
@@ -4491,6 +4493,119 @@ export type GetApiV1ProductsSearchResponses = {
 };
 
 export type GetApiV1ProductsSearchResponse = GetApiV1ProductsSearchResponses[keyof GetApiV1ProductsSearchResponses];
+
+export type GetApiV1ProductsFeedData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        limit?: number;
+        /**
+         * Sort order
+         */
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+    };
+    url: '/api/v1/products/feed';
+};
+
+export type GetApiV1ProductsFeedErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ProductsFeedError = GetApiV1ProductsFeedErrors[keyof GetApiV1ProductsFeedErrors];
+
+export type GetApiV1ProductsFeedResponses = {
+    /**
+     * Feed product list with pagination
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                description: string | null;
+                price: number;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                discountedPrice: number;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                imageUrl: string | null;
+                imageAlt: string | null;
+                category: {
+                    id: string;
+                    name: string;
+                    slug: string;
+                } | null;
+                attributes: Array<{
+                    name: string;
+                    slug: string;
+                    value: string;
+                }>;
+                variants: Array<{
+                    id: string;
+                    productId: string;
+                    size: string | null;
+                    color: string | null;
+                    weight: number | null;
+                    sku: string;
+                    price: number;
+                    stock: number;
+                    reservedStock: number;
+                    isDefault: boolean;
+                    trackInventory: boolean;
+                    discountType: string | null;
+                    discountPercentage: number | null;
+                    discountAmount: number | null;
+                    colorSortOrder: number | null;
+                    sizeSortOrder: number | null;
+                    deletedAt: string | null;
+                }>;
+                updatedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1ProductsFeedResponse = GetApiV1ProductsFeedResponses[keyof GetApiV1ProductsFeedResponses];
 
 export type GetApiV1ProductsBySlugData = {
     body?: never;
@@ -19528,6 +19643,7 @@ export type GetApiV1AdminSettingsSeoResponses = {
                 feeds: {
                     productCatalogEnabled: boolean;
                     includeUnavailableProducts: boolean;
+                    variantStrategy: 'products' | 'variants';
                     title: string;
                     description: string;
                 };
@@ -19538,6 +19654,7 @@ export type GetApiV1AdminSettingsSeoResponses = {
                     organization: boolean;
                     websiteSearch: boolean;
                     products: boolean;
+                    productGroups: boolean;
                     breadcrumbs: boolean;
                     collections: boolean;
                 };
@@ -19566,6 +19683,7 @@ export type PostApiV1AdminSettingsSeoData = {
             feeds?: {
                 productCatalogEnabled?: boolean;
                 includeUnavailableProducts?: boolean;
+                variantStrategy?: 'products' | 'variants';
                 title?: string;
                 description?: string;
             };
@@ -19576,6 +19694,7 @@ export type PostApiV1AdminSettingsSeoData = {
                 organization?: boolean;
                 websiteSearch?: boolean;
                 products?: boolean;
+                productGroups?: boolean;
                 breadcrumbs?: boolean;
                 collections?: boolean;
             };

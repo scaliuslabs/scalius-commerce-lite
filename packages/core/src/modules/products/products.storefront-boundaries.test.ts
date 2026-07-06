@@ -4,6 +4,13 @@ import { fileURLToPath } from "node:url";
 
 const PRODUCTS_MODULE_DIR = fileURLToPath(new URL(".", import.meta.url));
 
+function getFunctionBody(source: string, functionName: string): string {
+    const start = source.indexOf(`export async function ${functionName}`);
+    expect(start).toBeGreaterThan(-1);
+    const nextFunction = source.indexOf("\nexport async function ", start + 1);
+    return source.slice(start, nextFunction === -1 ? undefined : nextFunction);
+}
+
 describe("storefront product query boundaries", () => {
     it("requires buyer-resolvable SKUs before products enter public catalog reads", () => {
         const source = readFileSync(
@@ -75,6 +82,90 @@ describe("storefront product query boundaries", () => {
         expect(categoriesReadIndex).toBeGreaterThan(enrichmentWaveIndex);
         expect(imageMapIndex).toBe(enrichmentWaveIndex);
         expect(categoryMapIndex).toBeGreaterThan(imageMapIndex);
+    });
+
+    it("keeps feed projection dedicated instead of expanding normal product listings", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+
+        const listBody = getFunctionBody(source, "getStorefrontProducts");
+        const feedBody = getFunctionBody(source, "getStorefrontFeedProducts");
+
+        expect(source).toContain("StorefrontFeedProductFilterInput");
+        expect(source).toContain("StorefrontFeedProductVariant");
+        expect(feedBody).toContain("description: products.description");
+        expect(feedBody).toContain("attributes: attributeMap.get(product.id) ?? []");
+        expect(feedBody).toContain("variants: variantMap.get(product.id) ?? []");
+        expect(listBody).not.toContain("readStorefrontFeedAttributeMap");
+        expect(listBody).not.toContain("readStorefrontFeedVariantMap");
+        expect(listBody).not.toContain("attributes:");
+        expect(listBody).not.toContain("variants:");
+    });
+
+    it("keeps feed page rows/count and enrichment bulked by page product IDs", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+        const feedBody = getFunctionBody(source, "getStorefrontFeedProducts");
+
+        const readWaveIndex = feedBody.indexOf(
+            "const [productsList, totalCount] = await Promise.all([",
+        );
+        const productIdsIndex = feedBody.indexOf(
+            "const productIds = productsList.map((product) => product.id);",
+        );
+        const enrichmentWaveIndex = feedBody.indexOf(
+            "const [imageMap, categoriesData, attributeMap, variantMap] = await Promise.all([",
+        );
+
+        expect(readWaveIndex).toBeGreaterThan(-1);
+        expect(feedBody.indexOf("query.orderBy(orderBy).limit(limit).offset(offset).all()", readWaveIndex)).toBeGreaterThan(readWaveIndex);
+        expect(feedBody.indexOf("countQuery.get()", readWaveIndex)).toBeGreaterThan(readWaveIndex);
+        expect(productIdsIndex).toBeGreaterThan(readWaveIndex);
+        expect(enrichmentWaveIndex).toBeGreaterThan(productIdsIndex);
+        expect(feedBody.indexOf("readPrimaryProductImageMap(db, productIds)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
+        expect(feedBody.indexOf("readStorefrontFeedAttributeMap(db, productIds)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
+        expect(feedBody.indexOf("readStorefrontFeedVariantMap(db, productIds)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
+    });
+
+    it("keeps feed variants buyer-safe, normalized, and page-wide instead of N+1", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+        const variantHelperStart = source.indexOf("async function readStorefrontFeedVariantMap");
+        const feedBody = getFunctionBody(source, "getStorefrontFeedProducts");
+        const variantHelperEnd = source.indexOf("\n// ─", variantHelperStart);
+        const variantHelper = source.slice(variantHelperStart, variantHelperEnd);
+
+        expect(variantHelperStart).toBeGreaterThan(-1);
+        expect(variantHelper).toContain("id: productVariants.id");
+        expect(variantHelper).toContain("productId: productVariants.productId");
+        expect(variantHelper).toContain("size: productVariants.size");
+        expect(variantHelper).toContain("color: productVariants.color");
+        expect(variantHelper).toContain("weight: productVariants.weight");
+        expect(variantHelper).toContain("sku: productVariants.sku");
+        expect(variantHelper).toContain("price: productVariants.price");
+        expect(variantHelper).toContain("stock: productVariants.stock");
+        expect(variantHelper).toContain("reservedStock: productVariants.reservedStock");
+        expect(variantHelper).toContain("isDefault: productVariants.isDefault");
+        expect(variantHelper).toContain("trackInventory: productVariants.trackInventory");
+        expect(variantHelper).toContain("discountType: productVariants.discountType");
+        expect(variantHelper).toContain("discountPercentage: productVariants.discountPercentage");
+        expect(variantHelper).toContain("discountAmount: productVariants.discountAmount");
+        expect(variantHelper).toContain("colorSortOrder: productVariants.colorSortOrder");
+        expect(variantHelper).toContain("sizeSortOrder: productVariants.sizeSortOrder");
+        expect(variantHelper).toContain("deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`");
+        expect(variantHelper).toContain("inArray(productVariants.productId, productIds)");
+        expect(variantHelper).toContain("isNull(productVariants.deletedAt)");
+        expect(variantHelper).toContain("normalizeDefaultSkuOptions({");
+        expect(variantHelper).not.toContain("barcode");
+        expect(variantHelper).not.toContain("createdAt");
+        expect(variantHelper).not.toContain("updatedAt");
+        expect(feedBody).not.toContain("eq(productVariants.productId, product.id)");
     });
 
     it("keeps category products on the shared storefront list core", () => {

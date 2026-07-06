@@ -11,4 +11,18 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("data-product-has-variants={product.hasVariants.toString()}");
     expect(source).not.toContain("data-product-has-variants={(buyerVariants.length > 0).toString()}");
   });
+
+  it("emits ProductGroup JSON-LD only for optioned buyer variants when enabled", () => {
+    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
+
+    expect(source).toContain("discoverySettings.structuredData.productGroups");
+    expect(source).toContain('buyerVariantResolution.mode === "optioned"');
+    expect(source).toContain('"@type": "ProductGroup"');
+    expect(source).toContain("hasVariant: buyerVariants.map");
+    expect(source).toContain('url.searchParams.set("size", size)');
+    expect(source).toContain('url.searchParams.set("color", color)');
+    expect(source).toContain("isVariantAvailable(variant)");
+    expect(source).toContain('"@type": "Product"');
+    expect(source).toContain("shouldEmitProductGroupJsonLd");
+  });
 });
