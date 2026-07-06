@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getEmailProviderReadiness: vi.fn(),
   getEmailRuntimeSettings: vi.fn(),
   readEmailSetting: vi.fn(),
+  firstWhatsAppPlaceholderConfigError: vi.fn(),
   getWhatsAppCloudApiSettings: vi.fn(),
   saveWhatsAppAccessToken: vi.fn(),
   getSmsProviderReadiness: vi.fn(),
@@ -60,6 +61,7 @@ vi.mock("@scalius/core/integrations/email", () => ({
 }));
 
 vi.mock("@scalius/core/integrations/whatsapp", () => ({
+  firstWhatsAppPlaceholderConfigError: mocks.firstWhatsAppPlaceholderConfigError,
   getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
   saveWhatsAppAccessToken: mocks.saveWhatsAppAccessToken,
 }));
@@ -126,6 +128,7 @@ function createTestApp() {
   mocks.upsertEncryptedSetting.mockResolvedValue(undefined);
   mocks.upsertSetting.mockResolvedValue(undefined);
   mocks.clearNotificationProviderBlocks.mockResolvedValue(undefined);
+  mocks.firstWhatsAppPlaceholderConfigError.mockReturnValue(null);
   mocks.getEmailRuntimeSettings.mockResolvedValue({
     provider: "cloudflare",
     sender: "orders@example.com",
@@ -403,6 +406,29 @@ describe("system settings cache invalidation", () => {
     expect(response.status, await response.clone().text()).toBe(503);
     expect(mocks.upsertSetting).not.toHaveBeenCalled();
     expect(mocks.saveWhatsAppAccessToken).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+  });
+
+  it("rejects placeholder WhatsApp provider values before saving auth settings", async () => {
+    mocks.firstWhatsAppPlaceholderConfigError.mockReturnValueOnce(
+      "WhatsApp access token looks like a placeholder. Save real Meta WhatsApp Cloud API credentials before enabling WhatsApp.",
+    );
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      whatsappAccessToken: "dummy",
+      whatsappPhoneNumberId: "123456",
+      whatsappTemplateName: "test",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.firstWhatsAppPlaceholderConfigError).toHaveBeenCalledWith([
+      ["WhatsApp access token", "dummy"],
+      ["WhatsApp phone number ID", "123456"],
+      ["WhatsApp template name", "test"],
+    ]);
+    expect(mocks.saveWhatsAppAccessToken).not.toHaveBeenCalled();
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 

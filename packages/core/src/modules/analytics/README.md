@@ -91,7 +91,7 @@ slow/retry hotspot.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `getCapiSettings` | `(db: Database, encryptionKey?: string)` | Fetch singleton Meta CAPI settings from `metaConversionsSettings` (id = `"singleton"`). Gracefully decrypts encrypted access tokens when a key is supplied and tolerates legacy plaintext. Returns `MetaConversionsSettings | null`. Typed catch blocks (`error: unknown`). |
+| `getCapiSettings` | `(db: Database, encryptionKey?: string)` | Fetch singleton Meta CAPI settings from `metaConversionsSettings` (id = `"singleton"`). Strictly decrypts encrypted access tokens with the dedicated credential key, returns no access token for unreadable ciphertext, and tolerates legacy plaintext. Returns `MetaConversionsSettings | null`. Typed catch blocks (`error: unknown`). |
 | `logCapiEvent` | `(db: Database, logData, retentionHours = 12)` | Insert event log + trigger lazy cleanup via fire-and-forget `void performLogCleanup()`. Callers must pass redacted request payloads; the Meta CAPI route also redacts legacy stored payloads on admin reads. Uses `@paralleldrive/cuid2` for log IDs. |
 | `performLogCleanup` | `(db: Database, retentionHours: number)` | Delete logs older than retention period. |
 | `manualLogCleanup` | `(db: Database, retentionHours: number)` | Admin-triggered cleanup, returns `{ success: boolean; message: string }`. Uses `error instanceof Error` check in catch. |

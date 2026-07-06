@@ -212,6 +212,19 @@ describe("site settings cache invalidation", () => {
       method: "POST" as const,
       body: { siteTitle: "Site", homepageTitle: "Home" },
       groups: ["homepage", "layout"],
+      options: {
+        htmlPaths: [
+          "/",
+          "/robots.txt",
+          "/sitemap.xml",
+          "/sitemap-static.xml",
+          "/sitemap-categories.xml",
+          "/sitemap-collections.xml",
+          "/sitemap-pages.xml",
+          "/sitemap-products.xml?page=1",
+          "/api/facebook-feed.xml",
+        ],
+      },
     },
     {
       path: "/storefront-url",
@@ -225,16 +238,24 @@ describe("site settings cache invalidation", () => {
       body: { allowedCountries: ["BD"], mode: "include" },
       groups: ["checkout"],
     },
-  ])("invalidates $groups after $path saves", async ({ path, method, body, groups }) => {
+  ])("invalidates $groups after $path saves", async ({ path, method, body, groups, options }) => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(app, env, method, path, body);
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      groups,
-      expect.objectContaining({ env }),
-    );
+    if (options) {
+      expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+        groups,
+        expect.objectContaining({ env }),
+        options,
+      );
+    } else {
+      expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+        groups,
+        expect.objectContaining({ env }),
+      );
+    }
   });
 
   it("does not fail currency saves when legacy gateway currency KV cleanup fails", async () => {

@@ -50,6 +50,7 @@ import { getCredentialEncryptionKey, getCustomerSessionHashKey, getEncryptionKey
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import {
   RECEIPT_TOKEN_TTL_SECONDS,
+  getCheckoutStatusKvKey,
   getReceiptTokenKvKey,
   validateReceiptToken,
 } from "../utils/order-receipt-token";
@@ -121,15 +122,17 @@ function scheduleCheckoutSuccessRecoveryHints(
   try {
     scheduleCheckoutRecoveryHint(
       Promise.all([
-        env.CACHE.put(
-          `checkout_status:${token}`,
-          JSON.stringify({
-            status: "completed",
-            orderId,
-            receiptToken: token,
-            updatedAt: Date.now(),
-          }),
-          { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
+        getCheckoutStatusKvKey(token).then((statusKey) =>
+          env.CACHE.put(
+            statusKey,
+            JSON.stringify({
+              status: "completed",
+              orderId,
+              receiptToken: token,
+              updatedAt: Date.now(),
+            }),
+            { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
+          ),
         ),
         getReceiptTokenKvKey(token).then((receiptKey) => env.CACHE.put(
           receiptKey,
@@ -155,15 +158,17 @@ function scheduleCheckoutFailureStatusHint(
 
   try {
     scheduleCheckoutRecoveryHint(
-      env.CACHE.put(
-        `checkout_status:${token}`,
-        JSON.stringify({
-          status: "failed",
-          orderId,
-          error: errorMessage,
-          updatedAt: Date.now(),
-        }),
-        { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
+      getCheckoutStatusKvKey(token).then((statusKey) =>
+        env.CACHE.put(
+          statusKey,
+          JSON.stringify({
+            status: "failed",
+            orderId,
+            error: errorMessage,
+            updatedAt: Date.now(),
+          }),
+          { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
+        ),
       ),
       executionCtx,
     );
@@ -330,7 +335,7 @@ app.openapi(getOrderStatusRoute, async (c) => {
     return ok(c, { status: "processing" });
   }
 
-  const kvKey = `checkout_status:${token}`;
+  const kvKey = await getCheckoutStatusKvKey(token);
   const statusStr = await c.env.CACHE.get(kvKey);
 
   if (!statusStr) {
@@ -1234,9 +1239,10 @@ app.openapi(createOrderRoute, async (c) => {
         response: responsePayload,
       });
     } catch (markError) {
+      const checkoutStatusKey = await getCheckoutStatusKvKey(result.checkoutToken);
       console.error("[Orders] Failed to mark checkout attempt committed after order commit:", {
         orderId: result.orderId,
-        checkoutToken: result.checkoutToken,
+        checkoutStatusKeyPrefix: checkoutStatusKey.slice(0, 28),
         error: markError,
       });
     }

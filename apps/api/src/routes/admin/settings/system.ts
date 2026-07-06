@@ -12,7 +12,11 @@ import {
     normalizeFirebaseServiceAccountJson,
     saveFirebaseServiceAccountJson,
 } from "@scalius/core/integrations/firebase/settings";
-import { getWhatsAppCloudApiSettings, saveWhatsAppAccessToken } from "@scalius/core/integrations/whatsapp";
+import {
+    firstWhatsAppPlaceholderConfigError,
+    getWhatsAppCloudApiSettings,
+    saveWhatsAppAccessToken,
+} from "@scalius/core/integrations/whatsapp";
 import {
     getActivePaymentMethods,
     upsertEncryptedSetting,
@@ -191,10 +195,21 @@ app.openapi(saveAuthRoute, async (c) => {
             | ReturnType<typeof normalizeCustomerAuthPolicy>
             | undefined;
         const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-        const credentialWriteKey =
+        const incomingWhatsAppAccessToken =
             typeof body.whatsappAccessToken === "string" &&
-            body.whatsappAccessToken !== MASKED &&
-            body.whatsappAccessToken.trim()
+            body.whatsappAccessToken !== MASKED
+                ? body.whatsappAccessToken.trim()
+                : undefined;
+        const whatsappPlaceholderError = firstWhatsAppPlaceholderConfigError([
+            ["WhatsApp access token", incomingWhatsAppAccessToken],
+            ["WhatsApp phone number ID", typeof body.whatsappPhoneNumberId === "string" ? body.whatsappPhoneNumberId : undefined],
+            ["WhatsApp template name", typeof body.whatsappTemplateName === "string" ? body.whatsappTemplateName : undefined],
+        ]);
+        if (whatsappPlaceholderError) {
+            throw new ValidationError(whatsappPlaceholderError);
+        }
+        const credentialWriteKey =
+            incomingWhatsAppAccessToken
                 ? requireEncryptionKey(c.env as Record<string, unknown>)
                 : undefined;
         const whatsappProviderTouched =

@@ -24,4 +24,13 @@ describe("storefront SEO regressions", () => {
 
     expect(source).toContain("noindex");
   });
+
+  it("keeps global Organization JSON-LD behind absolute storefront and logo URLs", async () => {
+    const source = await readFile(join(storefrontRoot, "src/layouts/Layout.astro"), "utf8");
+
+    expect(source).toContain("toAbsoluteStorefrontSeoUrl");
+    expect(source).toContain("const orgJsonLd = discoverySettings.structuredData.organization && storefrontUrl && logoUrl");
+    expect(source).toContain("url: storefrontUrl");
+    expect(source).not.toContain("logo: { \"@type\": \"ImageObject\", url: getOptimizedImageUrl");
+  });
 });

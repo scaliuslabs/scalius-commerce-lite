@@ -199,6 +199,38 @@ describe("Facebook product feed route", () => {
     expect(body).not.toContain("<g:price>1200.00 BDT</g:price>");
   });
 
+  it("flattens rich-text product descriptions into safe catalog text", async () => {
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_rich",
+          slug: "rich-description",
+          name: "Rich Description",
+          description:
+            "<h1>Premium &amp; Fresh</h1><p>Ships <strong>today</strong>.</p><script>alert('x')</script><!-- hidden -->",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/rich.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(
+      "<g:description>Premium &amp; Fresh Ships today.</g:description>",
+    );
+    expect(body).not.toContain("<strong>");
+    expect(body).not.toContain("alert");
+    expect(body).not.toContain("hidden");
+    expect(body).not.toContain("&amp;amp;");
+  });
+
   it("skips image-less products and keeps required image and availability fields on valid items", async () => {
     mocks.getAllProducts.mockResolvedValueOnce({
       data: [

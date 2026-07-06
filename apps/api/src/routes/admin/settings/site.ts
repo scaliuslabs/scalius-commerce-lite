@@ -35,6 +35,17 @@ const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const CURRENCY_CACHE_GROUPS = ["layout", "checkout"] as const;
 const MEDIA_CACHE_GROUPS = ["media"] as const;
+const SEO_DISCOVERY_WARM_PATHS = [
+  "/",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/sitemap-static.xml",
+  "/sitemap-categories.xml",
+  "/sitemap-collections.xml",
+  "/sitemap-pages.xml",
+  "/sitemap-products.xml?page=1",
+  "/api/facebook-feed.xml",
+] as const;
 
 async function deleteLegacyCurrencyGatewayCache(kv?: KVNamespace | null): Promise<void> {
   if (!kv) return;
@@ -532,6 +543,7 @@ app.openapi(saveSeoRoute, async (c) => {
   await invalidateApiAndScheduleStorefrontGroups(
     [...HOMEPAGE_CACHE_GROUPS, ...LAYOUT_CACHE_GROUPS] as const,
     c,
+    { htmlPaths: SEO_DISCOVERY_WARM_PATHS },
   );
   return ok(c, { message: "SEO settings saved successfully" });
 });

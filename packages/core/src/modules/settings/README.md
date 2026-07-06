@@ -165,7 +165,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/theme` | Get storefront color overrides from `settings` (category=theme, key=storefront_colors) |
 | POST | `/theme` | Save storefront color overrides. Invalidates `api:storefront:layout:*` KV keys |
 | GET | `/seo` | Get siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, and discovery policy; fails closed on read errors |
-| POST | `/seo` | Save SEO fields and nested partial discovery toggles on siteSettings/settings |
+| POST | `/seo` | Save SEO fields and nested partial discovery toggles on siteSettings/settings; the API route invalidates homepage/layout/API caches and schedules warmups for public robots/sitemap/feed XML paths after committed saves |
 | GET | `/storefront-url` | Get storefrontUrl from siteSettings |
 | POST | `/storefront-url` | Save storefrontUrl. Invalidates layout cache + site settings KV |
 | GET | `/allowed-countries` | Get allowed countries list and mode (include/exclude). Backward-compatible: handles old format (plain array) and new format (`{ countries, mode }`) |
@@ -223,7 +223,7 @@ COD-only `POST /payment-methods` payloads are valid in compatible checkout flows
 
 Checkout Flow settings also depend on the same payment-method payload for compatibility previews. If payment-method readiness is pending or unavailable, the admin UI should mark payment flow as loading/unknown, show retry state for failed reads, and block checkout-flow saves instead of relying on backend rejection copy.
 
-WhatsApp access-token saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY`. Runtime provider readiness and notification-channel saves pass the dedicated credential key; missing/wrong-key encrypted rows return `accessTokenConfigured=false` instead of treating storage presence as configured. Legacy migration and legacy-column cleanup must receive `migrationEncryptionKey` from `getCredentialEncryptionKey()`; without that dedicated key, reads do not create encrypted rows and do not clear `site_settings.whatsapp_access_token`.
+WhatsApp access-token saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and reject obvious dummy/placeholder values before storage. Runtime provider readiness and notification-channel saves pass the dedicated credential key; missing/wrong-key encrypted rows or placeholder token/phone/template values return `accessTokenConfigured=false` / not-ready instead of treating storage presence as configured. Legacy migration and legacy-column cleanup must receive `migrationEncryptionKey` from `getCredentialEncryptionKey()`; without that dedicated key, reads do not create encrypted rows and do not clear `site_settings.whatsapp_access_token`.
 
 Firebase service-account saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes when that secret is missing. Runtime notification reads decrypt `enc:` rows, tolerate legacy plaintext/bare encrypted rows for migration, and never pass unreadable ciphertext to the FCM client. FCM OAuth access tokens are persisted in `SHARED_AUTH_CACHE` only as encrypted `enc:` values when the dedicated key is available; otherwise the FCM client uses per-instance memory/fresh OAuth exchange.
 

@@ -12,7 +12,10 @@ import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
-import { getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
+import {
+  getAbsoluteStorefrontSeoBaseUrl,
+  toAbsoluteStorefrontSeoUrl,
+} from "@/lib/seo-base-url";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
@@ -91,21 +94,23 @@ const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 
 // Organization JSON-LD — only emit when we have a logo (per SEO-05)
 const logoUrl = headerData.logo.src
-  ? getOptimizedImageUrl(headerData.logo.src, {
-      width: 512,
-      height: 512,
-      fit: "contain",
-    })
+  ? toAbsoluteStorefrontSeoUrl(
+      getOptimizedImageUrl(headerData.logo.src, {
+        width: 512,
+        height: 512,
+        fit: "contain",
+      }),
+    )
   : null;
 const socialUrls = (footerData.social || [])
   .map((s: { url?: string }) => s.url)
   .filter(Boolean);
-const orgJsonLd = discoverySettings.structuredData.organization && logoUrl
+const orgJsonLd = discoverySettings.structuredData.organization && storefrontUrl && logoUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "Organization",
       name: storeName,
-      ...(storefrontUrl ? { url: storefrontUrl } : {}),
+      url: storefrontUrl,
       logo: { "@type": "ImageObject", url: logoUrl },
       ...(socialUrls.length > 0 ? { sameAs: socialUrls } : {}),
     })

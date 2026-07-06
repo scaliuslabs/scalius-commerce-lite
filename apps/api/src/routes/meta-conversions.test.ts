@@ -124,6 +124,26 @@ describe("Meta conversions public event route", () => {
     expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
   });
 
+  it("does not use JWT fallback as the Meta CAPI credential decrypt key", async () => {
+    const { app } = createTestApp();
+    const response = await app.request(
+      "/api/v1/meta/events",
+      createRequest({ eventId: "Purchase:order_1" }),
+      {
+        CACHE: { get: vi.fn(), put: vi.fn() },
+        STOREFRONT_URL: "https://store.example",
+        JWT_SECRET: "legacy-jwt-key",
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.sendCapiEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { encryptionKey: undefined },
+    );
+  });
+
   it("fails closed when the trusted storefront origin is not configured", async () => {
     const { app } = createTestApp();
     const response = await app.request(

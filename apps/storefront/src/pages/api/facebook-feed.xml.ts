@@ -53,6 +53,49 @@ function escapeXml(text: string | null | undefined): string {
     .replace(/'/g, "&apos;");
 }
 
+function decodeHtmlEntities(text: string): string {
+  return text.replace(
+    /&(#\d+|#x[\da-f]+|amp|lt|gt|quot|apos|nbsp);/gi,
+    (match, entity: string) => {
+      const normalized = entity.toLowerCase();
+      if (normalized === "amp") return "&";
+      if (normalized === "lt") return "<";
+      if (normalized === "gt") return ">";
+      if (normalized === "quot") return '"';
+      if (normalized === "apos") return "'";
+      if (normalized === "nbsp") return " ";
+
+      const codePoint = normalized.startsWith("#x")
+        ? Number.parseInt(normalized.slice(2), 16)
+        : Number.parseInt(normalized.slice(1), 10);
+      if (!Number.isFinite(codePoint)) return match;
+
+      try {
+        return String.fromCodePoint(codePoint);
+      } catch {
+        return match;
+      }
+    },
+  );
+}
+
+function toPlainFeedDescription(text: string | null | undefined): string {
+  if (!text) return "";
+
+  return decodeHtmlEntities(
+    text
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<\/(?:p|div|li|h[1-6]|tr|td|th|section|article)>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/\s+([.,;:!?])/g, "$1")
+      .trim(),
+  );
+}
+
 /**
  * Formats price for Facebook feed (number + space + currency).
  * Uses ISO 4217 decimal places per currency (e.g., JPY=0, BDT/USD=2, BHD=3).
@@ -159,7 +202,7 @@ function generateProductItem(
   // Required fields
   item += `    <g:id>${escapeXml(product.id)}</g:id>\n`;
   item += `    <g:title>${escapeXml(product.name)}</g:title>\n`;
-  item += `    <g:description>${escapeXml(product.description || product.name)}</g:description>\n`;
+  item += `    <g:description>${escapeXml(toPlainFeedDescription(product.description) || product.name)}</g:description>\n`;
   item += `    <g:link>${escapeXml(productUrl)}</g:link>\n`;
   item += `    <g:availability>${availability}</g:availability>\n`;
   item += `    <g:condition>new</g:condition>\n`;

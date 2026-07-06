@@ -8,7 +8,7 @@ import { getClientIp, rateLimit } from "@scalius/shared/rate-limit";
 import { ok } from "../utils/api-response";
 import { errorResponses, successEnvelope } from "../schemas/responses";
 import { RateLimitError, ValidationError } from "../utils/api-error";
-import { getEncryptionKey } from "../utils/encryption-key";
+import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { getOptionalExecutionContext } from "../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -166,7 +166,7 @@ app.openapi(postEventRoute, async (c) => {
     },
     custom_data: body.customData
   }, {
-    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
 
   const executionCtx = getOptionalExecutionContext(c);
