@@ -9,6 +9,9 @@ export interface SeoDiscoverySettings {
   };
   feeds: {
     productCatalogEnabled: boolean;
+    includeUnavailableProducts: boolean;
+    title: string;
+    description: string;
   };
   robots: {
     advertiseSitemap: boolean;
@@ -16,6 +19,9 @@ export interface SeoDiscoverySettings {
   structuredData: {
     organization: boolean;
     websiteSearch: boolean;
+    products: boolean;
+    breadcrumbs: boolean;
+    collections: boolean;
   };
 }
 
@@ -30,6 +36,9 @@ export const DEFAULT_SEO_DISCOVERY_SETTINGS: SeoDiscoverySettings = {
   },
   feeds: {
     productCatalogEnabled: true,
+    includeUnavailableProducts: true,
+    title: "",
+    description: "",
   },
   robots: {
     advertiseSitemap: true,
@@ -37,6 +46,9 @@ export const DEFAULT_SEO_DISCOVERY_SETTINGS: SeoDiscoverySettings = {
   structuredData: {
     organization: true,
     websiteSearch: true,
+    products: true,
+    breadcrumbs: true,
+    collections: true,
   },
 };
 
@@ -48,6 +60,10 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function boolOrDefault(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function stringOrDefault(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value.trim() : fallback;
 }
 
 export function normalizeSeoDiscoverySettings(
@@ -91,6 +107,18 @@ export function normalizeSeoDiscoverySettings(
         feeds.productCatalogEnabled,
         DEFAULT_SEO_DISCOVERY_SETTINGS.feeds.productCatalogEnabled,
       ),
+      includeUnavailableProducts: boolOrDefault(
+        feeds.includeUnavailableProducts,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.feeds.includeUnavailableProducts,
+      ),
+      title: stringOrDefault(
+        feeds.title,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.feeds.title,
+      ),
+      description: stringOrDefault(
+        feeds.description,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.feeds.description,
+      ),
     },
     robots: {
       advertiseSitemap: boolOrDefault(
@@ -106,6 +134,18 @@ export function normalizeSeoDiscoverySettings(
       websiteSearch: boolOrDefault(
         structuredData.websiteSearch,
         DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.websiteSearch,
+      ),
+      products: boolOrDefault(
+        structuredData.products,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.products,
+      ),
+      breadcrumbs: boolOrDefault(
+        structuredData.breadcrumbs,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.breadcrumbs,
+      ),
+      collections: boolOrDefault(
+        structuredData.collections,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.collections,
       ),
     },
   };

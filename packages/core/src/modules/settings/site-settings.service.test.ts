@@ -56,9 +56,20 @@ describe("site SEO settings", () => {
           collections: true,
           pages: true,
         },
-        feeds: { productCatalogEnabled: true },
+        feeds: {
+          productCatalogEnabled: true,
+          includeUnavailableProducts: true,
+          title: "",
+          description: "",
+        },
         robots: { advertiseSitemap: true },
-        structuredData: { organization: true, websiteSearch: true },
+        structuredData: {
+          organization: true,
+          websiteSearch: true,
+          products: true,
+          breadcrumbs: true,
+          collections: true,
+        },
       },
     });
   });
@@ -81,9 +92,20 @@ describe("site SEO settings", () => {
           collections: true,
           pages: true,
         },
-        feeds: { productCatalogEnabled: true },
+        feeds: {
+          productCatalogEnabled: true,
+          includeUnavailableProducts: true,
+          title: "",
+          description: "",
+        },
         robots: { advertiseSitemap: true },
-        structuredData: { organization: true, websiteSearch: false },
+        structuredData: {
+          organization: true,
+          websiteSearch: false,
+          products: true,
+          breadcrumbs: true,
+          collections: true,
+        },
       },
     });
   });
@@ -147,9 +169,20 @@ describe("site SEO settings", () => {
         collections: true,
         pages: true,
       },
-      feeds: { productCatalogEnabled: false },
+      feeds: {
+        productCatalogEnabled: false,
+        includeUnavailableProducts: true,
+        title: "",
+        description: "",
+      },
       robots: { advertiseSitemap: false },
-      structuredData: { organization: false, websiteSearch: true },
+      structuredData: {
+        organization: false,
+        websiteSearch: true,
+        products: true,
+        breadcrumbs: true,
+        collections: true,
+      },
     });
   });
 });

@@ -453,6 +453,9 @@ const seoSettingsSchema = z.object({
     }),
     feeds: z.object({
       productCatalogEnabled: z.boolean(),
+      includeUnavailableProducts: z.boolean(),
+      title: z.string(),
+      description: z.string(),
     }),
     robots: z.object({
       advertiseSitemap: z.boolean(),
@@ -460,6 +463,9 @@ const seoSettingsSchema = z.object({
     structuredData: z.object({
       organization: z.boolean(),
       websiteSearch: z.boolean(),
+      products: z.boolean(),
+      breadcrumbs: z.boolean(),
+      collections: z.boolean(),
     }),
   }),
 });

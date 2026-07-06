@@ -20,7 +20,11 @@ describe("SEO discovery settings", () => {
     expect(
       normalizeSeoDiscoverySettings({
         sitemap: { products: false },
-        feeds: { productCatalogEnabled: false },
+        feeds: {
+          productCatalogEnabled: false,
+          includeUnavailableProducts: false,
+          title: "  Merchant feed  ",
+        },
       }),
     ).toEqual({
       ...DEFAULT_SEO_DISCOVERY_SETTINGS,
@@ -28,7 +32,12 @@ describe("SEO discovery settings", () => {
         ...DEFAULT_SEO_DISCOVERY_SETTINGS.sitemap,
         products: false,
       },
-      feeds: { productCatalogEnabled: false },
+      feeds: {
+        ...DEFAULT_SEO_DISCOVERY_SETTINGS.feeds,
+        productCatalogEnabled: false,
+        includeUnavailableProducts: false,
+        title: "Merchant feed",
+      },
     });
   });
 
@@ -59,13 +68,25 @@ describe("SEO discovery settings", () => {
           collections: true,
           pages: false,
           },
-          feeds: { productCatalogEnabled: false },
+          feeds: {
+            productCatalogEnabled: false,
+            includeUnavailableProducts: true,
+            title: "Catalog",
+            description: "Products",
+          },
           robots: { advertiseSitemap: false },
-          structuredData: { organization: false, websiteSearch: true },
+          structuredData: {
+            organization: false,
+            websiteSearch: true,
+            products: true,
+            breadcrumbs: true,
+            collections: true,
+          },
         },
         {
           sitemap: { pages: true },
-          structuredData: { websiteSearch: false },
+          feeds: { includeUnavailableProducts: false },
+          structuredData: { websiteSearch: false, products: false },
         },
       ),
     ).toEqual({
@@ -77,9 +98,20 @@ describe("SEO discovery settings", () => {
         collections: true,
         pages: true,
       },
-      feeds: { productCatalogEnabled: false },
+      feeds: {
+        productCatalogEnabled: false,
+        includeUnavailableProducts: false,
+        title: "Catalog",
+        description: "Products",
+      },
       robots: { advertiseSitemap: false },
-      structuredData: { organization: false, websiteSearch: false },
+      structuredData: {
+        organization: false,
+        websiteSearch: false,
+        products: false,
+        breadcrumbs: true,
+        collections: true,
+      },
     });
   });
 });

@@ -123,6 +123,55 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:availability>out of stock</g:availability>");
   });
 
+  it("uses merchant feed title/description and can skip unavailable products", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      discovery: {
+        feeds: {
+          productCatalogEnabled: true,
+          includeUnavailableProducts: false,
+          title: "  Summer catalog  ",
+          description: "  Fresh seasonal products  ",
+        },
+      },
+    });
+    mocks.getAllProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_available",
+          slug: "always-available",
+          name: "Always Available",
+          description: "Simple untracked SKU",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/available.jpg",
+        },
+        {
+          id: "prod_sold_out",
+          slug: "sold-out",
+          name: "Sold Out",
+          description: "Tracked SKU with no stock",
+          price: 1400,
+          discountedPrice: 1400,
+          isActive: true,
+          availableForSale: false,
+          imageUrl: "https://cdn.example.test/products/sold-out.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 2, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<title>Summer catalog</title>");
+    expect(body).toContain("<description>Fresh seasonal products</description>");
+    expect(body).toContain("<g:id>prod_available</g:id>");
+    expect(body).not.toContain("<g:id>prod_sold_out</g:id>");
+  });
+
   it("emits zero discounted prices without falling back to the original price", async () => {
     mocks.getAllProducts.mockResolvedValueOnce({
       data: [

@@ -13,9 +13,20 @@ describe("buildSeoDiscoveryStatus", () => {
           collections: true,
           pages: true,
         },
-        feeds: { productCatalogEnabled: true },
+        feeds: {
+          productCatalogEnabled: true,
+          includeUnavailableProducts: false,
+          title: "  Merchant feed  ",
+          description: "  Fresh catalog  ",
+        },
         robots: { advertiseSitemap: true },
-        structuredData: { organization: true, websiteSearch: false },
+        structuredData: {
+          organization: true,
+          websiteSearch: false,
+          products: true,
+          breadcrumbs: true,
+          collections: false,
+        },
       },
       robotsTxt: "User-agent: *\nAllow: /\nSitemap: [your-sitemap-url]",
       storefrontUrl: "https://shop.example.com/",
@@ -35,9 +46,17 @@ describe("buildSeoDiscoveryStatus", () => {
     expect(status.productFeed.imagePolicy).toContain(
       "absolute http(s) primary image",
     );
+    expect(status.productFeed.summary).toBe(
+      "Catalog XML includes only active products currently available for sale.",
+    );
+    expect(status.productFeed.feedTitle).toBe("Merchant feed");
+    expect(status.productFeed.feedDescription).toBe("Fresh catalog");
     expect(status.robots.warning).toBeUndefined();
+    expect(status.structuredData.summary).toBe(
+      "Organization; site search off; products; breadcrumbs; collections off",
+    );
     expect(status.structuredData.organizationNote).toBe(
-      "Organization schema is emitted only when a logo is available.",
+      "Organization schema needs a logo; product and collection schema follow their matching page toggles.",
     );
     expect(status.storefront.mode).toBe("absolute");
     expect(status.storefront.links).toContainEqual({
@@ -95,7 +114,13 @@ describe("buildSeoDiscoveryStatus", () => {
       discovery: {
         sitemap: { enabled: false },
         feeds: { productCatalogEnabled: false },
-        structuredData: { organization: false, websiteSearch: false },
+        structuredData: {
+          organization: false,
+          websiteSearch: false,
+          products: false,
+          breadcrumbs: false,
+          collections: false,
+        },
       },
       storefrontUrl: "",
     });

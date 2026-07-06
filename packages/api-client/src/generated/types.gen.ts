@@ -4229,6 +4229,9 @@ export type GetApiV1SeoResponses = {
                 };
                 feeds: {
                     productCatalogEnabled: boolean;
+                    includeUnavailableProducts: boolean;
+                    title: string;
+                    description: string;
                 };
                 robots: {
                     advertiseSitemap: boolean;
@@ -4236,6 +4239,9 @@ export type GetApiV1SeoResponses = {
                 structuredData: {
                     organization: boolean;
                     websiteSearch: boolean;
+                    products: boolean;
+                    breadcrumbs: boolean;
+                    collections: boolean;
                 };
             };
         };
@@ -19520,6 +19526,9 @@ export type GetApiV1AdminSettingsSeoResponses = {
                 };
                 feeds: {
                     productCatalogEnabled: boolean;
+                    includeUnavailableProducts: boolean;
+                    title: string;
+                    description: string;
                 };
                 robots: {
                     advertiseSitemap: boolean;
@@ -19527,6 +19536,9 @@ export type GetApiV1AdminSettingsSeoResponses = {
                 structuredData: {
                     organization: boolean;
                     websiteSearch: boolean;
+                    products: boolean;
+                    breadcrumbs: boolean;
+                    collections: boolean;
                 };
             };
         };
@@ -19552,6 +19564,9 @@ export type PostApiV1AdminSettingsSeoData = {
             };
             feeds?: {
                 productCatalogEnabled?: boolean;
+                includeUnavailableProducts?: boolean;
+                title?: string;
+                description?: string;
             };
             robots?: {
                 advertiseSitemap?: boolean;
@@ -19559,6 +19574,9 @@ export type PostApiV1AdminSettingsSeoData = {
             structuredData?: {
                 organization?: boolean;
                 websiteSearch?: boolean;
+                products?: boolean;
+                breadcrumbs?: boolean;
+                collections?: boolean;
             };
         };
     };

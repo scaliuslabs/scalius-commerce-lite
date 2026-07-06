@@ -8,12 +8,17 @@ import {
   type CollectionWithProducts,
 } from "@/lib/api";
 import { getActiveWidgetsForScope } from "@/lib/api/widgets";
-import { buildAbsoluteStorefrontSeoUrl, getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
+import {
+  buildAbsoluteStorefrontSeoUrl,
+  getAbsoluteStorefrontSeoBaseUrl,
+  toAbsoluteStorefrontSeoUrl,
+} from "@/lib/seo-base-url";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { getProductImageUrl } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { ArrowLeft, Tags } from "lucide-react";
 
 const { id } = Astro.params;
@@ -54,19 +59,25 @@ const subtitle = config.subtitle || "";
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const collectionPath = `/collections/${encodeURIComponent(collection.id)}`;
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl(collectionPath);
+const discoverySettings = normalizeSeoDiscoverySettings(
+  layoutData?.seo?.discovery,
+);
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const firstProductImage = products.find((product) => product.imageUrl)?.imageUrl ?? null;
 const ogImageUrl = firstProductImage
-  ? getProductImageUrl(firstProductImage, {
-      width: 1200,
-      height: 630,
-      quality: 85,
-      format: "auto",
-      fit: "cover",
-    })
+  ? toAbsoluteStorefrontSeoUrl(
+      getProductImageUrl(firstProductImage, {
+        width: 1200,
+        height: 630,
+        quality: 85,
+        format: "auto",
+        fit: "cover",
+      }),
+    )
   : undefined;
 
-const collectionJsonLd = canonicalUrl && storefrontUrl
+const collectionJsonLd =
+  discoverySettings.structuredData.collections && canonicalUrl && storefrontUrl
   ? serializeJsonForInlineScript({
       "@context": "https://schema.org",
       "@type": "CollectionPage",
@@ -74,23 +85,27 @@ const collectionJsonLd = canonicalUrl && storefrontUrl
       description: subtitle || `Browse ${collection.name}.`,
       url: canonicalUrl,
       numberOfItems: products.length,
-      breadcrumb: {
-        "@type": "BreadcrumbList",
-        itemListElement: [
-          {
-            "@type": "ListItem",
-            position: 1,
-            name: "Home",
-            item: `${storefrontUrl}/`,
-          },
-          {
-            "@type": "ListItem",
-            position: 2,
-            name: collection.name,
-            item: canonicalUrl,
-          },
-        ],
-      },
+      ...(discoverySettings.structuredData.breadcrumbs
+        ? {
+            breadcrumb: {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: "Home",
+                  item: `${storefrontUrl}/`,
+                },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: collection.name,
+                  item: canonicalUrl,
+                },
+              ],
+            },
+          }
+        : {}),
     })
   : null;
 ---
@@ -100,7 +115,7 @@ const collectionJsonLd = canonicalUrl && storefrontUrl
   description={subtitle || `Browse ${collection.name}.`}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
-  ogImage={ogImageUrl}
+  ogImage={ogImageUrl ?? undefined}
   ogType="website"
 >
   <Fragment slot="head">
