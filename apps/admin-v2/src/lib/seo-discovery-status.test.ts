@@ -46,6 +46,10 @@ describe("buildSeoDiscoveryStatus", () => {
       },
       robotsTxt: "User-agent: *\nAllow: /\nSitemap: [your-sitemap-url]",
       storefrontUrl: "https://shop.example.com/",
+      businessIdentity: {
+        companyName: "Scalius Mart",
+        legalName: "",
+      },
     });
 
     expect(status.sitemap.title).toBe("Sitemap index on");
@@ -77,8 +81,9 @@ describe("buildSeoDiscoveryStatus", () => {
       "BD; 14 day return window; free returns; mail or in-store returns; policy URL set",
     );
     expect(status.structuredData.organizationNote).toBe(
-      "OnlineStore schema needs a logo; ProductGroup schema describes optioned products, shipping schema uses active shipping methods, and return-policy schema uses only saved public policy fields.",
+      "OnlineStore schema needs a business name and logo; Product seller identity uses Business settings only; ProductGroup schema describes optioned products; shipping schema uses active shipping methods; return-policy schema uses only saved public policy fields. BreadcrumbList and CollectionPage are separate controls.",
     );
+    expect(status.structuredData.identityWarning).toBeUndefined();
     expect(status.storefront.mode).toBe("absolute");
     expect(status.storefront.links).toContainEqual({
       key: "sitemap",
@@ -203,6 +208,28 @@ describe("buildSeoDiscoveryStatus", () => {
       returnWindowDays: null,
       policyUrl: "https://example.com/returns",
     });
+  });
+
+  it("warns when enabled schema needs a business identity", () => {
+    const status = buildSeoDiscoveryStatus({
+      discovery: {
+        structuredData: {
+          organization: true,
+          websiteSearch: true,
+          products: true,
+        },
+      },
+      storefrontUrl: "https://shop.example.com",
+      businessIdentity: {
+        companyName: "",
+        legalName: "",
+      },
+    });
+
+    expect(status.structuredData.tone).toBe("warning");
+    expect(status.structuredData.identityWarning).toBe(
+      "Add a company name or legal name in Business settings before relying on OnlineStore, site search, or Product seller identity schema.",
+    );
   });
 });
 

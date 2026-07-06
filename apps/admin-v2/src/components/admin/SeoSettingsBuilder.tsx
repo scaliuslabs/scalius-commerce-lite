@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Braces,
   Globe2,
@@ -41,6 +42,7 @@ import {
   type SeoDiscoverySettingsWithReturnPolicy,
 } from "@/lib/seo-discovery-status";
 import {
+  getBusinessSettings,
   getSeoSettings,
   updateSeoSettings,
   type UpdateSeoSettingsInput,
@@ -145,6 +147,11 @@ const saveSeo = async (values: SeoConfig) => {
 };
 
 export function SeoSettingsBuilder() {
+  const businessSettingsQuery = useQuery({
+    queryKey: queryKeys.settings.business(),
+    queryFn: async () => getBusinessSettings(),
+    staleTime: 1000 * 60 * 5,
+  });
   const {
     values,
     setValues,
@@ -234,6 +241,17 @@ export function SeoSettingsBuilder() {
   const returnPolicyUrlInvalid = isInvalidReturnPolicyUrl(
     returnPolicy.policyUrl,
   );
+  const businessSettings = businessSettingsQuery.data;
+  const businessIdentity = {
+    companyName:
+      typeof businessSettings?.companyName === "string"
+        ? businessSettings.companyName
+        : "",
+    legalName:
+      typeof businessSettings?.legalName === "string"
+        ? businessSettings.legalName
+        : "",
+  };
 
   if (isLoading) {
     return (
@@ -741,6 +759,7 @@ export function SeoSettingsBuilder() {
       <SeoDiscoveryStatusCard
         discovery={values.discovery}
         robotsTxt={values.robotsTxt}
+        businessIdentity={businessIdentity}
       />
 
       <div className="space-y-2">

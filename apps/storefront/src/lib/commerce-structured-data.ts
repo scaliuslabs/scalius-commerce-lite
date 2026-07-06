@@ -285,22 +285,21 @@ function buildPostalAddress(business: StorefrontBusinessInfo | null | undefined)
 export function buildOnlineStoreJsonLd({
   storefrontUrl,
   logoUrl,
-  storeName,
   business,
   social,
   returnPolicy,
 }: {
   storefrontUrl: string | null;
   logoUrl: string | null;
-  storeName: string;
   business?: StorefrontBusinessInfo | null;
   social?: StorefrontSocialLink[] | null;
   returnPolicy?: MerchantReturnPolicyJsonLd | null;
 }) {
-  if (!storefrontUrl || !logoUrl) return null;
-
   const companyName = cleanString(business?.companyName);
   const legalName = cleanString(business?.legalName);
+  const schemaName = companyName || legalName;
+  if (!storefrontUrl || !logoUrl || !schemaName) return null;
+
   const telephone = cleanString(business?.phone);
   const email = cleanString(business?.email);
   const taxID = cleanString(business?.taxId);
@@ -313,7 +312,7 @@ export function buildOnlineStoreJsonLd({
     "@context": "https://schema.org",
     "@type": "OnlineStore",
     "@id": `${storefrontUrl}/#store`,
-    name: companyName || legalName || storeName,
+    name: schemaName,
     url: storefrontUrl,
     logo: { "@type": "ImageObject", url: logoUrl },
     ...(legalName ? { legalName } : {}),

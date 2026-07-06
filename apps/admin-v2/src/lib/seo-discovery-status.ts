@@ -22,6 +22,11 @@ export type SeoDiscoverySettingsWithReturnPolicy = SeoDiscoverySettings & {
   returnPolicy: SeoReturnPolicySettings;
 };
 
+export interface SeoDiscoveryBusinessIdentity {
+  companyName?: string | null;
+  legalName?: string | null;
+}
+
 const SITEMAP_SECTIONS = [
   ["staticPages", "Home + search"] as const,
   ["products", "Products"] as const,
@@ -105,6 +110,7 @@ export interface SeoDiscoveryStatusInput {
   discovery: unknown;
   robotsTxt?: string | null;
   storefrontUrl?: string | null;
+  businessIdentity?: SeoDiscoveryBusinessIdentity | null;
 }
 
 export interface SeoDiscoveryStatus {
@@ -153,6 +159,7 @@ export interface SeoDiscoveryStatus {
     breadcrumbsEnabled: boolean;
     collectionsEnabled: boolean;
     organizationNote: string;
+    identityWarning?: string;
   };
   storefront: {
     tone: SeoDiscoveryTone;
@@ -174,6 +181,14 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function hasBusinessSchemaName(
+  businessIdentity: SeoDiscoveryBusinessIdentity | null | undefined,
+): boolean {
+  return Boolean(
+    businessIdentity?.companyName?.trim() || businessIdentity?.legalName?.trim(),
+  );
 }
 
 export function normalizeSeoDiscoverySettingsWithReturnPolicy(
@@ -301,6 +316,7 @@ export function buildSeoDiscoveryStatus({
   discovery,
   robotsTxt,
   storefrontUrl,
+  businessIdentity,
 }: SeoDiscoveryStatusInput): SeoDiscoveryStatus {
   const normalized = normalizeSeoDiscoverySettingsWithReturnPolicy(discovery);
   const customSitemapLines = findCustomSitemapLines(robotsTxt);
@@ -320,6 +336,15 @@ export function buildSeoDiscoveryStatus({
     : trimmedStorefrontUrl
       ? "path-only"
       : "unavailable";
+  const identityBacked = hasBusinessSchemaName(businessIdentity);
+  const identityBackedSchemaEnabled =
+    normalized.structuredData.organization ||
+    normalized.structuredData.websiteSearch ||
+    normalized.structuredData.products;
+  const identityWarning =
+    identityBackedSchemaEnabled && !identityBacked
+      ? "Add a company name or legal name in Business settings before relying on OnlineStore, site search, or Product seller identity schema."
+      : undefined;
   const feedVariantStrategyLabel = getFeedVariantStrategyLabel(
     normalized.feeds.variantStrategy,
   );
@@ -378,14 +403,16 @@ export function buildSeoDiscoveryStatus({
     },
     structuredData: {
       tone:
-        normalized.structuredData.organization ||
-        normalized.structuredData.websiteSearch ||
-        normalized.structuredData.products ||
-        normalized.structuredData.productGroups ||
-        normalized.structuredData.offerShippingDetails ||
-        normalized.returnPolicy.enabled ||
-        normalized.structuredData.breadcrumbs ||
-        normalized.structuredData.collections
+        identityWarning
+          ? "warning"
+          : normalized.structuredData.organization ||
+              normalized.structuredData.websiteSearch ||
+              normalized.structuredData.products ||
+              normalized.structuredData.productGroups ||
+              normalized.structuredData.offerShippingDetails ||
+              normalized.returnPolicy.enabled ||
+              normalized.structuredData.breadcrumbs ||
+              normalized.structuredData.collections
           ? "ok"
           : "disabled",
       title:
@@ -434,7 +461,8 @@ export function buildSeoDiscoveryStatus({
       breadcrumbsEnabled: normalized.structuredData.breadcrumbs,
       collectionsEnabled: normalized.structuredData.collections,
       organizationNote:
-        "OnlineStore schema needs a logo; ProductGroup schema describes optioned products, shipping schema uses active shipping methods, and return-policy schema uses only saved public policy fields.",
+        "OnlineStore schema needs a business name and logo; Product seller identity uses Business settings only; ProductGroup schema describes optioned products; shipping schema uses active shipping methods; return-policy schema uses only saved public policy fields. BreadcrumbList and CollectionPage are separate controls.",
+      identityWarning,
     },
     storefront: {
       tone: absoluteStorefrontUrl

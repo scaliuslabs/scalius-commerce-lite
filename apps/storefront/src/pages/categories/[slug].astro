@@ -168,6 +168,14 @@ const pageDescription =
 const productListPathname = Astro.url.pathname;
 const canonicalFilterState = JSON.stringify(currentFilters);
 
+function plainText(value: string | null | undefined): string | null {
+  const text = value
+    ?.replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text ? text : null;
+}
+
 function getPaginationUrl(pageNum: number) {
   return buildProductListPaginationHref({
     pathname: productListPathname,
@@ -242,7 +250,39 @@ const ogImageUrl = category?.imageUrl
     )
   : null;
 
-// CollectionPage JSON-LD with embedded BreadcrumbList (per SEO-03, SEO-04)
+const categorySchemaDescription = category
+  ? plainText(category.description) ||
+    category.metaDescription ||
+    `Browse products in ${category.name}`
+  : null;
+
+const categoryBreadcrumbJsonLd =
+  discoverySettings.structuredData.breadcrumbs &&
+  category &&
+  !category.noIndex &&
+  canonicalUrl &&
+  storefrontUrl
+    ? serializeJsonForInlineScript({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: `${storefrontUrl}/`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: category.name,
+            item: canonicalUrl,
+          },
+        ],
+      })
+    : null;
+
+// CollectionPage JSON-LD for category listings (per SEO-03, SEO-04)
 const collectionJsonLd =
   discoverySettings.structuredData.collections &&
   category &&
@@ -253,31 +293,9 @@ const collectionJsonLd =
       "@context": "https://schema.org",
       "@type": "CollectionPage",
       name: category.name,
-      description:
-        category.metaDescription || `Browse products in ${category.name}`,
+      ...(categorySchemaDescription ? { description: categorySchemaDescription } : {}),
       url: canonicalUrl,
       numberOfItems: pagination.total,
-      ...(discoverySettings.structuredData.breadcrumbs
-        ? {
-            breadcrumb: {
-              "@type": "BreadcrumbList",
-              itemListElement: [
-                {
-                  "@type": "ListItem",
-                  position: 1,
-                  name: "Home",
-                  item: `${storefrontUrl}/`,
-                },
-                {
-                  "@type": "ListItem",
-                  position: 2,
-                  name: category.name,
-                  item: canonicalUrl,
-                },
-              ],
-            },
-          }
-        : {}),
     })
   : null;
 ---
@@ -295,6 +313,11 @@ const collectionJsonLd =
     {
       collectionJsonLd && (
         <script is:inline type="application/ld+json" set:html={collectionJsonLd} />
+      )
+    }
+    {
+      categoryBreadcrumbJsonLd && (
+        <script is:inline type="application/ld+json" set:html={categoryBreadcrumbJsonLd} />
       )
     }
   </Fragment>

@@ -247,6 +247,7 @@ describe("SeoDiscoveryStatusCard", () => {
             DEFAULT_SEO_DISCOVERY_SETTINGS,
           )}
           robotsTxt={robotsTxt}
+          businessIdentity={{ companyName: "Scalius Mart", legalName: "" }}
         />,
       );
     });
@@ -287,6 +288,28 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain("/sitemap.xml");
     expect(host.textContent).toContain(
       "Live proof waits for an absolute http(s) Store URL.",
+    );
+  });
+
+  it("surfaces missing business identity schema warnings", () => {
+    act(() => {
+      root.render(
+        <SeoDiscoveryStatusCard
+          discovery={normalizeSeoDiscoverySettingsWithReturnPolicy(
+            DEFAULT_SEO_DISCOVERY_SETTINGS,
+          )}
+          robotsTxt="User-agent: *\nAllow: /"
+          businessIdentity={{ companyName: "", legalName: "" }}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain("Structured data on");
+    expect(host.textContent).toContain(
+      "Add a company name or legal name in Business settings",
+    );
+    expect(host.textContent).toContain(
+      "BreadcrumbList and CollectionPage are separate controls",
     );
   });
 
