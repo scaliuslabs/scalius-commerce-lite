@@ -12,10 +12,15 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import type {
+  ProductFeedDiagnosticReason,
+  ProductFeedDiagnosticsReport,
+} from "@scalius/core/modules/products";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { useStorefrontUrl } from "../../hooks/use-storefront-url";
+import { seoFeedDiagnosticsQueryOptions } from "../../lib/api-query-options/seo-feed-diagnostics";
 import { seoDiscoveryLiveProbeQueryOptions } from "../../lib/api-query-options/seo-discovery-live-probe";
 import {
   buildSeoDiscoveryStatus,
@@ -51,8 +56,24 @@ const TONE_ICONS: Record<SeoDiscoveryTone, LucideIcon> = {
   info: Info,
 };
 
+const FEED_REASON_LABELS: Record<ProductFeedDiagnosticReason, string> = {
+  feed_disabled: "Feed disabled",
+  inactive_deleted_unpublished: "Inactive or deleted",
+  no_buyer_sku: "No buyer-safe SKU",
+  missing_image: "Missing primary image",
+  unavailable_excluded: "Sold out hidden",
+};
+
 function toneClassName(tone: SeoDiscoveryTone): string {
   return TONE_CLASSES[tone];
+}
+
+function formatCount(value: number): string {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function plural(value: number, singular: string, pluralLabel = `${singular}s`) {
+  return value === 1 ? singular : pluralLabel;
 }
 
 interface StatusRowProps {
@@ -329,6 +350,160 @@ function LiveProbePanel({
   );
 }
 
+function getFeedDiagnosticsTone({
+  enabled,
+  error,
+  isBusy,
+  result,
+}: {
+  enabled: boolean;
+  error: unknown;
+  isBusy: boolean;
+  result: ProductFeedDiagnosticsReport | undefined;
+}): SeoDiscoveryTone {
+  if (!enabled) return "disabled";
+  if (error) return "warning";
+  if (isBusy && !result) return "info";
+  if (!result) return "info";
+  return result.totals.productsWithIssues > 0 ? "warning" : "ok";
+}
+
+function FeedDiagnosticsPanel({
+  enabled,
+  error,
+  isFetching,
+  isLoading,
+  onRetry,
+  result,
+}: {
+  enabled: boolean;
+  error: unknown;
+  isFetching: boolean;
+  isLoading: boolean;
+  onRetry: () => void;
+  result: ProductFeedDiagnosticsReport | undefined;
+}) {
+  const isBusy = isLoading || isFetching;
+  const tone = getFeedDiagnosticsTone({ enabled, error, isBusy, result });
+  const errorMessage = error instanceof Error ? error.message : null;
+  const activeReasons =
+    result?.reasons.filter(
+      (reason) => reason.products > 0 || reason.rows > 0,
+    ) ?? [];
+  const title =
+    isBusy && !result
+      ? "Scanning catalog"
+      : tone === "ok"
+        ? "Catalog ready"
+        : tone === "disabled"
+          ? "Catalog feed disabled"
+          : "Catalog needs attention";
+
+  return (
+    <div className="space-y-3 border-t border-border pt-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              Catalog diagnostics
+            </h4>
+            <Badge
+              variant="outline"
+              className={`w-fit shrink-0 ${toneClassName(tone)}`}
+            >
+              {TONE_LABELS[tone]}
+            </Badge>
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">{title}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRetry}
+          disabled={isBusy}
+          className="w-fit"
+        >
+          <RefreshCw className={isBusy ? "animate-spin" : ""} />
+          Refresh
+        </Button>
+      </div>
+
+      {errorMessage ? (
+        <p className="text-xs leading-5 text-amber-700">{errorMessage}</p>
+      ) : null}
+
+      {result ? (
+        <div className="space-y-3 text-xs leading-5">
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="border-border bg-background">
+              Rows ready: {formatCount(result.totals.emittedRows)}
+            </Badge>
+            <Badge variant="outline" className="border-border bg-background">
+              Skipped rows: {formatCount(result.totals.skippedRows)}
+            </Badge>
+            <Badge variant="outline" className="border-border bg-background">
+              Products to fix: {formatCount(result.totals.productsWithIssues)}
+            </Badge>
+          </div>
+
+          <p className="text-muted-foreground">
+            Scanned {formatCount(result.scan.scannedProducts)} of first{" "}
+            {formatCount(result.scan.limit)}{" "}
+            {plural(result.scan.limit, "product")}.
+            {result.scan.truncated
+              ? " More products exist outside this bounded scan."
+              : ""}
+          </p>
+
+          {activeReasons.length > 0 ? (
+            <div className="divide-y divide-border border-t border-border">
+              {activeReasons.map((reason) => (
+                <div
+                  key={reason.reason}
+                  className="grid gap-2 py-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <p className="font-medium text-foreground">
+                      {FEED_REASON_LABELS[reason.reason]}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {formatCount(reason.products)}{" "}
+                      {plural(reason.products, "product")} ·{" "}
+                      {formatCount(reason.rows)} skipped{" "}
+                      {plural(reason.rows, "row")}
+                    </p>
+                    {reason.samples.length > 0 ? (
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        Sample:{" "}
+                        {reason.samples
+                          .map((sample) => sample.name || sample.slug)
+                          .join(", ")}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={`w-fit shrink-0 self-start ${toneClassName(
+                      reason.reason === "feed_disabled" ? "disabled" : "warning",
+                    )}`}
+                  >
+                    {formatCount(reason.products)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">
+              No feed blockers found in this bounded scan.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function SeoDiscoveryStatusCard({
   discovery,
   robotsTxt,
@@ -351,6 +526,7 @@ export function SeoDiscoveryStatusCard({
     ...seoDiscoveryLiveProbeQueryOptions(),
     enabled: liveProbeEnabled,
   });
+  const feedDiagnosticsQuery = useQuery(seoFeedDiagnosticsQueryOptions());
   const storefrontSummary = isStorefrontUrlLoading
     ? "Loading the dashboard Store URL preview."
     : status.storefront.summary;
@@ -404,6 +580,16 @@ export function SeoDiscoveryStatusCard({
               {status.productFeed.feedDescription}
             </span>
           </p>
+          <FeedDiagnosticsPanel
+            enabled={discovery.feeds.productCatalogEnabled}
+            error={feedDiagnosticsQuery.error}
+            isFetching={feedDiagnosticsQuery.isFetching}
+            isLoading={feedDiagnosticsQuery.isLoading}
+            onRetry={() => {
+              void feedDiagnosticsQuery.refetch();
+            }}
+            result={feedDiagnosticsQuery.data}
+          />
         </div>
       </StatusRow>
 

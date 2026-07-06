@@ -19790,6 +19790,129 @@ export type PostApiV1AdminSettingsSeoResponses = {
 
 export type PostApiV1AdminSettingsSeoResponse = PostApiV1AdminSettingsSeoResponses[keyof PostApiV1AdminSettingsSeoResponses];
 
+export type GetApiV1AdminSettingsSeoFeedDiagnosticsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        scanLimit?: number;
+        sampleLimit?: number;
+    };
+    url: '/api/v1/admin/settings/seo/feed-diagnostics';
+};
+
+export type GetApiV1AdminSettingsSeoFeedDiagnosticsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSeoFeedDiagnosticsError = GetApiV1AdminSettingsSeoFeedDiagnosticsErrors[keyof GetApiV1AdminSettingsSeoFeedDiagnosticsErrors];
+
+export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
+    /**
+     * Product feed diagnostics
+     */
+    200: {
+        success: true;
+        data: {
+            policy: {
+                productCatalogEnabled: boolean;
+                includeUnavailableProducts: boolean;
+                variantStrategy: 'products' | 'variants';
+            };
+            scan: {
+                limit: number;
+                scannedProducts: number;
+                truncated: boolean;
+                sampleLimitPerReason: number;
+            };
+            totals: {
+                emittedRows: number;
+                emittedProductRows: number;
+                emittedVariantRows: number;
+                productsWithIssues: number;
+                skippedRows: number;
+            };
+            reasons: Array<{
+                reason: 'feed_disabled' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
+                products: number;
+                rows: number;
+                samples: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    reason: 'feed_disabled' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponse = GetApiV1AdminSettingsSeoFeedDiagnosticsResponses[keyof GetApiV1AdminSettingsSeoFeedDiagnosticsResponses];
+
 export type GetApiV1AdminSettingsStorefrontUrlData = {
     body?: never;
     path?: never;

@@ -22,6 +22,13 @@ const liveProbeState = vi.hoisted(() => ({
   error: null as Error | null,
   refetch: vi.fn(),
 }));
+const feedDiagnosticsState = vi.hoisted(() => ({
+  data: undefined as unknown,
+  isLoading: false,
+  isFetching: false,
+  error: null as Error | null,
+  refetch: vi.fn(),
+}));
 
 vi.mock("../../hooks/use-storefront-url", () => ({
   useStorefrontUrl: () => storefrontUrlState,
@@ -32,8 +39,17 @@ vi.mock("../../lib/api-query-options/seo-discovery-live-probe", () => ({
     queryFn: vi.fn(),
   }),
 }));
+vi.mock("../../lib/api-query-options/seo-feed-diagnostics", () => ({
+  seoFeedDiagnosticsQueryOptions: () => ({
+    queryKey: ["settings", "seo-feed-diagnostics"],
+    queryFn: vi.fn(),
+  }),
+}));
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => liveProbeState,
+  useQuery: (options: { queryKey?: readonly unknown[] }) =>
+    options.queryKey?.includes("seo-feed-diagnostics")
+      ? feedDiagnosticsState
+      : liveProbeState,
 }));
 
 function createHealthyLiveProbe() {
@@ -90,6 +106,96 @@ function createHealthyLiveProbe() {
   };
 }
 
+function createHealthyFeedDiagnostics() {
+  return {
+    policy: {
+      productCatalogEnabled: true,
+      includeUnavailableProducts: false,
+      variantStrategy: "variants",
+    },
+    scan: {
+      limit: 500,
+      scannedProducts: 12,
+      truncated: false,
+      sampleLimitPerReason: 5,
+    },
+    totals: {
+      emittedRows: 11,
+      emittedProductRows: 3,
+      emittedVariantRows: 8,
+      productsWithIssues: 0,
+      skippedRows: 0,
+    },
+    reasons: [
+      {
+        reason: "feed_disabled",
+        products: 0,
+        rows: 0,
+        samples: [],
+      },
+      {
+        reason: "inactive_deleted_unpublished",
+        products: 0,
+        rows: 0,
+        samples: [],
+      },
+      {
+        reason: "no_buyer_sku",
+        products: 0,
+        rows: 0,
+        samples: [],
+      },
+      {
+        reason: "missing_image",
+        products: 0,
+        rows: 0,
+        samples: [],
+      },
+      {
+        reason: "unavailable_excluded",
+        products: 0,
+        rows: 0,
+        samples: [],
+      },
+    ],
+  };
+}
+
+function createWarningFeedDiagnostics() {
+  const result = createHealthyFeedDiagnostics();
+  return {
+    ...result,
+    scan: {
+      ...result.scan,
+      truncated: true,
+    },
+    totals: {
+      emittedRows: 9,
+      emittedProductRows: 3,
+      emittedVariantRows: 6,
+      productsWithIssues: 2,
+      skippedRows: 2,
+    },
+    reasons: result.reasons.map((reason) =>
+      reason.reason === "missing_image"
+        ? {
+            reason: "missing_image",
+            products: 2,
+            rows: 2,
+            samples: [
+              {
+                id: "prod_1",
+                name: "No Photo Tee",
+                slug: "no-photo-tee",
+                reason: "missing_image",
+              },
+            ],
+          }
+        : reason,
+    ),
+  };
+}
+
 describe("SeoDiscoveryStatusCard", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -107,6 +213,11 @@ describe("SeoDiscoveryStatusCard", () => {
     liveProbeState.isFetching = false;
     liveProbeState.error = null;
     liveProbeState.refetch = vi.fn();
+    feedDiagnosticsState.data = createHealthyFeedDiagnostics();
+    feedDiagnosticsState.isLoading = false;
+    feedDiagnosticsState.isFetching = false;
+    feedDiagnosticsState.error = null;
+    feedDiagnosticsState.refetch = vi.fn();
   });
 
   afterEach(() => {
@@ -139,6 +250,9 @@ describe("SeoDiscoveryStatusCard", () => {
       "This is a dashboard preview, not a live probe of the storefront Worker env.",
     );
     expect(host.textContent).toContain("Live proof complete");
+    expect(host.textContent).toContain("Catalog diagnostics");
+    expect(host.textContent).toContain("Rows ready: 11");
+    expect(host.textContent).toContain("No feed blockers found");
     expect(host.textContent).toContain("1 Sitemap line");
     expect(host.textContent).toContain("1 item; 1 image_link; 1 availability");
     expect(links).toEqual([
@@ -198,6 +312,36 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(liveProbeState.refetch).toHaveBeenCalledTimes(1);
   });
 
+  it("renders aggregate feed diagnostic blockers with samples", () => {
+    feedDiagnosticsState.data = createWarningFeedDiagnostics();
+
+    renderCard();
+
+    expect(host.textContent).toContain("Catalog needs attention");
+    expect(host.textContent).toContain("Products to fix: 2");
+    expect(host.textContent).toContain("Missing primary image");
+    expect(host.textContent).toContain("Sample: No Photo Tee");
+    expect(host.textContent).toContain(
+      "More products exist outside this bounded scan.",
+    );
+  });
+
+  it("refreshes feed diagnostics separately from the live proof", () => {
+    renderCard();
+
+    const refresh = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Refresh"),
+    );
+    expect(refresh).toBeTruthy();
+
+    act(() => {
+      refresh?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(feedDiagnosticsState.refetch).toHaveBeenCalledTimes(1);
+    expect(liveProbeState.refetch).not.toHaveBeenCalled();
+  });
+
   it("renders live probe loading and server-function error states", () => {
     liveProbeState.data = undefined;
     liveProbeState.isLoading = true;
@@ -220,6 +364,31 @@ describe("SeoDiscoveryStatusCard", () => {
     renderCard();
 
     expect(host.textContent).toContain("Live proof needs review");
+    expect(host.textContent).toContain("Admin access required.");
+  });
+
+  it("renders feed diagnostics loading and error states", () => {
+    feedDiagnosticsState.data = undefined;
+    feedDiagnosticsState.isLoading = true;
+    feedDiagnosticsState.isFetching = true;
+
+    renderCard();
+
+    expect(host.textContent).toContain("Scanning catalog");
+
+    act(() => {
+      root.unmount();
+    });
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    feedDiagnosticsState.isLoading = false;
+    feedDiagnosticsState.isFetching = false;
+    feedDiagnosticsState.error = new Error("Admin access required.");
+
+    renderCard();
+
+    expect(host.textContent).toContain("Catalog needs attention");
     expect(host.textContent).toContain("Admin access required.");
   });
 });

@@ -66151,6 +66151,452 @@
         ]
       }
     },
+    "/api/v1/admin/settings/seo/feed-diagnostics": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get product feed diagnostics",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "required": false,
+            "name": "scanLimit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "required": false,
+            "name": "sampleLimit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product feed diagnostics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "policy": {
+                          "type": "object",
+                          "properties": {
+                            "productCatalogEnabled": {
+                              "type": "boolean"
+                            },
+                            "includeUnavailableProducts": {
+                              "type": "boolean"
+                            },
+                            "variantStrategy": {
+                              "type": "string",
+                              "enum": [
+                                "products",
+                                "variants"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "productCatalogEnabled",
+                            "includeUnavailableProducts",
+                            "variantStrategy"
+                          ]
+                        },
+                        "scan": {
+                          "type": "object",
+                          "properties": {
+                            "limit": {
+                              "type": "number"
+                            },
+                            "scannedProducts": {
+                              "type": "number"
+                            },
+                            "truncated": {
+                              "type": "boolean"
+                            },
+                            "sampleLimitPerReason": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "limit",
+                            "scannedProducts",
+                            "truncated",
+                            "sampleLimitPerReason"
+                          ]
+                        },
+                        "totals": {
+                          "type": "object",
+                          "properties": {
+                            "emittedRows": {
+                              "type": "number"
+                            },
+                            "emittedProductRows": {
+                              "type": "number"
+                            },
+                            "emittedVariantRows": {
+                              "type": "number"
+                            },
+                            "productsWithIssues": {
+                              "type": "number"
+                            },
+                            "skippedRows": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "emittedRows",
+                            "emittedProductRows",
+                            "emittedVariantRows",
+                            "productsWithIssues",
+                            "skippedRows"
+                          ]
+                        },
+                        "reasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "feed_disabled",
+                                  "inactive_deleted_unpublished",
+                                  "no_buyer_sku",
+                                  "missing_image",
+                                  "unavailable_excluded"
+                                ]
+                              },
+                              "products": {
+                                "type": "number"
+                              },
+                              "rows": {
+                                "type": "number"
+                              },
+                              "samples": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "slug": {
+                                      "type": "string"
+                                    },
+                                    "reason": {
+                                      "type": "string",
+                                      "enum": [
+                                        "feed_disabled",
+                                        "inactive_deleted_unpublished",
+                                        "no_buyer_sku",
+                                        "missing_image",
+                                        "unavailable_excluded"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name",
+                                    "slug",
+                                    "reason"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "reason",
+                              "products",
+                              "rows",
+                              "samples"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "policy",
+                        "scan",
+                        "totals",
+                        "reasons"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/settings/storefront-url": {
       "get": {
         "tags": [
