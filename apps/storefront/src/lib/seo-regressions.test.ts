@@ -25,43 +25,42 @@ describe("storefront SEO regressions", () => {
     expect(source).toContain("noindex");
   });
 
-  it("keeps global Organization JSON-LD behind absolute storefront and logo URLs", async () => {
+  it("keeps global OnlineStore JSON-LD behind absolute storefront and logo URLs", async () => {
     const source = await readFile(join(storefrontRoot, "src/layouts/Layout.astro"), "utf8");
 
     expect(source).toContain("toAbsoluteStorefrontSeoUrl");
+    expect(source).toContain("buildOnlineStoreJsonLd");
     expect(source).toMatch(
       /const orgJsonLd =\s+discoverySettings\.structuredData\.organization && storefrontUrl && logoUrl/,
     );
-    expect(source).toContain("url: storefrontUrl");
+    expect(source).toContain("business: businessInfo");
     expect(source).not.toContain("logo: { \"@type\": \"ImageObject\", url: getOptimizedImageUrl");
   });
 
-  it("keeps Organization sameAs limited to absolute http(s) footer social URLs", async () => {
+  it("keeps OnlineStore sameAs limited to absolute http(s) footer social URLs", async () => {
     const layoutSource = await readFile(
       join(storefrontRoot, "src/layouts/Layout.astro"),
+      "utf8",
+    );
+    const helperSource = await readFile(
+      join(storefrontRoot, "src/lib/commerce-structured-data.ts"),
       "utf8",
     );
     const footerSource = await readFile(
       join(storefrontRoot, "src/components/Footer.astro"),
       "utf8",
     );
-    const sameAsHelper =
-      layoutSource.match(
-        /function toOrganizationSameAsUrl[\s\S]*?\n}\n\nconst socialUrls/,
-      )?.[0] ?? "";
 
-    expect(sameAsHelper).toContain("const parsed = new URL(trimmed)");
-    expect(sameAsHelper).toContain(
+    expect(layoutSource).toContain("social: footerData.social");
+    expect(helperSource).toContain("export function toHttpUrl");
+    expect(helperSource).toContain("const parsed = new URL(trimmed)");
+    expect(helperSource).toContain(
       'parsed.protocol === "http:" || parsed.protocol === "https:"',
     );
-    expect(sameAsHelper).toContain("catch {\n    return null;\n  }");
-    expect(sameAsHelper).not.toContain("toAbsoluteStorefrontSeoUrl");
-    expect(layoutSource).toContain(
-      ".map((s: { url?: string }) => toOrganizationSameAsUrl(s.url))",
-    );
-    expect(layoutSource).toContain(
-      ".filter((url): url is string => Boolean(url))",
-    );
+    expect(helperSource).toContain("catch {\n    return null;\n  }");
+    expect(helperSource).not.toContain("toAbsoluteStorefrontSeoUrl");
+    expect(helperSource).toContain(".map((item) => toHttpUrl(item.url))");
+    expect(helperSource).toContain(".filter((url): url is string => Boolean(url))");
     expect(layoutSource).not.toContain(
       ".map((s: { url?: string }) => s.url)\n  .filter(Boolean)",
     );

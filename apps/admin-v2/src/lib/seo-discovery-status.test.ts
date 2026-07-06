@@ -29,6 +29,7 @@ describe("buildSeoDiscoveryStatus", () => {
           websiteSearch: false,
           products: true,
           productGroups: true,
+          offerShippingDetails: true,
           breadcrumbs: true,
           collections: false,
         },
@@ -60,10 +61,10 @@ describe("buildSeoDiscoveryStatus", () => {
     expect(status.productFeed.feedDescription).toBe("Fresh catalog");
     expect(status.robots.warning).toBeUndefined();
     expect(status.structuredData.summary).toBe(
-      "Organization; site search off; products; ProductGroup variants; breadcrumbs; collections off",
+      "Organization; site search off; products; ProductGroup variants; shipping offers; breadcrumbs; collections off",
     );
     expect(status.structuredData.organizationNote).toBe(
-      "Organization schema needs a logo; ProductGroup schema describes optioned products and SKU variants when product schema is emitted.",
+      "OnlineStore schema needs a logo; ProductGroup schema describes optioned products, and shipping schema uses active shipping methods.",
     );
     expect(status.storefront.mode).toBe("absolute");
     expect(status.storefront.links).toContainEqual({
@@ -130,6 +131,7 @@ describe("buildSeoDiscoveryStatus", () => {
           websiteSearch: false,
           products: false,
           productGroups: false,
+          offerShippingDetails: false,
           breadcrumbs: false,
           collections: false,
         },

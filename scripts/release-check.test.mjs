@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   evaluateDiscoveryCacheHeaders,
   evaluateFacebookFeedXml,
+  evaluateProductJsonLdHtml,
   evaluateProductFeedXml,
   evaluateRemediationTracker,
   evaluateRequiredDocs,
@@ -111,6 +112,41 @@ function feedXml() {
     "<g:availability>in stock</g:availability>",
     "</item>",
     "</channel></rss>",
+  ].join("");
+}
+
+function productHtml() {
+  return [
+    "<!doctype html><html><head>",
+    '<script type="application/ld+json">',
+    JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: "Demo Product",
+      image: ["https://cdn.example.test/demo.png"],
+      sku: "SKU-1",
+      offers: {
+        "@type": "Offer",
+        url: "https://storefront.example.test/products/demo-product",
+        priceCurrency: "BDT",
+        price: "1200.00",
+        availability: "https://schema.org/InStock",
+        shippingDetails: {
+          "@type": "OfferShippingDetails",
+          shippingDestination: {
+            "@type": "DefinedRegion",
+            addressCountry: "BD",
+          },
+          shippingRate: {
+            "@type": "MonetaryAmount",
+            value: "80.00",
+            currency: "BDT",
+          },
+        },
+      },
+    }),
+    "</script>",
+    "</head><body></body></html>",
   ].join("");
 }
 
@@ -283,6 +319,32 @@ describe("release-check discovery evaluators", () => {
       errors: ["product feed must include Cache-Control."],
     });
   });
+
+  it("validates rendered product JSON-LD for Product, Offer, image, and shipping facts", () => {
+    expect(evaluateProductJsonLdHtml(productHtml(), { storefrontOrigin })).toMatchObject({
+      ok: true,
+      scriptCount: 1,
+      productSchemaCount: 1,
+      offerCount: 1,
+      shippingDetailsCount: 1,
+    });
+
+    expect(
+      evaluateProductJsonLdHtml(
+        '<script type="application/ld+json">{"@type":"Product","image":["/bad.png"],"offers":{"@type":"Offer","url":"/products/demo","price":"x"}}</script>',
+        { storefrontOrigin },
+      ),
+    ).toMatchObject({
+      ok: false,
+      errors: [
+        "Product JSON-LD image is not absolute http(s): /bad.png",
+        "Offer URL is not absolute http(s): /products/demo",
+        "Offer must include priceCurrency.",
+        "Offer price must be a non-negative number or numeric string.",
+        "Offer availability must be InStock or OutOfStock.",
+      ],
+    });
+  });
 });
 
 describe("runReleaseCheck", () => {
@@ -331,7 +393,7 @@ describe("runReleaseCheck", () => {
           feedRequests.push(`${parsed.pathname}${parsed.search}`);
           return discoveryResponse(feedXml(), FEED_CACHE_CONTROL);
         }
-        if (parsed.pathname === "/products/demo-product") return textResponse("<!doctype html><html></html>");
+        if (parsed.pathname === "/products/demo-product") return textResponse(productHtml());
       }
 
       throw new Error(`Unexpected URL ${url}`);
@@ -397,6 +459,11 @@ describe("runReleaseCheck", () => {
       "/api/facebook-feed.xml?page=2&limit=5",
     ]);
     expect(result.checks.productRoute.url).toBe("https://storefront.example.test/products/demo-product");
+    expect(result.checks.productRoute.schema).toMatchObject({
+      productSchemaCount: 1,
+      offerCount: 1,
+      shippingDetailsCount: 1,
+    });
     expect(fetchImpl.mock.calls.filter(([url]) => new URL(url).pathname === "/api/v1/readyz")).toHaveLength(4);
     expect(execFileImpl).toHaveBeenCalledTimes(1);
   });
@@ -499,7 +566,7 @@ describe("runReleaseCheck", () => {
         ) {
           return discoveryResponse(feedXml(), FEED_CACHE_CONTROL);
         }
-        if (parsed.pathname === "/products/demo-product") return textResponse("<html></html>");
+        if (parsed.pathname === "/products/demo-product") return textResponse(productHtml());
       }
       throw new Error(`Unexpected URL ${url}`);
     });

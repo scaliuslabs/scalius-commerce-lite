@@ -111,6 +111,7 @@ export interface SeoDiscoveryStatus {
     websiteSearchEnabled: boolean;
     productsEnabled: boolean;
     productGroupsEnabled: boolean;
+    offerShippingDetailsEnabled: boolean;
     breadcrumbsEnabled: boolean;
     collectionsEnabled: boolean;
     organizationNote: string;
@@ -301,6 +302,7 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.websiteSearch ||
         normalized.structuredData.products ||
         normalized.structuredData.productGroups ||
+        normalized.structuredData.offerShippingDetails ||
         normalized.structuredData.breadcrumbs ||
         normalized.structuredData.collections
           ? "ok"
@@ -310,6 +312,7 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.websiteSearch ||
         normalized.structuredData.products ||
         normalized.structuredData.productGroups ||
+        normalized.structuredData.offerShippingDetails ||
         normalized.structuredData.breadcrumbs ||
         normalized.structuredData.collections
           ? "Structured data on"
@@ -325,6 +328,9 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.productGroups
           ? "ProductGroup variants"
           : "ProductGroup variants off",
+        normalized.structuredData.offerShippingDetails
+          ? "shipping offers"
+          : "shipping offers off",
         normalized.structuredData.breadcrumbs
           ? "breadcrumbs"
           : "breadcrumbs off",
@@ -336,10 +342,12 @@ export function buildSeoDiscoveryStatus({
       websiteSearchEnabled: normalized.structuredData.websiteSearch,
       productsEnabled: normalized.structuredData.products,
       productGroupsEnabled: normalized.structuredData.productGroups,
+      offerShippingDetailsEnabled:
+        normalized.structuredData.offerShippingDetails,
       breadcrumbsEnabled: normalized.structuredData.breadcrumbs,
       collectionsEnabled: normalized.structuredData.collections,
       organizationNote:
-        "Organization schema needs a logo; ProductGroup schema describes optioned products and SKU variants when product schema is emitted.",
+        "OnlineStore schema needs a logo; ProductGroup schema describes optioned products, and shipping schema uses active shipping methods.",
     },
     storefront: {
       tone: absoluteStorefrontUrl

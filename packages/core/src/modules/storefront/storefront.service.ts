@@ -333,6 +333,12 @@ export async function getLayoutData(db: Database) {
       .from(settings)
       .where(and(eq(settings.category, "seo"), eq(settings.key, "discovery")))
       .limit(1),
+
+    // 9. Business identity for public OnlineStore JSON-LD
+    db
+      .select({ key: settings.key, value: settings.value })
+      .from(settings)
+      .where(eq(settings.category, "business_info")),
   ]);
 
   const [
@@ -345,6 +351,7 @@ export async function getLayoutData(db: Database) {
     mediaResults,
     metaCapiResults,
     seoDiscoveryResults,
+    businessResults,
   ] = batchResults;
 
   // Process Analytics
@@ -555,6 +562,25 @@ export async function getLayoutData(db: Database) {
   };
   const seoDiscoveryRow = (seoDiscoveryResults as { value?: string }[])[0];
   const discovery = parseSeoDiscoverySettings(seoDiscoveryRow?.value);
+  const businessMap = Object.fromEntries(
+    (businessResults as { key: string; value: string }[]).map((row) => [
+      row.key,
+      row.value,
+    ]),
+  );
+  const business = {
+    companyName: businessMap.company_name ?? "",
+    legalName: businessMap.legal_name ?? "",
+    addressLine1: businessMap.address_line1 ?? "",
+    addressLine2: businessMap.address_line2 ?? "",
+    city: businessMap.city ?? "",
+    stateRegion: businessMap.state_region ?? "",
+    postalCode: businessMap.postal_code ?? "",
+    country: businessMap.country ?? "Bangladesh",
+    phone: businessMap.phone ?? "",
+    email: businessMap.email ?? "",
+    taxId: businessMap.tax_id ?? "",
+  };
 
   return {
     analytics: processedAnalytics,
@@ -565,6 +591,7 @@ export async function getLayoutData(db: Database) {
     theme: { colors: themeColors },
     media,
     metaCapi,
+    business,
     seo: {
       discovery,
     },

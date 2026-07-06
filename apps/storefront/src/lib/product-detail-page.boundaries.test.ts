@@ -25,4 +25,17 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain('"@type": "Product"');
     expect(source).toContain("shouldEmitProductGroupJsonLd");
   });
+
+  it("keeps Product offer schema tied to active shipping methods and schema-safe GTINs", () => {
+    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
+
+    expect(source).toContain("getShippingMethods()");
+    expect(source).toContain("discoverySettings.structuredData.offerShippingDetails");
+    expect(source).toContain("buildOfferShippingDetails({");
+    expect(source).toContain("shippingMethods,");
+    expect(source).toContain("freeDelivery: product.freeDelivery");
+    expect(source).toContain("shippingDetails: offerShippingDetails");
+    expect(source).toContain("gtinJsonLdForVariant(variant.barcode, variant.barcodeType)");
+    expect(source).toContain("buyerVariants[0]?.barcode");
+  });
 });

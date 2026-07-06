@@ -142,6 +142,7 @@ describe("seoSettingsQueryOptions", () => {
         structuredData: {
           products: true,
           productGroups: true,
+          offerShippingDetails: true,
           breadcrumbs: false,
         },
       },

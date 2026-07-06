@@ -24,6 +24,7 @@ export interface SeoDiscoverySettings {
     websiteSearch: boolean;
     products: boolean;
     productGroups: boolean;
+    offerShippingDetails: boolean;
     breadcrumbs: boolean;
     collections: boolean;
   };
@@ -53,6 +54,7 @@ export const DEFAULT_SEO_DISCOVERY_SETTINGS: SeoDiscoverySettings = {
     websiteSearch: true,
     products: true,
     productGroups: true,
+    offerShippingDetails: true,
     breadcrumbs: true,
     collections: true,
   },
@@ -159,6 +161,10 @@ export function normalizeSeoDiscoverySettings(
       productGroups: boolOrDefault(
         structuredData.productGroups,
         DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.productGroups,
+      ),
+      offerShippingDetails: boolOrDefault(
+        structuredData.offerShippingDetails,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.offerShippingDetails,
       ),
       breadcrumbs: boolOrDefault(
         structuredData.breadcrumbs,
