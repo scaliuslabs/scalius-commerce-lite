@@ -34,8 +34,8 @@ Primary references for future changes:
 
 ## Known P2 Release Follow-Ups
 
-- `SEO-009`: per-resource canonical/noindex/sitemap/feed overrides, Merchant skipped-item diagnostics, SKU/ProductGroup variant feed strategy, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls.
-- SEO dashboard live probes: the current dashboard can preview discovery URLs from the saved Store URL, but should eventually probe the deployed storefront Worker env so a misconfigured `STOREFRONT_URL` is visible before crawlers see `503`.
+- `SEO-011`: per-resource canonical/noindex/sitemap/feed overrides, aggregate Merchant skipped-item diagnostics, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls.
+- SEO dashboard live probes now cover `robots.txt`, the sitemap index, canonical product feed, and compatibility Facebook feed from the saved Store URL. Remaining SEO dashboard work is aggregate skipped-item reason counts and per-resource overrides, not basic live discovery reachability.
 - Feed diagnostics: `/api/product-feed.xml` now paginates the final flattened feed rows so skipped products and variant expansion cannot drop rows, but dashboard skipped-item counts/reasons are still preview-only. Add live skipped-item diagnostics before calling Merchant Center readiness perfect.
 - `ANALYTICS-003`: provider health/test-send UX, TikTok Events API/server-side adapter, and broader server-side attribution.
 - `OPS-005`/ops alerting: routed email/notification alerts for production ops signals.

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  evaluateDiscoveryCacheHeaders,
   evaluateFacebookFeedXml,
+  evaluateProductFeedXml,
   evaluateRemediationTracker,
   evaluateRequiredDocs,
   evaluateRobotsTxt,
@@ -10,8 +12,15 @@ import {
   runReleaseCheck,
 } from "./release-check.mjs";
 
+const SITEMAP_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
+const FEED_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=43200";
+
 function textResponse(body, status = 200, headers = {}) {
   return new Response(body, { status, headers });
+}
+
+function discoveryResponse(body, cacheControl = SITEMAP_CACHE_CONTROL) {
+  return textResponse(body, 200, { "Cache-Control": cacheControl });
 }
 
 function jsonResponse(payload, status = 200) {
@@ -208,7 +217,7 @@ describe("release-check discovery evaluators", () => {
   it("validates feed item, availability, and absolute links", () => {
     const feedWithChannelLink = feedXml().replace("<channel>", "<channel><link>https://storefront.example.test/</link>");
 
-    expect(evaluateFacebookFeedXml(feedWithChannelLink, { storefrontOrigin })).toMatchObject({
+    expect(evaluateProductFeedXml(feedWithChannelLink, { storefrontOrigin })).toMatchObject({
       ok: true,
       itemCount: 1,
       linkCount: 1,
@@ -216,21 +225,58 @@ describe("release-check discovery evaluators", () => {
       availabilityCount: 1,
       firstStorefrontItemUrl: "https://storefront.example.test/products/demo-product",
     });
+    expect(evaluateFacebookFeedXml(feedWithChannelLink, { storefrontOrigin })).toMatchObject({
+      ok: true,
+      itemCount: 1,
+    });
 
-    expect(evaluateFacebookFeedXml("<rss><channel><item><g:link>/products/demo</g:link></item></channel></rss>", {
+    expect(evaluateProductFeedXml("<rss><channel><item><g:link>/products/demo</g:link></item></channel></rss>", {
       storefrontOrigin,
     })).toMatchObject({
       ok: false,
       errors: [
-        "Facebook feed must include availability markers.",
+        "Product feed must include availability markers.",
         "feed product link is not absolute http(s): /products/demo",
       ],
+    });
+
+    const missingRssShell = [
+      "<channel><item>",
+      "<g:link>https://storefront.example.test/products/demo-product</g:link>",
+      "<g:image_link>https://cloud.example.test/demo.png</g:image_link>",
+      "<g:availability>in stock</g:availability>",
+      "</item></channel>",
+    ].join("");
+    expect(evaluateProductFeedXml(missingRssShell, { storefrontOrigin })).toMatchObject({
+      ok: false,
+      errors: ["Product feed must be RSS/XML with <rss> and <channel>."],
+    });
+  });
+
+  it("validates production-safe discovery cache headers without pinning exact TTLs", () => {
+    expect(evaluateDiscoveryCacheHeaders("public, max-age=60", { label: "robots.txt" })).toMatchObject({
+      ok: true,
+      cacheControl: "public, max-age=60",
+    });
+    expect(evaluateDiscoveryCacheHeaders("private, no-store", { label: "sitemap.xml" })).toMatchObject({
+      ok: false,
+      errors: [
+        "sitemap.xml Cache-Control must not include no-store on successful discovery responses.",
+        "sitemap.xml Cache-Control must not be private on successful discovery responses.",
+        "sitemap.xml Cache-Control must include public cacheability.",
+        "sitemap.xml Cache-Control must include a positive max-age or s-maxage.",
+      ],
+    });
+    expect(evaluateDiscoveryCacheHeaders("", { label: "product feed" })).toMatchObject({
+      ok: false,
+      errors: ["product feed must include Cache-Control."],
     });
   });
 });
 
 describe("runReleaseCheck", () => {
   it("runs local gates and live read-only checks with fake fetch and exec", async () => {
+    const feedRequests = [];
     const fetchImpl = vi.fn(async (url, init) => {
       expect(init.method).toBe("GET");
       const parsed = new URL(url);
@@ -257,9 +303,17 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "storefront.example.test") {
         if (parsed.pathname === "/health") return textResponse("ok");
         if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<!doctype html><html></html>");
-        if (parsed.pathname === "/robots.txt") return textResponse(robotsTxt());
-        if (parsed.pathname.startsWith("/sitemap-") || parsed.pathname === "/sitemap.xml") return textResponse(sitemapXml());
-        if (parsed.pathname === "/api/product-feed.xml" && parsed.search === "?limit=5") return textResponse(feedXml());
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxt());
+        if (parsed.pathname.startsWith("/sitemap-") || parsed.pathname === "/sitemap.xml") {
+          return discoveryResponse(sitemapXml());
+        }
+        if (
+          (parsed.pathname === "/api/product-feed.xml" || parsed.pathname === "/api/facebook-feed.xml") &&
+          parsed.search === "?limit=5"
+        ) {
+          feedRequests.push(`${parsed.pathname}${parsed.search}`);
+          return discoveryResponse(feedXml(), FEED_CACHE_CONTROL);
+        }
         if (parsed.pathname === "/products/demo-product") return textResponse("<!doctype html><html></html>");
       }
 
@@ -304,7 +358,24 @@ describe("runReleaseCheck", () => {
       statusCode: 307,
       location: "/auth/login",
     });
-    expect(result.checks.discovery.feed.itemCount).toBe(1);
+    expect(result.checks.discovery.robots.cacheControl).toBe(SITEMAP_CACHE_CONTROL);
+    expect(result.checks.discovery.sitemaps["/sitemap.xml"].cacheControl).toBe(SITEMAP_CACHE_CONTROL);
+    expect(result.checks.discovery.feed).toMatchObject({
+      cacheControl: FEED_CACHE_CONTROL,
+      itemCount: 1,
+      imageLinkCount: 1,
+      availabilityCount: 1,
+    });
+    expect(result.checks.discovery.compatibilityFeed).toMatchObject({
+      cacheControl: FEED_CACHE_CONTROL,
+      itemCount: 1,
+      imageLinkCount: 1,
+      availabilityCount: 1,
+    });
+    expect(feedRequests).toEqual([
+      "/api/product-feed.xml?limit=5",
+      "/api/facebook-feed.xml?limit=5",
+    ]);
     expect(result.checks.productRoute.url).toBe("https://storefront.example.test/products/demo-product");
     expect(execFileImpl).toHaveBeenCalledTimes(1);
   });
@@ -343,9 +414,16 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "storefront.example.test") {
         if (parsed.pathname === "/health") return textResponse("ok");
         if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
-        if (parsed.pathname === "/robots.txt") return textResponse(robotsTxt());
-        if (parsed.pathname.startsWith("/sitemap-") || parsed.pathname === "/sitemap.xml") return textResponse(sitemapXml());
-        if (parsed.pathname === "/api/product-feed.xml") return textResponse(feedXml());
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxt());
+        if (parsed.pathname.startsWith("/sitemap-") || parsed.pathname === "/sitemap.xml") {
+          return discoveryResponse(sitemapXml());
+        }
+        if (
+          (parsed.pathname === "/api/product-feed.xml" || parsed.pathname === "/api/facebook-feed.xml") &&
+          parsed.search === "?limit=5"
+        ) {
+          return discoveryResponse(feedXml(), FEED_CACHE_CONTROL);
+        }
         if (parsed.pathname === "/products/demo-product") return textResponse("<html></html>");
       }
       throw new Error(`Unexpected URL ${url}`);

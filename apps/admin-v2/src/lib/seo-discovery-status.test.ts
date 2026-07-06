@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSeoDiscoveryStatus } from "./seo-discovery-status";
+import {
+  buildSeoDiscoveryStatus,
+  summarizeSeoDiscoveryProbeBody,
+} from "./seo-discovery-status";
 
 describe("buildSeoDiscoveryStatus", () => {
   it("summarizes enabled discovery controls and safe absolute preview links", () => {
@@ -142,5 +145,44 @@ describe("buildSeoDiscoveryStatus", () => {
     expect(status.storefront.links.every((link) => link.href === null)).toBe(
       true,
     );
+  });
+});
+
+describe("summarizeSeoDiscoveryProbeBody", () => {
+  it("counts robots Sitemap directives without exposing body text", () => {
+    expect(
+      summarizeSeoDiscoveryProbeBody(
+        "robots",
+        "User-agent: *\nAllow: /\nSitemap: https://shop.example.com/sitemap.xml\nsitemap: https://shop.example.com/sitemap-products.xml",
+      ),
+    ).toEqual({ robotsSitemapLines: 2 });
+  });
+
+  it("counts sitemap loc tags with optional XML namespaces", () => {
+    expect(
+      summarizeSeoDiscoveryProbeBody(
+        "sitemap",
+        `<sitemapindex>
+          <sitemap><loc>https://shop.example.com/sitemap-products.xml</loc></sitemap>
+          <x:loc>https://shop.example.com/sitemap-pages.xml</x:loc>
+        </sitemapindex>`,
+      ),
+    ).toEqual({ sitemapLocs: 2 });
+  });
+
+  it("counts feed item, image_link, and availability tags", () => {
+    expect(
+      summarizeSeoDiscoveryProbeBody(
+        "productFeed",
+        `<rss><channel>
+          <item><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item>
+          <item><image_link>https://img.example.com/b.jpg</image_link><availability>out of stock</availability></item>
+        </channel></rss>`,
+      ),
+    ).toEqual({
+      feedItems: 2,
+      imageLinks: 2,
+      availabilityValues: 2,
+    });
   });
 });

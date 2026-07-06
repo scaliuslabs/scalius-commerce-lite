@@ -18,6 +18,52 @@ const PREVIEW_ENDPOINTS = [
 ];
 
 export type SeoDiscoveryTone = "ok" | "warning" | "disabled" | "info";
+export const SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS = [
+  ["robots", "robots.txt", "/robots.txt"] as const,
+  ["sitemap", "Sitemap index", "/sitemap.xml"] as const,
+  [
+    "productFeed",
+    "Product feed",
+    "/api/product-feed.xml?limit=5",
+  ] as const,
+  [
+    "facebookFeed",
+    "Facebook feed",
+    "/api/facebook-feed.xml?limit=5",
+  ] as const,
+];
+export type SeoDiscoveryLiveProbeKey =
+  (typeof SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS)[number][0];
+
+export interface SeoDiscoveryLiveProbeCounts {
+  robotsSitemapLines?: number;
+  sitemapLocs?: number;
+  feedItems?: number;
+  imageLinks?: number;
+  availabilityValues?: number;
+}
+
+export interface SeoDiscoveryLiveProbeResource {
+  key: SeoDiscoveryLiveProbeKey;
+  label: string;
+  path: string;
+  href: string | null;
+  ok: boolean;
+  status: number | null;
+  contentType: string | null;
+  cacheControl: string | null;
+  counts: SeoDiscoveryLiveProbeCounts;
+  bodyTruncated?: boolean;
+  error?: string;
+}
+
+export interface SeoDiscoveryLiveProbeResult {
+  baseUrl: string | null;
+  checkedAt: string;
+  ok: boolean;
+  error?: string;
+  resources: SeoDiscoveryLiveProbeResource[];
+}
 
 export interface SeoDiscoveryStatusInput {
   discovery: unknown;
@@ -108,7 +154,9 @@ function findCustomSitemapLines(robotsTxt: string | null | undefined): string[] 
     });
 }
 
-function parseAbsoluteHttpUrl(value: string | null | undefined): URL | null {
+export function parseSeoDiscoveryStorefrontUrl(
+  value: string | null | undefined,
+): URL | null {
   if (!value) return null;
 
   try {
@@ -122,7 +170,7 @@ function parseAbsoluteHttpUrl(value: string | null | undefined): URL | null {
   }
 }
 
-function buildPreviewHref(baseUrl: URL, path: string): string {
+export function buildSeoDiscoveryHref(baseUrl: URL, path: string): string {
   const normalizedBase = baseUrl.href.endsWith("/")
     ? baseUrl.href.slice(0, -1)
     : baseUrl.href;
@@ -135,6 +183,39 @@ function getFeedVariantStrategyLabel(
   return strategy === "variants" ? "SKU / variant rows" : "Product rows";
 }
 
+function countXmlStartTags(xml: string, tagName: string): number {
+  const pattern = new RegExp(
+    `<\\s*(?!/)(?:[A-Za-z_][\\w.-]*:)?${tagName}\\b`,
+    "gi",
+  );
+  return Array.from(xml.matchAll(pattern)).length;
+}
+
+function countRobotsSitemapLines(robotsTxt: string): number {
+  return robotsTxt
+    .split(/\r?\n/)
+    .filter((line) => /^sitemap\s*:/i.test(line.trim())).length;
+}
+
+export function summarizeSeoDiscoveryProbeBody(
+  key: SeoDiscoveryLiveProbeKey,
+  body: string,
+): SeoDiscoveryLiveProbeCounts {
+  if (key === "robots") {
+    return { robotsSitemapLines: countRobotsSitemapLines(body) };
+  }
+
+  if (key === "sitemap") {
+    return { sitemapLocs: countXmlStartTags(body, "loc") };
+  }
+
+  return {
+    feedItems: countXmlStartTags(body, "item"),
+    imageLinks: countXmlStartTags(body, "image_link"),
+    availabilityValues: countXmlStartTags(body, "availability"),
+  };
+}
+
 export function buildSeoDiscoveryStatus({
   discovery,
   robotsTxt,
@@ -142,7 +223,7 @@ export function buildSeoDiscoveryStatus({
 }: SeoDiscoveryStatusInput): SeoDiscoveryStatus {
   const normalized = normalizeSeoDiscoverySettings(discovery);
   const customSitemapLines = findCustomSitemapLines(robotsTxt);
-  const absoluteStorefrontUrl = parseAbsoluteHttpUrl(storefrontUrl);
+  const absoluteStorefrontUrl = parseSeoDiscoveryStorefrontUrl(storefrontUrl);
   const trimmedStorefrontUrl = storefrontUrl?.trim() ?? "";
   const includedSections = SITEMAP_SECTIONS.map(([key, label]) => ({
     key,
@@ -284,7 +365,7 @@ export function buildSeoDiscoveryStatus({
         label,
         path,
         href: absoluteStorefrontUrl
-          ? buildPreviewHref(absoluteStorefrontUrl, path)
+          ? buildSeoDiscoveryHref(absoluteStorefrontUrl, path)
           : null,
       })),
     },
