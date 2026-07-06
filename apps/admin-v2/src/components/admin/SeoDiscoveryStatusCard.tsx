@@ -6,15 +6,21 @@ import {
   FileSearch,
   Info,
   Link2,
+  RefreshCw,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { useStorefrontUrl } from "../../hooks/use-storefront-url";
+import { seoDiscoveryLiveProbeQueryOptions } from "../../lib/api-query-options/seo-discovery-live-probe";
 import {
   buildSeoDiscoveryStatus,
+  type SeoDiscoveryLiveProbeResource,
+  type SeoDiscoveryLiveProbeResult,
   type SeoDiscoveryStatus,
   type SeoDiscoveryTone,
 } from "../../lib/seo-discovery-status";
@@ -137,6 +143,192 @@ function PreviewLinks({ status }: { status: SeoDiscoveryStatus["storefront"] }) 
   );
 }
 
+function getLiveProbeSummaryTone(
+  result: SeoDiscoveryLiveProbeResult | undefined,
+  enabled: boolean,
+  isBusy: boolean,
+  error: unknown,
+): SeoDiscoveryTone {
+  if (!enabled) return "disabled";
+  if (error) return "warning";
+  if (isBusy && !result) return "info";
+  if (!result) return "info";
+  if (!result.ok || result.error) return "warning";
+
+  const robots = result.resources.find((resource) => resource.key === "robots");
+  const sitemap = result.resources.find(
+    (resource) => resource.key === "sitemap",
+  );
+  if ((robots?.counts.robotsSitemapLines ?? 0) < 1) return "warning";
+  if ((sitemap?.counts.sitemapLocs ?? 0) < 1) return "warning";
+
+  return "ok";
+}
+
+function getLiveProbeResourceTone(
+  resource: SeoDiscoveryLiveProbeResource,
+): SeoDiscoveryTone {
+  if (!resource.ok || resource.error) return "warning";
+  if (
+    resource.key === "robots" &&
+    (resource.counts.robotsSitemapLines ?? 0) < 1
+  ) {
+    return "warning";
+  }
+  if (
+    resource.key === "sitemap" &&
+    (resource.counts.sitemapLocs ?? 0) < 1
+  ) {
+    return "warning";
+  }
+  return "ok";
+}
+
+function formatProbeCounts(resource: SeoDiscoveryLiveProbeResource): string {
+  if (resource.key === "robots") {
+    const count = resource.counts.robotsSitemapLines ?? 0;
+    return `${count} Sitemap line${count === 1 ? "" : "s"}`;
+  }
+
+  if (resource.key === "sitemap") {
+    return `${resource.counts.sitemapLocs ?? 0} loc`;
+  }
+
+  return `${resource.counts.feedItems ?? 0} item; ${
+    resource.counts.imageLinks ?? 0
+  } image_link; ${resource.counts.availabilityValues ?? 0} availability`;
+}
+
+function formatHeaderValue(value: string | null): string {
+  return value ?? "none";
+}
+
+function LiveProbeRows({
+  resources,
+}: {
+  resources: SeoDiscoveryLiveProbeResource[];
+}) {
+  return (
+    <div className="divide-y divide-border border-t border-border">
+      {resources.map((resource) => {
+        const tone = getLiveProbeResourceTone(resource);
+        const statusLabel = resource.status ? String(resource.status) : "No response";
+
+        return (
+          <div
+            key={resource.key}
+            className="grid gap-2 py-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+          >
+            <div className="min-w-0 space-y-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-xs font-medium text-foreground">
+                  {resource.label}
+                </span>
+                <code className="shrink-0 text-[11px] text-muted-foreground">
+                  {statusLabel}
+                </code>
+              </div>
+              <div className="grid min-w-0 gap-1 text-[11px] leading-4 text-muted-foreground sm:grid-cols-3">
+                <span className="truncate">
+                  Type: {formatHeaderValue(resource.contentType)}
+                </span>
+                <span className="truncate">
+                  Cache: {formatHeaderValue(resource.cacheControl)}
+                </span>
+                <span className="truncate">{formatProbeCounts(resource)}</span>
+              </div>
+              {resource.error || resource.bodyTruncated ? (
+                <p className="text-[11px] leading-4 text-amber-700">
+                  {resource.error ??
+                    "Response body read reached the diagnostic cap."}
+                </p>
+              ) : null}
+            </div>
+            <Badge
+              variant="outline"
+              className={`w-fit shrink-0 self-start ${toneClassName(tone)}`}
+            >
+              {TONE_LABELS[tone]}
+            </Badge>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LiveProbePanel({
+  enabled,
+  error,
+  isFetching,
+  isLoading,
+  onRetry,
+  result,
+}: {
+  enabled: boolean;
+  error: unknown;
+  isFetching: boolean;
+  isLoading: boolean;
+  onRetry: () => void;
+  result: SeoDiscoveryLiveProbeResult | undefined;
+}) {
+  const isBusy = isLoading || isFetching;
+  const tone = getLiveProbeSummaryTone(result, enabled, isBusy, error);
+  const errorMessage = error instanceof Error ? error.message : null;
+  const title =
+    isBusy && !result
+      ? "Checking live discovery files"
+      : tone === "ok"
+        ? "Live proof complete"
+        : "Live proof needs review";
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              Live proof
+            </h4>
+            <Badge
+              variant="outline"
+              className={`w-fit shrink-0 ${toneClassName(tone)}`}
+            >
+              {TONE_LABELS[tone]}
+            </Badge>
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {enabled
+              ? title
+              : "Live proof waits for an absolute http(s) Store URL."}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRetry}
+          disabled={!enabled || isBusy}
+          className="w-fit"
+        >
+          <RefreshCw className={isBusy ? "animate-spin" : ""} />
+          Retry
+        </Button>
+      </div>
+
+      {errorMessage ? (
+        <p className="text-xs leading-5 text-amber-700">{errorMessage}</p>
+      ) : result?.error ? (
+        <p className="text-xs leading-5 text-amber-700">{result.error}</p>
+      ) : null}
+
+      {result?.resources.length ? (
+        <LiveProbeRows resources={result.resources} />
+      ) : null}
+    </div>
+  );
+}
+
 export function SeoDiscoveryStatusCard({
   discovery,
   robotsTxt,
@@ -150,6 +342,14 @@ export function SeoDiscoveryStatusCard({
     discovery,
     robotsTxt,
     storefrontUrl,
+  });
+  const liveProbeEnabled =
+    status.storefront.mode === "absolute" &&
+    !isStorefrontUrlLoading &&
+    !storefrontUrlError;
+  const liveProbeQuery = useQuery({
+    ...seoDiscoveryLiveProbeQueryOptions(),
+    enabled: liveProbeEnabled,
   });
   const storefrontSummary = isStorefrontUrlLoading
     ? "Loading the dashboard Store URL preview."
@@ -245,6 +445,16 @@ export function SeoDiscoveryStatusCard({
             {status.storefront.baseUrl ?? "No absolute dashboard Store URL"}
           </span>
         </div>
+        <LiveProbePanel
+          enabled={liveProbeEnabled}
+          error={liveProbeQuery.error}
+          isFetching={liveProbeQuery.isFetching}
+          isLoading={liveProbeQuery.isLoading}
+          onRetry={() => {
+            void liveProbeQuery.refetch();
+          }}
+          result={liveProbeQuery.data}
+        />
       </StatusRow>
     </div>
   );

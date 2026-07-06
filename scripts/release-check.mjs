@@ -31,6 +31,18 @@ const SITEMAP_ENDPOINTS = [
   "/sitemap-collections.xml",
   "/sitemap-pages.xml",
 ];
+const FEED_ENDPOINTS = [
+  {
+    endpoint: "/api/product-feed.xml?limit=5",
+    resultKey: "feed",
+    label: "canonical product feed",
+  },
+  {
+    endpoint: "/api/facebook-feed.xml?limit=5",
+    resultKey: "compatibilityFeed",
+    label: "compatibility Facebook feed",
+  },
+];
 
 const closedTrackerStatuses = new Set(["verified", "won't fix", "won’t fix", "wont fix"]);
 const booleanOptions = new Set(["help", "json", "skip-live", "skip-wrangler"]);
@@ -259,6 +271,45 @@ function normalizeTrackerStatus(value) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function hasPositiveCacheTtl(cacheControl) {
+  const matches = cacheControl.matchAll(/\b(?:s-maxage|max-age)=(\d+)\b/gi);
+  for (const match of matches) {
+    if (Number(match[1]) > 0) return true;
+  }
+  return false;
+}
+
+export function evaluateDiscoveryCacheHeaders(headers, { label = "discovery response" } = {}) {
+  const cacheControl = typeof headers === "string"
+    ? headers
+    : headers.get("cache-control");
+  const normalized = cacheControl?.toLowerCase() ?? "";
+  const errors = [];
+
+  if (!cacheControl) {
+    errors.push(`${label} must include Cache-Control.`);
+  } else {
+    if (/\bno-store\b/.test(normalized)) {
+      errors.push(`${label} Cache-Control must not include no-store on successful discovery responses.`);
+    }
+    if (/\bprivate\b/.test(normalized)) {
+      errors.push(`${label} Cache-Control must not be private on successful discovery responses.`);
+    }
+    if (!/\bpublic\b/.test(normalized)) {
+      errors.push(`${label} Cache-Control must include public cacheability.`);
+    }
+    if (!hasPositiveCacheTtl(cacheControl)) {
+      errors.push(`${label} Cache-Control must include a positive max-age or s-maxage.`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    cacheControl: cacheControl ?? null,
+  };
+}
+
 export function evaluateRemediationTracker(markdown) {
   const blockers = [];
   const rows = [];
@@ -361,7 +412,7 @@ export function evaluateSitemapXml(body, {
   };
 }
 
-export function evaluateFacebookFeedXml(body, { storefrontOrigin } = {}) {
+export function evaluateProductFeedXml(body, { storefrontOrigin } = {}) {
   const itemBlocks = body.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
   const itemCount = itemBlocks.length;
   const links = itemBlocks.flatMap((item) => [
@@ -378,11 +429,14 @@ export function evaluateFacebookFeedXml(body, { storefrontOrigin } = {}) {
   ]).filter(Boolean);
   const errors = [];
 
+  if (!/<rss\b/i.test(body) || !/<channel\b/i.test(body)) {
+    errors.push("Product feed must be RSS/XML with <rss> and <channel>.");
+  }
   if (itemCount === 0) {
-    errors.push("Facebook feed must include at least one <item>.");
+    errors.push("Product feed must include at least one <item>.");
   }
   if (availabilityMarkers.length === 0) {
-    errors.push("Facebook feed must include availability markers.");
+    errors.push("Product feed must include availability markers.");
   }
   for (const link of links) {
     if (!isHttpUrl(link)) {
@@ -407,6 +461,8 @@ export function evaluateFacebookFeedXml(body, { storefrontOrigin } = {}) {
     firstStorefrontItemUrl: links.find((link) => storefrontOrigin ? isSameOrigin(link, storefrontOrigin) : isHttpUrl(link)) ?? null,
   };
 }
+
+export const evaluateFacebookFeedXml = evaluateProductFeedXml;
 
 function createCheckError(message, result) {
   const error = new Error(message);
@@ -568,9 +624,15 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
     accept: "text/plain, */*;q=0.8",
   });
   requireStatus(robots, "Storefront /robots.txt", (status) => status >= 200 && status < 300);
+  const robotsCache = evaluateDiscoveryCacheHeaders(robots.headers, { label: "robots.txt" });
+  if (!robotsCache.ok) throw new Error(`robots.txt cache headers failed: ${robotsCache.errors.join("; ")}`);
   checks.robots = evaluateRobotsTxt(robots.body, { storefrontOrigin });
   if (!checks.robots.ok) throw new Error(`robots.txt failed: ${checks.robots.errors.join("; ")}`);
-  responses.robots = { statusCode: robots.statusCode, durationMs: robots.durationMs };
+  responses.robots = {
+    statusCode: robots.statusCode,
+    durationMs: robots.durationMs,
+    cacheControl: robotsCache.cacheControl,
+  };
 
   responses.sitemaps = {};
   for (const endpoint of SITEMAP_ENDPOINTS) {
@@ -580,6 +642,10 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
       accept: "application/xml, text/xml, */*;q=0.8",
     });
     requireStatus(response, `Storefront ${endpoint}`, (status) => status >= 200 && status < 300);
+    const cacheEvaluation = evaluateDiscoveryCacheHeaders(response.headers, { label: endpoint });
+    if (!cacheEvaluation.ok) {
+      throw new Error(`${endpoint} cache headers failed: ${cacheEvaluation.errors.join("; ")}`);
+    }
     const evaluation = evaluateSitemapXml(response.body, {
       storefrontOrigin,
       forbidPriority: endpoint.startsWith("/sitemap-products.xml"),
@@ -591,28 +657,47 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
     responses.sitemaps[endpoint] = {
       statusCode: response.statusCode,
       durationMs: response.durationMs,
+      cacheControl: cacheEvaluation.cacheControl,
       locCount: evaluation.locCount,
     };
   }
 
-  const feed = await fetchText(buildUrlWithSearch(options.storefrontUrl, "/api/product-feed.xml?limit=5"), {
-    fetchImpl,
-    timeoutMs: options.timeoutMs,
-    accept: "application/xml, text/xml, */*;q=0.8",
-  });
-  requireStatus(feed, "Storefront /api/product-feed.xml?limit=5", (status) => status >= 200 && status < 300);
-  checks.feed = evaluateFacebookFeedXml(feed.body, { storefrontOrigin });
-  if (!checks.feed.ok) throw new Error(`product-feed.xml failed: ${checks.feed.errors.join("; ")}`);
-  responses.feed = {
-    statusCode: feed.statusCode,
-    durationMs: feed.durationMs,
-    itemCount: checks.feed.itemCount,
-    availabilityCount: checks.feed.availabilityCount,
-  };
+  responses.feeds = {};
+  for (const { endpoint, resultKey, label } of FEED_ENDPOINTS) {
+    const responseLabel = `Storefront ${label} (${endpoint})`;
+    const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, endpoint), {
+      fetchImpl,
+      timeoutMs: options.timeoutMs,
+      accept: "application/xml, text/xml, */*;q=0.8",
+    });
+    requireStatus(response, responseLabel, (status) => status >= 200 && status < 300);
+    const cacheEvaluation = evaluateDiscoveryCacheHeaders(response.headers, { label: endpoint });
+    if (!cacheEvaluation.ok) {
+      throw new Error(`${endpoint} cache headers failed: ${cacheEvaluation.errors.join("; ")}`);
+    }
+    const evaluation = evaluateProductFeedXml(response.body, { storefrontOrigin });
+    if (!evaluation.ok) {
+      throw new Error(`${endpoint} failed: ${evaluation.errors.join("; ")}`);
+    }
+    const feedResult = {
+      statusCode: response.statusCode,
+      durationMs: response.durationMs,
+      cacheControl: cacheEvaluation.cacheControl,
+      itemCount: evaluation.itemCount,
+      linkCount: evaluation.linkCount,
+      imageLinkCount: evaluation.imageLinkCount,
+      availabilityCount: evaluation.availabilityCount,
+      firstStorefrontItemUrl: evaluation.firstStorefrontItemUrl,
+    };
+    checks[resultKey] = evaluation;
+    responses[resultKey] = feedResult;
+    responses.feeds[endpoint] = feedResult;
+  }
 
   logger?.log(
     `PASS discovery: robots, ${SITEMAP_ENDPOINTS.length} sitemaps, ` +
-    `feed (${checks.feed.itemCount} items).`,
+    `canonical feed (${checks.feed.itemCount} items), ` +
+    `compatibility feed (${checks.compatibilityFeed.itemCount} items).`,
   );
 
   return {
