@@ -24,7 +24,7 @@ Current expected result:
 - Worker Env declaration guard passes.
 - Dependency audit reports no known moderate-or-higher vulnerabilities.
 - Root tests currently pass with `pnpm test`.
-- `pnpm outdated -r` is informational, not a pass/fail gate. Use a fresh run before dependency sweeps; storefront is on Astro 7 / `@astrojs/cloudflare` 14 / Vite 8.1 with Wrangler 4.103.0, so dependency sweeps must include `pnpm peers check`, storefront typecheck/build, generated Wrangler dry-run, local dev smoke, and generated Worker smoke.
+- `pnpm outdated -r` is informational, not a pass/fail gate. Use a fresh run before dependency sweeps; storefront is on Astro 7 / `@astrojs/cloudflare` 14 / Vite 8.1 with Wrangler 4.107.1, so dependency sweeps must include `pnpm peers check`, storefront typecheck/build, generated Wrangler dry-run, local dev smoke, and generated Worker smoke.
 - Keep ESLint and Prettier for now. Oxfmt can be evaluated as an additive formatter experiment, but do not replace `prettier-plugin-astro` until Oxfmt supports Astro/Prettier plugins and a focused dual-run diff proves formatting parity.
 
 ## Operational Readiness
@@ -465,6 +465,16 @@ curl -i https://storefront.scalius.com/api/purge-cache
 
 Expected result: `GET /api/purge-cache` is non-mutating and returns `405 Allow: POST` unless rejecting query-string credentials with `400`; it must not read/write the KV cache-version key, clear L1, or warm pages. `POST /api/purge-cache` remains the mutating path. Full/HTML-affecting direct purges bump the KV version, clear L1, and warm critical pages. Queue-driven purges send `warm:false`, then enqueue `storefront.cache_warm` only after purge success so retrying a warm failure cannot repeat the purge or version bump. Exact warm paths are canonicalized/capped and queue-side warming must stay small-batched; retryable warm failures retry the warm message, while `404`/other non-retryable warm misses are logged and acknowledged.
 
+Admin cache clear-all checks:
+
+```bash
+pnpm exec vitest run apps/api/src/routes/cache.test.ts apps/admin-v2/src/lib/route-graph-boundaries.test.ts --passWithNoTests
+pnpm --filter @scalius/api typecheck
+pnpm --filter @scalius/admin-v2 typecheck
+```
+
+Expected result: admin clear-all keeps the API `api:*` invalidation, then routes every storefront group through the durable `STOREFRONT_CACHE_QUEUE` purge path with all storefront prefixes and no purge token in the queue payload or URL. The missing-queue fallback may call `/api/purge-cache` directly only after stripping token query parameters and sending the token as an Authorization header. The global header cache action must require `settings.cache.manage`; cache-view-only admins may inspect cache state but cannot trigger a global invalidation from the header.
+
 Storefront cache queue recovery checks:
 
 ```bash
@@ -472,7 +482,11 @@ pnpm --filter @scalius/api test -- src/queue-consumer.test.ts src/routes/cache-s
 pnpm exec wrangler queues info storefront-cache-dlq --config apps/api/wrangler.jsonc
 ```
 
-Expected result: `storefront-cache-dlq` has `scalius-api` as a consumer, DLQ messages are archived to `storefront_cache_queue_failures` before ack, archive failures retry with a long delay, and admin cache replay re-enqueues the original purge/warm payload instead of mutating storefront caches inline.
+Expected result: `storefront-cache-dlq` has `scalius-api` as a consumer, DLQ messages are archived to `storefront_cache_queue_failures` before ack, archive failures retry with a long delay, and admin cache replay re-enqueues the original purge/warm payload instead of mutating storefront caches inline. `/admin/settings/cache` must show a bounded storefront queue recovery panel for pending failures with replay/ignore actions instead of leaving DLQ state invisible.
+
+Workers Cache adoption rule:
+
+Do not enable Cloudflare Workers Cache globally on API, admin, or storefront Workers for release-critical behavior until host/tenant cache keys, private-route bypass, response headers, and purge semantics are explicitly designed and tested. Workers Cache can serve a hit before Worker code runs, so it must not bypass the current storefront middleware's session checks, canonicalization, KV generation checks, and Cache API exact-generation invalidation without a replacement proof. Treat Workers Cache as a narrow future pilot for public HTML/discovery responses only after queue/DLQ/purge observability is already green.
 
 Widget cache invalidation checks:
 

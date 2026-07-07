@@ -42,4 +42,5 @@ export const ADMIN_PERMISSIONS = {
   SETTINGS_DELIVERY_PROVIDERS_VIEW: "settings.delivery_providers.view",
   SETTINGS_FRAUD_CHECKER_VIEW: "settings.fraud_checker.view",
   SETTINGS_CACHE_VIEW: "settings.cache.view",
+  SETTINGS_CACHE_MANAGE: "settings.cache.manage",
 } as const;

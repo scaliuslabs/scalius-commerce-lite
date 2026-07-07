@@ -4,8 +4,8 @@ import { deleteCacheByPattern, getCacheStats } from "../utils/kv-cache";
 import {
   INVALIDATION_GROUPS,
   ADMIN_PATH_TO_GROUPS,
+  getOptionalExecutionContext,
   invalidateGroups,
-  normalizeStorefrontPurgeUrl,
   shouldBumpStorefrontVersion,
   triggerStorefrontPurgeForGroups
 } from "../utils/cache-invalidation";
@@ -306,24 +306,11 @@ app.openapi(clearAllRoute, async (c) => {
   ];
   await bumpApiCacheFences(fenceScopes, kvNs);
   await deleteCacheByPattern("api:*", kvNs);
-
-  const env = c.env as Env;
-  const purgeUrl = env?.PURGE_URL;
-  const purgeToken = env?.PURGE_TOKEN;
-  if (purgeUrl && purgeToken) {
-    c.executionCtx.waitUntil(
-      fetch(normalizeStorefrontPurgeUrl(purgeUrl), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${purgeToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ bumpVersion: true }),
-      }).catch((err) =>
-        console.error("[Cache] Storefront purge failed:", err),
-      ),
-    );
-  }
+  triggerStorefrontPurgeForGroups(
+    groupNames,
+    c.env,
+    getOptionalExecutionContext(c),
+  );
 
   return ok(c, { message: "All cache cleared successfully" });
 });

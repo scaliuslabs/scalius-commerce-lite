@@ -50,13 +50,13 @@
   },
   "devDependencies": {
     "@astrojs/cloudflare": "^14.1.1",
-    "@cloudflare/workers-types": "^4.20260623.1",
+    "@cloudflare/workers-types": "^4.20260702.1",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.1",
     "happy-dom": "^20.10.3",
     "prettier": "^3.8.4",
     "prettier-plugin-astro": "^0.14.1",
     "vite": "^8.1.0",
-    "wrangler": "4.104.0"
+    "wrangler": "4.107.1"
   }
 }
