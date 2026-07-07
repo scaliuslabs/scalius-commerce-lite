@@ -455,7 +455,7 @@ describe("admin route graph boundaries", () => {
     expect(seoSettingsSource).toContain("queryKeys.settings.seoFeedDiagnostics()");
   });
 
-  it("keeps admin shell nav data local and aligned with core RBAC names", () => {
+  it("keeps admin shell nav data local while page access uses core RBAC source", () => {
     const adminNavSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminNav.ts"),
       "utf8",
@@ -470,9 +470,15 @@ describe("admin route graph boundaries", () => {
     );
     const corePermissionValues = new Set(Object.values(PERMISSIONS));
     const localPermissionValues = new Set(Object.values(ADMIN_PERMISSIONS));
+    const adminAccessRbacImports = [
+      ...adminAccessSource.matchAll(/@scalius\/core\/auth\/rbac\/([^"']+)/g),
+    ].map((match) => match[1]);
 
     expect(adminNavSource).not.toContain("@scalius/core/auth/rbac/permissions");
-    expect(adminAccessSource).not.toContain("@scalius/core/auth/rbac");
+    expect(adminAccessRbacImports).toEqual(["page-permissions"]);
+    expect(adminAccessSource).not.toContain("PAGE_PERMISSION_MAP");
+    expect(adminAccessSource).not.toContain("DYNAMIC_PAGE_PERMISSIONS");
+    expect(adminAccessSource).not.toContain("DEFAULT_ADMIN_PAGE_CANDIDATES");
     expect(adminPermissionsSource).not.toContain("@scalius/core/auth/rbac");
     expect(Object.values(ADMIN_PERMISSIONS).length).toBeGreaterThan(0);
     expect(

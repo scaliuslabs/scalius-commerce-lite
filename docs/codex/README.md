@@ -8,6 +8,7 @@ This folder is for Codex operational context only. Treat source code, tests, dep
 
 - `CODEBASE-MAP.md` - implementation-derived architecture map and data-flow notes.
 - `PLATFORM-GOAL.md` - product, architecture, and stable-release bar for future agents.
+- `MCP-AGENT-ARCHITECTURE.md` - durable assistant/MCP architecture, first-release scope, and verification gates.
 - `AGENTS-REFERENCE.md` - archived long-form agent context. Use only when the root router and focused docs do not contain the needed landmine.
 - `WIDGET-AI.md` - current widget AI provider/prompt architecture and verification targets.
 - `WIDGET-SYSTEM.md` - widget/page-builder purpose, quality bar, and reliability requirements.

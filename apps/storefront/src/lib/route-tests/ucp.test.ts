@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
   getProductBySlug: vi.fn(),
   getLayoutData: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
+  getRuntimeCdnDomain: vi.fn(() => ""),
+  getRuntimeImageCdnAllowedHosts: vi.fn(() => []),
+  getRuntimeImageCdnBaseUrl: vi.fn(() => ""),
+  getRuntimeImageCdnCanonicalHostAliases: vi.fn(() => []),
+  getRuntimeImageOptimizationEnabled: vi.fn(() => false),
   setRuntimeImageCdnPolicy: vi.fn(),
 }));
 
@@ -21,12 +26,19 @@ vi.mock("@/lib/api/storefront", () => ({
 
 vi.mock("@/lib/api/runtime-env", () => ({
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
+  getRuntimeCdnDomain: mocks.getRuntimeCdnDomain,
+  getRuntimeImageCdnAllowedHosts: mocks.getRuntimeImageCdnAllowedHosts,
+  getRuntimeImageCdnBaseUrl: mocks.getRuntimeImageCdnBaseUrl,
+  getRuntimeImageCdnCanonicalHostAliases: mocks.getRuntimeImageCdnCanonicalHostAliases,
+  getRuntimeImageOptimizationEnabled: mocks.getRuntimeImageOptimizationEnabled,
   setRuntimeImageCdnPolicy: mocks.setRuntimeImageCdnPolicy,
 }));
 
 import { GET as getProfile } from "../../pages/.well-known/ucp";
+import { POST as lookupCatalog } from "../../pages/ucp/catalog/lookup";
 import { POST as getCatalogProduct } from "../../pages/ucp/catalog/product";
 import { POST as searchCatalog } from "../../pages/ucp/catalog/search";
+import type { Product } from "@/lib/api/types";
 
 function request(body: unknown, headers: HeadersInit = {}, path = "/ucp/catalog/search") {
   return new Request(`https://storefront.example.test${path}`, {
@@ -34,6 +46,69 @@ function request(body: unknown, headers: HeadersInit = {}, path = "/ucp/catalog/
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
+}
+
+type CatalogProductOverrides = Partial<Product> & {
+  excludeFromProductFeed?: boolean;
+};
+
+function catalogProduct(overrides: CatalogProductOverrides = {}): Product {
+  return {
+    id: "prod_1",
+    name: "Khaki Shoes",
+    slug: "khaki-shoes",
+    canonicalPath: null,
+    description: "<p>Comfortable shoes</p>",
+    price: 1500,
+    discountType: null,
+    discountPercentage: null,
+    discountAmount: null,
+    discountedPrice: 1500,
+    freeDelivery: false,
+    isActive: true,
+    metaTitle: null,
+    metaDescription: null,
+    variantOption1Label: "Weight",
+    variantOption2Label: "Style",
+    variantOption1Schema: "none",
+    variantOption2Schema: "none",
+    categoryId: "cat_1",
+    category: { id: "cat_1", name: "Shoes", slug: "shoes" },
+    createdAt: "2026-07-01T00:00:00.000Z",
+    updatedAt: "2026-07-01T00:00:00.000Z",
+    deletedAt: null,
+    imageUrl: "/images/shoe.jpg",
+    imageAlt: "Khaki shoe",
+    hasVariants: true,
+    availableForSale: true,
+    attributes: [],
+    variants: [
+      {
+        id: "var_1",
+        productId: "prod_1",
+        size: "2KG",
+        color: "Red",
+        weight: null,
+        sku: "SKU-RED",
+        price: 1200,
+        stock: 3,
+        reservedStock: 0,
+        isDefault: false,
+        trackInventory: true,
+        barcode: null,
+        barcodeType: null,
+        discountType: null,
+        discountAmount: null,
+        discountPercentage: null,
+        colorSortOrder: 1,
+        sizeSortOrder: 1,
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+        deletedAt: null,
+      },
+    ],
+    ...overrides,
+  };
 }
 
 describe("UCP storefront routes", () => {
@@ -51,6 +126,7 @@ describe("UCP storefront routes", () => {
   it("publishes a cacheable read-only catalog profile", async () => {
     const response = await getProfile({} as never);
     const body = await response.json();
+    const serializedProfile = JSON.stringify(body).toLowerCase();
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("max-age=300");
@@ -61,6 +137,19 @@ describe("UCP storefront routes", () => {
       "dev.ucp.shopping.catalog.search",
       "dev.ucp.shopping.catalog.lookup",
     ]);
+    expect(body.payment_handlers).toBeUndefined();
+    expect(body.ucp.payment_handlers).toBeUndefined();
+    for (const unsafeCapability of [
+      "checkout",
+      "cart",
+      "order",
+      "payment",
+      "fulfillment",
+      "recovery",
+      "customer",
+    ]) {
+      expect(serializedProfile).not.toContain(unsafeCapability);
+    }
   });
 
   it("fails closed when the storefront URL cannot form an HTTPS profile origin", async () => {
@@ -121,6 +210,95 @@ describe("UCP storefront routes", () => {
     expect(body.messages[0].code).toBe("version_unsupported");
     expect(body.messages[0].path).toBe("$.ucp.version");
     expect(mocks.getFeedProducts).not.toHaveBeenCalled();
+  });
+
+  it("serves search from feed-ready buyer catalog rows only", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        catalogProduct(),
+        catalogProduct({
+          id: "prod_hidden",
+          slug: "hidden-shoes",
+          excludeFromProductFeed: true,
+        }),
+        catalogProduct({
+          id: "prod_inactive",
+          slug: "inactive-shoes",
+          isActive: false,
+        }),
+        catalogProduct({
+          id: "prod_no_media",
+          slug: "no-media-shoes",
+          imageUrl: null,
+        }),
+      ],
+      pagination: { page: 1, limit: 10, total: 4, totalPages: 1 },
+    });
+
+    const response = await searchCatalog({
+      request: request(
+        { ucp: { version: "2026-04-08" }, query: "khaki" },
+        { "UCP-Agent": 'profile="https://agent.example.test/.well-known/ucp"' },
+      ),
+    } as never);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      page: 1,
+      limit: 10,
+      sort: "newest",
+      search: "khaki",
+    });
+    expect(mocks.getProductBySlug).not.toHaveBeenCalled();
+    expect(body.products).toHaveLength(1);
+    expect(body.products[0]).toMatchObject({
+      id: "gid://scalius/product/prod_1",
+      metadata: { available_for_sale: true },
+      variants: [
+        {
+          id: "gid://scalius/product-variant/var_1",
+          availability: { available: true, status: "in_stock" },
+        },
+      ],
+    });
+  });
+
+  it("serves lookup from the feed projection without product-detail fallback", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [],
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+    });
+    mocks.getProductBySlug.mockResolvedValueOnce({
+      product: catalogProduct({ excludeFromProductFeed: true }),
+      category: null,
+      images: [],
+      variants: [],
+      relatedProducts: [],
+    });
+
+    const response = await lookupCatalog({
+      request: request(
+        { ucp: { version: "2026-04-08" }, ids: ["khaki-shoes"] },
+        { "UCP-Agent": 'profile="https://agent.example.test/.well-known/ucp"' },
+        "/ucp/catalog/lookup",
+      ),
+    } as never);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      page: 1,
+      limit: 10,
+      ids: "khaki-shoes",
+      sort: "newest",
+    });
+    expect(mocks.getProductBySlug).not.toHaveBeenCalled();
+    expect(body.products).toEqual([]);
+    expect(body.messages[0]).toMatchObject({
+      type: "info",
+      code: "partial_lookup",
+    });
   });
 
   it("returns product not_found as a non-cacheable UCP application error", async () => {

@@ -1,0 +1,111 @@
+# MCP And Agent Architecture
+
+Last reviewed: 2026-07-08
+
+This is the release-safe target for Scalius MCP and assistant work. It replaces `mcp.md` as durable repo guidance; `mcp.md` is intentionally local scratch and must not be committed.
+
+## Decision
+
+Build one tracked Cloudflare workspace, `apps/agent`, for durable assistants and MCP endpoints. Keep the commerce API as the domain authority.
+
+- `apps/agent` owns Flue durable agent sessions, model orchestration, MCP protocol routes, and assistant event streams.
+- `apps/api` remains the only authority for admin auth, RBAC, checkout, orders, payments, inventory, settings, feeds, SEO policy, and provider credentials.
+- `apps/admin-v2` owns visible admin page state: current route, dirty forms, selected rows, dialogs, validation errors, and navigation.
+- `apps/storefront` owns buyer-visible page context, local cart snapshot reads, same-origin cart validation, and navigation.
+
+Do not import database or core domain modules into the agent Worker unless an architecture review proves the service-binding API path cannot satisfy the use case. The boring default is: agent asks the API, API enforces the rules.
+
+## First Release Scope
+
+### Admin MCP
+
+Admin MCP is authenticated, admin-only, and starts small.
+
+- Use the active dashboard/admin session and API service binding. Do not add bearer/JWT fallback.
+- Enforce Better Auth session validity, onboarding gates, 2FA truth, and API RBAC through existing admin API middleware.
+- Use Cloudflare Code Mode only for the large admin OpenAPI/search surface, with an allowlisted execute path and host-owned auth callback.
+- Prefer typed high-value tools for risky or important workflows.
+- Expose read/search tools first: dashboard, products, categories, collections, CMS pages, orders, inventory lookup, media listing, and read-only settings.
+- Page tools may navigate, inspect page state, select rows, set fields, save a visible registered form, discard changes, or clear selection.
+
+Excluded from the first release: RBAC writes, admin-user invites/deletes, permanent deletes, refunds, order status/payment/shipping transitions, provider credential writes, cache clear, feed/SEO bulk toggles, raw provider payloads, recovery bearer links, and any operation that can move money or stock without a human-visible confirmation model.
+
+### Storefront MCP
+
+Storefront MCP is public and catalog-first.
+
+- Use typed tools over the existing UCP/feed/catalog projection, not Code Mode.
+- Expose catalog search, catalog lookup, product context, category reads, discovery policy reads, visible page context, same-origin navigation, and read-only cart snapshot validation.
+- Cart validation may explain stale cart issues using existing `PRODUCT_UNAVAILABLE`, `VARIANT_UNAVAILABLE`, `VARIANT_MISMATCH`, `VARIANT_REQUIRED`, `QUANTITY_UNAVAILABLE`, and `PRICE_CHANGED` repair semantics.
+
+Do not expose checkout, cart mutation, order, payment, fulfillment, customer-profile, hosted-payment recovery, or support-request tools until there is a D1-backed session, idempotency, signing, and payment-recovery design verified in code and live smokes.
+
+## UI Direction
+
+Use Flue for durable agent state and assistant workflows. Use `@flue/react` or `@flue/sdk` for client state integration.
+
+For visible chat/task UI, adapt AI Elements-style composable components into the existing admin/storefront design systems instead of inventing a full chat UI from scratch. `assistant-ui` remains a good fallback for polished primitives, but first release should avoid a large opinionated UI platform. AG-UI/CopilotKit is too broad for v1 unless future work needs deep bidirectional agent state beyond what the page-state bridges provide.
+
+References reviewed:
+
+- [Cloudflare MCP overview](https://developers.cloudflare.com/agents/model-context-protocol/)
+- [Cloudflare Code Mode MCP pattern](https://developers.cloudflare.com/agents/model-context-protocol/codemode/)
+- [Flue Cloudflare deployment](https://flueframework.com/docs/ecosystem/deploy/cloudflare/)
+- [AI Elements](https://elements.ai-sdk.dev/)
+- [assistant-ui](https://www.assistant-ui.com/)
+- [AG-UI](https://www.copilotkit.ai/ag-ui)
+
+## Model And Credential Configuration
+
+Reuse the existing `settings.ai` encrypted credential/config system. Do not create a second credential store for assistants.
+
+Add assistant model profiles under the AI settings domain when implementation starts:
+
+- `adminChat`
+- `storefrontChat`
+- `widgetGeneration`
+- `imageGeneration`
+- `voice`
+
+Environment variables may provide safe defaults; dashboard settings may override them. Secrets stay encrypted with `CREDENTIAL_ENCRYPTION_KEY`. Hot send paths must fail closed when credentials are missing, dummy, or undecryptable.
+
+## Required Guards
+
+Before exposing any MCP endpoint publicly:
+
+- Admin MCP must prove no access without a signed Better Auth admin cookie, completed onboarding, verified 2FA, and matching RBAC permission.
+- Admin page tools must use the same page-permission source as the dashboard route guard, or have a drift test that fails when maps diverge.
+- Admin form tools must operate only on registered visible forms and must refuse hidden credential fields unless a dedicated, human-confirmed credential-flow design exists.
+- Storefront MCP/UCP tests must prove only catalog capabilities are advertised.
+- Storefront page tools must refuse off-origin navigation and must not read private customer/order/session data.
+- MCP errors and logs must use masked metadata only. No OTPs, credentials, receipt proofs, provider payloads, raw phone/email, or buyer PII.
+
+## Verification Gates
+
+Minimum local gates for the first tracked agent Worker:
+
+- `pnpm --filter @scalius/agent typecheck`
+- Flue Cloudflare build for the agent workspace
+- Generated Wrangler dry-run for the agent Worker
+- `pnpm check:env`
+- MCP Inspector or equivalent JSON-RPC smoke for both MCP route groups
+- Admin 401/403/RBAC/2FA/onboarding tests
+- Storefront catalog-only capability tests
+- Browser smoke: admin assistant can read page state and navigate without console errors
+- Browser smoke: storefront assistant can read public product/cart-validation context without private data exposure
+
+Deploy only after those pass. Live proof must include API health/readyz, agent Worker route smoke, admin auth failure smoke, storefront UCP/catalog-only smoke, and `pnpm ops:check --queues` if queue/agent bindings changed.
+
+## Implementation Ownership
+
+Split future work by disjoint write scopes:
+
+- Agent platform worker: `apps/agent/package.json`, `apps/agent/**`, deploy/env wiring.
+- Admin MCP worker: `apps/agent/src/mcp/admin/**`, allowlists, admin API request callback tests.
+- Storefront MCP worker: `apps/agent/src/mcp/storefront/**`, UCP/feed wrappers, catalog-only tests.
+- Admin page-state worker: `apps/admin-v2/src/components/admin/assistant/**`, admin shell integration, shared form/table state registry.
+- Storefront page-context worker: `apps/storefront/src/components/assistant/**`, product/cart context bridge.
+- Model settings worker: existing AI settings core/API/admin UI only.
+- Verification worker: MCP Inspector smokes, browser smokes, deploy docs.
+
+Keep implementation boring: no browser DOM scraping when shared forms/tables can register state, no direct database access from the agent Worker, no model-selected privileged URLs, and no hidden commerce mutations.
