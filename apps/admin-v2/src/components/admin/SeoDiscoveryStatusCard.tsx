@@ -179,6 +179,47 @@ function PreviewLinks({ status }: { status: SeoDiscoveryStatus["storefront"] }) 
   );
 }
 
+function UcpCatalogDetails({
+  status,
+}: {
+  status: SeoDiscoveryStatus["ucpCatalog"];
+}) {
+  return (
+    <div className="space-y-2 text-xs leading-5 text-muted-foreground">
+      <div className="flex flex-wrap gap-2">
+        {status.capabilities.map((capability) => (
+          <Badge
+            key={capability}
+            variant="outline"
+            className="border-border bg-background text-foreground"
+          >
+            {capability}
+          </Badge>
+        ))}
+        <Badge variant="outline" className="border-border bg-muted">
+          No checkout/payment
+        </Badge>
+      </div>
+      <p>{status.note}</p>
+      {status.profileHref ? (
+        <a
+          href={status.profileHref}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex min-w-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          <span className="truncate">Open UCP profile</span>
+          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        </a>
+      ) : (
+        <code className="block text-[11px] text-muted-foreground">
+          {status.profilePath}
+        </code>
+      )}
+    </div>
+  );
+}
+
 function getLiveProbeSummaryTone(
   result: SeoDiscoveryLiveProbeResult | undefined,
   enabled: boolean,
@@ -240,6 +281,29 @@ function formatProbeCounts(resource: SeoDiscoveryLiveProbeResource): string {
     const count = resource.counts.sitemapLocs ?? 0;
     const minimum = resource.minimumSitemapLocs ?? 0;
     return minimum > 0 ? `${count}/${minimum}+ loc` : `${count} loc`;
+  }
+
+  if (resource.kind === "ucpProfile") {
+    const version = resource.counts.ucpVersion
+      ? `version ${resource.counts.ucpVersion}`
+      : "version missing";
+    const restServices = resource.counts.ucpShoppingRestServices ?? 0;
+    const catalogCapabilities = resource.counts.ucpCatalogCapabilities ?? 0;
+    const gatedCapabilities = resource.counts.ucpForbiddenCapabilities ?? 0;
+    return [
+      version,
+      `${restServices} ${plural(restServices, "REST service")}`,
+      `${catalogCapabilities} ${plural(
+        catalogCapabilities,
+        "catalog capability",
+        "catalog capabilities",
+      )}`,
+      `${gatedCapabilities} ${plural(
+        gatedCapabilities,
+        "gated capability",
+        "gated capabilities",
+      )}`,
+    ].join("; ");
   }
 
   const countParts = [`${resource.counts.feedItems ?? 0} item`];
@@ -652,6 +716,14 @@ export function SeoDiscoveryStatusCard({
             result={feedDiagnosticsQuery.data}
           />
         </div>
+      </StatusRow>
+
+      <StatusRow
+        tone={status.ucpCatalog.tone}
+        title={status.ucpCatalog.title}
+        summary={status.ucpCatalog.summary}
+      >
+        <UcpCatalogDetails status={status.ucpCatalog} />
       </StatusRow>
 
       <StatusRow
