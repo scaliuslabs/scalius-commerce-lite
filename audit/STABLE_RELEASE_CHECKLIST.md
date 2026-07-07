@@ -1,8 +1,16 @@
 # Stable Release Checklist
 
-Last reviewed: 2026-07-07
+Last reviewed: 2026-07-08
 
 Use this file before claiming the platform is ready for a stable merchant-facing release. The tracker is the source of truth for defects; this checklist is the release gate.
+
+## Latest Gate Evidence
+
+- 2026-07-08, HEAD `49f7d26f`: missing release hygiene gates passed: `pnpm exec drizzle-kit check --config packages/database/drizzle.config.ts`, `pnpm --filter @scalius/database check:migrations`, `pnpm install --frozen-lockfile`, `pnpm audit --audit-level moderate`, `pnpm peers check`, and `git diff --check`.
+- 2026-07-08, HEAD `49f7d26f`: local post-sale smokes passed. `pnpm dev:post-sale:smoke --json` seeded the disposable local fixture, created/replayed one COD order, fetched the receipt, and submitted a support request. `pnpm dev:post-sale:otp --json` failed closed once for the dummy local email provider with `503`, no pending OTP challenges, and clear customer-safe copy. `node scripts/dev-postsale.mjs payment-readiness --json` failed Stripe, SSLCommerz, and Polar closed with clear readiness messages and zero payment-plan/session side effects.
+- 2026-07-08, HEAD `49f7d26f`: live browser route smoke found no console errors, fatal render text, or horizontal overflow on `/admin/settings/checkout`, `/admin/orders/DW8W05`, `/admin/products`, `/admin/products/prod_abe_OILKCt75z47ppI1Sd/edit`, `/admin/settings/notifications`, `/admin/settings`, `/admin/settings/cache`, `/admin/collections`, `/admin/analytics`, storefront `/`, `/search`, `/cart`, `/checkout`, `/account`, and `/products/test-productss`. `/admin/settings/payments` is not a dashboard route; payment gateway settings are rendered inside `/admin/settings/checkout`.
+- 2026-07-08, HEAD `49f7d26f`: `pnpm release:check --timeout-ms 30000` passed after the local smokes with tracker/docs/API/dashboard/storefront/discovery/UCP/product-route checks green.
+- Remaining release acceptances before a stable tag: `OPS-010` stale external `worker:testdash` queue producer warning and `OPS-005` routed ops alerting, which still requires Cloudflare Email Service sender/destination setup outside the current code path.
 
 ## Non-Negotiable Gates
 
