@@ -1438,7 +1438,7 @@ describe("runReleaseCheck", () => {
       label: "failed fetch",
       seoResponse: () => textResponse("unavailable", 503),
     },
-  ])("keeps strict discovery expectations when public SEO policy has $label", async ({ seoResponse }) => {
+  ])("fails when public SEO policy has $label", async ({ seoResponse }) => {
     const fetchImpl = vi.fn(async (url) => {
       const parsed = new URL(url);
 
@@ -1483,13 +1483,70 @@ describe("runReleaseCheck", () => {
     }
 
     expect(thrown).toBeInstanceOf(Error);
-    expect(thrown.message).toContain("robots.txt failed");
-    expect(thrown.message).toContain("must advertise at least one absolute Sitemap URL");
+    expect(thrown.message).toContain("Public SEO policy failed");
     expect(thrown.result.checks.discovery).toMatchObject({
       status: "failed",
-      error: expect.stringContaining("must advertise at least one absolute Sitemap URL"),
+      error: expect.stringContaining("Public SEO policy failed"),
     });
     expect(fetchImpl.mock.calls.map(([url]) => new URL(url).pathname)).toContain("/api/v1/seo");
+  });
+
+  it("keeps strict discovery fallback only when explicitly allowed", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/seo") {
+          return jsonResponse({
+            success: true,
+            data: { discovery: { sitemap: { enabled: false } } },
+          });
+        }
+      }
+
+      if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+        return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "storefront.example.test") {
+        if (parsed.pathname === "/health") return textResponse("ok");
+        if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxtWithoutSitemap());
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    let thrown;
+    try {
+      await runReleaseCheck(parseReleaseCheckArgs([
+        "--skip-wrangler",
+        "--allow-strict-seo-policy-fallback",
+        "--api-base-url", "https://api.example.test",
+        "--storefront-url", "https://storefront.example.test",
+        "--dashboard-url", "https://dashboard.example.test",
+      ]), {
+        apiConfig: monitoringApiConfig(),
+        fetchImpl,
+        execFileImpl: vi.fn(),
+        rootDir: "/repo",
+        readFileImpl: () => verifiedTracker(),
+        fileExistsImpl: () => true,
+        logger: null,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toContain("robots.txt failed");
+    expect(thrown.message).toContain("must advertise at least one absolute Sitemap URL");
+    const requestedPaths = fetchImpl.mock.calls.map(([url]) => new URL(url).pathname);
+    expect(requestedPaths).toContain("/api/v1/seo");
+    expect(requestedPaths).toContain("/robots.txt");
   });
 
   it.each([

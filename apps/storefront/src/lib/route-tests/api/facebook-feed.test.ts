@@ -41,6 +41,7 @@ describe("Facebook product feed route", () => {
     mocks.getFeedProducts.mockReset();
     mocks.getLayoutData.mockReset();
     mocks.getSeoSettings.mockReset();
+    mocks.setRuntimeImageCdnPolicy.mockReset();
     mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
     mocks.getLayoutData.mockResolvedValue({
@@ -68,6 +69,19 @@ describe("Facebook product feed route", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(body).toContain("Facebook product feed is temporarily unavailable");
+    expect(mocks.getFeedProducts).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when storefront layout data cannot be read", async () => {
+    mocks.getLayoutData.mockResolvedValueOnce(null);
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toContain("Facebook product feed is temporarily unavailable");
+    expect(mocks.setRuntimeImageCdnPolicy).not.toHaveBeenCalled();
     expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
 
