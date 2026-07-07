@@ -89,6 +89,7 @@ const discountedPrice = product.discountedPrice;
 const productCategory = category ?? null;
 const productCategoryUrl = productCategory
   ? buildResourceCanonicalSeoUrl(
+      "category",
       `/categories/${productCategory.slug}`,
       productCategory.canonicalPath,
     )
@@ -135,6 +136,7 @@ const quickBuyNotice = quickBuyNoticeByError[Astro.url.searchParams.get("error")
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const canonicalUrl = buildResourceCanonicalSeoUrl(
+  "product",
   `/products/${product.slug}`,
   product.canonicalPath,
 );

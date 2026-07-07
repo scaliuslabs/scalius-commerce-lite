@@ -10,7 +10,7 @@ import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSeoSettings } from '@/lib/api';
 import { getSitemapProducts } from '@/lib/api/products';
 import type { APIContext, APIRoute } from 'astro';
-import { normalizeCanonicalPath } from '@scalius/shared/seo-canonical';
+import { normalizeResourceCanonicalPath } from '@scalius/shared/seo-canonical';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
@@ -108,7 +108,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     }
 
     const productUrls: SitemapUrl[] = allProducts.map((product) => ({
-      loc: `${baseUrl}${normalizeCanonicalPath(product.canonicalPath) ?? `/products/${product.slug}`}`,
+      loc: `${baseUrl}${normalizeResourceCanonicalPath('product', product.canonicalPath) ?? `/products/${product.slug}`}`,
       lastmod: product.updatedAt ?? undefined,
     }));
 

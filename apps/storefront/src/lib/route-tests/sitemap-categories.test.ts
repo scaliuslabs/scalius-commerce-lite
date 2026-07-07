@@ -118,8 +118,8 @@ describe("categories sitemap route", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("/shop/visible-category");
-    expect(body).not.toContain("/categories/visible");
+    expect(body).toContain("/categories/visible");
+    expect(body).not.toContain("/shop/visible-category");
     expect(body).not.toContain("/categories/noindex");
     expect(body).not.toContain("/categories/excluded");
   });

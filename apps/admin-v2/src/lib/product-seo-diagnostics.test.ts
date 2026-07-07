@@ -68,7 +68,7 @@ describe("buildProductSeoDiagnostics", () => {
     const diagnostics = buildProductSeoDiagnostics({
       product: {
         ...activeProduct,
-        canonicalPath: "/campaigns/green-tea",
+        canonicalPath: "/products/green-tea-campaign",
       },
       variants: availableSimpleSku,
       variantState: "loaded",
@@ -79,8 +79,28 @@ describe("buildProductSeoDiagnostics", () => {
     expect(diagnostics.canonical).toMatchObject({
       tone: "ok",
       title: "Canonical override ready",
-      path: "/campaigns/green-tea",
-      url: "https://shop.example.com/campaigns/green-tea",
+      path: "/products/green-tea-campaign",
+      url: "https://shop.example.com/products/green-tea-campaign",
+    });
+  });
+
+  it("warns on product canonical overrides outside product routes", () => {
+    const diagnostics = buildProductSeoDiagnostics({
+      product: {
+        ...activeProduct,
+        canonicalPath: "/shop/green-tea",
+      },
+      variants: availableSimpleSku,
+      variantState: "loaded",
+      discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+      storefrontUrl: "https://shop.example.com",
+    });
+
+    expect(diagnostics.canonical).toMatchObject({
+      tone: "warning",
+      title: "Canonical path needs cleanup",
+      path: null,
+      url: null,
     });
   });
 

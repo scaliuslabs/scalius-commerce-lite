@@ -64,3 +64,16 @@ describe("analytics form schema", () => {
     );
   });
 });
+
+describe("resource form canonical validation", () => {
+  it("uses resource-aware canonical route validators for category and page forms", () => {
+    const formSchemasSource = readFileSync(FORM_SCHEMAS_SOURCE, "utf8");
+
+    expect(formSchemasSource).toContain("isValidResourceCanonicalPath");
+    expect(formSchemasSource).toMatch(
+      /canonicalPathFormSchema\(\s*"category"\s*,\s*"\/categories\/summer-shoes"\s*,?\s*\)/,
+    );
+    expect(formSchemasSource).toContain('"/categories/summer-shoes"');
+    expect(formSchemasSource).toContain('canonicalPathFormSchema("page", "/returns")');
+  });
+});

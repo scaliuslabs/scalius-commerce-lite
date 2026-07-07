@@ -281,7 +281,7 @@ The storefront is an **Astro 7 SSR** application with React 19 islands for inter
 
 ### SEO
 
-- Dashboard-governed discovery controls for sitemaps, robots, schema families, product feed exposure, per-product sitemap/feed XML exclusion, and per-product/category/collection/page `noindex`, sitemap exclusion, or same-store canonical path override, with shared discovery-readiness previews on product, category, collection, and CMS page forms plus policy-aware live proof for robots, sitemap index, child sitemaps, and feed XML
+- Dashboard-governed discovery controls for sitemaps, robots, schema families, product feed exposure, per-product sitemap/feed XML exclusion, and per-product/category/collection/page `noindex`, sitemap exclusion, or route-shaped same-store canonical path override (collections are ID-routed today), with shared discovery-readiness previews on product, category, collection, and CMS page forms plus policy-aware live proof for robots, sitemap index, child sitemaps, and feed XML
 - JSON-LD schemas for OnlineStore, WebSite/SearchAction, Product/ProductGroup, BreadcrumbList, collection/category pages, active offer shipping details, GTINs from variant barcodes, and merchant-saved return policy facts; schema identity uses Business settings only, OnlineStore requires an absolute Store URL plus header logo and never emits a `null` JSON-LD script, product schema avoids invented facts such as condition or price expiry, and seller/brand are omitted unless backed by explicit merchant data
 - Merchant-compatible product feed XML with a Google/Base canonical feed at `/api/product-feed.xml` and a Meta compatibility feed at `/api/facebook-feed.xml`; both use SKU-aware availability, absolute images, canonical product links, configurable sold-out inclusion, per-product feed exclusion, true brand/GTIN data when provided, empty-catalog-safe XML, per-item link/image/availability validation, and stock-change invalidation that reaches the rendered XML cache. Google variant rows also emit `item_group_title` and `variant_option` pairs from merchant option labels, while standard `size`/`color`/`material`/`pattern` fields are emitted only from explicit product mapping.
 - Read-only UCP catalog discovery at `/.well-known/ucp` with REST endpoints under `/ucp/catalog/*`; it advertises only catalog search/lookup, requires HTTPS storefront discovery plus `UCP-Agent` on catalog operations, maps prices to ISO minor units, and reuses the dedicated feed/SKU projection so agent-readable variants, availability, option labels, canonical URLs, GTINs, and images match Merchant XML and checkout truth. Checkout/cart/order/payment UCP capabilities are intentionally not advertised yet.
@@ -372,7 +372,7 @@ pnpm run deploy:api         # Typecheck → build API → migrate remote D1 → 
 pnpm run deploy:admin       # Typecheck → build admin-v2 → deploy admin-v2
 pnpm run deploy:storefront  # Typecheck → build storefront → deploy storefront
 pnpm ops:check              # Read-only production API ops smoke; add --queues for queue metadata
-pnpm release:check          # Read-only release smoke across API, dashboard, storefront, discovery XML/feed, and tracker/docs
+pnpm release:check          # Read-only release smoke across API, dashboard, storefront, discovery XML/feed, UCP catalog discovery, and tracker/docs
 
 # Database
 pnpm db:generate        # Generate Drizzle migrations from schema changes

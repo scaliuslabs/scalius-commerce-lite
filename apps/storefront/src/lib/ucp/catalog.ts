@@ -8,7 +8,7 @@ import {
   resolveBuyerVariants,
 } from "@/lib/product-sellable-variants";
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
-import { normalizeCanonicalPath } from "@scalius/shared/seo-canonical";
+import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import {
   DEFAULT_PRODUCT_OPTION_LABELS,
   normalizeProductOptionLabel,
@@ -453,7 +453,9 @@ function productOptions(product: Product, variants: ProductVariant[]) {
 }
 
 function productUrl(product: Product, baseUrl: string): string {
-  const path = normalizeCanonicalPath(product.canonicalPath) ?? `/products/${product.slug}`;
+  const path =
+    normalizeResourceCanonicalPath("product", product.canonicalPath) ??
+    `/products/${product.slug}`;
   return new URL(path, `${baseUrl}/`).toString();
 }
 

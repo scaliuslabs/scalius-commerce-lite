@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 import {
-    isValidCanonicalPath,
+    isValidResourceCanonicalPath,
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 
@@ -13,17 +13,23 @@ const canonicalPathSchema = z
     .nullable()
     .optional()
     .transform((value) => normalizeCanonicalPathInput(value))
-    .refine((value) => value === null || isValidCanonicalPath(value), {
-        message: "Canonical path must be a clean same-store path without query strings or fragments.",
+    .refine((value) => value === null || isValidResourceCanonicalPath("page", value), {
+        message: "Canonical path must be a single page route such as /returns.",
     });
 const canonicalPathUpdateSchema = z
     .string()
     .nullable()
     .optional()
     .transform((value) => value === undefined ? undefined : normalizeCanonicalPathInput(value))
-    .refine((value) => value === undefined || value === null || isValidCanonicalPath(value), {
-        message: "Canonical path must be a clean same-store path without query strings or fragments.",
-    });
+    .refine(
+        (value) =>
+            value === undefined ||
+            value === null ||
+            isValidResourceCanonicalPath("page", value),
+        {
+            message: "Canonical path must be a single page route such as /returns.",
+        },
+    );
 
 export const pageFeaturedImageSchema = z.object({
     id: z.string().min(1),

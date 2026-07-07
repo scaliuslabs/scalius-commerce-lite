@@ -24,6 +24,11 @@ const DEFAULT_DASHBOARD_URL = "https://dashboard.scalius.com";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const RELEASE_READYZ_SAMPLES = 4;
 const MAX_BODY_PREVIEW_LENGTH = 180;
+const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
+const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
+const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
+const UCP_FORBIDDEN_CAPABILITY_PATTERN = /\b(?:checkout|carts?|orders?|payments?|payment_handlers)\b/i;
+const UCP_AGENT_HEADER = 'profile="https://release-check.scalius.com/.well-known/ucp"';
 const SITEMAP_SECTION_ENDPOINTS = [
   { endpoint: "/sitemap-static.xml", policyKey: "staticPages", label: "static pages sitemap" },
   { endpoint: "/sitemap-products.xml?page=1", policyKey: "products", label: "products sitemap" },
@@ -213,6 +218,46 @@ function requestHeaders(accept) {
     Accept: accept,
     "Cache-Control": "no-cache",
   };
+}
+
+async function fetchJson(url, {
+  fetchImpl,
+  timeoutMs,
+  method = "GET",
+  body,
+  headers = {},
+}) {
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const requestInit = {
+    method,
+    headers: {
+      ...requestHeaders("application/json, */*;q=0.8"),
+      ...headers,
+    },
+    signal: controller.signal,
+  };
+
+  if (body !== undefined) {
+    requestInit.body = JSON.stringify(body);
+    requestInit.headers["Content-Type"] = "application/json";
+  }
+
+  try {
+    const response = await fetchImpl(url, requestInit);
+    const responseBody = await response.text();
+    return {
+      url,
+      statusCode: response.status,
+      ok: response.ok,
+      body: responseBody,
+      headers: response.headers,
+      durationMs: Date.now() - startedAt,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function fetchText(url, {
@@ -846,6 +891,153 @@ export function evaluateProductJsonLdHtml(html, {
   };
 }
 
+function requireJsonResponse(response, label) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!/\bapplication\/json\b/i.test(contentType)) {
+    throw new Error(`${label} must return application/json; got ${contentType || "missing Content-Type"}.`);
+  }
+
+  try {
+    return response.body ? JSON.parse(response.body) : null;
+  } catch (error) {
+    throw new Error(`${label} returned invalid JSON: ${errorMessage(error)}`, { cause: error });
+  }
+}
+
+function collectUcpCapabilityNames(profile) {
+  const capabilities = isRecord(profile?.ucp?.capabilities)
+    ? profile.ucp.capabilities
+    : {};
+  return Object.keys(capabilities);
+}
+
+function readUcpShoppingEndpoint(profile) {
+  const services = isRecord(profile?.ucp?.services) ? profile.ucp.services : null;
+  const shoppingServices = Array.isArray(services?.[UCP_SHOPPING_SERVICE])
+    ? services[UCP_SHOPPING_SERVICE]
+    : [];
+  const restService = shoppingServices.find((service) =>
+    isRecord(service) &&
+    service.transport === "rest" &&
+    typeof service.endpoint === "string"
+  );
+  return typeof restService?.endpoint === "string" ? restService.endpoint : null;
+}
+
+export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
+  const errors = [];
+  const version = typeof profile?.ucp?.version === "string" ? profile.ucp.version : null;
+  const endpoint = readUcpShoppingEndpoint(profile);
+  const capabilities = collectUcpCapabilityNames(profile);
+  const forbiddenCapabilities = capabilities.filter((name) =>
+    UCP_FORBIDDEN_CAPABILITY_PATTERN.test(name)
+  );
+  const requiredCapabilities = [
+    UCP_CATALOG_SEARCH_CAPABILITY,
+    UCP_CATALOG_LOOKUP_CAPABILITY,
+  ];
+  const unexpectedCapabilities = capabilities.filter((name) => !requiredCapabilities.includes(name));
+
+  if (!isRecord(profile?.ucp)) {
+    errors.push("UCP profile must include a ucp object.");
+  }
+  if (!version) {
+    errors.push("UCP profile must include ucp.version.");
+  }
+  if (!endpoint) {
+    errors.push(`UCP profile must advertise a REST ${UCP_SHOPPING_SERVICE} service endpoint.`);
+  } else if (!isHttpUrl(endpoint)) {
+    errors.push(`UCP service endpoint is not absolute http(s): ${endpoint}`);
+  } else if (storefrontOrigin && !isSameOrigin(endpoint, storefrontOrigin)) {
+    errors.push(`UCP service endpoint is not on storefront origin: ${endpoint}`);
+  } else {
+    const endpointUrl = new URL(endpoint);
+    if (endpointUrl.pathname !== "/ucp" && !endpointUrl.pathname.startsWith("/ucp/")) {
+      errors.push(`UCP service endpoint must be under /ucp: ${endpoint}`);
+    }
+  }
+
+  for (const capability of requiredCapabilities) {
+    if (!capabilities.includes(capability)) {
+      errors.push(`UCP profile must advertise ${capability}.`);
+    }
+  }
+  if (unexpectedCapabilities.length > 0) {
+    errors.push(`UCP profile must advertise only catalog search/lookup capabilities: ${unexpectedCapabilities.join(", ")}`);
+  }
+  if (forbiddenCapabilities.length > 0) {
+    errors.push(`UCP profile must not advertise checkout/cart/order/payment capabilities: ${forbiddenCapabilities.join(", ")}`);
+  }
+
+  const supportedVersions = isRecord(profile?.ucp?.supported_versions)
+    ? profile.ucp.supported_versions
+    : {};
+  const supportedProfileUrl = version ? supportedVersions[version] : null;
+  if (version && typeof supportedProfileUrl === "string") {
+    if (!isHttpUrl(supportedProfileUrl)) {
+      errors.push(`UCP supported version URL is not absolute http(s): ${supportedProfileUrl}`);
+    } else if (storefrontOrigin && !isSameOrigin(supportedProfileUrl, storefrontOrigin)) {
+      errors.push(`UCP supported version URL is not on storefront origin: ${supportedProfileUrl}`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    version,
+    endpoint,
+    capabilities,
+  };
+}
+
+function productSearchQueryFromUrl(productUrl, storefrontOrigin) {
+  if (!productUrl || !isSameOrigin(productUrl, storefrontOrigin)) return null;
+  const parsed = new URL(productUrl);
+  const segments = parsed.pathname.split("/").filter(Boolean);
+  const lastSegment = segments.at(-1);
+  if (!lastSegment) return null;
+  try {
+    return decodeURIComponent(lastSegment).replace(/[-_]+/g, " ").trim() || null;
+  } catch {
+    return lastSegment.replace(/[-_]+/g, " ").trim() || null;
+  }
+}
+
+function firstUcpSearchCandidate(searchPayload) {
+  const products = Array.isArray(searchPayload?.products) ? searchPayload.products : [];
+  for (const product of products) {
+    if (!isRecord(product)) continue;
+    const variants = Array.isArray(product.variants) ? product.variants : [];
+    const variant = variants.find(isRecord);
+    const id = typeof variant?.id === "string"
+      ? variant.id
+      : typeof product.id === "string"
+        ? product.id
+        : typeof product.url === "string"
+          ? product.url
+          : null;
+    if (id) {
+      return {
+        id,
+        productId: typeof product.id === "string" ? product.id : null,
+        variantId: typeof variant?.id === "string" ? variant.id : null,
+      };
+    }
+  }
+  return null;
+}
+
+function lookupPayloadHasInputCorrelation(lookupPayload, inputId) {
+  const products = Array.isArray(lookupPayload?.products) ? lookupPayload.products : [];
+  return products.some((product) => {
+    if (!isRecord(product) || !Array.isArray(product.variants)) return false;
+    return product.variants.some((variant) => {
+      if (!isRecord(variant) || !Array.isArray(variant.inputs)) return false;
+      return variant.inputs.some((input) => isRecord(input) && input.id === inputId);
+    });
+  });
+}
+
 function createCheckError(message, result) {
   const error = new Error(message);
   error.result = result;
@@ -1282,6 +1474,118 @@ async function checkDiscoveredProductRoute(
   };
 }
 
+async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
+  const storefront = new URL(options.storefrontUrl);
+  const storefrontOrigin = storefront.origin;
+  if (storefront.protocol !== "https:") {
+    throw new Error("UCP discovery requires the configured Storefront URL to use HTTPS.");
+  }
+
+  const profileUrl = buildUrl(options.storefrontUrl, "/.well-known/ucp");
+  const profileResponse = await fetchJson(profileUrl, {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+  });
+  requireStatus(profileResponse, "Storefront /.well-known/ucp", (status) => status >= 200 && status < 300);
+  const profilePayload = requireJsonResponse(profileResponse, "Storefront /.well-known/ucp");
+  const profileEvaluation = evaluateUcpProfile(profilePayload, { storefrontOrigin });
+  if (!profileEvaluation.ok) {
+    throw new Error(`UCP profile failed: ${profileEvaluation.errors.join("; ")}`);
+  }
+
+  const result = {
+    profile: {
+      url: redactUrl(profileUrl),
+      statusCode: profileResponse.statusCode,
+      durationMs: profileResponse.durationMs,
+      version: profileEvaluation.version,
+      endpoint: profileEvaluation.endpoint,
+      capabilities: profileEvaluation.capabilities,
+    },
+  };
+
+  const searchQuery = productSearchQueryFromUrl(productUrl, storefrontOrigin);
+  if (!searchQuery) {
+    logger?.warn("WARN UCP catalog: search/lookup skipped because discovery did not expose a safe product candidate.");
+    result.catalog = {
+      status: "skipped",
+      reason: "No safe product candidate from discovery for read-only UCP catalog search/lookup.",
+    };
+    logger?.log("PASS UCP discovery: HTTPS profile advertises catalog search/lookup only.");
+    return result;
+  }
+
+  const serviceEndpoint = profileEvaluation.endpoint.replace(/\/+$/, "");
+  const searchResponse = await fetchJson(`${serviceEndpoint}/catalog/search`, {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    method: "POST",
+    headers: {
+      "UCP-Agent": UCP_AGENT_HEADER,
+    },
+    body: {
+      ...(profileEvaluation.version ? { ucp: { version: profileEvaluation.version } } : {}),
+      query: searchQuery,
+      pagination: { limit: 5 },
+    },
+  });
+  requireStatus(searchResponse, "UCP catalog search", (status) => status >= 200 && status < 300);
+  const searchPayload = requireJsonResponse(searchResponse, "UCP catalog search");
+  const searchedProducts = Array.isArray(searchPayload?.products) ? searchPayload.products.length : 0;
+  const candidate = firstUcpSearchCandidate(searchPayload);
+
+  result.catalog = {
+    search: {
+      url: redactUrl(`${serviceEndpoint}/catalog/search`),
+      statusCode: searchResponse.statusCode,
+      durationMs: searchResponse.durationMs,
+      query: searchQuery,
+      productCount: searchedProducts,
+    },
+  };
+
+  if (!candidate) {
+    result.catalog.lookup = {
+      status: "skipped",
+      reason: "UCP catalog search returned no product/variant candidate.",
+    };
+    logger?.log(
+      "PASS UCP discovery: HTTPS profile advertises catalog search/lookup only; catalog search returned no products.",
+    );
+    return result;
+  }
+
+  const lookupResponse = await fetchJson(`${serviceEndpoint}/catalog/lookup`, {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    method: "POST",
+    headers: {
+      "UCP-Agent": UCP_AGENT_HEADER,
+    },
+    body: {
+      ...(profileEvaluation.version ? { ucp: { version: profileEvaluation.version } } : {}),
+      ids: [candidate.id],
+    },
+  });
+  requireStatus(lookupResponse, "UCP catalog lookup", (status) => status >= 200 && status < 300);
+  const lookupPayload = requireJsonResponse(lookupResponse, "UCP catalog lookup");
+  if (!lookupPayloadHasInputCorrelation(lookupPayload, candidate.id)) {
+    throw new Error(`UCP catalog lookup did not correlate requested id: ${candidate.id}`);
+  }
+  result.catalog.lookup = {
+    url: redactUrl(`${serviceEndpoint}/catalog/lookup`),
+    statusCode: lookupResponse.statusCode,
+    durationMs: lookupResponse.durationMs,
+    inputId: candidate.id,
+    productCount: Array.isArray(lookupPayload?.products) ? lookupPayload.products.length : 0,
+  };
+
+  logger?.log(
+    `PASS UCP discovery: HTTPS profile plus catalog search/lookup for ${candidate.id}.`,
+  );
+  return result;
+}
+
 export async function runReleaseCheck(options, {
   apiConfig = {},
   fetchImpl = fetch,
@@ -1335,6 +1639,12 @@ export async function runReleaseCheck(options, {
     checkStorefrontPages(options, { fetchImpl, logger }));
   const discovery = await runStep(result, "discovery", () =>
     checkDiscovery(options, { fetchImpl, logger }));
+  await runStep(result, "ucpDiscovery", () =>
+    checkUcpDiscovery(options, {
+      fetchImpl,
+      productUrl: discovery.firstStorefrontItemUrl,
+      logger,
+    }));
   await runStep(result, "productRoute", () =>
     checkDiscoveredProductRoute(options, {
       fetchImpl,
@@ -1353,7 +1663,7 @@ function printUsage() {
   console.log(`Usage: pnpm release:check [options]
 
 Read-only production release smoke checks. This complements pnpm ops:check with
-storefront, dashboard, discovery XML/feed, tracker, and doc gates.
+storefront, dashboard, discovery XML/feed, UCP catalog discovery, tracker, and doc gates.
 
 Options:
   --api-base-url <url>     API base URL (default ${DEFAULT_API_BASE_URL})

@@ -165,7 +165,7 @@ describe("UCP catalog mapping", () => {
       minPrice: 1000,
       maxPrice: 2000,
     });
-    expect(result.body.products[0].url).toBe("https://storefront.example.test/shop/khaki-shoes");
+    expect(result.body.products[0].url).toBe("https://storefront.example.test/products/khaki-shoes");
     expect(result.body.products[0].variants[0]).toMatchObject({
       id: "gid://scalius/product-variant/var_1",
       price: { amount: 110000, currency: "BDT" },

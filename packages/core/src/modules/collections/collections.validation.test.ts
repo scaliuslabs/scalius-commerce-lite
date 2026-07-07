@@ -13,4 +13,25 @@ describe("collection validation", () => {
 
         expect(parsed).toEqual({ canonicalPath: null });
     });
+
+    it("accepts collection-shaped canonical overrides", () => {
+        const parsed = updateCollectionSchema.parse({
+            canonicalPath: " /collections/col_1 ",
+        });
+
+        expect(parsed).toEqual({ canonicalPath: "/collections/col_1" });
+    });
+
+    it("rejects canonical overrides that are not collection routes", () => {
+        for (const canonicalPath of [
+            "/featured/summer",
+            "/collections/summer/edit",
+            "/categories/summer-edit",
+        ]) {
+            expect(
+                updateCollectionSchema.safeParse({ canonicalPath }).success,
+                canonicalPath,
+            ).toBe(false);
+        }
+    });
 });

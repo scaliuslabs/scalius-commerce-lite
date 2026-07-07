@@ -296,7 +296,7 @@ describe("Facebook product feed route", () => {
         {
           id: "prod_shirt",
           slug: "linen-shirt",
-          canonicalPath: "/shop/linen-shirt",
+          canonicalPath: "/products/linen-shirt-canonical",
           name: "Linen Shirt",
           description: "Soft shirt",
           price: 1200,
@@ -337,8 +337,9 @@ describe("Facebook product feed route", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain(
-      "<g:link>https://storefront.example.test/shop/linen-shirt?size=M&amp;color=Red</g:link>",
+      "<g:link>https://storefront.example.test/products/linen-shirt-canonical?size=M&amp;color=Red</g:link>",
     );
+    expect(body).not.toContain("https://storefront.example.test/shop/linen-shirt");
     expect(body).toContain("<g:item_group_title>Linen Shirt</g:item_group_title>");
     expect(body).toContain("<g:variant_option>");
     expect(body).toContain("<g:name>Size</g:name>");

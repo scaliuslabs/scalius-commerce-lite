@@ -140,4 +140,25 @@ describe("buildResourceDiscoveryPreview", () => {
       title: "Sitemap pending",
     });
   });
+
+  it("fails canonical previews closed on non-routable override paths", () => {
+    const preview = buildResourceDiscoveryPreview({
+      kind: "category",
+      slug: "summer-shoes",
+      canonicalPath: "/shop/summer-shoes",
+      discovery: discovery(),
+      storefrontUrl,
+    });
+
+    expect(preview.canonical).toMatchObject({
+      tone: "warning",
+      title: "Canonical path needs cleanup",
+      path: null,
+      url: null,
+    });
+    expect(preview.sitemap).toMatchObject({
+      tone: "draft",
+      title: "Sitemap pending",
+    });
+  });
 });

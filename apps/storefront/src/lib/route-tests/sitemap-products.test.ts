@@ -110,8 +110,8 @@ describe("products sitemap route", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("<loc>https://storefront.example.test/fish/hilsa</loc>");
-    expect(body).not.toContain("<loc>https://storefront.example.test/products/hilsa</loc>");
+    expect(body).toContain("<loc>https://storefront.example.test/products/hilsa</loc>");
+    expect(body).not.toContain("<loc>https://storefront.example.test/fish/hilsa</loc>");
     expect(body).toContain("<lastmod>2026-06-23T00:00:00.000Z</lastmod>");
     expect(body).not.toContain("<priority>");
     expect(body).not.toContain("<changefreq>");

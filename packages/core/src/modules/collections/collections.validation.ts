@@ -1,7 +1,7 @@
 // src/modules/collections/collections.validation.ts
 import { z } from "zod";
 import {
-    isValidCanonicalPath,
+    isValidResourceCanonicalPath,
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 
@@ -10,17 +10,24 @@ const canonicalPathSchema = z
     .nullable()
     .optional()
     .transform((value) => normalizeCanonicalPathInput(value))
-    .refine((value) => value === null || isValidCanonicalPath(value), {
-        message: "Canonical path must be a clean same-store path without query strings or fragments.",
+    .refine((value) => value === null || isValidResourceCanonicalPath("collection", value), {
+        message: "Canonical path must be a collection route such as /collections/col_1.",
     });
 const canonicalPathUpdateSchema = z
     .string()
     .nullable()
     .optional()
     .transform((value) => value === undefined ? undefined : normalizeCanonicalPathInput(value))
-    .refine((value) => value === undefined || value === null || isValidCanonicalPath(value), {
-        message: "Canonical path must be a clean same-store path without query strings or fragments.",
-    });
+    .refine(
+        (value) =>
+            value === undefined ||
+            value === null ||
+            isValidResourceCanonicalPath("collection", value),
+        {
+            message:
+                "Canonical path must be a collection route such as /collections/col_1.",
+        },
+    );
 
 const collectionConfigSchema = z.object({
     categoryIds: z.array(z.string()).optional().default([]),

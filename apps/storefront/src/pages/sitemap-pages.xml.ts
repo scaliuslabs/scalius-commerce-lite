@@ -14,7 +14,7 @@ import { getSeoSettings } from '@/lib/api';
 import { getAllPages } from '@/lib/api/pages';
 import type { Page } from '@/lib/api/types';
 import type { APIContext, APIRoute } from 'astro';
-import { normalizeCanonicalPath } from '@scalius/shared/seo-canonical';
+import { normalizeResourceCanonicalPath } from '@scalius/shared/seo-canonical';
 import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
@@ -78,7 +78,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     const pageUrls: SitemapUrl[] = allPages
       .filter((page) => page.isPublished && page.slug && !page.noIndex && !page.excludeFromSitemap)
       .map((page) => ({
-        loc: `${baseUrl}${normalizeCanonicalPath(page.canonicalPath) ?? `/${page.slug}`}`,
+        loc: `${baseUrl}${normalizeResourceCanonicalPath('page', page.canonicalPath) ?? `/${page.slug}`}`,
         lastmod: page.publishedAt ?? page.updatedAt,
       }));
 
