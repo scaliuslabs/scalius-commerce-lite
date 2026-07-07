@@ -786,6 +786,63 @@ export interface AnalyticsScript {
   updatedAt: Date | string | number;
 }
 
+export type AnalyticsProviderType =
+  | "google_analytics"
+  | "google_tag_manager"
+  | "facebook_pixel"
+  | "tiktok_pixel"
+  | "cloudflare_web_analytics"
+  | "custom";
+
+export type AnalyticsProviderBrowserStatus =
+  | "ready"
+  | "draft"
+  | "blocked"
+  | "not_configured";
+
+export type AnalyticsProviderServerStatus =
+  | "ready"
+  | "blocked"
+  | "not_configured"
+  | "not_applicable";
+
+export interface AnalyticsProviderBrowserReadiness {
+  status: AnalyticsProviderBrowserStatus;
+  configured: boolean;
+  activeScriptCount: number;
+  readyScriptCount: number;
+  draftScriptCount: number;
+  blockedScriptCount: number;
+  message: string;
+  issues: string[];
+}
+
+export interface AnalyticsProviderServerReadiness {
+  status: AnalyticsProviderServerStatus;
+  configured: boolean;
+  label: string;
+  message: string;
+}
+
+export interface AnalyticsProviderHealthItem {
+  provider: AnalyticsProviderType;
+  label: string;
+  browser: AnalyticsProviderBrowserReadiness;
+  serverSide: AnalyticsProviderServerReadiness;
+}
+
+export interface AnalyticsProviderHealthResponse {
+  summary: {
+    totalProviders: number;
+    browserReadyProviders: number;
+    draftProviders: number;
+    blockedProviders: number;
+    notConfiguredProviders: number;
+    serverReadyProviders: number;
+  };
+  providers: AnalyticsProviderHealthItem[];
+}
+
 // ---------------------------------------------------------------------------
 // API Response Shapes (used by loaders + components)
 // ---------------------------------------------------------------------------

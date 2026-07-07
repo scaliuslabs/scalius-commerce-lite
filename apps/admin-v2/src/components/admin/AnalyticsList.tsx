@@ -37,6 +37,7 @@ import {
   toggleAnalyticsScript,
 } from "@/lib/api-functions/analytics";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { queryKeys } from "@/lib/query-keys";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, Link } from "@tanstack/react-router";
 import { AdminListPagination } from "./shared/AdminListPagination";
@@ -67,7 +68,7 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
   const canMutateAnalytics = canEditAnalytics || canToggleAnalytics;
   const { isDeleting, handleDelete } = useDeleteHandler({
     deleteFn: (data) => deleteAnalyticsScript({ data }),
-    invalidateKeys: [["analytics", "list"]],
+    invalidateKeys: [queryKeys.analytics.list(), queryKeys.analytics.providerHealth()],
     removeKeys: [(id) => ["analytics", "detail", id]],
     successMessage: "Analytics script has been deleted.",
     errorMessage: "Failed to delete analytics script.",
@@ -126,8 +127,11 @@ export function AnalyticsList({ analytics }: AnalyticsListProps) {
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
       await toggleAnalyticsScript({ data: { id, isActive: !currentStatus } });
-      queryClient.invalidateQueries({ queryKey: ["analytics", "list"] });
-      queryClient.invalidateQueries({ queryKey: ["analytics", "detail", id] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.analytics.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.analytics.detail(id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.analytics.providerHealth(),
+      });
       toast.success("Updated", { description: "Analytics script status has been updated." });
       router.invalidate();
     } catch (error: unknown) {

@@ -334,6 +334,10 @@ function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function hasOwnField(value, key) {
+  return isRecord(value) && Object.prototype.hasOwnProperty.call(value, key);
+}
+
 function readBoolean(record, key) {
   return typeof record?.[key] === "boolean" ? record[key] : null;
 }
@@ -1216,6 +1220,9 @@ export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
 
   if (!isRecord(profile?.ucp)) {
     errors.push("UCP profile must include a ucp object.");
+  }
+  if (hasOwnField(profile, "payment_handlers") || hasOwnField(profile?.ucp, "payment_handlers")) {
+    errors.push("UCP profile must not include a top-level payment_handlers field.");
   }
   if (!version) {
     errors.push("UCP profile must include ucp.version.");

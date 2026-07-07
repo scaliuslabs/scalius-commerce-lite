@@ -12,6 +12,7 @@ Third-party analytics script management, Meta Conversions API integration, and a
 | `dashboard.service.ts` | `getDashboardSummaryStats()`, `getDashboardStats()`, `getRecentOrders()`, `getDailyActivityData()` |
 | `meta.service.ts` | Standalone functions for Meta Conversions API settings and log management |
 | `meta-pixel-parity.ts` | Pure parser/diagnostic helpers for comparing CAPI Pixel ID with active browser Pixel snippets |
+| `provider-health.ts` | Read-only provider readiness summary for admin UI/API without provider calls or secret/script echo |
 
 ## Analytics Scripts
 
@@ -59,6 +60,16 @@ beacon snippets are canonicalized to the platform-generated
 tokens are blocked before activation and legacy toggles, `usePartytown` is forced
 off, and the admin UI defaults it to `body_end` so the beacon can read browser
 performance timing directly.
+
+## Provider Health
+
+`getAnalyticsProviderHealth()` powers the admin Provider Readiness card and
+`GET /api/v1/admin/analytics/health`. It is intentionally read-only and cheap:
+the helper reads analytics rows plus the singleton Meta CAPI settings row,
+strict-reads the encrypted Meta access token with `CREDENTIAL_ENCRYPTION_KEY`,
+and returns provider-level status messages/counts. It must not call GA, GTM,
+Meta, TikTok, Cloudflare, or custom snippet URLs, must not send test events, and
+must not return script config, access tokens, or provider payloads.
 
 ## Dashboard Statistics
 

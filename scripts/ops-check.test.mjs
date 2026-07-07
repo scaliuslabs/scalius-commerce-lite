@@ -60,6 +60,16 @@ function jsonResponse(payload, status = 200) {
   return new Response(JSON.stringify(payload), { status });
 }
 
+function openApiResponse(paths = {}) {
+  return jsonResponse({
+    openapi: "3.0.0",
+    paths: {
+      "/api/v1/admin/analytics/health": {},
+      ...paths,
+    },
+  });
+}
+
 describe("ops-check config helpers", () => {
   it("parses supported flags and validates incompatible options", () => {
     expect(parseOpsCheckArgs([
@@ -276,13 +286,10 @@ describe("runOpsCheck", () => {
       if (path === "/api/v1/health") return textResponse("ok");
       if (path === "/api/v1/readyz") return readyResponse();
       if (path === "/api/v1/openapi.json") {
-        return jsonResponse({
-          openapi: "3.0.0",
-          paths: {
-            "/api/v1/health": {},
-            "/api/v1/readyz": {},
-            "/api/v1/openapi.json": {},
-          },
+        return openApiResponse({
+          "/api/v1/health": {},
+          "/api/v1/readyz": {},
+          "/api/v1/openapi.json": {},
         });
       }
       throw new Error(`Unexpected URL ${url}`);
@@ -316,7 +323,8 @@ describe("runOpsCheck", () => {
     expect(result.status).toBe("passed");
     expect(result.checks.health.statusCode).toBe(200);
     expect(result.checks.readyz.readyCount).toBe(1);
-    expect(result.checks.openapi.pathCount).toBe(3);
+    expect(result.checks.openapi.pathCount).toBe(4);
+    expect(result.checks.openapi.requiredPaths).toContain("/api/v1/admin/analytics/health");
     expect(result.checks.monitoringConfig.status).toBe("passed");
     expect(result.checks.deployment.versionId).toBe("api-version");
     expect(result.checks.queues.status).toBe("skipped");
@@ -334,7 +342,7 @@ describe("runOpsCheck", () => {
           ? degradedResponse()
           : readyResponse();
       }
-      if (path === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+      if (path === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
       throw new Error(`Unexpected URL ${url}`);
     });
     const execFileImpl = vi.fn(async () => ({
@@ -370,7 +378,7 @@ describe("runOpsCheck", () => {
       const path = new URL(url).pathname;
       if (path === "/api/v1/health") return textResponse("ok");
       if (path === "/api/v1/readyz") return readyResponse();
-      if (path === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+      if (path === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
       throw new Error(`Unexpected URL ${url}`);
     });
     const execFileImpl = vi.fn(async (_command, args) => {
@@ -432,7 +440,7 @@ describe("runOpsCheck", () => {
       const path = new URL(url).pathname;
       if (path === "/api/v1/health") return textResponse("ok");
       if (path === "/api/v1/readyz") return readyResponse();
-      if (path === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+      if (path === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
       throw new Error(`Unexpected URL ${url}`);
     });
     const execFileImpl = vi.fn(async (_command, args) => {

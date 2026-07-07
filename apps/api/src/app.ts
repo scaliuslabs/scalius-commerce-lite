@@ -356,6 +356,7 @@ app.get("/openapi.json", (c) => {
       },
       servers: [{ url: "/", description: "Default" }],
     }));
+    c.header("Cache-Control", "no-store");
     return c.json(spec);
   } catch (error: unknown) {
     console.error("OpenAPI spec generation error:", error);

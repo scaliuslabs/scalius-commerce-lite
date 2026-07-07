@@ -16415,6 +16415,125 @@ export type PostApiV1AdminAnalyticsResponses = {
 
 export type PostApiV1AdminAnalyticsResponse = PostApiV1AdminAnalyticsResponses[keyof PostApiV1AdminAnalyticsResponses];
 
+export type GetApiV1AdminAnalyticsHealthData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/analytics/health';
+};
+
+export type GetApiV1AdminAnalyticsHealthErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAnalyticsHealthError = GetApiV1AdminAnalyticsHealthErrors[keyof GetApiV1AdminAnalyticsHealthErrors];
+
+export type GetApiV1AdminAnalyticsHealthResponses = {
+    /**
+     * Analytics provider health
+     */
+    200: {
+        success: true;
+        data: {
+            summary: {
+                totalProviders: number;
+                browserReadyProviders: number;
+                draftProviders: number;
+                blockedProviders: number;
+                notConfiguredProviders: number;
+                serverReadyProviders: number;
+            };
+            providers: Array<{
+                provider: 'google_analytics' | 'google_tag_manager' | 'facebook_pixel' | 'tiktok_pixel' | 'cloudflare_web_analytics' | 'custom';
+                label: string;
+                browser: {
+                    status: 'ready' | 'draft' | 'blocked' | 'not_configured';
+                    configured: boolean;
+                    activeScriptCount: number;
+                    readyScriptCount: number;
+                    draftScriptCount: number;
+                    blockedScriptCount: number;
+                    message: string;
+                    issues: Array<string>;
+                };
+                serverSide: {
+                    status: 'ready' | 'blocked' | 'not_configured' | 'not_applicable';
+                    configured: boolean;
+                    label: string;
+                    message: string;
+                };
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminAnalyticsHealthResponse = GetApiV1AdminAnalyticsHealthResponses[keyof GetApiV1AdminAnalyticsHealthResponses];
+
 export type DeleteApiV1AdminAnalyticsByIdData = {
     body?: never;
     path: {

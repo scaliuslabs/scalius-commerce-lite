@@ -457,6 +457,17 @@ export function getOpenApiPathCount(payload) {
   return Object.keys(payload.paths).length;
 }
 
+const REQUIRED_OPENAPI_PATHS = [
+  "/api/v1/admin/analytics/health",
+];
+
+export function getMissingRequiredOpenApiPaths(payload) {
+  if (!payload || typeof payload !== "object" || !payload.paths || typeof payload.paths !== "object") {
+    throw new Error("API /openapi.json returned JSON without an object paths map.");
+  }
+  return REQUIRED_OPENAPI_PATHS.filter((path) => !Object.prototype.hasOwnProperty.call(payload.paths, path));
+}
+
 async function checkOpenApi(options, {
   fetchImpl,
   requestId,
@@ -471,6 +482,10 @@ async function checkOpenApi(options, {
   requireOkResponse(response, "API /openapi.json");
   const payload = parseJsonBody(response.body, "API /openapi.json");
   const pathCount = getOpenApiPathCount(payload);
+  const missingRequiredPaths = getMissingRequiredOpenApiPaths(payload);
+  if (missingRequiredPaths.length > 0) {
+    throw new Error(`API /openapi.json missing required paths: ${missingRequiredPaths.join(", ")}`);
+  }
   logger?.log(`✓ API /openapi.json ${response.statusCode} (${pathCount} paths)`);
 
   return {
@@ -478,6 +493,7 @@ async function checkOpenApi(options, {
     statusCode: response.statusCode,
     durationMs: response.durationMs,
     pathCount,
+    requiredPaths: REQUIRED_OPENAPI_PATHS,
   };
 }
 

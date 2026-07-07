@@ -45,6 +45,11 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
 const DISCOVERY_CACHE_GROUPS = ["discovery"] as const;
+const STOREFRONT_URL_CACHE_GROUPS = [
+  ...HOMEPAGE_CACHE_GROUPS,
+  ...LAYOUT_CACHE_GROUPS,
+  ...DISCOVERY_CACHE_GROUPS,
+] as const;
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const CURRENCY_CACHE_GROUPS = ["layout", "checkout"] as const;
 const MEDIA_CACHE_GROUPS = ["media"] as const;
@@ -746,7 +751,9 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
   await saveStorefrontUrl(db, storefrontUrl);
   layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
   await invalidateSiteSettingsCache(getKv());
-  await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+  await invalidateApiAndScheduleStorefrontGroups(STOREFRONT_URL_CACHE_GROUPS, c, {
+    htmlPaths: SEO_DISCOVERY_WARM_PATHS,
+  });
   return ok(c, { message: "Storefront URL saved successfully" });
 });
 

@@ -129,6 +129,7 @@ export const queryKeys = {
     all: ["analytics"] as const,
     list: () => ["analytics", "list"] as const,
     detail: (id: string) => ["analytics", "detail", id] as const,
+    providerHealth: () => ["analytics", "provider-health"] as const,
   },
 
   // ── Inventory ────────────────────────────────────────────────────

@@ -498,7 +498,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(getGroupsForPath("/api/v1/admin/settings/footer")).toEqual(["layout"]);
     expect(getGroupsForPath("/api/v1/admin/settings/theme")).toEqual(["layout"]);
     expect(getGroupsForPath("/api/v1/admin/settings/storefront-url")).toEqual([
+      "homepage",
       "layout",
+      "discovery",
     ]);
     expect(getGroupsForPath("/api/v1/admin/settings/currency")).toEqual([
       "layout",

@@ -33,6 +33,16 @@ function jsonResponse(payload, status = 200) {
   });
 }
 
+function openApiResponse(paths = {}) {
+  return jsonResponse({
+    openapi: "3.0.0",
+    paths: {
+      "/api/v1/admin/analytics/health": {},
+      ...paths,
+    },
+  });
+}
+
 function seoDiscoveryPolicy(overrides = {}) {
   return {
     sitemap: {
@@ -719,6 +729,15 @@ describe("release-check discovery evaluators", () => {
       ],
     });
 
+    const topLevelPaymentHandlers = ucpProfile();
+    topLevelPaymentHandlers.ucp.payment_handlers = {
+      "com.example.pay": [{ id: "example_pay" }],
+    };
+    expect(evaluateUcpProfile(topLevelPaymentHandlers, { storefrontOrigin })).toMatchObject({
+      ok: false,
+      errors: ["UCP profile must not include a top-level payment_handlers field."],
+    });
+
     const offOrigin = ucpProfile();
     offOrigin.ucp.services["dev.ucp.shopping"][0].endpoint = "https://api.example.test/ucp";
     expect(evaluateUcpProfile(offOrigin, { storefrontOrigin })).toMatchObject({
@@ -764,12 +783,10 @@ describe("runReleaseCheck", () => {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyzResponses.shift() ?? readyResponse();
         if (parsed.pathname === "/api/v1/openapi.json") {
-          return jsonResponse({
-            paths: {
-              "/api/v1/health": {},
-              "/api/v1/readyz": {},
-              "/api/v1/openapi.json": {},
-            },
+          return openApiResponse({
+            "/api/v1/health": {},
+            "/api/v1/readyz": {},
+            "/api/v1/openapi.json": {},
           });
         }
         if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse();
@@ -866,7 +883,7 @@ describe("runReleaseCheck", () => {
       healthStatusCode: 200,
       readyCount: 3,
       readySampleCount: 4,
-      openApiPathCount: 3,
+      openApiPathCount: 4,
       deploymentVersionId: "api-version",
     });
     expect(result.checks.dashboard).toMatchObject({
@@ -970,7 +987,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse(disabledDiscoveryPolicy);
       }
 
@@ -1081,7 +1098,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse(disabledDiscoveryPolicy);
       }
 
@@ -1132,7 +1149,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") {
           return seoPolicyResponse({
             sitemap: {
@@ -1208,7 +1225,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") {
           return seoPolicyResponse({
             sitemap: {
@@ -1283,7 +1300,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") {
           return seoPolicyResponse({
             sitemap: {
@@ -1350,6 +1367,83 @@ describe("runReleaseCheck", () => {
     });
   });
 
+  it("fails UCP discovery when top-level payment_handlers is present without payment capabilities", async () => {
+    const requestedPaths = [];
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+      requestedPaths.push(parsed.pathname);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
+        if (parsed.pathname === "/api/v1/seo") {
+          return seoPolicyResponse({
+            sitemap: {
+              enabled: true,
+              staticPages: false,
+              products: false,
+              categories: false,
+              collections: false,
+              pages: false,
+            },
+            feeds: { productCatalogEnabled: false },
+          });
+        }
+      }
+
+      if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+        return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "storefront.example.test") {
+        if (parsed.pathname === "/health") return textResponse("ok");
+        if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxt());
+        if (parsed.pathname === "/sitemap.xml") return discoveryResponse(sitemapXml());
+        if (parsed.pathname === "/.well-known/ucp") {
+          const profile = ucpProfile();
+          profile.ucp.payment_handlers = {
+            "com.example.pay": [{ id: "example_pay" }],
+          };
+          return ucpProfileResponse(profile);
+        }
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    let thrown;
+    try {
+      await runReleaseCheck(parseReleaseCheckArgs([
+        "--skip-wrangler",
+        "--api-base-url", "https://api.example.test",
+        "--storefront-url", "https://storefront.example.test",
+        "--dashboard-url", "https://dashboard.example.test",
+      ]), {
+        apiConfig: monitoringApiConfig(),
+        fetchImpl,
+        execFileImpl: vi.fn(),
+        rootDir: "/repo",
+        readFileImpl: () => verifiedTracker(),
+        fileExistsImpl: () => true,
+        logger: null,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toContain("UCP profile failed");
+    expect(thrown.message).toContain("top-level payment_handlers");
+    expect(thrown.result.checks.ucpDiscovery).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining("top-level payment_handlers"),
+    });
+    expect(requestedPaths).toContain("/.well-known/ucp");
+    expect(requestedPaths).not.toContain("/ucp/catalog/search");
+  });
+
   it("fails UCP discovery when product detail does not keep the candidate variant first", async () => {
     const fetchImpl = vi.fn(async (url, init = {}) => {
       const parsed = new URL(url);
@@ -1357,7 +1451,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse();
       }
 
@@ -1436,7 +1530,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") {
           return seoPolicyResponse({
             sitemap: {
@@ -1545,7 +1639,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") {
           return seoPolicyResponse({
             sitemap: {
@@ -1623,7 +1717,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") {
           return seoPolicyResponse({
             sitemap: {
@@ -1730,7 +1824,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") return seoResponse();
       }
 
@@ -1783,7 +1877,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") {
           return jsonResponse({
             success: true,
@@ -1914,7 +2008,7 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
-        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
         if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse();
       }
       if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {

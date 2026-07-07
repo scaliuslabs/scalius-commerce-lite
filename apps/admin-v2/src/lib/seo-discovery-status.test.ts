@@ -51,6 +51,7 @@ describe("buildSeoDiscoveryStatus", () => {
         companyName: "Scalius Mart",
         legalName: "",
       },
+      hasStoreLogo: true,
     });
 
     expect(status.sitemap.title).toBe("Sitemap index on");
@@ -85,6 +86,42 @@ describe("buildSeoDiscoveryStatus", () => {
       "OnlineStore schema needs an absolute Store URL, a business name, and a header logo; Product seller identity uses Business settings only; ProductGroup schema describes optioned products; shipping schema uses active shipping methods; return-policy schema uses only saved public policy fields. BreadcrumbList and CollectionPage are separate controls.",
     );
     expect(status.structuredData.identityWarning).toBeUndefined();
+    expect(status.structuredData.schemaPreviewRows).toEqual([
+      {
+        key: "onlineStore",
+        tone: "ok",
+        title: "OnlineStore ready",
+        summary:
+          "Home/layout pages can emit store identity from Business settings, Store URL, header logo, and safe public social links.",
+      },
+      {
+        key: "websiteSearch",
+        tone: "disabled",
+        title: "WebSite SearchAction off",
+        summary: "Search box JSON-LD is disabled for global pages.",
+      },
+      {
+        key: "merchantReturnPolicy",
+        tone: "ok",
+        title: "MerchantReturnPolicy ready",
+        summary:
+          "Can attach through OnlineStore and Product offers when those pages are public and schema is eligible.",
+      },
+      {
+        key: "productPages",
+        tone: "ok",
+        title: "Product page schema ready",
+        summary:
+          "Product/ProductGroup on; shipping details on; product breadcrumbs on; Only public, indexed product pages emit resource JSON-LD.",
+      },
+      {
+        key: "categoryCollectionPages",
+        tone: "info",
+        title: "Category/collection schema partial",
+        summary:
+          "CollectionPage off; BreadcrumbList on; Applies to public indexed categories and collections; CMS pages do not emit page-specific JSON-LD today.",
+      },
+    ]);
     expect(status.storefront.mode).toBe("absolute");
     expect(status.storefront.links).toContainEqual({
       key: "sitemap",
@@ -210,11 +247,64 @@ describe("buildSeoDiscoveryStatus", () => {
     expect(status.productFeed.tone).toBe("disabled");
     expect(status.structuredData.tone).toBe("disabled");
     expect(status.structuredData.returnPolicySummary).toBe("return policy off");
+    expect(status.structuredData.schemaPreviewRows).toContainEqual({
+      key: "merchantReturnPolicy",
+      tone: "disabled",
+      title: "MerchantReturnPolicy off",
+      summary:
+        "No return-policy fact is attached. That is valid when a public policy is disabled or still incomplete.",
+    });
     expect(status.storefront.mode).toBe("unavailable");
     expect(status.storefront.baseUrl).toBeNull();
     expect(status.storefront.links.every((link) => link.href === null)).toBe(
       true,
     );
+  });
+
+  it("keeps nested schema preview rows honest about missing targets", () => {
+    const status = buildSeoDiscoveryStatus({
+      discovery: {
+        structuredData: {
+          organization: false,
+          websiteSearch: false,
+          products: false,
+          productGroups: true,
+          offerShippingDetails: true,
+          breadcrumbs: false,
+          collections: true,
+        },
+        returnPolicy: {
+          enabled: true,
+          country: "BD",
+          category: "finite",
+          returnWindowDays: 7,
+          returnFees: "customer_responsibility",
+          returnMethod: "mail",
+          policyUrl: "/returns",
+        },
+      },
+      storefrontUrl: "https://shop.example.com",
+      businessIdentity: {
+        companyName: "Scalius Mart",
+        legalName: "",
+      },
+      hasStoreLogo: true,
+    });
+
+    expect(status.structuredData.schemaPreviewRows).toContainEqual({
+      key: "merchantReturnPolicy",
+      tone: "warning",
+      title: "MerchantReturnPolicy waiting",
+      summary:
+        "Return-policy facts are saved, but they only emit through OnlineStore or Product offer schema. Turn on one of those targets to publish them.",
+    });
+    expect(status.structuredData.schemaPreviewRows).toContainEqual({
+      key: "productPages",
+      tone: "warning",
+      title: "Product add-ons waiting",
+      summary:
+        "ProductGroup variants and offer shipping details only attach when Product schema is enabled. Breadcrumbs follow their separate switch.",
+    });
   });
 
   it("normalizes return-policy discovery facts for schema-safe UI consumers", () => {

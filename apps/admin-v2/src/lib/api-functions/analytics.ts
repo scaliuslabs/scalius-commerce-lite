@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { AnalyticsScript } from "~/types/api-responses";
+import type {
+  AnalyticsProviderHealthResponse,
+  AnalyticsScript,
+} from "~/types/api-responses";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 
 export type CreateAnalyticsScriptInput = Record<string, unknown>;
@@ -29,6 +32,12 @@ type ToggleAnalyticsScriptPayload = {
 export const getAnalyticsScripts = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<AnalyticsScript[]>("/analytics");
+  },
+);
+
+export const getAnalyticsProviderHealth = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<AnalyticsProviderHealthResponse>("/analytics/health");
   },
 );
 

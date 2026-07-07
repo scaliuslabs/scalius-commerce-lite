@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
+  getAnalyticsProviderHealth,
   getAnalyticsScript,
   getAnalyticsScripts,
 } from "../api-functions/analytics";
@@ -12,6 +13,13 @@ export const analyticsScriptsQueryOptions = () =>
     queryKey: queryKeys.analytics.list(),
     queryFn: () => getAnalyticsScripts(),
     staleTime: LOOKUP_STALE_TIME_MS,
+  });
+
+export const analyticsProviderHealthQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.analytics.providerHealth(),
+    queryFn: () => getAnalyticsProviderHealth(),
+    staleTime: 0,
   });
 
 export const analyticsScriptQueryOptions = (id: string) =>

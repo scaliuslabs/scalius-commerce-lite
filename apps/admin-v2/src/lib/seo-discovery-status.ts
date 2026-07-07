@@ -80,6 +80,20 @@ const RETURN_POLICY_METHOD_LABELS: Record<SeoReturnPolicyMethod, string> = {
 };
 
 export type SeoDiscoveryTone = "ok" | "warning" | "disabled" | "info";
+export type SeoStructuredDataPreviewKey =
+  | "onlineStore"
+  | "websiteSearch"
+  | "merchantReturnPolicy"
+  | "productPages"
+  | "categoryCollectionPages";
+
+export interface SeoStructuredDataPreviewRow {
+  key: SeoStructuredDataPreviewKey;
+  tone: SeoDiscoveryTone;
+  title: string;
+  summary: string;
+}
+
 export const SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS = [
   ["robots", "robots.txt", "/robots.txt", "robots"] as const,
   ["sitemap", "Sitemap index", "/sitemap.xml", "sitemap"] as const,
@@ -236,6 +250,7 @@ export interface SeoDiscoveryStatus {
     collectionsEnabled: boolean;
     organizationNote: string;
     identityWarning?: string;
+    schemaPreviewRows: SeoStructuredDataPreviewRow[];
   };
   ucpCatalog: {
     tone: SeoDiscoveryTone;
@@ -400,6 +415,354 @@ function buildReturnPolicyEmissionNote({
       " and ",
     )}; normal schema prerequisites still apply.`,
   };
+}
+
+function onlineStorePrerequisiteSummary({
+  businessIdentity,
+  hasAbsoluteStorefrontUrl,
+  hasStoreLogo,
+}: {
+  businessIdentity: SeoDiscoveryBusinessIdentity | null | undefined;
+  hasAbsoluteStorefrontUrl: boolean;
+  hasStoreLogo: boolean | null | undefined;
+}): string | undefined {
+  if (!hasAbsoluteStorefrontUrl) return "Add an absolute http(s) Store URL.";
+  if (!hasBusinessSchemaName(businessIdentity)) {
+    return "Add a company name or legal name in Business settings.";
+  }
+  if (hasStoreLogo === false) return "Add a header logo.";
+  return undefined;
+}
+
+function buildOnlineStoreSchemaPreviewRow({
+  businessIdentity,
+  enabled,
+  hasAbsoluteStorefrontUrl,
+  hasStoreLogo,
+}: {
+  businessIdentity: SeoDiscoveryBusinessIdentity | null | undefined;
+  enabled: boolean;
+  hasAbsoluteStorefrontUrl: boolean;
+  hasStoreLogo: boolean | null | undefined;
+}): SeoStructuredDataPreviewRow {
+  if (!enabled) {
+    return {
+      key: "onlineStore",
+      tone: "disabled",
+      title: "OnlineStore off",
+      summary:
+        "Global store identity JSON-LD is disabled; product pages can still use their own schema controls.",
+    };
+  }
+
+  const prerequisite = onlineStorePrerequisiteSummary({
+    businessIdentity,
+    hasAbsoluteStorefrontUrl,
+    hasStoreLogo,
+  });
+
+  if (prerequisite) {
+    return {
+      key: "onlineStore",
+      tone: "warning",
+      title: "OnlineStore needs setup",
+      summary: `${prerequisite} Runtime omits OnlineStore until Store URL, business name, and header logo are ready.`,
+    };
+  }
+
+  return {
+    key: "onlineStore",
+    tone: "ok",
+    title: "OnlineStore ready",
+    summary:
+      "Home/layout pages can emit store identity from Business settings, Store URL, header logo, and safe public social links.",
+  };
+}
+
+function buildWebsiteSearchSchemaPreviewRow({
+  businessIdentity,
+  enabled,
+  hasAbsoluteStorefrontUrl,
+}: {
+  businessIdentity: SeoDiscoveryBusinessIdentity | null | undefined;
+  enabled: boolean;
+  hasAbsoluteStorefrontUrl: boolean;
+}): SeoStructuredDataPreviewRow {
+  if (!enabled) {
+    return {
+      key: "websiteSearch",
+      tone: "disabled",
+      title: "WebSite SearchAction off",
+      summary: "Search box JSON-LD is disabled for global pages.",
+    };
+  }
+
+  if (!hasAbsoluteStorefrontUrl) {
+    return {
+      key: "websiteSearch",
+      tone: "warning",
+      title: "SearchAction needs Store URL",
+      summary:
+        "Add an absolute http(s) Store URL so the search target can point to the public /search route.",
+    };
+  }
+
+  if (!hasBusinessSchemaName(businessIdentity)) {
+    return {
+      key: "websiteSearch",
+      tone: "warning",
+      title: "SearchAction needs business name",
+      summary:
+        "Add a company name or legal name in Business settings before emitting WebSite SearchAction.",
+    };
+  }
+
+  return {
+    key: "websiteSearch",
+    tone: "ok",
+    title: "WebSite SearchAction ready",
+    summary:
+      "Global pages can emit a WebSite schema with the public /search?q=... target.",
+  };
+}
+
+function buildMerchantReturnPolicySchemaPreviewRow({
+  businessIdentity,
+  discovery,
+  hasAbsoluteStorefrontUrl,
+  hasStoreLogo,
+  policy,
+}: {
+  businessIdentity: SeoDiscoveryBusinessIdentity | null | undefined;
+  discovery: SeoDiscoverySettings;
+  hasAbsoluteStorefrontUrl: boolean;
+  hasStoreLogo: boolean | null | undefined;
+  policy: SeoReturnPolicySettings;
+}): SeoStructuredDataPreviewRow {
+  if (!policy.enabled) {
+    return {
+      key: "merchantReturnPolicy",
+      tone: "disabled",
+      title: "MerchantReturnPolicy off",
+      summary:
+        "No return-policy fact is attached. That is valid when a public policy is disabled or still incomplete.",
+    };
+  }
+
+  const onlineStoreIssue = discovery.structuredData.organization
+    ? onlineStorePrerequisiteSummary({
+        businessIdentity,
+        hasAbsoluteStorefrontUrl,
+        hasStoreLogo,
+      })
+    : undefined;
+  const productIssue =
+    discovery.structuredData.products && !hasAbsoluteStorefrontUrl
+      ? "Product offers need an absolute Store URL."
+      : undefined;
+  const readyTargets = [
+    discovery.structuredData.organization && !onlineStoreIssue
+      ? "OnlineStore"
+      : null,
+    discovery.structuredData.products && !productIssue
+      ? "Product offers"
+      : null,
+  ].filter((target): target is string => Boolean(target));
+  const waitingTargets = [
+    onlineStoreIssue ? `OnlineStore waits: ${onlineStoreIssue}` : null,
+    productIssue ? productIssue : null,
+  ].filter((target): target is string => Boolean(target));
+
+  if (
+    !discovery.structuredData.organization &&
+    !discovery.structuredData.products
+  ) {
+    return {
+      key: "merchantReturnPolicy",
+      tone: "warning",
+      title: "MerchantReturnPolicy waiting",
+      summary:
+        "Return-policy facts are saved, but they only emit through OnlineStore or Product offer schema. Turn on one of those targets to publish them.",
+    };
+  }
+
+  if (readyTargets.length === 0) {
+    return {
+      key: "merchantReturnPolicy",
+      tone: "warning",
+      title: "MerchantReturnPolicy needs target",
+      summary: waitingTargets.join(" "),
+    };
+  }
+
+  return {
+    key: "merchantReturnPolicy",
+    tone: waitingTargets.length > 0 ? "warning" : "ok",
+    title:
+      waitingTargets.length > 0
+        ? "MerchantReturnPolicy partially ready"
+        : "MerchantReturnPolicy ready",
+    summary: [
+      `Can attach through ${readyTargets.join(" and ")} when those pages are public and schema is eligible.`,
+      ...waitingTargets,
+    ].join(" "),
+  };
+}
+
+function buildProductSchemaPreviewRow({
+  discovery,
+  hasAbsoluteStorefrontUrl,
+}: {
+  discovery: SeoDiscoverySettings;
+  hasAbsoluteStorefrontUrl: boolean;
+}): SeoStructuredDataPreviewRow {
+  const productsEnabled = discovery.structuredData.products;
+  const productGroupsEnabled = discovery.structuredData.productGroups;
+  const offerShippingDetailsEnabled =
+    discovery.structuredData.offerShippingDetails;
+  const breadcrumbsEnabled = discovery.structuredData.breadcrumbs;
+  const anyProductSchemaEnabled =
+    productsEnabled ||
+    productGroupsEnabled ||
+    offerShippingDetailsEnabled ||
+    breadcrumbsEnabled;
+
+  if (!anyProductSchemaEnabled) {
+    return {
+      key: "productPages",
+      tone: "disabled",
+      title: "Product page schema off",
+      summary:
+        "Product, ProductGroup, offer shipping, and product BreadcrumbList JSON-LD are disabled.",
+    };
+  }
+
+  if (!productsEnabled && (productGroupsEnabled || offerShippingDetailsEnabled)) {
+    return {
+      key: "productPages",
+      tone: "warning",
+      title: "Product add-ons waiting",
+      summary:
+        "ProductGroup variants and offer shipping details only attach when Product schema is enabled. Breadcrumbs follow their separate switch.",
+    };
+  }
+
+  if (!hasAbsoluteStorefrontUrl) {
+    return {
+      key: "productPages",
+      tone: "warning",
+      title: "Product pages need Store URL",
+      summary:
+        "Product and Breadcrumb URL fields need an absolute Store URL; noindexed products still suppress resource JSON-LD.",
+    };
+  }
+
+  return {
+    key: "productPages",
+    tone: productsEnabled && breadcrumbsEnabled ? "ok" : "info",
+    title:
+      productsEnabled && breadcrumbsEnabled
+        ? "Product page schema ready"
+        : "Product page schema partial",
+    summary: [
+      productsEnabled
+        ? productGroupsEnabled
+          ? "Product/ProductGroup on"
+          : "Product on"
+        : "Product off",
+      offerShippingDetailsEnabled ? "shipping details on" : "shipping details off",
+      breadcrumbsEnabled ? "product breadcrumbs on" : "product breadcrumbs off",
+      "Only public, indexed product pages emit resource JSON-LD.",
+    ].join("; "),
+  };
+}
+
+function buildCategoryCollectionSchemaPreviewRow({
+  discovery,
+  hasAbsoluteStorefrontUrl,
+}: {
+  discovery: SeoDiscoverySettings;
+  hasAbsoluteStorefrontUrl: boolean;
+}): SeoStructuredDataPreviewRow {
+  const collectionsEnabled = discovery.structuredData.collections;
+  const breadcrumbsEnabled = discovery.structuredData.breadcrumbs;
+
+  if (!collectionsEnabled && !breadcrumbsEnabled) {
+    return {
+      key: "categoryCollectionPages",
+      tone: "disabled",
+      title: "Category/collection schema off",
+      summary:
+        "CollectionPage and BreadcrumbList JSON-LD are disabled for category and collection pages. CMS pages do not emit page-specific JSON-LD today.",
+    };
+  }
+
+  if (!hasAbsoluteStorefrontUrl) {
+    return {
+      key: "categoryCollectionPages",
+      tone: "warning",
+      title: "Page schema needs Store URL",
+      summary:
+        "Category and collection schema URLs need an absolute Store URL; noindexed resources still suppress page-specific JSON-LD.",
+    };
+  }
+
+  return {
+    key: "categoryCollectionPages",
+    tone: collectionsEnabled && breadcrumbsEnabled ? "ok" : "info",
+    title:
+      collectionsEnabled && breadcrumbsEnabled
+        ? "Category/collection schema ready"
+        : "Category/collection schema partial",
+    summary: [
+      collectionsEnabled ? "CollectionPage on" : "CollectionPage off",
+      breadcrumbsEnabled ? "BreadcrumbList on" : "BreadcrumbList off",
+      "Applies to public indexed categories and collections; CMS pages do not emit page-specific JSON-LD today.",
+    ].join("; "),
+  };
+}
+
+function buildStructuredDataPreviewRows({
+  businessIdentity,
+  discovery,
+  hasAbsoluteStorefrontUrl,
+  hasStoreLogo,
+  returnPolicy,
+}: {
+  businessIdentity: SeoDiscoveryBusinessIdentity | null | undefined;
+  discovery: SeoDiscoverySettings;
+  hasAbsoluteStorefrontUrl: boolean;
+  hasStoreLogo: boolean | null | undefined;
+  returnPolicy: SeoReturnPolicySettings;
+}): SeoStructuredDataPreviewRow[] {
+  return [
+    buildOnlineStoreSchemaPreviewRow({
+      businessIdentity,
+      enabled: discovery.structuredData.organization,
+      hasAbsoluteStorefrontUrl,
+      hasStoreLogo,
+    }),
+    buildWebsiteSearchSchemaPreviewRow({
+      businessIdentity,
+      enabled: discovery.structuredData.websiteSearch,
+      hasAbsoluteStorefrontUrl,
+    }),
+    buildMerchantReturnPolicySchemaPreviewRow({
+      businessIdentity,
+      discovery,
+      hasAbsoluteStorefrontUrl,
+      hasStoreLogo,
+      policy: returnPolicy,
+    }),
+    buildProductSchemaPreviewRow({
+      discovery,
+      hasAbsoluteStorefrontUrl,
+    }),
+    buildCategoryCollectionSchemaPreviewRow({
+      discovery,
+      hasAbsoluteStorefrontUrl,
+    }),
+  ];
 }
 
 function isPlaceholderSitemapValue(value: string): boolean {
@@ -766,8 +1129,17 @@ export function buildSeoDiscoveryStatus({
     policyEnabled: normalized.returnPolicy.enabled,
     productsEnabled: normalized.structuredData.products,
   });
+  const schemaPreviewRows = buildStructuredDataPreviewRows({
+    businessIdentity,
+    discovery: normalized,
+    hasAbsoluteStorefrontUrl: Boolean(absoluteStorefrontUrl),
+    hasStoreLogo,
+    returnPolicy: normalized.returnPolicy,
+  });
   const structuredDataNeedsReview = Boolean(
-    identityWarning || returnPolicyEmission.warning,
+    identityWarning ||
+      returnPolicyEmission.warning ||
+      schemaPreviewRows.some((row) => row.tone === "warning"),
   );
   const anyStructuredDataEnabled =
     normalized.structuredData.organization ||
@@ -917,6 +1289,7 @@ export function buildSeoDiscoveryStatus({
       organizationNote:
         "OnlineStore schema needs an absolute Store URL, a business name, and a header logo; Product seller identity uses Business settings only; ProductGroup schema describes optioned products; shipping schema uses active shipping methods; return-policy schema uses only saved public policy fields. BreadcrumbList and CollectionPage are separate controls.",
       identityWarning,
+      schemaPreviewRows,
     },
     ucpCatalog: {
       tone: hasHttpsStorefrontUrl ? "ok" : "warning",
