@@ -15,6 +15,8 @@ describe("exact cache generations", () => {
     expect(shouldUseExactCacheGeneration("product_variants_prod_1")).toBe(true);
     expect(shouldUseExactCacheGeneration("feed_products_page=2&limit=5")).toBe(true);
     expect(shouldUseExactCacheGeneration("sitemap_products_page=2")).toBe(true);
+    expect(shouldUseExactCacheGeneration("all_products_default")).toBe(true);
+    expect(shouldUseExactCacheGeneration("category_products_shoes_default")).toBe(true);
     expect(shouldUseExactCacheGeneration("widget_wid_1")).toBe(true);
     expect(shouldUseExactCacheGeneration("widgets_scope_product_prod_1")).toBe(true);
     expect(shouldUseExactCacheGeneration("page_render_about-us_build")).toBe(true);
@@ -23,7 +25,6 @@ describe("exact cache generations", () => {
     expect(shouldUseExactCacheGeneration("global_shipping_methods")).toBe(true);
     expect(shouldUseExactCacheGeneration("shipping_zones_city_1")).toBe(true);
     expect(shouldUseExactCacheGeneration("shipping_areas_zone_1")).toBe(true);
-    expect(shouldUseExactCacheGeneration("all_products_default")).toBe(false);
     expect(cacheGenerationKeyForLogicalKey("shipping_zones_city_1")).toBe(
       "shipping_zones_",
     );
@@ -35,6 +36,12 @@ describe("exact cache generations", () => {
     );
     expect(cacheGenerationKeyForLogicalKey("sitemap_products_page=2")).toBe(
       "sitemap_products_",
+    );
+    expect(cacheGenerationKeyForLogicalKey("all_products_default")).toBe(
+      "all_products_",
+    );
+    expect(cacheGenerationKeyForLogicalKey("category_products_shoes_default")).toBe(
+      "category_products_",
     );
 
     expect(productSlugCacheKeyFromPath("/products/fish?size=m")).toBe(
@@ -151,6 +158,39 @@ describe("exact cache generations", () => {
     expect(store.put).toHaveBeenCalledOnce();
     expect(store.put).toHaveBeenCalledWith(
       buildExactCacheGenerationKey("storefront.example.com", "sitemap_products_"),
+      expect.any(String),
+    );
+  });
+
+  it("bumps product listing cache pages by list family", async () => {
+    const store = {
+      get: vi.fn(),
+      put: vi.fn(async () => undefined),
+    };
+
+    const result = await bumpExactCacheGenerations({
+      store,
+      hostname: "storefront.example.com",
+      logicalKeys: [
+        "all_products_default",
+        "all_products_page=2",
+        "category_products_shoes_default",
+        "category_products_bags_page=2",
+      ],
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result.map((item) => item.logicalKey)).toEqual([
+      "all_products_",
+      "category_products_",
+    ]);
+    expect(store.put).toHaveBeenCalledTimes(2);
+    expect(store.put).toHaveBeenCalledWith(
+      buildExactCacheGenerationKey("storefront.example.com", "all_products_"),
+      expect.any(String),
+    );
+    expect(store.put).toHaveBeenCalledWith(
+      buildExactCacheGenerationKey("storefront.example.com", "category_products_"),
       expect.any(String),
     );
   });
