@@ -3,6 +3,7 @@
 import { z } from "zod";
 import type { Product, ProductVariant, ProductImage } from "@scalius/database/schema";
 import type { ProductOptionSchema } from "@scalius/shared/product-options";
+import type { ProductCondition } from "@scalius/shared/product-condition";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
@@ -176,6 +177,7 @@ export interface StorefrontFeedProduct {
     freeDelivery: boolean;
     categoryId: string | null;
     excludeFromProductFeed: boolean;
+    productCondition: ProductCondition | null;
     hasVariants: boolean;
     availableForSale: boolean;
     imageUrl: string | null;

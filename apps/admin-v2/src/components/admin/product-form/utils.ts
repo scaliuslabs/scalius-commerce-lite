@@ -148,6 +148,7 @@ export const formatFormValuesForSubmission = (
     noIndex: values.noIndex,
     excludeFromSitemap: values.excludeFromSitemap,
     excludeFromProductFeed: values.excludeFromProductFeed,
+    productCondition: values.productCondition,
     variantOption1Label: values.variantOption1Label,
     variantOption2Label: values.variantOption2Label,
     variantOption1Schema: values.variantOption1Schema,

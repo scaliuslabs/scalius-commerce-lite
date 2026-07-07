@@ -37,6 +37,10 @@ import {
   normalizeProductOptionSchema,
   type ProductOptionSchema,
 } from "@scalius/shared/product-options";
+import {
+  normalizeSavedProductCondition,
+  PRODUCT_CONDITION_SCHEMA_URLS,
+} from "@scalius/shared/product-condition";
 
 const { slug } = Astro.params;
 if (!slug) {
@@ -186,6 +190,10 @@ const brandAttribute = product.attributes?.find(
   (a: { name: string }) => a.name.toLowerCase() === "brand",
 );
 const brandName = brandAttribute?.value?.trim() || null;
+const productCondition = normalizeSavedProductCondition(product.productCondition);
+const productConditionSchemaUrl = productCondition
+  ? PRODUCT_CONDITION_SCHEMA_URLS[productCondition]
+  : null;
 
 // Primary SKU
 const primarySku = buyerVariants[0]?.sku || product.id;
@@ -362,6 +370,7 @@ const productJsonLd = discoverySettings.structuredData.products && !product.noIn
                   url: buildVariantProductUrl(variant) ?? canonicalUrl,
                   priceCurrency: currencyCode,
                   price: variantPrice.toFixed(2),
+                  ...(productConditionSchemaUrl ? { itemCondition: productConditionSchemaUrl } : {}),
                   availability: isVariantAvailable(variant)
                     ? "https://schema.org/InStock"
                     : "https://schema.org/OutOfStock",
@@ -387,6 +396,7 @@ const productJsonLd = discoverySettings.structuredData.products && !product.noIn
               url: canonicalUrl,
               priceCurrency: currencyCode,
               price: product.discountedPrice.toFixed(2),
+              ...(productConditionSchemaUrl ? { itemCondition: productConditionSchemaUrl } : {}),
               availability: buyerStockSummary.canPurchaseAny
                 ? "https://schema.org/InStock"
                 : "https://schema.org/OutOfStock",

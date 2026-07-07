@@ -361,6 +361,7 @@ export async function getProductDetails(
             noIndex: products.noIndex,
             excludeFromSitemap: products.excludeFromSitemap,
             excludeFromProductFeed: products.excludeFromProductFeed,
+            productCondition: products.productCondition,
             variantOption1Label: products.variantOption1Label,
             variantOption2Label: products.variantOption2Label,
             variantOption1Schema: products.variantOption1Schema,
@@ -534,6 +535,7 @@ export async function createProduct(db: Database, data: CreateProductInput): Pro
             noIndex: data.noIndex ?? false,
             excludeFromSitemap: data.excludeFromSitemap ?? false,
             excludeFromProductFeed: data.excludeFromProductFeed ?? false,
+            productCondition: data.productCondition,
             variantOption1Label:
                 data.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
             variantOption2Label:
@@ -678,6 +680,7 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
                 noIndex: data.noIndex ?? false,
                 excludeFromSitemap: data.excludeFromSitemap ?? false,
                 excludeFromProductFeed: data.excludeFromProductFeed ?? false,
+                productCondition: data.productCondition,
                 variantOption1Label:
                     data.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
                 variantOption2Label:

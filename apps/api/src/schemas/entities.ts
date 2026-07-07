@@ -6,6 +6,7 @@
 
 import { z } from "@hono/zod-openapi";
 import { PRODUCT_OPTION_SCHEMA_VALUES } from "@scalius/shared/product-options";
+import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import {
   nullableTimestampSchema,
   optionalNullableTimestampSchema,
@@ -118,6 +119,7 @@ export const productDetailSchema = z
     noIndex: z.boolean(),
     excludeFromSitemap: z.boolean(),
     excludeFromProductFeed: z.boolean(),
+    productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
     variantOption1Label: z.string(),
     variantOption2Label: z.string(),
     variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),

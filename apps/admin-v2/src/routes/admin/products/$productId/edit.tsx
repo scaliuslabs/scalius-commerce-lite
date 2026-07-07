@@ -10,6 +10,7 @@ import type { ProductDetail, ProductImageDetail, ProductVariant } from "~/types/
 import {
   DEFAULT_PRODUCT_OPTION_LABELS,
   DEFAULT_PRODUCT_OPTION_SCHEMA,
+  DEFAULT_PRODUCT_CONDITION,
   type Category,
 } from "~/components/admin/product-form/types";
 import type { ProductVariant as LocalProductVariant } from "~/components/admin/product-form/variants/types";
@@ -60,6 +61,7 @@ function EditProductPage() {
     noIndex: product.noIndex,
     excludeFromSitemap: product.excludeFromSitemap,
     excludeFromProductFeed: product.excludeFromProductFeed,
+    productCondition: product.productCondition ?? DEFAULT_PRODUCT_CONDITION,
     variantOption1Label:
       product.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
     variantOption2Label:

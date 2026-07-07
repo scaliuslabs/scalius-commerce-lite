@@ -35,6 +35,7 @@ import {
   generateSlug,
   DEFAULT_PRODUCT_OPTION_LABELS,
   DEFAULT_PRODUCT_OPTION_SCHEMA,
+  DEFAULT_PRODUCT_CONDITION,
   type ProductFormValues,
   type Category,
 } from "./product-form";
@@ -115,6 +116,7 @@ export function ProductForm({
       noIndex: false,
       excludeFromSitemap: false,
       excludeFromProductFeed: false,
+      productCondition: DEFAULT_PRODUCT_CONDITION,
       variantOption1Label: DEFAULT_PRODUCT_OPTION_LABELS.option1,
       variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
       variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,

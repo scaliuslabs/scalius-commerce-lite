@@ -24,6 +24,7 @@ export { useProductVariants } from "./hooks/useProductVariants";
 
 // Types
 export {
+  DEFAULT_PRODUCT_CONDITION,
   DEFAULT_PRODUCT_OPTION_LABELS,
   DEFAULT_PRODUCT_OPTION_SCHEMA,
   productFormSchema,

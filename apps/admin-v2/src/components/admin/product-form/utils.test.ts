@@ -12,6 +12,7 @@ import {
 import {
   DEFAULT_PRODUCT_OPTION_LABELS,
   DEFAULT_PRODUCT_OPTION_SCHEMA,
+  DEFAULT_PRODUCT_CONDITION,
   productFormSchema,
   type ProductFormValues,
 } from "./types";
@@ -101,6 +102,7 @@ describe("product form catalog option mapping", () => {
     noIndex: false,
     excludeFromSitemap: false,
     excludeFromProductFeed: false,
+    productCondition: DEFAULT_PRODUCT_CONDITION,
     variantOption1Label: DEFAULT_PRODUCT_OPTION_LABELS.option1,
     variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
     variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
@@ -165,6 +167,24 @@ describe("product form catalog option mapping", () => {
       variantOption2Label: "Shade",
       variantOption1Schema: "size",
       variantOption2Schema: "color",
+    });
+  });
+
+  it("keeps product condition as an explicit merchant-owned submission field", () => {
+    expect(productFormSchema.safeParse({ ...baseValues, productCondition: "used" }).success).toBe(true);
+    expect(productFormSchema.safeParse({ ...baseValues, productCondition: "open-box" }).success).toBe(false);
+
+    expect(
+      formatFormValuesForSubmission(
+        {
+          ...baseValues,
+          productCondition: "refurbished",
+        },
+        false,
+        "option2",
+      ),
+    ).toMatchObject({
+      productCondition: "refurbished",
     });
   });
 });

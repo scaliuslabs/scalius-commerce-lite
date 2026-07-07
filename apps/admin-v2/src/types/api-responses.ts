@@ -126,6 +126,7 @@ export interface Product {
   noIndex: boolean;
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
+  productCondition: "new" | "refurbished" | "used" | null;
   variantOption1Label: string;
   variantOption2Label: string;
   variantOption1Schema: "size" | "color" | "material" | "pattern" | "none";

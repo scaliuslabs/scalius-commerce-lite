@@ -28,6 +28,7 @@ import {
   normalizeProductOptionSchema,
   type ProductOptionSchema,
 } from "@scalius/shared/product-options";
+import { normalizeSavedProductCondition } from "@scalius/shared/product-condition";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import {
   isVariantAvailable,
@@ -532,7 +533,10 @@ function generateProductItem(
   item += `    <g:description>${escapeXml(toPlainFeedDescription(product.description) || product.name)}</g:description>\n`;
   item += `    <g:link>${escapeXml(productUrl)}</g:link>\n`;
   item += `    <g:availability>${availability}</g:availability>\n`;
-  item += `    <g:condition>new</g:condition>\n`;
+  const condition = normalizeSavedProductCondition(product.productCondition);
+  if (condition) {
+    item += `    <g:condition>${condition}</g:condition>\n`;
+  }
   item += `    <g:price>${formatFeedPrice(feedPrice, currencyCode)}</g:price>\n`;
 
   // Image (required)

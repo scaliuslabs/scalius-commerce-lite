@@ -4617,6 +4617,7 @@ export type GetApiV1ProductsFeedResponses = {
                 freeDelivery: boolean;
                 categoryId: string | null;
                 excludeFromProductFeed: boolean;
+                productCondition: 'new' | 'refurbished' | 'used' | null;
                 hasVariants: boolean;
                 availableForSale: boolean;
                 imageUrl: string | null;
@@ -29701,6 +29702,7 @@ export type PostApiV1AdminProductsData = {
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
+        productCondition: 'new' | 'refurbished' | 'used';
         variantOption1Label?: string;
         variantOption2Label?: string;
         variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
@@ -30153,6 +30155,7 @@ export type GetApiV1AdminProductsByIdResponses = {
             noIndex: boolean;
             excludeFromSitemap: boolean;
             excludeFromProductFeed: boolean;
+            productCondition: 'new' | 'refurbished' | 'used' | null;
             variantOption1Label: string;
             variantOption2Label: string;
             variantOption1Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
@@ -30241,6 +30244,7 @@ export type PutApiV1AdminProductsByIdData = {
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
+        productCondition: 'new' | 'refurbished' | 'used';
         variantOption1Label?: string;
         variantOption2Label?: string;
         variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
