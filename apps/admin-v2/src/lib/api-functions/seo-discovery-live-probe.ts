@@ -47,6 +47,12 @@ interface ProbeTarget {
   minimumSitemapLocs?: number;
 }
 
+function probeAcceptHeader(kind: SeoDiscoveryLiveProbeKind): string {
+  return kind === "ucpProfile"
+    ? "application/json,application/ucp+json;q=0.9,*/*;q=0.1"
+    : "application/xml,text/xml,text/plain;q=0.9,*/*;q=0.1";
+}
+
 function safeHeaderValue(value: string | null): string | null {
   if (!value) return null;
   const trimmed = value.trim();
@@ -173,7 +179,7 @@ async function probeEndpoint({
       cache: "no-store",
       signal: controller.signal,
       headers: {
-        Accept: "application/xml,text/xml,text/plain;q=0.9,*/*;q=0.1",
+        Accept: probeAcceptHeader(kind),
       },
     });
     const body = await readBoundedResponseText(response, maxBodyBytes);
@@ -234,10 +240,23 @@ function countEnabledSitemapSections(
   ).length;
 }
 
-function buildProbeTargets(discoveryValue: unknown): ProbeTarget[] {
+function buildProbeTargets(discoveryValue: unknown, baseUrl: URL): ProbeTarget[] {
   const discovery = normalizeSeoDiscoverySettingsWithReturnPolicy(discoveryValue);
   const targets: ProbeTarget[] = SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS.map(
     ([key, label, path, kind]) => {
+      if (kind === "ucpProfile") {
+        return {
+          key,
+          kind,
+          label,
+          path,
+          disabledReason:
+            baseUrl.protocol === "https:"
+              ? undefined
+              : "UCP public discovery requires an HTTPS Store URL, so this catalog profile check is skipped.",
+        };
+      }
+
       if (kind === "robots") {
         return {
           key,
@@ -336,7 +355,7 @@ export async function runSeoDiscoveryLiveProbe(
   const policyPayload = deps.getDiscoveryPolicy
     ? await deps.getDiscoveryPolicy()
     : { discovery: undefined };
-  const probeTargets = buildProbeTargets(policyPayload.discovery);
+  const probeTargets = buildProbeTargets(policyPayload.discovery, baseUrl);
   const resources = await Promise.all(
     probeTargets.map((target) =>
       probeEndpoint({

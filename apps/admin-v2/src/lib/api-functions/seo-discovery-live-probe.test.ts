@@ -28,6 +28,38 @@ function textResponse(
   });
 }
 
+function ucpProfileResponse(
+  overrides: Record<string, unknown> = {},
+  init?: { status?: number; contentType?: string; cacheControl?: string },
+) {
+  return textResponse(
+    JSON.stringify({
+      ucp: {
+        version: "2026-04-08",
+        services: {
+          "dev.ucp.shopping": [
+            {
+              version: "2026-04-08",
+              transport: "rest",
+              endpoint: "https://shop.example.com/ucp",
+            },
+          ],
+        },
+        capabilities: {
+          "dev.ucp.shopping.catalog.search": [{ version: "2026-04-08" }],
+          "dev.ucp.shopping.catalog.lookup": [{ version: "2026-04-08" }],
+        },
+        ...overrides,
+      },
+    }),
+    {
+      contentType: "application/json; charset=utf-8",
+      cacheControl: "public, max-age=300",
+      ...init,
+    },
+  );
+}
+
 describe("runSeoDiscoveryLiveProbe", () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -98,6 +130,9 @@ describe("runSeoDiscoveryLiveProbe", () => {
             },
           );
         }
+        if (url.endsWith("/.well-known/ucp")) {
+          return ucpProfileResponse();
+        }
         return textResponse(
           "<rss><channel><item><g:link>https://shop.example.com/products/a</g:link><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item></channel></rss>",
           {
@@ -122,6 +157,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
       "https://shop.example.com/sitemap.xml",
       "https://shop.example.com/api/product-feed.xml?limit=5",
       "https://shop.example.com/api/facebook-feed.xml?limit=5",
+      "https://shop.example.com/.well-known/ucp",
       "https://shop.example.com/sitemap-static.xml",
       "https://shop.example.com/sitemap-products.xml?page=1",
       "https://shop.example.com/sitemap-categories.xml",
@@ -143,6 +179,13 @@ describe("runSeoDiscoveryLiveProbe", () => {
       });
       expect(requestInit.signal).toBeInstanceOf(AbortSignal);
     }
+    const ucpCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).endsWith("/.well-known/ucp"),
+    );
+    expect(ucpCall).toBeTruthy();
+    expect((ucpCall?.[1] as RequestInit | undefined)?.headers).toMatchObject({
+      Accept: "application/json,application/ucp+json;q=0.9,*/*;q=0.1",
+    });
 
     expect(result.ok).toBe(true);
     expect(result.resources).toEqual(
@@ -194,6 +237,22 @@ describe("runSeoDiscoveryLiveProbe", () => {
           },
         }),
         expect.objectContaining({
+          key: "ucpProfile",
+          kind: "ucpProfile",
+          ok: true,
+          status: 200,
+          contentType: "application/json; charset=utf-8",
+          cacheControl: "public, max-age=300",
+          counts: {
+            ucpValidJson: 1,
+            ucpVersion: "2026-04-08",
+            ucpShoppingRestServices: 1,
+            ucpCatalogCapabilities: 2,
+            ucpForbiddenCapabilities: 0,
+            ucpPaymentHandlers: 0,
+          },
+        }),
+        expect.objectContaining({
           key: "staticPagesSitemap",
           kind: "sitemapChild",
           ok: true,
@@ -236,6 +295,9 @@ describe("runSeoDiscoveryLiveProbe", () => {
           </channel></rss>`,
           { contentType: "application/rss+xml" },
         );
+      }
+      if (url.endsWith("/.well-known/ucp")) {
+        return ucpProfileResponse();
       }
       return textResponse(
         "<rss><channel><item><g:link>https://shop.example.com/products/a</g:link><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item></channel></rss>",
@@ -306,6 +368,9 @@ describe("runSeoDiscoveryLiveProbe", () => {
           { contentType: "application/xml" },
         );
       }
+      if (url.endsWith("/.well-known/ucp")) {
+        return ucpProfileResponse();
+      }
       return textResponse("<urlset><url><loc>https://shop.example.com/</loc></url></urlset>", {
         contentType: "application/xml",
       });
@@ -320,6 +385,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
       "https://shop.example.com/robots.txt",
       "https://shop.example.com/sitemap.xml",
+      "https://shop.example.com/.well-known/ucp",
       "https://shop.example.com/sitemap-static.xml",
     ]);
     expect(result.ok).toBe(true);
@@ -348,6 +414,18 @@ describe("runSeoDiscoveryLiveProbe", () => {
             "Catalog feeds are disabled by the current SEO discovery policy.",
         }),
         expect.objectContaining({
+          key: "ucpProfile",
+          status: 200,
+          counts: {
+            ucpValidJson: 1,
+            ucpVersion: "2026-04-08",
+            ucpShoppingRestServices: 1,
+            ucpCatalogCapabilities: 2,
+            ucpForbiddenCapabilities: 0,
+            ucpPaymentHandlers: 0,
+          },
+        }),
+        expect.objectContaining({
           key: "staticPagesSitemap",
           status: 200,
           counts: { sitemapLocs: 1 },
@@ -357,6 +435,136 @@ describe("runSeoDiscoveryLiveProbe", () => {
           status: null,
           disabledReason:
             "This sitemap section is disabled by the current SEO discovery policy.",
+        }),
+      ]),
+    );
+  });
+
+  it("skips the UCP profile on absolute HTTP Store URLs without using the feed toggle", async () => {
+    mocks.getStorefrontUrl.mockResolvedValue({
+      storefrontUrl: "http://shop.example.com/",
+    });
+    mocks.getDiscoveryPolicy.mockResolvedValue({
+      discovery: {
+        sitemap: { enabled: false },
+        feeds: { productCatalogEnabled: false },
+        robots: { advertiseSitemap: false },
+      },
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/robots.txt")) {
+        return textResponse("User-agent: *\nAllow: /", {
+          contentType: "text/plain",
+        });
+      }
+      if (url.endsWith("/sitemap.xml")) {
+        return textResponse("<sitemapindex></sitemapindex>", {
+          contentType: "application/xml",
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const result = await runSeoDiscoveryLiveProbe({
+      fetch: fetchMock as unknown as typeof fetch,
+      getDiscoveryPolicy: discoveryPolicyLookup,
+      getStorefrontUrl: storefrontUrlLookup,
+    });
+
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+      "http://shop.example.com/robots.txt",
+      "http://shop.example.com/sitemap.xml",
+    ]);
+    expect(result.ok).toBe(true);
+    expect(result.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "productFeed",
+          status: null,
+          disabledReason:
+            "Catalog feeds are disabled by the current SEO discovery policy.",
+        }),
+        expect.objectContaining({
+          key: "ucpProfile",
+          status: null,
+          disabledReason:
+            "UCP public discovery requires an HTTPS Store URL, so this catalog profile check is skipped.",
+        }),
+      ]),
+    );
+  });
+
+  it("warns when the UCP profile advertises checkout or payment capabilities", async () => {
+    mocks.getStorefrontUrl.mockResolvedValue({
+      storefrontUrl: "https://shop.example.com/",
+    });
+    mocks.getDiscoveryPolicy.mockResolvedValue({
+      discovery: {
+        sitemap: { enabled: false },
+        feeds: { productCatalogEnabled: false },
+        robots: { advertiseSitemap: false },
+      },
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/robots.txt")) {
+        return textResponse("User-agent: *\nAllow: /", {
+          contentType: "text/plain",
+        });
+      }
+      if (url.endsWith("/sitemap.xml")) {
+        return textResponse("<sitemapindex></sitemapindex>", {
+          contentType: "application/xml",
+        });
+      }
+      if (url.endsWith("/.well-known/ucp")) {
+        return ucpProfileResponse({
+          capabilities: {
+            "dev.ucp.shopping.catalog.search": [{ version: "2026-04-08" }],
+            "dev.ucp.shopping.catalog.lookup": [{ version: "2026-04-08" }],
+            "dev.ucp.shopping.checkout": [{ version: "2026-04-08" }],
+            "dev.ucp.shopping.orders": [{ version: "2026-04-08" }],
+          },
+          payment_handlers: {
+            "com.example.pay": [{ id: "example_pay" }],
+          },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const result = await runSeoDiscoveryLiveProbe({
+      fetch: fetchMock as unknown as typeof fetch,
+      getDiscoveryPolicy: discoveryPolicyLookup,
+      getStorefrontUrl: storefrontUrlLookup,
+    });
+
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+      "https://shop.example.com/robots.txt",
+      "https://shop.example.com/sitemap.xml",
+      "https://shop.example.com/.well-known/ucp",
+    ]);
+    expect(
+      fetchMock.mock.calls.some((call) => String(call[0]).includes("/ucp/catalog")),
+    ).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(result.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "ucpProfile",
+          ok: false,
+          status: 200,
+          counts: {
+            ucpValidJson: 1,
+            ucpVersion: "2026-04-08",
+            ucpShoppingRestServices: 1,
+            ucpCatalogCapabilities: 2,
+            ucpForbiddenCapabilities: 3,
+            ucpPaymentHandlers: 1,
+          },
+          error:
+            "UCP profile must stay catalog-only; remove cart, checkout, order, payment, or payment handler capabilities.",
         }),
       ]),
     );
@@ -389,6 +597,10 @@ describe("runSeoDiscoveryLiveProbe", () => {
                   { contentType: "application/xml" },
                 ),
               );
+              return;
+            }
+            if (url.endsWith("/.well-known/ucp")) {
+              resolve(ucpProfileResponse());
               return;
             }
             resolve(
@@ -438,7 +650,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.resources).toHaveLength(9);
+    expect(result.resources).toHaveLength(10);
     expect(
       result.resources.every(
         (resource) => resource.error === "Redirect blocked.",

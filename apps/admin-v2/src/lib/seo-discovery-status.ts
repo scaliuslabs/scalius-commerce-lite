@@ -41,6 +41,27 @@ const PREVIEW_ENDPOINTS = [
   ["feed", "Catalog feed XML", "/api/product-feed.xml"] as const,
 ];
 
+const UCP_PROFILE_PATH = "/.well-known/ucp";
+const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
+const UCP_CATALOG_SEARCH_CAPABILITY =
+  "dev.ucp.shopping.catalog.search";
+const UCP_CATALOG_LOOKUP_CAPABILITY =
+  "dev.ucp.shopping.catalog.lookup";
+const UCP_REQUIRED_CATALOG_CAPABILITIES = [
+  UCP_CATALOG_SEARCH_CAPABILITY,
+  UCP_CATALOG_LOOKUP_CAPABILITY,
+] as const;
+const UCP_FORBIDDEN_CAPABILITY_SEGMENTS = new Set([
+  "cart",
+  "carts",
+  "checkout",
+  "order",
+  "orders",
+  "payment",
+  "payments",
+  "payment_handlers",
+]);
+
 const RETURN_POLICY_CATEGORY_LABELS: Record<SeoReturnPolicyCategory, string> = {
   finite: "finite return window",
   unlimited: "unlimited returns",
@@ -73,6 +94,12 @@ export const SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS = [
     "Facebook feed",
     "/api/facebook-feed.xml?limit=5",
     "feed",
+  ] as const,
+  [
+    "ucpProfile",
+    "UCP catalog profile",
+    UCP_PROFILE_PATH,
+    "ucpProfile",
   ] as const,
 ];
 export const SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS = [
@@ -118,6 +145,12 @@ export interface SeoDiscoveryLiveProbeCounts {
   imageLinks?: number;
   absoluteImageLinks?: number;
   availabilityValues?: number;
+  ucpValidJson?: number;
+  ucpVersion?: string;
+  ucpShoppingRestServices?: number;
+  ucpCatalogCapabilities?: number;
+  ucpForbiddenCapabilities?: number;
+  ucpPaymentHandlers?: number;
 }
 
 export interface SeoDiscoveryLiveProbeResource {
@@ -202,6 +235,15 @@ export interface SeoDiscoveryStatus {
     organizationNote: string;
     identityWarning?: string;
   };
+  ucpCatalog: {
+    tone: SeoDiscoveryTone;
+    title: string;
+    summary: string;
+    profilePath: string;
+    profileHref: string | null;
+    capabilities: string[];
+    note: string;
+  };
   storefront: {
     tone: SeoDiscoveryTone;
     title: string;
@@ -222,6 +264,10 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
 function hasBusinessSchemaName(
@@ -421,10 +467,80 @@ function isAbsoluteHttpUrl(value: string | null): boolean {
   }
 }
 
+function isAbsoluteHttpsUrl(value: string | null): boolean {
+  if (!value) return false;
+
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function countRobotsSitemapLines(robotsTxt: string): number {
   return robotsTxt
     .split(/\r?\n/)
     .filter((line) => /^sitemap\s*:/i.test(line.trim())).length;
+}
+
+function capabilitySegments(capability: string): string[] {
+  return capability
+    .toLowerCase()
+    .split(".")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function isForbiddenUcpCapability(capability: string): boolean {
+  return capabilitySegments(capability).some((segment) =>
+    UCP_FORBIDDEN_CAPABILITY_SEGMENTS.has(segment),
+  );
+}
+
+function summarizeUcpProfileBody(body: string): SeoDiscoveryLiveProbeCounts {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return { ucpValidJson: 0 };
+  }
+
+  const root = asRecord(parsed);
+  const ucp = asRecord(root.ucp);
+  const services = asRecord(ucp.services);
+  const shoppingRestServices = asArray(services[UCP_SHOPPING_SERVICE]).filter(
+    (service) => {
+      const serviceRecord = asRecord(service);
+      return (
+        serviceRecord.transport === "rest" &&
+        isAbsoluteHttpsUrl(
+          typeof serviceRecord.endpoint === "string"
+            ? serviceRecord.endpoint
+            : null,
+        )
+      );
+    },
+  );
+  const capabilities = asRecord(ucp.capabilities);
+  const capabilityNames = Object.keys(capabilities);
+  const catalogCapabilities = UCP_REQUIRED_CATALOG_CAPABILITIES.filter(
+    (capability) => asArray(capabilities[capability]).length > 0,
+  );
+  const forbiddenCapabilities = capabilityNames.filter(
+    isForbiddenUcpCapability,
+  );
+  const paymentHandlers = Object.keys(asRecord(ucp.payment_handlers));
+  const version = typeof ucp.version === "string" ? ucp.version.trim() : "";
+
+  return {
+    ucpValidJson: 1,
+    ucpVersion: version || undefined,
+    ucpShoppingRestServices: shoppingRestServices.length,
+    ucpCatalogCapabilities: catalogCapabilities.length,
+    ucpForbiddenCapabilities:
+      forbiddenCapabilities.length + paymentHandlers.length,
+    ucpPaymentHandlers: paymentHandlers.length,
+  };
 }
 
 export function summarizeSeoDiscoveryProbeBody(
@@ -437,6 +553,10 @@ export function summarizeSeoDiscoveryProbeBody(
 
   if (key === "sitemap" || key.endsWith("Sitemap")) {
     return { sitemapLocs: countXmlStartTags(body, "loc") };
+  }
+
+  if (key === "ucpProfile") {
+    return summarizeUcpProfileBody(body);
   }
 
   const itemBodies = extractXmlElementTexts(body, "item");
@@ -473,7 +593,38 @@ export function getSeoDiscoveryLiveProbeCountIssue(
     bodyTruncated?: boolean;
   },
 ): string | undefined {
-  if (resource.kind !== "feed" || resource.bodyTruncated) return undefined;
+  if (resource.bodyTruncated) return undefined;
+
+  if (resource.kind === "ucpProfile") {
+    const issues: string[] = [];
+    if (resource.counts.ucpValidJson !== 1) {
+      return "UCP profile must be valid JSON.";
+    }
+    if (!resource.counts.ucpVersion) {
+      issues.push("UCP profile is missing ucp.version.");
+    }
+    if ((resource.counts.ucpShoppingRestServices ?? 0) < 1) {
+      issues.push(
+        "UCP profile must expose a dev.ucp.shopping REST service with an HTTPS endpoint.",
+      );
+    }
+    if (
+      (resource.counts.ucpCatalogCapabilities ?? 0) <
+      UCP_REQUIRED_CATALOG_CAPABILITIES.length
+    ) {
+      issues.push(
+        "UCP profile must advertise catalog search and catalog lookup.",
+      );
+    }
+    if ((resource.counts.ucpForbiddenCapabilities ?? 0) > 0) {
+      issues.push(
+        "UCP profile must stay catalog-only; remove cart, checkout, order, payment, or payment handler capabilities.",
+      );
+    }
+    return issues.length > 0 ? issues.join(" ") : undefined;
+  }
+
+  if (resource.kind !== "feed") return undefined;
 
   const itemCount = resource.counts.feedItems ?? 0;
   if (itemCount <= 0) return undefined;
@@ -575,6 +726,14 @@ export function buildSeoDiscoveryStatus({
   const feedNeedsStoreUrl =
     normalized.feeds.productCatalogEnabled && !absoluteStorefrontUrl;
   const robotsNeedsStoreUrl = !absoluteStorefrontUrl;
+  const ucpProfileHref =
+    absoluteStorefrontUrl?.protocol === "https:"
+      ? buildSeoDiscoveryHref(absoluteStorefrontUrl, UCP_PROFILE_PATH)
+      : null;
+  const hasHttpsStorefrontUrl = Boolean(ucpProfileHref);
+  const ucpStoreUrlIssue = absoluteStorefrontUrl
+    ? "UCP public discovery requires an HTTPS Store URL."
+    : `${storeUrlRequirement} UCP public discovery requires HTTPS.`;
 
   return {
     sitemap: {
@@ -713,6 +872,19 @@ export function buildSeoDiscoveryStatus({
       organizationNote:
         "OnlineStore schema needs an absolute Store URL, a business name, and a header logo; Product seller identity uses Business settings only; ProductGroup schema describes optioned products; shipping schema uses active shipping methods; return-policy schema uses only saved public policy fields. BreadcrumbList and CollectionPage are separate controls.",
       identityWarning,
+    },
+    ucpCatalog: {
+      tone: hasHttpsStorefrontUrl ? "ok" : "warning",
+      title: hasHttpsStorefrontUrl
+        ? "UCP catalog discovery on"
+        : "UCP catalog needs HTTPS Store URL",
+      summary: hasHttpsStorefrontUrl
+        ? "Shopping agents can discover read-only catalog search and lookup. Checkout, cart, order, and payment capabilities are not advertised."
+        : ucpStoreUrlIssue,
+      profilePath: UCP_PROFILE_PATH,
+      profileHref: ucpProfileHref,
+      capabilities: ["Catalog search", "Catalog lookup"],
+      note: "This is an agent-commerce catalog surface only, not a checkout or payment integration.",
     },
     storefront: {
       tone: absoluteStorefrontUrl

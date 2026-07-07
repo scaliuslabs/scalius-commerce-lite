@@ -124,6 +124,25 @@ function createHealthyLiveProbe() {
         },
       },
       {
+        key: "ucpProfile",
+        kind: "ucpProfile",
+        label: "UCP catalog profile",
+        path: "/.well-known/ucp",
+        href: "https://shop.example.com/.well-known/ucp",
+        ok: true,
+        status: 200,
+        contentType: "application/json; charset=utf-8",
+        cacheControl: "public, max-age=300",
+        counts: {
+          ucpValidJson: 1,
+          ucpVersion: "2026-04-08",
+          ucpShoppingRestServices: 1,
+          ucpCatalogCapabilities: 2,
+          ucpForbiddenCapabilities: 0,
+          ucpPaymentHandlers: 0,
+        },
+      },
+      {
         key: "staticPagesSitemap",
         kind: "sitemapChild",
         label: "Home + search sitemap",
@@ -354,12 +373,21 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain("Catalog diagnostics");
     expect(host.textContent).toContain("Rows ready: 11");
     expect(host.textContent).toContain("No feed blockers found");
+    expect(host.textContent).toContain("UCP catalog discovery on");
+    expect(host.textContent).toContain(
+      "Shopping agents can discover read-only catalog search and lookup.",
+    );
+    expect(host.textContent).toContain("No checkout/payment");
+    expect(host.textContent).toContain(
+      "version 2026-04-08; 1 REST service; 2 catalog capabilities; 0 gated capabilities",
+    );
     expect(host.textContent).toContain("1/1 Sitemap line");
     expect(host.textContent).toContain("Home + search sitemap");
     expect(host.textContent).toContain(
       "1 item; 1 link; 1 image_link; 1 availability",
     );
     expect(links).toEqual([
+      "https://shop.example.com/.well-known/ucp",
       "https://shop.example.com/robots.txt",
       "https://shop.example.com/sitemap.xml",
       "https://shop.example.com/api/product-feed.xml",
@@ -376,10 +404,47 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain("Sitemap needs Store URL");
     expect(host.textContent).toContain("Product feed needs Store URL");
     expect(host.textContent).toContain("robots.txt needs Store URL");
+    expect(host.textContent).toContain("UCP catalog needs HTTPS Store URL");
     expect(host.textContent).toContain("/sitemap.xml");
+    expect(host.textContent).toContain("/.well-known/ucp");
     expect(host.textContent).toContain(
       "Live proof waits for an absolute http(s) Store URL.",
     );
+  });
+
+  it("warns that public UCP discovery requires HTTPS even when the Store URL is absolute HTTP", () => {
+    storefrontUrlState.storefrontUrl = "http://shop.example.com";
+    const result = createHealthyLiveProbe();
+    liveProbeState.data = {
+      ...result,
+      baseUrl: "http://shop.example.com/",
+      resources: result.resources.map((resource) =>
+        resource.key === "ucpProfile"
+          ? {
+              ...resource,
+              href: "http://shop.example.com/.well-known/ucp",
+              ok: true,
+              status: null,
+              contentType: null,
+              cacheControl: null,
+              counts: {},
+              disabledReason:
+                "UCP public discovery requires an HTTPS Store URL, so this catalog profile check is skipped.",
+            }
+          : resource,
+      ),
+    };
+
+    renderCard();
+
+    expect(host.textContent).toContain("UCP catalog needs HTTPS Store URL");
+    expect(host.textContent).toContain(
+      "UCP public discovery requires an HTTPS Store URL.",
+    );
+    expect(host.textContent).toContain(
+      "UCP public discovery requires an HTTPS Store URL, so this catalog profile check is skipped.",
+    );
+    expect(host.textContent).toContain("Skipped by policy");
   });
 
   it("warns when live feed proof counts are incomplete", () => {
