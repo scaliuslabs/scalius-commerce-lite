@@ -13,12 +13,12 @@ interface CategoryMapping {
 }
 
 /**
- * Default category mappings for product taxonomies.
+ * Optional category mappings for product taxonomies.
  *
- * TODO: These mappings are hardcoded for a pharmacy/health store.
- * For other store types, this should be configurable from admin settings
- * (e.g., stored in the `settings` table under category "taxonomy").
- * The default fallback also uses "Health & Beauty" which is domain-specific.
+ * These mappings are intentionally narrow. Google/Facebook category fields
+ * should be emitted only when the platform has an explicit mapping; the feed
+ * must not fabricate a generic taxonomy such as "Health & Beauty" for an
+ * unrelated merchant category.
  */
 const CATEGORY_MAPPINGS: Record<string, CategoryMapping> = {
   // Health & Beauty categories
@@ -97,54 +97,44 @@ const CATEGORY_MAPPINGS: Record<string, CategoryMapping> = {
 };
 
 /**
- * Default fallback for unmapped categories
- */
-const DEFAULT_CATEGORY: CategoryMapping = {
-  googleCategory: 'Health & Beauty > Health Care',
-  googleCategoryId: 491,
-  facebookCategory: 'Health & Beauty > Health Care',
-  facebookCategoryId: 5307,
-};
-
-/**
  * Get category mapping for a given category slug or name
  * Returns mappings for both Google and Facebook taxonomies
  */
 export function getCategoryMapping(categorySlug: string): CategoryMapping {
   const normalized = categorySlug.toLowerCase().trim();
-  return CATEGORY_MAPPINGS[normalized] || DEFAULT_CATEGORY;
+  return CATEGORY_MAPPINGS[normalized] || {};
 }
 
 /**
  * Get Google product category (name format)
  */
-export function getGoogleCategory(categorySlug: string): string {
+export function getGoogleCategory(categorySlug: string): string | null {
   const mapping = getCategoryMapping(categorySlug);
-  return mapping.googleCategory || DEFAULT_CATEGORY.googleCategory!;
+  return mapping.googleCategory || null;
 }
 
 /**
  * Get Google product category (ID format)
  */
-export function getGoogleCategoryId(categorySlug: string): number {
+export function getGoogleCategoryId(categorySlug: string): number | null {
   const mapping = getCategoryMapping(categorySlug);
-  return mapping.googleCategoryId || DEFAULT_CATEGORY.googleCategoryId!;
+  return mapping.googleCategoryId || null;
 }
 
 /**
  * Get Facebook product category (name format)
  */
-export function getFacebookCategory(categorySlug: string): string {
+export function getFacebookCategory(categorySlug: string): string | null {
   const mapping = getCategoryMapping(categorySlug);
-  return mapping.facebookCategory || DEFAULT_CATEGORY.facebookCategory!;
+  return mapping.facebookCategory || null;
 }
 
 /**
  * Get Facebook product category (ID format)
  */
-export function getFacebookCategoryId(categorySlug: string): number {
+export function getFacebookCategoryId(categorySlug: string): number | null {
   const mapping = getCategoryMapping(categorySlug);
-  return mapping.facebookCategoryId || DEFAULT_CATEGORY.facebookCategoryId!;
+  return mapping.facebookCategoryId || null;
 }
 
 /**
