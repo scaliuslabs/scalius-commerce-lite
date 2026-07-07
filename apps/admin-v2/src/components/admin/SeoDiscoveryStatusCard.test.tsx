@@ -343,13 +343,14 @@ describe("SeoDiscoveryStatusCard", () => {
     });
   });
 
-  function renderCard(robotsTxt = "User-agent: *\nAllow: /") {
+  function renderCard(
+    robotsTxt = "User-agent: *\nAllow: /",
+    discovery: unknown = DEFAULT_SEO_DISCOVERY_SETTINGS,
+  ) {
     act(() => {
       root.render(
         <SeoDiscoveryStatusCard
-          discovery={normalizeSeoDiscoverySettingsWithReturnPolicy(
-            DEFAULT_SEO_DISCOVERY_SETTINGS,
-          )}
+          discovery={normalizeSeoDiscoverySettingsWithReturnPolicy(discovery)}
           robotsTxt={robotsTxt}
           businessIdentity={{ companyName: "Scalius Mart", legalName: "" }}
         />,
@@ -409,6 +410,43 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain("/.well-known/ucp");
     expect(host.textContent).toContain(
       "Live proof waits for an absolute http(s) Store URL.",
+    );
+  });
+
+  it("does not warn about robots Store URL when sitemap advertising is off", () => {
+    const discovery = {
+      ...DEFAULT_SEO_DISCOVERY_SETTINGS,
+      robots: { advertiseSitemap: false },
+    };
+
+    for (const storefrontUrl of [null, "/local-store"]) {
+      storefrontUrlState.storefrontUrl = storefrontUrl;
+      renderCard("User-agent: *\nAllow: /", discovery);
+
+      expect(host.textContent).toContain("robots.txt sitemap not advertised");
+      expect(host.textContent).toContain(
+        "Runtime strips all Sitemap directives and advertises no sitemap.",
+      );
+      expect(host.textContent).not.toContain("robots.txt needs Store URL");
+    }
+  });
+
+  it("does not say robots advertises a sitemap when sitemap generation is off", () => {
+    renderCard("User-agent: *\nAllow: /", {
+      ...DEFAULT_SEO_DISCOVERY_SETTINGS,
+      sitemap: {
+        ...DEFAULT_SEO_DISCOVERY_SETTINGS.sitemap,
+        enabled: false,
+      },
+      robots: { advertiseSitemap: true },
+    });
+
+    expect(host.textContent).toContain("robots.txt sitemap not advertised");
+    expect(host.textContent).toContain(
+      "Sitemap index is off, so runtime advertises no sitemap.",
+    );
+    expect(host.textContent).not.toContain(
+      "robots.txt advertises canonical sitemap",
     );
   });
 
@@ -491,7 +529,7 @@ describe("SeoDiscoveryStatusCard", () => {
       );
     });
 
-    expect(host.textContent).toContain("Structured data on");
+    expect(host.textContent).toContain("Structured data needs review");
     expect(host.textContent).toContain(
       "Add a company name or legal name in Business settings",
     );
@@ -619,5 +657,57 @@ describe("SeoDiscoveryStatusCard", () => {
 
     expect(host.textContent).toContain("Catalog needs attention");
     expect(host.textContent).toContain("Admin access required.");
+  });
+
+  it("warns when return policy is enabled without OnlineStore or Product targets", () => {
+    renderCard("User-agent: *\nAllow: /", {
+      ...DEFAULT_SEO_DISCOVERY_SETTINGS,
+      structuredData: {
+        organization: false,
+        websiteSearch: false,
+        products: false,
+        productGroups: false,
+        offerShippingDetails: false,
+        breadcrumbs: false,
+        collections: false,
+      },
+      returnPolicy: {
+        enabled: true,
+        country: "BD",
+        category: "finite",
+        returnWindowDays: 7,
+        returnFees: "customer_responsibility",
+        returnMethod: "mail",
+        policyUrl: "/returns",
+      },
+    });
+
+    expect(host.textContent).toContain(
+      "Return policy facts are saved but will not emit until Organization or Product schema is enabled.",
+    );
+  });
+
+  it("names the return policy schema targets when Organization and Product schema are on", () => {
+    renderCard("User-agent: *\nAllow: /", {
+      ...DEFAULT_SEO_DISCOVERY_SETTINGS,
+      structuredData: {
+        ...DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData,
+        organization: true,
+        products: true,
+      },
+      returnPolicy: {
+        enabled: true,
+        country: "BD",
+        category: "finite",
+        returnWindowDays: 7,
+        returnFees: "customer_responsibility",
+        returnMethod: "mail",
+        policyUrl: "/returns",
+      },
+    });
+
+    expect(host.textContent).toContain(
+      "Return policy can emit through OnlineStore and Product offers; normal schema prerequisites still apply.",
+    );
   });
 });
