@@ -4,11 +4,13 @@ import {
   getActivePaymentMethods,
   getPolarSettings,
   getPolarCheckoutReadiness,
+  isPolarPlaceholderCredential,
   getSSLCommerzSettings,
   getSSLCommerzCheckoutReadiness,
   isSSLCommerzPlaceholderCredential,
   getStripeSettings,
   getStripeCheckoutReadiness,
+  isStripePlaceholderCredential,
   invalidatePaymentMethodsCache,
   invalidatePolarCache,
   invalidateSSLCommerzCache,
@@ -381,6 +383,85 @@ describe("payment gateway settings cache cleanup", () => {
 
   it.each([
     "dummy",
+    "placeholder",
+    "example",
+    "demo",
+    "test",
+    "stripe_secret_key",
+    "stripe_publishable_key",
+    "stripe_webhook_secret",
+    "your_stripe_secret_key",
+    "your_stripe_publishable_key",
+    "your_stripe_webhook_secret",
+    "sk_test_your_key_here",
+    "pk_test_your_key_here",
+    "whsec_your_webhook_secret",
+  ])("treats %s as a Stripe placeholder credential", (value) => {
+    expect(isStripePlaceholderCredential(` ${value.toUpperCase()} `)).toBe(true);
+  });
+
+  it("does not reject real-looking Stripe test-mode keys by prefix", () => {
+    expect(isStripePlaceholderCredential("sk_test_51_realishValue")).toBe(false);
+    expect(isStripePlaceholderCredential("pk_test_realishValue")).toBe(false);
+    expect(isStripePlaceholderCredential("sk_test")).toBe(false);
+    expect(getStripeCheckoutReadiness({
+      secretKey: "sk_test",
+      publishableKey: "pk_test",
+      webhookSecret: "whsec_test",
+      enabled: true,
+    })).toMatchObject({
+      configured: true,
+      usable: true,
+      credentialErrors: [],
+    });
+  });
+
+  it("blocks Stripe checkout readiness when credentials are placeholders", () => {
+    expect(getStripeCheckoutReadiness({
+      secretKey: "stripe_secret_key",
+      publishableKey: "pk_test_your_key_here",
+      webhookSecret: "whsec_your_webhook_secret",
+      enabled: true,
+    })).toMatchObject({
+      configured: false,
+      enabled: true,
+      usable: false,
+      missingFields: [],
+      credentialErrors: [
+        "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account.",
+        "Stripe publishable key looks like a placeholder. Enter the real Stripe publishable key from your merchant account.",
+        "Stripe webhook secret looks like a placeholder. Enter the real Stripe webhook secret from your merchant account.",
+      ],
+      blockedReason: "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account.",
+    });
+  });
+
+  it("does not make Stripe active with placeholder credentials", async () => {
+    const db = createDbReturningCategoryReads([
+      [
+        { key: "enabled_methods", value: JSON.stringify(["stripe"]) },
+        { key: "default_method", value: "stripe" },
+      ],
+      [
+        { key: "secret_key", value: "sk_test_your_key_here" },
+        { key: "publishable_key", value: "pk_live_public" },
+        { key: "webhook_secret", value: "whsec_live" },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+
+    await expect(
+      getActivePaymentMethods(db as never, undefined, undefined, {
+        bypassMemoryCache: true,
+      }),
+    ).resolves.toEqual({
+      enabledMethods: [],
+      defaultMethod: "cod",
+    });
+  });
+
+  it.each([
+    "dummy",
     "test",
     "testbox",
     "qwerty",
@@ -432,6 +513,82 @@ describe("payment gateway settings cache cleanup", () => {
       [
         { key: "store_id", value: "real_store_123" },
         { key: "store_password", value: "password" },
+        { key: "enabled", value: "true" },
+      ],
+    ]);
+
+    await expect(
+      getActivePaymentMethods(db as never, undefined, undefined, {
+        bypassMemoryCache: true,
+      }),
+    ).resolves.toEqual({
+      enabledMethods: [],
+      defaultMethod: "cod",
+    });
+  });
+
+  it.each([
+    "dummy",
+    "placeholder",
+    "example",
+    "demo",
+    "test",
+    "polar_access_token",
+    "polar_product_id",
+    "polar_webhook_secret",
+    "your_polar_token",
+    "your_polar_access_token",
+    "your_polar_product_id",
+    "your_polar_webhook_secret",
+  ])("treats %s as a Polar placeholder credential", (value) => {
+    expect(isPolarPlaceholderCredential(` ${value.toUpperCase()} `)).toBe(true);
+  });
+
+  it("does not reject real-looking Polar test tokens by substring", () => {
+    expect(isPolarPlaceholderCredential("polar_oat_test_realishValue")).toBe(false);
+    expect(isPolarPlaceholderCredential("polar_token")).toBe(false);
+    expect(getPolarCheckoutReadiness({
+      accessToken: "polar_token",
+      productId: "prod_test_realish",
+      webhookSecret: "whsec_test",
+      enabled: true,
+    })).toMatchObject({
+      configured: true,
+      usable: true,
+      credentialErrors: [],
+    });
+  });
+
+  it("blocks Polar checkout readiness when credentials are placeholders", () => {
+    expect(getPolarCheckoutReadiness({
+      accessToken: "polar_access_token",
+      productId: "your_polar_product_id",
+      webhookSecret: "your_polar_webhook_secret",
+      enabled: true,
+    })).toMatchObject({
+      configured: false,
+      enabled: true,
+      usable: false,
+      missingFields: [],
+      credentialErrors: [
+        "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.",
+        "Polar product ID looks like a placeholder. Enter the real Polar product ID from your merchant account.",
+        "Polar webhook secret looks like a placeholder. Enter the real Polar webhook secret from your merchant account.",
+      ],
+      blockedReason: "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.",
+    });
+  });
+
+  it("does not make Polar active with placeholder credentials", async () => {
+    const db = createDbReturningCategoryReads([
+      [
+        { key: "enabled_methods", value: JSON.stringify(["polar"]) },
+        { key: "default_method", value: "polar" },
+      ],
+      [
+        { key: "access_token", value: "your_polar_token" },
+        { key: "product_id", value: "polar_product_live" },
+        { key: "webhook_secret", value: "polar_webhook_live" },
         { key: "enabled", value: "true" },
       ],
     ]);

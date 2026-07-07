@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createOrder: vi.fn(),
@@ -75,6 +75,10 @@ beforeEach(() => {
     paymentMethod: "sslcommerz",
   });
   vi.stubGlobal("fetch", vi.fn());
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("hosted online payment handlers", () => {
@@ -169,6 +173,41 @@ describe("hosted online payment handlers", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("retries SSLCommerz session creation when the committed order is still processing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        json: async () => ({
+          status: "processing",
+          retryable: true,
+          retryAfterSeconds: 2,
+          message: "Payment session creation is already processing. Please try again shortly.",
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          gatewayUrl: "https://ssl.example.test/pay",
+        }),
+      } as Response);
+
+    const resultPromise = sslcommerzHandler.processPayment(makeContext());
+    await vi.advanceTimersByTimeAsync(2000);
+    const result = await resultPromise;
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({
+      success: true,
+      redirectUrl: "https://ssl.example.test/pay",
+      clearCartOnRedirect: true,
+      hostedPaymentRecoveryUrl: recoveryUrl("sslcommerz"),
+    });
+  });
+
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
     { handler: polarHandler, gateway: "polar" },
@@ -204,6 +243,7 @@ describe("hosted online payment handlers", () => {
       json: async () => ({
         status: "processing",
         retryable: true,
+        retryAfterSeconds: 30,
         message: "Payment session creation is already processing. Please try again shortly.",
       }),
     } as Response);
@@ -365,6 +405,68 @@ describe("Stripe checkout handler", () => {
     });
   });
 
+  it("retries Stripe intent creation when the committed order is still processing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    document.body.innerHTML = `
+      <div id="stripeCardElement"></div>
+      <div id="stripeError"></div>
+    `;
+    const stripeCard = {
+      mount: vi.fn(),
+      on: vi.fn(),
+    };
+    const stripeInstance = {
+      elements: vi.fn(() => ({
+        create: vi.fn(() => stripeCard),
+      })),
+      confirmCardPayment: vi.fn(async () => ({
+        paymentIntent: { status: "succeeded" },
+      })),
+    };
+    vi.stubGlobal("Stripe", vi.fn(() => stripeInstance));
+    const container = document.createElement("div");
+    container.dataset.publishableKey = "pk_retry";
+    await stripeHandler.onSelect?.(container);
+
+    mocks.createOrder.mockResolvedValueOnce({
+      orderId: "order_1",
+      totalAmount: 125,
+      paymentMethod: "stripe",
+    });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        json: async () => ({
+          status: "processing",
+          retryable: true,
+          retryAfterSeconds: 2,
+          message: "Payment session creation is already processing. Please try again shortly.",
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          clientSecret: "pi_secret_retry",
+        }),
+      } as Response);
+
+    const resultPromise = stripeHandler.processPayment(makeContext());
+    await vi.advanceTimersByTimeAsync(2000);
+    const result = await resultPromise;
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(stripeInstance.confirmCardPayment).toHaveBeenCalledWith("pi_secret_retry", {
+      payment_method: { card: stripeCard },
+    });
+    expect(result).toEqual({
+      success: true,
+      redirectUrl: "/order-success?orderId=order_1&payment=stripe",
+    });
+  });
+
   it("does not confirm Stripe payment while intent creation is still processing", async () => {
     document.body.innerHTML = `
       <div id="stripeCardElement"></div>
@@ -396,12 +498,14 @@ describe("Stripe checkout handler", () => {
       json: async () => ({
         status: "processing",
         retryable: true,
+        retryAfterSeconds: 30,
         message: "Payment session creation is already processing. Please try again shortly.",
       }),
     } as Response);
 
     const result = await stripeHandler.processPayment(makeContext());
 
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(stripeInstance.confirmCardPayment).not.toHaveBeenCalled();
     expect(result).toEqual({
       success: false,

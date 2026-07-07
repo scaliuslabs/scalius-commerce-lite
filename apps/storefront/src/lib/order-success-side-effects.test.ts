@@ -84,9 +84,11 @@ describe("order success side effects", () => {
     const retryScriptIndex = pageSource.indexOf('querySelectorAll<HTMLButtonElement>("[data-payment-retry-button]")');
     expect(retryScriptIndex).toBeGreaterThan(pageSource.indexOf("clearCart();"));
     const retryScript = pageSource.slice(retryScriptIndex);
+    expect(retryScript).toContain("fetchPaymentSessionWithProcessingRetry");
     expect(retryScript).not.toContain("clearCart");
     expect(retryScript).not.toContain("trackFbPurchase");
-    expect(retryScript.indexOf('response.status === 202 || data.status === "processing"'))
+    expect(retryScript).toContain("Retrying in ${event.retryAfterSeconds}s");
+    expect(retryScript.indexOf("fetchPaymentSessionWithProcessingRetry"))
       .toBeLessThan(retryScript.indexOf("Payment gateway did not return a redirect URL."));
   });
 });

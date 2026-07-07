@@ -473,6 +473,8 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 </script>
 
 <script>
+  import { fetchPaymentSessionWithProcessingRetry } from "@/lib/checkout/payment-session-retry";
+
   document.addEventListener("DOMContentLoaded", () => {
     const buttons = Array.from(
       document.querySelectorAll<HTMLButtonElement>("[data-payment-retry-button]")
@@ -511,21 +513,20 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
           payload.depositAmount = depositAmount;
         }
 
-        const response = await fetch(endpoint, {
+        const { data, response } = await fetchPaymentSessionWithProcessingRetry<Record<string, unknown>>(() => fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
+        }), {
+          onProcessing: (event) => {
+            if (message) {
+              message.textContent = `${event.message} Retrying in ${event.retryAfterSeconds}s...`;
+            }
+          },
         });
-        const data = await response.json().catch(() => ({} as Record<string, unknown>));
         if (!response.ok) {
           const error = typeof data.error === "string" ? data.error : "Could not start payment. Please try again.";
           throw new Error(error);
-        }
-        if (response.status === 202 || data.status === "processing") {
-          const message = typeof data.message === "string" && data.message.trim()
-            ? data.message
-            : "Payment is still being prepared. Please try again shortly.";
-          throw new Error(message);
         }
         const gatewayUrl = typeof data.gatewayUrl === "string" ? data.gatewayUrl : "";
         if (!gatewayUrl) {

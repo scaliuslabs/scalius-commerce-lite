@@ -5,6 +5,12 @@
 // so Set-Cookie headers are processed by the browser. Cross-origin
 // Cross-origin Set-Cookie is silently dropped
 // by modern browsers.
+import {
+  PaymentSessionProcessingTimeoutError,
+  fetchPaymentSessionWithProcessingRetry,
+  unwrapPaymentSessionPayload,
+  type PaymentSessionRetryOptions,
+} from "../checkout/payment-session-retry";
 
 // ---------------------------------------------------------------------------
 // Response shapes for customer auth API endpoints
@@ -67,6 +73,15 @@ interface CustomerOrderPaymentSessionProcessingData {
   retryable?: boolean;
   retryAfterSeconds?: number;
   message?: string;
+}
+
+function isCustomerOrderPaymentSession(value: unknown): value is CustomerOrderPaymentSessionData {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<CustomerOrderPaymentSessionData>;
+  return (
+    (session.gateway === "stripe" || session.gateway === "sslcommerz" || session.gateway === "polar") &&
+    (session.paymentType === "full" || session.paymentType === "deposit" || session.paymentType === "balance")
+  );
 }
 
 export type CustomerAuthIntent = "sign_in" | "sign_up";
@@ -742,7 +757,9 @@ export async function createCustomerOrderSupportRequest(
  * Create a payment session for an order owned by the signed-in customer.
  * This endpoint never accepts or returns receipt tokens.
  */
-export async function createCustomerOrderPaymentSession(orderId: string): Promise<{
+type CreateCustomerOrderPaymentSessionOptions = Pick<PaymentSessionRetryOptions, "onProcessing">;
+
+export async function createCustomerOrderPaymentSession(orderId: string, options: CreateCustomerOrderPaymentSessionOptions = {}): Promise<{
   success: boolean;
   session?: CustomerOrderPaymentSession;
   error?: string;
@@ -753,31 +770,29 @@ export async function createCustomerOrderPaymentSession(orderId: string): Promis
   }
 
   try {
-    const res = await customerAuthFetch(authUrl(`orders/${encodeURIComponent(orderId)}/payment-session`), {
+    const { data: rawResponse, response: res } = await fetchPaymentSessionWithProcessingRetry(() => customerAuthFetch(authUrl(`orders/${encodeURIComponent(orderId)}/payment-session`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       cache: "no-store",
       body: JSON.stringify({}),
-    }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
-    const raw = await readEnvelope<CustomerOrderPaymentSessionData | CustomerOrderPaymentSessionProcessingData>(res);
-    if (!res.ok || isFailedEnvelope(raw)) {
+    }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS), {
+      onProcessing: options?.onProcessing,
+    });
+    const raw = rawResponse as unknown as AuthApiEnvelope<CustomerOrderPaymentSessionData | CustomerOrderPaymentSessionProcessingData>;
+    const session = unwrapPaymentSessionPayload(rawResponse) as unknown as CustomerOrderPaymentSessionData | CustomerOrderPaymentSessionProcessingData;
+    if (!res.ok || isFailedEnvelope(raw) || !isCustomerOrderPaymentSession(session)) {
       return {
         success: false,
         error: extractError(raw) || "Payment could not be prepared. Please try again.",
         status: res.status,
       };
     }
-    const session = raw.data ?? (raw as unknown as CustomerOrderPaymentSessionData | CustomerOrderPaymentSessionProcessingData);
-    if ("status" in session && session.status === "processing") {
-      return {
-        success: false,
-        error: session.message || "Payment is still being prepared. Please try again shortly.",
-        status: res.status,
-      };
-    }
     return { success: true, session: session as CustomerOrderPaymentSessionData };
   } catch (error: unknown) {
+    if (error instanceof PaymentSessionProcessingTimeoutError) {
+      return { success: false, error: error.message, status: error.status };
+    }
     return { success: false, error: networkErrorMessage(error), status: 0 };
   }
 }

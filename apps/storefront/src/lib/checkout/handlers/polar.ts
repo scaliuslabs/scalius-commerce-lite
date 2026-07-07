@@ -2,10 +2,7 @@ import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
 import { resolveCheckoutPaymentRequest } from "../payment-mode";
 import { buildPaymentRecoveryUrl } from "../payment-recovery";
-import {
-  getPaymentSessionProcessingMessage,
-  isPaymentSessionProcessingPayload,
-} from "../payment-session-proxy";
+import { fetchPaymentSessionWithProcessingRetry } from "../payment-session-retry";
 
 export const polarHandler: GatewayHandler = {
   id: "polar",
@@ -42,22 +39,17 @@ export const polarHandler: GatewayHandler = {
           orderId,
         };
 
-        const sessionRes = await fetch("/api/checkout/polar-session", {
+        const { data: sessionData, response: sessionRes } = await fetchPaymentSessionWithProcessingRetry(() => fetch("/api/checkout/polar-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(sessionPayload),
-        });
+        }));
 
         if (!sessionRes.ok) {
-          const e = await sessionRes.json().catch(() => ({} as Record<string, unknown>));
+          const e = sessionData;
           throw new Error((e.error as string) || "Payment gateway initialization failed");
         }
-
-        const sessionData = await sessionRes.json();
-        if (sessionRes.status === 202 || isPaymentSessionProcessingPayload(sessionData)) {
-          throw new Error(getPaymentSessionProcessingMessage(sessionData));
-        }
-        gatewayUrl = sessionData.gatewayUrl as string;
+        gatewayUrl = typeof sessionData.gatewayUrl === "string" ? sessionData.gatewayUrl : undefined;
       }
       if (!gatewayUrl) throw new Error("No gateway URL received");
       const hostedPaymentRecoveryUrl = buildPaymentRecoveryUrl({

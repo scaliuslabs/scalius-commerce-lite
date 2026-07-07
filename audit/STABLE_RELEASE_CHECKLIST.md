@@ -12,6 +12,7 @@ Use this file before claiming the platform is ready for a stable merchant-facing
 - Current branch has passed local buyer and merchant smokes for admin login/setup, product create/edit, cart, checkout, order success/receipt, customer auth/profile completion, order detail, notifications, and settings saves.
 - Current branch has been deployed through the normal Cloudflare path and live read-only smokes pass for API health/readyz, OpenAPI, dashboard login/critical routes, storefront home/search/product/category/cart/checkout, queues/ops check, and discovery XML.
 - Dummy or unreadable provider credentials fail closed with clear dashboard copy, no hot retry loops, no raw provider dumps, no noisy queue churn, and no runaway compute.
+- Hosted payment-session `202 processing` responses are retried only by the bounded storefront helper, with server-provided retry hints honored and a short hard stop before recovery copy. Do not add unbounded polling after order commit.
 - Cache invalidation evidence shows scoped API KV invalidation plus storefront purge/warm for affected content, not accidental global purge behavior.
 
 ## SEO, Feed, AEO, And AIO Gate

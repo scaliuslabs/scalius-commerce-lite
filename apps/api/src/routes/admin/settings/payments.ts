@@ -18,11 +18,13 @@ import {
     getActivePaymentMethods,
     getStripeSettings,
     getStripeCheckoutReadiness,
+    isStripePlaceholderCredential,
     getSSLCommerzCheckoutReadiness,
     getSSLCommerzSettings,
     isSSLCommerzPlaceholderCredential,
     getPolarCheckoutReadiness,
     getPolarSettings,
+    isPolarPlaceholderCredential,
     isStripeCheckoutUsable,
     isSSLCommerzCheckoutUsable,
     isPolarCheckoutUsable,
@@ -155,8 +157,13 @@ function storedMarker(value: string | undefined): string {
     return value?.trim() ? "__stored__" : "";
 }
 
-function effectiveSecretValue(submitted: string | undefined, stored: string | undefined): string {
+function effectivePlaceholderAwareSecretValue(
+    submitted: string | undefined,
+    stored: string | undefined,
+    isPlaceholder: (value: unknown) => boolean,
+): string {
     if (submitted === undefined || submitted === MASKED || submitted.trim() === "") {
+        if (isPlaceholder(stored)) return stored?.trim() ?? "";
         return storedMarker(stored);
     }
     return submitted.trim();
@@ -181,9 +188,9 @@ function getEffectiveStripeCheckoutSettings(map: StripeSettingsMap, body: SaveSt
         : Boolean(map.secret_key && map.webhook_secret && map.publishable_key);
 
     return {
-        secretKey: effectiveSecretValue(body.secretKey, map.secret_key),
+        secretKey: effectivePlaceholderAwareSecretValue(body.secretKey, map.secret_key, isStripePlaceholderCredential),
         publishableKey: effectivePlainValue(body.publishableKey, map.publishable_key),
-        webhookSecret: effectiveSecretValue(body.webhookSecret, map.webhook_secret),
+        webhookSecret: effectivePlaceholderAwareSecretValue(body.webhookSecret, map.webhook_secret, isStripePlaceholderCredential),
         enabled: body.enabled ?? existingEnabled,
     };
 }
@@ -219,8 +226,8 @@ function getEffectivePolarCheckoutSettings(map: PolarSettingsMap, body: z.infer<
         : hasStoredPolarAccount(map);
 
     return {
-        accessToken: effectiveSecretValue(body.accessToken, map.access_token),
-        webhookSecret: effectiveSecretValue(body.webhookSecret, map.webhook_secret),
+        accessToken: effectivePlaceholderAwareSecretValue(body.accessToken, map.access_token, isPolarPlaceholderCredential),
+        webhookSecret: effectivePlaceholderAwareSecretValue(body.webhookSecret, map.webhook_secret, isPolarPlaceholderCredential),
         productId: effectivePlainValue(body.productId, map.product_id),
         sandbox: body.sandbox ?? map.sandbox !== "false",
         enabled: body.enabled ?? existingEnabled,

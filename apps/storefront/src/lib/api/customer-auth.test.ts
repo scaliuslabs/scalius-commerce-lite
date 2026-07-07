@@ -65,22 +65,37 @@ describe("customer auth API helpers", () => {
     });
   });
 
-  it("treats customer payment-session processing responses as retryable failures", async () => {
+  it("fails closed when the customer payment-session success body is malformed", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: { gatewayUrl: "https://ssl.example.test/pay" },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    await expect(createCustomerOrderPaymentSession("order_1")).resolves.toEqual({
+      success: false,
+      error: "Payment could not be prepared. Please try again.",
+      status: 200,
+    });
+  });
+
+  it("treats customer payment-session processing responses as retryable after the bounded window", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       success: true,
       data: {
         status: "processing",
         retryable: true,
-        retryAfterSeconds: 2,
+        retryAfterSeconds: 30,
         message: "Payment session creation is already processing. Please try again shortly.",
       },
-    }), { status: 202, headers: { "Content-Type": "application/json" } })));
+    }), { status: 202, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
 
     await expect(createCustomerOrderPaymentSession("order_1")).resolves.toEqual({
       success: false,
       error: "Payment session creation is already processing. Please try again shortly.",
       status: 202,
     });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects missing order ids before sending a request", async () => {

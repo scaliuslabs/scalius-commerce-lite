@@ -209,13 +209,15 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/payment-methods` | Get raw merchant-selected methods/default, effective active methods/default, and gateway readiness (`configured`, `providerEnabled`, `checkoutSelected`, `checkoutVisible`, `usable`, `missingFields`, `blockedReason`) |
 | POST | `/payment-methods` | Atomically save enabled methods + default. Validates default is in enabled list, selected gateways are checkout-usable, and the current checkout flow still has a compatible method. Invalidates checkout config/cache |
 | GET | `/stripe` | Get Stripe keys (masks secret + webhook) |
-| POST | `/stripe` | Save Stripe keys/provider enabled state. Rejects enabled saves until secret key, publishable key, and webhook secret are effectively present. Invalidates stripe, payment methods, and checkout config/cache |
+| POST | `/stripe` | Save Stripe keys/provider enabled state. Rejects enabled saves until secret key, publishable key, and webhook secret are effectively present and not exact placeholder/demo values. Invalidates stripe, payment methods, and checkout config/cache |
 | GET | `/sslcommerz` | Get SSLCommerz credentials (masks password) |
 | POST | `/sslcommerz` | Save SSLCommerz credentials/provider enabled state. Rejects enabled saves until store ID and store password are effectively present. Invalidates sslcommerz, payment methods, and checkout config/cache |
 | GET | `/polar` | Get Polar credentials (masks token + webhook) |
-| POST | `/polar` | Save Polar credentials/provider enabled state. Rejects enabled saves until access token, product ID, and webhook secret are effectively present. Invalidates polar, payment methods, and checkout config/cache |
+| POST | `/polar` | Save Polar credentials/provider enabled state. Rejects enabled saves until access token, product ID, and webhook secret are effectively present and not exact placeholder/demo values. Invalidates polar, payment methods, and checkout config/cache |
 
 Payment gateway secret saves for Stripe, SSLCommerz, and Polar require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Runtime/readiness reads use the dedicated credential key and fail closed on missing/wrong-key ciphertext; legacy plaintext and old bare AES-GCM rows remain readable only when they do not require JWT fallback.
+
+Stripe, SSLCommerz, and Polar checkout readiness must reject obvious exact placeholder credentials before checkout exposure or provider calls. Keep the checks narrow enough to avoid blocking legitimate provider test-mode credentials merely because they use `test` prefixes.
 
 Provider readiness and storefront visibility are separate concepts. A gateway can be configured but provider-disabled, provider-enabled but hidden by checkout visibility, or selected for checkout but hidden by checkout-flow policy such as partial payment hiding COD. Keep admin copy and API responses explicit about those states instead of collapsing them into one "enabled" flag.
 
