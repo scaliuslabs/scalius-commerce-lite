@@ -632,6 +632,7 @@ pnpm dev:admin:create
 pnpm dev:admin:reset
 pnpm dev:admin:status
 pnpm dev:admin:smoke
+pnpm dev:admin:browser-smoke
 pnpm dev:doctor
 pnpm dev:doctor:api
 pnpm dev:doctor:admin
@@ -668,10 +669,11 @@ bash -n scripts/dev.sh
 node --check scripts/dev-local-utils.mjs
 node --check scripts/dev-admin.mjs
 node --check scripts/dev-admin-smoke.mjs
+node --check scripts/dev-admin-browser-smoke.mjs
 node --check scripts/dev-setup.mjs
 node --check scripts/dev-reset.mjs
 node --check scripts/dev-doctor.mjs
-pnpm exec vitest run scripts/dev-admin-cli.test.mjs scripts/dev-admin-smoke.test.mjs scripts/dev-local-utils.test.mjs scripts/dev-doctor.test.mjs scripts/dev-sh.test.mjs --passWithNoTests
+pnpm exec vitest run scripts/dev-admin-cli.test.mjs scripts/dev-admin-smoke.test.mjs scripts/dev-admin-browser-smoke.test.mjs scripts/dev-local-utils.test.mjs scripts/dev-doctor.test.mjs scripts/dev-sh.test.mjs --passWithNoTests
 pnpm dev:doctor
 pnpm dev:doctor --profile api
 ```
@@ -685,6 +687,7 @@ Expected result:
 - `scripts/dev.sh` preserves the failing child process exit code after cleanup.
 - `scripts/dev.sh` has a dry-run regression proving API-only startup and API-readiness ordering before admin/storefront startup.
 - `dev:doctor --profile api|admin|storefront|all` checks only the services expected for that local stack, so intentional partial stacks do not create false service warnings/failures.
+- `dev:admin:browser-smoke` refuses production/non-local targets, starts local API/admin workers against disposable Wrangler state when needed, creates/reuses inactive/noindex/feed-excluded category/product fixtures, opens `/admin/products/{id}/edit` as the authenticated local admin in Chrome/Chromium, types a unique marker into the rich-text editor, saves, and verifies the description persisted without browser page or console errors.
 
 Disposable reset smoke test:
 
@@ -723,6 +726,19 @@ Expected result:
 - The API and admin workers share the same disposable `SCALIUS_WRANGLER_STATE`.
 - First-admin setup, Better Auth sign-in, admin proxy cookie forwarding, RBAC, and business settings persistence all pass locally.
 - The settings write is intentionally tiny: it posts only the current `invoicePrefix` value back to `/api/v1/admin/settings/business`.
+
+Local admin product rich-text browser smoke:
+
+```bash
+rm -rf /tmp/scalius-admin-browser-smoke-state
+pnpm dev:admin:browser-smoke --state /tmp/scalius-admin-browser-smoke-state --reset-admin
+```
+
+Expected result:
+
+- The helper refuses production and non-local API/admin targets before touching auth, catalog, or browser state.
+- The API and admin workers share the same disposable `SCALIUS_WRANGLER_STATE`.
+- The browser opens `/admin/products/{id}/edit` with the local admin session, focuses the Tiptap rich-text editor, inserts a unique marker, saves, reports zero page/console errors, and confirms the marker persisted through `/api/v1/admin/products/{id}`.
 
 Local post-sale mutation smoke:
 
