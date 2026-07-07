@@ -28,6 +28,84 @@ function discoveryResponse(body, cacheControl = SITEMAP_CACHE_CONTROL) {
   return textResponse(body, 200, { "Cache-Control": cacheControl });
 }
 
+function storefrontCacheablePageResponse(body = "<!doctype html><html></html>", status = 200, headers = {}) {
+  return textResponse(body, status, {
+    "Cache-Control": "public, max-age=0, must-revalidate",
+    "X-Cache-Status": "HIT; v=42; build=test-build; project=storefront.example.test",
+    ...headers,
+  });
+}
+
+function checkoutNoStoreResponse(headers = {}) {
+  return textResponse("<!doctype html><html></html>", 200, {
+    "Cache-Control": "private, no-cache, no-store, must-revalidate",
+    "X-Cache-Status": "NO_CACHE",
+    ...headers,
+  });
+}
+
+function productFeedCacheResponse(body = feedXml(), headers = {}) {
+  return textResponse(body, 200, {
+    "Cache-Control": FEED_CACHE_CONTROL,
+    "X-Cache-Status": "HIT; v=42; build=test-build; gen=7; project=storefront.example.test",
+    ...headers,
+  });
+}
+
+function purgeGetNoStoreResponse(headers = {}) {
+  return textResponse("Method Not Allowed", 405, {
+    Allow: "POST",
+    "Cache-Control": "no-store",
+    ...headers,
+  });
+}
+
+function responseWithHeaders(response, headers) {
+  const nextHeaders = new Headers(response.headers);
+  for (const [key, value] of Object.entries(headers)) {
+    if (!nextHeaders.has(key)) nextHeaders.set(key, value);
+  }
+  const responseClone = response.clone();
+  return new Response(responseClone.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: nextHeaders,
+  });
+}
+
+function resolveMockResponse(value, fallback) {
+  const response = typeof value === "function" ? value() : (value ?? fallback());
+  return response.clone();
+}
+
+function defaultStorefrontCacheSmokeResponse(url) {
+  const parsed = new URL(url);
+  if (parsed.hostname !== "storefront.example.test") return null;
+  if (parsed.pathname === "/checkout") return checkoutNoStoreResponse();
+  if (parsed.pathname === "/api/purge-cache") return purgeGetNoStoreResponse();
+  if (parsed.pathname === "/api/product-feed.xml" && parsed.search === "?limit=5") {
+    return productFeedCacheResponse();
+  }
+  return null;
+}
+
+function decorateStorefrontCacheSmokeResponse(url, response) {
+  const parsed = new URL(url);
+  if (parsed.hostname !== "storefront.example.test") return response;
+  if (parsed.pathname === "/" || parsed.pathname === "/search") {
+    return responseWithHeaders(response, {
+      "Cache-Control": "public, max-age=0, must-revalidate",
+      "X-Cache-Status": "HIT; v=42; build=test-build; project=storefront.example.test",
+    });
+  }
+  if (parsed.pathname === "/api/product-feed.xml" && parsed.search === "?limit=5") {
+    return responseWithHeaders(response, {
+      "X-Cache-Status": "HIT; v=42; build=test-build; gen=7; project=storefront.example.test",
+    });
+  }
+  return response;
+}
+
 function jsonResponse(payload, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
@@ -54,7 +132,52 @@ function releaseFetch(implementation) {
   return vi.fn(async (url, init = {}) => {
     const response = invalidAdminCookieResponse(url, init);
     if (response) return response;
-    return implementation(url, init);
+    try {
+      return decorateStorefrontCacheSmokeResponse(url, await implementation(url, init));
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Unexpected URL ")) {
+        const fallback = defaultStorefrontCacheSmokeResponse(url);
+        if (fallback) return fallback;
+      }
+      throw error;
+    }
+  });
+}
+
+function cacheHeaderGateFetch(overrides = {}) {
+  return releaseFetch(async (url) => {
+    const parsed = new URL(url);
+
+    if (parsed.hostname === "api.example.test") {
+      if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+      if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+      if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
+    }
+
+    if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+      return textResponse("", 307, { location: "/auth/login" });
+    }
+
+    if (parsed.hostname === "storefront.example.test") {
+      if (parsed.pathname === "/health") return textResponse("ok");
+      if (parsed.pathname === "/") {
+        return resolveMockResponse(overrides.home, storefrontCacheablePageResponse);
+      }
+      if (parsed.pathname === "/search") {
+        return resolveMockResponse(overrides.search, storefrontCacheablePageResponse);
+      }
+      if (parsed.pathname === "/checkout") {
+        return resolveMockResponse(overrides.checkout, checkoutNoStoreResponse);
+      }
+      if (parsed.pathname === "/api/product-feed.xml" && parsed.search === "?limit=5") {
+        return resolveMockResponse(overrides.productFeed, productFeedCacheResponse);
+      }
+      if (parsed.pathname === "/api/purge-cache") {
+        return resolveMockResponse(overrides.purgeGet, purgeGetNoStoreResponse);
+      }
+    }
+
+    throw new Error(`Unexpected URL ${url}`);
   });
 }
 
@@ -925,6 +1048,40 @@ describe("runReleaseCheck", () => {
       statusCode: 307,
       location: "/auth/login",
     });
+    expect(result.checks.storefrontCacheHeaders).toMatchObject({
+      paths: [
+        "/",
+        "/search?sortBy=newest",
+        "/checkout",
+        "/api/product-feed.xml?limit=5",
+        "/api/purge-cache",
+      ],
+      publicPages: [
+        {
+          path: "/",
+          cacheStatus: "HIT; v=42; build=test-build; project=storefront.example.test",
+        },
+        {
+          path: "/search?sortBy=newest",
+          cacheStatus: "HIT; v=42; build=test-build; project=storefront.example.test",
+        },
+      ],
+      checkout: {
+        statusCode: 200,
+        cacheControl: "private, no-cache, no-store, must-revalidate",
+        cacheStatus: "NO_CACHE",
+      },
+      productFeed: {
+        statusCode: 200,
+        cacheControl: FEED_CACHE_CONTROL,
+        cacheStatus: "HIT; v=42; build=test-build; gen=7; project=storefront.example.test",
+      },
+      purgeGet: {
+        statusCode: 405,
+        allow: "POST",
+        cacheControl: "no-store",
+      },
+    });
     expect(result.checks.discovery.robots.cacheControl).toBe(SITEMAP_CACHE_CONTROL);
     expect(result.checks.discovery.policy).toMatchObject({
       source: "public-seo",
@@ -951,6 +1108,7 @@ describe("runReleaseCheck", () => {
       availabilityCount: 1,
     });
     expect(feedRequests).toEqual([
+      "/api/product-feed.xml?limit=5",
       "/api/product-feed.xml?limit=5",
       "/api/product-feed.xml?page=2&limit=5",
       "/api/facebook-feed.xml?limit=5",
@@ -996,6 +1154,81 @@ describe("runReleaseCheck", () => {
     });
     expect(fetchImpl.mock.calls.filter(([url]) => new URL(url).pathname === "/api/v1/readyz")).toHaveLength(4);
     expect(execFileImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    {
+      label: "home page cache status lacks build marker",
+      overrides: {
+        home: storefrontCacheablePageResponse("<html></html>", 200, {
+          "X-Cache-Status": "MISS; v=42; project=storefront.example.test",
+        }),
+      },
+      expectedMessage: "Storefront / cache headers failed",
+      expectedDetail: "must include a build marker",
+    },
+    {
+      label: "checkout is publicly cacheable",
+      overrides: {
+        checkout: textResponse("<html></html>", 200, {
+          "Cache-Control": "public, max-age=60",
+          "X-Cache-Status": "HIT; v=42; build=test-build",
+        }),
+      },
+      expectedMessage: "Storefront /checkout cache headers failed",
+      expectedDetail: "checkout Cache-Control must include private",
+    },
+    {
+      label: "product feed lacks generation marker",
+      overrides: {
+        productFeed: productFeedCacheResponse(feedXml(), {
+          "X-Cache-Status": "HIT; v=42; build=test-build; project=storefront.example.test",
+        }),
+      },
+      expectedMessage: "Storefront /api/product-feed.xml cache headers failed",
+      expectedDetail: "must include a generation marker",
+    },
+    {
+      label: "purge GET is not method-locked",
+      overrides: {
+        purgeGet: textResponse("ok", 200, {
+          Allow: "GET, POST",
+          "Cache-Control": "no-store",
+        }),
+      },
+      expectedMessage: "Storefront /api/purge-cache GET returned HTTP 200",
+      expectedDetail: "Storefront /api/purge-cache GET returned HTTP 200",
+    },
+  ])("fails storefront cache-header smoke when $label", async ({ overrides, expectedMessage, expectedDetail }) => {
+    const fetchImpl = cacheHeaderGateFetch(overrides);
+
+    let thrown;
+    try {
+      await runReleaseCheck(parseReleaseCheckArgs([
+        "--skip-wrangler",
+        "--api-base-url", "https://api.example.test",
+        "--storefront-url", "https://storefront.example.test",
+        "--dashboard-url", "https://dashboard.example.test",
+      ]), {
+        apiConfig: monitoringApiConfig(),
+        fetchImpl,
+        execFileImpl: vi.fn(),
+        rootDir: "/repo",
+        readFileImpl: () => verifiedTracker(),
+        fileExistsImpl: () => true,
+        logger: null,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toContain(expectedMessage);
+    expect(thrown.message).toContain(expectedDetail);
+    expect(thrown.result.checks.storefrontCacheHeaders).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining(expectedMessage),
+    });
   });
 
   it.each([
@@ -1173,6 +1406,11 @@ describe("runReleaseCheck", () => {
       "/health",
       "/",
       "/search",
+      "/",
+      "/search?sortBy=newest",
+      "/checkout",
+      "/api/product-feed.xml?limit=5",
+      "/api/purge-cache",
       "/",
       "/robots.txt",
       "/sitemap.xml",
@@ -1726,6 +1964,11 @@ describe("runReleaseCheck", () => {
       "/health",
       "/",
       "/search",
+      "/",
+      "/search?sortBy=newest",
+      "/checkout",
+      "/api/product-feed.xml?limit=5",
+      "/api/purge-cache",
       "/",
       "/robots.txt",
       "/sitemap.xml",

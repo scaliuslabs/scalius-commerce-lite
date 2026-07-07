@@ -55,6 +55,13 @@ const FEED_ENDPOINTS = [
     availabilityValues: ["in stock", "out of stock"],
   },
 ];
+const STOREFRONT_CACHE_HEADER_PATHS = [
+  "/",
+  "/search?sortBy=newest",
+  "/checkout",
+  "/api/product-feed.xml?limit=5",
+  "/api/purge-cache",
+];
 const STRICT_SEO_DISCOVERY_POLICY = Object.freeze({
   source: "strict-default",
   sitemap: Object.freeze({
@@ -580,6 +587,127 @@ function hasPositiveCacheTtl(cacheControl) {
     if (Number(match[1]) > 0) return true;
   }
   return false;
+}
+
+function normalizeHeaderValue(headers, name) {
+  return headers.get(name) ?? "";
+}
+
+function hasHeaderToken(value, token) {
+  return new RegExp(`(?:^|[,;\\s])${token}(?:$|[,;\\s])`, "i").test(value);
+}
+
+function evaluatePublicStorefrontCacheHeaders(headers, { label }) {
+  const cacheControl = normalizeHeaderValue(headers, "cache-control");
+  const cacheStatus = normalizeHeaderValue(headers, "x-cache-status");
+  const normalizedCacheStatus = cacheStatus.toLowerCase();
+  const errors = [];
+
+  if (!cacheStatus) {
+    errors.push(`${label} must include X-Cache-Status.`);
+  } else {
+    if (hasHeaderToken(normalizedCacheStatus, "no_cache")) {
+      errors.push(`${label} must not report NO_CACHE.`);
+    }
+    if (!/^[A-Z][A-Z0-9_ -]*(?:;|$)/.test(cacheStatus)) {
+      errors.push(`${label} X-Cache-Status must start with a cache state.`);
+    }
+    if (!/\bv=[^;,\s]+/i.test(cacheStatus)) {
+      errors.push(`${label} X-Cache-Status must include a cache version marker.`);
+    }
+    if (!/\bbuild=[^;,\s]+/i.test(cacheStatus)) {
+      errors.push(`${label} X-Cache-Status must include a build marker.`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    cacheControl: cacheControl || null,
+    cacheStatus: cacheStatus || null,
+  };
+}
+
+function evaluateCheckoutCacheHeaders(headers) {
+  const cacheControl = normalizeHeaderValue(headers, "cache-control");
+  const cacheStatus = normalizeHeaderValue(headers, "x-cache-status");
+  const normalizedCacheControl = cacheControl.toLowerCase();
+  const normalizedCacheStatus = cacheStatus.toLowerCase();
+  const errors = [];
+
+  if (!cacheControl) {
+    errors.push("checkout must include Cache-Control.");
+  } else {
+    if (!hasHeaderToken(normalizedCacheControl, "private")) {
+      errors.push("checkout Cache-Control must include private.");
+    }
+    if (!hasHeaderToken(normalizedCacheControl, "no-store")) {
+      errors.push("checkout Cache-Control must include no-store.");
+    }
+  }
+  if (!cacheStatus) {
+    errors.push("checkout must include X-Cache-Status.");
+  } else if (!hasHeaderToken(normalizedCacheStatus, "no_cache")) {
+    errors.push("checkout X-Cache-Status must report NO_CACHE.");
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    cacheControl: cacheControl || null,
+    cacheStatus: cacheStatus || null,
+  };
+}
+
+function evaluateFeedGenerationCacheHeaders(headers) {
+  const cacheControl = normalizeHeaderValue(headers, "cache-control");
+  const cacheStatus = normalizeHeaderValue(headers, "x-cache-status");
+  const generationHeader =
+    normalizeHeaderValue(headers, "x-cache-generation") ||
+    normalizeHeaderValue(headers, "x-storefront-cache-generation");
+  const discoveryCache = evaluateDiscoveryCacheHeaders(headers, { label: "product feed" });
+  const errors = [...discoveryCache.errors];
+  const hasGenerationMarker =
+    /\bgen(?:eration)?=[^;,\s]+/i.test(cacheStatus) ||
+    generationHeader.trim().length > 0;
+
+  if (!cacheStatus && !generationHeader) {
+    errors.push("product feed must include X-Cache-Status or an explicit cache generation header.");
+  }
+  if (!hasGenerationMarker) {
+    errors.push("product feed cache headers must include a generation marker.");
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    cacheControl: cacheControl || null,
+    cacheStatus: cacheStatus || null,
+    generationHeader: generationHeader || null,
+  };
+}
+
+function evaluatePurgeGetHeaders(headers) {
+  const cacheControl = normalizeHeaderValue(headers, "cache-control");
+  const allow = normalizeHeaderValue(headers, "allow");
+  const normalizedCacheControl = cacheControl.toLowerCase();
+  const errors = [];
+
+  if (!hasHeaderToken(allow, "POST")) {
+    errors.push("purge-cache GET must advertise Allow: POST.");
+  }
+  if (!cacheControl) {
+    errors.push("purge-cache GET must include Cache-Control.");
+  } else if (!hasHeaderToken(normalizedCacheControl, "no-store")) {
+    errors.push("purge-cache GET Cache-Control must include no-store.");
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    allow: allow || null,
+    cacheControl: cacheControl || null,
+  };
 }
 
 export function evaluateDiscoveryCacheHeaders(headers, { label = "discovery response" } = {}) {
@@ -1600,6 +1728,102 @@ async function checkStorefrontPages(options, { fetchImpl, logger }) {
   return { pages };
 }
 
+async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
+  const publicPages = [];
+  for (const path of ["/", "/search?sortBy=newest"]) {
+    const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, path), {
+      fetchImpl,
+      timeoutMs: options.timeoutMs,
+      accept: "text/html, */*;q=0.8",
+    });
+    requireStatus(response, `Storefront cache headers ${path}`, (status) =>
+      status >= 200 && status < 300);
+    const cache = evaluatePublicStorefrontCacheHeaders(response.headers, {
+      label: `Storefront ${path}`,
+    });
+    if (!cache.ok) {
+      throw new Error(`Storefront ${path} cache headers failed: ${cache.errors.join("; ")}`);
+    }
+    publicPages.push({
+      path,
+      statusCode: response.statusCode,
+      durationMs: response.durationMs,
+      cacheControl: cache.cacheControl,
+      cacheStatus: cache.cacheStatus,
+    });
+  }
+
+  const checkoutResponse = await fetchText(buildUrl(options.storefrontUrl, "/checkout"), {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    accept: "text/html, */*;q=0.8",
+  });
+  requireStatus(checkoutResponse, "Storefront /checkout cache headers", (status) =>
+    status >= 200 && status < 400);
+  const checkout = evaluateCheckoutCacheHeaders(checkoutResponse.headers);
+  if (!checkout.ok) {
+    throw new Error(`Storefront /checkout cache headers failed: ${checkout.errors.join("; ")}`);
+  }
+
+  const productFeedResponse = await fetchText(
+    buildUrlWithSearch(options.storefrontUrl, "/api/product-feed.xml?limit=5"),
+    {
+      fetchImpl,
+      timeoutMs: options.timeoutMs,
+      accept: "application/xml, text/xml, */*;q=0.8",
+    },
+  );
+  requireStatus(productFeedResponse, "Storefront /api/product-feed.xml cache headers", (status) =>
+    status >= 200 && status < 300);
+  const productFeed = evaluateFeedGenerationCacheHeaders(productFeedResponse.headers);
+  if (!productFeed.ok) {
+    throw new Error(
+      `Storefront /api/product-feed.xml cache headers failed: ${productFeed.errors.join("; ")}`,
+    );
+  }
+
+  const purgeGetResponse = await fetchText(buildUrl(options.storefrontUrl, "/api/purge-cache"), {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    accept: "text/plain, application/json, */*;q=0.8",
+  });
+  requireStatus(purgeGetResponse, "Storefront /api/purge-cache GET", (status) => status === 405);
+  const purgeGet = evaluatePurgeGetHeaders(purgeGetResponse.headers);
+  if (!purgeGet.ok) {
+    throw new Error(`Storefront /api/purge-cache GET headers failed: ${purgeGet.errors.join("; ")}`);
+  }
+
+  logger?.log(
+    "PASS storefront cache headers: public pages report cache version/build, checkout is no-store, feed is generation-tagged, and purge GET is non-mutating.",
+  );
+  return {
+    paths: [...STOREFRONT_CACHE_HEADER_PATHS],
+    publicPages,
+    checkout: {
+      path: "/checkout",
+      statusCode: checkoutResponse.statusCode,
+      durationMs: checkoutResponse.durationMs,
+      cacheControl: checkout.cacheControl,
+      cacheStatus: checkout.cacheStatus,
+    },
+    productFeed: {
+      path: "/api/product-feed.xml?limit=5",
+      statusCode: productFeedResponse.statusCode,
+      durationMs: productFeedResponse.durationMs,
+      cacheControl: productFeed.cacheControl,
+      cacheStatus: productFeed.cacheStatus,
+      generationHeader: productFeed.generationHeader,
+    },
+    purgeGet: {
+      path: "/api/purge-cache",
+      statusCode: purgeGetResponse.statusCode,
+      durationMs: purgeGetResponse.durationMs,
+      allow: purgeGet.allow,
+      cacheControl: purgeGet.cacheControl,
+    },
+  };
+}
+
 async function checkDiscovery(options, { fetchImpl, logger }) {
   const storefrontOrigin = new URL(options.storefrontUrl).origin;
   const responses = {};
@@ -2114,6 +2338,8 @@ export async function runReleaseCheck(options, {
     checkDashboard(options, { fetchImpl, logger }));
   await runStep(result, "storefront", () =>
     checkStorefrontPages(options, { fetchImpl, logger }));
+  await runStep(result, "storefrontCacheHeaders", () =>
+    checkStorefrontCacheHeaders(options, { fetchImpl, logger }));
   const discovery = await runStep(result, "discovery", () =>
     checkDiscovery(options, { fetchImpl, logger }));
   await runStep(result, "ucpDiscovery", () =>
