@@ -44,7 +44,7 @@ Expected healthy result: HTTP `200`, `Cache-Control: no-store`, `success: true`,
 
 Expected degraded result: HTTP `503`, `success: false`, `status: "degraded"`, and a per-check `status` of `missing`, `error`, or `timeout`. The endpoint must stay read-only: D1 uses `SELECT 1`, KV uses a read probe, R2 uses `list({ limit: 1 })`, and Queue/DO checks are binding-shape checks only.
 
-`pnpm ops:check`, `pnpm release:check`, and API deploy verification all use the same four-sample `/readyz` recovery window by default: the final sample must be ready and at least two samples must be ready. `pnpm release:check` also validates emitted homepage OnlineStore/WebSite/SearchAction/MerchantReturnPolicy JSON-LD, then validates the storefront UCP profile as HTTPS/catalog-only and runs read-only UCP catalog search/lookup/product checks when discovery exposes a product candidate.
+`pnpm ops:check`, `pnpm release:check`, and API deploy verification all use the same four-sample `/readyz` recovery window by default: the final sample must be ready and at least two samples must be ready. `pnpm release:check` also validates emitted homepage OnlineStore/WebSite/SearchAction/MerchantReturnPolicy JSON-LD, verifies the deployed agent Worker `/health` plus MCP tools/list as catalog-only unless `--skip-live` or `--skip-wrangler` was explicitly used, then validates the storefront UCP profile as HTTPS/catalog-only and runs read-only UCP catalog search/lookup/product checks when discovery exposes a product candidate.
 
 Every API HTTP response should carry `X-Request-Id`; preserve a safe caller-supplied value during smoke tests when you want to match client output to Worker logs. Structured API ops logs include `requestId` and Cloudflare `cfRay` when available. Alert on repeated `api.readyz.degraded` events by required-check status, then use the same request id/CF-Ray to inspect the matching Worker invocation without exposing secrets or buyer data.
 
@@ -89,7 +89,7 @@ pnpm --filter @scalius/agent build
 pnpm run deploy:agent -- --dry-run
 ```
 
-The first public agent Worker is intentionally stateless and catalog-only. It must expose only `GET /health` and `/mcp` read tools backed by storefront UCP catalog/profile endpoints, and it must not gain D1, R2, KV, queue, Durable Object, provider-secret, checkout, cart mutation, order, payment, fulfillment, customer, support, or recovery bindings without a new architecture note and focused tests. After a real deploy, smoke `/health` plus an MCP JSON-RPC initialize/tools-list request against the deployed Worker URL and keep the tool list catalog-only.
+The first public agent Worker is intentionally stateless and catalog-only. It must expose only `GET /health` and `/mcp` read tools backed by storefront UCP catalog/profile endpoints, and it must not gain D1, R2, KV, queue, Durable Object, provider-secret, checkout, cart mutation, order, payment, fulfillment, customer, support, or recovery bindings without a new architecture note and focused tests. `pnpm run deploy:agent` now performs the live `/health` plus MCP JSON-RPC initialize/tools-list smoke after deploy, and `pnpm release:check` repeats the same catalog-only tool-list gate for release candidates unless `--skip-live` or `--skip-wrangler` is intentionally used.
 
 `pnpm ops:check --queues` fails when expected API queue producers/consumers are
 missing. Extra queue producers are warning-level evidence in logs/JSON, so a

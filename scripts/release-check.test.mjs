@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   evaluateDiscoveryCacheHeaders,
+  evaluateAgentMcpTools,
   evaluateFacebookFeedXml,
   evaluateHomepageJsonLdHtml,
   evaluateProductJsonLdHtml,
@@ -110,6 +111,51 @@ function jsonResponse(payload, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+}
+
+function agentHealthResponse(payload = {
+  success: true,
+  status: "ok",
+  service: "scalius-agent",
+}) {
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+function agentMcpTool(name, extra = {}) {
+  return {
+    name,
+    title: name.replace(/_/g, " "),
+    description: `Reads public storefront catalog data for ${name}.`,
+    inputSchema: { type: "object", properties: {} },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+    ...extra,
+  };
+}
+
+function agentMcpTools(overrides = {}) {
+  return [
+    agentMcpTool("catalog_search", overrides.catalog_search),
+    agentMcpTool("catalog_lookup", overrides.catalog_lookup),
+    agentMcpTool("catalog_product", overrides.catalog_product),
+    agentMcpTool("catalog_profile", overrides.catalog_profile),
+  ];
+}
+
+function mcpSseResponse(message, headers = {}) {
+  return textResponse(`event: message\ndata: ${JSON.stringify(message)}\n\n`, 200, {
+    "Content-Type": "text/event-stream",
+    ...headers,
   });
 }
 
@@ -581,6 +627,7 @@ describe("release-check parser", () => {
       "--storefront-url",
       "https://storefront.example.test/",
       "--dashboard-url=https://dashboard.example.test/",
+      "--agent-url=https://agent.example.test/",
     ])).toMatchObject({
       json: true,
       skipLive: false,
@@ -589,6 +636,7 @@ describe("release-check parser", () => {
       apiBaseUrl: "https://api.example.test/api/v1",
       storefrontUrl: "https://storefront.example.test",
       dashboardUrl: "https://dashboard.example.test",
+      agentUrl: "https://agent.example.test",
     });
 
     expect(parseReleaseCheckArgs(["--help"])).toEqual({ help: true });
@@ -639,6 +687,48 @@ describe("release-check local evaluators", () => {
     })).toMatchObject({
       ok: false,
       missing: ["docs/ARCHITECTURE.md"],
+    });
+  });
+
+  it("accepts exactly the catalog-only read-only agent MCP tools", () => {
+    expect(evaluateAgentMcpTools(agentMcpTools())).toMatchObject({
+      ok: true,
+      errors: [],
+      toolNames: [
+        "catalog_lookup",
+        "catalog_product",
+        "catalog_profile",
+        "catalog_search",
+      ],
+      readOnlyToolCount: 4,
+    });
+  });
+
+  it("rejects unsafe agent MCP tool names and capabilities", () => {
+    const unsafeName = evaluateAgentMcpTools([
+      ...agentMcpTools(),
+      agentMcpTool("catalog_checkout"),
+    ]);
+    expect(unsafeName).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        expect.stringContaining("unexpected catalog_checkout"),
+        expect.stringContaining("checkout/cart/order/payment/customer/recovery terms"),
+      ]),
+    });
+
+    const unsafeCapability = evaluateAgentMcpTools(agentMcpTools({
+      catalog_profile: {
+        _meta: {
+          capabilities: ["payment"],
+        },
+      },
+    }));
+    expect(unsafeCapability).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        expect.stringContaining("checkout/cart/order/payment/customer/recovery terms"),
+      ]),
     });
   });
 });
@@ -1024,6 +1114,7 @@ describe("runReleaseCheck", () => {
   it("runs local gates and live read-only checks after transient API readiness recovers", async () => {
     const feedRequests = [];
     const ucpRequests = [];
+    const agentMcpRequests = [];
     const readyzResponses = [
       degradedResponse(),
       readyResponse(),
@@ -1032,7 +1123,12 @@ describe("runReleaseCheck", () => {
     ];
     const fetchImpl = releaseFetch(async (url, init) => {
       const parsed = new URL(url);
-      if (parsed.pathname.startsWith("/ucp/catalog/")) {
+      if (parsed.hostname === "agent.example.test" && parsed.pathname === "/mcp") {
+        expect(init.method).toBe("POST");
+        const headers = new Headers(init.headers);
+        expect(headers.get("accept")).toBe("application/json, text/event-stream");
+        expect(headers.get("content-type")).toBe("application/json");
+      } else if (parsed.pathname.startsWith("/ucp/catalog/")) {
         expect(init.method).toBe("POST");
         expect(init.headers["UCP-Agent"]).toBe('profile="https://release-check.scalius.com/.well-known/ucp"');
       } else {
@@ -1055,6 +1151,32 @@ describe("runReleaseCheck", () => {
       if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
         expect(init.redirect).toBe("manual");
         return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "agent.example.test") {
+        if (parsed.pathname === "/health") return agentHealthResponse();
+        if (parsed.pathname === "/mcp") {
+          const body = JSON.parse(init.body);
+          agentMcpRequests.push(body.method);
+          if (body.method === "initialize") {
+            return mcpSseResponse({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: {
+                protocolVersion: "2025-06-18",
+                capabilities: { tools: { listChanged: true } },
+                serverInfo: { name: "scalius-agent", version: "0.1.0" },
+              },
+            });
+          }
+          if (body.method === "tools/list") {
+            return mcpSseResponse({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: { tools: agentMcpTools() },
+            });
+          }
+        }
       }
 
       if (parsed.hostname === "storefront.example.test") {
@@ -1127,6 +1249,7 @@ describe("runReleaseCheck", () => {
       "--api-base-url", "https://api.example.test",
       "--storefront-url", "https://storefront.example.test",
       "--dashboard-url", "https://dashboard.example.test",
+      "--agent-url", "https://agent.example.test",
     ]), {
       apiConfig: monitoringApiConfig(),
       fetchImpl,
@@ -1192,6 +1315,32 @@ describe("runReleaseCheck", () => {
         statusCode: 405,
         allow: "POST",
         cacheControl: "no-store",
+      },
+    });
+    expect(agentMcpRequests).toEqual(["initialize", "tools/list"]);
+    expect(result.checks.agentMcp).toMatchObject({
+      agentUrl: "https://agent.example.test/",
+      health: {
+        statusCode: 200,
+        cacheControl: "no-store",
+        service: "scalius-agent",
+      },
+      mcp: {
+        initialize: {
+          statusCode: 200,
+          protocolVersion: "2025-06-18",
+          session: "none",
+        },
+        tools: {
+          statusCode: 200,
+          toolNames: [
+            "catalog_lookup",
+            "catalog_product",
+            "catalog_profile",
+            "catalog_search",
+          ],
+          readOnlyToolCount: 4,
+        },
       },
     });
     expect(result.checks.discovery.robots.cacheControl).toBe(SITEMAP_CACHE_CONTROL);
@@ -2539,6 +2688,10 @@ describe("runReleaseCheck", () => {
     expect(result.status).toBe("passed");
     expect(result.checks.apiOps).toMatchObject({
       deploymentStatus: "skipped",
+    });
+    expect(result.checks.agentMcp).toMatchObject({
+      status: "skipped",
+      reason: "Skipped by --skip-wrangler.",
     });
     expect(fetchImpl).toHaveBeenCalled();
     expect(execFileImpl).not.toHaveBeenCalled();

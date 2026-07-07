@@ -26,6 +26,11 @@ import { readFileSync } from "fs";
 import { delimiter, resolve, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
+import {
+  DEFAULT_AGENT_URL,
+  normalizeHttpBaseUrl,
+  smokeAgentWorker,
+} from "./release-check.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -52,6 +57,7 @@ const STOREFRONT_WARM_CONCURRENCY = 4;
 const API_READYZ_SAMPLE_COUNT = 4;
 const API_READYZ_SAMPLE_DELAY_MS = 1_000;
 const API_READYZ_TIMEOUT_MS = 10_000;
+const AGENT_DEPLOY_TIMEOUT_MS = 10_000;
 const pnpmExecutable = resolvePnpmExecutable();
 process.env.SCALIUS_PNPM_BIN = pnpmExecutable;
 process.env.PATH = `${dirname(pnpmExecutable)}${delimiter}${process.env.PATH || ""}`;
@@ -570,12 +576,39 @@ async function verifyApiDeploy(config) {
   await sampleApiReadiness(apiBaseUrl);
 }
 
+function getAgentDeployUrl() {
+  return normalizeHttpBaseUrl(process.env.SCALIUS_AGENT_URL ?? DEFAULT_AGENT_URL, "Agent URL");
+}
+
+export async function verifyAgentDeploy({
+  agentUrl = getAgentDeployUrl(),
+  fetchImpl = fetch,
+  timeoutMs = AGENT_DEPLOY_TIMEOUT_MS,
+} = {}) {
+  console.log("\n▶ Verify live Agent Worker /health and MCP tools");
+  console.log(`  ${agentUrl}\n`);
+  const result = await smokeAgentWorker({
+    agentUrl,
+    fetchImpl,
+    timeoutMs,
+    logger: null,
+  });
+  console.log(
+    `✓ Agent /health returned ${result.health.statusCode}; ` +
+    `MCP tools: ${result.mcp.tools.toolNames.join(", ")}.`,
+  );
+  return result;
+}
+
 async function verifyPostDeployTarget(target, apiConfig) {
   if (target === "api") {
     await verifyApiDeploy(apiConfig);
   }
   if (target === "storefront") {
     await verifyStorefrontDeploy();
+  }
+  if (target === "agent") {
+    await verifyAgentDeploy();
   }
 }
 

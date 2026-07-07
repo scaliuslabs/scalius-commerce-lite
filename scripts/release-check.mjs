@@ -21,12 +21,27 @@ const defaultApiConfigPath = resolve(defaultRootDir, "apps/api/wrangler.jsonc");
 const DEFAULT_API_BASE_URL = "https://api.scalius.com";
 const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
 const DEFAULT_DASHBOARD_URL = "https://dashboard.scalius.com";
+export const DEFAULT_AGENT_URL = "https://scalius-agent.abnidaala.workers.dev";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const RELEASE_READYZ_SAMPLES = 4;
 const MAX_BODY_PREVIEW_LENGTH = 180;
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
+const MCP_PROTOCOL_VERSION = "2025-06-18";
+const MCP_ACCEPT_HEADER = "application/json, text/event-stream";
+const MCP_CLIENT_INFO = Object.freeze({
+  name: "scalius-release-check",
+  version: "1.0.0",
+});
+const AGENT_EXPECTED_TOOL_NAMES = Object.freeze([
+  "catalog_search",
+  "catalog_lookup",
+  "catalog_product",
+  "catalog_profile",
+]);
+const AGENT_FORBIDDEN_TOOL_TERM_PATTERN =
+  /(?:^|[^a-z0-9])(?:checkout|carts?|orders?|payments?|customers?|recovery)(?:$|[^a-z0-9])/i;
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
 const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
 const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
@@ -97,7 +112,13 @@ const booleanOptions = new Set([
   "skip-wrangler",
   "allow-strict-seo-policy-fallback",
 ]);
-const stringOptions = new Set(["timeout-ms", "api-base-url", "storefront-url", "dashboard-url"]);
+const stringOptions = new Set([
+  "timeout-ms",
+  "api-base-url",
+  "storefront-url",
+  "dashboard-url",
+  "agent-url",
+]);
 const knownOptions = new Set([...booleanOptions, ...stringOptions]);
 
 const requiredDocs = [
@@ -185,6 +206,7 @@ export function parseReleaseCheckArgs(rawArgs, {
   defaultApiBaseUrl = DEFAULT_API_BASE_URL,
   defaultStorefrontUrl = DEFAULT_STOREFRONT_URL,
   defaultDashboardUrl = DEFAULT_DASHBOARD_URL,
+  defaultAgentUrl = DEFAULT_AGENT_URL,
 } = {}) {
   const rawOptions = parseRawOptions(rawArgs);
   if (rawOptions.help) return { help: true };
@@ -202,6 +224,7 @@ export function parseReleaseCheckArgs(rawArgs, {
     apiBaseUrl: normalizeHttpBaseUrl(rawOptions["api-base-url"] ?? defaultApiBaseUrl, "API base URL"),
     storefrontUrl: normalizeHttpBaseUrl(rawOptions["storefront-url"] ?? defaultStorefrontUrl, "Storefront URL"),
     dashboardUrl: normalizeHttpBaseUrl(rawOptions["dashboard-url"] ?? defaultDashboardUrl, "Dashboard URL"),
+    agentUrl: normalizeHttpBaseUrl(rawOptions["agent-url"] ?? defaultAgentUrl, "Agent URL"),
   };
 }
 
@@ -1290,6 +1313,308 @@ function requireJsonResponse(response, label) {
   }
 }
 
+function parseMcpJsonRpcMessages(response, label) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!/\b(?:application\/json|text\/event-stream)\b/i.test(contentType)) {
+    throw new Error(`${label} must return JSON or MCP event stream; got ${contentType || "missing Content-Type"}.`);
+  }
+
+  const body = response.body.trim();
+  if (!body) return [];
+
+  try {
+    const parsed = JSON.parse(body);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    // Fall through to SSE parsing.
+  }
+
+  const messages = [];
+  for (const frame of response.body.split(/\r?\n\r?\n/)) {
+    const data = frame
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n")
+      .trim();
+    if (!data) continue;
+
+    try {
+      messages.push(JSON.parse(data));
+    } catch (error) {
+      throw new Error(`${label} returned invalid MCP event JSON: ${errorMessage(error)}`, { cause: error });
+    }
+  }
+
+  if (messages.length === 0) {
+    throw new Error(`${label} returned neither JSON nor MCP event data: ${responsePreview(response.body)}`);
+  }
+
+  return messages;
+}
+
+function requireMcpJsonRpcResult(response, label, id) {
+  requireStatus(response, label, (status) => status >= 200 && status < 300);
+  const messages = parseMcpJsonRpcMessages(response, label);
+  const message = messages.find((candidate) =>
+    isRecord(candidate) && candidate.jsonrpc === "2.0" && candidate.id === id
+  );
+
+  if (!message) {
+    throw new Error(`${label} did not return a JSON-RPC response for id ${id}.`);
+  }
+  if (isRecord(message.error)) {
+    const code = message.error.code ?? "unknown";
+    const messageText = typeof message.error.message === "string"
+      ? message.error.message
+      : "unknown MCP error";
+    throw new Error(`${label} returned JSON-RPC error ${code}: ${messageText}`);
+  }
+  if (!isRecord(message.result)) {
+    throw new Error(`${label} returned no JSON-RPC result object.`);
+  }
+
+  return message.result;
+}
+
+async function fetchMcpJsonRpc(url, {
+  fetchImpl,
+  timeoutMs,
+  body,
+  sessionId,
+  protocolVersion,
+}) {
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const headers = {
+    Accept: MCP_ACCEPT_HEADER,
+    "Cache-Control": "no-cache",
+    "Content-Type": "application/json",
+  };
+  if (sessionId) headers["Mcp-Session-Id"] = sessionId;
+  if (protocolVersion) headers["MCP-Protocol-Version"] = protocolVersion;
+
+  try {
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const responseBody = await response.text();
+    return {
+      url,
+      statusCode: response.status,
+      ok: response.ok,
+      body: responseBody,
+      headers: response.headers,
+      durationMs: Date.now() - startedAt,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function listDiff(actual, expected) {
+  const actualSet = new Set(actual);
+  return expected.filter((value) => !actualSet.has(value));
+}
+
+export function evaluateAgentMcpTools(tools, {
+  expectedToolNames = AGENT_EXPECTED_TOOL_NAMES,
+} = {}) {
+  const errors = [];
+  const expectedSorted = [...expectedToolNames].sort();
+
+  if (!Array.isArray(tools)) {
+    return {
+      ok: false,
+      errors: ["Agent MCP tools/list result must include a tools array."],
+      toolNames: [],
+      expectedToolNames: expectedSorted,
+      readOnlyToolCount: 0,
+    };
+  }
+
+  const toolNames = [];
+  const unsafeTools = [];
+  let readOnlyToolCount = 0;
+  const duplicateNames = new Set();
+  const seenNames = new Set();
+
+  tools.forEach((tool, index) => {
+    if (!isRecord(tool)) {
+      errors.push(`Agent MCP tool ${index + 1} must be an object.`);
+      return;
+    }
+
+    const name = typeof tool.name === "string" ? tool.name : "";
+    if (!name) {
+      errors.push(`Agent MCP tool ${index + 1} must include a name.`);
+    } else {
+      toolNames.push(name);
+      if (seenNames.has(name)) duplicateNames.add(name);
+      seenNames.add(name);
+    }
+
+    const annotations = isRecord(tool.annotations) ? tool.annotations : null;
+    if (annotations?.readOnlyHint === true) {
+      readOnlyToolCount += 1;
+    } else {
+      errors.push(`Agent MCP tool ${name || index + 1} must set annotations.readOnlyHint=true.`);
+    }
+    if (annotations?.destructiveHint === true) {
+      errors.push(`Agent MCP tool ${name || index + 1} must not be marked destructive.`);
+    }
+
+    const serialized = JSON.stringify(tool).toLowerCase();
+    if (AGENT_FORBIDDEN_TOOL_TERM_PATTERN.test(serialized)) {
+      unsafeTools.push(name || `tool ${index + 1}`);
+    }
+  });
+
+  const sortedNames = [...toolNames].sort();
+  const missing = listDiff(sortedNames, expectedSorted);
+  const unexpected = listDiff(expectedSorted, sortedNames);
+  if (missing.length > 0 || unexpected.length > 0 || duplicateNames.size > 0) {
+    const details = [
+      missing.length ? `missing ${missing.join(", ")}` : "",
+      unexpected.length ? `unexpected ${unexpected.join(", ")}` : "",
+      duplicateNames.size ? `duplicate ${[...duplicateNames].sort().join(", ")}` : "",
+    ].filter(Boolean).join("; ");
+    errors.push(
+      `Agent MCP tools must list exactly ${expectedSorted.join(", ")}${details ? ` (${details})` : ""}.`,
+    );
+  }
+
+  if (unsafeTools.length > 0) {
+    errors.push(
+      "Agent MCP tools must not include checkout/cart/order/payment/customer/recovery terms: " +
+      unsafeTools.join(", "),
+    );
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolNames: sortedNames,
+    expectedToolNames: expectedSorted,
+    readOnlyToolCount,
+  };
+}
+
+export async function smokeAgentWorker({
+  agentUrl = DEFAULT_AGENT_URL,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  fetchImpl = fetch,
+  logger = console,
+} = {}) {
+  const normalizedAgentUrl = normalizeHttpBaseUrl(agentUrl, "Agent URL");
+  const healthUrl = buildUrl(normalizedAgentUrl, "/health");
+  const healthResponse = await fetchJson(healthUrl, {
+    fetchImpl,
+    timeoutMs,
+  });
+  requireStatus(healthResponse, "Agent /health", (status) => status === 200);
+  const healthCache = healthResponse.headers.get("cache-control") ?? "";
+  if (!hasHeaderToken(healthCache, "no-store")) {
+    throw new Error("Agent /health Cache-Control must include no-store.");
+  }
+  const healthPayload = requireJsonResponse(healthResponse, "Agent /health");
+  if (healthPayload?.success !== true || healthPayload?.status !== "ok") {
+    throw new Error("Agent /health must return success=true and status=ok.");
+  }
+
+  const mcpUrl = buildUrl(normalizedAgentUrl, "/mcp");
+  const initializeResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        capabilities: {},
+        clientInfo: MCP_CLIENT_INFO,
+      },
+    },
+  });
+  const initializeResult = requireMcpJsonRpcResult(
+    initializeResponse,
+    "Agent MCP initialize",
+    1,
+  );
+  const sessionId = initializeResponse.headers.get("mcp-session-id") || null;
+  const negotiatedProtocolVersion =
+    typeof initializeResult.protocolVersion === "string"
+      ? initializeResult.protocolVersion
+      : MCP_PROTOCOL_VERSION;
+
+  if (sessionId) {
+    const initializedResponse = await fetchMcpJsonRpc(mcpUrl, {
+      fetchImpl,
+      timeoutMs,
+      sessionId,
+      protocolVersion: negotiatedProtocolVersion,
+      body: {
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+      },
+    });
+    requireStatus(initializedResponse, "Agent MCP initialized notification", (status) =>
+      status >= 200 && status < 300);
+  }
+
+  const toolsResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    },
+  });
+  const toolsResult = requireMcpJsonRpcResult(toolsResponse, "Agent MCP tools/list", 2);
+  const toolEvaluation = evaluateAgentMcpTools(toolsResult.tools);
+  if (!toolEvaluation.ok) {
+    throw new Error(`Agent MCP tools/list failed: ${toolEvaluation.errors.join("; ")}`);
+  }
+
+  logger?.log(
+    `PASS agent MCP: /health ${healthResponse.statusCode}, tools ${toolEvaluation.toolNames.join(", ")}.`,
+  );
+  return {
+    agentUrl: redactUrl(normalizedAgentUrl),
+    health: {
+      url: redactUrl(healthUrl),
+      statusCode: healthResponse.statusCode,
+      durationMs: healthResponse.durationMs,
+      cacheControl: healthCache,
+      service: typeof healthPayload.service === "string" ? healthPayload.service : null,
+    },
+    mcp: {
+      url: redactUrl(mcpUrl),
+      initialize: {
+        statusCode: initializeResponse.statusCode,
+        durationMs: initializeResponse.durationMs,
+        protocolVersion: negotiatedProtocolVersion,
+        session: sessionId ? "present" : "none",
+      },
+      tools: {
+        statusCode: toolsResponse.statusCode,
+        durationMs: toolsResponse.durationMs,
+        toolNames: toolEvaluation.toolNames,
+        readOnlyToolCount: toolEvaluation.readOnlyToolCount,
+      },
+    },
+  };
+}
+
 function collectUcpCapabilityNames(profile) {
   const capabilities = isRecord(profile?.ucp?.capabilities)
     ? profile.ucp.capabilities
@@ -1837,6 +2162,24 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
   };
 }
 
+async function checkAgentMcp(options, { fetchImpl, logger }) {
+  if (options.skipWrangler) {
+    logger?.warn("WARN agent MCP skipped (--skip-wrangler).");
+    return {
+      status: "skipped",
+      reason: "Skipped by --skip-wrangler.",
+      agentUrl: redactUrl(options.agentUrl),
+    };
+  }
+
+  return smokeAgentWorker({
+    agentUrl: options.agentUrl,
+    timeoutMs: options.timeoutMs,
+    fetchImpl,
+    logger,
+  });
+}
+
 async function checkDiscovery(options, { fetchImpl, logger }) {
   const storefrontOrigin = new URL(options.storefrontUrl).origin;
   const responses = {};
@@ -2315,6 +2658,7 @@ export async function runReleaseCheck(options, {
     apiBaseUrl: redactUrl(options.apiBaseUrl),
     storefrontUrl: redactUrl(options.storefrontUrl),
     dashboardUrl: redactUrl(options.dashboardUrl),
+    agentUrl: redactUrl(options.agentUrl),
     checks: {},
     warnings: [],
     requiredActions: [],
@@ -2364,6 +2708,8 @@ export async function runReleaseCheck(options, {
     checkStorefrontPages(options, { fetchImpl, logger }));
   await runStep(result, "storefrontCacheHeaders", () =>
     checkStorefrontCacheHeaders(options, { fetchImpl, logger }));
+  await runStep(result, "agentMcp", () =>
+    checkAgentMcp(options, { fetchImpl, logger }));
   const discovery = await runStep(result, "discovery", () =>
     checkDiscovery(options, { fetchImpl, logger }));
   await runStep(result, "ucpDiscovery", () =>
@@ -2396,9 +2742,10 @@ Options:
   --api-base-url <url>     API base URL (default ${DEFAULT_API_BASE_URL})
   --storefront-url <url>   Storefront URL (default ${DEFAULT_STOREFRONT_URL})
   --dashboard-url <url>    Dashboard URL (default ${DEFAULT_DASHBOARD_URL})
+  --agent-url <url>        Agent Worker URL (default ${DEFAULT_AGENT_URL})
   --timeout-ms <ms>        Per-request/per-command timeout (default ${DEFAULT_TIMEOUT_MS})
   --skip-live              Run only local tracker/doc gates
-  --skip-wrangler          Skip read-only Wrangler deployment proof inside API ops
+  --skip-wrangler          Skip read-only Wrangler deployment proof and agent Worker smoke
   --allow-strict-seo-policy-fallback
                            Continue with strict discovery defaults if public SEO policy cannot be read
   --json                   Emit JSON
@@ -2433,6 +2780,7 @@ export async function main(rawArgs = process.argv.slice(2), {
       defaultApiBaseUrl: apiConfig.vars?.PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL,
       defaultStorefrontUrl: apiConfig.vars?.STOREFRONT_URL ?? DEFAULT_STOREFRONT_URL,
       defaultDashboardUrl: DEFAULT_DASHBOARD_URL,
+      defaultAgentUrl: process.env.SCALIUS_AGENT_URL ?? DEFAULT_AGENT_URL,
     });
 
     const result = await runReleaseCheck(options, {
