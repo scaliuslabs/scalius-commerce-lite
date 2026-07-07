@@ -234,20 +234,44 @@ function hasBusinessSchemaName(
 
 function buildStructuredDataWarning({
   businessIdentity,
+  hasAbsoluteStorefrontUrl,
   hasStoreLogo,
   organizationEnabled,
+  productGroupsEnabled,
   productsEnabled,
+  returnPolicyEnabled,
   websiteSearchEnabled,
+  breadcrumbsEnabled,
+  collectionsEnabled,
 }: {
   businessIdentity: SeoDiscoveryBusinessIdentity | null | undefined;
+  hasAbsoluteStorefrontUrl: boolean;
   hasStoreLogo: boolean | null | undefined;
   organizationEnabled: boolean;
+  productGroupsEnabled: boolean;
   productsEnabled: boolean;
+  returnPolicyEnabled: boolean;
   websiteSearchEnabled: boolean;
+  breadcrumbsEnabled: boolean;
+  collectionsEnabled: boolean;
 }): string | undefined {
   const warnings: string[] = [];
   const needsBusinessName =
     organizationEnabled || websiteSearchEnabled || productsEnabled;
+  const needsSchemaUrl =
+    organizationEnabled ||
+    websiteSearchEnabled ||
+    productsEnabled ||
+    productGroupsEnabled ||
+    returnPolicyEnabled ||
+    breadcrumbsEnabled ||
+    collectionsEnabled;
+
+  if (needsSchemaUrl && !hasAbsoluteStorefrontUrl) {
+    warnings.push(
+      "Add a full absolute http(s) Store URL in dashboard settings before relying on URL-bearing structured data; path-only values only help dashboard preview/sidebar navigation.",
+    );
+  }
 
   if (needsBusinessName && !hasBusinessSchemaName(businessIdentity)) {
     warnings.push(
@@ -529,10 +553,15 @@ export function buildSeoDiscoveryStatus({
       : "unavailable";
   const identityWarning = buildStructuredDataWarning({
     businessIdentity,
+    hasAbsoluteStorefrontUrl: Boolean(absoluteStorefrontUrl),
     hasStoreLogo,
     organizationEnabled: normalized.structuredData.organization,
+    productGroupsEnabled: normalized.structuredData.productGroups,
     productsEnabled: normalized.structuredData.products,
+    returnPolicyEnabled: normalized.returnPolicy.enabled,
     websiteSearchEnabled: normalized.structuredData.websiteSearch,
+    breadcrumbsEnabled: normalized.structuredData.breadcrumbs,
+    collectionsEnabled: normalized.structuredData.collections,
   });
   const feedVariantStrategyLabel = getFeedVariantStrategyLabel(
     normalized.feeds.variantStrategy,

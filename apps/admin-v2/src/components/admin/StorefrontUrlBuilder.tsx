@@ -1,13 +1,13 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { Loader2, ExternalLink } from "lucide-react";
 import {
   getStorefrontUrl,
   updateStorefrontUrl,
-} from "@/lib/api-functions/storefront-url";
-import { useSettingsForm } from "@/hooks/use-settings-form";
-import { queryKeys } from "@/lib/query-keys";
+} from "~/lib/api-functions/storefront-url";
+import { useSettingsForm } from "~/hooks/use-settings-form";
+import { queryKeys } from "~/lib/query-keys";
 
 interface StorefrontUrlValues {
   storefrontUrl: string;
@@ -39,6 +39,7 @@ export function StorefrontUrlBuilder({
       fetchFn: fetchUrl,
       saveFn: saveUrl,
       defaultValues: { storefrontUrl: initialUrl },
+      invalidateQueryKeys: [queryKeys.settings.seoDiscoveryLiveProbe()],
       successMessage: "Storefront URL saved successfully.",
       errorMessage: "Failed to save storefront URL.",
     });
@@ -84,9 +85,10 @@ export function StorefrontUrlBuilder({
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Use "/" for root, "/store" for subdirectory, or a full URL like
-          "https://mystore.com" for headless setups. This powers the "View
-          Store" sidebar link.
+          SEO discovery proof needs a full absolute http(s) Store URL like
+          "https://mystore.com". Path-only values such as "/" or "/store" only
+          help dashboard preview/sidebar navigation, including the "View Store"
+          link.
         </p>
       </div>
 

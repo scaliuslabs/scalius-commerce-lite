@@ -9,9 +9,10 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
+  ProductFeedDiagnosticSample,
   ProductFeedDiagnosticReason,
   ProductFeedDiagnosticsReport,
 } from "@scalius/core/modules/products";
@@ -80,6 +81,14 @@ function formatCount(value: number): string {
 
 function plural(value: number, singular: string, pluralLabel = `${singular}s`) {
   return value === 1 ? singular : pluralLabel;
+}
+
+function getFeedSampleLabel(sample: ProductFeedDiagnosticSample): string {
+  return sample.name || sample.slug || sample.id || "Unnamed product";
+}
+
+function getProductEditHref(productId: string): string {
+  return `/admin/products/${encodeURIComponent(productId)}/edit`;
 }
 
 interface StatusRowProps {
@@ -512,9 +521,21 @@ function FeedDiagnosticsPanel({
                     {reason.samples.length > 0 ? (
                       <p className="truncate text-[11px] text-muted-foreground">
                         Sample:{" "}
-                        {reason.samples
-                          .map((sample) => sample.name || sample.slug)
-                          .join(", ")}
+                        {reason.samples.map((sample, index) => (
+                          <Fragment key={`${sample.id || sample.slug}-${index}`}>
+                            {index > 0 ? ", " : null}
+                            {sample.id ? (
+                              <a
+                                href={getProductEditHref(sample.id)}
+                                className="font-medium text-foreground underline-offset-2 hover:underline"
+                              >
+                                {getFeedSampleLabel(sample)}
+                              </a>
+                            ) : (
+                              <span>{getFeedSampleLabel(sample)}</span>
+                            )}
+                          </Fragment>
+                        ))}
                       </p>
                     ) : null}
                   </div>
