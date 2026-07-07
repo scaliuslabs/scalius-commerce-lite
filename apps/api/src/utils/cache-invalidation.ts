@@ -218,6 +218,17 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
       "storefront_homepage_",
     ],
   },
+  discovery: {
+    label: "Discovery",
+    description: "SEO policy, robots, sitemap XML, and product feed XML",
+    kvPrefixes: ["api:seo:"],
+    bumpsHtml: true,
+    storefrontPrefixes: [
+      "global_seo_settings",
+      "feed_products_",
+      "sitemap_products_",
+    ],
+  },
   widgets: {
     label: "Widgets",
     description:
@@ -328,7 +339,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/business": ["layout"],
   "/api/v1/admin/settings/storefront-url": ["layout"],
   "/api/v1/admin/settings/hero-sliders": ["homepage"],
-  "/api/v1/admin/settings/seo": ["homepage", "layout"],
+  "/api/v1/admin/settings/seo": ["homepage", "layout", "discovery"],
   "/api/v1/admin/settings/security": ["layout"],
   "/api/v1/admin/settings/theme": ["layout"],
   "/api/v1/admin/settings/media": ["media"],

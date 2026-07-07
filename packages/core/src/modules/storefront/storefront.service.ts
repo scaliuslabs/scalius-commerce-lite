@@ -24,6 +24,7 @@ import {
   shouldInjectAnalyticsScript,
   shouldUsePartytown,
 } from "../../integrations/analytics";
+import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
@@ -253,7 +254,10 @@ export async function getPageRenderData(db: Database, slug: string) {
  * Fetch and shape all layout data in a single batched D1 round-trip.
  * Returns the final { analytics, header, navigation, footer, currency, theme } object.
  */
-export async function getLayoutData(db: Database) {
+export async function getLayoutData(
+  db: Database,
+  options: { credentialEncryptionKey?: string } = {},
+) {
   const batchResults = await db.batch([
     // 0. Analytics configurations
     db.select().from(analytics).where(eq(analytics.isActive, true)),
@@ -565,11 +569,22 @@ export async function getLayoutData(db: Database) {
     pixelId?: string | null;
     accessToken?: string | null;
   }[])[0];
+  const metaCapiAccessToken = await readStoredCredentialStrict(
+    metaCapiRow?.accessToken,
+    options.credentialEncryptionKey,
+    "Meta Conversions API access token",
+  );
+  if (metaCapiAccessToken.error) {
+    console.warn(
+      "[Storefront] Meta CAPI browser events are not ready:",
+      metaCapiAccessToken.error,
+    );
+  }
   const metaCapi = {
     browserEventsEnabled: Boolean(
       metaCapiRow?.isEnabled &&
       metaCapiRow.pixelId?.trim() &&
-      metaCapiRow.accessToken?.trim(),
+      metaCapiAccessToken.value.trim(),
     ),
   };
   const seoDiscoveryRow = (seoDiscoveryResults as { value?: string }[])[0];

@@ -141,7 +141,9 @@ app.use(
 
 app.openapi(layoutRoute, async (c) => {
   const db = c.get("db");
-  const data = await getLayoutData(db) as unknown as LayoutData;
+  const data = await getLayoutData(db, {
+    credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
+  }) as unknown as LayoutData;
   return ok(c, data);
 });
 

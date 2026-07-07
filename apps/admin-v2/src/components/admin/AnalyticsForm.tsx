@@ -107,17 +107,76 @@ const ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS = [
   /\bYOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN\b/i,
 ];
 
+const GA4_MEASUREMENT_ID_PATTERN = /\bG-[A-Z0-9]{4,32}\b/i;
+const GOOGLE_TAG_MANAGER_ID_PATTERN = /\bGTM-[A-Z0-9]{4,32}\b/i;
+const FACEBOOK_PIXEL_INIT_PATTERN =
+  /\bfbq\s*\(\s*(['"])init\1\s*,\s*(['"])(\d{5,32})\2/i;
+const TIKTOK_PIXEL_LOAD_PATTERN =
+  /\bttq\.load\s*\(\s*(['"])([A-Z0-9_-]{6,64})\1/i;
+const TIKTOK_PIXEL_EVENTS_URL_PATTERN =
+  /analytics\.tiktok\.com\/i18n\/pixel\/events\.js/i;
+const TIKTOK_PIXEL_SDK_ID_PATTERN = /\bsdkid=([A-Z0-9_-]{6,64})\b/i;
+
 function getConfigExample(type: AnalyticsScriptType) {
   return ANALYTICS_CONFIG_EXAMPLES[type] ?? ANALYTICS_CONFIG_EXAMPLES.custom;
 }
 
-function hasActiveAnalyticsPlaceholder(values: AnalyticsFormValues) {
+function hasGa4GtagSignal(config: string) {
   return (
-    values.isActive &&
+    /\bgtag\s*\(/i.test(config) ||
+    /googletagmanager\.com\/gtag\/js\?/i.test(config) ||
+    /\bgtag\.js\b/i.test(config)
+  );
+}
+
+function hasTikTokPixelLoadSignal(config: string) {
+  return (
+    TIKTOK_PIXEL_LOAD_PATTERN.test(config) ||
+    (TIKTOK_PIXEL_EVENTS_URL_PATTERN.test(config) &&
+      TIKTOK_PIXEL_SDK_ID_PATTERN.test(config))
+  );
+}
+
+function getActiveAnalyticsConfigError(values: AnalyticsFormValues) {
+  if (!values.isActive) {
+    return null;
+  }
+
+  if (
     ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS.some((pattern) =>
       pattern.test(values.config),
     )
-  );
+  ) {
+    return "Replace placeholder IDs before activating this analytics script.";
+  }
+
+  switch (values.type) {
+    case "google_analytics":
+      if (
+        !GA4_MEASUREMENT_ID_PATTERN.test(values.config) ||
+        !hasGa4GtagSignal(values.config)
+      ) {
+        return "Active Google Analytics scripts must use a GA4 gtag.js snippet with a G- measurement ID, not a GTM container snippet.";
+      }
+      return null;
+    case "google_tag_manager":
+      if (!GOOGLE_TAG_MANAGER_ID_PATTERN.test(values.config)) {
+        return "Active Google Tag Manager scripts must include a GTM- container ID.";
+      }
+      return null;
+    case "facebook_pixel":
+      if (!FACEBOOK_PIXEL_INIT_PATTERN.test(values.config)) {
+        return "Active Facebook Pixel scripts must include a readable numeric fbq('init', '...') Pixel ID.";
+      }
+      return null;
+    case "tiktok_pixel":
+      if (!hasTikTokPixelLoadSignal(values.config)) {
+        return "Active TikTok Pixel scripts must include the official Pixel load call, such as ttq.load('...').";
+      }
+      return null;
+    default:
+      return null;
+  }
 }
 
 export function AnalyticsForm({
@@ -161,10 +220,11 @@ export function AnalyticsForm({
   });
 
   const handleSubmit = (values: AnalyticsFormValues) => {
-    if (hasActiveAnalyticsPlaceholder(values)) {
+    const activeConfigError = getActiveAnalyticsConfigError(values);
+    if (activeConfigError) {
       form.setError("config", {
         type: "validate",
-        message: "Replace placeholder IDs before activating this analytics script.",
+        message: activeConfigError,
       });
       form.setFocus("config");
       return;

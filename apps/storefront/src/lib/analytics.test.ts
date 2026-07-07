@@ -64,6 +64,23 @@ describe("storefront analytics", () => {
     ).toBe(false);
   });
 
+  it("keeps Cloudflare Web Analytics beacon snippets out of Partytown even as custom scripts", () => {
+    expect(
+      shouldUsePartytown({
+        id: "analytics_1",
+        name: "Cloudflare Web Analytics pasted as custom",
+        type: "custom",
+        isActive: true,
+        usePartytown: true,
+        config:
+          '<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon=\'{"token":"site_token_123"}\'></script>',
+        location: "body_end",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    ).toBe(false);
+  });
+
   it("defaults TikTok Pixel scripts into Partytown", () => {
     expect(
       shouldUsePartytown({

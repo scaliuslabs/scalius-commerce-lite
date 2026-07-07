@@ -13,6 +13,7 @@ declare const window: {
 
 import type { Analytics as AnalyticsConfig } from "@scalius/database/schema";
 import {
+  CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC,
   isMainThreadOnlyAnalyticsType,
   isPubliclyInjectableAnalyticsConfig,
 } from "../modules/analytics/analytics.validation";
@@ -40,6 +41,9 @@ export function processAnalyticsScript(script: AnalyticsConfig): string {
  */
 export function shouldUsePartytown(script: AnalyticsConfig): boolean {
   if (isMainThreadOnlyAnalyticsType(script.type)) {
+    return false;
+  }
+  if (script.config.includes(CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC)) {
     return false;
   }
 

@@ -238,6 +238,31 @@ describe("ops-check Wrangler helpers", () => {
       errors: ["missing expected consumer worker:scalius-api"],
     });
   });
+
+  it("warns for unexpected queue actors without failing expected wiring", () => {
+    const output = [
+      "Queue Name: payment-events",
+      "Queue ID: queue-id",
+      "Number of Producers: 3",
+      "Producers: worker:scalius-api, worker:scalius-ops-monitor, worker:testdash",
+      "Number of Consumers: 2",
+      "Consumers: worker:scalius-api, worker:testdash",
+    ].join("\n");
+
+    expect(evaluateQueueInfoOutput("payment-events", output, {
+      expectedProducers: ["worker:scalius-api"],
+      expectedConsumers: ["worker:scalius-api"],
+    })).toMatchObject({
+      ok: true,
+      errors: [],
+      warnings: [
+        "unexpected producer worker:testdash",
+        "unexpected consumer worker:testdash",
+      ],
+      unexpectedProducers: ["worker:testdash"],
+      unexpectedConsumers: ["worker:testdash"],
+    });
+  });
 });
 
 describe("runOpsCheck", () => {
@@ -400,5 +425,80 @@ describe("runOpsCheck", () => {
       "--dir apps/api exec wrangler queues info payment-events",
       "--dir apps/api exec wrangler queues info payment-events-dlq",
     ]);
+  });
+
+  it("propagates unexpected queue actor warnings without failing the run", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const path = new URL(url).pathname;
+      if (path === "/api/v1/health") return textResponse("ok");
+      if (path === "/api/v1/readyz") return readyResponse();
+      if (path === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    const execFileImpl = vi.fn(async (_command, args) => {
+      if (args.includes("deployments")) {
+        return {
+          stdout: JSON.stringify([
+            {
+              created_on: "2026-07-05T02:00:00Z",
+              versions: [{ version_id: "api-version", percentage: 100 }],
+            },
+          ]),
+        };
+      }
+      const queueName = args.at(-1);
+      const producerLines = queueName.endsWith("-dlq")
+        ? ["Number of Producers: 1", "Producers: worker:scalius-ops-monitor"]
+        : ["Number of Producers: 3", "Producers: worker:scalius-api, worker:scalius-ops-monitor, worker:testdash"];
+      const consumerLines = queueName.endsWith("-dlq")
+        ? ["Number of Consumers: 2", "Consumers: worker:scalius-api, worker:testdash"]
+        : ["Number of Consumers: 1", "Consumers: worker:scalius-api"];
+      return {
+        stdout: [
+          `Queue Name: ${queueName}`,
+          "Queue ID: queue-id",
+          ...producerLines,
+          ...consumerLines,
+        ].join("\n"),
+      };
+    });
+    const logger = {
+      log: vi.fn(),
+      warn: vi.fn(),
+    };
+
+    const result = await runOpsCheck(parseOpsCheckArgs(["--samples", "1", "--queues"], {
+      defaultApiBaseUrl: "https://api.example.test",
+    }), {
+      apiConfig: monitoringApiConfig(),
+      fetchImpl,
+      execFileImpl,
+      sleepImpl: async () => undefined,
+      logger,
+      pnpmExecutable: "pnpm",
+      rootDir: "/repo",
+      requestId: "ops-check-test",
+    });
+
+    expect(result.status).toBe("passed");
+    expect(result.checks.queues.status).toBe("passed");
+    expect(result.warnings).toEqual([
+      "Queue payment-events: unexpected producer worker:testdash",
+      "Queue payment-events-dlq: unexpected consumer worker:testdash",
+    ]);
+    expect(result.checks.queues.queues[0]).toMatchObject({
+      name: "payment-events",
+      unexpectedProducers: ["worker:testdash"],
+      unexpectedConsumers: [],
+      warnings: ["unexpected producer worker:testdash"],
+    });
+    expect(result.checks.queues.queues[1]).toMatchObject({
+      name: "payment-events-dlq",
+      unexpectedProducers: [],
+      unexpectedConsumers: ["worker:testdash"],
+      warnings: ["unexpected consumer worker:testdash"],
+    });
+    expect(logger.warn).toHaveBeenCalledWith("⚠ Queue payment-events: unexpected producer worker:testdash");
+    expect(logger.warn).toHaveBeenCalledWith("⚠ Queue payment-events-dlq: unexpected consumer worker:testdash");
   });
 });
