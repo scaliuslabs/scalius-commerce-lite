@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDate } from "@scalius/shared/timestamps";
 import {
@@ -31,7 +31,12 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  ImageIcon,
+  Globe2,
+  Blocks,
 } from "lucide-react";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { useHasPermission } from "@/contexts/PermissionContext";
 import {
   cacheGroupsQueryOptions,
   cacheLastClearedQueryOptions,
@@ -64,13 +69,16 @@ import {
 } from "../ui/alert-dialog";
 
 // Group display config: icon, styling
-const GROUP_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; bgColor: string; iconColor: string; hoverBorder: string }> = {
+const GROUP_CONFIG: Record<string, { icon: ComponentType<{ className?: string }>; bgColor: string; iconColor: string; hoverBorder: string }> = {
   products: { icon: ShoppingCart, bgColor: "bg-blue-100 dark:bg-blue-900/40", iconColor: "text-blue-600 dark:text-blue-400", hoverBorder: "hover:border-blue-500/50" },
   categories: { icon: FolderTree, bgColor: "bg-green-100 dark:bg-green-900/40", iconColor: "text-green-600 dark:text-green-400", hoverBorder: "hover:border-green-500/50" },
   collections: { icon: Layers3, bgColor: "bg-purple-100 dark:bg-purple-900/40", iconColor: "text-purple-600 dark:text-purple-400", hoverBorder: "hover:border-purple-500/50" },
   pages: { icon: FileText, bgColor: "bg-orange-100 dark:bg-orange-900/40", iconColor: "text-orange-600 dark:text-orange-400", hoverBorder: "hover:border-orange-500/50" },
   layout: { icon: PanelTop, bgColor: "bg-pink-100 dark:bg-pink-900/40", iconColor: "text-pink-600 dark:text-pink-400", hoverBorder: "hover:border-pink-500/50" },
+  media: { icon: ImageIcon, bgColor: "bg-rose-100 dark:bg-rose-900/40", iconColor: "text-rose-600 dark:text-rose-400", hoverBorder: "hover:border-rose-500/50" },
   homepage: { icon: Home, bgColor: "bg-yellow-100 dark:bg-yellow-900/40", iconColor: "text-yellow-600 dark:text-yellow-400", hoverBorder: "hover:border-yellow-500/50" },
+  discovery: { icon: Globe2, bgColor: "bg-teal-100 dark:bg-teal-900/40", iconColor: "text-teal-600 dark:text-teal-400", hoverBorder: "hover:border-teal-500/50" },
+  widgets: { icon: Blocks, bgColor: "bg-violet-100 dark:bg-violet-900/40", iconColor: "text-violet-600 dark:text-violet-400", hoverBorder: "hover:border-violet-500/50" },
   checkout: { icon: CreditCard, bgColor: "bg-emerald-100 dark:bg-emerald-900/40", iconColor: "text-emerald-600 dark:text-emerald-400", hoverBorder: "hover:border-emerald-500/50" },
   search: { icon: Search, bgColor: "bg-cyan-100 dark:bg-cyan-900/40", iconColor: "text-cyan-600 dark:text-cyan-400", hoverBorder: "hover:border-cyan-500/50" },
   attributes: { icon: ListTree, bgColor: "bg-indigo-100 dark:bg-indigo-900/40", iconColor: "text-indigo-600 dark:text-indigo-400", hoverBorder: "hover:border-indigo-500/50" },
@@ -117,6 +125,7 @@ function getRelativeTime(timestamp: number | null): string {
 
 export function CacheManager() {
   const [showDeps, setShowDeps] = useState(false);
+  const canManageCache = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE);
 
   const statsQuery = useQuery(cacheStatsQueryOptions());
   const timestampsQuery = useQuery(cacheLastClearedQueryOptions());
@@ -279,6 +288,17 @@ export function CacheManager() {
         </Card>
       </div>
 
+      {!canManageCache && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Read-only cache access</AlertTitle>
+          <AlertDescription>
+            You can review cache health and queue status. Replay, mark resolved,
+            and clear actions require cache manage permission.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Storefront queue recovery */}
       <Card className="border border-border/60 shadow-none">
         <CardHeader className="pb-3">
@@ -369,38 +389,67 @@ export function CacheManager() {
                           {cacheQueueErrorLabel(failure.lastError)}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 sm:justify-end">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 gap-1.5"
-                          disabled={actionBusy}
-                          onClick={() =>
-                            replayStorefrontDlqMutation.mutate(failure.id)
-                          }
-                        >
-                          <RefreshCw
-                            className={`h-3.5 w-3.5 ${isReplaying ? "animate-spin" : ""}`}
-                          />
-                          Replay
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 gap-1.5"
-                          disabled={actionBusy}
-                          onClick={() =>
-                            ignoreStorefrontDlqMutation.mutate(failure.id)
-                          }
-                        >
-                          <CheckCircle2
-                            className={`h-3.5 w-3.5 ${isIgnoring ? "animate-pulse" : ""}`}
-                          />
-                          Ignore
-                        </Button>
-                      </div>
+                      {canManageCache ? (
+                        <div className="flex items-center gap-2 sm:justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1.5"
+                            disabled={actionBusy}
+                            onClick={() =>
+                              replayStorefrontDlqMutation.mutate(failure.id)
+                            }
+                          >
+                            <RefreshCw
+                              className={`h-3.5 w-3.5 ${isReplaying ? "animate-spin" : ""}`}
+                            />
+                            Replay
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5"
+                                disabled={actionBusy}
+                              >
+                                <CheckCircle2
+                                  className={`h-3.5 w-3.5 ${isIgnoring ? "animate-pulse" : ""}`}
+                                />
+                                Mark resolved
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Mark cache queue failure resolved?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This archives the failure without replaying it.
+                                  Use this only when the cache message no longer
+                                  needs to run.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() =>
+                                    ignoreStorefrontDlqMutation.mutate(failure.id)
+                                  }
+                                >
+                                  Mark resolved
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-xs text-muted-foreground sm:justify-end">
+                          Manage permission required
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -418,20 +467,30 @@ export function CacheManager() {
 
       {/* Dependency visualization (collapsible) */}
       <Card>
-        <CardHeader
-          className="pb-2 cursor-pointer select-none"
-          onClick={() => setShowDeps(!showDeps)}
-        >
-          <CardTitle className="flex items-center justify-between text-lg">
-            <span className="flex items-center">
-              <ListTree className="mr-2 h-5 w-5 text-primary" />
-              Admin Action → Cache Group Mapping
-            </span>
-            {showDeps ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">
+            <Button
+              type="button"
+              variant="ghost"
+              className="flex h-auto w-full items-center justify-between gap-3 p-0 text-left text-lg font-semibold hover:bg-transparent"
+              aria-expanded={showDeps}
+              aria-controls="cache-dependency-mapping"
+              onClick={() => setShowDeps((current) => !current)}
+            >
+              <span className="flex items-center">
+                <ListTree className="mr-2 h-5 w-5 text-primary" />
+                Admin Action → Cache Group Mapping
+              </span>
+              {showDeps ? (
+                <ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+              )}
+            </Button>
           </CardTitle>
         </CardHeader>
         {showDeps && (
-          <CardContent>
+          <CardContent id="cache-dependency-mapping">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {groupNames.map((groupName) => {
                 const triggers = groupTriggers[groupName] || [];
@@ -505,20 +564,22 @@ export function CacheManager() {
                     <Clock className="h-3 w-3 mr-1" />
                     {getRelativeTime(lastCleared)}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => clearGroupMutation.mutate(groupName)}
-                    disabled={clearingGroup !== null || clearingAll}
-                  >
-                    {isClearing ? (
-                      <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
-                    ) : (
-                      <Trash2 className="mr-1 h-3 w-3" />
-                    )}
-                    Clear
-                  </Button>
+                  {canManageCache && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => clearGroupMutation.mutate(groupName)}
+                      disabled={clearingGroup !== null || clearingAll}
+                    >
+                      {isClearing ? (
+                        <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="mr-1 h-3 w-3" />
+                      )}
+                      Clear
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -527,52 +588,56 @@ export function CacheManager() {
       </div>
 
       {/* Danger zone */}
-      <Separator />
-      <Card className="border border-destructive/30 bg-destructive/5 dark:bg-destructive/10 shadow-none">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center text-lg text-destructive">
-            <Eraser className="mr-2 h-5 w-5" />
-            Danger Zone
-          </CardTitle>
-          <CardDescription className="text-destructive/80">
-            Clear all backend and storefront caches. This will cause a temporary performance
-            dip while caches rebuild.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="destructive"
-                disabled={clearingAll || clearingGroup !== null}
-                className="w-full sm:w-auto"
-              >
-                {clearingAll ? (
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="mr-2 h-4 w-4" />
-                )}
-                Clear All Cache
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Clear all cache?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will clear all backend API cache and purge the storefront cache.
-                  The site may be slower for a few moments while caches rebuild.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => clearAllMutation.mutate()}>
-                  Clear all cache
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </CardContent>
-      </Card>
+      {canManageCache && (
+        <>
+          <Separator />
+          <Card className="border border-destructive/30 bg-destructive/5 dark:bg-destructive/10 shadow-none">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center text-lg text-destructive">
+                <Eraser className="mr-2 h-5 w-5" />
+                Danger Zone
+              </CardTitle>
+              <CardDescription className="text-destructive/80">
+                Clear all backend and storefront caches. This will cause a temporary performance
+                dip while caches rebuild.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    disabled={clearingAll || clearingGroup !== null}
+                    className="w-full sm:w-auto"
+                  >
+                    {clearingAll ? (
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="mr-2 h-4 w-4" />
+                    )}
+                    Clear All Cache
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear all cache?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will clear all backend API cache and purge the storefront cache.
+                      The site may be slower for a few moments while caches rebuild.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearAllMutation.mutate()}>
+                      Clear all cache
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
