@@ -281,7 +281,7 @@ The storefront is an **Astro 7 SSR** application with React 19 islands for inter
 
 ### SEO
 
-- Dashboard-governed discovery controls for sitemaps, robots, schema families, product feed exposure, per-product sitemap/feed XML exclusion, and per-product/category/collection/page `noindex`, sitemap exclusion, or same-store canonical path override
+- Dashboard-governed discovery controls for sitemaps, robots, schema families, product feed exposure, per-product sitemap/feed XML exclusion, and per-product/category/collection/page `noindex`, sitemap exclusion, or same-store canonical path override, with shared discovery-readiness previews on product, category, collection, and CMS page forms
 - JSON-LD schemas for OnlineStore, WebSite/SearchAction, Product/ProductGroup, BreadcrumbList, collection/category pages, active offer shipping details, GTINs from variant barcodes, and merchant-saved return policy facts; schema identity uses Business settings only, product schema avoids invented facts such as condition or price expiry, and seller/brand are omitted unless backed by explicit merchant data
 - Merchant-compatible product feed XML with a Google/Base canonical feed at `/api/product-feed.xml` and a Meta compatibility feed at `/api/facebook-feed.xml`; both use SKU-aware availability, absolute images, canonical product links, configurable sold-out inclusion, per-product feed exclusion, true brand/GTIN data when provided, and stock-change invalidation that reaches the rendered XML cache
 - Bounded dashboard diagnostics for product-feed emitted rows, skipped rows, reason counts, and safe product samples

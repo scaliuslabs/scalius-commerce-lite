@@ -23,6 +23,7 @@ import { Switch } from "../ui/switch";
 import { ExternalLink } from "lucide-react";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
+import { ResourceDiscoveryReadiness } from "@/components/admin/shared/ResourceDiscoveryReadiness";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
@@ -426,6 +427,14 @@ export function CategoryForm({
                 )}
               />
             </div>
+
+            <ResourceDiscoveryReadiness
+              kind="category"
+              slug={form.watch("slug")}
+              canonicalPath={form.watch("canonicalPath")}
+              noIndex={form.watch("noIndex")}
+              excludeFromSitemap={form.watch("excludeFromSitemap")}
+            />
           </CollapsibleCard>
         </div>
       </div>

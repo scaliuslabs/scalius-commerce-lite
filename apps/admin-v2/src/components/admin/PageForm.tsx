@@ -25,6 +25,7 @@ import { CharacterCounter } from "@/components/ui/character-counter";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
+import { ResourceDiscoveryReadiness } from "@/components/admin/shared/ResourceDiscoveryReadiness";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import {
   createPage,
@@ -540,6 +541,15 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                   )}
                 />
               </div>
+
+              <ResourceDiscoveryReadiness
+                kind="page"
+                slug={form.watch("slug")}
+                canonicalPath={form.watch("canonicalPath")}
+                noIndex={form.watch("noIndex")}
+                excludeFromSitemap={form.watch("excludeFromSitemap")}
+                isPublished={form.watch("isPublished")}
+              />
             </CollapsibleCard>
           </div>
         </div>

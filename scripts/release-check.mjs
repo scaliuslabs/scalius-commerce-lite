@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { promisify } from "util";
 import { resolvePnpmExecutable } from "./dev-local-utils.mjs";
 import {
+  buildApiV1Url,
   parseOpsCheckArgs,
   readApiWranglerConfig,
   runOpsCheck,
@@ -23,13 +24,12 @@ const DEFAULT_DASHBOARD_URL = "https://dashboard.scalius.com";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const RELEASE_READYZ_SAMPLES = 4;
 const MAX_BODY_PREVIEW_LENGTH = 180;
-const SITEMAP_ENDPOINTS = [
-  "/sitemap.xml",
-  "/sitemap-static.xml",
-  "/sitemap-products.xml?page=1",
-  "/sitemap-categories.xml",
-  "/sitemap-collections.xml",
-  "/sitemap-pages.xml",
+const SITEMAP_SECTION_ENDPOINTS = [
+  { endpoint: "/sitemap-static.xml", policyKey: "staticPages", label: "static pages sitemap" },
+  { endpoint: "/sitemap-products.xml?page=1", policyKey: "products", label: "products sitemap" },
+  { endpoint: "/sitemap-categories.xml", policyKey: "categories", label: "categories sitemap" },
+  { endpoint: "/sitemap-collections.xml", policyKey: "collections", label: "collections sitemap" },
+  { endpoint: "/sitemap-pages.xml", policyKey: "pages", label: "CMS pages sitemap" },
 ];
 const FEED_ENDPOINTS = [
   {
@@ -47,6 +47,23 @@ const FEED_ENDPOINTS = [
     availabilityValues: ["in stock", "out of stock"],
   },
 ];
+const STRICT_SEO_DISCOVERY_POLICY = Object.freeze({
+  source: "strict-default",
+  sitemap: Object.freeze({
+    enabled: true,
+    staticPages: true,
+    products: true,
+    categories: true,
+    collections: true,
+    pages: true,
+  }),
+  feeds: Object.freeze({
+    productCatalogEnabled: true,
+  }),
+  robots: Object.freeze({
+    advertiseSitemap: true,
+  }),
+});
 
 const closedTrackerStatuses = new Set(["verified", "won't fix", "won’t fix", "wont fix"]);
 const booleanOptions = new Set(["help", "json", "skip-live", "skip-wrangler"]);
@@ -251,6 +268,155 @@ function isSameOrigin(value, origin) {
   }
 }
 
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function readBoolean(record, key) {
+  return typeof record?.[key] === "boolean" ? record[key] : null;
+}
+
+function getSeoSettingsPayload(payload) {
+  if (isRecord(payload) && isRecord(payload.data)) return payload.data;
+  return isRecord(payload) ? payload : null;
+}
+
+function parseSeoDiscoveryPolicyPayload(payload) {
+  const settings = getSeoSettingsPayload(payload);
+  const discovery = isRecord(settings?.discovery) ? settings.discovery : null;
+  const sitemap = isRecord(discovery?.sitemap) ? discovery.sitemap : null;
+  const feeds = isRecord(discovery?.feeds) ? discovery.feeds : null;
+  const robots = isRecord(discovery?.robots) ? discovery.robots : null;
+
+  if (!sitemap || !feeds || !robots) return null;
+
+  const parsed = {
+    source: "public-seo",
+    sitemap: {
+      enabled: readBoolean(sitemap, "enabled"),
+      staticPages: readBoolean(sitemap, "staticPages"),
+      products: readBoolean(sitemap, "products"),
+      categories: readBoolean(sitemap, "categories"),
+      collections: readBoolean(sitemap, "collections"),
+      pages: readBoolean(sitemap, "pages"),
+    },
+    feeds: {
+      productCatalogEnabled: readBoolean(feeds, "productCatalogEnabled"),
+    },
+    robots: {
+      advertiseSitemap: readBoolean(robots, "advertiseSitemap"),
+    },
+  };
+
+  const complete =
+    Object.values(parsed.sitemap).every((value) => typeof value === "boolean") &&
+    typeof parsed.feeds.productCatalogEnabled === "boolean" &&
+    typeof parsed.robots.advertiseSitemap === "boolean";
+
+  return complete ? parsed : null;
+}
+
+function countEnabledSitemapSections(policy) {
+  if (!policy.sitemap.enabled) return 0;
+  return SITEMAP_SECTION_ENDPOINTS.filter(({ policyKey }) => policy.sitemap[policyKey]).length;
+}
+
+function summarizeSeoDiscoveryPolicy(policy) {
+  const enabledSections = countEnabledSitemapSections(policy);
+  const feedStatus = policy.feeds.productCatalogEnabled ? "feed enabled" : "feed disabled";
+  const robotsStatus =
+    policy.sitemap.enabled && policy.robots.advertiseSitemap
+      ? "robots advertises sitemap"
+      : "robots sitemap advertisement disabled";
+  return `sitemap ${policy.sitemap.enabled ? `${enabledSections} sections enabled` : "disabled"}, ${feedStatus}, ${robotsStatus}`;
+}
+
+function strictSeoPolicyResult(url, reason, extra = {}) {
+  return {
+    source: STRICT_SEO_DISCOVERY_POLICY.source,
+    url: redactUrl(url),
+    reason,
+    sitemap: STRICT_SEO_DISCOVERY_POLICY.sitemap,
+    feeds: STRICT_SEO_DISCOVERY_POLICY.feeds,
+    robots: STRICT_SEO_DISCOVERY_POLICY.robots,
+    ...extra,
+  };
+}
+
+async function fetchSeoDiscoveryPolicy(options, { fetchImpl, logger }) {
+  const url = buildApiV1Url(options.apiBaseUrl, "/seo");
+
+  try {
+    const response = await fetchText(url, {
+      fetchImpl,
+      timeoutMs: options.timeoutMs,
+      accept: "application/json, */*;q=0.8",
+    });
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      const reason = `Public SEO policy returned HTTP ${response.statusCode}; using strict discovery defaults.`;
+      logger?.warn(`WARN SEO policy: ${reason}`);
+      return {
+        policy: STRICT_SEO_DISCOVERY_POLICY,
+        result: strictSeoPolicyResult(url, reason, {
+          statusCode: response.statusCode,
+          durationMs: response.durationMs,
+        }),
+      };
+    }
+
+    let payload;
+    try {
+      payload = response.body ? JSON.parse(response.body) : null;
+    } catch (error) {
+      const reason = `Public SEO policy returned invalid JSON (${errorMessage(error)}); using strict discovery defaults.`;
+      logger?.warn(`WARN SEO policy: ${reason}`);
+      return {
+        policy: STRICT_SEO_DISCOVERY_POLICY,
+        result: strictSeoPolicyResult(url, reason, {
+          statusCode: response.statusCode,
+          durationMs: response.durationMs,
+        }),
+      };
+    }
+
+    const policy = parseSeoDiscoveryPolicyPayload(payload);
+    if (!policy) {
+      const reason = "Public SEO policy shape is unknown; using strict discovery defaults.";
+      logger?.warn(`WARN SEO policy: ${reason}`);
+      return {
+        policy: STRICT_SEO_DISCOVERY_POLICY,
+        result: strictSeoPolicyResult(url, reason, {
+          statusCode: response.statusCode,
+          durationMs: response.durationMs,
+        }),
+      };
+    }
+
+    logger?.log(`PASS SEO policy: ${summarizeSeoDiscoveryPolicy(policy)}.`);
+    return {
+      policy,
+      result: {
+        source: policy.source,
+        url: redactUrl(url),
+        statusCode: response.statusCode,
+        durationMs: response.durationMs,
+        summary: summarizeSeoDiscoveryPolicy(policy),
+        sitemap: policy.sitemap,
+        feeds: policy.feeds,
+        robots: policy.robots,
+      },
+    };
+  } catch (error) {
+    const reason = `Public SEO policy could not be fetched (${errorMessage(error)}); using strict discovery defaults.`;
+    logger?.warn(`WARN SEO policy: ${reason}`);
+    return {
+      policy: STRICT_SEO_DISCOVERY_POLICY,
+      result: strictSeoPolicyResult(url, reason),
+    };
+  }
+}
+
 function extractTagValues(xml, tagName) {
   const escaped = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const pattern = new RegExp(`<${escaped}\\b[^>]*>([\\s\\S]*?)<\\/${escaped}>`, "gi");
@@ -356,7 +522,14 @@ export function evaluateRequiredDocs({
   };
 }
 
-export function evaluateRobotsTxt(body, { storefrontOrigin }) {
+export function evaluateRobotsTxt(
+  body,
+  {
+    storefrontOrigin,
+    requireSitemap = true,
+    allowSitemap = true,
+  } = {},
+) {
   const sitemapUrls = [];
   const errors = [];
 
@@ -365,6 +538,7 @@ export function evaluateRobotsTxt(body, { storefrontOrigin }) {
     if (!match) continue;
     const value = decodeXml(match[1]);
     sitemapUrls.push(value);
+    if (!allowSitemap) continue;
     if (!isHttpUrl(value)) {
       errors.push(`robots sitemap URL is not absolute http(s): ${value}`);
     } else if (!isSameOrigin(value, storefrontOrigin)) {
@@ -372,7 +546,9 @@ export function evaluateRobotsTxt(body, { storefrontOrigin }) {
     }
   }
 
-  if (sitemapUrls.length === 0) {
+  if (!allowSitemap && sitemapUrls.length > 0) {
+    errors.push("robots.txt must not advertise Sitemap URLs when policy disables sitemap advertisement.");
+  } else if (requireSitemap && sitemapUrls.length === 0) {
     errors.push("robots.txt must advertise at least one absolute Sitemap URL.");
   }
 
@@ -387,11 +563,12 @@ export function evaluateSitemapXml(body, {
   storefrontOrigin,
   forbidPriority = false,
   forbidChangefreq = false,
+  requireLoc = true,
 } = {}) {
   const locs = extractTagValues(body, "loc");
   const errors = [];
 
-  if (locs.length === 0) {
+  if (requireLoc && locs.length === 0) {
     errors.push("sitemap must include at least one <loc>.");
   }
   for (const loc of locs) {
@@ -785,6 +962,11 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
   const storefrontOrigin = new URL(options.storefrontUrl).origin;
   const responses = {};
   const checks = {};
+  const { policy, result: policyResult } = await fetchSeoDiscoveryPolicy(options, {
+    fetchImpl,
+    logger,
+  });
+  responses.policy = policyResult;
 
   const robots = await fetchText(buildUrl(options.storefrontUrl, "/robots.txt"), {
     fetchImpl,
@@ -794,16 +976,22 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
   requireStatus(robots, "Storefront /robots.txt", (status) => status >= 200 && status < 300);
   const robotsCache = evaluateDiscoveryCacheHeaders(robots.headers, { label: "robots.txt" });
   if (!robotsCache.ok) throw new Error(`robots.txt cache headers failed: ${robotsCache.errors.join("; ")}`);
-  checks.robots = evaluateRobotsTxt(robots.body, { storefrontOrigin });
+  const robotsShouldAdvertiseSitemap = policy.sitemap.enabled && policy.robots.advertiseSitemap;
+  checks.robots = evaluateRobotsTxt(robots.body, {
+    storefrontOrigin,
+    requireSitemap: robotsShouldAdvertiseSitemap,
+    allowSitemap: robotsShouldAdvertiseSitemap,
+  });
   if (!checks.robots.ok) throw new Error(`robots.txt failed: ${checks.robots.errors.join("; ")}`);
   responses.robots = {
     statusCode: robots.statusCode,
     durationMs: robots.durationMs,
     cacheControl: robotsCache.cacheControl,
+    sitemapUrls: checks.robots.sitemapUrls,
   };
 
   responses.sitemaps = {};
-  for (const endpoint of SITEMAP_ENDPOINTS) {
+  const verifySitemapEndpoint = async (endpoint, { requireLoc }) => {
     const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, endpoint), {
       fetchImpl,
       timeoutMs: options.timeoutMs,
@@ -818,9 +1006,15 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
       storefrontOrigin,
       forbidPriority: endpoint.startsWith("/sitemap-products.xml"),
       forbidChangefreq: endpoint.startsWith("/sitemap-products.xml"),
+      requireLoc,
     });
     if (!evaluation.ok) {
       throw new Error(`${endpoint} failed: ${evaluation.errors.join("; ")}`);
+    }
+    if (endpoint.startsWith("/sitemap-products.xml")) {
+      checks.productSitemapFirstUrl ??= evaluation.locs.find((loc) =>
+        isSameOrigin(loc, storefrontOrigin)
+      ) ?? null;
     }
     responses.sitemaps[endpoint] = {
       statusCode: response.statusCode,
@@ -828,122 +1022,175 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
       cacheControl: cacheEvaluation.cacheControl,
       locCount: evaluation.locCount,
     };
+  };
+
+  const enabledSitemapSectionCount = countEnabledSitemapSections(policy);
+  if (policy.sitemap.enabled) {
+    await verifySitemapEndpoint("/sitemap.xml", {
+      requireLoc: enabledSitemapSectionCount > 0,
+    });
+  } else {
+    responses.sitemaps["/sitemap.xml"] = {
+      status: "skipped",
+      reason: "Global sitemap disabled by public SEO policy.",
+    };
+  }
+
+  for (const { endpoint, policyKey, label } of SITEMAP_SECTION_ENDPOINTS) {
+    if (!policy.sitemap.enabled) {
+      responses.sitemaps[endpoint] = {
+        status: "skipped",
+        reason: "Global sitemap disabled by public SEO policy.",
+      };
+      continue;
+    }
+    if (!policy.sitemap[policyKey]) {
+      responses.sitemaps[endpoint] = {
+        status: "skipped",
+        reason: `${label} disabled by public SEO policy.`,
+      };
+      continue;
+    }
+
+    await verifySitemapEndpoint(endpoint, { requireLoc: true });
   }
 
   responses.feeds = {};
-  for (const {
-    endpoint,
-    resultKey,
-    label,
-    page2Endpoint,
-    availabilityValues,
-  } of FEED_ENDPOINTS) {
-    const responseLabel = `Storefront ${label} (${endpoint})`;
-    const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, endpoint), {
-      fetchImpl,
-      timeoutMs: options.timeoutMs,
-      accept: "application/xml, text/xml, */*;q=0.8",
-    });
-    requireStatus(response, responseLabel, (status) => status >= 200 && status < 300);
-    const cacheEvaluation = evaluateDiscoveryCacheHeaders(response.headers, { label: endpoint });
-    if (!cacheEvaluation.ok) {
-      throw new Error(`${endpoint} cache headers failed: ${cacheEvaluation.errors.join("; ")}`);
+  if (!policy.feeds.productCatalogEnabled) {
+    for (const { endpoint, resultKey, page2Endpoint } of FEED_ENDPOINTS) {
+      const skipped = {
+        status: "skipped",
+        reason: "Product catalog feed disabled by public SEO policy.",
+      };
+      responses[resultKey] = skipped;
+      responses.feeds[endpoint] = skipped;
+      if (page2Endpoint) responses.feeds[page2Endpoint] = skipped;
     }
-    const evaluation = evaluateProductFeedXml(response.body, {
+  } else {
+    for (const {
+      endpoint,
+      resultKey,
+      label,
+      page2Endpoint,
       availabilityValues,
-      storefrontOrigin,
-    });
-    if (!evaluation.ok) {
-      throw new Error(`${endpoint} failed: ${evaluation.errors.join("; ")}`);
-    }
-    const feedResult = {
-      statusCode: response.statusCode,
-      durationMs: response.durationMs,
-      cacheControl: cacheEvaluation.cacheControl,
-      itemCount: evaluation.itemCount,
-      linkCount: evaluation.linkCount,
-      imageLinkCount: evaluation.imageLinkCount,
-      availabilityCount: evaluation.availabilityCount,
-      firstStorefrontItemUrl: evaluation.firstStorefrontItemUrl,
-    };
-    checks[resultKey] = evaluation;
-    responses[resultKey] = feedResult;
-    responses.feeds[endpoint] = feedResult;
+    } of FEED_ENDPOINTS) {
+      const responseLabel = `Storefront ${label} (${endpoint})`;
+      const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, endpoint), {
+        fetchImpl,
+        timeoutMs: options.timeoutMs,
+        accept: "application/xml, text/xml, */*;q=0.8",
+      });
+      requireStatus(response, responseLabel, (status) => status >= 200 && status < 300);
+      const cacheEvaluation = evaluateDiscoveryCacheHeaders(response.headers, { label: endpoint });
+      if (!cacheEvaluation.ok) {
+        throw new Error(`${endpoint} cache headers failed: ${cacheEvaluation.errors.join("; ")}`);
+      }
+      const evaluation = evaluateProductFeedXml(response.body, {
+        availabilityValues,
+        storefrontOrigin,
+      });
+      if (!evaluation.ok) {
+        throw new Error(`${endpoint} failed: ${evaluation.errors.join("; ")}`);
+      }
+      const feedResult = {
+        statusCode: response.statusCode,
+        durationMs: response.durationMs,
+        cacheControl: cacheEvaluation.cacheControl,
+        itemCount: evaluation.itemCount,
+        linkCount: evaluation.linkCount,
+        imageLinkCount: evaluation.imageLinkCount,
+        availabilityCount: evaluation.availabilityCount,
+        firstStorefrontItemUrl: evaluation.firstStorefrontItemUrl,
+      };
+      checks[resultKey] = evaluation;
+      responses[resultKey] = feedResult;
+      responses.feeds[endpoint] = feedResult;
 
-    if (page2Endpoint) {
-      const page2Response = await fetchText(
-        buildUrlWithSearch(options.storefrontUrl, page2Endpoint),
-        {
-          fetchImpl,
-          timeoutMs: options.timeoutMs,
-          accept: "application/xml, text/xml, */*;q=0.8",
-        },
-      );
-      requireStatus(
-        page2Response,
-        `Storefront ${label} page 2 (${page2Endpoint})`,
-        (status) => (status >= 200 && status < 300) || status === 404,
-      );
-      if (page2Response.statusCode >= 200 && page2Response.statusCode < 300) {
-        const page2CacheEvaluation = evaluateDiscoveryCacheHeaders(
-          page2Response.headers,
-          { label: page2Endpoint },
+      if (page2Endpoint) {
+        const page2Response = await fetchText(
+          buildUrlWithSearch(options.storefrontUrl, page2Endpoint),
+          {
+            fetchImpl,
+            timeoutMs: options.timeoutMs,
+            accept: "application/xml, text/xml, */*;q=0.8",
+          },
         );
-        if (!page2CacheEvaluation.ok) {
-          throw new Error(
-            `${page2Endpoint} cache headers failed: ${page2CacheEvaluation.errors.join("; ")}`,
+        requireStatus(
+          page2Response,
+          `Storefront ${label} page 2 (${page2Endpoint})`,
+          (status) => (status >= 200 && status < 300) || status === 404,
+        );
+        if (page2Response.statusCode >= 200 && page2Response.statusCode < 300) {
+          const page2CacheEvaluation = evaluateDiscoveryCacheHeaders(
+            page2Response.headers,
+            { label: page2Endpoint },
           );
+          if (!page2CacheEvaluation.ok) {
+            throw new Error(
+              `${page2Endpoint} cache headers failed: ${page2CacheEvaluation.errors.join("; ")}`,
+            );
+          }
+          const page2Evaluation = evaluateProductFeedXml(page2Response.body, {
+            availabilityValues,
+            storefrontOrigin,
+          });
+          if (!page2Evaluation.ok) {
+            throw new Error(`${page2Endpoint} failed: ${page2Evaluation.errors.join("; ")}`);
+          }
+          responses.feeds[page2Endpoint] = {
+            statusCode: page2Response.statusCode,
+            durationMs: page2Response.durationMs,
+            cacheControl: page2CacheEvaluation.cacheControl,
+            itemCount: page2Evaluation.itemCount,
+            linkCount: page2Evaluation.linkCount,
+            imageLinkCount: page2Evaluation.imageLinkCount,
+            availabilityCount: page2Evaluation.availabilityCount,
+            firstStorefrontItemUrl: page2Evaluation.firstStorefrontItemUrl,
+          };
+        } else {
+          responses.feeds[page2Endpoint] = {
+            statusCode: page2Response.statusCode,
+            durationMs: page2Response.durationMs,
+            cacheControl: page2Response.headers.get("Cache-Control") ?? "",
+            itemCount: 0,
+            linkCount: 0,
+            imageLinkCount: 0,
+            availabilityCount: 0,
+            firstStorefrontItemUrl: null,
+          };
         }
-        const page2Evaluation = evaluateProductFeedXml(page2Response.body, {
-          availabilityValues,
-          storefrontOrigin,
-        });
-        if (!page2Evaluation.ok) {
-          throw new Error(`${page2Endpoint} failed: ${page2Evaluation.errors.join("; ")}`);
-        }
-        responses.feeds[page2Endpoint] = {
-          statusCode: page2Response.statusCode,
-          durationMs: page2Response.durationMs,
-          cacheControl: page2CacheEvaluation.cacheControl,
-          itemCount: page2Evaluation.itemCount,
-          linkCount: page2Evaluation.linkCount,
-          imageLinkCount: page2Evaluation.imageLinkCount,
-          availabilityCount: page2Evaluation.availabilityCount,
-          firstStorefrontItemUrl: page2Evaluation.firstStorefrontItemUrl,
-        };
-      } else {
-        responses.feeds[page2Endpoint] = {
-          statusCode: page2Response.statusCode,
-          durationMs: page2Response.durationMs,
-          cacheControl: page2Response.headers.get("Cache-Control") ?? "",
-          itemCount: 0,
-          linkCount: 0,
-          imageLinkCount: 0,
-          availabilityCount: 0,
-          firstStorefrontItemUrl: null,
-        };
       }
     }
   }
 
+  const checkedSitemapCount = Object.values(responses.sitemaps)
+    .filter((result) => result.status !== "skipped").length;
+  const skippedSitemapCount = Object.values(responses.sitemaps)
+    .filter((result) => result.status === "skipped").length;
+  const feedSummary = policy.feeds.productCatalogEnabled
+    ? `canonical feed (${checks.feed.itemCount} items), compatibility feed (${checks.compatibilityFeed.itemCount} items)`
+    : "catalog feeds skipped by policy";
   logger?.log(
-    `PASS discovery: robots, ${SITEMAP_ENDPOINTS.length} sitemaps, ` +
-    `canonical feed (${checks.feed.itemCount} items), ` +
-    `compatibility feed (${checks.compatibilityFeed.itemCount} items).`,
+    `PASS discovery: robots, ${checkedSitemapCount} sitemap checks` +
+    `${skippedSitemapCount ? ` (${skippedSitemapCount} skipped by policy)` : ""}, ` +
+    `${feedSummary}.`,
   );
 
   return {
     ...responses,
-    firstStorefrontItemUrl: checks.feed.firstStorefrontItemUrl,
+    firstStorefrontItemUrl:
+      checks.feed?.firstStorefrontItemUrl ??
+      checks.productSitemapFirstUrl ??
+      null,
   };
 }
 
 async function checkDiscoveredProductRoute(options, { fetchImpl, productUrl, logger }) {
   if (!productUrl) {
-    logger?.warn("WARN product route: skipped because the feed did not expose a storefront item URL.");
+    logger?.warn("WARN product route: skipped because discovery did not expose a storefront product URL.");
     return {
       status: "skipped",
-      reason: "No storefront item URL discovered from the feed.",
+      reason: "No storefront product URL discovered from the catalog feed or product sitemap.",
     };
   }
 

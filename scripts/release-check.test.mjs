@@ -28,6 +28,51 @@ function jsonResponse(payload, status = 200) {
   return new Response(JSON.stringify(payload), { status });
 }
 
+function seoDiscoveryPolicy(overrides = {}) {
+  return {
+    sitemap: {
+      enabled: true,
+      staticPages: true,
+      products: true,
+      categories: true,
+      collections: true,
+      pages: true,
+      ...overrides.sitemap,
+    },
+    feeds: {
+      productCatalogEnabled: true,
+      includeUnavailableProducts: true,
+      variantStrategy: "variants",
+      title: "",
+      description: "",
+      ...overrides.feeds,
+    },
+    robots: {
+      advertiseSitemap: true,
+      ...overrides.robots,
+    },
+    structuredData: {
+      organization: true,
+      websiteSearch: true,
+      products: true,
+      productGroups: true,
+      offerShippingDetails: true,
+      breadcrumbs: true,
+      collections: true,
+      ...overrides.structuredData,
+    },
+  };
+}
+
+function seoPolicyResponse(overrides) {
+  return jsonResponse({
+    success: true,
+    data: {
+      discovery: seoDiscoveryPolicy(overrides),
+    },
+  });
+}
+
 function readyResponse() {
   return jsonResponse({
     success: true,
@@ -92,11 +137,23 @@ function robotsTxt() {
   return "User-agent: *\nAllow: /\nSitemap: https://storefront.example.test/sitemap.xml\n";
 }
 
+function robotsTxtWithoutSitemap() {
+  return "User-agent: *\nAllow: /\n";
+}
+
 function sitemapXml() {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     "<url><loc>https://storefront.example.test/products/demo-product</loc></url>",
+    "</urlset>",
+  ].join("");
+}
+
+function emptySitemapXml() {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     "</urlset>",
   ].join("");
 }
@@ -235,6 +292,22 @@ describe("release-check discovery evaluators", () => {
       ok: false,
       errors: ["robots sitemap URL is not absolute http(s): /sitemap.xml"],
     });
+    expect(evaluateRobotsTxt(robotsTxtWithoutSitemap(), {
+      storefrontOrigin,
+      requireSitemap: false,
+      allowSitemap: false,
+    })).toMatchObject({
+      ok: true,
+      sitemapUrls: [],
+    });
+    expect(evaluateRobotsTxt(robotsTxt(), {
+      storefrontOrigin,
+      requireSitemap: false,
+      allowSitemap: false,
+    })).toMatchObject({
+      ok: false,
+      errors: ["robots.txt must not advertise Sitemap URLs when policy disables sitemap advertisement."],
+    });
 
     expect(evaluateSitemapXml(sitemapXml(), { storefrontOrigin })).toMatchObject({
       ok: true,
@@ -243,6 +316,13 @@ describe("release-check discovery evaluators", () => {
     expect(evaluateSitemapXml("<url><loc>/products/demo</loc></url>", { storefrontOrigin })).toMatchObject({
       ok: false,
       errors: ["sitemap <loc> is not absolute http(s): /products/demo"],
+    });
+    expect(evaluateSitemapXml(emptySitemapXml(), {
+      storefrontOrigin,
+      requireLoc: false,
+    })).toMatchObject({
+      ok: true,
+      locCount: 0,
     });
   });
 
@@ -386,6 +466,7 @@ describe("runReleaseCheck", () => {
             },
           });
         }
+        if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse();
       }
 
       if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
@@ -460,6 +541,12 @@ describe("runReleaseCheck", () => {
       location: "/auth/login",
     });
     expect(result.checks.discovery.robots.cacheControl).toBe(SITEMAP_CACHE_CONTROL);
+    expect(result.checks.discovery.policy).toMatchObject({
+      source: "public-seo",
+      sitemap: { enabled: true, products: true },
+      feeds: { productCatalogEnabled: true },
+      robots: { advertiseSitemap: true },
+    });
     expect(result.checks.discovery.sitemaps["/sitemap.xml"].cacheControl).toBe(SITEMAP_CACHE_CONTROL);
     expect(result.checks.discovery.feed).toMatchObject({
       cacheControl: FEED_CACHE_CONTROL,
@@ -487,6 +574,249 @@ describe("runReleaseCheck", () => {
     });
     expect(fetchImpl.mock.calls.filter(([url]) => new URL(url).pathname === "/api/v1/readyz")).toHaveLength(4);
     expect(execFileImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses public SEO policy to skip disabled sitemap sections, feeds, and robots sitemap advertisement", async () => {
+    const requestedStorefrontPaths = [];
+    const disabledDiscoveryPolicy = {
+      sitemap: {
+        enabled: true,
+        staticPages: false,
+        products: false,
+        categories: false,
+        collections: false,
+        pages: false,
+      },
+      feeds: {
+        productCatalogEnabled: false,
+      },
+      robots: {
+        advertiseSitemap: false,
+      },
+    };
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse(disabledDiscoveryPolicy);
+      }
+
+      if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+        return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "storefront.example.test") {
+        requestedStorefrontPaths.push(`${parsed.pathname}${parsed.search}`);
+        if (parsed.pathname === "/health") return textResponse("ok");
+        if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxtWithoutSitemap());
+        if (parsed.pathname === "/sitemap.xml") return discoveryResponse(emptySitemapXml());
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    const execFileImpl = vi.fn();
+
+    const result = await runReleaseCheck(parseReleaseCheckArgs([
+      "--skip-wrangler",
+      "--api-base-url", "https://api.example.test",
+      "--storefront-url", "https://storefront.example.test",
+      "--dashboard-url", "https://dashboard.example.test",
+    ]), {
+      apiConfig: monitoringApiConfig(),
+      fetchImpl,
+      execFileImpl,
+      rootDir: "/repo",
+      readFileImpl: () => verifiedTracker(),
+      fileExistsImpl: () => true,
+      logger: null,
+    });
+
+    expect(result.status).toBe("passed");
+    expect(result.checks.discovery.policy).toMatchObject({
+      source: "public-seo",
+      sitemap: { enabled: true, products: false },
+      feeds: { productCatalogEnabled: false },
+      robots: { advertiseSitemap: false },
+    });
+    expect(result.checks.discovery.robots).toMatchObject({
+      sitemapUrls: [],
+    });
+    expect(result.checks.discovery.sitemaps["/sitemap.xml"]).toMatchObject({
+      locCount: 0,
+    });
+    expect(result.checks.discovery.sitemaps["/sitemap-products.xml?page=1"]).toMatchObject({
+      status: "skipped",
+      reason: "products sitemap disabled by public SEO policy.",
+    });
+    expect(result.checks.discovery.feed).toMatchObject({
+      status: "skipped",
+      reason: "Product catalog feed disabled by public SEO policy.",
+    });
+    expect(result.checks.discovery.compatibilityFeed).toMatchObject({
+      status: "skipped",
+    });
+    expect(result.checks.productRoute).toMatchObject({
+      status: "skipped",
+      reason: "No storefront product URL discovered from the catalog feed or product sitemap.",
+    });
+    expect(requestedStorefrontPaths).toEqual([
+      "/health",
+      "/",
+      "/search",
+      "/robots.txt",
+      "/sitemap.xml",
+    ]);
+    expect(execFileImpl).not.toHaveBeenCalled();
+  });
+
+  it("uses product sitemap as the product route smoke source when catalog feeds are disabled", async () => {
+    const requestedStorefrontPaths = [];
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/seo") {
+          return seoPolicyResponse({
+            sitemap: {
+              enabled: true,
+              staticPages: false,
+              products: true,
+              categories: false,
+              collections: false,
+              pages: false,
+            },
+            feeds: {
+              productCatalogEnabled: false,
+            },
+            robots: {
+              advertiseSitemap: true,
+            },
+          });
+        }
+      }
+
+      if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+        return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "storefront.example.test") {
+        requestedStorefrontPaths.push(`${parsed.pathname}${parsed.search}`);
+        if (parsed.pathname === "/health") return textResponse("ok");
+        if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxt());
+        if (parsed.pathname === "/sitemap.xml" || parsed.pathname === "/sitemap-products.xml") {
+          return discoveryResponse(sitemapXml());
+        }
+        if (parsed.pathname === "/products/demo-product") return textResponse(productHtml());
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    const result = await runReleaseCheck(parseReleaseCheckArgs([
+      "--skip-wrangler",
+      "--api-base-url", "https://api.example.test",
+      "--storefront-url", "https://storefront.example.test",
+      "--dashboard-url", "https://dashboard.example.test",
+    ]), {
+      apiConfig: monitoringApiConfig(),
+      fetchImpl,
+      execFileImpl: vi.fn(),
+      rootDir: "/repo",
+      readFileImpl: () => verifiedTracker(),
+      fileExistsImpl: () => true,
+      logger: null,
+    });
+
+    expect(result.status).toBe("passed");
+    expect(result.checks.discovery.feed).toMatchObject({ status: "skipped" });
+    expect(result.checks.productRoute.url).toBe("https://storefront.example.test/products/demo-product");
+    expect(requestedStorefrontPaths).toEqual([
+      "/health",
+      "/",
+      "/search",
+      "/robots.txt",
+      "/sitemap.xml",
+      "/sitemap-products.xml?page=1",
+      "/products/demo-product",
+    ]);
+  });
+
+  it.each([
+    {
+      label: "unknown shape",
+      seoResponse: () => jsonResponse({
+        success: true,
+        data: {
+          discovery: {
+            sitemap: { enabled: false },
+          },
+        },
+      }),
+    },
+    {
+      label: "failed fetch",
+      seoResponse: () => textResponse("unavailable", 503),
+    },
+  ])("keeps strict discovery expectations when public SEO policy has $label", async ({ seoResponse }) => {
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/seo") return seoResponse();
+      }
+
+      if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+        return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "storefront.example.test") {
+        if (parsed.pathname === "/health") return textResponse("ok");
+        if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxtWithoutSitemap());
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    let thrown;
+    try {
+      await runReleaseCheck(parseReleaseCheckArgs([
+        "--skip-wrangler",
+        "--api-base-url", "https://api.example.test",
+        "--storefront-url", "https://storefront.example.test",
+        "--dashboard-url", "https://dashboard.example.test",
+      ]), {
+        apiConfig: monitoringApiConfig(),
+        fetchImpl,
+        execFileImpl: vi.fn(),
+        rootDir: "/repo",
+        readFileImpl: () => verifiedTracker(),
+        fileExistsImpl: () => true,
+        logger: null,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toContain("robots.txt failed");
+    expect(thrown.message).toContain("must advertise at least one absolute Sitemap URL");
+    expect(thrown.result.checks.discovery).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining("must advertise at least one absolute Sitemap URL"),
+    });
+    expect(fetchImpl.mock.calls.map(([url]) => new URL(url).pathname)).toContain("/api/v1/seo");
   });
 
   it.each([
@@ -570,6 +900,7 @@ describe("runReleaseCheck", () => {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
         if (parsed.pathname === "/api/v1/readyz") return readyResponse();
         if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse();
       }
       if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
         return textResponse("", 307, { location: "/auth/login" });
