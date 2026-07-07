@@ -2,6 +2,8 @@ import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engi
 import { getFeedProducts } from "@/lib/api/products";
 import { getLayoutData, type CurrencyData } from "@/lib/api/storefront";
 import type { PaginatedResponse, Product, ProductVariant } from "@/lib/api/types";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   availableQuantityForVariant,
   isVariantAvailable,
@@ -9,6 +11,7 @@ import {
 } from "@/lib/product-sellable-variants";
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
+import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
 import {
   DEFAULT_PRODUCT_OPTION_LABELS,
   normalizeProductOptionLabel,
@@ -26,6 +29,12 @@ const DEFAULT_SEARCH_LIMIT = 10;
 const MAX_SEARCH_LIMIT = 50;
 const MAX_LOOKUP_IDS = 25;
 const GID_PREFIX = "gid://scalius/";
+const CATALOG_IMAGE_OPTIONS = {
+  width: 1200,
+  quality: 90,
+  format: "auto",
+  fit: "scale-down",
+} as const;
 
 type UcpStatus = "success" | "error";
 type UcpMessageType = "info" | "warning" | "error";
@@ -286,6 +295,7 @@ export async function getUcpCatalogContext(): Promise<UcpCatalogContext | null> 
   if (!layout) {
     return null;
   }
+  setRuntimeImageCdnPolicy(layout.media);
 
   const code = (layout.currency?.code ?? DEFAULT_CURRENCY.code).toUpperCase();
   const decimalPlaces = Number.isInteger(layout.currency?.decimalPlaces)
@@ -570,22 +580,17 @@ function variantUrl(product: Product, variant: ProductVariant, baseUrl: string):
 }
 
 function primaryMedia(product: Product, baseUrl: string) {
-  const rawUrl = product.imageUrl?.trim();
-  if (!rawUrl) return undefined;
+  const url = resolveCatalogDiscoveryImageUrl(product.imageUrl, baseUrl, {
+    transformImageUrl: (imageUrl) =>
+      getOptimizedImageUrl(imageUrl, CATALOG_IMAGE_OPTIONS),
+  });
+  if (!url) return undefined;
 
-  try {
-    const parsed = new URL(rawUrl, `${baseUrl}/`);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return undefined;
-    }
-    return [{
-      type: "image" as const,
-      url: parsed.toString(),
-      ...(product.imageAlt ? { alt_text: product.imageAlt } : {}),
-    }];
-  } catch {
-    return undefined;
-  }
+  return [{
+    type: "image" as const,
+    url,
+    ...(product.imageAlt ? { alt_text: product.imageAlt } : {}),
+  }];
 }
 
 function supportedBarcode(variant: ProductVariant) {
@@ -635,9 +640,10 @@ function mapVariant(
   variant: ProductVariant,
   context: UcpCatalogContext,
   inputs?: Array<{ id: string; match?: VariantMatchMode }>,
+  productMedia?: Array<{ type: "image"; url: string; alt_text?: string }>,
 ): UcpVariant {
   const pricing = variantPrices(product, variant, context);
-  const media = primaryMedia(product, context.baseUrl);
+  const media = productMedia ?? primaryMedia(product, context.baseUrl);
   const available = product.isActive !== false && isVariantAvailable(variant);
   const quantity = availableQuantityForVariant(variant);
 
@@ -711,6 +717,8 @@ function mapProduct(
 
   const resolution = resolveBuyerVariants(product.variants ?? []);
   if (resolution.variants.length === 0) return null;
+  const media = primaryMedia(product, context.baseUrl);
+  if (!media) return null;
 
   const variants = resolution.variants.map((variant, index) => {
     const inputs = inputMatches?.get(variant.id);
@@ -723,10 +731,10 @@ function mapProduct(
         ...(inputs ?? []),
         ...(featuredInputs ?? []),
       ],
+      media,
     );
   });
 
-  const media = primaryMedia(product, context.baseUrl);
   return {
     id: productGid(product.id),
     title: product.name,

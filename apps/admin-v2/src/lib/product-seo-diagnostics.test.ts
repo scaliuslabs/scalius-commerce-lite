@@ -7,7 +7,7 @@ const activeProduct = {
   id: "prod_1",
   slug: "green-tea",
   isActive: true,
-  images: [{ url: "https://cdn.example.com/green-tea.jpg" }],
+  images: [{ url: "https://cdn.example.com/green-tea.jpg", isPrimary: true }],
 };
 
 const availableSimpleSku = [
@@ -121,6 +121,56 @@ describe("buildProductSeoDiagnostics", () => {
     });
     expect(diagnostics.feed).toMatchObject({
       tone: "warning",
+      inclusion: "skipped",
+      skippedReason: "Missing or invalid primary image.",
+    });
+  });
+
+  it("requires the actual primary image for feed readiness", () => {
+    const diagnostics = buildProductSeoDiagnostics({
+      product: {
+        ...activeProduct,
+        images: [
+          { url: "https://cdn.example.com/secondary.jpg", isPrimary: false },
+          { url: "", isPrimary: true },
+        ],
+      },
+      variants: availableSimpleSku,
+      variantState: "loaded",
+      discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+      storefrontUrl: "https://shop.example.com",
+      policySource: "current",
+    });
+
+    expect(diagnostics.feedImage).toMatchObject({
+      tone: "warning",
+      title: "Feed image needed",
+      imageUrl: null,
+    });
+    expect(diagnostics.feed).toMatchObject({
+      inclusion: "skipped",
+      skippedReason: "Missing or invalid primary image.",
+    });
+  });
+
+  it("uses the shared catalog discovery image contract for feed image readiness", () => {
+    const diagnostics = buildProductSeoDiagnostics({
+      product: {
+        ...activeProduct,
+        images: [{ url: "//cdn.example.com/protocol-relative.jpg", isPrimary: true }],
+      },
+      variants: availableSimpleSku,
+      variantState: "loaded",
+      discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+      storefrontUrl: "https://shop.example.com",
+      policySource: "current",
+    });
+
+    expect(diagnostics.feedImage).toMatchObject({
+      tone: "warning",
+      title: "Feed image skipped",
+    });
+    expect(diagnostics.feed).toMatchObject({
       inclusion: "skipped",
       skippedReason: "Missing or invalid primary image.",
     });

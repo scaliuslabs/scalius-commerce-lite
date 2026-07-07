@@ -163,6 +163,15 @@ function emptySitemapXml() {
   ].join("");
 }
 
+function sitemapIndexXml(locs) {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...locs.map((loc) => `<sitemap><loc>${loc}</loc></sitemap>`),
+    "</sitemapindex>",
+  ].join("");
+}
+
 function feedXml({ availability = "in_stock" } = {}) {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -1025,6 +1034,73 @@ describe("runReleaseCheck", () => {
       "/.well-known/ucp",
     ]);
     expect(execFileImpl).not.toHaveBeenCalled();
+  });
+
+  it("fails when the sitemap index advertises a child sitemap disabled by public SEO policy", async () => {
+    const disabledDiscoveryPolicy = {
+      sitemap: {
+        enabled: true,
+        staticPages: false,
+        products: false,
+        categories: false,
+        collections: false,
+        pages: false,
+      },
+      feeds: {
+        productCatalogEnabled: false,
+      },
+      robots: {
+        advertiseSitemap: false,
+      },
+    };
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse(disabledDiscoveryPolicy);
+      }
+
+      if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+        return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "storefront.example.test") {
+        if (parsed.pathname === "/health") return textResponse("ok");
+        if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxtWithoutSitemap());
+        if (parsed.pathname === "/sitemap.xml") {
+          return discoveryResponse(
+            sitemapIndexXml([
+              "https://storefront.example.test/sitemap-products.xml?page=1",
+            ]),
+          );
+        }
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    await expect(
+      runReleaseCheck(parseReleaseCheckArgs([
+        "--skip-wrangler",
+        "--api-base-url", "https://api.example.test",
+        "--storefront-url", "https://storefront.example.test",
+        "--dashboard-url", "https://dashboard.example.test",
+      ]), {
+        apiConfig: monitoringApiConfig(),
+        fetchImpl,
+        execFileImpl: vi.fn(),
+        rootDir: "/repo",
+        readFileImpl: () => verifiedTracker(),
+        fileExistsImpl: () => true,
+        logger: null,
+      }),
+    ).rejects.toThrow(
+      "sitemap index must not advertise disabled products sitemap: https://storefront.example.test/sitemap-products.xml?page=1",
+    );
   });
 
   it("verifies UCP profile-only discovery when the catalog is empty", async () => {

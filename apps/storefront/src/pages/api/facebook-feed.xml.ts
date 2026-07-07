@@ -30,6 +30,7 @@ import {
 } from "@scalius/shared/product-options";
 import { normalizeSavedProductCondition } from "@scalius/shared/product-condition";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
+import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
 import {
   isVariantAvailable,
   resolveBuyerVariants,
@@ -250,21 +251,10 @@ function getPrimaryImageLink(product: Product, baseUrl: string): string | null {
     return null;
   }
 
-  const imageLink = getOptimizedImageUrl(sourceImage, FEED_IMAGE_OPTIONS).trim();
-  if (!imageLink) {
-    return null;
-  }
-
-  try {
-    const parsed = new URL(imageLink, baseUrl);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return null;
-    }
-
-    return parsed.toString();
-  } catch {
-    return null;
-  }
+  return resolveCatalogDiscoveryImageUrl(sourceImage, baseUrl, {
+    transformImageUrl: (imageUrl) =>
+      getOptimizedImageUrl(imageUrl, FEED_IMAGE_OPTIONS),
+  });
 }
 
 function toFeedProductRow(product: Product, baseUrl: string): FeedProductRow | null {

@@ -189,7 +189,32 @@ describe("UCP catalog mapping", () => {
       ],
       availability: { available: true, status: "in_stock" },
       barcodes: [{ type: "EAN", value: "1234567890123" }],
+      media: [
+        {
+          type: "image",
+          url: "https://storefront.example.test/images/shoe.jpg",
+          alt_text: "Khaki shoe",
+        },
+      ],
     });
+  });
+
+  it("filters catalog products without a safe discovery image", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          ...productFixture(),
+          id: "prod_bad_image",
+          imageUrl: "//cdn.example.test/unsafe.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await searchCatalog({ query: "khaki" }, context);
+
+    expect(result.status).toBe(200);
+    expect(result.body.products).toEqual([]);
   });
 
   it("correlates lookup inputs for variant IDs and SKUs", async () => {

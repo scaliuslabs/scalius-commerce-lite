@@ -31,6 +31,11 @@ export function toAbsoluteStorefrontSeoUrl(
 ): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;
+  if (trimmed.startsWith("//")) return null;
+  for (const char of trimmed) {
+    const code = char.charCodeAt(0);
+    if (char === "\\" || code <= 0x1f || code === 0x7f) return null;
+  }
 
   try {
     const parsed = new URL(trimmed);
