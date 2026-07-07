@@ -495,7 +495,19 @@ export function SeoSettingsBuilder() {
             </div>
           </div>
 
-          <div className="p-4 md:border-r">
+          <div className="border-b border-border p-4 md:border-r">
+            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              UCP Catalog Discovery
+            </div>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Default-on when the Store URL is HTTPS. Exposes read-only catalog
+              search and lookup from feed-ready products only; checkout, cart,
+              orders, and payments stay hidden.
+            </p>
+          </div>
+
+          <div className="border-b border-border p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium">
               <Globe2 className="h-4 w-4 text-muted-foreground" />
               robots.txt
@@ -511,7 +523,7 @@ export function SeoSettingsBuilder() {
             </label>
           </div>
 
-          <div className="p-4">
+          <div className="p-4 md:col-span-2">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium">
               <Braces className="h-4 w-4 text-muted-foreground" />
               Structured Data

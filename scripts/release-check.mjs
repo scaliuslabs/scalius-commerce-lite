@@ -80,7 +80,13 @@ const STRICT_SEO_DISCOVERY_POLICY = Object.freeze({
 });
 
 const closedTrackerStatuses = new Set(["verified", "won't fix", "won’t fix", "wont fix"]);
-const booleanOptions = new Set(["help", "json", "skip-live", "skip-wrangler"]);
+const booleanOptions = new Set([
+  "help",
+  "json",
+  "skip-live",
+  "skip-wrangler",
+  "allow-strict-seo-policy-fallback",
+]);
 const stringOptions = new Set(["timeout-ms", "api-base-url", "storefront-url", "dashboard-url"]);
 const knownOptions = new Set([...booleanOptions, ...stringOptions]);
 
@@ -178,6 +184,8 @@ export function parseReleaseCheckArgs(rawArgs, {
     json: rawOptions.json === true,
     skipLive: rawOptions["skip-live"] === true,
     skipWrangler: rawOptions["skip-wrangler"] === true,
+    allowStrictSeoPolicyFallback:
+      rawOptions["allow-strict-seo-policy-fallback"] === true,
     timeoutMs: rawOptions["timeout-ms"] === undefined
       ? DEFAULT_TIMEOUT_MS
       : parsePositiveInteger(rawOptions["timeout-ms"], "timeout-ms"),
@@ -418,6 +426,20 @@ function strictSeoPolicyResult(url, reason, extra = {}) {
   };
 }
 
+function seoPolicyFailure(url, reason, extra = {}) {
+  const result = strictSeoPolicyResult(url, reason, {
+    status: "failed",
+    ...extra,
+  });
+  const error = new Error(`Public SEO policy failed: ${reason}`);
+  error.result = result;
+  return error;
+}
+
+function strictSeoFallbackAllowed(options) {
+  return options.allowStrictSeoPolicyFallback === true;
+}
+
 async function fetchSeoDiscoveryPolicy(options, { fetchImpl, logger }) {
   const url = buildApiV1Url(options.apiBaseUrl, "/seo");
 
@@ -429,11 +451,18 @@ async function fetchSeoDiscoveryPolicy(options, { fetchImpl, logger }) {
     });
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      const reason = `Public SEO policy returned HTTP ${response.statusCode}; using strict discovery defaults.`;
-      logger?.warn(`WARN SEO policy: ${reason}`);
+      const reason = `Public SEO policy returned HTTP ${response.statusCode}.`;
+      if (!strictSeoFallbackAllowed(options)) {
+        throw seoPolicyFailure(url, reason, {
+          statusCode: response.statusCode,
+          durationMs: response.durationMs,
+        });
+      }
+      const fallbackReason = `${reason} Using strict discovery defaults because --allow-strict-seo-policy-fallback was provided.`;
+      logger?.warn(`WARN SEO policy: ${fallbackReason}`);
       return {
         policy: STRICT_SEO_DISCOVERY_POLICY,
-        result: strictSeoPolicyResult(url, reason, {
+        result: strictSeoPolicyResult(url, fallbackReason, {
           statusCode: response.statusCode,
           durationMs: response.durationMs,
         }),
@@ -444,11 +473,18 @@ async function fetchSeoDiscoveryPolicy(options, { fetchImpl, logger }) {
     try {
       payload = response.body ? JSON.parse(response.body) : null;
     } catch (error) {
-      const reason = `Public SEO policy returned invalid JSON (${errorMessage(error)}); using strict discovery defaults.`;
-      logger?.warn(`WARN SEO policy: ${reason}`);
+      const reason = `Public SEO policy returned invalid JSON (${errorMessage(error)}).`;
+      if (!strictSeoFallbackAllowed(options)) {
+        throw seoPolicyFailure(url, reason, {
+          statusCode: response.statusCode,
+          durationMs: response.durationMs,
+        });
+      }
+      const fallbackReason = `${reason} Using strict discovery defaults because --allow-strict-seo-policy-fallback was provided.`;
+      logger?.warn(`WARN SEO policy: ${fallbackReason}`);
       return {
         policy: STRICT_SEO_DISCOVERY_POLICY,
-        result: strictSeoPolicyResult(url, reason, {
+        result: strictSeoPolicyResult(url, fallbackReason, {
           statusCode: response.statusCode,
           durationMs: response.durationMs,
         }),
@@ -457,11 +493,18 @@ async function fetchSeoDiscoveryPolicy(options, { fetchImpl, logger }) {
 
     const policy = parseSeoDiscoveryPolicyPayload(payload);
     if (!policy) {
-      const reason = "Public SEO policy shape is unknown; using strict discovery defaults.";
-      logger?.warn(`WARN SEO policy: ${reason}`);
+      const reason = "Public SEO policy shape is unknown.";
+      if (!strictSeoFallbackAllowed(options)) {
+        throw seoPolicyFailure(url, reason, {
+          statusCode: response.statusCode,
+          durationMs: response.durationMs,
+        });
+      }
+      const fallbackReason = `${reason} Using strict discovery defaults because --allow-strict-seo-policy-fallback was provided.`;
+      logger?.warn(`WARN SEO policy: ${fallbackReason}`);
       return {
         policy: STRICT_SEO_DISCOVERY_POLICY,
-        result: strictSeoPolicyResult(url, reason, {
+        result: strictSeoPolicyResult(url, fallbackReason, {
           statusCode: response.statusCode,
           durationMs: response.durationMs,
         }),
@@ -484,11 +527,18 @@ async function fetchSeoDiscoveryPolicy(options, { fetchImpl, logger }) {
       },
     };
   } catch (error) {
-    const reason = `Public SEO policy could not be fetched (${errorMessage(error)}); using strict discovery defaults.`;
-    logger?.warn(`WARN SEO policy: ${reason}`);
+    if (error instanceof Error && error.result) {
+      throw error;
+    }
+    const reason = `Public SEO policy could not be fetched (${errorMessage(error)}).`;
+    if (!strictSeoFallbackAllowed(options)) {
+      throw seoPolicyFailure(url, reason);
+    }
+    const fallbackReason = `${reason} Using strict discovery defaults because --allow-strict-seo-policy-fallback was provided.`;
+    logger?.warn(`WARN SEO policy: ${fallbackReason}`);
     return {
       policy: STRICT_SEO_DISCOVERY_POLICY,
-      result: strictSeoPolicyResult(url, reason),
+      result: strictSeoPolicyResult(url, fallbackReason),
     };
   }
 }
@@ -1992,6 +2042,8 @@ Options:
   --timeout-ms <ms>        Per-request/per-command timeout (default ${DEFAULT_TIMEOUT_MS})
   --skip-live              Run only local tracker/doc gates
   --skip-wrangler          Skip read-only Wrangler deployment proof inside API ops
+  --allow-strict-seo-policy-fallback
+                           Continue with strict discovery defaults if public SEO policy cannot be read
   --json                   Emit JSON
   -h, --help               Show this help
 `);

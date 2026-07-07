@@ -837,8 +837,13 @@ export function createCatalogFeedGet(format: FeedFormat): APIRoute {
       }
 
       const layoutData = await getLayoutData();
-      setRuntimeImageCdnPolicy(layoutData?.media);
-      const currencyCode = layoutData?.currency?.code ?? "BDT";
+      if (!layoutData) {
+        return xmlDataUnavailableResponse(
+          `${feedLabel} is temporarily unavailable`,
+        );
+      }
+      setRuntimeImageCdnPolicy(layoutData.media);
+      const currencyCode = layoutData.currency?.code ?? "BDT";
 
       const feedWindow = await readFeedItemWindow({
         page,
