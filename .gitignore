@@ -50,3 +50,4 @@ skills-lock.json
 !/docs/research/
 !/docs/research/*.md
 CLAUDE.md
+mcp.md
