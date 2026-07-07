@@ -4,6 +4,7 @@ import {
   getDeployCommandForTarget,
   parseOnlyTarget,
   sampleApiReadiness,
+  verifyAgentDeploy,
 } from "./deploy.mjs";
 
 function readyResponse() {
@@ -28,6 +29,50 @@ function degradedResponse(status = 503) {
       r2: { status: "error", latencyMs: 1_500 },
     },
   }), { status });
+}
+
+function agentHealthResponse() {
+  return new Response(JSON.stringify({
+    success: true,
+    status: "ok",
+    service: "scalius-agent",
+  }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+function agentTool(name, extra = {}) {
+  return {
+    name,
+    description: `Reads public catalog data for ${name}.`,
+    inputSchema: { type: "object" },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+    ...extra,
+  };
+}
+
+function agentTools(overrides = {}) {
+  return [
+    agentTool("catalog_search", overrides.catalog_search),
+    agentTool("catalog_lookup", overrides.catalog_lookup),
+    agentTool("catalog_product", overrides.catalog_product),
+    agentTool("catalog_profile", overrides.catalog_profile),
+  ];
+}
+
+function mcpSseResponse(message) {
+  return new Response(`event: message\ndata: ${JSON.stringify(message)}\n\n`, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
 }
 
 describe("deploy API readiness sampling", () => {
@@ -87,6 +132,115 @@ describe("deploy API readiness sampling", () => {
       fetchImpl,
       sleepImpl: async () => undefined,
     })).rejects.toThrow("1/2 ready");
+  });
+});
+
+describe("deploy agent verification", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("passes when health and MCP tools are catalog-only", async () => {
+    const requests = [];
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+      requests.push(`${init.method ?? "GET"} ${parsed.pathname}`);
+
+      if (parsed.pathname === "/health") {
+        expect(init.method).toBe("GET");
+        return agentHealthResponse();
+      }
+      if (parsed.pathname === "/mcp") {
+        expect(init.method).toBe("POST");
+        const headers = new Headers(init.headers);
+        expect(headers.get("accept")).toBe("application/json, text/event-stream");
+        expect(headers.get("content-type")).toBe("application/json");
+        const body = JSON.parse(init.body);
+        if (body.method === "initialize") {
+          return mcpSseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: {
+              protocolVersion: "2025-06-18",
+              capabilities: { tools: { listChanged: true } },
+              serverInfo: { name: "scalius-agent", version: "0.1.0" },
+            },
+          });
+        }
+        if (body.method === "tools/list") {
+          return mcpSseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { tools: agentTools() },
+          });
+        }
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    const result = await verifyAgentDeploy({
+      agentUrl: "https://agent.example.test",
+      fetchImpl,
+      timeoutMs: 5_000,
+    });
+
+    expect(requests).toEqual([
+      "GET /health",
+      "POST /mcp",
+      "POST /mcp",
+    ]);
+    expect(result.mcp.tools.toolNames).toEqual([
+      "catalog_lookup",
+      "catalog_product",
+      "catalog_profile",
+      "catalog_search",
+    ]);
+    expect(console.log).toHaveBeenCalledWith(
+      "✓ Agent /health returned 200; MCP tools: catalog_lookup, catalog_product, catalog_profile, catalog_search.",
+    );
+  });
+
+  it("fails when MCP tools expose unsafe capabilities", async () => {
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+      if (parsed.pathname === "/health") return agentHealthResponse();
+      if (parsed.pathname === "/mcp") {
+        const body = JSON.parse(init.body);
+        if (body.method === "initialize") {
+          return mcpSseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { protocolVersion: "2025-06-18", capabilities: {} },
+          });
+        }
+        if (body.method === "tools/list") {
+          return mcpSseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: {
+              tools: agentTools({
+                catalog_profile: {
+                  _meta: { capabilities: ["customer_recovery"] },
+                },
+              }),
+            },
+          });
+        }
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    await expect(verifyAgentDeploy({
+      agentUrl: "https://agent.example.test",
+      fetchImpl,
+      timeoutMs: 5_000,
+    })).rejects.toThrow("checkout/cart/order/payment/customer/recovery terms");
   });
 });
 
