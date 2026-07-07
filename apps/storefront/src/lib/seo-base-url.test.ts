@@ -30,7 +30,14 @@ describe("SEO base URL helpers", () => {
   });
 
   it("rejects missing, relative, and non-http storefront URLs", () => {
-    for (const value of ["", "/demo", "ftp://shop.example.com"]) {
+    for (const value of [
+      "",
+      "/demo",
+      "ftp://shop.example.com",
+      "https://shop.example.com/base",
+      "https://shop.example.com?preview=1",
+      "https://shop.example.com/#hash",
+    ]) {
       mocks.getRuntimeStorefrontUrl.mockReturnValue(value);
       expect(getAbsoluteStorefrontSeoBaseUrl()).toBeNull();
       expect(buildAbsoluteStorefrontSeoUrl("/products/fish")).toBeNull();

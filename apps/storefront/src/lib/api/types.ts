@@ -37,6 +37,7 @@ import type {
   PostApiV1OrdersResponse as PostOrdersResponse,
 } from "@scalius/api-client/types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import type { ProductOptionSchema } from "@scalius/shared/product-options";
 
 export type {
   GetProductsResponse,
@@ -116,6 +117,10 @@ export interface Product {
   metaTitle: string | null;
   metaDescription: string | null;
   canonicalPath?: string | null;
+  variantOption1Label?: string | null;
+  variantOption2Label?: string | null;
+  variantOption1Schema?: ProductOptionSchema | null;
+  variantOption2Schema?: ProductOptionSchema | null;
   noIndex?: boolean;
   features?: string[];
   additionalInfo?: ProductRichContent[];
@@ -185,6 +190,7 @@ export interface CategorySummary {
   id: string;
   name: string;
   slug: string;
+  canonicalPath?: string | null;
 }
 
 export interface CategoryProductsResponse extends PaginatedResponse<Product> {

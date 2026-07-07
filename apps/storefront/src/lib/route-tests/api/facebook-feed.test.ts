@@ -212,6 +212,9 @@ describe("Facebook product feed route", () => {
     expect(body).not.toContain("<g:id>prod_shirt</g:id>");
     expect(body).toContain("<g:item_group_id>prod_shirt</g:item_group_id>");
     expect(body).toContain(
+      "<g:title>Linen Shirt - Size: M / Color: Red</g:title>",
+    );
+    expect(body).toContain(
       "<g:link>https://storefront.example.test/products/linen-shirt?size=M&amp;color=Red</g:link>",
     );
     expect(body).toContain("<g:price>900.00 BDT</g:price>");
@@ -224,6 +227,67 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:material>Cotton</g:material>");
     expect(body).not.toContain("Catalog color");
     expect(body).not.toContain("Catalog size");
+  });
+
+  it("uses merchant option mapping for variant feed labels and schema fields", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_pack",
+          slug: "premium-pack",
+          name: "Premium Pack",
+          description: "Bundle options",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          hasVariants: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/pack.jpg",
+          variantOption1Label: "Weight",
+          variantOption2Label: "Style",
+          variantOption1Schema: "none",
+          variantOption2Schema: "pattern",
+          variants: [
+            {
+              id: "var_pack_premium",
+              productId: "prod_pack",
+              size: "2KG",
+              color: "Premium",
+              sku: "PACK-2KG-PREMIUM",
+              price: 1200,
+              stock: 4,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: null,
+              discountAmount: null,
+              discountPercentage: null,
+            },
+          ],
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(
+      "<g:title>Premium Pack - Weight: 2KG / Style: Premium</g:title>",
+    );
+    expect(body).toContain("<g:item_group_title>Premium Pack</g:item_group_title>");
+    expect(body).toContain("<g:name>Weight</g:name>");
+    expect(body).toContain("<g:value>2KG</g:value>");
+    expect(body).toContain("<g:name>Style</g:name>");
+    expect(body).toContain("<g:value>Premium</g:value>");
+    expect(body).toContain("<g:pattern>Premium</g:pattern>");
+    expect(body).not.toContain("<g:size>2KG</g:size>");
+    expect(body).not.toContain("<g:color>Premium</g:color>");
+    expect(body).not.toContain("<g:material>2KG</g:material>");
   });
 
   it("uses Google feed vocabulary and canonical product paths on the canonical product feed", async () => {
@@ -275,6 +339,12 @@ describe("Facebook product feed route", () => {
     expect(body).toContain(
       "<g:link>https://storefront.example.test/shop/linen-shirt?size=M&amp;color=Red</g:link>",
     );
+    expect(body).toContain("<g:item_group_title>Linen Shirt</g:item_group_title>");
+    expect(body).toContain("<g:variant_option>");
+    expect(body).toContain("<g:name>Size</g:name>");
+    expect(body).toContain("<g:value>M</g:value>");
+    expect(body).toContain("<g:name>Color</g:name>");
+    expect(body).toContain("<g:value>Red</g:value>");
     expect(body).toContain("<g:availability>in_stock</g:availability>");
     expect(body).not.toContain("<g:availability>in stock</g:availability>");
     expect(body).toContain("<g:identifier_exists>no</g:identifier_exists>");

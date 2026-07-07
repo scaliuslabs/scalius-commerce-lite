@@ -7,6 +7,11 @@ import {
     isValidCanonicalPath,
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
+import {
+    DEFAULT_PRODUCT_OPTION_LABELS,
+    DEFAULT_PRODUCT_OPTION_SCHEMA,
+    PRODUCT_OPTION_SCHEMA_VALUES,
+} from "@scalius/shared/product-options";
 
 const canonicalPathSchema = z
     .string()
@@ -16,6 +21,9 @@ const canonicalPathSchema = z
     .refine((value) => value === null || isValidCanonicalPath(value), {
         message: "Canonical path must be a clean same-store path without query strings or fragments.",
     });
+
+const productOptionLabelSchema = z.string().trim().min(1).max(40);
+const productOptionSchemaSchema = z.enum(PRODUCT_OPTION_SCHEMA_VALUES);
 
 /** Shared image schema used in create and update */
 const productImageSchema = z.object({
@@ -64,6 +72,18 @@ const productBaseSchema = z.object({
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
     excludeFromProductFeed: z.boolean().optional().default(false),
+    variantOption1Label: productOptionLabelSchema
+        .optional()
+        .default(DEFAULT_PRODUCT_OPTION_LABELS.option1),
+    variantOption2Label: productOptionLabelSchema
+        .optional()
+        .default(DEFAULT_PRODUCT_OPTION_LABELS.option2),
+    variantOption1Schema: productOptionSchemaSchema
+        .optional()
+        .default(DEFAULT_PRODUCT_OPTION_SCHEMA.option1),
+    variantOption2Schema: productOptionSchemaSchema
+        .optional()
+        .default(DEFAULT_PRODUCT_OPTION_SCHEMA.option2),
     slug: z
         .string()
         .min(3)

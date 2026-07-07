@@ -7,7 +7,11 @@ import { productQueryOptions } from "~/lib/api-query-options/products";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { useHydrated } from "~/hooks/use-hydrated";
 import type { ProductDetail, ProductImageDetail, ProductVariant } from "~/types/api-responses";
-import type { Category } from "~/components/admin/product-form/types";
+import {
+  DEFAULT_PRODUCT_OPTION_LABELS,
+  DEFAULT_PRODUCT_OPTION_SCHEMA,
+  type Category,
+} from "~/components/admin/product-form/types";
 import type { ProductVariant as LocalProductVariant } from "~/components/admin/product-form/variants/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
@@ -56,6 +60,14 @@ function EditProductPage() {
     noIndex: product.noIndex,
     excludeFromSitemap: product.excludeFromSitemap,
     excludeFromProductFeed: product.excludeFromProductFeed,
+    variantOption1Label:
+      product.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
+    variantOption2Label:
+      product.variantOption2Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option2,
+    variantOption1Schema:
+      product.variantOption1Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+    variantOption2Schema:
+      product.variantOption2Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
     isActive: product.isActive,
     discountType: (product.discountType || "percentage") as "percentage" | "flat",
     discountPercentage: product.discountPercentage || 0,

@@ -4,6 +4,12 @@ import {
   isValidCanonicalPath,
   normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
+import {
+  DEFAULT_PRODUCT_OPTION_LABELS,
+  DEFAULT_PRODUCT_OPTION_SCHEMA,
+  PRODUCT_OPTION_SCHEMA_VALUES,
+  type ProductOptionSchema,
+} from "@scalius/shared/product-options";
 
 const canonicalPathSchema = z
   .string()
@@ -12,6 +18,19 @@ const canonicalPathSchema = z
   .refine((value) => value === null || isValidCanonicalPath(value), {
     message: "Use a same-store path such as /products/main-shoe.",
   });
+
+export {
+  DEFAULT_PRODUCT_OPTION_LABELS,
+  DEFAULT_PRODUCT_OPTION_SCHEMA,
+  PRODUCT_OPTION_SCHEMA_VALUES,
+  type ProductOptionSchema,
+};
+
+const productOptionLabelSchema = z
+  .string()
+  .trim()
+  .min(1, "Option label is required")
+  .max(40, "Option label must be 40 characters or less");
 
 export interface Category {
   id: string;
@@ -50,6 +69,10 @@ export const productFormSchema = z.object({
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   excludeFromProductFeed: z.boolean(),
+  variantOption1Label: productOptionLabelSchema,
+  variantOption2Label: productOptionLabelSchema,
+  variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
+  variantOption2Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
   slug: z
     .string()
     .min(3, "Slug must be at least 3 characters")

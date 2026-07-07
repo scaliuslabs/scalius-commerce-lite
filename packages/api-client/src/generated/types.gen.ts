@@ -4584,6 +4584,10 @@ export type GetApiV1ProductsFeedResponses = {
                 name: string;
                 slug: string;
                 canonicalPath: string | null;
+                variantOption1Label: string;
+                variantOption2Label: string;
+                variantOption1Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                variantOption2Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
                 description: string | null;
                 price: number;
                 discountType: string | null;
@@ -29677,6 +29681,10 @@ export type PostApiV1AdminProductsData = {
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
+        variantOption1Label?: string;
+        variantOption2Label?: string;
+        variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+        variantOption2Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
         slug: string;
         images: Array<{
             id: string;
@@ -30125,6 +30133,10 @@ export type GetApiV1AdminProductsByIdResponses = {
             noIndex: boolean;
             excludeFromSitemap: boolean;
             excludeFromProductFeed: boolean;
+            variantOption1Label: string;
+            variantOption2Label: string;
+            variantOption1Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
+            variantOption2Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
             discountPercentage: number | null;
             discountType: 'percentage' | 'flat' | null;
             discountAmount: number | null;
@@ -30209,6 +30221,10 @@ export type PutApiV1AdminProductsByIdData = {
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
+        variantOption1Label?: string;
+        variantOption2Label?: string;
+        variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+        variantOption2Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
         slug: string;
         images: Array<{
             id: string;

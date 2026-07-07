@@ -4,6 +4,7 @@
 export { AttributesSection } from "./AttributesSection";
 export { ProductImagesSection } from "./ProductImagesSection";
 export { SeoSection } from "./SeoSection";
+export { OptionDiscoverySection } from "./OptionDiscoverySection";
 export { TitleDescriptionSection } from "./TitleDescriptionSection";
 export { PricingCard } from "./PricingCard";
 export { StatusCard } from "./StatusCard";
@@ -23,8 +24,11 @@ export { useProductVariants } from "./hooks/useProductVariants";
 
 // Types
 export {
+  DEFAULT_PRODUCT_OPTION_LABELS,
+  DEFAULT_PRODUCT_OPTION_SCHEMA,
   productFormSchema,
   type ProductFormValues,
+  type ProductOptionSchema,
   type Category,
   type ProductImage,
 } from "./types";

@@ -4,10 +4,17 @@ import {
   addVariantImagesMarker,
   cleanMetaDescription,
   extractUniqueVariantOptionValues,
+  formatFormValuesForSubmission,
   getVariantImagesAxis,
   hasVariantImagesEnabled,
   resolveVariantImageAxis,
 } from "./utils";
+import {
+  DEFAULT_PRODUCT_OPTION_LABELS,
+  DEFAULT_PRODUCT_OPTION_SCHEMA,
+  productFormSchema,
+  type ProductFormValues,
+} from "./types";
 
 const variants = [
   {
@@ -74,5 +81,81 @@ describe("product form variant image metadata", () => {
     expect(resolveVariantImageAxis("option1", [], ["Red"])).toBe("option2");
     expect(resolveVariantImageAxis("option2", ["1KG"], ["Red"])).toBe("option2");
     expect(resolveVariantImageAxis("option1", [], [])).toBe("option1");
+  });
+});
+
+describe("product form catalog option mapping", () => {
+  const baseValues: ProductFormValues = {
+    name: "Main Shoe",
+    description: "Comfortable everyday shoe.",
+    price: 1200,
+    categoryId: "cat_1",
+    isActive: true,
+    discountType: "percentage",
+    discountPercentage: 0,
+    discountAmount: 0,
+    freeDelivery: false,
+    metaTitle: null,
+    metaDescription: null,
+    canonicalPath: null,
+    noIndex: false,
+    excludeFromSitemap: false,
+    excludeFromProductFeed: false,
+    variantOption1Label: DEFAULT_PRODUCT_OPTION_LABELS.option1,
+    variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
+    variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+    variantOption2Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+    slug: "main-shoe",
+    images: [],
+    attributes: [],
+    additionalInfo: [],
+    slugEdited: false,
+  };
+
+  it("trims labels and accepts the supported schema enum", () => {
+    const result = productFormSchema.safeParse({
+      ...baseValues,
+      variantOption1Label: " Size ",
+      variantOption2Label: " Finish ",
+      variantOption1Schema: "size",
+      variantOption2Schema: "pattern",
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.variantOption1Label).toBe("Size");
+    expect(result.data.variantOption2Label).toBe("Finish");
+    expect(result.data.variantOption2Schema).toBe("pattern");
+  });
+
+  it("rejects empty labels and unknown schema mappings", () => {
+    const result = productFormSchema.safeParse({
+      ...baseValues,
+      variantOption1Label: " ",
+      variantOption2Schema: "style",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("includes catalog option mapping fields in product submissions", () => {
+    expect(
+      formatFormValuesForSubmission(
+        {
+          ...baseValues,
+          variantOption1Label: "Pack",
+          variantOption2Label: "Shade",
+          variantOption1Schema: "size",
+          variantOption2Schema: "color",
+        },
+        false,
+        "option2",
+      ),
+    ).toMatchObject({
+      variantOption1Label: "Pack",
+      variantOption2Label: "Shade",
+      variantOption1Schema: "size",
+      variantOption2Schema: "color",
+    });
   });
 });

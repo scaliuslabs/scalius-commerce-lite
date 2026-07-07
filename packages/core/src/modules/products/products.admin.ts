@@ -24,6 +24,10 @@ import { checkAndAlertLowStock } from "../inventory/alerts";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import { defaultProductSkuValues, normalizeDefaultSkuOptions } from "./products.public-eligibility";
 import { assertConsistentVariantOptionAxes, assertProductVariantOptionAxes } from "./products.variants";
+import {
+    DEFAULT_PRODUCT_OPTION_LABELS,
+    DEFAULT_PRODUCT_OPTION_SCHEMA,
+} from "@scalius/shared/product-options";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -357,6 +361,10 @@ export async function getProductDetails(
             noIndex: products.noIndex,
             excludeFromSitemap: products.excludeFromSitemap,
             excludeFromProductFeed: products.excludeFromProductFeed,
+            variantOption1Label: products.variantOption1Label,
+            variantOption2Label: products.variantOption2Label,
+            variantOption1Schema: products.variantOption1Schema,
+            variantOption2Schema: products.variantOption2Schema,
             createdAt: products.createdAt,
             updatedAt: products.updatedAt,
             deletedAt: products.deletedAt,
@@ -526,6 +534,14 @@ export async function createProduct(db: Database, data: CreateProductInput): Pro
             noIndex: data.noIndex ?? false,
             excludeFromSitemap: data.excludeFromSitemap ?? false,
             excludeFromProductFeed: data.excludeFromProductFeed ?? false,
+            variantOption1Label:
+                data.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
+            variantOption2Label:
+                data.variantOption2Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option2,
+            variantOption1Schema:
+                data.variantOption1Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+            variantOption2Schema:
+                data.variantOption2Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
             isActive: data.isActive,
             discountType: data.discountType || "percentage",
             discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
@@ -656,12 +672,20 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
                 price: data.price,
                 categoryId: data.categoryId,
                 slug: data.slug,
-            metaTitle: data.metaTitle,
-            metaDescription: data.metaDescription,
-            canonicalPath: data.canonicalPath ?? null,
-            noIndex: data.noIndex ?? false,
-            excludeFromSitemap: data.excludeFromSitemap ?? false,
-            excludeFromProductFeed: data.excludeFromProductFeed ?? false,
+                metaTitle: data.metaTitle,
+                metaDescription: data.metaDescription,
+                canonicalPath: data.canonicalPath ?? null,
+                noIndex: data.noIndex ?? false,
+                excludeFromSitemap: data.excludeFromSitemap ?? false,
+                excludeFromProductFeed: data.excludeFromProductFeed ?? false,
+                variantOption1Label:
+                    data.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
+                variantOption2Label:
+                    data.variantOption2Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option2,
+                variantOption1Schema:
+                    data.variantOption1Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+                variantOption2Schema:
+                    data.variantOption2Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
                 isActive: data.isActive,
                 discountType: data.discountType || "percentage",
                 discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage ?? null) : 0,

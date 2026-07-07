@@ -1,6 +1,7 @@
 // src/server/routes/products.ts
 // Storefront product routes — thin HTTP layer.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { PRODUCT_OPTION_SCHEMA_VALUES } from "@scalius/shared/product-options";
 import { cacheMiddleware } from "../middleware/cache";
 import {
   getStorefrontFeedProducts,
@@ -215,6 +216,10 @@ const storefrontFeedProductSchema = z.object({
   name: z.string(),
   slug: z.string(),
   canonicalPath: z.string().nullable(),
+  variantOption1Label: z.string(),
+  variantOption2Label: z.string(),
+  variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
+  variantOption2Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
   description: z.string().nullable(),
   price: z.number(),
   discountType: z.string().nullable(),

@@ -5,6 +5,7 @@
 // Entity schemas define strict shapes for OpenAPI documentation and SDK type generation.
 
 import { z } from "@hono/zod-openapi";
+import { PRODUCT_OPTION_SCHEMA_VALUES } from "@scalius/shared/product-options";
 import {
   nullableTimestampSchema,
   optionalNullableTimestampSchema,
@@ -117,6 +118,10 @@ export const productDetailSchema = z
     noIndex: z.boolean(),
     excludeFromSitemap: z.boolean(),
     excludeFromProductFeed: z.boolean(),
+    variantOption1Label: z.string(),
+    variantOption2Label: z.string(),
+    variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
+    variantOption2Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
     discountPercentage: z.number().nullable(),
     discountType: z.enum(["percentage", "flat"]).nullable(),
     discountAmount: z.number().nullable(),

@@ -3,7 +3,11 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
-import type { Category } from "~/components/admin/product-form/types";
+import {
+  DEFAULT_PRODUCT_OPTION_LABELS,
+  DEFAULT_PRODUCT_OPTION_SCHEMA,
+  type Category,
+} from "~/components/admin/product-form/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 const defaultValues = {
@@ -22,6 +26,10 @@ const defaultValues = {
   noIndex: false,
   excludeFromSitemap: false,
   excludeFromProductFeed: false,
+  variantOption1Label: DEFAULT_PRODUCT_OPTION_LABELS.option1,
+  variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
+  variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+  variantOption2Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
   slug: "",
   images: [],
 };

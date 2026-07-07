@@ -23,6 +23,10 @@ export const products = sqliteTable(
         noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
         excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
         excludeFromProductFeed: integer("exclude_from_product_feed", { mode: "boolean" }).notNull().default(false),
+        variantOption1Label: text("variant_option_1_label").notNull().default("Size"),
+        variantOption2Label: text("variant_option_2_label").notNull().default("Color"),
+        variantOption1Schema: text("variant_option_1_schema", { enum: ["size", "color", "material", "pattern", "none"] }).notNull().default("size"),
+        variantOption2Schema: text("variant_option_2_schema", { enum: ["size", "color", "material", "pattern", "none"] }).notNull().default("color"),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),

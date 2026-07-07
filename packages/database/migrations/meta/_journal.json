@@ -582,6 +582,13 @@
       "when": 1783486800000,
       "tag": "0082_resource_canonical_paths",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "6",
+      "when": 1783490400000,
+      "tag": "0083_product_variant_option_discovery",
+      "breakpoints": true
     }
   ]
 }
