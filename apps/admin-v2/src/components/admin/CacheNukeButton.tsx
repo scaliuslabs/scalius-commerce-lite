@@ -24,14 +24,21 @@ import {
 export function CacheNukeButton() {
   const [clearing, setClearing] = useState(false);
 
-  const handleClearAll = async () => {
+  const handleInvalidateCaches = async () => {
     try {
       setClearing(true);
       await clearCache();
-      toast.success("All cache cleared successfully");
+      toast.success(
+        "API cache invalidated and storefront edge cache purge requested",
+      );
     } catch (error: unknown) {
-      console.error("Error clearing cache:", error);
-      toast.error(getServerFnError(error, "Failed to clear cache"));
+      console.error("Error invalidating cache:", error);
+      toast.error(
+        getServerFnError(
+          error,
+          "Failed to invalidate API cache and purge storefront edge cache",
+        ),
+      );
     } finally {
       setClearing(false);
     }
@@ -47,27 +54,33 @@ export function CacheNukeButton() {
               size="icon"
               className="h-8 w-8 p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
               disabled={clearing}
+              aria-label="Invalidate API cache and purge storefront edge cache"
             >
-              <Eraser className={`w-4 h-4 ${clearing ? "animate-pulse" : ""}`} />
+              <Eraser
+                className={`w-4 h-4 ${clearing ? "animate-pulse" : ""}`}
+              />
             </Button>
           </AlertDialogTrigger>
         </TooltipTrigger>
         <TooltipContent>
-          <p>Clear all cache</p>
+          <p>Invalidate API cache and purge storefront edge cache</p>
         </TooltipContent>
       </Tooltip>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Clear all cache?</AlertDialogTitle>
+          <AlertDialogTitle>
+            Invalidate API cache and purge storefront edge cache?
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            This will clear all backend API cache and purge the storefront cache.
+            This will invalidate backend API cache and request a storefront edge
+            cache purge.
             The site may be slower for a few moments while caches rebuild.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleClearAll}>
-            Clear all cache
+          <AlertDialogAction onClick={handleInvalidateCaches}>
+            Invalidate and purge
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

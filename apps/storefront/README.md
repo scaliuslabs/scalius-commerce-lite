@@ -143,6 +143,10 @@ When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN
 - L1 in-memory cache can be cleared via `clearMemoryCache()` or selectively via `clearL1ByPrefixes()`
 - L2 entries with old version or product-generation keys are never matched
 
+Admin/API cache clear-all must follow the same durable path as scoped invalidation: the API invalidates `api:*`, then enqueues one `storefront.cache_purge` message for every storefront group/prefix. Direct `/api/purge-cache` fallback is allowed only when the queue binding is missing or broken, and it must strip any purge token query parameter before sending the token in the Authorization header. Pending purge/warm DLQ rows should be visible from `/admin/settings/cache` so operators can replay or ignore failures without re-running blind global purges.
+
+Cloudflare Workers Cache is intentionally not enabled globally for the storefront release path yet. A Workers Cache hit can bypass Worker middleware, while this app currently depends on middleware for private-route bypass, session-cookie detection, canonical cache keys, KV version/generation checks, and response headers. Pilot it only after host/tenant keying and purge semantics are designed to preserve the current Cache API plus KV-generation freshness contract.
+
 ### Cache TTL Constants
 
 | Constant | Seconds | Purpose |

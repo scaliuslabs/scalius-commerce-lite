@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { formatDate } from "@scalius/shared/timestamps";
 import {
   Card,
   CardContent,
@@ -29,17 +30,25 @@ import {
   Info,
   ChevronDown,
   ChevronUp,
+  CheckCircle2,
 } from "lucide-react";
 import {
   cacheGroupsQueryOptions,
   cacheLastClearedQueryOptions,
   cacheStatsQueryOptions,
+  STOREFRONT_CACHE_DLQ_LIMIT,
+  storefrontCacheDlqQueryOptions,
 } from "@/lib/api-query-options/cache";
 import {
   useClearCache,
   useClearCacheGroup,
+  useIgnoreStorefrontCacheDlqFailure,
+  useReplayStorefrontCacheDlqFailure,
 } from "@/lib/api-mutations/cache";
-import type { CacheGroupDefinition } from "@/lib/api-functions/cache";
+import type {
+  CacheGroupDefinition,
+  StorefrontCacheQueueFailureRecord,
+} from "@/lib/api-functions/cache";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Separator } from "../ui/separator";
 import {
@@ -70,6 +79,27 @@ const GROUP_CONFIG: Record<string, { icon: React.ComponentType<{ className?: str
 const EMPTY_GROUPS: Record<string, CacheGroupDefinition> = {};
 const EMPTY_PATH_MAPPING: Record<string, string[]> = {};
 const EMPTY_TIMESTAMPS: Record<string, number | null> = {};
+const EMPTY_STOREFRONT_DLQ_FAILURES: StorefrontCacheQueueFailureRecord[] = [];
+
+function humanizeCacheQueueValue(value: string | null | undefined): string {
+  const text = value?.trim();
+  if (!text) return "Unknown";
+  const normalized = text
+    .replace(/^storefront\./, "")
+    .replace(/^cache_/, "cache ")
+    .replace(/[._:-]+/g, " ");
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function cacheQueueAttemptLabel(attempts: number): string {
+  return `${attempts} attempt${attempts === 1 ? "" : "s"}`;
+}
+
+function cacheQueueErrorLabel(error: string | null): string {
+  const text = error?.trim();
+  if (!text) return "No error detail recorded.";
+  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+}
 
 function getRelativeTime(timestamp: number | null): string {
   if (!timestamp) return "Never";
@@ -91,27 +121,44 @@ export function CacheManager() {
   const statsQuery = useQuery(cacheStatsQueryOptions());
   const timestampsQuery = useQuery(cacheLastClearedQueryOptions());
   const groupsQuery = useQuery(cacheGroupsQueryOptions());
+  const storefrontDlqQuery = useQuery(
+    storefrontCacheDlqQueryOptions({
+      status: "pending",
+      limit: STOREFRONT_CACHE_DLQ_LIMIT,
+    }),
+  );
   const clearGroupMutation = useClearCacheGroup();
   const clearAllMutation = useClearCache();
+  const replayStorefrontDlqMutation = useReplayStorefrontCacheDlqFailure();
+  const ignoreStorefrontDlqMutation = useIgnoreStorefrontCacheDlqFailure();
 
   const stats = statsQuery.data?.stats ?? null;
   const timestamps = timestampsQuery.data?.timestamps ?? EMPTY_TIMESTAMPS;
   const groups = groupsQuery.data?.groups ?? EMPTY_GROUPS;
   const pathMapping = groupsQuery.data?.pathMapping ?? EMPTY_PATH_MAPPING;
+  const pendingStorefrontDlqFailures =
+    storefrontDlqQuery.data?.failures ?? EMPTY_STOREFRONT_DLQ_FAILURES;
   const loading =
     statsQuery.isLoading || timestampsQuery.isLoading || groupsQuery.isLoading;
   const refreshing =
     statsQuery.isFetching ||
     timestampsQuery.isFetching ||
-    groupsQuery.isFetching;
+    groupsQuery.isFetching ||
+    storefrontDlqQuery.isFetching;
   const clearingGroup = clearGroupMutation.isPending
     ? clearGroupMutation.variables
     : null;
   const clearingAll = clearAllMutation.isPending;
+  const storefrontDlqActionId = replayStorefrontDlqMutation.isPending
+    ? replayStorefrontDlqMutation.variables
+    : ignoreStorefrontDlqMutation.isPending
+      ? ignoreStorefrontDlqMutation.variables
+      : null;
   const lastUpdated = Math.max(
     statsQuery.dataUpdatedAt,
     timestampsQuery.dataUpdatedAt,
     groupsQuery.dataUpdatedAt,
+    storefrontDlqQuery.dataUpdatedAt,
   );
 
   const refreshData = () => {
@@ -119,6 +166,7 @@ export function CacheManager() {
       statsQuery.refetch(),
       timestampsQuery.refetch(),
       groupsQuery.refetch(),
+      storefrontDlqQuery.refetch(),
     ]);
   };
 
@@ -135,6 +183,20 @@ export function CacheManager() {
   }, [pathMapping]);
 
   const groupNames = Object.keys(groups);
+  const storefrontDlqCount = pendingStorefrontDlqFailures.length;
+  const storefrontDlqMayHaveMore =
+    storefrontDlqCount >= STOREFRONT_CACHE_DLQ_LIMIT;
+  const storefrontDlqCountLabel = storefrontDlqQuery.isError
+    ? "Unavailable"
+    : storefrontDlqQuery.isLoading
+      ? "Loading"
+      : storefrontDlqMayHaveMore
+        ? `${storefrontDlqCount}+ pending`
+        : `${storefrontDlqCount} pending`;
+  const storefrontDlqError =
+    storefrontDlqQuery.error instanceof Error
+      ? storefrontDlqQuery.error.message
+      : "Could not load storefront cache queue failures.";
 
   return (
     <div className="space-y-6">
@@ -216,6 +278,143 @@ export function CacheManager() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Storefront queue recovery */}
+      <Card className="border border-border/60 shadow-none">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
+                <RefreshCw className="h-5 w-5 text-primary" />
+                Storefront queue recovery
+                <Badge variant="outline" className="font-normal">
+                  {storefrontDlqCountLabel}
+                </Badge>
+              </CardTitle>
+              <CardDescription>
+                Recent cache purge and warm messages that are waiting for replay or ignore.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 self-start"
+              onClick={() => void storefrontDlqQuery.refetch()}
+              disabled={storefrontDlqQuery.isFetching}
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${storefrontDlqQuery.isFetching ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {storefrontDlqQuery.isLoading ? (
+            <div className="space-y-2">
+              <div className="h-14 rounded-md bg-muted animate-pulse" />
+              <div className="h-14 rounded-md bg-muted/70 animate-pulse" />
+            </div>
+          ) : storefrontDlqQuery.isError ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Queue status unavailable</AlertTitle>
+              <AlertDescription>{storefrontDlqError}</AlertDescription>
+            </Alert>
+          ) : storefrontDlqCount === 0 ? (
+            <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              No pending storefront cache queue failures.
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {pendingStorefrontDlqFailures.map((failure) => {
+                  const isReplaying =
+                    replayStorefrontDlqMutation.isPending &&
+                    storefrontDlqActionId === failure.id;
+                  const isIgnoring =
+                    ignoreStorefrontDlqMutation.isPending &&
+                    storefrontDlqActionId === failure.id;
+                  const actionBusy = storefrontDlqActionId !== null;
+
+                  return (
+                    <div
+                      key={failure.id}
+                      className="grid gap-3 rounded-md border border-border bg-background/70 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto]"
+                    >
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary" className="font-normal">
+                            {humanizeCacheQueueValue(failure.messageType)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            Source: {humanizeCacheQueueValue(failure.source)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {cacheQueueAttemptLabel(failure.attempts)}
+                          </span>
+                          <span
+                            className="text-xs text-muted-foreground"
+                            suppressHydrationWarning
+                          >
+                            Failed {formatDate(failure.failedAt)}
+                          </span>
+                        </div>
+                        <div
+                          className="line-clamp-2 text-xs text-muted-foreground"
+                          title={failure.lastError ?? undefined}
+                        >
+                          {cacheQueueErrorLabel(failure.lastError)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 sm:justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1.5"
+                          disabled={actionBusy}
+                          onClick={() =>
+                            replayStorefrontDlqMutation.mutate(failure.id)
+                          }
+                        >
+                          <RefreshCw
+                            className={`h-3.5 w-3.5 ${isReplaying ? "animate-spin" : ""}`}
+                          />
+                          Replay
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5"
+                          disabled={actionBusy}
+                          onClick={() =>
+                            ignoreStorefrontDlqMutation.mutate(failure.id)
+                          }
+                        >
+                          <CheckCircle2
+                            className={`h-3.5 w-3.5 ${isIgnoring ? "animate-pulse" : ""}`}
+                          />
+                          Ignore
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {storefrontDlqMayHaveMore && (
+                <p className="text-xs text-muted-foreground">
+                  Showing the latest {STOREFRONT_CACHE_DLQ_LIMIT} pending items.
+                  Replay or ignore an item to reveal older pending failures.
+                </p>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Dependency visualization (collapsible) */}
       <Card>

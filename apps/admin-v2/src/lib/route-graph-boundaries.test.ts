@@ -488,6 +488,28 @@ describe("admin route graph boundaries", () => {
     ).toBe(true);
   });
 
+  it("keeps the global cache invalidation action behind cache manage permission", () => {
+    const adminHeaderSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminHeader.tsx"),
+      "utf8",
+    );
+    const cacheNukeButtonSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "CacheNukeButton.tsx"),
+      "utf8",
+    );
+
+    expect(ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE).toBe(
+      PERMISSIONS.SETTINGS_CACHE_MANAGE,
+    );
+    expect(adminHeaderSource).toContain("useHasPermission");
+    expect(adminHeaderSource).toContain("ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE");
+    expect(adminHeaderSource).toContain("canManageCache ? (");
+    expect(cacheNukeButtonSource).toContain(
+      "Invalidate API cache and purge storefront edge cache",
+    );
+    expect(cacheNukeButtonSource).not.toContain("Clear all cache");
+  });
+
   it("keeps customer form writes invalidating dashboard aggregates", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "CustomerForm.tsx"),
@@ -961,7 +983,7 @@ describe("admin route graph boundaries", () => {
     expect(queryClientSource).toContain("refetchOnReconnect: false");
     expect(queryClientSource).toContain("retry: ADMIN_QUERY_RETRY");
     expect(queryClientSource).toContain("ADMIN_QUERY_RETRY = false");
-    expect(cacheQuerySource.match(/refetchOnReconnect: true/g)?.length).toBe(3);
+    expect(cacheQuerySource.match(/refetchOnReconnect: true/g)?.length).toBe(4);
     expect(orderDetailSource).toContain("refetchInterval: 30_000");
     expect(orderDetailSource).not.toContain("refetchOnWindowFocus: true");
     expect(orderDetailSource).not.toContain("refetchOnReconnect: true");

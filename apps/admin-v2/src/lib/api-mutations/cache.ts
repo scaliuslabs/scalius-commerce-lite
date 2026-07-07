@@ -3,9 +3,12 @@ import { toast } from "sonner";
 import {
   clearCache,
   clearCacheGroup,
+  ignoreStorefrontCacheDlqFailure,
+  replayStorefrontCacheDlqFailure,
   type CacheGroupsPayload,
   type CacheLastClearedPayload,
 } from "../api-functions/cache";
+import { storefrontCacheDlqQueryKey } from "../api-query-options/cache";
 import { getServerFnError, queryKeys } from "./shared";
 
 function updateClearedTimestamps(
@@ -23,6 +26,12 @@ function updateClearedTimestamps(
 function invalidateCacheReadModels(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: queryKeys.cache.stats() });
   queryClient.invalidateQueries({ queryKey: queryKeys.cache.lastCleared() });
+}
+
+function invalidateStorefrontCacheDlqQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  queryClient.invalidateQueries({ queryKey: storefrontCacheDlqQueryKey() });
 }
 
 export function useClearCacheGroup() {
@@ -71,5 +80,33 @@ export function useClearCache() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to clear all cache")),
+  });
+}
+
+export function useReplayStorefrontCacheDlqFailure() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      replayStorefrontCacheDlqFailure({ data: { id } }),
+    onSuccess: () => {
+      invalidateStorefrontCacheDlqQueries(queryClient);
+      toast.success("Storefront cache replay queued");
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to replay cache queue item")),
+  });
+}
+
+export function useIgnoreStorefrontCacheDlqFailure() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      ignoreStorefrontCacheDlqFailure({ data: { id } }),
+    onSuccess: () => {
+      invalidateStorefrontCacheDlqQueries(queryClient);
+      toast.success("Storefront cache queue item ignored");
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to ignore cache queue item")),
   });
 }
