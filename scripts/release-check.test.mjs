@@ -17,6 +17,8 @@ import {
 
 const SITEMAP_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
 const FEED_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=43200";
+const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
+const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 
 function textResponse(body, status = 200, headers = {}) {
   return new Response(body, { status, headers });
@@ -30,6 +32,29 @@ function jsonResponse(payload, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+}
+
+function invalidAdminCookieResponse(url, init = {}) {
+  const parsed = new URL(url);
+  if (parsed.pathname !== ADMIN_BUSINESS_SETTINGS_PATH) return null;
+
+  expect(init.method).toBe("GET");
+  expect(new Headers(init.headers).get("cookie")).toBe(INVALID_ADMIN_SESSION_COOKIE);
+  if (parsed.hostname === "api.example.test") {
+    return jsonResponse({ success: false, error: { code: "UNAUTHORIZED" } }, 401);
+  }
+  if (parsed.hostname === "dashboard.example.test") {
+    return jsonResponse({ success: false, error: { code: "FORBIDDEN" } }, 403);
+  }
+  return null;
+}
+
+function releaseFetch(implementation) {
+  return vi.fn(async (url, init = {}) => {
+    const response = invalidAdminCookieResponse(url, init);
+    if (response) return response;
+    return implementation(url, init);
   });
 }
 
@@ -770,7 +795,7 @@ describe("runReleaseCheck", () => {
       readyResponse(),
       readyResponse(),
     ];
-    const fetchImpl = vi.fn(async (url, init) => {
+    const fetchImpl = releaseFetch(async (url, init) => {
       const parsed = new URL(url);
       if (parsed.pathname.startsWith("/ucp/catalog/")) {
         expect(init.method).toBe("POST");
@@ -886,6 +911,16 @@ describe("runReleaseCheck", () => {
       openApiPathCount: 4,
       deploymentVersionId: "api-version",
     });
+    expect(result.checks.adminInvalidCookieAuth).toMatchObject({
+      api: {
+        url: "https://api.example.test/api/v1/admin/settings/business",
+        statusCode: 401,
+      },
+      dashboardProxy: {
+        url: "https://dashboard.example.test/api/v1/admin/settings/business",
+        statusCode: 403,
+      },
+    });
     expect(result.checks.dashboard).toMatchObject({
       statusCode: 307,
       location: "/auth/login",
@@ -963,6 +998,77 @@ describe("runReleaseCheck", () => {
     expect(execFileImpl).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    {
+      label: "direct API accepts the invalid cookie",
+      apiResponse: () => jsonResponse({ success: true }, 200),
+      dashboardResponse: () => jsonResponse({ success: false }, 403),
+      expectedMessage: "accepted an invalid better-auth.session_token",
+    },
+    {
+      label: "dashboard proxy hits the admin read timeout",
+      apiResponse: () => jsonResponse({ success: false }, 401),
+      dashboardResponse: () => jsonResponse({
+        success: false,
+        error: { code: "ADMIN_API_READ_TIMEOUT" },
+      }, 504),
+      expectedMessage: "hit ADMIN_API_READ_TIMEOUT/504",
+    },
+  ])("fails when $label", async ({ apiResponse, dashboardResponse, expectedMessage }) => {
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
+        if (parsed.pathname === ADMIN_BUSINESS_SETTINGS_PATH) {
+          expect(init.method).toBe("GET");
+          expect(new Headers(init.headers).get("cookie")).toBe(INVALID_ADMIN_SESSION_COOKIE);
+          return apiResponse();
+        }
+      }
+
+      if (
+        parsed.hostname === "dashboard.example.test" &&
+        parsed.pathname === ADMIN_BUSINESS_SETTINGS_PATH
+      ) {
+        expect(init.method).toBe("GET");
+        expect(new Headers(init.headers).get("cookie")).toBe(INVALID_ADMIN_SESSION_COOKIE);
+        return dashboardResponse();
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    let thrown;
+    try {
+      await runReleaseCheck(parseReleaseCheckArgs([
+        "--skip-wrangler",
+        "--api-base-url", "https://api.example.test",
+        "--storefront-url", "https://storefront.example.test",
+        "--dashboard-url", "https://dashboard.example.test",
+      ]), {
+        apiConfig: monitoringApiConfig(),
+        fetchImpl,
+        execFileImpl: vi.fn(),
+        rootDir: "/repo",
+        readFileImpl: () => verifiedTracker(),
+        fileExistsImpl: () => true,
+        logger: null,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toContain(expectedMessage);
+    expect(thrown.result.checks.adminInvalidCookieAuth).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining(expectedMessage),
+    });
+  });
+
   it("uses public SEO policy to skip disabled sitemap sections, feeds, and robots sitemap advertisement", async () => {
     const requestedStorefrontPaths = [];
     const disabledDiscoveryPolicy = {
@@ -981,7 +1087,7 @@ describe("runReleaseCheck", () => {
         advertiseSitemap: false,
       },
     };
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1092,7 +1198,7 @@ describe("runReleaseCheck", () => {
         advertiseSitemap: false,
       },
     };
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1143,7 +1249,7 @@ describe("runReleaseCheck", () => {
   });
 
   it("verifies UCP profile-only discovery when the catalog is empty", async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1219,7 +1325,7 @@ describe("runReleaseCheck", () => {
   });
 
   it("fails UCP discovery when the profile success response is not publicly cacheable", async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1294,7 +1400,7 @@ describe("runReleaseCheck", () => {
   });
 
   it("fails UCP discovery when checkout or payment capabilities are advertised", async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1369,7 +1475,7 @@ describe("runReleaseCheck", () => {
 
   it("fails UCP discovery when top-level payment_handlers is present without payment capabilities", async () => {
     const requestedPaths = [];
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
       requestedPaths.push(parsed.pathname);
 
@@ -1445,7 +1551,7 @@ describe("runReleaseCheck", () => {
   });
 
   it("fails UCP discovery when product detail does not keep the candidate variant first", async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1524,7 +1630,7 @@ describe("runReleaseCheck", () => {
 
   it("uses product sitemap as the product route smoke source when catalog feeds are disabled", async () => {
     const requestedStorefrontPaths = [];
-    const fetchImpl = vi.fn(async (url, init) => {
+    const fetchImpl = releaseFetch(async (url, init) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1633,7 +1739,7 @@ describe("runReleaseCheck", () => {
   });
 
   it("fails UCP discovery when known product URL lookup is not correlated after empty search", async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1711,7 +1817,7 @@ describe("runReleaseCheck", () => {
   });
 
   it("skips Product JSON-LD smoke when public SEO policy disables product schema", async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1818,7 +1924,7 @@ describe("runReleaseCheck", () => {
       seoResponse: () => textResponse("unavailable", 503),
     },
   ])("fails when public SEO policy has $label", async ({ seoResponse }) => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1871,7 +1977,7 @@ describe("runReleaseCheck", () => {
   });
 
   it("keeps strict discovery fallback only when explicitly allowed", async () => {
-    const fetchImpl = vi.fn(async (url) => {
+    const fetchImpl = releaseFetch(async (url) => {
       const parsed = new URL(url);
 
       if (parsed.hostname === "api.example.test") {
@@ -1941,7 +2047,7 @@ describe("runReleaseCheck", () => {
     },
   ])("fails $label during API ops", async ({ responses, expectedDetail }) => {
     const readyzResponses = [...responses];
-    const fetchImpl = vi.fn(async (url) => {
+    const fetchImpl = releaseFetch(async (url) => {
       const parsed = new URL(url);
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
@@ -2003,7 +2109,7 @@ describe("runReleaseCheck", () => {
   });
 
   it("honors --skip-wrangler while still running live HTTP checks", async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
+    const fetchImpl = releaseFetch(async (url, init = {}) => {
       const parsed = new URL(url);
       if (parsed.hostname === "api.example.test") {
         if (parsed.pathname === "/api/v1/health") return textResponse("ok");
