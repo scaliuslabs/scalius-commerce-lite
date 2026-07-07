@@ -117,16 +117,18 @@ const logoUrl = headerData.logo.src
     )
   : null;
 
-const orgJsonLd = discoverySettings.structuredData.organization && storefrontUrl && logoUrl
-  ? serializeJsonForInlineScript(
-      buildOnlineStoreJsonLd({
+const onlineStoreJsonLd =
+  discoverySettings.structuredData.organization && storefrontUrl && logoUrl
+    ? buildOnlineStoreJsonLd({
         storefrontUrl,
         logoUrl,
         business: businessInfo,
         social: footerData.social,
         returnPolicy: merchantReturnPolicyJsonLd,
-      }),
-    )
+      })
+    : null;
+const orgJsonLd = onlineStoreJsonLd
+  ? serializeJsonForInlineScript(onlineStoreJsonLd)
   : null;
 
 // WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)

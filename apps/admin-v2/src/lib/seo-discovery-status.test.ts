@@ -81,7 +81,7 @@ describe("buildSeoDiscoveryStatus", () => {
       "BD; 14 day return window; free returns; mail or in-store returns; policy URL set",
     );
     expect(status.structuredData.organizationNote).toBe(
-      "OnlineStore schema needs a business name and logo; Product seller identity uses Business settings only; ProductGroup schema describes optioned products; shipping schema uses active shipping methods; return-policy schema uses only saved public policy fields. BreadcrumbList and CollectionPage are separate controls.",
+      "OnlineStore schema needs an absolute Store URL, a business name, and a header logo; Product seller identity uses Business settings only; ProductGroup schema describes optioned products; shipping schema uses active shipping methods; return-policy schema uses only saved public policy fields. BreadcrumbList and CollectionPage are separate controls.",
     );
     expect(status.structuredData.identityWarning).toBeUndefined();
     expect(status.storefront.mode).toBe("absolute");
@@ -229,6 +229,29 @@ describe("buildSeoDiscoveryStatus", () => {
     expect(status.structuredData.tone).toBe("warning");
     expect(status.structuredData.identityWarning).toBe(
       "Add a company name or legal name in Business settings before relying on OnlineStore, site search, or Product seller identity schema.",
+    );
+  });
+
+  it("warns when OnlineStore schema is enabled but the header logo is missing", () => {
+    const status = buildSeoDiscoveryStatus({
+      discovery: {
+        structuredData: {
+          organization: true,
+          websiteSearch: false,
+          products: false,
+        },
+      },
+      storefrontUrl: "https://shop.example.com",
+      businessIdentity: {
+        companyName: "Scalius Mart",
+        legalName: "",
+      },
+      hasStoreLogo: false,
+    });
+
+    expect(status.structuredData.tone).toBe("warning");
+    expect(status.structuredData.identityWarning).toBe(
+      "Add a header logo before relying on OnlineStore schema; runtime omits it without a logo.",
     );
   });
 });

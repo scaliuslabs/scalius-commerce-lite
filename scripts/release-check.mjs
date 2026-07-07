@@ -63,6 +63,9 @@ const STRICT_SEO_DISCOVERY_POLICY = Object.freeze({
   robots: Object.freeze({
     advertiseSitemap: true,
   }),
+  structuredData: Object.freeze({
+    products: true,
+  }),
 });
 
 const closedTrackerStatuses = new Set(["verified", "won't fix", "won’t fix", "wont fix"]);
@@ -287,8 +290,11 @@ function parseSeoDiscoveryPolicyPayload(payload) {
   const sitemap = isRecord(discovery?.sitemap) ? discovery.sitemap : null;
   const feeds = isRecord(discovery?.feeds) ? discovery.feeds : null;
   const robots = isRecord(discovery?.robots) ? discovery.robots : null;
+  const structuredData = isRecord(discovery?.structuredData)
+    ? discovery.structuredData
+    : null;
 
-  if (!sitemap || !feeds || !robots) return null;
+  if (!sitemap || !feeds || !robots || !structuredData) return null;
 
   const parsed = {
     source: "public-seo",
@@ -306,12 +312,16 @@ function parseSeoDiscoveryPolicyPayload(payload) {
     robots: {
       advertiseSitemap: readBoolean(robots, "advertiseSitemap"),
     },
+    structuredData: {
+      products: readBoolean(structuredData, "products"),
+    },
   };
 
   const complete =
     Object.values(parsed.sitemap).every((value) => typeof value === "boolean") &&
     typeof parsed.feeds.productCatalogEnabled === "boolean" &&
-    typeof parsed.robots.advertiseSitemap === "boolean";
+    typeof parsed.robots.advertiseSitemap === "boolean" &&
+    typeof parsed.structuredData.products === "boolean";
 
   return complete ? parsed : null;
 }
@@ -328,7 +338,10 @@ function summarizeSeoDiscoveryPolicy(policy) {
     policy.sitemap.enabled && policy.robots.advertiseSitemap
       ? "robots advertises sitemap"
       : "robots sitemap advertisement disabled";
-  return `sitemap ${policy.sitemap.enabled ? `${enabledSections} sections enabled` : "disabled"}, ${feedStatus}, ${robotsStatus}`;
+  const productSchemaStatus = policy.structuredData.products
+    ? "Product schema enabled"
+    : "Product schema disabled";
+  return `sitemap ${policy.sitemap.enabled ? `${enabledSections} sections enabled` : "disabled"}, ${feedStatus}, ${robotsStatus}, ${productSchemaStatus}`;
 }
 
 function strictSeoPolicyResult(url, reason, extra = {}) {
@@ -339,6 +352,7 @@ function strictSeoPolicyResult(url, reason, extra = {}) {
     sitemap: STRICT_SEO_DISCOVERY_POLICY.sitemap,
     feeds: STRICT_SEO_DISCOVERY_POLICY.feeds,
     robots: STRICT_SEO_DISCOVERY_POLICY.robots,
+    structuredData: STRICT_SEO_DISCOVERY_POLICY.structuredData,
     ...extra,
   };
 }
@@ -405,6 +419,7 @@ async function fetchSeoDiscoveryPolicy(options, { fetchImpl, logger }) {
         sitemap: policy.sitemap,
         feeds: policy.feeds,
         robots: policy.robots,
+        structuredData: policy.structuredData,
       },
     };
   } catch (error) {
@@ -526,6 +541,7 @@ export function evaluateRobotsTxt(
   body,
   {
     storefrontOrigin,
+    expectedSitemapUrl,
     requireSitemap = true,
     allowSitemap = true,
   } = {},
@@ -543,6 +559,8 @@ export function evaluateRobotsTxt(
       errors.push(`robots sitemap URL is not absolute http(s): ${value}`);
     } else if (!isSameOrigin(value, storefrontOrigin)) {
       errors.push(`robots sitemap URL is not on storefront origin: ${value}`);
+    } else if (expectedSitemapUrl && value !== expectedSitemapUrl) {
+      errors.push(`robots sitemap URL must be canonical: ${expectedSitemapUrl}`);
     }
   }
 
@@ -599,49 +617,68 @@ export function evaluateProductFeedXml(
 ) {
   const itemBlocks = body.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
   const itemCount = itemBlocks.length;
-  const links = itemBlocks.flatMap((item) => [
-    ...extractTagValues(item, "link"),
-    ...extractTagValues(item, "g:link"),
-  ]).filter(Boolean);
-  const imageLinks = itemBlocks.flatMap((item) => [
-    ...extractTagValues(item, "image_link"),
-    ...extractTagValues(item, "g:image_link"),
-  ]).filter(Boolean);
-  const availabilityMarkers = itemBlocks.flatMap((item) => [
-    ...extractTagValues(item, "availability"),
-    ...extractTagValues(item, "g:availability"),
-  ]).filter(Boolean);
+  const links = [];
+  const imageLinks = [];
+  const availabilityMarkers = [];
   const errors = [];
 
   if (!/<rss\b/i.test(body) || !/<channel\b/i.test(body)) {
     errors.push("Product feed must be RSS/XML with <rss> and <channel>.");
   }
-  if (itemCount === 0) {
-    errors.push("Product feed must include at least one <item>.");
-  }
-  if (availabilityMarkers.length === 0) {
-    errors.push("Product feed must include availability markers.");
-  }
-  if (availabilityValues?.length) {
-    const allowed = new Set(availabilityValues);
-    for (const value of availabilityMarkers) {
-      if (!allowed.has(value)) {
-        errors.push(`feed availability value is not allowed: ${value}`);
+
+  const allowedAvailability = availabilityValues?.length
+    ? new Set(availabilityValues)
+    : null;
+
+  itemBlocks.forEach((item, index) => {
+    const itemNumber = index + 1;
+    const itemLinks = [
+      ...extractTagValues(item, "link"),
+      ...extractTagValues(item, "g:link"),
+    ].filter(Boolean);
+    const itemImageLinks = [
+      ...extractTagValues(item, "image_link"),
+      ...extractTagValues(item, "g:image_link"),
+    ].filter(Boolean);
+    const itemAvailability = [
+      ...extractTagValues(item, "availability"),
+      ...extractTagValues(item, "g:availability"),
+    ].filter(Boolean);
+
+    links.push(...itemLinks);
+    imageLinks.push(...itemImageLinks);
+    availabilityMarkers.push(...itemAvailability);
+
+    if (itemLinks.length === 0) {
+      errors.push(`feed item ${itemNumber} must include a product link.`);
+    }
+    if (itemImageLinks.length === 0) {
+      errors.push(`feed item ${itemNumber} must include an image_link.`);
+    }
+    if (itemAvailability.length === 0) {
+      errors.push(`feed item ${itemNumber} must include availability.`);
+    }
+
+    if (allowedAvailability) {
+      for (const value of itemAvailability) {
+        if (!allowedAvailability.has(value)) {
+          errors.push(`feed availability value is not allowed: ${value}`);
+        }
       }
     }
-  }
-  for (const link of links) {
-    if (!isHttpUrl(link)) {
-      errors.push(`feed product link is not absolute http(s): ${link}`);
-    } else if (storefrontOrigin && !isSameOrigin(link, storefrontOrigin)) {
-      errors.push(`feed product link is not on storefront origin: ${link}`);
+    for (const link of itemLinks) {
+      if (!isHttpUrl(link)) {
+        errors.push(`feed product link is not absolute http(s): ${link}`);
+      } else if (storefrontOrigin && !isSameOrigin(link, storefrontOrigin)) {
+        errors.push(`feed product link is not on storefront origin: ${link}`);
+      }
     }
-  }
-  for (const imageLink of imageLinks) {
-    if (!isHttpUrl(imageLink)) {
-      errors.push(`feed image link is not absolute http(s): ${imageLink}`);
+    for (const imageLink of itemImageLinks) {
+      if (!isHttpUrl(imageLink)) {
+        errors.push(`feed image link is not absolute http(s): ${imageLink}`);
+      }
     }
-  }
+  });
 
   return {
     ok: errors.length === 0,
@@ -979,6 +1016,7 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
   const robotsShouldAdvertiseSitemap = policy.sitemap.enabled && policy.robots.advertiseSitemap;
   checks.robots = evaluateRobotsTxt(robots.body, {
     storefrontOrigin,
+    expectedSitemapUrl: buildUrl(options.storefrontUrl, "/sitemap.xml"),
     requireSitemap: robotsShouldAdvertiseSitemap,
     allowSitemap: robotsShouldAdvertiseSitemap,
   });
@@ -1052,7 +1090,9 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
       continue;
     }
 
-    await verifySitemapEndpoint(endpoint, { requireLoc: true });
+    await verifySitemapEndpoint(endpoint, {
+      requireLoc: policyKey === "staticPages",
+    });
   }
 
   responses.feeds = {};
@@ -1185,7 +1225,10 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
   };
 }
 
-async function checkDiscoveredProductRoute(options, { fetchImpl, productUrl, logger }) {
+async function checkDiscoveredProductRoute(
+  options,
+  { fetchImpl, productUrl, logger, requireProductJsonLd = true },
+) {
   if (!productUrl) {
     logger?.warn("WARN product route: skipped because discovery did not expose a storefront product URL.");
     return {
@@ -1205,6 +1248,19 @@ async function checkDiscoveredProductRoute(options, { fetchImpl, productUrl, log
     accept: "text/html, */*;q=0.8",
   });
   requireStatus(response, "Discovered storefront product route", (status) => status >= 200 && status < 300);
+  if (!requireProductJsonLd) {
+    logger?.log("PASS product route: returned 2xx; Product JSON-LD skipped by public SEO policy.");
+    return {
+      url: productUrl,
+      statusCode: response.statusCode,
+      durationMs: response.durationMs,
+      schema: {
+        status: "skipped",
+        reason: "Product JSON-LD disabled by public SEO policy.",
+      },
+    };
+  }
+
   const schemaEvaluation = evaluateProductJsonLdHtml(response.body, {
     storefrontOrigin,
   });
@@ -1284,6 +1340,8 @@ export async function runReleaseCheck(options, {
       fetchImpl,
       productUrl: discovery.firstStorefrontItemUrl,
       logger,
+      requireProductJsonLd:
+        discovery.policy?.structuredData?.products !== false,
     }));
 
   result.status = "passed";

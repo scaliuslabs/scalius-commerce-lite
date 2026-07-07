@@ -60,21 +60,54 @@ const RETURN_POLICY_METHOD_LABELS: Record<SeoReturnPolicyMethod, string> = {
 
 export type SeoDiscoveryTone = "ok" | "warning" | "disabled" | "info";
 export const SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS = [
-  ["robots", "robots.txt", "/robots.txt"] as const,
-  ["sitemap", "Sitemap index", "/sitemap.xml"] as const,
+  ["robots", "robots.txt", "/robots.txt", "robots"] as const,
+  ["sitemap", "Sitemap index", "/sitemap.xml", "sitemap"] as const,
   [
     "productFeed",
     "Product feed",
     "/api/product-feed.xml?limit=5",
+    "feed",
   ] as const,
   [
     "facebookFeed",
     "Facebook feed",
     "/api/facebook-feed.xml?limit=5",
+    "feed",
   ] as const,
 ];
+export const SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS = [
+  [
+    "staticPagesSitemap",
+    "Home + search sitemap",
+    "/sitemap-static.xml",
+    "staticPages",
+  ] as const,
+  [
+    "productsSitemap",
+    "Products sitemap",
+    "/sitemap-products.xml?page=1",
+    "products",
+  ] as const,
+  [
+    "categoriesSitemap",
+    "Categories sitemap",
+    "/sitemap-categories.xml",
+    "categories",
+  ] as const,
+  [
+    "collectionsSitemap",
+    "Collections sitemap",
+    "/sitemap-collections.xml",
+    "collections",
+  ] as const,
+  ["pagesSitemap", "Pages sitemap", "/sitemap-pages.xml", "pages"] as const,
+];
 export type SeoDiscoveryLiveProbeKey =
-  (typeof SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS)[number][0];
+  | (typeof SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS)[number][0]
+  | (typeof SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS)[number][0];
+export type SeoDiscoveryLiveProbeKind =
+  | (typeof SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS)[number][3]
+  | "sitemapChild";
 
 export interface SeoDiscoveryLiveProbeCounts {
   robotsSitemapLines?: number;
@@ -86,6 +119,7 @@ export interface SeoDiscoveryLiveProbeCounts {
 
 export interface SeoDiscoveryLiveProbeResource {
   key: SeoDiscoveryLiveProbeKey;
+  kind: SeoDiscoveryLiveProbeKind;
   label: string;
   path: string;
   href: string | null;
@@ -95,7 +129,10 @@ export interface SeoDiscoveryLiveProbeResource {
   cacheControl: string | null;
   counts: SeoDiscoveryLiveProbeCounts;
   bodyTruncated?: boolean;
+  disabledReason?: string;
   error?: string;
+  expectedRobotsSitemapLines?: number;
+  minimumSitemapLocs?: number;
 }
 
 export interface SeoDiscoveryLiveProbeResult {
@@ -111,6 +148,7 @@ export interface SeoDiscoveryStatusInput {
   robotsTxt?: string | null;
   storefrontUrl?: string | null;
   businessIdentity?: SeoDiscoveryBusinessIdentity | null;
+  hasStoreLogo?: boolean | null;
 }
 
 export interface SeoDiscoveryStatus {
@@ -189,6 +227,38 @@ function hasBusinessSchemaName(
   return Boolean(
     businessIdentity?.companyName?.trim() || businessIdentity?.legalName?.trim(),
   );
+}
+
+function buildStructuredDataWarning({
+  businessIdentity,
+  hasStoreLogo,
+  organizationEnabled,
+  productsEnabled,
+  websiteSearchEnabled,
+}: {
+  businessIdentity: SeoDiscoveryBusinessIdentity | null | undefined;
+  hasStoreLogo: boolean | null | undefined;
+  organizationEnabled: boolean;
+  productsEnabled: boolean;
+  websiteSearchEnabled: boolean;
+}): string | undefined {
+  const warnings: string[] = [];
+  const needsBusinessName =
+    organizationEnabled || websiteSearchEnabled || productsEnabled;
+
+  if (needsBusinessName && !hasBusinessSchemaName(businessIdentity)) {
+    warnings.push(
+      "Add a company name or legal name in Business settings before relying on OnlineStore, site search, or Product seller identity schema.",
+    );
+  }
+
+  if (organizationEnabled && hasStoreLogo === false) {
+    warnings.push(
+      "Add a header logo before relying on OnlineStore schema; runtime omits it without a logo.",
+    );
+  }
+
+  return warnings.length > 0 ? warnings.join(" ") : undefined;
 }
 
 export function normalizeSeoDiscoverySettingsWithReturnPolicy(
@@ -301,7 +371,7 @@ export function summarizeSeoDiscoveryProbeBody(
     return { robotsSitemapLines: countRobotsSitemapLines(body) };
   }
 
-  if (key === "sitemap") {
+  if (key === "sitemap" || key.endsWith("Sitemap")) {
     return { sitemapLocs: countXmlStartTags(body, "loc") };
   }
 
@@ -317,6 +387,7 @@ export function buildSeoDiscoveryStatus({
   robotsTxt,
   storefrontUrl,
   businessIdentity,
+  hasStoreLogo,
 }: SeoDiscoveryStatusInput): SeoDiscoveryStatus {
   const normalized = normalizeSeoDiscoverySettingsWithReturnPolicy(discovery);
   const customSitemapLines = findCustomSitemapLines(robotsTxt);
@@ -336,15 +407,13 @@ export function buildSeoDiscoveryStatus({
     : trimmedStorefrontUrl
       ? "path-only"
       : "unavailable";
-  const identityBacked = hasBusinessSchemaName(businessIdentity);
-  const identityBackedSchemaEnabled =
-    normalized.structuredData.organization ||
-    normalized.structuredData.websiteSearch ||
-    normalized.structuredData.products;
-  const identityWarning =
-    identityBackedSchemaEnabled && !identityBacked
-      ? "Add a company name or legal name in Business settings before relying on OnlineStore, site search, or Product seller identity schema."
-      : undefined;
+  const identityWarning = buildStructuredDataWarning({
+    businessIdentity,
+    hasStoreLogo,
+    organizationEnabled: normalized.structuredData.organization,
+    productsEnabled: normalized.structuredData.products,
+    websiteSearchEnabled: normalized.structuredData.websiteSearch,
+  });
   const feedVariantStrategyLabel = getFeedVariantStrategyLabel(
     normalized.feeds.variantStrategy,
   );
@@ -461,7 +530,7 @@ export function buildSeoDiscoveryStatus({
       breadcrumbsEnabled: normalized.structuredData.breadcrumbs,
       collectionsEnabled: normalized.structuredData.collections,
       organizationNote:
-        "OnlineStore schema needs a business name and logo; Product seller identity uses Business settings only; ProductGroup schema describes optioned products; shipping schema uses active shipping methods; return-policy schema uses only saved public policy fields. BreadcrumbList and CollectionPage are separate controls.",
+        "OnlineStore schema needs an absolute Store URL, a business name, and a header logo; Product seller identity uses Business settings only; ProductGroup schema describes optioned products; shipping schema uses active shipping methods; return-policy schema uses only saved public policy fields. BreadcrumbList and CollectionPage are separate controls.",
       identityWarning,
     },
     storefront: {

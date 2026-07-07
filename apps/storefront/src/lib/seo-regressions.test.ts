@@ -33,8 +33,10 @@ describe("storefront SEO regressions", () => {
     expect(source).toContain("buildMerchantReturnPolicyJsonLd");
     expect(source).toContain("const storeSchemaName =");
     expect(source).toMatch(
-      /const orgJsonLd =\s+discoverySettings\.structuredData\.organization && storefrontUrl && logoUrl/,
+      /const onlineStoreJsonLd =\s+discoverySettings\.structuredData\.organization && storefrontUrl && logoUrl/,
     );
+    expect(source).toContain("const orgJsonLd = onlineStoreJsonLd");
+    expect(source).toContain("? serializeJsonForInlineScript(onlineStoreJsonLd)");
     expect(source).toContain("const websiteJsonLd = discoverySettings.structuredData.websiteSearch && storefrontUrl && storeSchemaName");
     expect(source).toContain("business: businessInfo");
     expect(source).toContain("settings: layoutData?.seo?.returnPolicy");

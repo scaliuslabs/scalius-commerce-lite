@@ -1,8 +1,11 @@
 import {
   SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS,
+  SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS,
   buildSeoDiscoveryHref,
+  normalizeSeoDiscoverySettingsWithReturnPolicy,
   parseSeoDiscoveryStorefrontUrl,
   summarizeSeoDiscoveryProbeBody,
+  type SeoDiscoveryLiveProbeKind,
   type SeoDiscoveryLiveProbeKey,
   type SeoDiscoveryLiveProbeResource,
   type SeoDiscoveryLiveProbeResult,
@@ -15,6 +18,10 @@ export interface StorefrontUrlPayload {
   storefrontUrl: string;
 }
 
+export interface SeoDiscoveryPolicyPayload {
+  discovery?: unknown;
+}
+
 interface BoundedTextRead {
   text: string;
   truncated: boolean;
@@ -22,10 +29,21 @@ interface BoundedTextRead {
 
 export interface SeoDiscoveryLiveProbeDeps {
   fetch?: typeof fetch;
+  getDiscoveryPolicy?: () => Promise<SeoDiscoveryPolicyPayload>;
   getStorefrontUrl?: () => Promise<StorefrontUrlPayload>;
   maxBodyBytes?: number;
   now?: () => Date;
   timeoutMs?: number;
+}
+
+interface ProbeTarget {
+  key: SeoDiscoveryLiveProbeKey;
+  kind: SeoDiscoveryLiveProbeKind;
+  label: string;
+  path: string;
+  disabledReason?: string;
+  expectedRobotsSitemapLines?: number;
+  minimumSitemapLocs?: number;
 }
 
 function safeHeaderValue(value: string | null): string | null {
@@ -33,16 +51,6 @@ function safeHeaderValue(value: string | null): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed.slice(0, 160);
-}
-
-function getEndpointMeta(key: SeoDiscoveryLiveProbeKey) {
-  const endpoint = SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS.find(
-    ([endpointKey]) => endpointKey === key,
-  );
-  if (!endpoint) {
-    throw new Error(`Unknown SEO discovery probe endpoint: ${key}`);
-  }
-  return endpoint;
 }
 
 async function readBoundedResponseText(
@@ -109,20 +117,45 @@ function formatHttpFailure(status: number): string | undefined {
   return undefined;
 }
 
+function disabledProbeResource(
+  target: ProbeTarget,
+  baseUrl: URL,
+): SeoDiscoveryLiveProbeResource {
+  return {
+    key: target.key,
+    kind: target.kind,
+    label: target.label,
+    path: target.path,
+    href: buildSeoDiscoveryHref(baseUrl, target.path),
+    ok: true,
+    status: null,
+    contentType: null,
+    cacheControl: null,
+    counts: {},
+    disabledReason: target.disabledReason,
+    expectedRobotsSitemapLines: target.expectedRobotsSitemapLines,
+    minimumSitemapLocs: target.minimumSitemapLocs,
+  };
+}
+
 async function probeEndpoint({
   baseUrl,
   fetchImpl,
-  key,
   maxBodyBytes,
+  target,
   timeoutMs,
 }: {
   baseUrl: URL;
   fetchImpl: typeof fetch;
-  key: SeoDiscoveryLiveProbeKey;
   maxBodyBytes: number;
+  target: ProbeTarget;
   timeoutMs: number;
 }): Promise<SeoDiscoveryLiveProbeResource> {
-  const [, label, path] = getEndpointMeta(key);
+  if (target.disabledReason) {
+    return disabledProbeResource(target, baseUrl);
+  }
+
+  const { key, kind, label, path } = target;
   const href = buildSeoDiscoveryHref(baseUrl, path);
   const controller = new AbortController();
   let didTimeout = false;
@@ -147,6 +180,7 @@ async function probeEndpoint({
 
     return {
       key,
+      kind,
       label,
       path,
       href,
@@ -157,10 +191,13 @@ async function probeEndpoint({
       counts: summarizeSeoDiscoveryProbeBody(key, body.text),
       bodyTruncated: body.truncated || undefined,
       error,
+      expectedRobotsSitemapLines: target.expectedRobotsSitemapLines,
+      minimumSitemapLocs: target.minimumSitemapLocs,
     };
   } catch {
     return {
       key,
+      kind,
       label,
       path,
       href,
@@ -170,10 +207,85 @@ async function probeEndpoint({
       cacheControl: null,
       counts: {},
       error: formatProbeFailure(didTimeout, timeoutMs),
+      expectedRobotsSitemapLines: target.expectedRobotsSitemapLines,
+      minimumSitemapLocs: target.minimumSitemapLocs,
     };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function countEnabledSitemapSections(
+  sitemap: ReturnType<
+    typeof normalizeSeoDiscoverySettingsWithReturnPolicy
+  >["sitemap"],
+): number {
+  return SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS.filter(
+    ([, , , sectionKey]) => sitemap[sectionKey],
+  ).length;
+}
+
+function buildProbeTargets(discoveryValue: unknown): ProbeTarget[] {
+  const discovery = normalizeSeoDiscoverySettingsWithReturnPolicy(discoveryValue);
+  const targets: ProbeTarget[] = SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS.map(
+    ([key, label, path, kind]) => {
+      if (kind === "robots") {
+        return {
+          key,
+          kind,
+          label,
+          path,
+          expectedRobotsSitemapLines:
+            discovery.sitemap.enabled && discovery.robots.advertiseSitemap
+              ? 1
+              : 0,
+        };
+      }
+
+      if (kind === "sitemap") {
+        return {
+          key,
+          kind,
+          label,
+          path,
+          minimumSitemapLocs: discovery.sitemap.enabled
+            ? countEnabledSitemapSections(discovery.sitemap)
+            : 0,
+        };
+      }
+
+      return {
+        key,
+        kind,
+        label,
+        path,
+        disabledReason: discovery.feeds.productCatalogEnabled
+          ? undefined
+          : "Catalog feeds are disabled by the current SEO discovery policy.",
+      };
+    },
+  );
+
+  for (const [
+    key,
+    label,
+    path,
+    sectionKey,
+  ] of SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS) {
+    const enabled = discovery.sitemap.enabled && discovery.sitemap[sectionKey];
+    targets.push({
+      key,
+      kind: "sitemapChild",
+      label,
+      path,
+      disabledReason: enabled
+        ? undefined
+        : "This sitemap section is disabled by the current SEO discovery policy.",
+      minimumSitemapLocs: sectionKey === "staticPages" && enabled ? 1 : 0,
+    });
+  }
+
+  return targets;
 }
 
 export async function runSeoDiscoveryLiveProbe(
@@ -212,13 +324,17 @@ export async function runSeoDiscoveryLiveProbe(
     };
   }
 
+  const policyPayload = deps.getDiscoveryPolicy
+    ? await deps.getDiscoveryPolicy()
+    : { discovery: undefined };
+  const probeTargets = buildProbeTargets(policyPayload.discovery);
   const resources = await Promise.all(
-    SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS.map(([key]) =>
+    probeTargets.map((target) =>
       probeEndpoint({
         baseUrl,
         fetchImpl,
-        key,
         maxBodyBytes,
+        target,
         timeoutMs,
       }),
     ),

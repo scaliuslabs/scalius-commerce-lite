@@ -61,6 +61,7 @@ function createHealthyLiveProbe() {
     resources: [
       {
         key: "robots",
+        kind: "robots",
         label: "robots.txt",
         path: "/robots.txt",
         href: "https://shop.example.com/robots.txt",
@@ -69,9 +70,11 @@ function createHealthyLiveProbe() {
         contentType: "text/plain",
         cacheControl: "public, max-age=300",
         counts: { robotsSitemapLines: 1 },
+        expectedRobotsSitemapLines: 1,
       },
       {
         key: "sitemap",
+        kind: "sitemap",
         label: "Sitemap index",
         path: "/sitemap.xml",
         href: "https://shop.example.com/sitemap.xml",
@@ -79,10 +82,12 @@ function createHealthyLiveProbe() {
         status: 200,
         contentType: "application/xml",
         cacheControl: "public, max-age=600",
-        counts: { sitemapLocs: 1 },
+        counts: { sitemapLocs: 5 },
+        minimumSitemapLocs: 5,
       },
       {
         key: "productFeed",
+        kind: "feed",
         label: "Product feed",
         path: "/api/product-feed.xml?limit=5",
         href: "https://shop.example.com/api/product-feed.xml?limit=5",
@@ -94,6 +99,7 @@ function createHealthyLiveProbe() {
       },
       {
         key: "facebookFeed",
+        kind: "feed",
         label: "Facebook feed",
         path: "/api/facebook-feed.xml?limit=5",
         href: "https://shop.example.com/api/facebook-feed.xml?limit=5",
@@ -102,6 +108,71 @@ function createHealthyLiveProbe() {
         contentType: "application/rss+xml",
         cacheControl: "public, max-age=600",
         counts: { feedItems: 1, imageLinks: 1, availabilityValues: 1 },
+      },
+      {
+        key: "staticPagesSitemap",
+        kind: "sitemapChild",
+        label: "Home + search sitemap",
+        path: "/sitemap-static.xml",
+        href: "https://shop.example.com/sitemap-static.xml",
+        ok: true,
+        status: 200,
+        contentType: "application/xml",
+        cacheControl: "public, max-age=600",
+        counts: { sitemapLocs: 2 },
+        minimumSitemapLocs: 1,
+      },
+      {
+        key: "productsSitemap",
+        kind: "sitemapChild",
+        label: "Products sitemap",
+        path: "/sitemap-products.xml?page=1",
+        href: "https://shop.example.com/sitemap-products.xml?page=1",
+        ok: true,
+        status: 200,
+        contentType: "application/xml",
+        cacheControl: "public, max-age=600",
+        counts: { sitemapLocs: 1 },
+        minimumSitemapLocs: 0,
+      },
+      {
+        key: "categoriesSitemap",
+        kind: "sitemapChild",
+        label: "Categories sitemap",
+        path: "/sitemap-categories.xml",
+        href: "https://shop.example.com/sitemap-categories.xml",
+        ok: true,
+        status: 200,
+        contentType: "application/xml",
+        cacheControl: "public, max-age=600",
+        counts: { sitemapLocs: 1 },
+        minimumSitemapLocs: 0,
+      },
+      {
+        key: "collectionsSitemap",
+        kind: "sitemapChild",
+        label: "Collections sitemap",
+        path: "/sitemap-collections.xml",
+        href: "https://shop.example.com/sitemap-collections.xml",
+        ok: true,
+        status: 200,
+        contentType: "application/xml",
+        cacheControl: "public, max-age=600",
+        counts: { sitemapLocs: 1 },
+        minimumSitemapLocs: 0,
+      },
+      {
+        key: "pagesSitemap",
+        kind: "sitemapChild",
+        label: "Pages sitemap",
+        path: "/sitemap-pages.xml",
+        href: "https://shop.example.com/sitemap-pages.xml",
+        ok: true,
+        status: 200,
+        contentType: "application/xml",
+        cacheControl: "public, max-age=600",
+        counts: { sitemapLocs: 1 },
+        minimumSitemapLocs: 0,
       },
     ],
   };
@@ -269,7 +340,8 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain("Catalog diagnostics");
     expect(host.textContent).toContain("Rows ready: 11");
     expect(host.textContent).toContain("No feed blockers found");
-    expect(host.textContent).toContain("1 Sitemap line");
+    expect(host.textContent).toContain("1/1 Sitemap line");
+    expect(host.textContent).toContain("Home + search sitemap");
     expect(host.textContent).toContain("1 item; 1 image_link; 1 availability");
     expect(links).toEqual([
       "https://shop.example.com/robots.txt",

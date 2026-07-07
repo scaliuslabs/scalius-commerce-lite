@@ -35,6 +35,7 @@ interface SeoDiscoveryStatusCardProps {
   discovery: SeoDiscoverySettingsWithReturnPolicy;
   robotsTxt: string;
   businessIdentity?: SeoDiscoveryBusinessIdentity | null;
+  hasStoreLogo?: boolean | null;
 }
 
 const TONE_LABELS: Record<SeoDiscoveryTone, string> = {
@@ -179,13 +180,13 @@ function getLiveProbeSummaryTone(
   if (isBusy && !result) return "info";
   if (!result) return "info";
   if (!result.ok || result.error) return "warning";
-
-  const robots = result.resources.find((resource) => resource.key === "robots");
-  const sitemap = result.resources.find(
-    (resource) => resource.key === "sitemap",
-  );
-  if ((robots?.counts.robotsSitemapLines ?? 0) < 1) return "warning";
-  if ((sitemap?.counts.sitemapLocs ?? 0) < 1) return "warning";
+  if (
+    result.resources.some(
+      (resource) => getLiveProbeResourceTone(resource) === "warning",
+    )
+  ) {
+    return "warning";
+  }
 
   return "ok";
 }
@@ -193,16 +194,20 @@ function getLiveProbeSummaryTone(
 function getLiveProbeResourceTone(
   resource: SeoDiscoveryLiveProbeResource,
 ): SeoDiscoveryTone {
+  if (resource.disabledReason) return "disabled";
   if (!resource.ok || resource.error) return "warning";
   if (
     resource.key === "robots" &&
-    (resource.counts.robotsSitemapLines ?? 0) < 1
+    resource.expectedRobotsSitemapLines !== undefined &&
+    (resource.counts.robotsSitemapLines ?? 0) !==
+      resource.expectedRobotsSitemapLines
   ) {
     return "warning";
   }
   if (
-    resource.key === "sitemap" &&
-    (resource.counts.sitemapLocs ?? 0) < 1
+    (resource.kind === "sitemap" || resource.kind === "sitemapChild") &&
+    resource.minimumSitemapLocs !== undefined &&
+    (resource.counts.sitemapLocs ?? 0) < resource.minimumSitemapLocs
   ) {
     return "warning";
   }
@@ -210,13 +215,20 @@ function getLiveProbeResourceTone(
 }
 
 function formatProbeCounts(resource: SeoDiscoveryLiveProbeResource): string {
+  if (resource.disabledReason) return "Skipped by policy";
+
   if (resource.key === "robots") {
     const count = resource.counts.robotsSitemapLines ?? 0;
-    return `${count} Sitemap line${count === 1 ? "" : "s"}`;
+    const expected = resource.expectedRobotsSitemapLines;
+    return expected === undefined
+      ? `${count} Sitemap line${count === 1 ? "" : "s"}`
+      : `${count}/${expected} Sitemap line${expected === 1 ? "" : "s"}`;
   }
 
-  if (resource.key === "sitemap") {
-    return `${resource.counts.sitemapLocs ?? 0} loc`;
+  if (resource.kind === "sitemap" || resource.kind === "sitemapChild") {
+    const count = resource.counts.sitemapLocs ?? 0;
+    const minimum = resource.minimumSitemapLocs ?? 0;
+    return minimum > 0 ? `${count}/${minimum}+ loc` : `${count} loc`;
   }
 
   return `${resource.counts.feedItems ?? 0} item; ${
@@ -262,9 +274,18 @@ function LiveProbeRows({
                 </span>
                 <span className="truncate">{formatProbeCounts(resource)}</span>
               </div>
-              {resource.error || resource.bodyTruncated ? (
-                <p className="text-[11px] leading-4 text-amber-700">
-                  {resource.error ??
+              {resource.disabledReason ||
+              resource.error ||
+              resource.bodyTruncated ? (
+                <p
+                  className={`text-[11px] leading-4 ${
+                    resource.disabledReason
+                      ? "text-muted-foreground"
+                      : "text-amber-700"
+                  }`}
+                >
+                  {resource.disabledReason ??
+                    resource.error ??
                     "Response body read reached the diagnostic cap."}
                 </p>
               ) : null}
@@ -512,6 +533,7 @@ export function SeoDiscoveryStatusCard({
   discovery,
   robotsTxt,
   businessIdentity,
+  hasStoreLogo,
 }: SeoDiscoveryStatusCardProps) {
   const {
     storefrontUrl,
@@ -523,6 +545,7 @@ export function SeoDiscoveryStatusCard({
     robotsTxt,
     storefrontUrl,
     businessIdentity,
+    hasStoreLogo,
   });
   const liveProbeEnabled =
     status.storefront.mode === "absolute" &&

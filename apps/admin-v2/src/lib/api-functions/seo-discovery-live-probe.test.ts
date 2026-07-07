@@ -3,8 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runSeoDiscoveryLiveProbe } from "./seo-discovery-live-probe";
 
 const mocks = vi.hoisted(() => ({
+  getDiscoveryPolicy: vi.fn(),
   getStorefrontUrl: vi.fn(),
 }));
+
+function discoveryPolicyLookup() {
+  return mocks.getDiscoveryPolicy();
+}
 
 function storefrontUrlLookup() {
   return mocks.getStorefrontUrl();
@@ -27,6 +32,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
   beforeEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    mocks.getDiscoveryPolicy.mockResolvedValue({ discovery: undefined });
   });
 
   it("does not fetch live URLs when the Store URL is not absolute http(s)", async () => {
@@ -36,10 +42,12 @@ describe("runSeoDiscoveryLiveProbe", () => {
     const result = await runSeoDiscoveryLiveProbe({
       fetch: fetchMock as unknown as typeof fetch,
       getStorefrontUrl: storefrontUrlLookup,
+      getDiscoveryPolicy: discoveryPolicyLookup,
       now: () => new Date("2026-07-06T00:00:00.000Z"),
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.getDiscoveryPolicy).not.toHaveBeenCalled();
     expect(result).toEqual({
       baseUrl: null,
       checkedAt: "2026-07-06T00:00:00.000Z",
@@ -49,7 +57,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
     });
   });
 
-  it("probes only the fixed discovery paths without forwarding credentials", async () => {
+  it("probes policy-enabled discovery paths without forwarding credentials", async () => {
     mocks.getStorefrontUrl.mockResolvedValue({
       storefrontUrl: "https://shop.example.com/",
     });
@@ -68,7 +76,22 @@ describe("runSeoDiscoveryLiveProbe", () => {
         }
         if (url.endsWith("/sitemap.xml")) {
           return textResponse(
-            "<sitemapindex><sitemap><loc>https://shop.example.com/sitemap-products.xml</loc></sitemap></sitemapindex>",
+            `<sitemapindex>
+              <sitemap><loc>https://shop.example.com/sitemap-static.xml</loc></sitemap>
+              <sitemap><loc>https://shop.example.com/sitemap-products.xml?page=1</loc></sitemap>
+              <sitemap><loc>https://shop.example.com/sitemap-categories.xml</loc></sitemap>
+              <sitemap><loc>https://shop.example.com/sitemap-collections.xml</loc></sitemap>
+              <sitemap><loc>https://shop.example.com/sitemap-pages.xml</loc></sitemap>
+            </sitemapindex>`,
+            {
+              contentType: "application/xml",
+              cacheControl: "public, max-age=600",
+            },
+          );
+        }
+        if (url.includes("/sitemap-")) {
+          return textResponse(
+            `<urlset><url><loc>${url}</loc></url></urlset>`,
             {
               contentType: "application/xml",
               cacheControl: "public, max-age=600",
@@ -87,16 +110,23 @@ describe("runSeoDiscoveryLiveProbe", () => {
 
     const result = await runSeoDiscoveryLiveProbe({
       fetch: fetchMock as unknown as typeof fetch,
+      getDiscoveryPolicy: discoveryPolicyLookup,
       getStorefrontUrl: storefrontUrlLookup,
       now: () => new Date("2026-07-06T00:00:00.000Z"),
     });
 
     expect(mocks.getStorefrontUrl).toHaveBeenCalledTimes(1);
+    expect(mocks.getDiscoveryPolicy).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
       "https://shop.example.com/robots.txt",
       "https://shop.example.com/sitemap.xml",
       "https://shop.example.com/api/product-feed.xml?limit=5",
       "https://shop.example.com/api/facebook-feed.xml?limit=5",
+      "https://shop.example.com/sitemap-static.xml",
+      "https://shop.example.com/sitemap-products.xml?page=1",
+      "https://shop.example.com/sitemap-categories.xml",
+      "https://shop.example.com/sitemap-collections.xml",
+      "https://shop.example.com/sitemap-pages.xml",
     ]);
     for (const [, init] of fetchMock.mock.calls) {
       expect(init).toBeDefined();
@@ -115,34 +145,137 @@ describe("runSeoDiscoveryLiveProbe", () => {
     }
 
     expect(result.ok).toBe(true);
-    expect(result.resources).toMatchObject([
-      {
-        key: "robots",
-        ok: true,
-        status: 200,
-        contentType: "text/plain; charset=utf-8",
-        cacheControl: "public, max-age=300",
-        counts: { robotsSitemapLines: 1 },
+    expect(result.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "robots",
+          kind: "robots",
+          ok: true,
+          status: 200,
+          contentType: "text/plain; charset=utf-8",
+          cacheControl: "public, max-age=300",
+          counts: { robotsSitemapLines: 1 },
+          expectedRobotsSitemapLines: 1,
+        }),
+        expect.objectContaining({
+          key: "sitemap",
+          kind: "sitemap",
+          ok: true,
+          status: 200,
+          counts: { sitemapLocs: 5 },
+          minimumSitemapLocs: 5,
+        }),
+        expect.objectContaining({
+          key: "productFeed",
+          kind: "feed",
+          ok: true,
+          status: 200,
+          counts: { feedItems: 1, imageLinks: 1, availabilityValues: 1 },
+        }),
+        expect.objectContaining({
+          key: "facebookFeed",
+          kind: "feed",
+          ok: true,
+          status: 200,
+          counts: { feedItems: 1, imageLinks: 1, availabilityValues: 1 },
+        }),
+        expect.objectContaining({
+          key: "staticPagesSitemap",
+          kind: "sitemapChild",
+          ok: true,
+          status: 200,
+          counts: { sitemapLocs: 1 },
+          minimumSitemapLocs: 1,
+        }),
+      ]),
+    );
+  });
+
+  it("skips disabled feeds and child sitemap sections without live fetches", async () => {
+    mocks.getStorefrontUrl.mockResolvedValue({
+      storefrontUrl: "https://shop.example.com/",
+    });
+    mocks.getDiscoveryPolicy.mockResolvedValue({
+      discovery: {
+        sitemap: {
+          enabled: true,
+          staticPages: true,
+          products: false,
+          categories: false,
+          collections: false,
+          pages: false,
+        },
+        feeds: { productCatalogEnabled: false },
+        robots: { advertiseSitemap: false },
       },
-      {
-        key: "sitemap",
-        ok: true,
-        status: 200,
-        counts: { sitemapLocs: 1 },
-      },
-      {
-        key: "productFeed",
-        ok: true,
-        status: 200,
-        counts: { feedItems: 1, imageLinks: 1, availabilityValues: 1 },
-      },
-      {
-        key: "facebookFeed",
-        ok: true,
-        status: 200,
-        counts: { feedItems: 1, imageLinks: 1, availabilityValues: 1 },
-      },
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/robots.txt")) {
+        return textResponse("User-agent: *\nAllow: /", {
+          contentType: "text/plain",
+        });
+      }
+      if (url.endsWith("/sitemap.xml")) {
+        return textResponse(
+          "<sitemapindex><sitemap><loc>https://shop.example.com/sitemap-static.xml</loc></sitemap></sitemapindex>",
+          { contentType: "application/xml" },
+        );
+      }
+      return textResponse("<urlset><url><loc>https://shop.example.com/</loc></url></urlset>", {
+        contentType: "application/xml",
+      });
+    });
+
+    const result = await runSeoDiscoveryLiveProbe({
+      fetch: fetchMock as unknown as typeof fetch,
+      getDiscoveryPolicy: discoveryPolicyLookup,
+      getStorefrontUrl: storefrontUrlLookup,
+    });
+
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+      "https://shop.example.com/robots.txt",
+      "https://shop.example.com/sitemap.xml",
+      "https://shop.example.com/sitemap-static.xml",
     ]);
+    expect(result.ok).toBe(true);
+    expect(result.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "robots",
+          counts: { robotsSitemapLines: 0 },
+          expectedRobotsSitemapLines: 0,
+        }),
+        expect.objectContaining({
+          key: "sitemap",
+          counts: { sitemapLocs: 1 },
+          minimumSitemapLocs: 1,
+        }),
+        expect.objectContaining({
+          key: "productFeed",
+          status: null,
+          disabledReason:
+            "Catalog feeds are disabled by the current SEO discovery policy.",
+        }),
+        expect.objectContaining({
+          key: "facebookFeed",
+          status: null,
+          disabledReason:
+            "Catalog feeds are disabled by the current SEO discovery policy.",
+        }),
+        expect.objectContaining({
+          key: "staticPagesSitemap",
+          status: 200,
+          counts: { sitemapLocs: 1 },
+        }),
+        expect.objectContaining({
+          key: "productsSitemap",
+          status: null,
+          disabledReason:
+            "This sitemap section is disabled by the current SEO discovery policy.",
+        }),
+      ]),
+    );
   });
 
   it("allows cold-but-healthy discovery files to finish within the default budget", async () => {
@@ -191,6 +324,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
 
     const resultPromise = runSeoDiscoveryLiveProbe({
       fetch: fetchMock as unknown as typeof fetch,
+      getDiscoveryPolicy: discoveryPolicyLookup,
       getStorefrontUrl: storefrontUrlLookup,
       now: () => new Date("2026-07-06T00:00:00.000Z"),
     });
@@ -214,12 +348,13 @@ describe("runSeoDiscoveryLiveProbe", () => {
 
     const result = await runSeoDiscoveryLiveProbe({
       fetch: fetchMock as unknown as typeof fetch,
+      getDiscoveryPolicy: discoveryPolicyLookup,
       getStorefrontUrl: storefrontUrlLookup,
       maxBodyBytes: 8,
     });
 
     expect(result.ok).toBe(false);
-    expect(result.resources).toHaveLength(4);
+    expect(result.resources).toHaveLength(9);
     expect(
       result.resources.every(
         (resource) => resource.error === "Redirect blocked.",
