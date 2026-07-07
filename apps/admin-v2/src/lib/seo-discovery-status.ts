@@ -230,6 +230,8 @@ export interface SeoDiscoveryStatus {
     offerShippingDetailsEnabled: boolean;
     returnPolicyEnabled: boolean;
     returnPolicySummary: string;
+    returnPolicyNote?: string;
+    returnPolicyWarning?: string;
     breadcrumbsEnabled: boolean;
     collectionsEnabled: boolean;
     organizationNote: string;
@@ -368,6 +370,36 @@ function buildReturnPolicySummary(policy: SeoReturnPolicySettings): string {
     RETURN_POLICY_METHOD_LABELS[policy.returnMethod],
     policy.policyUrl ? "policy URL set" : "policy URL missing",
   ].join("; ");
+}
+
+function buildReturnPolicyEmissionNote({
+  organizationEnabled,
+  policyEnabled,
+  productsEnabled,
+}: {
+  organizationEnabled: boolean;
+  policyEnabled: boolean;
+  productsEnabled: boolean;
+}): { note?: string; warning?: string } {
+  if (!policyEnabled) return {};
+
+  if (!organizationEnabled && !productsEnabled) {
+    return {
+      warning:
+        "Return policy facts are saved but will not emit until Organization or Product schema is enabled.",
+    };
+  }
+
+  const targets = [
+    organizationEnabled ? "OnlineStore" : null,
+    productsEnabled ? "Product offers" : null,
+  ].filter((target): target is string => Boolean(target));
+
+  return {
+    note: `Return policy can emit through ${targets.join(
+      " and ",
+    )}; normal schema prerequisites still apply.`,
+  };
 }
 
 function isPlaceholderSitemapValue(value: string): boolean {
@@ -725,7 +757,32 @@ export function buildSeoDiscoveryStatus({
     normalized.sitemap.enabled && !absoluteStorefrontUrl;
   const feedNeedsStoreUrl =
     normalized.feeds.productCatalogEnabled && !absoluteStorefrontUrl;
-  const robotsNeedsStoreUrl = !absoluteStorefrontUrl;
+  const robotsAdvertisesCanonicalSitemap =
+    normalized.sitemap.enabled && normalized.robots.advertiseSitemap;
+  const robotsNeedsStoreUrl =
+    robotsAdvertisesCanonicalSitemap && !absoluteStorefrontUrl;
+  const returnPolicyEmission = buildReturnPolicyEmissionNote({
+    organizationEnabled: normalized.structuredData.organization,
+    policyEnabled: normalized.returnPolicy.enabled,
+    productsEnabled: normalized.structuredData.products,
+  });
+  const structuredDataNeedsReview = Boolean(
+    identityWarning || returnPolicyEmission.warning,
+  );
+  const anyStructuredDataEnabled =
+    normalized.structuredData.organization ||
+    normalized.structuredData.websiteSearch ||
+    normalized.structuredData.products ||
+    normalized.structuredData.productGroups ||
+    normalized.structuredData.offerShippingDetails ||
+    normalized.returnPolicy.enabled ||
+    normalized.structuredData.breadcrumbs ||
+    normalized.structuredData.collections;
+  const returnPolicySummaryLabel = normalized.returnPolicy.enabled
+    ? returnPolicyEmission.warning
+      ? "return policy waiting for Organization/Product schema"
+      : "return policy"
+    : "return policy off";
   const ucpProfileHref =
     absoluteStorefrontUrl?.protocol === "https:"
       ? buildSeoDiscoveryHref(absoluteStorefrontUrl, UCP_PROFILE_PATH)
@@ -795,14 +852,16 @@ export function buildSeoDiscoveryStatus({
           : "info",
       title: robotsNeedsStoreUrl
         ? "robots.txt needs Store URL"
-        : normalized.robots.advertiseSitemap
+        : robotsAdvertisesCanonicalSitemap
           ? "robots.txt advertises canonical sitemap"
-          : "robots.txt sitemap ad off",
+          : "robots.txt sitemap not advertised",
       summary: robotsNeedsStoreUrl
         ? `${storeUrlRequirement} Runtime robots output cannot prove canonical sitemap advertising.`
-        : normalized.robots.advertiseSitemap
+        : robotsAdvertisesCanonicalSitemap
           ? "Runtime strips saved Sitemap directives and advertises only the canonical current sitemap."
-          : "Runtime strips all Sitemap directives and advertises no sitemap.",
+          : normalized.sitemap.enabled
+            ? "Runtime strips all Sitemap directives and advertises no sitemap."
+            : "Sitemap index is off, so runtime advertises no sitemap.",
       advertiseSitemap: normalized.robots.advertiseSitemap,
       customSitemapLines,
       warning:
@@ -811,28 +870,14 @@ export function buildSeoDiscoveryStatus({
           : undefined,
     },
     structuredData: {
-      tone:
-        identityWarning
-          ? "warning"
-          : normalized.structuredData.organization ||
-              normalized.structuredData.websiteSearch ||
-              normalized.structuredData.products ||
-              normalized.structuredData.productGroups ||
-              normalized.structuredData.offerShippingDetails ||
-              normalized.returnPolicy.enabled ||
-              normalized.structuredData.breadcrumbs ||
-              normalized.structuredData.collections
+      tone: structuredDataNeedsReview
+        ? "warning"
+        : anyStructuredDataEnabled
           ? "ok"
           : "disabled",
-      title:
-        normalized.structuredData.organization ||
-        normalized.structuredData.websiteSearch ||
-        normalized.structuredData.products ||
-        normalized.structuredData.productGroups ||
-        normalized.structuredData.offerShippingDetails ||
-        normalized.returnPolicy.enabled ||
-        normalized.structuredData.breadcrumbs ||
-        normalized.structuredData.collections
+      title: structuredDataNeedsReview
+        ? "Structured data needs review"
+        : anyStructuredDataEnabled
           ? "Structured data on"
           : "Structured data off",
       summary: [
@@ -849,9 +894,7 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.offerShippingDetails
           ? "shipping offers"
           : "shipping offers off",
-        normalized.returnPolicy.enabled
-          ? "return policy"
-          : "return policy off",
+        returnPolicySummaryLabel,
         normalized.structuredData.breadcrumbs
           ? "breadcrumbs"
           : "breadcrumbs off",
@@ -867,6 +910,8 @@ export function buildSeoDiscoveryStatus({
         normalized.structuredData.offerShippingDetails,
       returnPolicyEnabled: normalized.returnPolicy.enabled,
       returnPolicySummary: buildReturnPolicySummary(normalized.returnPolicy),
+      returnPolicyNote: returnPolicyEmission.note,
+      returnPolicyWarning: returnPolicyEmission.warning,
       breadcrumbsEnabled: normalized.structuredData.breadcrumbs,
       collectionsEnabled: normalized.structuredData.collections,
       organizationNote:

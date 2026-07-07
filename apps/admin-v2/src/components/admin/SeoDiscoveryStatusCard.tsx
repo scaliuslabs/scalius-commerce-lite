@@ -760,6 +760,13 @@ export function SeoDiscoveryStatusCard({
               {status.structuredData.returnPolicySummary}
             </span>
           </p>
+          {status.structuredData.returnPolicyWarning ? (
+            <p className="text-amber-700">
+              {status.structuredData.returnPolicyWarning}
+            </p>
+          ) : status.structuredData.returnPolicyNote ? (
+            <p>{status.structuredData.returnPolicyNote}</p>
+          ) : null}
         </div>
       </StatusRow>
 

@@ -595,8 +595,8 @@ export function SeoSettingsBuilder() {
                     Return Policy Schema
                   </div>
                   <p className="text-xs leading-5 text-muted-foreground">
-                    Publishes public return-policy discovery facts when enabled.
-                    It does not change checkout, refunds, or order handling.
+                    Saves return-policy facts for OnlineStore/Product schema;
+                    it does not change checkout, refunds, or order handling.
                   </p>
                 </div>
               </div>
