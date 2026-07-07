@@ -14,6 +14,7 @@ Scalius Commerce is a lightweight, nearly complete commerce platform for small a
 - Merchant controls should separate buyer visibility, search indexing, sitemap inclusion, feed inclusion, and structured-data output instead of hiding multiple meanings behind one switch.
 - Resource canonical overrides are route-shaped same-store path controls only. They must not allow off-origin, query-string, fragment, or arbitrary dead-path canonical hacks; products use `/products/<slug>`, categories `/categories/<slug>`, collections currently use `/collections/<collectionId>` (not a collection slug), and CMS pages use one non-reserved `/<slug>` segment. Blank or invalid persisted values must cleanly fall back to the resource's normal public route.
 - UCP (Universal Commerce Protocol) is the next commerce-discovery surface after SEO/AEO/AIO is proven: expose agent-readable commerce capabilities only from the same checkout, SKU, payment, delivery, and policy authorities that buyers already use. The first shipped UCP surface is read-only catalog search/lookup; checkout/cart/order/payment capabilities remain hidden until their own D1 session, idempotency, signing, and payment recovery model is built.
+- MCP and assistant surfaces must be trusted UI/API extensions, not alternate backdoors. Admin MCP cannot bypass Better Auth, onboarding, 2FA, RBAC, visible page-state rules, or provider-secret safeguards. Storefront MCP stays catalog/page-context/read-only cart-validation until commerce mutation sessions are designed and verified.
 
 ## Architecture Bar
 
@@ -46,3 +47,4 @@ A stable release is credible only when:
 - Commit after a meaningful verified achievement. Keep unfinished exploratory edits out of unrelated commits.
 - If a context file grows because the codebase is confusing, prefer making the code/test boundary clearer over adding more prose.
 - Keep root agent context as an index. Add detailed guidance only to focused docs or code-adjacent README files with a clear owner, verification note, and removal path when the rule becomes enforceable in code/tests.
+- Durable MCP/assistant guidance lives in `docs/codex/MCP-AGENT-ARCHITECTURE.md`; keep `mcp.md` as local scratch only.

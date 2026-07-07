@@ -49,5 +49,8 @@ skills-lock.json
 /docs/*
 !/docs/research/
 !/docs/research/*.md
+!/docs/codex/
+/docs/codex/*
+!/docs/codex/MCP-AGENT-ARCHITECTURE.md
 CLAUDE.md
 mcp.md
