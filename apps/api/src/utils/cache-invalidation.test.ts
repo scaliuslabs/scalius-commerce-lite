@@ -1046,6 +1046,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "product_variants_prod_1",
         "product_slug_phone-case",
         "product_variants_prod_2",
+        "all_products_",
+        "category_products_",
         "feed_products_",
         "sitemap_products_",
       ],
@@ -1074,6 +1076,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
       "product_variants_prod_1",
       "product_slug_phone-case",
       "product_variants_prod_2",
+      "all_products_",
+      "category_products_",
       "feed_products_",
       "sitemap_products_",
     ]);
@@ -1166,6 +1170,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
       exactKeys: [
         "product_slug_phone",
         "product_variants_prod_1",
+        "all_products_",
+        "category_products_",
         "feed_products_",
         "sitemap_products_",
       ],
@@ -1227,6 +1233,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
       exactKeys: [
         "product_slug_phone",
         "product_variants_prod_1",
+        "all_products_",
+        "category_products_",
         "feed_products_",
         "sitemap_products_",
       ],

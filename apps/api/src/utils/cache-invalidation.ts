@@ -1217,7 +1217,13 @@ export function getProductAvailabilityStorefrontPrefixes(
   ]);
 
   return prefixes.length > 0
-    ? [...prefixes, "feed_products_", "sitemap_products_"]
+    ? [
+        ...prefixes,
+        "all_products_",
+        "category_products_",
+        "feed_products_",
+        "sitemap_products_",
+      ]
     : [];
 }
 
