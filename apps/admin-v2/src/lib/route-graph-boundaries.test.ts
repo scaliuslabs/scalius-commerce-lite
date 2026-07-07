@@ -1346,7 +1346,7 @@ describe("admin route graph boundaries", () => {
     );
   });
 
-  it("keeps the primary product description on the real editor path", () => {
+  it("keeps the primary product description on the deferred editor boundary", () => {
     const source = readFileSync(
       join(
         ADMIN_SRC_ROOT,
@@ -1358,12 +1358,15 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
 
-    expect(source).toContain('import { TiptapEditor } from "@/components/ui/tiptap/TiptapEditor"');
-    expect(source).toContain("<TiptapEditor");
+    expect(source).toContain(
+      'import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor"',
+    );
+    expect(source).toContain("<DeferredTiptapEditor");
     expect(source).toContain('placeholder="Describe your product..."');
+    expect(source).not.toContain('from "@/components/ui/tiptap/TiptapEditor"');
+    expect(source).not.toContain("<TiptapEditor");
     expect(source).not.toContain('import("@/components/ui/tiptap/TiptapEditor")');
     expect(source).not.toContain('fallback={<LoadingFallback height="h-[237px]" />}');
-    expect(source).not.toContain("DeferredTiptapEditor");
     expect(source).not.toContain("<RichContent");
     expect(source).not.toContain("../rich-content");
     expect(source).not.toContain("TiptapToolbarSkeleton");

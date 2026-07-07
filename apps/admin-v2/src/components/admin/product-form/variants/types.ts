@@ -1,6 +1,7 @@
 // src/components/admin/ProductForm/variants/types.ts
 
 import { z } from "zod";
+import { DEFAULT_PRODUCT_OPTION_LABELS } from "@scalius/shared/product-options";
 
 // --- Core Types ---
 
@@ -25,6 +26,25 @@ export interface ProductVariant {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+}
+
+export interface VariantOptionLabels {
+  option1: string;
+  option2: string;
+}
+
+export const DEFAULT_VARIANT_OPTION_LABELS: VariantOptionLabels = {
+  option1: DEFAULT_PRODUCT_OPTION_LABELS.option1,
+  option2: DEFAULT_PRODUCT_OPTION_LABELS.option2,
+};
+
+export function normalizeVariantOptionLabels(
+  labels?: Partial<VariantOptionLabels> | null,
+): VariantOptionLabels {
+  return {
+    option1: labels?.option1?.trim() || DEFAULT_VARIANT_OPTION_LABELS.option1,
+    option2: labels?.option2?.trim() || DEFAULT_VARIANT_OPTION_LABELS.option2,
+  };
 }
 
 // --- Validation Schemas ---

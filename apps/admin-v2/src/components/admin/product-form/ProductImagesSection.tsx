@@ -23,6 +23,10 @@ import { cn } from "@scalius/shared/utils";
 import type { ProductFormValues } from "./types";
 import { toast } from "sonner";
 import type { VariantImageAxis } from "./utils";
+import {
+  normalizeVariantOptionLabels,
+  type VariantOptionLabels,
+} from "./variants/types";
 
 const DraggableImageGallery = lazy(() =>
   import("../DraggableImageGallery").then((module) => ({
@@ -38,6 +42,7 @@ interface ProductImagesSectionProps {
   setVariantImageAxis: (axis: VariantImageAxis) => void;
   uniqueOptionOneValues: string[];
   uniqueOptionTwoValues: string[];
+  optionLabels?: VariantOptionLabels;
 }
 
 export const ProductImagesSection = memo(function ProductImagesSection({
@@ -48,16 +53,25 @@ export const ProductImagesSection = memo(function ProductImagesSection({
   setVariantImageAxis,
   uniqueOptionOneValues,
   uniqueOptionTwoValues,
+  optionLabels,
 }: ProductImagesSectionProps) {
   const [isOpen, setIsOpen] = React.useState(true);
+  const normalizedOptionLabels = React.useMemo(
+    () => normalizeVariantOptionLabels(optionLabels),
+    [optionLabels],
+  );
   const variantImageOptions =
     variantImageAxis === "option1" ? uniqueOptionOneValues : uniqueOptionTwoValues;
   const hasVariantImageOptions =
     uniqueOptionOneValues.length > 0 || uniqueOptionTwoValues.length > 0;
   const axisLabel =
     variantImageAxis === "option1"
-      ? "Option 1 values (size, weight, pack)"
-      : "Option 2 values (color, style)";
+      ? `${normalizedOptionLabels.option1} values`
+      : `${normalizedOptionLabels.option2} values`;
+  const variantImageAxisLabel =
+    variantImageAxis === "option1"
+      ? normalizedOptionLabels.option1
+      : normalizedOptionLabels.option2;
 
   React.useEffect(() => {
     if (
@@ -192,20 +206,20 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                   onValueChange={(value) => setVariantImageAxis(value as VariantImageAxis)}
                 >
                   <SelectTrigger className="h-8 w-[150px] text-xs">
-                    <span>{variantImageAxis === "option1" ? "Option 1" : "Option 2"}</span>
+                    <span className="truncate">{variantImageAxisLabel}</span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem
                       value="option1"
                       disabled={uniqueOptionOneValues.length === 0}
                     >
-                      Option 1
+                      {normalizedOptionLabels.option1}
                     </SelectItem>
                     <SelectItem
                       value="option2"
                       disabled={uniqueOptionTwoValues.length === 0}
                     >
-                      Option 2
+                      {normalizedOptionLabels.option2}
                     </SelectItem>
                   </SelectContent>
                 </Select>

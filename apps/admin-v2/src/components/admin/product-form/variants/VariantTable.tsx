@@ -22,7 +22,14 @@ import {
 import { VariantDisplayRow } from "./VariantDisplayRow";
 import { VariantFormEditor, VariantFormRow } from "./VariantFormRow";
 import { VariantBulkEditRow } from "./VariantBulkEditRow";
-import type { ProductVariant, VariantBulkEditField, VariantBulkEditValue, VariantFormValues } from "./types";
+import {
+  normalizeVariantOptionLabels,
+  type ProductVariant,
+  type VariantBulkEditField,
+  type VariantBulkEditValue,
+  type VariantFormValues,
+  type VariantOptionLabels,
+} from "./types";
 import { useCurrency } from "@/hooks/use-currency";
 import { cn } from "@scalius/shared/utils";
 import {
@@ -54,6 +61,7 @@ interface VariantTableProps {
   onRemoveBulkRow?: (id: string) => void;
   productName?: string;
   addVariantDefaults?: Partial<VariantFormValues>;
+  optionLabels?: VariantOptionLabels;
 }
 
 export function VariantTable({
@@ -79,8 +87,10 @@ export function VariantTable({
   onRemoveBulkRow,
   productName,
   addVariantDefaults,
+  optionLabels,
 }: VariantTableProps) {
   const { symbol } = useCurrency();
+  const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
   const selectableVariants = variants.filter((variant) => !variant.isDefault);
   const selectedSelectableCount = selectableVariants.filter((variant) => selectedVariants.has(variant.id)).length;
   const allSelected = selectableVariants.length > 0 && selectedSelectableCount === selectableVariants.length;
@@ -121,6 +131,7 @@ export function VariantTable({
                 onDelete={onDelete}
                 onDuplicate={onDuplicate}
                 symbol={symbol}
+                optionLabels={normalizedOptionLabels}
               />
             ))
           )}
@@ -135,6 +146,7 @@ export function VariantTable({
             onSave={onSaveVariant}
             onCancel={onCancelEdit}
             isSubmitting={isSubmitting}
+            optionLabels={normalizedOptionLabels}
           />
         </div>
       )}
@@ -165,12 +177,14 @@ export function VariantTable({
                 <>
                   <TableHead className="min-w-[110px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">SKU</TableHead>
                   <TableHead className="min-w-[90px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                    <span className="block leading-none">Option 1</span>
-                    <span className="mt-0.5 block text-[9px] normal-case tracking-normal text-muted-foreground/50">size/weight</span>
+                    <span className="block leading-none">
+                      {normalizedOptionLabels.option1}
+                    </span>
                   </TableHead>
                   <TableHead className="min-w-[90px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                    <span className="block leading-none">Option 2</span>
-                    <span className="mt-0.5 block text-[9px] normal-case tracking-normal text-muted-foreground/50">color/style</span>
+                    <span className="block leading-none">
+                      {normalizedOptionLabels.option2}
+                    </span>
                   </TableHead>
                   <TableHead className="min-w-[72px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Weight</TableHead>
                   <TableHead className="min-w-[88px] py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Price</TableHead>
@@ -219,6 +233,7 @@ export function VariantTable({
                     variant={variant}
                     draftUpdate={draftUpdates?.[variant.id]}
                     onChange={onBulkEditChange!}
+                    optionLabels={normalizedOptionLabels}
                   />
                 );
               }
@@ -230,6 +245,7 @@ export function VariantTable({
                   onSave={onSaveVariant}
                   onCancel={onCancelEdit}
                   isSubmitting={isSubmitting}
+                  optionLabels={normalizedOptionLabels}
                 />
               ) : (
                 <VariantDisplayRow
@@ -242,6 +258,7 @@ export function VariantTable({
                   onDuplicate={onDuplicate}
                   isAnyRowEditing={isAnyRowEditing}
                   productName={productName}
+                  optionLabels={normalizedOptionLabels}
                 />
               );
             })}
@@ -267,6 +284,7 @@ export function VariantTable({
                   onChange={onBulkEditChange!}
                   isNew={true}
                   onRemoveNew={() => onRemoveBulkRow?.(newId)}
+                  optionLabels={normalizedOptionLabels}
                 />
               );
             })}
@@ -277,6 +295,7 @@ export function VariantTable({
                 onSave={onSaveVariant}
                 onCancel={onCancelEdit}
                 isSubmitting={isSubmitting}
+                optionLabels={normalizedOptionLabels}
               />
             )}
           </TableBody>
@@ -312,6 +331,7 @@ function VariantMobileCard({
   onDelete,
   onDuplicate,
   symbol,
+  optionLabels,
 }: {
   variant: ProductVariant;
   isSelected: boolean;
@@ -321,19 +341,21 @@ function VariantMobileCard({
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   symbol: string;
+  optionLabels?: VariantOptionLabels;
 }) {
+  const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
   const inventoryTracked = isInventoryTracked(variant);
   const isProtectedDefaultSku = variant.isDefault === true;
   const availableStock = inventoryTracked
     ? Math.max(0, variant.stock - variant.reservedStock)
     : null;
   const stockStatus = availableStock === null ? null : getStockStatus(availableStock);
-  const optionLabels = (
+  const optionBadges = (
     isProtectedDefaultSku
       ? [variant.weight && `${variant.weight}g`]
       : [
-          variant.size && `Opt 1: ${variant.size}`,
-          variant.color && `Opt 2: ${variant.color}`,
+          variant.size && `${normalizedOptionLabels.option1}: ${variant.size}`,
+          variant.color && `${normalizedOptionLabels.option2}: ${variant.color}`,
           variant.weight && `${variant.weight}g`,
         ]
   ).filter(Boolean);
@@ -368,8 +390,8 @@ function VariantMobileCard({
                     Product SKU
                   </Badge>
                 )}
-                {optionLabels.length > 0 ? (
-                  optionLabels.map((label) => (
+                {optionBadges.length > 0 ? (
+                  optionBadges.map((label) => (
                     <Badge key={label} variant="secondary" className="h-5 px-1.5 text-[10px]">
                       {label}
                     </Badge>

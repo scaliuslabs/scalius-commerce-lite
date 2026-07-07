@@ -18,7 +18,13 @@ import { generateEAN13 } from "@scalius/shared/barcode-utils";
 import { cn } from "@scalius/shared/utils";
 import { Check, Loader2, Sparkles, X } from "lucide-react";
 import { useCurrency } from "@/hooks/use-currency";
-import { variantOptionFormSchema, type ProductVariant, type VariantFormValues } from "./types";
+import {
+  normalizeVariantOptionLabels,
+  variantOptionFormSchema,
+  type ProductVariant,
+  type VariantFormValues,
+  type VariantOptionLabels,
+} from "./types";
 
 interface VariantFormRowProps {
   initialData?: ProductVariant;
@@ -26,6 +32,7 @@ interface VariantFormRowProps {
   onSave: (values: VariantFormValues) => Promise<boolean>;
   onCancel: () => void;
   isSubmitting: boolean;
+  optionLabels?: VariantOptionLabels;
 }
 
 type VariantEditorLayout = "row" | "card";
@@ -44,9 +51,11 @@ function VariantOptionForm({
   onSave,
   onCancel,
   isSubmitting,
+  optionLabels,
   layout,
 }: VariantFormRowProps & { layout: VariantEditorLayout }) {
   const { symbol } = useCurrency();
+  const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
   const isEditMode = !!initialData?.id;
 
   const form = useForm<VariantFormValues>({
@@ -104,6 +113,7 @@ function VariantOptionForm({
     saveLabel,
     compactInputClass,
     messageClass,
+    optionLabels: normalizedOptionLabels,
     onCancel,
     onSubmit: form.handleSubmit(handleSubmit),
   };
@@ -127,10 +137,10 @@ function VariantOptionForm({
         <LabeledCell label="SKU" className={layout === "row" ? "col-span-2" : "col-span-2"}>
           <SkuField {...controlProps} autoFocus={isEditMode} />
         </LabeledCell>
-        <LabeledCell label="Option 1" hint="choice" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
+        <LabeledCell label={normalizedOptionLabels.option1} hint="choice" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
           <OptionOneField {...controlProps} autoFocus={!isEditMode} />
         </LabeledCell>
-        <LabeledCell label="Option 2" hint="choice" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
+        <LabeledCell label={normalizedOptionLabels.option2} hint="choice" className={layout === "row" ? "col-span-1 sm:col-span-2 lg:col-span-1" : ""}>
           <OptionTwoField {...controlProps} />
         </LabeledCell>
         <LabeledCell label="Price" className={layout === "row" ? "col-span-1" : ""}>
@@ -187,6 +197,7 @@ type ControlProps = {
   saveLabel: string;
   compactInputClass: string;
   messageClass: string;
+  optionLabels: VariantOptionLabels;
   onCancel: () => void;
   onSubmit: () => void;
 };
@@ -222,6 +233,7 @@ function OptionOneField({
   form,
   compactInputClass,
   messageClass,
+  optionLabels,
   autoFocus,
 }: ControlProps & { autoFocus?: boolean }) {
   return (
@@ -233,6 +245,7 @@ function OptionOneField({
           <FormControl>
             <Input
               placeholder="2KG, XL, 100ml"
+              aria-label={optionLabels.option1}
               {...field}
               value={field.value ?? ""}
               className={compactInputClass}
@@ -246,7 +259,12 @@ function OptionOneField({
   );
 }
 
-function OptionTwoField({ form, compactInputClass, messageClass }: ControlProps) {
+function OptionTwoField({
+  form,
+  compactInputClass,
+  messageClass,
+  optionLabels,
+}: ControlProps) {
   return (
     <FormField
       control={form.control}
@@ -256,6 +274,7 @@ function OptionTwoField({ form, compactInputClass, messageClass }: ControlProps)
           <FormControl>
             <Input
               placeholder="Red, Blue, Pro"
+              aria-label={optionLabels.option2}
               {...field}
               value={field.value ?? ""}
               className={compactInputClass}
@@ -346,7 +365,7 @@ function StockField({ form, compactInputClass, messageClass, trackInventory }: C
   );
 }
 
-function StockLimitField({ form }: ControlProps) {
+function StockLimitField({ form, optionLabels }: ControlProps) {
   return (
     <FormField
       control={form.control}
@@ -357,7 +376,7 @@ function StockLimitField({ form }: ControlProps) {
             <div
               className="grid h-7 grid-cols-2 overflow-hidden rounded-[4px] border border-border/60 bg-muted/20 p-px text-[10px] shadow-none"
               role="group"
-              aria-label="Stock limit for this option"
+              aria-label={`Stock limit for this ${optionLabels.option1}/${optionLabels.option2} option`}
             >
               <button
                 type="button"

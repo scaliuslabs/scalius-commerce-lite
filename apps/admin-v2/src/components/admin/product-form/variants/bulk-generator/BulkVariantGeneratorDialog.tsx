@@ -13,10 +13,12 @@ import {
 import { Loader2, Sparkles } from "lucide-react";
 import { generateVariantCombinations } from "../utils/variantHelpers";
 import { validateSkuTemplate } from "../utils/skuGenerator";
-import type {
-  BulkVariantOptions,
-  BulkGeneratedVariant,
-  ProductVariant,
+import {
+  normalizeVariantOptionLabels,
+  type BulkVariantOptions,
+  type BulkGeneratedVariant,
+  type ProductVariant,
+  type VariantOptionLabels,
 } from "../types";
 import { VariantAttributeInput } from "./VariantAttributeInput";
 import { VariantConfigSection } from "./VariantConfigSection";
@@ -41,6 +43,7 @@ interface BulkVariantGeneratorProps {
   onGenerate: (variants: BulkGeneratedVariant[]) => Promise<void>;
   disabled?: boolean;
   initialOpen?: boolean;
+  optionLabels?: VariantOptionLabels;
 }
 
 export function BulkVariantGenerator({
@@ -49,8 +52,10 @@ export function BulkVariantGenerator({
   onGenerate,
   disabled,
   initialOpen = false,
+  optionLabels,
 }: BulkVariantGeneratorProps) {
   const { symbol } = useCurrency();
+  const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
   const [open, setOpen] = useState(initialOpen);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -152,8 +157,9 @@ export function BulkVariantGenerator({
             Bulk Option Generator
           </DialogTitle>
           <DialogDescription className="text-base mt-2">
-            Generate multiple options at once by combining values such as
-            sizes, weights, colors, styles, or pack names.
+            Generate multiple options at once by combining{" "}
+            {normalizedOptionLabels.option1} and{" "}
+            {normalizedOptionLabels.option2} values.
           </DialogDescription>
         </DialogHeader>
 
@@ -162,25 +168,25 @@ export function BulkVariantGenerator({
           <div className="space-y-5">
             <VariantAttributeInput
               id="sizes"
-              label="Option 1 values (size, weight, pack)"
+              label={`${normalizedOptionLabels.option1} values`}
               items={sizes}
               onItemsChange={setSizes}
               inputValue={sizeInput}
               onInputValueChange={setSizeInput}
               placeholder="Type a value and press Enter. Paste comma-separated lists supported."
-              emptyMessage="No Option 1 values added yet. Try S,M,L or 1KG,2KG,3KG."
+              emptyMessage={`No ${normalizedOptionLabels.option1} values added yet.`}
               quickAddOptions={[...SIZE_QUICK_ADD]}
             />
 
             <VariantAttributeInput
               id="colors"
-              label="Option 2 values (color, style)"
+              label={`${normalizedOptionLabels.option2} values`}
               items={colors}
               onItemsChange={setColors}
               inputValue={colorInput}
               onInputValueChange={setColorInput}
               placeholder="Type a value and press Enter. Paste supported."
-              emptyMessage="No Option 2 values added yet. Try Red,Blue or Classic,Premium."
+              emptyMessage={`No ${normalizedOptionLabels.option2} values added yet.`}
               quickAddOptions={[...COLOR_QUICK_ADD]}
             />
 
@@ -213,6 +219,7 @@ export function BulkVariantGenerator({
             skuConflicts={skuConflicts}
             generateBarcodes={generateBarcodes}
             symbol={symbol}
+            optionLabels={normalizedOptionLabels}
           />
         </div>
 

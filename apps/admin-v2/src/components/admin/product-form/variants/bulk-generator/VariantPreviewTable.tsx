@@ -9,7 +9,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import type { BulkGeneratedVariant } from "../types";
+import {
+  normalizeVariantOptionLabels,
+  type BulkGeneratedVariant,
+  type VariantOptionLabels,
+} from "../types";
 
 interface VariantPreviewTableProps {
   previewVariants: BulkGeneratedVariant[];
@@ -17,6 +21,7 @@ interface VariantPreviewTableProps {
   skuConflicts: BulkGeneratedVariant[];
   generateBarcodes: boolean;
   symbol: string;
+  optionLabels?: VariantOptionLabels;
 }
 
 const VariantPreviewRow = React.memo(function VariantPreviewRow({
@@ -79,7 +84,10 @@ export const VariantPreviewTable = React.memo(function VariantPreviewTable({
   skuConflicts,
   generateBarcodes,
   symbol,
+  optionLabels,
 }: VariantPreviewTableProps) {
+  const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -102,8 +110,12 @@ export const VariantPreviewTable = React.memo(function VariantPreviewTable({
               {generateBarcodes && (
                 <TableHead className="font-semibold">Barcode</TableHead>
               )}
-              <TableHead className="font-semibold">Option 1</TableHead>
-              <TableHead className="font-semibold">Option 2</TableHead>
+              <TableHead className="font-semibold">
+                {normalizedOptionLabels.option1}
+              </TableHead>
+              <TableHead className="font-semibold">
+                {normalizedOptionLabels.option2}
+              </TableHead>
               <TableHead className="text-right font-semibold">Price</TableHead>
               <TableHead className="text-right font-semibold">Stock</TableHead>
             </TableRow>
@@ -117,7 +129,8 @@ export const VariantPreviewTable = React.memo(function VariantPreviewTable({
                 >
                   <div className="text-muted-foreground">
                     <p className="text-sm">
-                      Add Option 1 and/or Option 2 values to preview options
+                      Add {normalizedOptionLabels.option1} and/or{" "}
+                      {normalizedOptionLabels.option2} values to preview options
                     </p>
                     <p className="text-xs mt-1">
                       All combinations will be shown here
