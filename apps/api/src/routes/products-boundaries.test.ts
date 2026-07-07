@@ -29,6 +29,7 @@ describe("product route query boundaries", () => {
     expect(source).toContain("search: normalizePublicFtsSearchCacheValue");
     expect(source).toContain("limit: normalizePublicIntegerCacheValue");
     expect(source).toContain("cacheCondition: (c) => {");
+    expect(source).toContain("category: z.string().optional().openapi({ description: \"Category slug or ID filter\" })");
     expect(source).toContain("return isPublicProductSearchCacheable(c.req.url);");
     expect(source).toContain("return isPublicProductListCacheable(c.req.url);");
     expect(source).toContain("const search = normalizePublicListingSearchParam(params.search);");
@@ -45,16 +46,25 @@ describe("product route query boundaries", () => {
     const slugRouteStart = source.indexOf("const getProductBySlugRoute = createRoute({");
 
     expect(source).toContain("getStorefrontFeedProducts");
-    expect(source).toContain("const PRODUCT_FEED_QUERY_KEYS = new Set([\"page\", \"limit\", \"sort\"]);");
+    expect(source).toContain("const PRODUCT_FEED_QUERY_KEYS = new Set([\"page\", \"limit\", \"sort\", \"category\", \"search\", \"minPrice\", \"maxPrice\", \"ids\"]);");
     expect(source).toContain("function isStorefrontFeedProductsCacheable(url: string): boolean");
-    expect(source).toContain("if (!PRODUCT_FEED_QUERY_KEYS.has(key) || value.trim() === \"\") return false;");
+    expect(source).toContain("if (!PRODUCT_FEED_QUERY_KEYS.has(key)) return false;");
+    expect(source).toContain("if (value.trim() === \"\" && key !== \"search\") return false;");
+    expect(source).toContain("hasOptionalFiniteNumberParam(params, \"minPrice\")");
+    expect(source).toContain("hasOptionalFiniteNumberParam(params, \"maxPrice\")");
     expect(source).toContain("if (normalizedPath.endsWith(\"/products/feed\"))");
     expect(source).toContain("return { page: 1, limit: 100, sort: \"newest\" };");
     expect(source).toContain("return isStorefrontFeedProductsCacheable(c.req.url);");
     expect(source).toContain("const productFeedSchema = z.object({");
+    expect(source).toContain("category: z.string().optional().openapi({ description: \"Category slug or ID filter\" })");
+    expect(source).toContain("search: z.string().optional().openapi({ description: \"Search query\" })");
+    expect(source).toContain("minPrice: z.coerce.number().optional().openapi({ description: \"Minimum price filter\" })");
+    expect(source).toContain("maxPrice: z.coerce.number().optional().openapi({ description: \"Maximum price filter\" })");
+    expect(source).toContain("description: \"Comma-separated product IDs, product handles, variant IDs, or SKUs\"");
     expect(source).toContain("limit: z.coerce.number().int().min(1).max(100).optional().default(100)");
     expect(source).toContain("path: \"/feed\"");
-    expect(source).toContain("getStorefrontFeedProducts(db, params)");
+    expect(source).toContain("const search = normalizePublicListingSearchParam(params.search);");
+    expect(source).toContain("getStorefrontFeedProducts(db, { ...params, search })");
     expect(feedRouteStart).toBeGreaterThan(listRouteStart);
     expect(slugRouteStart).toBeGreaterThan(feedRouteStart);
 

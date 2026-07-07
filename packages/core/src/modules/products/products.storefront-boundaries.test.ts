@@ -105,6 +105,38 @@ describe("storefront product query boundaries", () => {
         expect(listBody).not.toContain("variants:");
     });
 
+    it("lets feed reuse safe public filters with UCP lookup support", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+
+        const lookupHelperStart = source.indexOf("function buildProductLookupCondition");
+        const lookupHelperEnd = source.indexOf("\nfunction buildStorefrontProductConditions", lookupHelperStart);
+        const lookupHelper = source.slice(lookupHelperStart, lookupHelperEnd);
+        const listBody = getFunctionBody(source, "getStorefrontProducts");
+        const feedBody = getFunctionBody(source, "getStorefrontFeedProducts");
+
+        expect(source).toContain("const MAX_PUBLIC_LOOKUP_TOKENS = 100;");
+        expect(source).toContain("function parsePublicLookupTokens");
+        expect(source).toContain(".slice(\n        0,\n        MAX_PUBLIC_LOOKUP_TOKENS,");
+        expect(source).toContain("function buildCategoryLookupCondition(category: string): SQL");
+        expect(source).toContain("eq(categories.slug, category)");
+        expect(source).toContain("buildCategoryLookupCondition(category)");
+        expect(lookupHelper).toContain("inArray(products.id, lookupTokens)");
+        expect(lookupHelper).toContain("inArray(products.slug, lookupTokens)");
+        expect(lookupHelper).toContain("FROM \"product_variants\"");
+        expect(lookupHelper).toContain("inArray(productVariants.id, lookupTokens)");
+        expect(lookupHelper).toContain("inArray(productVariants.sku, lookupTokens)");
+        expect(listBody).toContain("const conditions = buildStorefrontProductConditions(params);");
+        expect(listBody).not.toContain("includeLookupHandles");
+        expect(listBody).not.toContain("includeVariantLookups");
+        expect(feedBody).toContain("const conditions = buildStorefrontProductConditions(params, {");
+        expect(feedBody).toContain("includeLookupHandles: true");
+        expect(feedBody).toContain("includeVariantLookups: true");
+        expect(feedBody).toContain("conditions.push(eq(products.excludeFromProductFeed, false));");
+    });
+
     it("keeps feed page rows/count and enrichment bulked by page product IDs", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,

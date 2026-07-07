@@ -38,6 +38,7 @@ Primary references for future changes:
 - `SEO-011`: remaining structured-data preview UX, live child-sitemap/dashboard refinement, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls where dashboard-owned data exists.
 - SEO dashboard live probes now cover `robots.txt`, the sitemap index, canonical product feed, and compatibility Facebook feed from the saved Store URL. The dashboard also has bounded aggregate product-feed diagnostics for emitted rows, skipped rows, reason counts, and safe product samples; latest live smoke showed `77` emitted rows, `0` skipped rows, `2` products to fix, `29` scanned products, and live proof checks OK.
 - Feed diagnostics: `/api/product-feed.xml` paginates the final flattened feed rows so skipped products and variant expansion cannot drop rows, while admin diagnostics explain which bounded catalog rows are skipped and why.
+- `UCP-001`: read-only catalog discovery is present without checkout/cart/order/payment advertisement; remaining UCP work is a P2/P1 roadmap item for dashboard control, D1-backed sessions, idempotency, signing/profile verification, and supported payment completion.
 - `ANALYTICS-003`: provider health/test-send UX, TikTok Events API/server-side adapter, and broader server-side attribution.
 - `OPS-005`/ops alerting: routed email/notification alerts for production ops signals.
 - Broad admin performance hardening remains ongoing under `PERF-003`; do not let it block a stable release unless a concrete route regresses or stalls.

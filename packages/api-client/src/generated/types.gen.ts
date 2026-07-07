@@ -4334,7 +4334,7 @@ export type GetApiV1ProductsData = {
     path?: never;
     query?: {
         /**
-         * Category slug filter
+         * Category slug or ID filter
          */
         category?: string;
         /**
@@ -4530,6 +4530,14 @@ export type GetApiV1ProductsFeedData = {
     path?: never;
     query?: {
         /**
+         * Category slug or ID filter
+         */
+        category?: string;
+        /**
+         * Search query
+         */
+        search?: string;
+        /**
          * Page number
          */
         page?: number;
@@ -4541,6 +4549,18 @@ export type GetApiV1ProductsFeedData = {
          * Sort order
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        /**
+         * Minimum price filter
+         */
+        minPrice?: number | null;
+        /**
+         * Maximum price filter
+         */
+        maxPrice?: number | null;
+        /**
+         * Comma-separated product IDs, product handles, variant IDs, or SKUs
+         */
+        ids?: string;
     };
     url: '/api/v1/products/feed';
 };

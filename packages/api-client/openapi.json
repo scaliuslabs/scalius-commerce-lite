@@ -14766,10 +14766,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Category slug filter"
+              "description": "Category slug or ID filter"
             },
             "required": false,
-            "description": "Category slug filter",
+            "description": "Category slug or ID filter",
             "name": "category",
             "in": "query"
           },
@@ -15372,6 +15372,26 @@
         "parameters": [
           {
             "schema": {
+              "type": "string",
+              "description": "Category slug or ID filter"
+            },
+            "required": false,
+            "description": "Category slug or ID filter",
+            "name": "category",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Search query"
+            },
+            "required": false,
+            "description": "Search query",
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "integer",
               "minimum": 1,
               "maximum": 1000,
@@ -15413,6 +15433,38 @@
             "required": false,
             "description": "Sort order",
             "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true,
+              "description": "Minimum price filter"
+            },
+            "required": false,
+            "description": "Minimum price filter",
+            "name": "minPrice",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true,
+              "description": "Maximum price filter"
+            },
+            "required": false,
+            "description": "Maximum price filter",
+            "name": "maxPrice",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated product IDs, product handles, variant IDs, or SKUs"
+            },
+            "required": false,
+            "description": "Comma-separated product IDs, product handles, variant IDs, or SKUs",
+            "name": "ids",
             "in": "query"
           }
         ],

@@ -125,11 +125,10 @@ export interface StorefrontProductFilterInput {
     attributeFilters?: { slug: string; value: string }[];
 }
 
-export interface StorefrontFeedProductFilterInput {
-    page?: number;
-    limit?: number;
-    sort?: StorefrontProductFilterInput["sort"];
-}
+export type StorefrontFeedProductFilterInput = Pick<
+    StorefrontProductFilterInput,
+    "category" | "search" | "page" | "limit" | "sort" | "minPrice" | "maxPrice" | "ids"
+>;
 
 export interface StorefrontFeedProductAttribute {
     name: string;
