@@ -1,0 +1,295 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import * as z from "zod/v4";
+
+export const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
+export const DEFAULT_AGENT_PROFILE_URL = "https://agent.scalius.com/.well-known/ucp";
+export const UCP_VERSION = "2026-04-08";
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+  "Content-Type": "application/json; charset=utf-8",
+} as const;
+
+const READ_ONLY_TOOL_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+} as const;
+
+const GENERIC_UPSTREAM_ERROR = {
+  ucp: { status: "error", version: UCP_VERSION },
+  messages: [
+    {
+      type: "error",
+      code: "temporarily_unavailable",
+      content: "Storefront catalog is temporarily unavailable.",
+      severity: "recoverable",
+    },
+  ],
+};
+
+export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+export interface StorefrontCatalogMcpOptions {
+  fetchImpl?: FetchLike;
+}
+
+type JsonRecord = Record<string, unknown>;
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: NO_STORE_HEADERS,
+  });
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function textFallback(body: JsonRecord): string {
+  return JSON.stringify(body, null, 2);
+}
+
+function toolResult(body: JsonRecord, isError = false): CallToolResult {
+  return {
+    structuredContent: body,
+    content: [{ type: "text", text: textFallback(body) }],
+    ...(isError ? { isError: true } : {}),
+  };
+}
+
+function genericToolError(code = "temporarily_unavailable"): CallToolResult {
+  return toolResult({
+    ...GENERIC_UPSTREAM_ERROR,
+    messages: GENERIC_UPSTREAM_ERROR.messages.map((message) => ({ ...message, code })),
+  }, true);
+}
+
+export function resolveStorefrontBaseUrl(env: Pick<Env, "STOREFRONT_URL">): string {
+  const configured = env.STOREFRONT_URL?.trim() || DEFAULT_STOREFRONT_URL;
+  const parsed = new URL(configured);
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("STOREFRONT_URL must be an absolute http(s) URL");
+  }
+
+  parsed.pathname = "/";
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString().replace(/\/$/, "");
+}
+
+export function resolveAgentProfileUrl(env: Pick<Env, "AGENT_PROFILE_URL">): string {
+  const configured = env.AGENT_PROFILE_URL?.trim();
+  if (!configured) return DEFAULT_AGENT_PROFILE_URL;
+
+  try {
+    const parsed = new URL(configured);
+    if (parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.hash) {
+      return parsed.toString();
+    }
+  } catch {
+    return DEFAULT_AGENT_PROFILE_URL;
+  }
+
+  return DEFAULT_AGENT_PROFILE_URL;
+}
+
+function ucpAgentHeader(env: Pick<Env, "AGENT_PROFILE_URL">): string {
+  return `profile="${resolveAgentProfileUrl(env)}"`;
+}
+
+function isUcpApplicationError(status: number, body: JsonRecord): boolean {
+  const ucp = isRecord(body.ucp) ? body.ucp : null;
+  return status >= 400 || ucp?.status === "error";
+}
+
+async function parseJsonResponse(response: Response): Promise<JsonRecord | null> {
+  try {
+    const body = await response.json();
+    return isRecord(body) ? body : { value: body };
+  } catch {
+    return null;
+  }
+}
+
+async function callStorefrontUcp(
+  env: Env,
+  path: string,
+  init: {
+    method: "GET" | "POST";
+    body?: JsonRecord;
+    signal?: AbortSignal;
+  },
+  fetchImpl: FetchLike,
+): Promise<CallToolResult> {
+  let url: URL;
+  try {
+    url = new URL(path, `${resolveStorefrontBaseUrl(env)}/`);
+  } catch {
+    return genericToolError("upstream_config_invalid");
+  }
+
+  try {
+    const headers = new Headers({
+      Accept: "application/json",
+      "UCP-Agent": ucpAgentHeader(env),
+    });
+    if (init.method === "POST") {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const response = await fetchImpl(url, {
+      method: init.method,
+      headers,
+      body: init.body ? JSON.stringify(init.body) : undefined,
+      signal: init.signal,
+    });
+    const body = await parseJsonResponse(response);
+    if (!body) {
+      return genericToolError("upstream_response_invalid");
+    }
+
+    return toolResult(body, isUcpApplicationError(response.status, body));
+  } catch {
+    return genericToolError();
+  }
+}
+
+export function createStorefrontCatalogMcpServer(
+  env: Env,
+  options: StorefrontCatalogMcpOptions = {},
+): McpServer {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const server = new McpServer({
+    name: env.AGENT_NAME?.trim() || "scalius-storefront-catalog-agent",
+    version: env.AGENT_VERSION?.trim() || "0.1.0",
+  });
+
+  server.registerTool(
+    "catalog_search",
+    {
+      title: "Catalog Search",
+      description: "Searches the public storefront catalog. Returns UCP catalog search JSON.",
+      inputSchema: {
+        query: z.string().trim().min(1).max(160).describe("Search text."),
+        limit: z.number().int().min(1).max(10).default(5).describe("Maximum products to return."),
+        cursor: z.string().trim().min(1).max(64).optional().describe("Opaque catalog page cursor."),
+        category: z.string().trim().min(1).max(120).optional().describe("Optional merchant category name or slug."),
+      },
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async ({ query, limit, cursor, category }, extra) => {
+      const body: JsonRecord = {
+        ucp: { version: UCP_VERSION },
+        query,
+        pagination: {
+          limit,
+          ...(cursor ? { cursor } : {}),
+        },
+        ...(category ? { filters: { categories: [category] } } : {}),
+      };
+
+      return callStorefrontUcp(env, "/ucp/catalog/search", {
+        method: "POST",
+        body,
+        signal: extra.signal,
+      }, fetchImpl);
+    },
+  );
+
+  server.registerTool(
+    "catalog_lookup",
+    {
+      title: "Catalog Lookup",
+      description: "Looks up public catalog products or variants by id, SKU, handle, or product URL. Returns UCP catalog lookup JSON.",
+      inputSchema: {
+        ids: z.array(z.string().trim().min(1).max(220)).min(1).max(10).describe("Product, variant, SKU, handle, or product URL identifiers."),
+      },
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async ({ ids }, extra) =>
+      callStorefrontUcp(env, "/ucp/catalog/lookup", {
+        method: "POST",
+        body: {
+          ucp: { version: UCP_VERSION },
+          ids,
+        },
+        signal: extra.signal,
+      }, fetchImpl),
+  );
+
+  server.registerTool(
+    "catalog_product",
+    {
+      title: "Catalog Product",
+      description: "Reads one public catalog product detail by product id, variant id, SKU, handle, or product URL. Returns UCP product JSON.",
+      inputSchema: {
+        id: z.string().trim().min(1).max(220).describe("Product, variant, SKU, handle, or product URL identifier."),
+        selected: z.array(z.object({
+          name: z.string().trim().min(1).max(80),
+          label: z.string().trim().min(1).max(120),
+        })).max(4).optional().describe("Optional selected variant options."),
+      },
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async ({ id, selected }, extra) =>
+      callStorefrontUcp(env, "/ucp/catalog/product", {
+        method: "POST",
+        body: {
+          ucp: { version: UCP_VERSION },
+          id,
+          ...(selected ? { selected } : {}),
+        },
+        signal: extra.signal,
+      }, fetchImpl),
+  );
+
+  server.registerTool(
+    "catalog_profile",
+    {
+      title: "Catalog Profile",
+      description: "Reads the public UCP catalog discovery profile from the storefront.",
+      inputSchema: {},
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (_args, extra) =>
+      callStorefrontUcp(env, "/.well-known/ucp", {
+        method: "GET",
+        signal: extra.signal,
+      }, fetchImpl),
+  );
+
+  return server;
+}
+
+export function createAgentWorker(options: StorefrontCatalogMcpOptions = {}) {
+  return {
+    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+      const url = new URL(request.url);
+
+      if (request.method === "GET" && url.pathname === "/health") {
+        return jsonResponse({
+          success: true,
+          status: "ok",
+          service: "scalius-agent",
+        });
+      }
+
+      if (url.pathname === "/mcp") {
+        const { createMcpHandler } = await import("agents/mcp");
+        const server = createStorefrontCatalogMcpServer(env, options);
+        return createMcpHandler(server, { route: "/mcp" })(request, env, ctx);
+      }
+
+      return jsonResponse({
+        success: false,
+        error: "not_found",
+      }, 404);
+    },
+  } satisfies ExportedHandler<Env>;
+}
+
+export default createAgentWorker();

@@ -10,6 +10,8 @@
     "apps/storefront/.env*",
     "apps/ops-monitor/.dev.vars",
     "apps/ops-monitor/.env*",
+    "apps/agent/.dev.vars",
+    "apps/agent/.env*",
     "pnpm-lock.yaml",
     "eslint.config.js",
     "scripts/copy-flags.mjs"

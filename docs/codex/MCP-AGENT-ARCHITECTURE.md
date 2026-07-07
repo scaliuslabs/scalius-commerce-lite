@@ -9,6 +9,7 @@ This is the release-safe target for Scalius MCP and assistant work. It replaces 
 Build one tracked Cloudflare workspace, `apps/agent`, for durable assistants and MCP endpoints. Keep the commerce API as the domain authority.
 
 - `apps/agent` owns Flue durable agent sessions, model orchestration, MCP protocol routes, and assistant event streams.
+- Stateless public catalog MCP may use Cloudflare's `createMcpHandler` directly before Flue state is needed.
 - `apps/api` remains the only authority for admin auth, RBAC, checkout, orders, payments, inventory, settings, feeds, SEO policy, and provider credentials.
 - `apps/admin-v2` owns visible admin page state: current route, dirty forms, selected rows, dialogs, validation errors, and navigation.
 - `apps/storefront` owns buyer-visible page context, local cart snapshot reads, same-origin cart validation, and navigation.
@@ -35,6 +36,8 @@ Excluded from the first release: RBAC writes, admin-user invites/deletes, perman
 Storefront MCP is public and catalog-first.
 
 - Use typed tools over the existing UCP/feed/catalog projection, not Code Mode.
+- The first implemented slice is `@scalius/agent` with `GET /health` and stateless `/mcp` catalog tools: `catalog_search`, `catalog_lookup`, `catalog_product`, and `catalog_profile`.
+- That first slice has no D1, R2, KV, queue, Durable Object, provider-secret, admin, customer, order, checkout, payment, fulfillment, support, or recovery bindings.
 - Expose catalog search, catalog lookup, product context, category reads, discovery policy reads, visible page context, same-origin navigation, and read-only cart snapshot validation.
 - Cart validation may explain stale cart issues using existing `PRODUCT_UNAVAILABLE`, `VARIANT_UNAVAILABLE`, `VARIANT_MISMATCH`, `VARIANT_REQUIRED`, `QUANTITY_UNAVAILABLE`, and `PRICE_CHANGED` repair semantics.
 
@@ -42,7 +45,7 @@ Do not expose checkout, cart mutation, order, payment, fulfillment, customer-pro
 
 ## UI Direction
 
-Use Flue for durable agent state and assistant workflows. Use `@flue/react` or `@flue/sdk` for client state integration.
+Use Flue for durable agent state and assistant workflows once the product needs sessions, task memory, or long-running flows. Do not add Flue state to the stateless public catalog MCP slice until a concrete workflow needs it. Use `@flue/react` or `@flue/sdk` for client state integration when durable UI workflows start.
 
 For visible chat/task UI, adapt AI Elements-style composable components into the existing admin/storefront design systems instead of inventing a full chat UI from scratch. `assistant-ui` remains a good fallback for polished primitives, but first release should avoid a large opinionated UI platform. AG-UI/CopilotKit is too broad for v1 unless future work needs deep bidirectional agent state beyond what the page-state bridges provide.
 
@@ -85,8 +88,10 @@ Before exposing any MCP endpoint publicly:
 Minimum local gates for the first tracked agent Worker:
 
 - `pnpm --filter @scalius/agent typecheck`
-- Flue Cloudflare build for the agent workspace
-- Generated Wrangler dry-run for the agent Worker
+- `pnpm --filter @scalius/agent lint`
+- `pnpm --filter @scalius/agent test`
+- `pnpm --filter @scalius/agent build`
+- `pnpm run deploy:agent -- --dry-run`
 - `pnpm check:env`
 - MCP Inspector or equivalent JSON-RPC smoke for both MCP route groups
 - Admin 401/403/RBAC/2FA/onboarding tests

@@ -8,6 +8,7 @@
  *   node scripts/deploy.mjs --only admin     # typecheck + build/deploy admin
  *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
  *   node scripts/deploy.mjs --only ops-monitor # typecheck + build/deploy ops monitor
+ *   node scripts/deploy.mjs --only agent     # typecheck + build/deploy agent
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
  *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
  *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
@@ -15,7 +16,7 @@
  * Runs in order (full deploy):
  *   1. turbo build       — builds all workspaces
  *   2. wrangler d1 migrations apply --remote  — applies pending migrations to D1
- *   3. wrangler deploy   — deploys workers (API, Admin, Storefront, Ops Monitor)
+ *   3. wrangler deploy   — deploys workers (API, Admin, Storefront, Ops Monitor, Agent)
  *
  * The database name is read from apps/api/wrangler.jsonc (API worker owns D1).
  */
@@ -30,17 +31,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
 const opsMonitorDir = resolve(root, "apps", "ops-monitor");
+const agentDir = resolve(root, "apps", "agent");
 const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
 const dryRun = args.includes("--dry-run");
 const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
-const deployTargets = ["api", "admin", "storefront", "ops-monitor"];
+const deployTargets = ["api", "admin", "storefront", "ops-monitor", "agent"];
 const appDirsByTarget = {
   api: "apps/api",
   admin: "apps/admin-v2",
   storefront: "apps/storefront",
   "ops-monitor": "apps/ops-monitor",
+  agent: "apps/agent",
 };
 const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
@@ -141,6 +144,8 @@ export function getBuildCommandForTarget(target) {
       return `${pnpm} --filter @scalius/storefront build`;
     case "ops-monitor":
       return `${pnpm} --filter @scalius/ops-monitor build`;
+    case "agent":
+      return `${pnpm} --filter @scalius/agent build`;
     default:
       throw new Error(`Unknown deploy target: ${target}`);
   }
@@ -164,6 +169,8 @@ export function getDeployCommandForTarget(target) {
       };
     case "ops-monitor":
       return { cmd: `${pnpm} exec wrangler deploy`, label: "Deploy Ops Monitor Worker", cwd: opsMonitorDir };
+    case "agent":
+      return { cmd: `${pnpm} exec wrangler deploy`, label: "Deploy Agent Worker", cwd: agentDir };
     default:
       throw new Error(`Unknown deploy target: ${target}`);
   }
@@ -175,6 +182,7 @@ function buildTarget(target) {
     admin: "Build Admin V2 workspace",
     storefront: "Build Storefront workspace",
     "ops-monitor": "Build Ops Monitor workspace",
+    agent: "Build Agent workspace",
   };
   run(getBuildCommandForTarget(target), labels[target]);
 }
