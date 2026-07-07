@@ -37,6 +37,12 @@ import {
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
+type StorefrontProductConditionOptions = {
+    includeLookupHandles?: boolean;
+    includeVariantLookups?: boolean;
+};
+
+const MAX_PUBLIC_LOOKUP_TOKENS = 100;
 
 type StorefrontProductListRow = {
     id: string;
@@ -120,7 +126,57 @@ function extractFeatures(description: string | null): string[] {
     return features;
 }
 
-function buildStorefrontProductConditions(params: StorefrontProductFilterInput): SQL[] {
+function parsePublicLookupTokens(ids: string | undefined): string[] {
+    if (!ids) return [];
+    return Array.from(new Set(ids.split(",").map((id) => id.trim()).filter(Boolean))).slice(
+        0,
+        MAX_PUBLIC_LOOKUP_TOKENS,
+    );
+}
+
+function buildCategoryLookupCondition(category: string): SQL {
+    return sql`(
+        ${products.categoryId} = ${category}
+        OR EXISTS (
+            SELECT 1
+            FROM "categories"
+            WHERE ${eq(categories.id, products.categoryId)}
+              AND ${eq(categories.slug, category)}
+              AND ${isNull(categories.deletedAt)}
+        )
+    )`;
+}
+
+function buildProductLookupCondition(
+    lookupTokens: string[],
+    options: StorefrontProductConditionOptions = {},
+): SQL {
+    const lookupConditions: SQL[] = [inArray(products.id, lookupTokens)];
+
+    if (options.includeLookupHandles) {
+        lookupConditions.push(inArray(products.slug, lookupTokens));
+    }
+
+    if (options.includeVariantLookups) {
+        lookupConditions.push(sql`EXISTS (
+            SELECT 1
+            FROM "product_variants"
+            WHERE ${eq(productVariants.productId, products.id)}
+              AND ${isNull(productVariants.deletedAt)}
+              AND ${or(
+            inArray(productVariants.id, lookupTokens),
+            inArray(productVariants.sku, lookupTokens),
+        )}
+        )`);
+    }
+
+    return or(...lookupConditions) ?? sql`0 = 1`;
+}
+
+function buildStorefrontProductConditions(
+    params: StorefrontProductFilterInput,
+    options: StorefrontProductConditionOptions = {},
+): SQL[] {
     const {
         category,
         search,
@@ -133,7 +189,7 @@ function buildStorefrontProductConditions(params: StorefrontProductFilterInput):
 
     const conditions: (SQL | undefined)[] = publicProductBaseConditions();
 
-    if (category) conditions.push(eq(products.categoryId, category));
+    if (category) conditions.push(buildCategoryLookupCondition(category));
     if (search) {
         const cond = ftsMatch("products_fts", "products", search);
         conditions.push(cond ?? sql`0 = 1`);
@@ -148,8 +204,10 @@ function buildStorefrontProductConditions(params: StorefrontProductFilterInput):
         conditions.push(sql`(${products.discountPercentage} IS NULL OR ${products.discountPercentage} = 0) AND (${products.discountAmount} IS NULL OR ${products.discountAmount} = 0)`);
     }
     if (ids) {
-        const productIds = ids.split(",").filter(Boolean);
-        if (productIds.length > 0) conditions.push(inArray(products.id, productIds));
+        const lookupTokens = parsePublicLookupTokens(ids);
+        if (lookupTokens.length > 0) {
+            conditions.push(buildProductLookupCondition(lookupTokens, options));
+        }
     }
 
     return conditions.filter((condition): condition is SQL => Boolean(condition));
@@ -453,7 +511,10 @@ export async function getStorefrontFeedProducts(
         limit = 100,
         sort = "newest",
     } = params;
-    const conditions = buildStorefrontProductConditions({});
+    const conditions = buildStorefrontProductConditions(params, {
+        includeLookupHandles: true,
+        includeVariantLookups: true,
+    });
     conditions.push(eq(products.excludeFromProductFeed, false));
     const orderBy = getStorefrontProductOrderBy(sort);
     const offset = (page - 1) * limit;

@@ -26,7 +26,7 @@ import {
 } from "../utils/public-search-query";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const PRODUCT_FEED_QUERY_KEYS = new Set(["page", "limit", "sort"]);
+const PRODUCT_FEED_QUERY_KEYS = new Set(["page", "limit", "sort", "category", "search", "minPrice", "maxPrice", "ids"]);
 const PRODUCT_SITEMAP_QUERY_KEYS = new Set(["page", "limit"]);
 const PRODUCT_FEED_SORT_VALUES = new Set([
   "newest",
@@ -50,17 +50,26 @@ function hasOptionalIntegerParamInRange(
   return numericValue >= min && numericValue <= max;
 }
 
+function hasOptionalFiniteNumberParam(params: URLSearchParams, key: string): boolean {
+  if (!params.has(key)) return true;
+  const value = params.get(key)?.trim() ?? "";
+  return value !== "" && Number.isFinite(Number(value));
+}
+
 function isStorefrontFeedProductsCacheable(url: string): boolean {
   const params = new URL(url).searchParams;
   for (const [key, value] of params.entries()) {
-    if (!PRODUCT_FEED_QUERY_KEYS.has(key) || value.trim() === "") return false;
+    if (!PRODUCT_FEED_QUERY_KEYS.has(key)) return false;
+    if (value.trim() === "" && key !== "search") return false;
   }
 
   const sort = params.get("sort");
   return (
     (sort === null || PRODUCT_FEED_SORT_VALUES.has(sort)) &&
     hasOptionalIntegerParamInRange(params, "page", 1, 1000) &&
-    hasOptionalIntegerParamInRange(params, "limit", 1, 100)
+    hasOptionalIntegerParamInRange(params, "limit", 1, 100) &&
+    hasOptionalFiniteNumberParam(params, "minPrice") &&
+    hasOptionalFiniteNumberParam(params, "maxPrice")
   );
 }
 
@@ -126,7 +135,7 @@ app.use(
 );
 
 const productFilterSchema = z.object({
-  category: z.string().optional().openapi({ description: "Category slug filter" }),
+  category: z.string().optional().openapi({ description: "Category slug or ID filter" }),
   search: z.string().optional().openapi({ description: "Search query" }),
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
@@ -149,6 +158,8 @@ const productSearchSchema = z.object({
 });
 
 const productFeedSchema = z.object({
+  category: z.string().optional().openapi({ description: "Category slug or ID filter" }),
+  search: z.string().optional().openapi({ description: "Search query" }),
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(100).openapi({ description: "Items per page" }),
   sort: z
@@ -156,6 +167,11 @@ const productFeedSchema = z.object({
     .optional()
     .default("newest")
     .openapi({ description: "Sort order" }),
+  minPrice: z.coerce.number().optional().openapi({ description: "Minimum price filter" }),
+  maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
+  ids: z.string().optional().openapi({
+    description: "Comma-separated product IDs, product handles, variant IDs, or SKUs",
+  }),
 });
 
 const productSitemapSchema = z.object({
@@ -355,7 +371,8 @@ const feedProductsRoute = createRoute({
 app.openapi(feedProductsRoute, async (c) => {
   const db = c.get("db");
   const params = c.req.valid("query");
-  const result = await getStorefrontFeedProducts(db, params);
+  const search = normalizePublicListingSearchParam(params.search);
+  const result = await getStorefrontFeedProducts(db, { ...params, search });
   return ok(c, result);
 });
 

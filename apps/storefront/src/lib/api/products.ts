@@ -129,7 +129,7 @@ export interface ProductListOptions {
   maxPrice?: number;
   freeDelivery?: boolean;
   hasDiscount?: boolean;
-  ids?: string[];
+  ids?: string[] | string;
   [key: string]: string | number | boolean | string[] | undefined;
 }
 

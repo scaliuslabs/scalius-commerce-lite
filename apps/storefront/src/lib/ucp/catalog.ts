@@ -1,0 +1,1035 @@
+import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
+import { getFeedProducts, getProductBySlug } from "@/lib/api/products";
+import { getLayoutData, type CurrencyData } from "@/lib/api/storefront";
+import type { Product, ProductVariant } from "@/lib/api/types";
+import {
+  availableQuantityForVariant,
+  isVariantAvailable,
+  resolveBuyerVariants,
+} from "@/lib/product-sellable-variants";
+import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
+import { normalizeCanonicalPath } from "@scalius/shared/seo-canonical";
+import {
+  DEFAULT_PRODUCT_OPTION_LABELS,
+  normalizeProductOptionLabel,
+} from "@scalius/shared/product-options";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+
+export const UCP_VERSION = "2026-04-08";
+export const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
+export const UCP_CATALOG_SEARCH_CAPABILITY =
+  "dev.ucp.shopping.catalog.search";
+export const UCP_CATALOG_LOOKUP_CAPABILITY =
+  "dev.ucp.shopping.catalog.lookup";
+
+const DEFAULT_SEARCH_LIMIT = 10;
+const MAX_SEARCH_LIMIT = 50;
+const MAX_LOOKUP_IDS = 25;
+const GID_PREFIX = "gid://scalius/";
+
+type UcpStatus = "success" | "error";
+type UcpMessageType = "info" | "warning" | "error";
+type VariantMatchMode = "featured" | "exact";
+
+interface UcpMessage {
+  type: UcpMessageType;
+  code: string;
+  content: string;
+  path?: string;
+}
+
+interface UcpPrice {
+  amount: number;
+  currency: string;
+}
+
+interface UcpVariant {
+  id: string;
+  title: string;
+  description: { plain?: string; html?: string };
+  price: UcpPrice;
+  list_price?: UcpPrice;
+  sku?: string;
+  barcodes?: Array<{ type: string; value: string }>;
+  handle?: string;
+  url?: string;
+  availability?: {
+    available: boolean;
+    status: "in_stock" | "out_of_stock";
+  };
+  options?: Array<{ name: string; label: string }>;
+  media?: Array<{ type: "image"; url: string; alt_text?: string }>;
+  metadata?: Record<string, unknown>;
+  inputs?: Array<{ id: string; match?: VariantMatchMode }>;
+}
+
+interface UcpProduct {
+  id: string;
+  title: string;
+  description: { plain?: string; html?: string };
+  url?: string;
+  handle?: string;
+  price_range: { min: UcpPrice; max: UcpPrice };
+  list_price_range?: { min: UcpPrice; max: UcpPrice };
+  variants: UcpVariant[];
+  options?: Array<{ name: string; values: Array<{ label: string }> }>;
+  categories?: Array<{ value: string; taxonomy?: "merchant" }>;
+  media?: Array<{ type: "image"; url: string; alt_text?: string }>;
+  tags?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+interface UcpCatalogContext {
+  baseUrl: string;
+  currency: Required<Pick<CurrencyData, "code" | "decimalPlaces">>;
+}
+
+interface LookupInput {
+  original: string;
+  normalized: string;
+}
+
+interface SearchRequestBody {
+  ucp?: { version?: unknown };
+  query?: unknown;
+  filters?: unknown;
+  pagination?: unknown;
+}
+
+interface LookupRequestBody {
+  ucp?: { version?: unknown };
+  ids?: unknown;
+}
+
+interface ProductRequestBody {
+  ucp?: { version?: unknown };
+  id?: unknown;
+  selected?: unknown;
+}
+
+function ucpMetadata(status: UcpStatus, capabilities?: string[]) {
+  return {
+    version: UCP_VERSION,
+    status,
+    ...(capabilities?.length
+      ? {
+          capabilities: Object.fromEntries(
+            capabilities.map((capability) => [
+              capability,
+              [buildCapability(capability)],
+            ]),
+          ),
+        }
+      : {}),
+  };
+}
+
+function buildCapability(name: string) {
+  const suffix = name === UCP_CATALOG_SEARCH_CAPABILITY
+    ? "catalog/search"
+    : "catalog/lookup";
+
+  return {
+    version: UCP_VERSION,
+    spec: `https://ucp.dev/${UCP_VERSION}/specification/${suffix}/`,
+    schema: `https://ucp.dev/${UCP_VERSION}/schemas/shopping/catalog.json`,
+  };
+}
+
+export function buildUcpProfile(baseUrl: string) {
+  const endpoint = `${baseUrl}/ucp`;
+  return {
+    ucp: {
+      version: UCP_VERSION,
+      services: {
+        [UCP_SHOPPING_SERVICE]: [
+          {
+            transport: "rest",
+            endpoint,
+            spec: `https://ucp.dev/${UCP_VERSION}/services/shopping/rest.openapi.json`,
+            schema: `https://ucp.dev/${UCP_VERSION}/schemas/shopping/catalog.json`,
+          },
+        ],
+      },
+      capabilities: {
+        [UCP_CATALOG_SEARCH_CAPABILITY]: [
+          buildCapability(UCP_CATALOG_SEARCH_CAPABILITY),
+        ],
+        [UCP_CATALOG_LOOKUP_CAPABILITY]: [
+          buildCapability(UCP_CATALOG_LOOKUP_CAPABILITY),
+        ],
+      },
+      supported_versions: {
+        [UCP_VERSION]: `${baseUrl}/.well-known/ucp`,
+      },
+    },
+  };
+}
+
+export function getUcpBaseUrl(): string {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl.startsWith("https://")) {
+    throw new Error("UCP discovery requires an absolute HTTPS storefront origin");
+  }
+  return baseUrl;
+}
+
+export function ucpJsonResponse(
+  body: unknown,
+  status = 200,
+  extraHeaders: HeadersInit = {},
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers":
+        "Content-Type,UCP-Agent,Request-Id,Idempotency-Key,Content-Digest,Signature,Signature-Input",
+      ...extraHeaders,
+    },
+  });
+}
+
+export function ucpOptionsResponse(): Response {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers":
+        "Content-Type,UCP-Agent,Request-Id,Idempotency-Key,Content-Digest,Signature,Signature-Input",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
+}
+
+export function ucpErrorResponse(
+  status: number,
+  code: string,
+  content: string,
+  path?: string,
+): Response {
+  return ucpJsonResponse(
+    {
+      ucp: ucpMetadata("error"),
+      messages: [{ type: "error", code, content, ...(path ? { path } : {}) }],
+    },
+    status,
+    { "Cache-Control": "private, no-cache, no-store, must-revalidate" },
+  );
+}
+
+export function ucpUnavailableResponse(message: string): Response {
+  return ucpJsonResponse(
+    {
+      ucp: ucpMetadata("error"),
+      messages: [{ type: "error", code: "temporarily_unavailable", content: message }],
+    },
+    503,
+    {
+      "Cache-Control": "private, no-cache, no-store, must-revalidate",
+      "Retry-After": "30",
+    },
+  );
+}
+
+export function ucpProfileUnavailableResponse(): Response {
+  return xmlDataUnavailableResponse("UCP profile is temporarily unavailable");
+}
+
+export async function getUcpCatalogContext(): Promise<UcpCatalogContext | null> {
+  let baseUrl: string;
+  try {
+    baseUrl = getUcpBaseUrl();
+  } catch {
+    return null;
+  }
+
+  const layout = await getLayoutData();
+  if (!layout) {
+    return null;
+  }
+
+  const code = (layout.currency?.code ?? DEFAULT_CURRENCY.code).toUpperCase();
+  const decimalPlaces = Number.isInteger(layout.currency?.decimalPlaces)
+    ? layout.currency!.decimalPlaces!
+    : DEFAULT_CURRENCY.decimalPlaces;
+
+  return { baseUrl, currency: { code, decimalPlaces } };
+}
+
+export function validateUcpRequest(
+  request: Request,
+  body: { ucp?: { version?: unknown } },
+): UcpMessage[] {
+  const messages: UcpMessage[] = [];
+  const requestedVersion = body.ucp?.version;
+  if (typeof requestedVersion === "string" && requestedVersion !== UCP_VERSION) {
+    messages.push({
+      type: "error",
+      code: "version_unsupported",
+      path: "$.ucp.version",
+      content: `Unsupported UCP version. This storefront currently serves ${UCP_VERSION}.`,
+    });
+  }
+
+  const ucpAgent = request.headers.get("UCP-Agent")?.trim();
+  if (!ucpAgent) {
+    messages.push({
+      type: "error",
+      code: "invalid_profile_url",
+      content: "UCP-Agent header is required and must use profile=\"https://...\" structured field syntax.",
+    });
+  } else {
+    const profile = /^profile="([^"]+)"$/i.exec(ucpAgent)?.[1];
+    try {
+      const parsed = profile ? new URL(profile) : null;
+      if (!parsed || parsed.protocol !== "https:") {
+        messages.push({
+          type: "error",
+          code: "invalid_profile_url",
+          content: "UCP-Agent must use profile=\"https://...\" structured field syntax.",
+        });
+      }
+    } catch {
+      messages.push({
+        type: "error",
+        code: "invalid_profile_url",
+        content: "UCP-Agent profile URL is malformed.",
+      });
+    }
+  }
+
+  return messages;
+}
+
+export async function parseJsonBody<T>(request: Request): Promise<T | null> {
+  try {
+    const body = await request.json();
+    return body && typeof body === "object" && !Array.isArray(body)
+      ? (body as T)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text.replace(
+    /&(#\d+|#x[\da-f]+|amp|lt|gt|quot|apos|nbsp);/gi,
+    (match, entity: string) => {
+      const normalized = entity.toLowerCase();
+      if (normalized === "amp") return "&";
+      if (normalized === "lt") return "<";
+      if (normalized === "gt") return ">";
+      if (normalized === "quot") return '"';
+      if (normalized === "apos") return "'";
+      if (normalized === "nbsp") return " ";
+
+      const codePoint = normalized.startsWith("#x")
+        ? Number.parseInt(normalized.slice(2), 16)
+        : Number.parseInt(normalized.slice(1), 10);
+      if (!Number.isFinite(codePoint)) return match;
+
+      try {
+        return String.fromCodePoint(codePoint);
+      } catch {
+        return match;
+      }
+    },
+  );
+}
+
+function stripHtml(text: string | null | undefined): string {
+  if (!text) return "";
+  return decodeHtmlEntities(
+    text
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<\/(?:p|div|li|h[1-6]|tr|td|th|section|article)>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/\s+([.,;:!?])/g, "$1")
+      .trim(),
+  );
+}
+
+function productDescription(product: Product) {
+  const plain = stripHtml(product.description) || product.name;
+  const description: { plain?: string; html?: string } = { plain };
+  if (product.description && /<[^>]+>/.test(product.description)) {
+    description.html = product.description;
+  }
+  return description;
+}
+
+function toMinorUnits(amount: number, currency: UcpCatalogContext["currency"]): number {
+  const multiplier = 10 ** currency.decimalPlaces;
+  return Math.max(0, Math.round(amount * multiplier));
+}
+
+function price(amount: number, context: UcpCatalogContext): UcpPrice {
+  return {
+    amount: toMinorUnits(amount, context.currency),
+    currency: context.currency.code,
+  };
+}
+
+function productGid(id: string): string {
+  return `${GID_PREFIX}product/${id}`;
+}
+
+function variantGid(id: string): string {
+  return `${GID_PREFIX}product-variant/${id}`;
+}
+
+function normalizeLookupValue(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  if (trimmed.startsWith(`${GID_PREFIX}product-variant/`)) {
+    return trimmed.slice(`${GID_PREFIX}product-variant/`.length);
+  }
+  if (trimmed.startsWith(`${GID_PREFIX}variant/`)) {
+    return trimmed.slice(`${GID_PREFIX}variant/`.length);
+  }
+  if (trimmed.startsWith(`${GID_PREFIX}product/`)) {
+    return trimmed.slice(`${GID_PREFIX}product/`.length);
+  }
+  return trimmed;
+}
+
+function uniqueStrings(values: string[], max = MAX_LOOKUP_IDS): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).slice(0, max);
+}
+
+function normalizedOption(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function getProductOptionLabel(product: Product, axis: "option1" | "option2"): string {
+  return normalizeProductOptionLabel(
+    axis === "option1"
+      ? product.variantOption1Label
+      : product.variantOption2Label,
+    axis === "option1"
+      ? DEFAULT_PRODUCT_OPTION_LABELS.option1
+      : DEFAULT_PRODUCT_OPTION_LABELS.option2,
+  );
+}
+
+function selectedOptions(product: Product, variant: ProductVariant) {
+  return [
+    { name: getProductOptionLabel(product, "option1"), label: normalizedOption(variant.size) },
+    { name: getProductOptionLabel(product, "option2"), label: normalizedOption(variant.color) },
+  ].flatMap((option) => option.label ? [{ name: option.name, label: option.label }] : []);
+}
+
+function productOptions(product: Product, variants: ProductVariant[]) {
+  const option1Values = uniqueStrings(variants.map((variant) => variant.size ?? ""));
+  const option2Values = uniqueStrings(variants.map((variant) => variant.color ?? ""));
+  const options = [];
+
+  if (option1Values.length > 0) {
+    options.push({
+      name: getProductOptionLabel(product, "option1"),
+      values: option1Values.map((label) => ({ label })),
+    });
+  }
+  if (option2Values.length > 0) {
+    options.push({
+      name: getProductOptionLabel(product, "option2"),
+      values: option2Values.map((label) => ({ label })),
+    });
+  }
+
+  return options.length > 0 ? options : undefined;
+}
+
+function productUrl(product: Product, baseUrl: string): string {
+  const path = normalizeCanonicalPath(product.canonicalPath) ?? `/products/${product.slug}`;
+  return new URL(path, `${baseUrl}/`).toString();
+}
+
+function variantUrl(product: Product, variant: ProductVariant, baseUrl: string): string {
+  const url = new URL(productUrl(product, baseUrl));
+  const option1 = normalizedOption(variant.size);
+  const option2 = normalizedOption(variant.color);
+  if (option1) url.searchParams.set("size", option1);
+  if (option2) url.searchParams.set("color", option2);
+  return url.toString();
+}
+
+function primaryMedia(product: Product, baseUrl: string) {
+  const rawUrl = product.imageUrl?.trim();
+  if (!rawUrl) return undefined;
+
+  try {
+    const parsed = new URL(rawUrl, `${baseUrl}/`);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return undefined;
+    }
+    return [{
+      type: "image" as const,
+      url: parsed.toString(),
+      ...(product.imageAlt ? { alt_text: product.imageAlt } : {}),
+    }];
+  } catch {
+    return undefined;
+  }
+}
+
+function supportedBarcode(variant: ProductVariant) {
+  const value = variant.barcode?.trim();
+  if (!value) return undefined;
+
+  const type = variant.barcodeType?.toLowerCase();
+  if (type === "upc") return [{ type: "UPC", value }];
+  if (type === "ean13") return [{ type: "EAN", value }];
+  if (type === "isbn") return [{ type: "ISBN", value }];
+  if (type === "gtin") return [{ type: "GTIN", value }];
+  return undefined;
+}
+
+function variantPrices(
+  product: Product,
+  variant: ProductVariant,
+  context: UcpCatalogContext,
+) {
+  const basePrice = variant.price ?? product.price;
+  const finalPrice = getVariantDiscountedPrice(
+    variant.price,
+    product.price,
+    variant.discountType,
+    variant.discountPercentage,
+    variant.discountAmount,
+    product.discountType,
+    product.discountPercentage,
+    product.discountAmount,
+  );
+
+  return {
+    listPrice: price(basePrice, context),
+    finalPrice: price(finalPrice, context),
+    hasDiscount: finalPrice < basePrice,
+  };
+}
+
+function variantTitle(product: Product, variant: ProductVariant): string {
+  const options = selectedOptions(product, variant);
+  if (options.length === 0) return product.name;
+  return `${product.name} - ${options.map((option) => `${option.name}: ${option.label}`).join(" / ")}`;
+}
+
+function mapVariant(
+  product: Product,
+  variant: ProductVariant,
+  context: UcpCatalogContext,
+  inputs?: Array<{ id: string; match?: VariantMatchMode }>,
+): UcpVariant {
+  const pricing = variantPrices(product, variant, context);
+  const media = primaryMedia(product, context.baseUrl);
+  const available = product.isActive !== false && isVariantAvailable(variant);
+  const quantity = availableQuantityForVariant(variant);
+
+  return {
+    id: variantGid(variant.id),
+    title: variantTitle(product, variant),
+    description: productDescription(product),
+    price: pricing.finalPrice,
+    ...(pricing.hasDiscount ? { list_price: pricing.listPrice } : {}),
+    ...(variant.sku ? { sku: variant.sku } : {}),
+    ...(supportedBarcode(variant) ? { barcodes: supportedBarcode(variant) } : {}),
+    handle: product.slug,
+    url: variantUrl(product, variant, context.baseUrl),
+    availability: {
+      available,
+      status: available ? "in_stock" : "out_of_stock",
+    },
+    ...(selectedOptions(product, variant).length > 0
+      ? { options: selectedOptions(product, variant) }
+      : {}),
+    ...(media ? { media } : {}),
+    metadata: {
+      product_id: product.id,
+      variant_id: variant.id,
+      ...(quantity === null ? {} : { available_quantity: quantity }),
+    },
+    ...(inputs?.length ? { inputs } : {}),
+  };
+}
+
+function priceRange(variants: UcpVariant[]) {
+  const amounts = variants.map((variant) => variant.price.amount);
+  const currency = variants[0]!.price.currency;
+  return {
+    min: { amount: Math.min(...amounts), currency },
+    max: { amount: Math.max(...amounts), currency },
+  };
+}
+
+function listPriceRange(variants: UcpVariant[]) {
+  const listPrices = variants
+    .map((variant) => variant.list_price)
+    .filter((value): value is UcpPrice => Boolean(value));
+  if (listPrices.length === 0) return undefined;
+
+  const currency = listPrices[0]!.currency;
+  const amounts = listPrices.map((value) => value.amount);
+  return {
+    min: { amount: Math.min(...amounts), currency },
+    max: { amount: Math.max(...amounts), currency },
+  };
+}
+
+function productTags(product: Product): string[] | undefined {
+  const tags = [
+    ...(product.freeDelivery ? ["free_delivery"] : []),
+    ...(product.attributes ?? []).map((attribute) => `${attribute.name}:${attribute.value}`),
+  ];
+  return tags.length > 0 ? tags : undefined;
+}
+
+function mapProduct(
+  product: Product,
+  context: UcpCatalogContext,
+  inputMatches?: Map<string, Array<{ id: string; match?: VariantMatchMode }>>,
+): UcpProduct | null {
+  if (product.isActive === false) return null;
+
+  const resolution = resolveBuyerVariants(product.variants ?? []);
+  if (resolution.variants.length === 0) return null;
+
+  const variants = resolution.variants.map((variant, index) => {
+    const inputs = inputMatches?.get(variant.id);
+    const featuredInputs = index === 0 ? inputMatches?.get(product.id) : undefined;
+    return mapVariant(
+      product,
+      variant,
+      context,
+      [
+        ...(inputs ?? []),
+        ...(featuredInputs ?? []),
+      ],
+    );
+  });
+
+  const media = primaryMedia(product, context.baseUrl);
+  return {
+    id: productGid(product.id),
+    title: product.name,
+    description: productDescription(product),
+    url: productUrl(product, context.baseUrl),
+    handle: product.slug,
+    price_range: priceRange(variants),
+    ...(listPriceRange(variants) ? { list_price_range: listPriceRange(variants) } : {}),
+    variants,
+    ...(productOptions(product, resolution.variants) ? { options: productOptions(product, resolution.variants) } : {}),
+    ...(product.category?.name
+      ? { categories: [{ value: product.category.name, taxonomy: "merchant" as const }] }
+      : {}),
+    ...(media ? { media } : {}),
+    ...(productTags(product) ? { tags: productTags(product) } : {}),
+    metadata: {
+      product_id: product.id,
+      available_for_sale: product.availableForSale !== false,
+    },
+  };
+}
+
+function parsePagination(value: unknown) {
+  const pagination = value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+  const requestedLimit = typeof pagination.limit === "number"
+    ? pagination.limit
+    : Number(pagination.limit ?? DEFAULT_SEARCH_LIMIT);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(MAX_SEARCH_LIMIT, Math.max(1, Math.floor(requestedLimit)))
+    : DEFAULT_SEARCH_LIMIT;
+  const cursor = typeof pagination.cursor === "string" ? pagination.cursor : "";
+  const page = cursor.startsWith("page:")
+    ? Math.max(1, Number.parseInt(cursor.slice("page:".length), 10) || 1)
+    : 1;
+
+  return { page, limit };
+}
+
+function filtersObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function minorUnitsToMajor(value: unknown, context: UcpCatalogContext): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return value / (10 ** context.currency.decimalPlaces);
+}
+
+function buildSearchOptions(body: SearchRequestBody, context: UcpCatalogContext) {
+  const filters = filtersObject(body.filters);
+  const priceFilter = filtersObject(filters.price);
+  const categories = Array.isArray(filters.categories)
+    ? filters.categories.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
+  const { page, limit } = parsePagination(body.pagination);
+  const query = typeof body.query === "string" ? body.query.trim() : "";
+  const minPrice = minorUnitsToMajor(priceFilter.min, context);
+  const maxPrice = minorUnitsToMajor(priceFilter.max, context);
+
+  return {
+    page,
+    limit,
+    sort: "newest" as const,
+    ...(query ? { search: query } : {}),
+    ...(categories[0] ? { category: categories[0] } : {}),
+    ...(minPrice !== undefined ? { minPrice } : {}),
+    ...(maxPrice !== undefined ? { maxPrice } : {}),
+  };
+}
+
+function hasRecognizedSearchInput(body: SearchRequestBody): boolean {
+  const filters = filtersObject(body.filters);
+  const priceFilter = filtersObject(filters.price);
+  const hasPriceFilter = typeof priceFilter.min === "number" || typeof priceFilter.max === "number";
+  const hasCategoryFilter = Array.isArray(filters.categories) && filters.categories.length > 0;
+  return Boolean(
+    (typeof body.query === "string" && body.query.trim()) ||
+    hasCategoryFilter ||
+    hasPriceFilter,
+  );
+}
+
+export async function searchCatalog(
+  body: SearchRequestBody,
+  context: UcpCatalogContext,
+) {
+  if (!hasRecognizedSearchInput(body)) {
+    return {
+      status: 400,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_SEARCH_CAPABILITY]),
+        products: [],
+        messages: [
+          {
+            type: "error",
+            code: "request_invalid",
+            content: "Catalog search requires a query, category filter, price filter, or extension input.",
+          },
+        ],
+      },
+    };
+  }
+
+  const options = buildSearchOptions(body, context);
+  const result = await getFeedProducts(options);
+  if (!result) {
+    return {
+      status: 503,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_SEARCH_CAPABILITY]),
+        products: [],
+        messages: [
+          {
+            type: "error",
+            code: "temporarily_unavailable",
+            content: "Catalog search is temporarily unavailable.",
+          },
+        ],
+      },
+    };
+  }
+
+  const products = result.data
+    .map((product) => mapProduct(product, context))
+    .filter((product): product is UcpProduct => Boolean(product));
+  const hasNextPage = options.page < result.pagination.totalPages;
+
+  return {
+    status: 200,
+    body: {
+      ucp: ucpMetadata("success", [UCP_CATALOG_SEARCH_CAPABILITY]),
+      products,
+      pagination: {
+        has_next_page: hasNextPage,
+        ...(hasNextPage ? { cursor: `page:${options.page + 1}` } : {}),
+        total_count: result.pagination.total,
+      },
+    },
+  };
+}
+
+function parseProductSlugFromUrl(value: string, baseUrl: string): string | null {
+  try {
+    const parsed = new URL(value, `${baseUrl}/`);
+    const base = new URL(baseUrl);
+    if (parsed.origin !== base.origin) return null;
+    const match = /^\/products\/([^/?#]+)\/?$/.exec(parsed.pathname);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function lookupInputs(ids: unknown, context: UcpCatalogContext): LookupInput[] {
+  if (!Array.isArray(ids)) return [];
+
+  return uniqueStrings(ids.filter((id): id is string => typeof id === "string"))
+    .map((original) => ({
+      original,
+      normalized: parseProductSlugFromUrl(original, context.baseUrl) ?? normalizeLookupValue(original),
+    }))
+    .filter((input) => input.normalized.length > 0);
+}
+
+async function loadProductsByInputs(inputs: LookupInput[]): Promise<Product[]> {
+  if (inputs.length === 0) return [];
+
+  const result = await getFeedProducts({
+    page: 1,
+    limit: Math.max(inputs.length, DEFAULT_SEARCH_LIMIT),
+    ids: inputs.map((input) => input.normalized).join(","),
+    sort: "newest",
+  });
+  const productsById = new Map<string, Product>();
+  for (const product of result?.data ?? []) {
+    productsById.set(product.id, product);
+  }
+
+  const slugs = inputs
+    .map((input) => input.normalized)
+    .filter((value) => !productsById.has(value) && /^[a-z0-9][a-z0-9-]*$/i.test(value));
+  await Promise.all(slugs.map(async (slug) => {
+    const detail = await getProductBySlug(slug);
+    if (!detail) return;
+    const primaryImage = detail.images.find((image) => image.isPrimary) ?? detail.images[0];
+    productsById.set(detail.product.id, {
+      ...detail.product,
+      imageUrl: detail.product.imageUrl ?? primaryImage?.url ?? null,
+      imageAlt: detail.product.imageAlt ?? primaryImage?.alt ?? null,
+      category: detail.product.category ?? detail.category ?? undefined,
+      variants: detail.variants,
+    });
+  }));
+
+  return [...productsById.values()];
+}
+
+function buildInputMatches(products: Product[], inputs: LookupInput[]) {
+  const matches = new Map<string, Map<string, Array<{ id: string; match?: VariantMatchMode }>>>();
+
+  for (const product of products) {
+    const productMatches = new Map<string, Array<{ id: string; match?: VariantMatchMode }>>();
+    const variants = product.variants ?? [];
+    for (const input of inputs) {
+      if (
+        input.normalized === product.id ||
+        input.normalized === product.slug ||
+        input.original === productGid(product.id)
+      ) {
+        productMatches.set(product.id, [
+          ...(productMatches.get(product.id) ?? []),
+          { id: input.original, match: "featured" },
+        ]);
+        continue;
+      }
+
+      const variant = variants.find((candidate) => (
+        input.normalized === candidate.id ||
+        input.normalized === candidate.sku ||
+        input.original === variantGid(candidate.id)
+      ));
+      if (variant) {
+        productMatches.set(variant.id, [
+          ...(productMatches.get(variant.id) ?? []),
+          { id: input.original, match: "exact" },
+        ]);
+      }
+    }
+    matches.set(product.id, productMatches);
+  }
+
+  return matches;
+}
+
+export async function lookupCatalog(
+  body: LookupRequestBody,
+  context: UcpCatalogContext,
+) {
+  const inputs = lookupInputs(body.ids, context);
+  if (inputs.length === 0) {
+    return {
+      status: 400,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_LOOKUP_CAPABILITY]),
+        products: [],
+        messages: [
+          {
+            type: "error",
+            code: "request_invalid",
+            path: "$.ids",
+            content: "Catalog lookup requires at least one product, variant, SKU, handle, or product URL identifier.",
+          },
+        ],
+      },
+    };
+  }
+
+  const products = await loadProductsByInputs(inputs);
+  const inputMatches = buildInputMatches(products, inputs);
+  const mappedProducts = products
+    .map((product) => mapProduct(product, context, inputMatches.get(product.id)))
+    .filter((product): product is UcpProduct => Boolean(product))
+    .map((product) => ({
+      ...product,
+      variants: product.variants.filter((variant) => variant.inputs?.length),
+    }))
+    .filter((product) => product.variants.length > 0);
+  const resolvedInputIds = new Set(
+    mappedProducts.flatMap((product) => (
+      product.variants.flatMap((variant) => variant.inputs?.map((input) => input.id) ?? [])
+    )),
+  );
+
+  return {
+    status: 200,
+    body: {
+      ucp: ucpMetadata("success", [UCP_CATALOG_LOOKUP_CAPABILITY]),
+      products: mappedProducts,
+      ...(resolvedInputIds.size < inputs.length
+        ? {
+            messages: [
+              {
+                type: "info",
+                code: "partial_lookup",
+                content: "Some requested identifiers did not resolve to buyer-visible products.",
+              },
+            ],
+          }
+        : {}),
+    },
+  };
+}
+
+function selectedOptionFilters(body: ProductRequestBody): Array<{ name: string; label: string }> {
+  return Array.isArray(body.selected)
+    ? body.selected.flatMap((value) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+        const option = value as Record<string, unknown>;
+        return typeof option.name === "string" && typeof option.label === "string"
+          ? [{ name: option.name, label: option.label }]
+          : [];
+      })
+    : [];
+}
+
+function orderSelectedVariantFirst(product: UcpProduct, selected: Array<{ name: string; label: string }>): UcpProduct {
+  if (selected.length === 0) return product;
+
+  const selectedVariantIndex = product.variants.findIndex((variant) => (
+    selected.every((selection) => (
+      variant.options?.some((option) => (
+        option.name.toLowerCase() === selection.name.toLowerCase() &&
+        option.label.toLowerCase() === selection.label.toLowerCase()
+      ))
+    ))
+  ));
+
+  if (selectedVariantIndex <= 0) return product;
+  return {
+    ...product,
+    variants: [
+      product.variants[selectedVariantIndex]!,
+      ...product.variants.slice(0, selectedVariantIndex),
+      ...product.variants.slice(selectedVariantIndex + 1),
+    ],
+  };
+}
+
+export async function getCatalogProduct(
+  body: ProductRequestBody,
+  context: UcpCatalogContext,
+) {
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  if (!id) {
+    return {
+      status: 400,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_LOOKUP_CAPABILITY]),
+        messages: [
+          {
+            type: "error",
+            code: "request_invalid",
+            path: "$.id",
+            content: "Catalog product lookup requires an id.",
+          },
+        ],
+      },
+    };
+  }
+
+  const inputs = lookupInputs([id], context);
+  const products = await loadProductsByInputs(inputs);
+  const sourceProduct = products[0];
+  const product = sourceProduct ? mapProduct(sourceProduct, context) : null;
+  if (!product) {
+    return {
+      status: 404,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_LOOKUP_CAPABILITY]),
+        messages: [
+          {
+            type: "error",
+            code: "not_found",
+            content: "Product was not found or is not currently buyer-visible.",
+          },
+        ],
+      },
+    };
+  }
+
+  return {
+    status: 200,
+    body: {
+      ucp: ucpMetadata("success", [UCP_CATALOG_LOOKUP_CAPABILITY]),
+      product: orderSelectedVariantFirst(
+        orderRequestedVariantFirst(product, sourceProduct, inputs[0]),
+        selectedOptionFilters(body),
+      ),
+    },
+  };
+}
+
+function orderRequestedVariantFirst(
+  product: UcpProduct,
+  sourceProduct: Product,
+  input: LookupInput | undefined,
+): UcpProduct {
+  if (!input) return product;
+
+  const requestedVariant = (sourceProduct.variants ?? []).find((variant) => (
+    input.normalized === variant.id ||
+    input.normalized === variant.sku ||
+    input.original === variantGid(variant.id)
+  ));
+  if (!requestedVariant) return product;
+
+  const requestedGid = variantGid(requestedVariant.id);
+  const index = product.variants.findIndex((variant) => variant.id === requestedGid);
+  if (index <= 0) return product;
+
+  return {
+    ...product,
+    variants: [
+      product.variants[index]!,
+      ...product.variants.slice(0, index),
+      ...product.variants.slice(index + 1),
+    ],
+  };
+}
