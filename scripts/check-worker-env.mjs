@@ -48,6 +48,12 @@ const apps = [
     envFiles: ["apps/ops-monitor/src/env.d.ts"],
     extraEnv: [],
   },
+  {
+    name: "agent",
+    configs: ["apps/agent/wrangler.jsonc"],
+    envFiles: ["apps/agent/src/env.d.ts"],
+    extraEnv: [],
+  },
 ];
 
 function readText(path) {

@@ -91,15 +91,19 @@ describe("deploy API readiness sampling", () => {
 });
 
 describe("deploy target wiring", () => {
-  it("accepts ops-monitor as a deploy target", () => {
+  it("accepts non-commerce worker deploy targets", () => {
     expect(parseOnlyTarget(["--only", "ops-monitor"])).toEqual({
       ok: true,
       target: "ops-monitor",
     });
+    expect(parseOnlyTarget(["--only", "agent"])).toEqual({
+      ok: true,
+      target: "agent",
+    });
 
     expect(parseOnlyTarget(["--only", "unknown"])).toMatchObject({
       ok: false,
-      message: expect.stringContaining("api, admin, storefront, ops-monitor"),
+      message: expect.stringContaining("api, admin, storefront, ops-monitor, agent"),
     });
   });
 
@@ -112,5 +116,16 @@ describe("deploy target wiring", () => {
     expect(command.cmd).toContain("exec wrangler deploy");
     expect(command.label).toBe("Deploy Ops Monitor Worker");
     expect(command.cwd).toMatch(/apps\/ops-monitor$/);
+  });
+
+  it("builds and deploys agent from its app workspace", () => {
+    expect(getBuildCommandForTarget("agent")).toContain(
+      "--filter @scalius/agent build",
+    );
+
+    const command = getDeployCommandForTarget("agent");
+    expect(command.cmd).toContain("exec wrangler deploy");
+    expect(command.label).toBe("Deploy Agent Worker");
+    expect(command.cwd).toMatch(/apps\/agent$/);
   });
 });

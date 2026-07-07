@@ -79,6 +79,18 @@ pnpm ops:check --queues --samples 1 --timeout-ms 20000
 
 Required evidence before closing OPS-005/OPS-008 monitoring scope: deployed ops-monitor Worker version, ops-monitor cron schedule (`*/2 * * * *`), no-public-route confirmation, KV binding for streak/cooldown state, Cloudflare Email Service `ALERT_EMAIL` binding, every normal/DLQ queue binding, Wrangler tail or Workers Logs showing scheduled `/readyz` checks and `Queue.metrics()` summaries, redacted structured log examples, and routed Cloudflare Email Service proof. Keep this distinct from the API scheduled-maintenance cron (`*/15 * * * *`). The monitor logs `alertCount`, `routedAlertCount`, and `deliveryFailureCount`; do not treat logs-only alert events as routed notification success. Logs-only monitoring is acceptable as an intermediate slice, but the tracker must keep alert-channel verification open until a verified sender/destination test notification is recorded without secrets or inbox screenshots.
 
+Agent MCP verification:
+
+```bash
+pnpm --filter @scalius/agent typecheck
+pnpm --filter @scalius/agent lint
+pnpm --filter @scalius/agent test
+pnpm --filter @scalius/agent build
+pnpm run deploy:agent -- --dry-run
+```
+
+The first public agent Worker is intentionally stateless and catalog-only. It must expose only `GET /health` and `/mcp` read tools backed by storefront UCP catalog/profile endpoints, and it must not gain D1, R2, KV, queue, Durable Object, provider-secret, checkout, cart mutation, order, payment, fulfillment, customer, support, or recovery bindings without a new architecture note and focused tests. After a real deploy, smoke `/health` plus an MCP JSON-RPC initialize/tools-list request against the deployed Worker URL and keep the tool list catalog-only.
+
 `pnpm ops:check --queues` fails when expected API queue producers/consumers are
 missing. Extra queue producers are warning-level evidence in logs/JSON, so a
 stale Worker such as an old test deployment should be cleaned up without

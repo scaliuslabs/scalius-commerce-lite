@@ -17,6 +17,8 @@ describe("turbo cache inputs", () => {
         "apps/storefront/.env*",
         "apps/ops-monitor/.dev.vars",
         "apps/ops-monitor/.env*",
+        "apps/agent/.dev.vars",
+        "apps/agent/.env*",
       ]),
     );
   });

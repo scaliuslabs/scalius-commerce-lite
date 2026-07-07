@@ -1,0 +1,24 @@
+{
+  "name": "@scalius/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "agents": "^0.16.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "@scalius/tsconfig": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9",
+    "wrangler": "4.107.1"
+  }
+}
