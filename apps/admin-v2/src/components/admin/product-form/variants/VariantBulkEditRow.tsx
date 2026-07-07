@@ -2,7 +2,13 @@
 import { Input } from "@/components/ui/input";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { cn } from "@scalius/shared/utils";
-import type { ProductVariant, VariantBulkEditField, VariantBulkEditValue } from "./types";
+import {
+    normalizeVariantOptionLabels,
+    type ProductVariant,
+    type VariantBulkEditField,
+    type VariantBulkEditValue,
+    type VariantOptionLabels,
+} from "./types";
 
 interface VariantBulkEditRowProps {
     variant: ProductVariant;
@@ -18,9 +24,11 @@ interface VariantBulkEditRowProps {
     onChange: (variantId: string, field: VariantBulkEditField, value: VariantBulkEditValue) => void;
     isNew?: boolean;
     onRemoveNew?: () => void;
+    optionLabels?: VariantOptionLabels;
 }
 
-export function VariantBulkEditRow({ variant, draftUpdate, onChange, isNew, onRemoveNew }: VariantBulkEditRowProps) {
+export function VariantBulkEditRow({ variant, draftUpdate, onChange, isNew, onRemoveNew, optionLabels }: VariantBulkEditRowProps) {
+    const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
     const getValue = (field: keyof NonNullable<VariantBulkEditRowProps['draftUpdate']>) => {
         const val = draftUpdate?.[field] !== undefined ? draftUpdate[field] : (variant[field as keyof ProductVariant] ?? "");
         return val === null ? "" : (val as string | number);
@@ -46,6 +54,7 @@ export function VariantBulkEditRow({ variant, draftUpdate, onChange, isNew, onRe
             <TableCell className={cn(cellClass, "min-w-[90px]")}>
                 <Input
                     placeholder="—"
+                    aria-label={normalizedOptionLabels.option1}
                     className={cellInputClass}
                     value={getValue('size') || ''}
                     onChange={(e) => onChange(variant.id, 'size', e.target.value || null)}
@@ -56,6 +65,7 @@ export function VariantBulkEditRow({ variant, draftUpdate, onChange, isNew, onRe
             <TableCell className={cn(cellClass, "min-w-[90px]")}>
                 <Input
                     placeholder="—"
+                    aria-label={normalizedOptionLabels.option2}
                     className={cellInputClass}
                     value={getValue('color') || ''}
                     onChange={(e) => onChange(variant.id, 'color', e.target.value || null)}
@@ -91,7 +101,7 @@ export function VariantBulkEditRow({ variant, draftUpdate, onChange, isNew, onRe
             <TableCell className={cn(cellClass, "min-w-[110px] px-1.5")}>
                 <StockLimitSegment
                     trackInventory={trackInventory}
-                    ariaLabel={`Stock limit for option ${variant.sku}`}
+                    ariaLabel={`Stock limit for ${normalizedOptionLabels.option1}/${normalizedOptionLabels.option2} option ${variant.sku}`}
                     onChange={(nextValue) => onChange(variant.id, 'trackInventory', nextValue)}
                 />
             </TableCell>

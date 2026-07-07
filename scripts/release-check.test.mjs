@@ -277,6 +277,21 @@ function monitoringApiConfig() {
   };
 }
 
+function logsOnlyOpsMonitorConfig() {
+  return {
+    name: "scalius-ops-monitor",
+    observability: { enabled: true },
+    kv_namespaces: [{ binding: "OPS_MONITOR_STATE", id: "state-id" }],
+    send_email: [{ name: "ALERT_EMAIL" }],
+    triggers: { crons: ["*/2 * * * *"] },
+    vars: {
+      ALERT_EMAIL_FROM: "",
+      ALERT_EMAIL_TO: "",
+      ALERT_EMAIL_SUBJECT_PREFIX: "[Scalius ops]",
+    },
+  };
+}
+
 function verifiedTracker() {
   return [
     "| ID | Severity | Status | Owner | Summary | Primary Verification |",
@@ -909,6 +924,103 @@ describe("release-check discovery evaluators", () => {
 });
 
 describe("runReleaseCheck", () => {
+  it("surfaces logs-only ops-monitor warnings and actions without failing release output", async () => {
+    const disabledDiscoveryPolicy = {
+      sitemap: {
+        enabled: true,
+        staticPages: false,
+        products: false,
+        categories: false,
+        collections: false,
+        pages: false,
+      },
+      feeds: {
+        productCatalogEnabled: false,
+      },
+      robots: {
+        advertiseSitemap: false,
+      },
+      structuredData: {
+        products: false,
+      },
+    };
+    const fetchImpl = releaseFetch(async (url) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
+        if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse(disabledDiscoveryPolicy);
+      }
+
+      if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+        return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "storefront.example.test") {
+        if (parsed.pathname === "/health") return textResponse("ok");
+        if (parsed.pathname === "/" || parsed.pathname === "/search") {
+          return textResponse("<!doctype html><html></html>");
+        }
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxtWithoutSitemap());
+        if (parsed.pathname === "/sitemap.xml") return discoveryResponse(emptySitemapXml());
+        if (parsed.pathname === "/.well-known/ucp") return ucpProfileResponse();
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    const logger = {
+      log: vi.fn(),
+      warn: vi.fn(),
+    };
+
+    const result = await runReleaseCheck(parseReleaseCheckArgs([
+      "--skip-wrangler",
+      "--api-base-url", "https://api.example.test",
+      "--storefront-url", "https://storefront.example.test",
+      "--dashboard-url", "https://dashboard.example.test",
+    ]), {
+      apiConfig: monitoringApiConfig(),
+      opsMonitorConfig: logsOnlyOpsMonitorConfig(),
+      fetchImpl,
+      execFileImpl: vi.fn(),
+      rootDir: "/repo",
+      readFileImpl: () => verifiedTracker(),
+      fileExistsImpl: () => true,
+      logger,
+    });
+
+    const warning = "Ops-monitor alert channel: ALERT_EMAIL_TO is empty.";
+    const action =
+      "Ops-monitor alert channel: Set ALERT_EMAIL_TO to one or more verified Cloudflare Email Service destinations.";
+
+    expect(result.status).toBe("passed");
+    expect(result.checks.apiOps.opsMonitorAlertChannel).toMatchObject({
+      status: "warning",
+      alertMode: "logs_only",
+      routedEmailReady: false,
+      warnings: expect.arrayContaining([
+        "Routed Cloudflare Email alerts are not configured; ops-monitor remains logs-only.",
+        "ALERT_EMAIL_TO is empty.",
+      ]),
+      requiredActions: expect.arrayContaining([
+        "Set ALERT_EMAIL_TO to one or more verified Cloudflare Email Service destinations.",
+      ]),
+    });
+    expect(result.checks.apiOps.warnings).toContain(warning);
+    expect(result.checks.apiOps.requiredActions).toContain(action);
+    expect(result.warnings).toContain(warning);
+    expect(result.requiredActions).toContain(action);
+    expect(JSON.parse(JSON.stringify(result))).toMatchObject({
+      warnings: expect.arrayContaining([warning]),
+      requiredActions: expect.arrayContaining([action]),
+    });
+    expect(logger.warn).toHaveBeenCalledWith(`WARN API ops: ${warning}`);
+    expect(logger.warn).toHaveBeenCalledWith(`ACTION API ops: ${action}`);
+    expect(logger.log).toHaveBeenCalledWith("Release readiness check passed.");
+  });
+
   it("runs local gates and live read-only checks after transient API readiness recovers", async () => {
     const feedRequests = [];
     const ucpRequests = [];

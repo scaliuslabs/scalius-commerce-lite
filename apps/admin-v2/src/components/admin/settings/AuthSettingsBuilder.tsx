@@ -84,6 +84,7 @@ interface AuthAndSmsSettings {
     smsProvider: string;
     smsProviderConfigured: boolean;
     smsProviderError: string;
+    smsReadinessError: string;
     smsnetbdApiKey: string;
     smsnetbdSenderId: string;
     bdbulksmsToken: string;
@@ -109,6 +110,7 @@ const defaultValues: AuthAndSmsSettings = {
     smsProvider: "",
     smsProviderConfigured: false,
     smsProviderError: "",
+    smsReadinessError: "",
     smsnetbdApiKey: "",
     smsnetbdSenderId: "",
     bdbulksmsToken: "",
@@ -119,6 +121,9 @@ const defaultValues: AuthAndSmsSettings = {
     gennetBaseUrl: "",
     gennetSid: "",
 };
+
+const SMS_READINESS_LOAD_ERROR =
+    "SMS readiness could not be checked. Retry or review the SMS provider settings before enabling SMS OTP.";
 
 async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
     const result: Partial<AuthAndSmsSettings> = {};
@@ -151,6 +156,7 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
         result.smsProvider = (smsData.activeProvider as string) || "";
         result.smsProviderConfigured = smsData.activeProviderConfigured === true;
         result.smsProviderError = (smsData.activeProviderError as string) || "";
+        result.smsReadinessError = "";
         result.smsnetbdApiKey = (smsData.smsnetbdApiKey as string) || "";
         result.smsnetbdSenderId = (smsData.smsnetbdSenderId as string) || "";
         result.bdbulksmsToken = (smsData.bdbulksmsToken as string) || "";
@@ -161,7 +167,7 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
         result.gennetBaseUrl = (smsData.gennetBaseUrl as string) || "";
         result.gennetSid = (smsData.gennetSid as string) || "";
     } catch {
-        // SMS settings fetch failure is non-fatal
+        result.smsReadinessError = SMS_READINESS_LOAD_ERROR;
     }
 
     return result;
@@ -205,6 +211,10 @@ function getSmsProviderIssue(values: AuthAndSmsSettings): string | null {
     }
 
     return null;
+}
+
+function getSmsReadinessIssue(values: AuthAndSmsSettings): string | null {
+    return values.smsReadinessError || null;
 }
 
 function getWhatsAppProviderIssue(values: AuthAndSmsSettings): string | null {
@@ -255,6 +265,8 @@ async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
     }
 
     if (customerAuthPolicyUsesSmsProvider(customerAuthPolicy)) {
+        const smsReadinessIssue = getSmsReadinessIssue(v);
+        if (smsReadinessIssue) throw new Error(smsReadinessIssue);
         const smsIssue = getSmsProviderIssue(v);
         if (smsIssue) throw new Error(smsIssue);
         await updateSmsSettings({
@@ -317,10 +329,14 @@ export default function AuthSettingsBuilder() {
     const emailProviderIssue = customerAuthPolicyUsesEmailProvider(customerAuthPolicy)
         ? getEmailProviderIssue(values)
         : null;
+    const smsReadinessIssue = customerAuthPolicyUsesSmsProvider(customerAuthPolicy)
+        ? getSmsReadinessIssue(values)
+        : null;
     const smsProviderIssue = customerAuthPolicyUsesSmsProvider(customerAuthPolicy)
         ? getSmsProviderIssue(values)
         : null;
     const smsProviderServerIssue = customerAuthPolicyUsesSmsProvider(customerAuthPolicy) &&
+        !smsReadinessIssue &&
         !smsProviderIssue &&
         !values.smsProviderConfigured &&
         values.smsProviderError &&
@@ -330,12 +346,12 @@ export default function AuthSettingsBuilder() {
     const whatsAppProviderIssue = customerAuthPolicyUsesWhatsAppProvider(customerAuthPolicy)
         ? getWhatsAppProviderIssue(values)
         : null;
-    const providerReadinessIssue = emailProviderIssue ?? smsProviderIssue ?? smsProviderServerIssue ?? whatsAppProviderIssue;
+    const providerReadinessIssue = emailProviderIssue ?? smsReadinessIssue ?? smsProviderIssue ?? smsProviderServerIssue ?? whatsAppProviderIssue;
     const emailConfigured = customerAuthPolicyUsesEmailProvider(customerAuthPolicy)
         ? !emailProviderIssue
         : false;
     const smsConfigured = customerAuthPolicyUsesSmsProvider(customerAuthPolicy)
-        ? !smsProviderIssue && !smsProviderServerIssue
+        ? !smsReadinessIssue && !smsProviderIssue && !smsProviderServerIssue
         : false;
     const whatsAppConfigured = customerAuthPolicyUsesWhatsAppProvider(customerAuthPolicy)
         ? !whatsAppProviderIssue
@@ -344,7 +360,7 @@ export default function AuthSettingsBuilder() {
     const getChannelReadinessIssue = (channel: CustomerAuthOtpChannel): string | null => {
         if (!customerAuthPolicy.otpChannels.includes(channel)) return null;
         if (channel === "email") return emailProviderIssue;
-        if (channel === "sms") return smsProviderIssue ?? smsProviderServerIssue;
+        if (channel === "sms") return smsReadinessIssue ?? smsProviderIssue ?? smsProviderServerIssue;
         if (channel === "whatsapp") return whatsAppProviderIssue;
         return null;
     };
@@ -704,11 +720,11 @@ export default function AuthSettingsBuilder() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {(smsProviderIssue || smsProviderServerIssue) && (
+                        {(smsReadinessIssue || smsProviderIssue || smsProviderServerIssue) && (
                             <Alert variant="destructive">
                                 <AlertTriangle className="h-4 w-4" />
                                 <AlertTitle>SMS OTP is not ready</AlertTitle>
-                                <AlertDescription>{formatProviderReadinessIssue(smsProviderIssue ?? smsProviderServerIssue)}</AlertDescription>
+                                <AlertDescription>{formatProviderReadinessIssue(smsReadinessIssue ?? smsProviderIssue ?? smsProviderServerIssue)}</AlertDescription>
                             </Alert>
                         )}
 

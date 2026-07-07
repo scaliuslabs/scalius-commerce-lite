@@ -21,6 +21,9 @@ const VARIANT_ROW_SOURCE = fileURLToPath(
 const VARIANT_STATS_SOURCE = fileURLToPath(
   new URL("./VariantStatsDisplay.tsx", import.meta.url),
 );
+const VARIANT_SORT_MODAL_SOURCE = fileURLToPath(
+  new URL("./VariantSortModal.tsx", import.meta.url),
+);
 const VARIANT_FORM_ROW_SOURCE = fileURLToPath(
   new URL("./VariantFormRow.tsx", import.meta.url),
 );
@@ -115,11 +118,11 @@ describe("VariantManager product mode boundaries", () => {
     expect(toolbarSource).toContain("Search options...");
     expect(toolbarSource).toContain("onClick={onAddVariant}");
     expect(toolbarSource).toContain("Spreadsheet");
-    expect(toolbarSource).toContain("Option 1");
-    expect(toolbarSource).toContain("Option 2");
+    expect(toolbarSource).toContain("normalizedOptionLabels.option1");
+    expect(toolbarSource).toContain("normalizedOptionLabels.option2");
     expect(tableSource).toContain("No options yet");
-    expect(tableSource).toContain("Option 1");
-    expect(tableSource).toContain("Option 2");
+    expect(tableSource).toContain("normalizedOptionLabels.option1");
+    expect(tableSource).toContain("normalizedOptionLabels.option2");
     expect(tableSource).toContain("VariantMobileCard");
     expect(tableSource).toContain("const showMobileCards");
     expect(tableSource).toContain("md:hidden");
@@ -156,7 +159,48 @@ describe("VariantManager product mode boundaries", () => {
     expect(productFormSource).toContain("manage its product SKU or add customer options");
     expect(productFormSource).not.toContain("size/color options");
     expect(productImagesSource).toContain('Product Options → "Reorder"');
+    expect(productImagesSource).toContain("normalizeVariantOptionLabels");
+    expect(productImagesSource).toContain("variantImageAxisLabel");
     expect(productImagesSource).not.toContain('"Sort Options"');
+  });
+
+  it("threads merchant option labels through visible variant operations", () => {
+    const managerSource = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
+    const toolbarSource = readFileSync(VARIANT_TOOLBAR_SOURCE, "utf8");
+    const tableSource = readFileSync(VARIANT_TABLE_SOURCE, "utf8");
+    const rowSource = readFileSync(VARIANT_ROW_SOURCE, "utf8");
+    const formRowSource = readFileSync(VARIANT_FORM_ROW_SOURCE, "utf8");
+    const bulkEditSource = readFileSync(VARIANT_BULK_EDIT_ROW_SOURCE, "utf8");
+    const generatorSource = readFileSync(BULK_GENERATOR_SOURCE, "utf8");
+    const previewSource = readFileSync(BULK_PREVIEW_SOURCE, "utf8");
+    const sortModalSource = readFileSync(VARIANT_SORT_MODAL_SOURCE, "utf8");
+
+    expect(managerSource).toContain("optionLabels?: VariantOptionLabels");
+    expect(managerSource).toContain("normalizeVariantOptionLabels(optionLabels)");
+    expect(managerSource).toContain("optionLabels={normalizedOptionLabels}");
+    expect(toolbarSource).toContain("optionLabels?: VariantOptionLabels");
+    expect(toolbarSource).toContain("label: normalizedOptionLabels.option1");
+    expect(toolbarSource).toContain("label: normalizedOptionLabels.option2");
+    expect(tableSource).toContain("optionLabels?: VariantOptionLabels");
+    expect(tableSource).toContain("optionLabels={normalizedOptionLabels}");
+    expect(rowSource).toContain("optionLabels?: VariantOptionLabels");
+    expect(rowSource).toContain("{normalizedOptionLabels.option1}: {variant.size}");
+    expect(rowSource).toContain("{normalizedOptionLabels.option2}: {variant.color}");
+    expect(formRowSource).toContain("optionLabels?: VariantOptionLabels");
+    expect(formRowSource).toContain("label={normalizedOptionLabels.option1}");
+    expect(formRowSource).toContain("label={normalizedOptionLabels.option2}");
+    expect(bulkEditSource).toContain("optionLabels?: VariantOptionLabels");
+    expect(bulkEditSource).toContain("aria-label={normalizedOptionLabels.option1}");
+    expect(bulkEditSource).toContain("aria-label={normalizedOptionLabels.option2}");
+    expect(generatorSource).toContain("optionLabels?: VariantOptionLabels");
+    expect(generatorSource).toContain("label={`${normalizedOptionLabels.option1} values`}");
+    expect(generatorSource).toContain("label={`${normalizedOptionLabels.option2} values`}");
+    expect(previewSource).toContain("optionLabels?: VariantOptionLabels");
+    expect(previewSource).toContain("{normalizedOptionLabels.option1}");
+    expect(previewSource).toContain("{normalizedOptionLabels.option2}");
+    expect(sortModalSource).toContain("optionLabels?: VariantOptionLabels");
+    expect(sortModalSource).toContain("{normalizedOptionLabels.option1}");
+    expect(sortModalSource).toContain("{normalizedOptionLabels.option2}");
   });
 
   it("saves dirty simple SKU changes before entering first option setup", () => {
@@ -218,13 +262,13 @@ describe("VariantManager product mode boundaries", () => {
 
     expect(formRowSource).toContain('name="trackInventory"');
     expect(formRowSource).toContain("StockLimitField");
-    expect(formRowSource).toContain("Stock limit for this option");
+    expect(formRowSource).toContain("Stock limit for this ${optionLabels.option1}/${optionLabels.option2} option");
     expect(formRowSource).toContain("Track stock");
     expect(formRowSource).toContain("No stock limit");
     expect(formRowSource).not.toContain("No limit");
     expect(formRowSource).toContain("Math.max(0");
     expect(bulkEditSource).toContain("'trackInventory'");
-    expect(bulkEditSource).toContain("Stock limit for option");
+    expect(bulkEditSource).toContain("Stock limit for ${normalizedOptionLabels.option1}/${normalizedOptionLabels.option2} option");
     expect(bulkEditSource).toContain("Track stock");
     expect(bulkEditSource).toContain("No stock limit");
     expect(bulkEditSource).not.toContain("No limit");
@@ -258,10 +302,10 @@ describe("VariantManager product mode boundaries", () => {
     expect(formRowSource).toContain('aria-label="Track stock"');
     expect(formRowSource).toContain("rounded-[4px] bg-background px-2 text-[11px] shadow-none");
     expect(formRowSource).toContain("border border-border/60");
-    expect(formRowSource).toContain('label="Option 1"');
+    expect(formRowSource).toContain("label={normalizedOptionLabels.option1}");
     expect(formRowSource).toContain('hint="choice"');
     expect(formRowSource).toContain('placeholder="2KG, XL, 100ml"');
-    expect(formRowSource).toContain('label="Option 2"');
+    expect(formRowSource).toContain("label={normalizedOptionLabels.option2}");
     expect(formRowSource).toContain('placeholder="Red, Blue, Pro"');
     expect(formRowSource).not.toContain('hint="size"');
     expect(formRowSource).not.toContain('hint="color"');

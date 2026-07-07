@@ -36,12 +36,17 @@ import {
   getVariantSortOrder,
   updateVariantSortOrder,
 } from "@/lib/api-functions/products";
+import {
+  normalizeVariantOptionLabels,
+  type VariantOptionLabels,
+} from "./types";
 
 interface VariantSortModalProps {
   productId: string;
   isOpen: boolean;
   onClose: () => void;
   onSortUpdated: () => void;
+  optionLabels?: VariantOptionLabels;
 }
 
 interface SortItem {
@@ -99,7 +104,9 @@ export function VariantSortModal({
   isOpen,
   onClose,
   onSortUpdated,
+  optionLabels,
 }: VariantSortModalProps) {
+  const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
   const [colors, setColors] = useState<SortItem[]>([]);
   const [sizes, setSizes] = useState<SortItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -178,8 +185,8 @@ export function VariantSortModal({
         <DialogHeader>
           <DialogTitle>Reorder Variant Values</DialogTitle>
           <DialogDescription>
-            Drag and drop to reorder Option 1 and Option 2 values. This affects
-            the display order in the storefront.
+            Drag and drop to reorder {normalizedOptionLabels.option1} and{" "}
+            {normalizedOptionLabels.option2} values.
           </DialogDescription>
         </DialogHeader>
 
@@ -194,10 +201,12 @@ export function VariantSortModal({
           >
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="colors">
-                Option 2 {colors.length > 0 && `(${colors.length})`}
+                {normalizedOptionLabels.option2}{" "}
+                {colors.length > 0 && `(${colors.length})`}
               </TabsTrigger>
               <TabsTrigger value="sizes">
-                Option 1 {sizes.length > 0 && `(${sizes.length})`}
+                {normalizedOptionLabels.option1}{" "}
+                {sizes.length > 0 && `(${sizes.length})`}
               </TabsTrigger>
             </TabsList>
 
@@ -207,7 +216,7 @@ export function VariantSortModal({
             >
               {colors.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No Option 2 values found
+                  No {normalizedOptionLabels.option2} values found
                 </div>
               ) : (
                 <DndContext
@@ -240,7 +249,7 @@ export function VariantSortModal({
             >
               {sizes.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No Option 1 values found
+                  No {normalizedOptionLabels.option1} values found
                 </div>
               ) : (
                 <DndContext

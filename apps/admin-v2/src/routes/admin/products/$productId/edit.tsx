@@ -13,7 +13,10 @@ import {
   DEFAULT_PRODUCT_CONDITION,
   type Category,
 } from "~/components/admin/product-form/types";
-import type { ProductVariant as LocalProductVariant } from "~/components/admin/product-form/variants/types";
+import type {
+  ProductVariant as LocalProductVariant,
+  VariantOptionLabels,
+} from "~/components/admin/product-form/variants/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 
@@ -114,6 +117,10 @@ function EditProductPage() {
       updatedAt: new Date(v.updatedAt),
       deletedAt: v.deletedAt ? new Date(v.deletedAt) : null,
     }));
+  const variantOptionLabels: VariantOptionLabels = {
+    option1: defaultValues.variantOption1Label,
+    option2: defaultValues.variantOption2Label,
+  };
 
   return (
     <div className="container max-w-7xl space-y-6 py-4 pb-8">
@@ -131,6 +138,7 @@ function EditProductPage() {
               productSlug={product.slug}
               productName={product.name}
               variants={formattedVariants}
+              optionLabels={variantOptionLabels}
             />
           </Suspense>
         ) : (

@@ -17,7 +17,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { ProductVariant } from "./types";
+import {
+  normalizeVariantOptionLabels,
+  type ProductVariant,
+  type VariantOptionLabels,
+} from "./types";
 import {
   formatDate,
   getDiscountDisplay,
@@ -37,6 +41,7 @@ interface VariantDisplayRowProps {
   onDuplicate: (id: string) => void;
   isAnyRowEditing: boolean;
   productName?: string;
+  optionLabels?: VariantOptionLabels;
 }
 
 function printBarcodeLabel(variant: ProductVariant, productName: string) {
@@ -87,8 +92,10 @@ export function VariantDisplayRow({
   onDuplicate,
   isAnyRowEditing,
   productName = "",
+  optionLabels,
 }: VariantDisplayRowProps) {
   const { symbol } = useCurrency();
+  const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
   const inventoryTracked = isInventoryTracked(variant);
   const isSimpleDefaultSku = variant.isDefault === true;
   const isProtectedDefaultSku = variant.isDefault === true;
@@ -141,8 +148,16 @@ export function VariantDisplayRow({
         <div className="flex flex-wrap gap-1">
           {!isSimpleDefaultSku ? (
             <>
-              {variant.size && <Badge variant="secondary" className="h-[20px] px-1.5 text-[10px] font-medium bg-secondary/50 rounded-[4px]">{variant.size}</Badge>}
-              {variant.color && <Badge variant="secondary" className="h-[20px] px-1.5 text-[10px] font-medium bg-secondary/50 rounded-[4px]">{variant.color}</Badge>}
+              {variant.size && (
+                <Badge variant="secondary" className="h-[20px] px-1.5 text-[10px] font-medium bg-secondary/50 rounded-[4px]">
+                  {normalizedOptionLabels.option1}: {variant.size}
+                </Badge>
+              )}
+              {variant.color && (
+                <Badge variant="secondary" className="h-[20px] px-1.5 text-[10px] font-medium bg-secondary/50 rounded-[4px]">
+                  {normalizedOptionLabels.option2}: {variant.color}
+                </Badge>
+              )}
               {variant.weight && <Badge variant="outline" className="h-[20px] px-1.5 text-[10px] font-medium text-muted-foreground/80 rounded-[4px]">{variant.weight}g</Badge>}
               {!variant.size && !variant.color && !variant.weight && <span className="text-[11px] text-muted-foreground/60">—</span>}
             </>

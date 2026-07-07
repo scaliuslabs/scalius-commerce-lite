@@ -237,6 +237,14 @@ function responsePreview(body) {
   return body.replace(/\s+/g, " ").trim().slice(0, MAX_BODY_PREVIEW_LENGTH);
 }
 
+function appendUnique(list, values) {
+  for (const value of values) {
+    if (typeof value === "string" && value && !list.includes(value)) {
+      list.push(value);
+    }
+  }
+}
+
 function requestHeaders(accept) {
   return {
     Accept: accept,
@@ -1572,6 +1580,7 @@ async function checkApiOps(options, {
   pnpmExecutable,
   rootDir,
   logger,
+  opsMonitorConfig,
 }) {
   const opsArgs = [
     "--api-base-url", options.apiBaseUrl,
@@ -1592,6 +1601,7 @@ async function checkApiOps(options, {
     rootDir,
     logger: null,
     requestId: "release-check",
+    opsMonitorConfig,
   });
 
   const deployment = result.checks.deployment;
@@ -1613,6 +1623,9 @@ async function checkApiOps(options, {
     deploymentStatus: deployment?.status ?? "passed",
     deploymentVersionId: deployment?.versionId ?? null,
     monitoringConfigStatus: result.checks.monitoringConfig.status,
+    opsMonitorAlertChannel: result.checks.opsMonitorAlertChannel,
+    warnings: result.warnings,
+    requiredActions: result.requiredActions,
   };
 }
 
@@ -2295,6 +2308,7 @@ export async function runReleaseCheck(options, {
   rootDir = defaultRootDir,
   readFileImpl = readFileSync,
   fileExistsImpl = existsSync,
+  opsMonitorConfig,
 } = {}) {
   const result = {
     status: "running",
@@ -2303,6 +2317,7 @@ export async function runReleaseCheck(options, {
     dashboardUrl: redactUrl(options.dashboardUrl),
     checks: {},
     warnings: [],
+    requiredActions: [],
   };
 
   logger?.log("Release readiness check");
@@ -2322,7 +2337,7 @@ export async function runReleaseCheck(options, {
     return result;
   }
 
-  await runStep(result, "apiOps", () =>
+  const apiOps = await runStep(result, "apiOps", () =>
     checkApiOps(options, {
       apiConfig,
       fetchImpl,
@@ -2331,7 +2346,16 @@ export async function runReleaseCheck(options, {
       pnpmExecutable,
       rootDir,
       logger,
+      opsMonitorConfig,
     }));
+  appendUnique(result.warnings, apiOps.warnings ?? []);
+  appendUnique(result.requiredActions, apiOps.requiredActions ?? []);
+  for (const warning of apiOps.warnings ?? []) {
+    logger?.warn(`WARN API ops: ${warning}`);
+  }
+  for (const action of apiOps.requiredActions ?? []) {
+    logger?.warn(`ACTION API ops: ${action}`);
+  }
   await runStep(result, "adminInvalidCookieAuth", () =>
     checkInvalidAdminCookieAuth(options, { fetchImpl, logger }));
   await runStep(result, "dashboard", () =>

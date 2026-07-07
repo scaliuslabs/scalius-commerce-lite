@@ -39,6 +39,7 @@ import {
   type ProductFormValues,
   type Category,
 } from "./product-form";
+import type { VariantOptionLabels } from "./product-form/variants/types";
 
 interface ProductFormProps {
   categories: Category[];
@@ -130,6 +131,18 @@ export function ProductForm({
     },
   });
 
+  const variantOption1Label = form.watch("variantOption1Label");
+  const variantOption2Label = form.watch("variantOption2Label");
+  const variantOptionLabels = React.useMemo<VariantOptionLabels>(
+    () => ({
+      option1:
+        variantOption1Label?.trim() || DEFAULT_PRODUCT_OPTION_LABELS.option1,
+      option2:
+        variantOption2Label?.trim() || DEFAULT_PRODUCT_OPTION_LABELS.option2,
+    }),
+    [variantOption1Label, variantOption2Label],
+  );
+
   // Set up form submission handler
   const { isSubmitting, showAlert, alertMessage, setShowAlert, handleSubmit } =
     useProductSubmit({
@@ -185,6 +198,7 @@ export function ProductForm({
                 setVariantImageAxis={setVariantImageAxis}
                 uniqueOptionOneValues={uniqueOptionOneValues}
                 uniqueOptionTwoValues={uniqueOptionTwoValues}
+                optionLabels={variantOptionLabels}
               />
             </div>
 

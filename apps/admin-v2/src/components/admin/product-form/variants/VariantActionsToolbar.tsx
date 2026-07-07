@@ -22,11 +22,13 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import type {
-  ProductVariant,
-  BulkGeneratedVariant,
-  SortField,
-  SortOrder,
+import {
+  normalizeVariantOptionLabels,
+  type ProductVariant,
+  type BulkGeneratedVariant,
+  type SortField,
+  type SortOrder,
+  type VariantOptionLabels,
 } from "./types";
 
 const BulkVariantGenerator = lazy(() =>
@@ -58,6 +60,7 @@ interface VariantActionsToolbarProps {
   isBulkEditing?: boolean;
   onToggleBulkEdit?: () => void;
   onSaveBulkEdit?: () => void;
+  optionLabels?: VariantOptionLabels;
   disabled?: boolean;
 }
 
@@ -78,9 +81,11 @@ export function VariantActionsToolbar({
   isBulkEditing,
   onToggleBulkEdit,
   onSaveBulkEdit,
+  optionLabels,
   disabled,
 }: VariantActionsToolbarProps) {
   const [showFilters, setShowFilters] = useState(false);
+  const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
   const skuConflictVariants = reservedVariants.length > 0
     ? [...variants, ...reservedVariants]
     : variants;
@@ -89,8 +94,8 @@ export function VariantActionsToolbar({
     { label: "SKU", field: "sku" },
     { label: "Price", field: "price" },
     { label: "Stock", field: "stock" },
-    { label: "Option 1 (size/weight)", field: "size" },
-    { label: "Option 2 (color/style)", field: "color" },
+    { label: normalizedOptionLabels.option1, field: "size" },
+    { label: normalizedOptionLabels.option2, field: "color" },
     { label: "Created Date", field: "createdAt" },
     { label: "Updated Date", field: "updatedAt" },
   ];
@@ -191,6 +196,7 @@ export function VariantActionsToolbar({
                   existingVariants={skuConflictVariants}
                   onGenerate={onBulkGenerate}
                   disabled={disabled}
+                  optionLabels={normalizedOptionLabels}
                 />
 
                 <Button type="button" size="sm" onClick={onAddVariant} disabled={disabled} className="h-7 w-full text-[11px] bg-primary text-primary-foreground sm:w-auto">
@@ -242,6 +248,7 @@ interface LazyBulkVariantGeneratorProps {
   existingVariants: ProductVariant[];
   onGenerate: (variants: BulkGeneratedVariant[]) => Promise<void>;
   disabled?: boolean;
+  optionLabels?: VariantOptionLabels;
 }
 
 function LazyBulkVariantGenerator({
@@ -249,6 +256,7 @@ function LazyBulkVariantGenerator({
   existingVariants,
   onGenerate,
   disabled,
+  optionLabels,
 }: LazyBulkVariantGeneratorProps) {
   const [shouldLoad, setShouldLoad] = useState(false);
 
@@ -282,6 +290,7 @@ function LazyBulkVariantGenerator({
         existingVariants={existingVariants}
         onGenerate={onGenerate}
         disabled={disabled}
+        optionLabels={optionLabels}
         initialOpen
       />
     </Suspense>

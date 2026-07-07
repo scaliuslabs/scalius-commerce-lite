@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
-import { TiptapEditor } from "@/components/ui/tiptap/TiptapEditor";
+import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import type { ProductFormValues } from "./types";
 
 const AdditionalInfoManager = lazy(() =>
@@ -83,7 +83,7 @@ export function TitleDescriptionSection({
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    <TiptapEditor
+                    <DeferredTiptapEditor
                       content={field.value || ""}
                       onChange={field.onChange}
                       placeholder="Describe your product..."

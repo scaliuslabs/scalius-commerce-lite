@@ -100,4 +100,28 @@ describe("sensitive settings load-error boundaries", () => {
       source.indexOf("Save Changes"),
     );
   });
+
+  it("blocks SMS OTP when auth settings cannot read SMS readiness", () => {
+    const source = readFileSync(AUTH_SOURCE, "utf8");
+
+    expect(source).toContain("smsReadinessError");
+    expect(source).toContain(
+      "SMS readiness could not be checked. Retry or review the SMS provider settings before enabling SMS OTP.",
+    );
+    expect(source).toContain("result.smsReadinessError = SMS_READINESS_LOAD_ERROR");
+    expect(source).toContain("const smsReadinessIssue = getSmsReadinessIssue(v)");
+    expect(source).toContain("if (smsReadinessIssue) throw new Error(smsReadinessIssue)");
+    expect(source).toContain(
+      "emailProviderIssue ?? smsReadinessIssue ?? smsProviderIssue ?? smsProviderServerIssue ?? whatsAppProviderIssue",
+    );
+    expect(source).toContain(
+      "if (channel === \"sms\") return smsReadinessIssue ?? smsProviderIssue ?? smsProviderServerIssue",
+    );
+    expect(source).toContain(
+      "formatProviderReadinessIssue(smsReadinessIssue ?? smsProviderIssue ?? smsProviderServerIssue)",
+    );
+    expect(source.indexOf("const smsReadinessIssue = getSmsReadinessIssue(v)")).toBeLessThan(
+      source.indexOf("const smsIssue = getSmsProviderIssue(v)"),
+    );
+  });
 });

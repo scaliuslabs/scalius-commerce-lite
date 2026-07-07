@@ -24,14 +24,16 @@ import {
   getVariantStats,
 } from "./utils/variantHelpers";
 import { getVariantManagementMode } from "./utils/variantMode";
-import type {
-  ProductVariant,
-  VariantBulkEditField,
-  VariantBulkEditValue,
-  VariantFormValues,
-  BulkGeneratedVariant,
-  VariantFilters,
-  VariantSort,
+import {
+  normalizeVariantOptionLabels,
+  type ProductVariant,
+  type VariantBulkEditField,
+  type VariantBulkEditValue,
+  type VariantFormValues,
+  type BulkGeneratedVariant,
+  type VariantFilters,
+  type VariantSort,
+  type VariantOptionLabels,
 } from "./types";
 
 function SimpleSkuTransitionSummary({
@@ -115,6 +117,7 @@ interface VariantManagerProps {
   productSlug?: string;
   productName?: string;
   variants: ProductVariant[];
+  optionLabels?: VariantOptionLabels;
   onVariantChange?: () => void;
 }
 
@@ -136,9 +139,14 @@ export function VariantManager({
   productSlug,
   productName,
   variants,
+  optionLabels,
   onVariantChange,
 }: VariantManagerProps) {
   const { symbol } = useCurrency();
+  const normalizedOptionLabels = useMemo(
+    () => normalizeVariantOptionLabels(optionLabels),
+    [optionLabels],
+  );
   const [localVariants, setLocalVariants] =
     useState<ProductVariant[]>(variants);
 
@@ -603,6 +611,7 @@ export function VariantManager({
               isBulkEditing={isBulkEditing}
               onToggleBulkEdit={handleToggleBulkEdit}
               onSaveBulkEdit={handleSaveBulkEdit}
+              optionLabels={normalizedOptionLabels}
             />
           )}
 
@@ -637,6 +646,7 @@ export function VariantManager({
             onRemoveBulkRow={handleRemoveBulkRow}
             productName={productName}
             addVariantDefaults={isFirstOptionSetup ? addVariantDefaults : undefined}
+            optionLabels={normalizedOptionLabels}
           />
 
           {/* Variant count footer */}
@@ -678,6 +688,7 @@ export function VariantManager({
             isOpen={isSortModalOpen}
             onClose={() => setIsSortModalOpen(false)}
             onSortUpdated={handleSortUpdated}
+            optionLabels={normalizedOptionLabels}
           />
         </Suspense>
       ) : null}
