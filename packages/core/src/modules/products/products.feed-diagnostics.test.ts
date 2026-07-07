@@ -297,6 +297,65 @@ describe("product feed diagnostics", () => {
         });
     });
 
+    it("uses the catalog discovery image contract for missing-image diagnostics", () => {
+        const report = buildProductFeedDiagnosticsFromScan({
+            products: [
+                product("protocol_relative"),
+                product("unsafe_path"),
+                product("valid_relative"),
+            ],
+            primaryImageUrls: new Map([
+                ["protocol_relative", "//cdn.example.test/product.jpg"],
+                ["unsafe_path", "products\\main.jpg"],
+                ["valid_relative", "/products/main.jpg"],
+            ]),
+            variants: new Map([
+                [
+                    "protocol_relative",
+                    [
+                        variant("var_protocol", "protocol_relative", {
+                            isDefault: true,
+                            trackInventory: false,
+                        }),
+                    ],
+                ],
+                [
+                    "unsafe_path",
+                    [
+                        variant("var_unsafe", "unsafe_path", {
+                            isDefault: true,
+                            trackInventory: false,
+                        }),
+                    ],
+                ],
+                [
+                    "valid_relative",
+                    [
+                        variant("var_valid", "valid_relative", {
+                            isDefault: true,
+                            trackInventory: false,
+                        }),
+                    ],
+                ],
+            ]),
+            feedsPolicy: baseFeedsPolicy,
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl: "https://store.example.test",
+        });
+
+        expect(report.totals).toMatchObject({
+            emittedRows: 1,
+            skippedRows: 2,
+            productsWithIssues: 2,
+        });
+        expect(reasonCount(report, "missing_image")).toMatchObject({
+            products: 2,
+            rows: 2,
+        });
+    });
+
     it("marks scanned products as feed disabled without reading row availability", () => {
         const report = buildProductFeedDiagnosticsFromScan({
             products: [product("one"), product("two")],

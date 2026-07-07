@@ -29,6 +29,15 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("shouldEmitProductGroupJsonLd");
   });
 
+  it("uses catalog-discovery image validation for Product JSON-LD and social images", () => {
+    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
+
+    expect(source).toContain("resolveCatalogDiscoveryImageUrl(primaryImageUrl, storefrontUrl");
+    expect(source).toContain("getOptimizedImageUrl(imageUrl");
+    expect(source).toContain("image: [ogImageUrl]");
+    expect(source).not.toContain("toAbsoluteStorefrontSeoUrl");
+  });
+
   it("uses category canonical overrides in product BreadcrumbList JSON-LD", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 

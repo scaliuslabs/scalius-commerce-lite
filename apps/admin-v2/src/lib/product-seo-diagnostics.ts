@@ -6,6 +6,7 @@ import {
   isValidResourceCanonicalPath,
   normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
+import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
 
 export type ProductSeoDiagnosticTone =
   | "ok"
@@ -235,38 +236,10 @@ function pickPrimaryImage(
 ): string | null {
   if (!images || images.length === 0) return null;
 
-  const candidates = images
-    .map((image, index) => ({ image, index }))
-    .filter(({ image }) => Boolean(image.url?.trim()))
-    .sort((left, right) => {
-      if (left.image.isPrimary && !right.image.isPrimary) return -1;
-      if (!left.image.isPrimary && right.image.isPrimary) return 1;
-
-      const leftSort = left.image.sortOrder ?? left.index;
-      const rightSort = right.image.sortOrder ?? right.index;
-      return leftSort - rightSort;
-    });
-
-  return candidates[0]?.image.url?.trim() ?? null;
-}
-
-function imageCanResolveToHttpUrl(
-  imageUrl: string | null,
-  absoluteStorefrontUrl: URL | null,
-): boolean | null {
-  if (!imageUrl) return false;
-
-  const absoluteImageUrl = parseAbsoluteHttpUrl(imageUrl);
-  if (absoluteImageUrl) return true;
-
-  try {
-    const parsed = absoluteStorefrontUrl
-      ? new URL(imageUrl, absoluteStorefrontUrl)
-      : new URL(imageUrl);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return absoluteStorefrontUrl ? false : null;
-  }
+  return (
+    images.find((image) => image.isPrimary === true && image.url?.trim())
+      ?.url?.trim() ?? null
+  );
 }
 
 function buildFeedImageStatus({
@@ -291,18 +264,31 @@ function buildFeedImageStatus({
     };
   }
 
-  const canResolve = imageCanResolveToHttpUrl(imageUrl, absoluteStorefrontUrl);
-  if (canResolve === true) {
+  const resolvedImageUrl = resolveCatalogDiscoveryImageUrl(
+    imageUrl,
+    absoluteStorefrontUrl?.origin ?? null,
+  );
+  if (resolvedImageUrl) {
     return {
       tone: "ok",
       title: "Feed image ready",
       summary: "Primary image can resolve to an http(s) feed image link.",
       value: imageUrl,
+      imageUrl: resolvedImageUrl,
+    };
+  }
+
+  if (!absoluteStorefrontUrl && parseAbsoluteHttpUrl(imageUrl)) {
+    return {
+      tone: "ok",
+      title: "Feed image ready",
+      summary: "Primary image is already an absolute http(s) URL.",
+      value: imageUrl,
       imageUrl,
     };
   }
 
-  if (canResolve === null) {
+  if (!absoluteStorefrontUrl) {
     return {
       tone: "info",
       title: "Feed image needs Store URL",

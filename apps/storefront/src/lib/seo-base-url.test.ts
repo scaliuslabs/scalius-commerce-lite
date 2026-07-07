@@ -54,6 +54,8 @@ describe("SEO base URL helpers", () => {
       "https://cdn.example.com/fish.jpg",
     );
     expect(toAbsoluteStorefrontSeoUrl("data:image/svg+xml,%3Csvg%3E")).toBeNull();
+    expect(toAbsoluteStorefrontSeoUrl("//cdn.example.com/fish.jpg")).toBeNull();
+    expect(toAbsoluteStorefrontSeoUrl("products\\fish.jpg")).toBeNull();
   });
 
   it("builds resource canonical URLs from resource-shaped path overrides only", () => {

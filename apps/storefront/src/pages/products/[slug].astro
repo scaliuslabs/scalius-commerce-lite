@@ -7,6 +7,7 @@ import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
   setRuntimeImageCdnPolicy,
@@ -14,7 +15,6 @@ import {
 import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
-  toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
 import {
   buildMerchantReturnPolicyJsonLd,
@@ -41,6 +41,7 @@ import {
   normalizeSavedProductCondition,
   PRODUCT_CONDITION_SCHEMA_URLS,
 } from "@scalius/shared/product-condition";
+import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
 
 const { slug } = Astro.params;
 if (!slug) {
@@ -159,16 +160,17 @@ const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, {
   format: "auto",
   fit: "contain",
 });
-const ogImageUrl = primaryImageUrl
-  ? toAbsoluteStorefrontSeoUrl(
-      getProductImageUrl(primaryImageUrl, {
-        width: 1200,
-        height: 630,
-        quality: 85,
-        format: "auto",
-        fit: "cover",
-      }),
-    )
+const ogImageUrl = primaryImageUrl && storefrontUrl
+  ? resolveCatalogDiscoveryImageUrl(primaryImageUrl, storefrontUrl, {
+      transformImageUrl: (imageUrl) =>
+        getOptimizedImageUrl(imageUrl, {
+          width: 1200,
+          height: 630,
+          quality: 85,
+          format: "auto",
+          fit: "cover",
+        }),
+    })
   : null;
 
 // Description for OG and JSON-LD -- strip HTML (per research constraint)

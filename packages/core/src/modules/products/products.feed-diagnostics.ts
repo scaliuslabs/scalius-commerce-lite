@@ -1,6 +1,10 @@
 import { productImages, products, productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import {
+    normalizeCatalogDiscoveryBaseUrl,
+    resolveCatalogDiscoveryImageUrl,
+} from "@scalius/shared/catalog-discovery-media";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 export const PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT = 500;
@@ -160,31 +164,8 @@ function isVariantAvailable(variant: ProductFeedDiagnosticScanVariant): boolean 
     return !variant.trackInventory || variant.stock - variant.reservedStock > 0;
 }
 
-function parseAbsoluteHttpBaseUrl(value: string | null | undefined): string | null {
-    const source = value?.trim();
-    if (!source) return null;
-
-    try {
-        const parsed = new URL(source);
-        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-            return null;
-        }
-        return parsed.toString();
-    } catch {
-        return null;
-    }
-}
-
 function hasValidFeedImage(imageUrl: string | null | undefined, storefrontBaseUrl: string): boolean {
-    const source = imageUrl?.trim();
-    if (!source) return false;
-
-    try {
-        const parsed = new URL(source, storefrontBaseUrl);
-        return parsed.protocol === "https:" || parsed.protocol === "http:";
-    } catch {
-        return false;
-    }
+    return Boolean(resolveCatalogDiscoveryImageUrl(imageUrl, storefrontBaseUrl));
 }
 
 function finalReasonSummaries(
@@ -216,7 +197,7 @@ export function buildProductFeedDiagnosticsFromScan({
     let emittedProductRows = 0;
     let emittedVariantRows = 0;
     let skippedRows = 0;
-    const absoluteStorefrontBaseUrl = parseAbsoluteHttpBaseUrl(storefrontBaseUrl);
+    const absoluteStorefrontBaseUrl = normalizeCatalogDiscoveryBaseUrl(storefrontBaseUrl);
 
     const recordIssue = (
         product: ProductFeedDiagnosticScanProduct,

@@ -722,6 +722,33 @@ export function evaluateSitemapXml(body, {
   };
 }
 
+export function evaluateSitemapIndexPolicy(locs, { policy, storefrontOrigin } = {}) {
+  const errors = [];
+  const sitemapPolicy = policy?.sitemap;
+  if (!sitemapPolicy?.enabled) {
+    return { ok: true, errors };
+  }
+
+  for (const loc of locs) {
+    if (!isHttpUrl(loc) || (storefrontOrigin && !isSameOrigin(loc, storefrontOrigin))) {
+      continue;
+    }
+
+    const parsed = new URL(loc);
+    const section = SITEMAP_SECTION_ENDPOINTS.find(({ endpoint }) =>
+      new URL(endpoint, "https://example.invalid").pathname === parsed.pathname
+    );
+    if (section && !sitemapPolicy[section.policyKey]) {
+      errors.push(`sitemap index must not advertise disabled ${section.label}: ${loc}`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+  };
+}
+
 export function evaluateProductFeedXml(
   body,
   { availabilityValues, storefrontOrigin } = {},
@@ -1592,13 +1619,21 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
       cacheControl: cacheEvaluation.cacheControl,
       locCount: evaluation.locCount,
     };
+    return evaluation;
   };
 
   const enabledSitemapSectionCount = countEnabledSitemapSections(policy);
   if (policy.sitemap.enabled) {
-    await verifySitemapEndpoint("/sitemap.xml", {
+    const sitemapIndexEvaluation = await verifySitemapEndpoint("/sitemap.xml", {
       requireLoc: enabledSitemapSectionCount > 0,
     });
+    const sitemapIndexPolicy = evaluateSitemapIndexPolicy(sitemapIndexEvaluation.locs, {
+      policy,
+      storefrontOrigin,
+    });
+    if (!sitemapIndexPolicy.ok) {
+      throw new Error(`sitemap index failed: ${sitemapIndexPolicy.errors.join("; ")}`);
+    }
   } else {
     responses.sitemaps["/sitemap.xml"] = {
       status: "skipped",
