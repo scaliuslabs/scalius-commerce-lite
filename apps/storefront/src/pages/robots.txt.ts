@@ -54,8 +54,8 @@ function normalizeSitemapDirectives(
       continue;
     }
 
-    lines.push(line);
-    if (sitemapUrl && value === sitemapUrl) {
+    if (advertise && sitemapUrl && !canonicalSitemapEmitted) {
+      lines.push(`Sitemap: ${sitemapUrl}`);
       canonicalSitemapEmitted = true;
     }
   }

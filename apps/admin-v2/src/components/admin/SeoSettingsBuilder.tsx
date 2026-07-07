@@ -47,6 +47,7 @@ import {
   updateSeoSettings,
   type UpdateSeoSettingsInput,
 } from "@/lib/api-functions/settings";
+import { generalSettingsQueryOptions } from "@/lib/api-query-options/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -146,12 +147,26 @@ const saveSeo = async (values: SeoConfig) => {
   });
 };
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readHeaderLogoReady(settings: unknown): boolean | null {
+  if (!settings) return null;
+  const headerConfig = asRecord(asRecord(settings).headerConfig);
+  const logo = asRecord(headerConfig.logo);
+  return typeof logo.src === "string" && logo.src.trim().length > 0;
+}
+
 export function SeoSettingsBuilder() {
   const businessSettingsQuery = useQuery({
     queryKey: queryKeys.settings.business(),
     queryFn: async () => getBusinessSettings(),
     staleTime: 1000 * 60 * 5,
   });
+  const generalSettingsQuery = useQuery(generalSettingsQueryOptions());
   const {
     values,
     setValues,
@@ -252,6 +267,7 @@ export function SeoSettingsBuilder() {
         ? businessSettings.legalName
         : "",
   };
+  const hasStoreLogo = readHeaderLogoReady(generalSettingsQuery.data);
 
   if (isLoading) {
     return (
@@ -765,6 +781,7 @@ export function SeoSettingsBuilder() {
         discovery={values.discovery}
         robotsTxt={values.robotsTxt}
         businessIdentity={businessIdentity}
+        hasStoreLogo={hasStoreLogo}
       />
 
       <div className="space-y-2">

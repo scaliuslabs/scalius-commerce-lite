@@ -172,6 +172,14 @@ function feedXml({ availability = "in_stock" } = {}) {
   ].join("");
 }
 
+function emptyFeedXml() {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel>',
+    "</channel></rss>",
+  ].join("");
+}
+
 function productHtml() {
   return [
     "<!doctype html><html><head>",
@@ -288,6 +296,18 @@ describe("release-check discovery evaluators", () => {
       ok: true,
       sitemapUrls: ["https://storefront.example.test/sitemap.xml"],
     });
+    expect(evaluateRobotsTxt(robotsTxt().replace(
+      "https://storefront.example.test/sitemap.xml",
+      "https://storefront.example.test:443/sitemap.xml",
+    ), {
+      storefrontOrigin,
+      expectedSitemapUrl: "https://storefront.example.test/sitemap.xml",
+    })).toMatchObject({
+      ok: false,
+      errors: [
+        "robots sitemap URL must be canonical: https://storefront.example.test/sitemap.xml",
+      ],
+    });
     expect(evaluateRobotsTxt("Sitemap: /sitemap.xml", { storefrontOrigin })).toMatchObject({
       ok: false,
       errors: ["robots sitemap URL is not absolute http(s): /sitemap.xml"],
@@ -371,12 +391,25 @@ describe("release-check discovery evaluators", () => {
       errors: ["feed availability value is not allowed: in stock"],
     });
 
+    expect(evaluateProductFeedXml(emptyFeedXml(), {
+      availabilityValues: ["in_stock", "out_of_stock"],
+      storefrontOrigin,
+    })).toMatchObject({
+      ok: true,
+      itemCount: 0,
+      linkCount: 0,
+      imageLinkCount: 0,
+      availabilityCount: 0,
+      firstStorefrontItemUrl: null,
+    });
+
     expect(evaluateProductFeedXml("<rss><channel><item><g:link>/products/demo</g:link></item></channel></rss>", {
       storefrontOrigin,
     })).toMatchObject({
       ok: false,
       errors: [
-        "Product feed must include availability markers.",
+        "feed item 1 must include an image_link.",
+        "feed item 1 must include availability.",
         "feed product link is not absolute http(s): /products/demo",
       ],
     });
@@ -747,6 +780,77 @@ describe("runReleaseCheck", () => {
       "/sitemap-products.xml?page=1",
       "/products/demo-product",
     ]);
+  });
+
+  it("skips Product JSON-LD smoke when public SEO policy disables product schema", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/seo") {
+          return seoPolicyResponse({
+            sitemap: {
+              enabled: true,
+              staticPages: false,
+              products: true,
+              categories: false,
+              collections: false,
+              pages: false,
+            },
+            feeds: { productCatalogEnabled: false },
+            structuredData: { products: false },
+          });
+        }
+      }
+
+      if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+        return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "storefront.example.test") {
+        if (parsed.pathname === "/health") return textResponse("ok");
+        if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxt());
+        if (parsed.pathname === "/sitemap.xml" || parsed.pathname === "/sitemap-products.xml") {
+          return discoveryResponse(sitemapXml());
+        }
+        if (parsed.pathname === "/products/demo-product") {
+          return textResponse("<!doctype html><html><body>Demo Product</body></html>");
+        }
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    const result = await runReleaseCheck(parseReleaseCheckArgs([
+      "--skip-wrangler",
+      "--api-base-url", "https://api.example.test",
+      "--storefront-url", "https://storefront.example.test",
+      "--dashboard-url", "https://dashboard.example.test",
+    ]), {
+      apiConfig: monitoringApiConfig(),
+      fetchImpl,
+      execFileImpl: vi.fn(),
+      rootDir: "/repo",
+      readFileImpl: () => verifiedTracker(),
+      fileExistsImpl: () => true,
+      logger: null,
+    });
+
+    expect(result.status).toBe("passed");
+    expect(result.checks.discovery.policy.structuredData).toEqual({
+      products: false,
+    });
+    expect(result.checks.productRoute).toMatchObject({
+      url: "https://storefront.example.test/products/demo-product",
+      schema: {
+        status: "skipped",
+        reason: "Product JSON-LD disabled by public SEO policy.",
+      },
+    });
   });
 
   it.each([

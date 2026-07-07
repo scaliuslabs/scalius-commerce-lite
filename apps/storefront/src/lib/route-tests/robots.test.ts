@@ -175,4 +175,25 @@ describe("robots.txt route", () => {
     expect(body).toContain("Sitemap: https://storefront.example.test/sitemap.xml");
     expect(body).not.toContain("old-sitemap.xml");
   });
+
+  it("normalizes canonical-equivalent sitemap directives to one exact canonical line", async () => {
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      siteTitle: "Store",
+      homepageTitle: "Home",
+      homepageMetaDescription: "Description",
+      robotsTxt:
+        "User-agent: *\nAllow: /\nSitemap: https://storefront.example.test:443/sitemap.xml",
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+    const sitemapLines = body
+      .split(/\r?\n/)
+      .filter((line) => /^Sitemap:/i.test(line));
+
+    expect(response.status).toBe(200);
+    expect(sitemapLines).toEqual([
+      "Sitemap: https://storefront.example.test/sitemap.xml",
+    ]);
+  });
 });
