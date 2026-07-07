@@ -24,6 +24,9 @@ const DEFAULT_DASHBOARD_URL = "https://dashboard.scalius.com";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const RELEASE_READYZ_SAMPLES = 4;
 const MAX_BODY_PREVIEW_LENGTH = 180;
+const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
+const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
+const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
 const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
 const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
@@ -1518,6 +1521,64 @@ async function checkDashboard(options, { fetchImpl, logger }) {
   };
 }
 
+async function checkInvalidAdminCookieFailure({ url, label, fetchImpl, timeoutMs }) {
+  const response = await fetchJson(url, {
+    fetchImpl,
+    timeoutMs,
+    headers: {
+      Cookie: INVALID_ADMIN_SESSION_COOKIE,
+    },
+  });
+
+  if (
+    response.statusCode === 504 ||
+    response.body.includes(ADMIN_API_READ_TIMEOUT_CODE)
+  ) {
+    throw new Error(
+      `${label} hit ${ADMIN_API_READ_TIMEOUT_CODE}/504 instead of rejecting the invalid admin cookie quickly.`,
+    );
+  }
+  if (response.statusCode >= 200 && response.statusCode < 300) {
+    throw new Error(
+      `${label} accepted an invalid better-auth.session_token with HTTP ${response.statusCode}.`,
+    );
+  }
+  if (response.statusCode !== 401 && response.statusCode !== 403) {
+    throw new Error(
+      `${label} returned HTTP ${response.statusCode}; expected 401/403 for an invalid better-auth.session_token: ${responsePreview(response.body)}`,
+    );
+  }
+
+  return {
+    url: redactUrl(url),
+    statusCode: response.statusCode,
+    durationMs: response.durationMs,
+  };
+}
+
+async function checkInvalidAdminCookieAuth(options, { fetchImpl, logger }) {
+  const apiUrl = buildUrl(options.apiBaseUrl, ADMIN_BUSINESS_SETTINGS_PATH);
+  const dashboardProxyUrl = buildUrl(options.dashboardUrl, ADMIN_BUSINESS_SETTINGS_PATH);
+
+  const api = await checkInvalidAdminCookieFailure({
+    url: apiUrl,
+    label: "API admin business settings invalid-cookie smoke",
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+  });
+  const dashboardProxy = await checkInvalidAdminCookieFailure({
+    url: dashboardProxyUrl,
+    label: "Dashboard proxy admin business settings invalid-cookie smoke",
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+  });
+
+  logger?.log(
+    `PASS admin auth: invalid cookie rejected by API (${api.statusCode}) and dashboard proxy (${dashboardProxy.statusCode}).`,
+  );
+  return { api, dashboardProxy };
+}
+
 async function checkStorefrontPages(options, { fetchImpl, logger }) {
   const pages = [];
   for (const path of ["/health", "/", "/search"]) {
@@ -2047,6 +2108,8 @@ export async function runReleaseCheck(options, {
       rootDir,
       logger,
     }));
+  await runStep(result, "adminInvalidCookieAuth", () =>
+    checkInvalidAdminCookieAuth(options, { fetchImpl, logger }));
   await runStep(result, "dashboard", () =>
     checkDashboard(options, { fetchImpl, logger }));
   await runStep(result, "storefront", () =>
