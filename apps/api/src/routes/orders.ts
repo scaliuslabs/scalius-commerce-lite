@@ -141,7 +141,6 @@ function scheduleCheckoutSuccessRecoveryHints(
             JSON.stringify({
               status: "completed",
               orderId,
-              receiptToken,
               updatedAt: Date.now(),
             }),
             { expirationTtl: CHECKOUT_STATUS_TTL_SECONDS },
@@ -188,6 +187,35 @@ function scheduleCheckoutFailureStatusHint(
   } catch (error) {
     console.error("[Orders] Failed to schedule checkout failure recovery hint:", error);
   }
+}
+
+type CheckoutStatusResponsePayload = {
+  status: string;
+  orderId?: string;
+  error?: string;
+  message?: string;
+};
+
+function sanitizeCheckoutStatusPayload(value: unknown): CheckoutStatusResponsePayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { status: "processing" };
+  }
+
+  const record = value as Record<string, unknown>;
+  const safePayload: CheckoutStatusResponsePayload = {
+    status: typeof record.status === "string" ? record.status : "processing",
+  };
+  if (typeof record.orderId === "string") {
+    safePayload.orderId = record.orderId;
+  }
+  if (typeof record.error === "string") {
+    safePayload.error = record.error;
+  }
+  if (typeof record.message === "string") {
+    safePayload.message = record.message;
+  }
+
+  return safePayload;
 }
 
 function getCustomerSessionTokenFromRequest(c: { req: { header: (name: string) => string | undefined } }): string | null {
@@ -324,7 +352,9 @@ const getOrderStatusRoute = createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({
         status: z.string(),
         orderId: z.string().optional(),
-      }).passthrough()) } },
+        error: z.string().optional(),
+        message: z.string().optional(),
+      })) } },
     },
     202: {
       description: "Order is processing",
@@ -384,7 +414,6 @@ app.openapi(getOrderStatusRoute, async (c) => {
       return ok(c, {
         status: "completed",
         orderId: attempt.orderId,
-        receiptToken: attempt.checkoutToken,
       });
     }
 
@@ -421,7 +450,6 @@ app.openapi(getOrderStatusRoute, async (c) => {
         return ok(c, {
           status: "completed",
           orderId: attempt.orderId,
-          receiptToken: attempt.checkoutToken,
         });
       }
 
@@ -486,12 +514,11 @@ app.openapi(getOrderStatusRoute, async (c) => {
       return ok(c, {
         status: "completed",
         orderId: attempt.orderId,
-        receiptToken: attempt.checkoutToken,
       });
     }
   }
 
-  return ok(c, statusData);
+  return ok(c, sanitizeCheckoutStatusPayload(statusData));
 });
 
 // ─── GET /receipt/:id ───────────────────────────────────────────────────────

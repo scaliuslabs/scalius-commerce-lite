@@ -29,6 +29,27 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("shouldEmitProductGroupJsonLd");
   });
 
+  it("maps ProductGroup variant labels and schema from merchant-defined option axes", () => {
+    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
+
+    expect(source).toContain("const productOptionMetadata");
+    expect(source).toContain("product.variantOption1Label");
+    expect(source).toContain("product.variantOption2Label");
+    expect(source).toContain("product.variantOption1Schema");
+    expect(source).toContain("product.variantOption2Schema");
+    expect(source).toContain("return productOptionMetadata[axis].schema");
+    expect(source).toContain("return productOptionMetadata[axis].label");
+    expect(source).toContain("if (schema === \"none\" || props[schema]) continue;");
+    expect(source).toContain("props[schema] = option.value;");
+    expect(source).toContain("`${getProductOptionLabel(option.axis)}: ${option.value}`");
+    expect(source).toContain("PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema(\"option1\")");
+    expect(source).toContain("PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema(\"option2\")");
+    expect(source).not.toContain('`${product.name} - Size:');
+    expect(source).not.toContain('`${product.name} - Color:');
+    expect(source).not.toContain('props.size =');
+    expect(source).not.toContain('props.color =');
+  });
+
   it("uses catalog-discovery image validation for Product JSON-LD and social images", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 

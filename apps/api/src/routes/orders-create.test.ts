@@ -489,14 +489,17 @@ describe("checkout status recovery hints", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    const json = await response.json() as { data: Record<string, unknown> };
+    expect(json).toMatchObject({
       success: true,
       data: {
         status: "completed",
         orderId: "order_1",
-        receiptToken: "chk_status",
       },
     });
+    expect(json.data).not.toHaveProperty("receiptToken");
+    expect(JSON.stringify(json)).not.toContain("chk_status");
+    expect(JSON.stringify(json)).not.toContain("chk_");
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     await executionCtx.waitUntil.mock.calls[0]?.[0];
     const statusKey = await getCheckoutStatusKvKey(statusToken);
@@ -508,8 +511,10 @@ describe("checkout status recovery hints", () => {
     expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
       status: "completed",
       orderId: "order_1",
-      receiptToken: "chk_status",
     });
+    expect(JSON.parse(String(statusWrite?.[1]))).not.toHaveProperty("receiptToken");
+    expect(String(statusWrite?.[1])).not.toContain("chk_status");
+    expect(String(statusWrite?.[1])).not.toContain("chk_");
     expect(statusWrite?.[2]).toEqual({ expirationTtl: 86400 });
     expect(receiptKey).not.toContain("chk_status");
     expect(JSON.parse(String(receiptWrite?.[1]))).toEqual({ orderId: "order_1" });
@@ -535,14 +540,17 @@ describe("checkout status recovery hints", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    const json = await response.json() as { data: Record<string, unknown> };
+    expect(json).toMatchObject({
       success: true,
       data: {
         status: "completed",
         orderId: "order_1",
-        receiptToken: "chk_status",
       },
     });
+    expect(json.data).not.toHaveProperty("receiptToken");
+    expect(JSON.stringify(json)).not.toContain("chk_status");
+    expect(JSON.stringify(json)).not.toContain("chk_");
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     await executionCtx.waitUntil.mock.calls[0]?.[0];
     const statusKey = await getCheckoutStatusKvKey(statusToken);
@@ -579,14 +587,17 @@ describe("checkout status recovery hints", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    const json = await response.json() as { data: Record<string, unknown> };
+    expect(json).toMatchObject({
       success: true,
       data: {
         status: "completed",
         orderId: "order_1",
-        receiptToken: "chk_status",
       },
     });
+    expect(json.data).not.toHaveProperty("receiptToken");
+    expect(JSON.stringify(json)).not.toContain("chk_status");
+    expect(JSON.stringify(json)).not.toContain("chk_");
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
     await executionCtx.waitUntil.mock.calls[0]?.[0];
     const statusKey = await getCheckoutStatusKvKey(statusToken);
@@ -597,6 +608,40 @@ describe("checkout status recovery hints", () => {
       status: "completed",
       orderId: "order_1",
     });
+    expect(JSON.parse(String(statusWrite?.[1]))).not.toHaveProperty("receiptToken");
+    expect(String(statusWrite?.[1])).not.toContain("chk_status");
+    expect(String(statusWrite?.[1])).not.toContain("chk_");
+  });
+
+  it("does not leak receipt proof from legacy checkout status KV rows", async () => {
+    const { app, kv, statusToken } = createStatusTestApp({
+      kvStatus: {
+        status: "completed",
+        orderId: "order_1",
+        receiptToken: "chk_legacy_status",
+        checkoutToken: "chk_legacy_checkout",
+        updatedAt: Date.now() - 60_000,
+      },
+    });
+
+    const response = await app.request(
+      `/api/v1/orders/status/${statusToken}`,
+      {},
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as { data: Record<string, unknown> };
+    expect(json).toMatchObject({
+      success: true,
+      data: {
+        status: "completed",
+        orderId: "order_1",
+      },
+    });
+    expect(json.data).not.toHaveProperty("receiptToken");
+    expect(json.data).not.toHaveProperty("checkoutToken");
+    expect(JSON.stringify(json)).not.toContain("chk_");
   });
 
   it("repairs failed checkout status after a failed D1 fallback", async () => {
@@ -692,6 +737,7 @@ describe("create order commit/KV ordering", () => {
       const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
       const receiptKey = await getReceiptTokenKvKey("chk_order_1");
       const kvKeys = kv.put.mock.calls.map(([key]) => String(key));
+      const statusWrite = kv.put.mock.calls.find(([key]) => key === statusKey) as [string, string, unknown?] | undefined;
       const receiptWrite = kv.put.mock.calls.find(([key]) => key === receiptKey) as [string, string, unknown?] | undefined;
       expect(calls.slice(0, 2)).toEqual(["commit", "mark-committed"]);
       expect(calls).toContain(`kv:${statusKey}`);
@@ -703,6 +749,9 @@ describe("create order commit/KV ordering", () => {
       expect(statusKey).not.toContain(DEFAULT_STATUS_TOKEN);
       expect(receiptKey).not.toContain("chk_order_1");
       expect(JSON.stringify(kvKeys)).not.toContain("chk_order_1");
+      expect(String(statusWrite?.[1])).not.toContain("chk_order_1");
+      expect(String(statusWrite?.[1])).not.toContain("chk_");
+      expect(JSON.parse(String(statusWrite?.[1]))).not.toHaveProperty("receiptToken");
       expect(String(receiptWrite?.[1])).not.toContain("chk_order_1");
       expect(String(receiptWrite?.[1])).not.toContain("chk_");
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain("chk_order_1");

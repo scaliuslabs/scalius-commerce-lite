@@ -105,6 +105,33 @@ describe("storefront product query boundaries", () => {
         expect(listBody).not.toContain("variants:");
     });
 
+    it("carries merchant option metadata only in feed and detail projections", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+
+        const listBody = getFunctionBody(source, "getStorefrontProducts");
+        const feedBody = getFunctionBody(source, "getStorefrontFeedProducts");
+        const detailBody = getFunctionBody(source, "getStorefrontProductBySlug");
+
+        for (const field of [
+            "variantOption1Label",
+            "variantOption2Label",
+            "variantOption1Schema",
+            "variantOption2Schema",
+        ]) {
+            expect(feedBody).toContain(`${field}: products.${field}`);
+            expect(detailBody).toContain(`${field}: products.${field}`);
+            expect(listBody).not.toContain(`${field}: products.${field}`);
+        }
+
+        expect(detailBody).toContain("variantOption1Label: normalizeProductOptionLabel(");
+        expect(detailBody).toContain("variantOption2Label: normalizeProductOptionLabel(");
+        expect(detailBody).toContain("variantOption1Schema: normalizeProductOptionSchema(");
+        expect(detailBody).toContain("variantOption2Schema: normalizeProductOptionSchema(");
+    });
+
     it("lets feed reuse safe public filters with UCP lookup support", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,

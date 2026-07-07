@@ -33,7 +33,12 @@ import {
     paymentMethodsQueryOptions,
 } from "@/lib/api-query-options/settings";
 import { queryKeys } from "@/lib/query-keys";
-import { getCheckoutFlowPreviewIssues } from "./checkout-flow-policy";
+import {
+    CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS,
+    CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL,
+    getCheckoutAdvancePaymentAmountIssue,
+    getCheckoutFlowPreviewIssues,
+} from "./checkout-flow-policy";
 
 function buildCheckoutFlowSummary(options: {
     guestCheckoutEnabled: boolean;
@@ -164,6 +169,9 @@ export default function CheckoutFlowSettings() {
         partialPaymentEnabled,
         partialPaymentAmount,
     });
+    const partialPaymentAmountIssue = partialPaymentEnabled
+        ? getCheckoutAdvancePaymentAmountIssue(partialPaymentAmount)
+        : null;
     const readiness = checkoutReadiness as CheckoutReadinessPayload | undefined;
     const readinessIssues = readiness?.issues ?? [];
     const previewIssues = [...flowIssues, ...readinessIssues];
@@ -447,22 +455,24 @@ export default function CheckoutFlowSettings() {
                                 <Input
                                     id="partial-payment-amount"
                                     type="number"
-                                    min="0"
+                                    min={CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min}
+                                    max={CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max}
+                                    step="1"
                                     className="max-w-xs"
                                     placeholder="e.g. 200"
                                     value={partialPaymentAmount}
                                     onChange={(e) => setPartialPaymentAmount(Number(e.target.value))}
                                 />
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Must be greater than 0 and charged through an online gateway. Carts at or below this amount pay the full total online.
+                                    Must be between {CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL} and charged through an online gateway. Carts at or below this amount pay the full total online.
                                 </p>
                             </div>
 
-                            {partialPaymentAmount === 0 && (
+                            {partialPaymentAmountIssue && (
                                 <Alert className="border-amber-500/30 bg-amber-500/5">
                                     <AlertTriangle className="h-4 w-4 text-amber-500" />
                                     <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
-                                        Partial payment is enabled but the amount is set to 0. Customers will not be charged any advance deposit.
+                                        {partialPaymentAmountIssue}
                                     </AlertDescription>
                                 </Alert>
                             )}

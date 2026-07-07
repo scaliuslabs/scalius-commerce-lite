@@ -776,6 +776,10 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             metaDescription: products.metaDescription,
             canonicalPath: products.canonicalPath,
             productCondition: products.productCondition,
+            variantOption1Label: products.variantOption1Label,
+            variantOption2Label: products.variantOption2Label,
+            variantOption1Schema: products.variantOption1Schema,
+            variantOption2Schema: products.variantOption2Schema,
             noIndex: products.noIndex,
             discountType: products.discountType,
             discountPercentage: products.discountPercentage,
@@ -946,6 +950,22 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
             deletedAt: product.deletedAt ? unixToDate(product.deletedAt)?.toISOString() : null,
+            variantOption1Label: normalizeProductOptionLabel(
+                product.variantOption1Label,
+                DEFAULT_PRODUCT_OPTION_LABELS.option1,
+            ),
+            variantOption2Label: normalizeProductOptionLabel(
+                product.variantOption2Label,
+                DEFAULT_PRODUCT_OPTION_LABELS.option2,
+            ),
+            variantOption1Schema: normalizeProductOptionSchema(
+                product.variantOption1Schema,
+                DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+            ),
+            variantOption2Schema: normalizeProductOptionSchema(
+                product.variantOption2Schema,
+                DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+            ),
             discountType: product.discountType || "percentage",
             discountPercentage: product.discountPercentage || 0,
             discountAmount: product.discountAmount || 0,
