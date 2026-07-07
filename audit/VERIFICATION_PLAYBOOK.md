@@ -615,6 +615,7 @@ pnpm dev:reset
 pnpm dev:admin:create
 pnpm dev:admin:reset
 pnpm dev:admin:status
+pnpm dev:admin:smoke
 pnpm dev:doctor
 pnpm dev:doctor:api
 pnpm dev:doctor:admin
@@ -650,10 +651,11 @@ Local helper regression checks:
 bash -n scripts/dev.sh
 node --check scripts/dev-local-utils.mjs
 node --check scripts/dev-admin.mjs
+node --check scripts/dev-admin-smoke.mjs
 node --check scripts/dev-setup.mjs
 node --check scripts/dev-reset.mjs
 node --check scripts/dev-doctor.mjs
-pnpm exec vitest run scripts/dev-admin-cli.test.mjs scripts/dev-local-utils.test.mjs scripts/dev-doctor.test.mjs scripts/dev-sh.test.mjs --passWithNoTests
+pnpm exec vitest run scripts/dev-admin-cli.test.mjs scripts/dev-admin-smoke.test.mjs scripts/dev-local-utils.test.mjs scripts/dev-doctor.test.mjs scripts/dev-sh.test.mjs --passWithNoTests
 pnpm dev:doctor
 pnpm dev:doctor --profile api
 ```
@@ -662,6 +664,7 @@ Expected result:
 
 - Valueless flags such as `--password`, `--state`, or `--admin-password` fail before side effects.
 - `dev:admin:reset` proves API reachability before clearing local auth tables.
+- `dev:admin:smoke` refuses production/non-local targets, starts local API/admin workers when needed with one shared Wrangler state, signs in through `/api/auth/sign-in/email`, proves session/RBAC through `/api/v1/admin/auth/account-security`, and GET/POST/GET verifies `/api/v1/admin/settings/business` by writing only the current `invoicePrefix` back.
 - `dev:setup --env-only` repairs missing or blank runtime and build-time env keys without migrations/admin creation.
 - `scripts/dev.sh` preserves the failing child process exit code after cleanup.
 - `scripts/dev.sh` has a dry-run regression proving API-only startup and API-readiness ordering before admin/storefront startup.
@@ -690,6 +693,20 @@ Expected result:
 - The admin proxy route can be checked with a cookie jar; `GET http://localhost:4323/api/v1/admin/dashboard` should return `200 OK` and `x-proxy-base-url: http://localhost:8787/api/v1`.
 - Admin order detail should render without a payment-card waterfall: visit an order detail page such as `http://localhost:4323/admin/orders/{id}` and confirm the initial route load warms `/orders/{id}/payments`; COD orders should also warm `/orders/{id}/cod`. Optional delivery-provider/payment/COD/currency warmup failures should log a warning and keep the order detail page loadable.
 - Admin checkout settings should render the checkout-flow tab after preloading only auth settings; payment gateway and shipping method API calls should not happen until their tabs are opened.
+
+Local admin settings smoke:
+
+```bash
+rm -rf /tmp/scalius-admin-smoke-state
+pnpm dev:admin:smoke --state /tmp/scalius-admin-smoke-state --reset-admin
+```
+
+Expected result:
+
+- The helper refuses production and non-local API/admin targets before touching auth or settings state.
+- The API and admin workers share the same disposable `SCALIUS_WRANGLER_STATE`.
+- First-admin setup, Better Auth sign-in, admin proxy cookie forwarding, RBAC, and business settings persistence all pass locally.
+- The settings write is intentionally tiny: it posts only the current `invoicePrefix` value back to `/api/v1/admin/settings/business`.
 
 Local post-sale mutation smoke:
 
