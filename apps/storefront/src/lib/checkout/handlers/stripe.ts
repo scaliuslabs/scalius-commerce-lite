@@ -1,9 +1,6 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
-import {
-  getPaymentSessionProcessingMessage,
-  isPaymentSessionProcessingPayload,
-} from "../payment-session-proxy";
+import { fetchPaymentSessionWithProcessingRetry } from "../payment-session-retry";
 
 declare global {
   interface Window {
@@ -124,22 +121,18 @@ export const stripeHandler: GatewayHandler = {
           orderId,
         };
 
-        const intentRes = await fetch("/api/checkout/stripe-intent", {
+        const { data: intentData, response: intentRes } = await fetchPaymentSessionWithProcessingRetry(() => fetch("/api/checkout/stripe-intent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(intentPayload),
-        });
+        }));
 
         if (!intentRes.ok) {
-          const e = await intentRes.json().catch(() => ({} as Record<string, unknown>));
+          const e = intentData;
           throw new Error((e.error as string) || "Payment initialization failed");
         }
 
-        const intentData = await intentRes.json();
-        if (intentRes.status === 202 || isPaymentSessionProcessingPayload(intentData)) {
-          throw new Error(getPaymentSessionProcessingMessage(intentData));
-        }
-        clientSecret = intentData.clientSecret as string;
+        clientSecret = typeof intentData.clientSecret === "string" ? intentData.clientSecret : undefined;
       }
       if (!clientSecret) throw new Error("No client secret received from payment gateway");
 

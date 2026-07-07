@@ -180,6 +180,26 @@ async function readCategory(
 
 const STRIPE_CATEGORY = "stripe";
 const STRIPE_CACHE_KEY = "gw:stripe";
+const STRIPE_PLACEHOLDER_VALUES = new Set([
+  "dummy",
+  "placeholder",
+  "example",
+  "demo",
+  "test",
+  "stripe_secret_key",
+  "stripe_publishable_key",
+  "stripe_webhook_secret",
+  "your_stripe_secret_key",
+  "your_stripe_publishable_key",
+  "your_stripe_webhook_secret",
+  "your_stripe_key",
+  "your_stripe_webhook_secret_here",
+  "sk_test_your_key_here",
+  "pk_test_your_key_here",
+  "whsec_your_webhook_secret",
+]);
+
+type StripeCredentialField = "secretKey" | "publishableKey" | "webhookSecret";
 
 function hasText(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
@@ -187,6 +207,10 @@ function hasText(value: unknown): boolean {
 
 function compactErrors(errors: Array<string | null | undefined>): string[] {
   return errors.filter((error): error is string => Boolean(error));
+}
+
+export function isStripePlaceholderCredential(value: unknown): boolean {
+  return typeof value === "string" && STRIPE_PLACEHOLDER_VALUES.has(value.trim().toLowerCase());
 }
 
 export function getStripeCheckoutMissingFields(
@@ -205,11 +229,30 @@ function stripeBlockedReason(missingFields: StripeCheckoutRequiredField[]): stri
   return `Stripe needs ${labels.join(", ")} before it can be shown at checkout.`;
 }
 
+function getStripePlaceholderCredentialErrors(
+  settings: Partial<Pick<StripeSettings, StripeCredentialField>> | null | undefined,
+): string[] {
+  const errors: string[] = [];
+  if (isStripePlaceholderCredential(settings?.secretKey)) {
+    errors.push("Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account.");
+  }
+  if (isStripePlaceholderCredential(settings?.publishableKey)) {
+    errors.push("Stripe publishable key looks like a placeholder. Enter the real Stripe publishable key from your merchant account.");
+  }
+  if (isStripePlaceholderCredential(settings?.webhookSecret)) {
+    errors.push("Stripe webhook secret looks like a placeholder. Enter the real Stripe webhook secret from your merchant account.");
+  }
+  return errors;
+}
+
 export function getStripeCheckoutReadiness(
   settings: Partial<StripeSettings> | null | undefined,
 ): StripeCheckoutReadiness {
   const missingFields = getStripeCheckoutMissingFields(settings);
-  const credentialErrors = compactErrors(settings?.credentialErrors ?? []);
+  const credentialErrors = compactErrors([
+    ...(settings?.credentialErrors ?? []),
+    ...getStripePlaceholderCredentialErrors(settings),
+  ]);
   const enabled = settings?.enabled === true;
   const configured = missingFields.length === 0 && credentialErrors.length === 0;
   return {
@@ -413,6 +456,28 @@ export async function invalidateSSLCommerzCache(kv?: KVNamespace): Promise<void>
 
 const POLAR_CATEGORY = "polar";
 const POLAR_CACHE_KEY = "gw:polar";
+const POLAR_PLACEHOLDER_VALUES = new Set([
+  "dummy",
+  "placeholder",
+  "example",
+  "demo",
+  "test",
+  "polar_access_token",
+  "polar_product_id",
+  "polar_webhook_secret",
+  "your_polar_token",
+  "your_polar_access_token",
+  "your_polar_product_id",
+  "your_polar_webhook_secret",
+  "your_polar_token_here",
+  "your_polar_webhook_secret_here",
+]);
+
+type PolarCredentialField = "accessToken" | "productId" | "webhookSecret";
+
+export function isPolarPlaceholderCredential(value: unknown): boolean {
+  return typeof value === "string" && POLAR_PLACEHOLDER_VALUES.has(value.trim().toLowerCase());
+}
 
 export function getPolarCheckoutMissingFields(
   settings: Partial<Pick<PolarSettings, PolarCheckoutRequiredField>> | null | undefined,
@@ -430,11 +495,30 @@ function polarBlockedReason(missingFields: PolarCheckoutRequiredField[]): string
   return `Polar needs ${labels.join(", ")} before it can be shown at checkout.`;
 }
 
+function getPolarPlaceholderCredentialErrors(
+  settings: Partial<Pick<PolarSettings, PolarCredentialField>> | null | undefined,
+): string[] {
+  const errors: string[] = [];
+  if (isPolarPlaceholderCredential(settings?.accessToken)) {
+    errors.push("Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.");
+  }
+  if (isPolarPlaceholderCredential(settings?.productId)) {
+    errors.push("Polar product ID looks like a placeholder. Enter the real Polar product ID from your merchant account.");
+  }
+  if (isPolarPlaceholderCredential(settings?.webhookSecret)) {
+    errors.push("Polar webhook secret looks like a placeholder. Enter the real Polar webhook secret from your merchant account.");
+  }
+  return errors;
+}
+
 export function getPolarCheckoutReadiness(
   settings: Partial<PolarSettings> | null | undefined,
 ): PolarCheckoutReadiness {
   const missingFields = getPolarCheckoutMissingFields(settings);
-  const credentialErrors = compactErrors(settings?.credentialErrors ?? []);
+  const credentialErrors = compactErrors([
+    ...(settings?.credentialErrors ?? []),
+    ...getPolarPlaceholderCredentialErrors(settings),
+  ]);
   const enabled = settings?.enabled === true;
   const configured = missingFields.length === 0 && credentialErrors.length === 0;
   return {

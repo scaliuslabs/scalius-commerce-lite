@@ -5,6 +5,24 @@ import { errorResponseFromError } from "../../../utils/api-response";
 import { ServiceUnavailableError } from "../../../utils/api-error";
 
 const mocks = vi.hoisted(() => {
+    const stripePlaceholders = new Set([
+        "dummy",
+        "placeholder",
+        "example",
+        "demo",
+        "test",
+        "stripe_secret_key",
+        "stripe_publishable_key",
+        "stripe_webhook_secret",
+        "your_stripe_secret_key",
+        "your_stripe_publishable_key",
+        "your_stripe_webhook_secret",
+        "sk_test_your_key_here",
+        "pk_test_your_key_here",
+        "whsec_your_webhook_secret",
+    ]);
+    const isStripePlaceholder = (value: unknown) =>
+        typeof value === "string" && stripePlaceholders.has(value.trim().toLowerCase());
     const sslPlaceholders = new Set([
         "dummy",
         "test",
@@ -25,6 +43,22 @@ const mocks = vi.hoisted(() => {
     ]);
     const isSslPlaceholder = (value: unknown) =>
         typeof value === "string" && sslPlaceholders.has(value.trim().toLowerCase());
+    const polarPlaceholders = new Set([
+        "dummy",
+        "placeholder",
+        "example",
+        "demo",
+        "test",
+        "polar_access_token",
+        "polar_product_id",
+        "polar_webhook_secret",
+        "your_polar_token",
+        "your_polar_access_token",
+        "your_polar_product_id",
+        "your_polar_webhook_secret",
+    ]);
+    const isPolarPlaceholder = (value: unknown) =>
+        typeof value === "string" && polarPlaceholders.has(value.trim().toLowerCase());
 
     return {
         getKv: vi.fn(),
@@ -48,6 +82,17 @@ const mocks = vi.hoisted(() => {
                 !settings?.publishableKey?.trim() ? "publishableKey" : null,
                 !settings?.webhookSecret?.trim() ? "webhookSecret" : null,
             ].filter((field): field is string => Boolean(field));
+            const credentialErrors = [
+                isStripePlaceholder(settings?.secretKey)
+                    ? "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account."
+                    : null,
+                isStripePlaceholder(settings?.publishableKey)
+                    ? "Stripe publishable key looks like a placeholder. Enter the real Stripe publishable key from your merchant account."
+                    : null,
+                isStripePlaceholder(settings?.webhookSecret)
+                    ? "Stripe webhook secret looks like a placeholder. Enter the real Stripe webhook secret from your merchant account."
+                    : null,
+            ].filter((error): error is string => Boolean(error));
             const labels: Record<string, string> = {
                 secretKey: "secret key",
                 publishableKey: "publishable key",
@@ -55,13 +100,14 @@ const mocks = vi.hoisted(() => {
             };
             const enabled = settings?.enabled === true;
             return {
-                configured: missingFields.length === 0,
+                configured: missingFields.length === 0 && credentialErrors.length === 0,
                 enabled,
-                usable: enabled && missingFields.length === 0,
+                usable: enabled && missingFields.length === 0 && credentialErrors.length === 0,
                 missingFields,
-                blockedReason: missingFields.length > 0
+                credentialErrors,
+                blockedReason: credentialErrors[0] ?? (missingFields.length > 0
                     ? `Stripe needs ${missingFields.map((field) => labels[field] ?? field).join(", ")} before it can be shown at checkout.`
-                    : undefined,
+                    : undefined),
             };
         }),
         isStripeCheckoutUsable: vi.fn((settings: {
@@ -73,8 +119,12 @@ const mocks = vi.hoisted(() => {
             settings?.enabled === true &&
             Boolean(settings.secretKey?.trim()) &&
             Boolean(settings.publishableKey?.trim()) &&
-            Boolean(settings.webhookSecret?.trim())
+            Boolean(settings.webhookSecret?.trim()) &&
+            !isStripePlaceholder(settings.secretKey) &&
+            !isStripePlaceholder(settings.publishableKey) &&
+            !isStripePlaceholder(settings.webhookSecret)
         )),
+        isStripePlaceholderCredential: vi.fn(isStripePlaceholder),
         getSSLCommerzCheckoutReadiness: vi.fn((settings: {
             enabled?: boolean;
             storeId?: string;
@@ -134,6 +184,17 @@ const mocks = vi.hoisted(() => {
                 !settings?.productId?.trim() ? "productId" : null,
                 !settings?.webhookSecret?.trim() ? "webhookSecret" : null,
             ].filter((field): field is string => Boolean(field));
+            const credentialErrors = [
+                isPolarPlaceholder(settings?.accessToken)
+                    ? "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account."
+                    : null,
+                isPolarPlaceholder(settings?.productId)
+                    ? "Polar product ID looks like a placeholder. Enter the real Polar product ID from your merchant account."
+                    : null,
+                isPolarPlaceholder(settings?.webhookSecret)
+                    ? "Polar webhook secret looks like a placeholder. Enter the real Polar webhook secret from your merchant account."
+                    : null,
+            ].filter((error): error is string => Boolean(error));
             const labels: Record<string, string> = {
                 accessToken: "access token",
                 productId: "product ID",
@@ -141,13 +202,14 @@ const mocks = vi.hoisted(() => {
             };
             const enabled = settings?.enabled === true;
             return {
-                configured: missingFields.length === 0,
+                configured: missingFields.length === 0 && credentialErrors.length === 0,
                 enabled,
-                usable: enabled && missingFields.length === 0,
+                usable: enabled && missingFields.length === 0 && credentialErrors.length === 0,
                 missingFields,
-                blockedReason: missingFields.length > 0
+                credentialErrors,
+                blockedReason: credentialErrors[0] ?? (missingFields.length > 0
                     ? `Polar needs ${missingFields.map((field) => labels[field] ?? field).join(", ")} before it can be shown at checkout.`
-                    : undefined,
+                    : undefined),
             };
         }),
         isPolarCheckoutUsable: vi.fn((settings: {
@@ -159,9 +221,13 @@ const mocks = vi.hoisted(() => {
             settings?.enabled === true &&
             Boolean(settings.accessToken?.trim()) &&
             Boolean(settings.productId?.trim()) &&
-            Boolean(settings.webhookSecret?.trim())
+            Boolean(settings.webhookSecret?.trim()) &&
+            !isPolarPlaceholder(settings.accessToken) &&
+            !isPolarPlaceholder(settings.productId) &&
+            !isPolarPlaceholder(settings.webhookSecret)
         )),
         getPolarSettings: vi.fn(),
+        isPolarPlaceholderCredential: vi.fn(isPolarPlaceholder),
         invalidatePaymentMethodsCache: vi.fn(),
         invalidateStripeCache: vi.fn(),
         invalidateSSLCommerzCache: vi.fn(),
@@ -195,12 +261,14 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
     getStripeSettings: mocks.getStripeSettings,
     getStripeCheckoutReadiness: mocks.getStripeCheckoutReadiness,
     isStripeCheckoutUsable: mocks.isStripeCheckoutUsable,
+    isStripePlaceholderCredential: mocks.isStripePlaceholderCredential,
     getSSLCommerzCheckoutReadiness: mocks.getSSLCommerzCheckoutReadiness,
     isSSLCommerzCheckoutUsable: mocks.isSSLCommerzCheckoutUsable,
     getSSLCommerzSettings: mocks.getSSLCommerzSettings,
     isSSLCommerzPlaceholderCredential: mocks.isSSLCommerzPlaceholderCredential,
     getPolarCheckoutReadiness: mocks.getPolarCheckoutReadiness,
     isPolarCheckoutUsable: mocks.isPolarCheckoutUsable,
+    isPolarPlaceholderCredential: mocks.isPolarPlaceholderCredential,
     getPolarSettings: mocks.getPolarSettings,
     invalidatePaymentMethodsCache: mocks.invalidatePaymentMethodsCache,
     invalidateStripeCache: mocks.invalidateStripeCache,
@@ -556,6 +624,55 @@ describe("payment settings cache invalidation", () => {
         expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
     });
 
+    it("rejects enabling Stripe with submitted placeholder credentials", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await postJson(app, env, "/stripe", {
+            secretKey: "stripe_secret_key",
+            publishableKey: "pk_live_public",
+            webhookSecret: "whsec_live",
+            enabled: true,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account.",
+            },
+        });
+        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
+    });
+
+    it("rejects enabling Stripe when a masked stored credential is a placeholder", async () => {
+        const { app, env } = createTestApp({}, [
+            { key: "secret_key", value: "sk_test_your_key_here" },
+            { key: "publishable_key", value: "pk_live_public" },
+            { key: "webhook_secret", value: "whsec_live" },
+            { key: "enabled", value: "false" },
+        ]);
+
+        const response = await postJson(app, env, "/stripe", {
+            enabled: true,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account.",
+            },
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
+    });
+
     it("requires the credential encryption key before saving Stripe secrets", async () => {
         const { app, env } = createTestApp();
 
@@ -791,6 +908,55 @@ describe("payment settings cache invalidation", () => {
             },
         });
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidatePolarCache).not.toHaveBeenCalled();
+    });
+
+    it("rejects enabling Polar with submitted placeholder credentials", async () => {
+        const { app, env } = createTestApp();
+
+        const response = await postJson(app, env, "/polar", {
+            accessToken: "polar_access_token",
+            productId: "polar_product_live",
+            webhookSecret: "polar_webhook_live",
+            enabled: true,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.",
+            },
+        });
+        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidatePolarCache).not.toHaveBeenCalled();
+    });
+
+    it("rejects enabling Polar when a masked stored credential is a placeholder", async () => {
+        const { app, env } = createTestApp({}, [
+            { key: "access_token", value: "your_polar_token" },
+            { key: "product_id", value: "polar_product_live" },
+            { key: "webhook_secret", value: "polar_webhook_live" },
+            { key: "enabled", value: "false" },
+        ]);
+
+        const response = await postJson(app, env, "/polar", {
+            enabled: true,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.",
+            },
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
         expect(mocks.invalidatePolarCache).not.toHaveBeenCalled();
     });
 
