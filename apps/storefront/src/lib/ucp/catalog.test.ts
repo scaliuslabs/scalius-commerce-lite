@@ -206,6 +206,68 @@ describe("UCP catalog mapping", () => {
     ]);
   });
 
+  it("does not fall back to product detail for slug-like lookup misses", async () => {
+    const product = productFixture();
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [],
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+    });
+    mocks.getProductBySlug.mockResolvedValueOnce({
+      product: { ...product, excludeFromProductFeed: true },
+      category: product.category,
+      images: [],
+      variants: product.variants,
+      relatedProducts: [],
+    });
+
+    const result = await lookupCatalog({ ids: ["khaki-shoes"] }, context);
+
+    expect(result.status).toBe(200);
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      page: 1,
+      limit: 10,
+      ids: "khaki-shoes",
+      sort: "newest",
+    });
+    expect(mocks.getProductBySlug).not.toHaveBeenCalled();
+    expect(result.body.products).toEqual([]);
+    expect(result.body.messages?.[0]).toMatchObject({
+      type: "info",
+      code: "partial_lookup",
+    });
+  });
+
+  it("returns lookup 503 when the feed projection cannot be read", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce(null);
+
+    const result = await lookupCatalog({ ids: ["khaki-shoes"] }, context);
+
+    expect(result.status).toBe(503);
+    expect(mocks.getProductBySlug).not.toHaveBeenCalled();
+    expect(result.body).toMatchObject({
+      ucp: { status: "error" },
+      products: [],
+      messages: [
+        {
+          type: "error",
+          code: "temporarily_unavailable",
+        },
+      ],
+    });
+  });
+
+  it("filters any feed-excluded row before mapping lookup products", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [{ ...productFixture(), excludeFromProductFeed: true } as Product],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await lookupCatalog({ ids: ["khaki-shoes"] }, context);
+
+    expect(result.status).toBe(200);
+    expect(result.body.products).toEqual([]);
+  });
+
   it("returns full product detail while ordering the requested variant first", async () => {
     mocks.getFeedProducts.mockResolvedValueOnce({
       data: [productFixture()],
@@ -221,5 +283,61 @@ describe("UCP catalog mapping", () => {
     expect(product.variants).toHaveLength(2);
     expect(product.variants[0].sku).toBe("SKU-BLUE");
     expect(product.variants[1].sku).toBe("SKU-RED");
+  });
+
+  it("does not fall back to product detail for slug-like product misses", async () => {
+    const product = productFixture();
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [],
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+    });
+    mocks.getProductBySlug.mockResolvedValueOnce({
+      product: { ...product, excludeFromProductFeed: true },
+      category: product.category,
+      images: [],
+      variants: product.variants,
+      relatedProducts: [],
+    });
+
+    const result = await getCatalogProduct({ id: "khaki-shoes" }, context);
+
+    expect(result.status).toBe(404);
+    expect(mocks.getProductBySlug).not.toHaveBeenCalled();
+    expect(result.body.messages?.[0]).toMatchObject({
+      type: "error",
+      code: "not_found",
+    });
+  });
+
+  it("filters any feed-excluded row before mapping product detail", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [{ ...productFixture(), excludeFromProductFeed: true } as Product],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await getCatalogProduct({ id: "khaki-shoes" }, context);
+
+    expect(result.status).toBe(404);
+    expect(result.body.messages?.[0]).toMatchObject({
+      type: "error",
+      code: "not_found",
+    });
+  });
+
+  it("returns product 503 when the feed projection cannot be read", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce(null);
+
+    const result = await getCatalogProduct({ id: "khaki-shoes" }, context);
+
+    expect(result.status).toBe(503);
+    expect(result.body).toMatchObject({
+      ucp: { status: "error" },
+      messages: [
+        {
+          type: "error",
+          code: "temporarily_unavailable",
+        },
+      ],
+    });
   });
 });

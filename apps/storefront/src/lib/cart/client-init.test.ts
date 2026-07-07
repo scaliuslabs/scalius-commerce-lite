@@ -5,6 +5,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { cartStore, type CartStore, type Discount } from "../../store/cart";
+import type { CartValidationIssue } from "../api/orders";
+import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "./repair-state";
 import { initCartFunctionality } from "./client";
 
 const apiMocks = vi.hoisted(() => ({
@@ -95,6 +97,7 @@ function renderCartDom() {
     </form>
     <button id="removeDiscountBtn" type="button"></button>
     <div id="discountMessage"></div>
+    <div id="cartValidationMessage" class="hidden"></div>
     <div id="cartItems"></div>
     <span id="subtotal"></span>
     <span id="shippingCost"></span>
@@ -216,6 +219,83 @@ describe("initCartFunctionality", () => {
         customerPhone: "01700000000",
       }),
     );
+  });
+
+  it("rotates a failed checkout id before resubmitting a repaired cart", async () => {
+    const failedCheckoutId = "chk_session_failed_claim";
+    const issue: CartValidationIssue = {
+      index: 0,
+      cartKey: "prod_1-var_1",
+      productId: "prod_1",
+      variantId: "var_1",
+      code: "QUANTITY_UNAVAILABLE",
+      action: "reduce_quantity",
+      message: "Only 1 left.",
+      productName: "Rice",
+      variantLabel: null,
+      requestedQuantity: 3,
+      availableQuantity: 1,
+    };
+    const staleCart: CartStore = {
+      ...cartState,
+      items: {
+        "prod_1-var_1": {
+          ...cartState.items["prod_1-var_1"]!,
+          quantity: 3,
+        },
+      },
+      totalItems: 3,
+      totalAmount: 300,
+    };
+
+    localStorage.setItem("cart", JSON.stringify(staleCart));
+    cartStore.set(staleCart);
+    sessionStorage.setItem("checkoutId", failedCheckoutId);
+    sessionStorage.setItem(
+      CHECKOUT_CART_REPAIR_STORAGE_KEY,
+      JSON.stringify({
+        source: "checkout",
+        message: "Some items in your cart need attention.",
+        issues: [issue],
+        createdAt: Date.now(),
+      }),
+    );
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            valid: false,
+            issues: [issue],
+            items: [],
+            subtotal: 300,
+            hasFreeDeliveryProduct: false,
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await initCartFunctionality();
+
+    const repairStateCheckoutId = sessionStorage.getItem("checkoutId");
+    const checkoutIdInput = document.getElementById("checkoutIdInput") as HTMLInputElement;
+    expect(repairStateCheckoutId).toMatch(/^chk_session_/);
+    expect(repairStateCheckoutId).not.toBe(failedCheckoutId);
+    expect(checkoutIdInput.value).toBe(repairStateCheckoutId);
+
+    window.reduceCartIssueItem?.("prod_1-var_1");
+    await Promise.resolve();
+
+    const resubmitCheckoutId = sessionStorage.getItem("checkoutId");
+    const form = document.getElementById("checkoutForm") as HTMLFormElement;
+    expect(cartStore.get().items["prod_1-var_1"]?.quantity).toBe(1);
+    expect(resubmitCheckoutId).toMatch(/^chk_session_/);
+    expect(resubmitCheckoutId).not.toBe(failedCheckoutId);
+    expect(resubmitCheckoutId).not.toBe(repairStateCheckoutId);
+    expect(checkoutIdInput.value).toBe(resubmitCheckoutId);
+    expect(new FormData(form).get("checkoutId")).toBe(resubmitCheckoutId);
+    expect(sessionStorage.getItem(CHECKOUT_CART_REPAIR_STORAGE_KEY)).toBeNull();
   });
 
   it("does not duplicate remove-discount listeners after repeated init", async () => {

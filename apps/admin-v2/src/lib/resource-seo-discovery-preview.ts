@@ -3,6 +3,7 @@ import {
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
 import {
+  getResourceCanonicalPathSegment,
   isValidResourceCanonicalPath,
   normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
@@ -238,6 +239,25 @@ function buildCanonicalStatus(
       path: null,
       url: null,
     };
+  }
+
+  if (input.kind === "collection" && normalizedCanonicalPath) {
+    const collectionId = input.id?.trim() ?? "";
+    const canonicalSegment = getResourceCanonicalPathSegment(
+      "collection",
+      normalizedCanonicalPath,
+    );
+    if (!collectionId || canonicalSegment !== collectionId) {
+      return {
+        tone: "warning",
+        title: "Canonical path needs cleanup",
+        summary:
+          "Collections are currently served by ID. Leave this blank or use the exact saved collection route.",
+        value: normalizedCanonicalPath,
+        path: null,
+        url: null,
+      };
+    }
   }
 
   const path = normalizedCanonicalPath ?? defaultPath;

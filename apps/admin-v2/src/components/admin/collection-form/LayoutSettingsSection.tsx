@@ -91,7 +91,11 @@ export const LayoutSettingsSection = React.memo(
                   </FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="/collections/summer-edit"
+                      placeholder={
+                        form.watch("id")
+                          ? `/collections/${form.watch("id")}`
+                          : "Leave blank until saved"
+                      }
                       {...field}
                       value={field.value || ""}
                       onChange={(event) => {
@@ -100,7 +104,7 @@ export const LayoutSettingsSection = React.memo(
                     />
                   </FormControl>
                   <FormDescription className="text-xs">
-                    Optional same-store path for duplicate or campaign pages. Leave blank to use this collection page.
+                    Collections are served by ID. Leave blank unless you need the exact saved collection route.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

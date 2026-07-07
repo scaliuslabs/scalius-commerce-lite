@@ -161,4 +161,27 @@ describe("buildResourceDiscoveryPreview", () => {
       title: "Sitemap pending",
     });
   });
+
+  it("fails collection canonical preview when the override is not the saved ID route", () => {
+    const preview = buildResourceDiscoveryPreview({
+      kind: "collection",
+      id: "V1StGXR8_Z5jdHi6B-myT",
+      canonicalPath: "/collections/Z9StGXR8_Z5jdHi6B-myT",
+      isActive: true,
+      discovery: discovery(),
+      storefrontUrl,
+    });
+
+    expect(preview.canonical).toMatchObject({
+      tone: "warning",
+      title: "Canonical path needs cleanup",
+      path: null,
+      url: null,
+    });
+    expect(preview.canonical.summary).toContain("served by ID");
+    expect(preview.sitemap).toMatchObject({
+      tone: "draft",
+      title: "Sitemap pending",
+    });
+  });
 });

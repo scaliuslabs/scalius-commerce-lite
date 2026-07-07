@@ -26,6 +26,7 @@ describe("collection validation", () => {
         for (const canonicalPath of [
             "/featured/summer",
             "/collections/summer/edit",
+            "/collections/summer-edit",
             "/categories/summer-edit",
         ]) {
             expect(

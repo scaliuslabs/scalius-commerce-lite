@@ -69,6 +69,8 @@ const defaults = {
   concurrency: 5,
 };
 
+const receiptTokenHeader = "X-Receipt-Token";
+
 let migrationsApplied = false;
 
 export function getPostsaleConfig(rawArgs = process.argv.slice(2), env = process.env) {
@@ -288,6 +290,13 @@ export function buildCartValidationPayload(orderPayload) {
   };
 }
 
+export function buildReceiptLookupRequest(orderId, receiptToken) {
+  return {
+    path: `/api/v1/orders/receipt/${encodeURIComponent(orderId)}`,
+    headers: { [receiptTokenHeader]: receiptToken },
+  };
+}
+
 export async function runCommand(config) {
   if (config.command === "help") {
     printHelp();
@@ -446,11 +455,8 @@ async function runCheckoutSmoke(config) {
   const replayData = unwrapData(replay.body);
   assertCondition(replayData?.orderId === orderData.orderId, "Committed checkout replay returned a different orderId.");
 
-  const receipt = await requestJson(
-    config,
-    "GET",
-    `/api/v1/orders/receipt/${encodeURIComponent(orderData.orderId)}?token=${encodeURIComponent(orderData.receiptToken)}`,
-  );
+  const receiptRequest = buildReceiptLookupRequest(orderData.orderId, orderData.receiptToken);
+  const receipt = await requestJson(config, "GET", receiptRequest.path, undefined, [200], receiptRequest.headers);
   const receiptOrder = unwrapData(receipt.body)?.order;
   assertCondition(receiptOrder?.id === orderData.orderId, "Receipt token lookup did not return the created order.");
   assertCondition(Array.isArray(receiptOrder?.items) && receiptOrder.items.length === 1, "Receipt did not include the order item.");
@@ -476,7 +482,7 @@ async function runCheckoutSmoke(config) {
   const result = {
     cartValid: true,
     orderId: orderData.orderId,
-    receiptToken: orderData.receiptToken,
+    receiptProof: "received",
     replayedOrderId: replayData.orderId,
     receiptItems: receiptOrder.items.length,
     supportRequestId: supportRequest?.id ?? null,
@@ -763,10 +769,12 @@ function readLocalD1DatabaseName() {
   return dbName;
 }
 
-async function requestJson(config, method, path, body, expectedStatuses = [200]) {
+async function requestJson(config, method, path, body, expectedStatuses = [200], headers = {}) {
   const response = await fetch(`${config.apiBaseUrl}${path}`, {
     method,
-    headers: body ? { "content-type": "application/json", accept: "application/json" } : { accept: "application/json" },
+    headers: body
+      ? { "content-type": "application/json", accept: "application/json", ...headers }
+      : { accept: "application/json", ...headers },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(30_000),
   });
