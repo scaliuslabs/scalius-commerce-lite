@@ -24,6 +24,7 @@
     "dev:admin:create": "node scripts/dev-admin.mjs create",
     "dev:admin:reset": "node scripts/dev-admin.mjs reset",
     "dev:admin:status": "node scripts/dev-admin.mjs status",
+    "dev:admin:smoke": "node scripts/dev-admin-smoke.mjs",
     "dev:post-sale:seed": "node scripts/dev-postsale.mjs seed",
     "dev:post-sale:smoke": "node scripts/dev-postsale.mjs checkout-smoke",
     "dev:post-sale:load": "node scripts/dev-postsale.mjs load",
