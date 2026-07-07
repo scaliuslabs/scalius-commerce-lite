@@ -56,17 +56,24 @@ describe("SEO base URL helpers", () => {
     expect(toAbsoluteStorefrontSeoUrl("data:image/svg+xml,%3Csvg%3E")).toBeNull();
   });
 
-  it("builds resource canonical URLs from same-store path overrides only", () => {
+  it("builds resource canonical URLs from resource-shaped path overrides only", () => {
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://shop.example.com/");
 
     expect(
-      buildResourceCanonicalSeoUrl("/products/fish", "/collections/fish"),
-    ).toBe("https://shop.example.com/collections/fish");
+      buildResourceCanonicalSeoUrl("product", "/products/fish", "/products/hilsa"),
+    ).toBe("https://shop.example.com/products/hilsa");
     expect(
-      buildResourceCanonicalSeoUrl("/products/fish", "https://other.example/fish"),
+      buildResourceCanonicalSeoUrl("product", "/products/fish", "/collections/fish"),
     ).toBe("https://shop.example.com/products/fish");
     expect(
-      buildResourceCanonicalSeoUrl("/products/fish", "/products/fish?ref=ad"),
+      buildResourceCanonicalSeoUrl(
+        "product",
+        "/products/fish",
+        "https://other.example/fish",
+      ),
+    ).toBe("https://shop.example.com/products/fish");
+    expect(
+      buildResourceCanonicalSeoUrl("product", "/products/fish", "/products/fish?ref=ad"),
     ).toBe("https://shop.example.com/products/fish");
   });
 });

@@ -28,7 +28,7 @@ import {
   normalizeProductOptionSchema,
   type ProductOptionSchema,
 } from "@scalius/shared/product-options";
-import { normalizeCanonicalPath } from "@scalius/shared/seo-canonical";
+import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import {
   isVariantAvailable,
   resolveBuyerVariants,
@@ -360,7 +360,7 @@ function toFeedItems(
 
 function buildFeedItemUrl(feedItem: FeedItem, baseUrl: string): string {
   const productPath =
-    normalizeCanonicalPath(feedItem.product.canonicalPath) ??
+    normalizeResourceCanonicalPath("product", feedItem.product.canonicalPath) ??
     `/products/${feedItem.product.slug}`;
   const productUrl = new URL(productPath, `${baseUrl}/`);
   if (feedItem.kind === "variant") {

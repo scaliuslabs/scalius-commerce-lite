@@ -1,7 +1,7 @@
 // src/components/admin/product-form/types.ts
 import { z } from "zod";
 import {
-  isValidCanonicalPath,
+  isValidResourceCanonicalPath,
   normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 import {
@@ -15,9 +15,12 @@ const canonicalPathSchema = z
   .string()
   .nullable()
   .transform((value) => normalizeCanonicalPathInput(value))
-  .refine((value) => value === null || isValidCanonicalPath(value), {
-    message: "Use a same-store path such as /products/main-shoe.",
-  });
+  .refine(
+    (value) => value === null || isValidResourceCanonicalPath("product", value),
+    {
+      message: "Use a reachable product route such as /products/main-shoe.",
+    },
+  );
 
 export {
   DEFAULT_PRODUCT_OPTION_LABELS,

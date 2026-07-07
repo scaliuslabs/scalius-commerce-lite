@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  isValidCanonicalPath,
+  isValidResourceCanonicalPath,
   normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 
@@ -8,9 +8,14 @@ const canonicalPathSchema = z
   .string()
   .nullable()
   .transform((value) => normalizeCanonicalPathInput(value))
-  .refine((value) => value === null || isValidCanonicalPath(value), {
-    message: "Use a same-store path such as /collections/summer-edit.",
-  });
+  .refine(
+    (value) =>
+      value === null || isValidResourceCanonicalPath("collection", value),
+    {
+      message:
+        "Use a reachable collection route such as /collections/col_1.",
+    },
+  );
 
 export interface Category {
   id: string;

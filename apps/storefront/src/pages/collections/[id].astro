@@ -59,6 +59,7 @@ const subtitle = config.subtitle || "";
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const collectionPath = `/collections/${encodeURIComponent(collection.id)}`;
 const canonicalUrl = buildResourceCanonicalSeoUrl(
+  "collection",
   collectionPath,
   collection.canonicalPath,
 );

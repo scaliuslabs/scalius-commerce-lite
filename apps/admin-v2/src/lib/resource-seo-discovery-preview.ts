@@ -3,7 +3,7 @@ import {
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
 import {
-  isValidCanonicalPath,
+  isValidResourceCanonicalPath,
   normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 
@@ -224,12 +224,16 @@ function buildCanonicalStatus(
   const normalizedCanonicalPath = normalizeCanonicalPathInput(
     input.canonicalPath,
   );
-  if (normalizedCanonicalPath && !isValidCanonicalPath(normalizedCanonicalPath)) {
+  if (
+    normalizedCanonicalPath &&
+    !isValidResourceCanonicalPath(input.kind, normalizedCanonicalPath)
+  ) {
     return {
       tone: "warning",
       title: "Canonical path needs cleanup",
       summary:
-        "Use a same-store path without query strings, fragments, spaces, or another domain.",
+        "Use a reachable same-store route for this resource without query strings, " +
+        "fragments, spaces, or another domain.",
       value: normalizedCanonicalPath,
       path: null,
       url: null,

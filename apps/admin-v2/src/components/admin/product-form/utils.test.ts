@@ -138,6 +138,15 @@ describe("product form catalog option mapping", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects product canonical overrides outside product routes", () => {
+    const result = productFormSchema.safeParse({
+      ...baseValues,
+      canonicalPath: "/shop/main-shoe",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("includes catalog option mapping fields in product submissions", () => {
     expect(
       formatFormValuesForSubmission(

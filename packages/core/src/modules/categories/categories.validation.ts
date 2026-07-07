@@ -1,7 +1,7 @@
 // src/modules/categories/categories.validation.ts
 import { z } from "zod";
 import {
-    isValidCanonicalPath,
+    isValidResourceCanonicalPath,
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 
@@ -10,8 +10,8 @@ const canonicalPathSchema = z
     .nullable()
     .optional()
     .transform((value) => normalizeCanonicalPathInput(value))
-    .refine((value) => value === null || isValidCanonicalPath(value), {
-        message: "Canonical path must be a clean same-store path without query strings or fragments.",
+    .refine((value) => value === null || isValidResourceCanonicalPath("category", value), {
+        message: "Canonical path must be a category route such as /categories/summer-shoes.",
     });
 
 const imageSchema = z

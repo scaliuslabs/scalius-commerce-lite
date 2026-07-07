@@ -21,17 +21,25 @@ import {
   isWidgetPlacementSlotAllowedForScope,
 } from "@scalius/shared/widget-placement";
 import {
-  isValidCanonicalPath,
+  isValidResourceCanonicalPath,
   normalizeCanonicalPathInput,
+  type CanonicalResourceKind,
 } from "@scalius/shared/seo-canonical";
 
-const canonicalPathFormSchema = z
-  .string()
-  .nullable()
-  .transform((value) => normalizeCanonicalPathInput(value))
-  .refine((value) => value === null || isValidCanonicalPath(value), {
-    message: "Use a same-store path such as /products/main-shoe.",
-  });
+const canonicalPathFormSchema = (
+  kind: CanonicalResourceKind,
+  example: string,
+) =>
+  z
+    .string()
+    .nullable()
+    .transform((value) => normalizeCanonicalPathInput(value))
+    .refine(
+      (value) => value === null || isValidResourceCanonicalPath(kind, value),
+      {
+        message: `Use a reachable same-store route such as ${example}.`,
+      },
+    );
 
 const mediaFileFormSchema = z.object({
   id: z.string(),
@@ -65,7 +73,10 @@ export const categoryFormSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
-  canonicalPath: canonicalPathFormSchema,
+  canonicalPath: canonicalPathFormSchema(
+    "category",
+    "/categories/summer-shoes",
+  ),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   image: mediaFileFormSchema.nullable(),
@@ -92,7 +103,7 @@ export const pageFormSchema = z.object({
   content: z.string().min(1, "Content is required"),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
-  canonicalPath: canonicalPathFormSchema,
+  canonicalPath: canonicalPathFormSchema("page", "/returns"),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   isPublished: z.boolean(),

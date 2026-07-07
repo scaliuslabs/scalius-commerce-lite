@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 import {
-    isValidCanonicalPath,
+    isValidResourceCanonicalPath,
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 import {
@@ -18,8 +18,8 @@ const canonicalPathSchema = z
     .nullable()
     .optional()
     .transform((value) => normalizeCanonicalPathInput(value))
-    .refine((value) => value === null || isValidCanonicalPath(value), {
-        message: "Canonical path must be a clean same-store path without query strings or fragments.",
+    .refine((value) => value === null || isValidResourceCanonicalPath("product", value), {
+        message: "Canonical path must be a product route such as /products/main-shoe.",
     });
 
 const productOptionLabelSchema = z.string().trim().min(1).max(40);

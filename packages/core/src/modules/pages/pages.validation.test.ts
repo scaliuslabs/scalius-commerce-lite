@@ -13,6 +13,23 @@ const featuredImage = {
   createdAt: "2026-05-11T00:00:00.000Z",
 };
 
+const pageInput = {
+  title: "Return Policy",
+  slug: "returns",
+  content: "<p>Return policy details.</p>",
+  metaTitle: null,
+  metaDescription: null,
+  canonicalPath: null,
+  noIndex: false,
+  excludeFromSitemap: false,
+  isPublished: true,
+  sortOrder: 0,
+  hideHeader: false,
+  hideFooter: false,
+  hideTitle: false,
+  featuredImage: null,
+};
+
 describe("page validation", () => {
   it("accepts a featured image when creating a page", () => {
     const parsed = createPageSchema.parse({
@@ -46,5 +63,43 @@ describe("page validation", () => {
     const parsed = updatePageSchema.parse({ title: "Updated Offer" });
 
     expect(parsed).toEqual({ title: "Updated Offer" });
+  });
+
+  it("accepts single-segment page canonical overrides", () => {
+    const parsed = createPageSchema.parse({
+      ...pageInput,
+      canonicalPath: " /returns ",
+    });
+
+    expect(parsed.canonicalPath).toBe("/returns");
+  });
+
+  it("rejects multi-segment and reserved page canonical overrides", () => {
+    for (const canonicalPath of [
+      "/company/about",
+      "/products",
+      "/categories",
+      "/collections",
+      "/api",
+      "/buy",
+      "/health",
+      "/order-success",
+      "/payment-recovery",
+      "/sitemap.xml",
+      "/robots.txt",
+      "/search",
+      "/cart",
+      "/checkout",
+      "/account",
+      "/admin",
+    ]) {
+      expect(
+        createPageSchema.safeParse({
+          ...pageInput,
+          canonicalPath,
+        }).success,
+        canonicalPath,
+      ).toBe(false);
+    }
   });
 });

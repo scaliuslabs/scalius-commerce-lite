@@ -230,6 +230,7 @@ const analyticsProductData = products.map((p) => ({
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 // Canonical always points to page 1 -- strips ?page, ?sortBy, and filter params (per CAN-01)
 const canonicalUrl = buildResourceCanonicalSeoUrl(
+  "category",
   `/categories/${slug}`,
   category?.canonicalPath,
 );

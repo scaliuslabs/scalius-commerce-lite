@@ -1,5 +1,8 @@
 import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
-import { normalizeCanonicalPath } from "@scalius/shared/seo-canonical";
+import {
+  normalizeResourceCanonicalPath,
+  type CanonicalResourceKind,
+} from "@scalius/shared/seo-canonical";
 import { normalizeAbsoluteStorefrontOriginUrl } from "./storefront-origin";
 
 export function getAbsoluteStorefrontSeoBaseUrl(): string | null {
@@ -14,11 +17,12 @@ export function buildAbsoluteStorefrontSeoUrl(path: string): string | null {
 }
 
 export function buildResourceCanonicalSeoUrl(
+  kind: CanonicalResourceKind,
   fallbackPath: string,
   canonicalPath?: string | null,
 ): string | null {
   return buildAbsoluteStorefrontSeoUrl(
-    normalizeCanonicalPath(canonicalPath) ?? fallbackPath,
+    normalizeResourceCanonicalPath(kind, canonicalPath) ?? fallbackPath,
   );
 }
 
