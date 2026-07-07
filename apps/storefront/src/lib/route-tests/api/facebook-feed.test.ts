@@ -87,6 +87,61 @@ describe("Facebook product feed route", () => {
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({ page: 1, limit: 100 });
   });
 
+  it("emits product condition only from a saved product fact", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_used",
+          slug: "used-camera",
+          name: "Used Camera",
+          description: "Second-hand camera",
+          price: 7500,
+          discountedPrice: 7500,
+          availableForSale: true,
+          productCondition: "used",
+          imageUrl: "https://cdn.example.test/products/used-camera.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<g:condition>used</g:condition>");
+    expect(body).not.toContain("<g:condition>new</g:condition>");
+  });
+
+  it("does not fabricate a feed condition for products without a saved condition", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_unknown_condition",
+          slug: "unknown-condition",
+          name: "Condition Not Saved",
+          description: "Product without explicit condition",
+          price: 1200,
+          discountedPrice: 1200,
+          availableForSale: true,
+          productCondition: null,
+          imageUrl: "https://cdn.example.test/products/condition-not-saved.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).not.toContain("<g:condition>");
+  });
+
   it("rejects malformed page and limit query parameters", async () => {
     const badPage = await GET(
       context("https://storefront.example.test/api/facebook-feed.xml?page=2abc"),

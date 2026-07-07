@@ -15561,6 +15561,16 @@
                               "excludeFromProductFeed": {
                                 "type": "boolean"
                               },
+                              "productCondition": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "new",
+                                  "refurbished",
+                                  "used",
+                                  null
+                                ]
+                              },
                               "hasVariants": {
                                 "type": "boolean"
                               },
@@ -15737,6 +15747,7 @@
                               "freeDelivery",
                               "categoryId",
                               "excludeFromProductFeed",
+                              "productCondition",
                               "hasVariants",
                               "availableForSale",
                               "imageUrl",
@@ -100622,6 +100633,14 @@
                     "type": "boolean",
                     "default": false
                   },
+                  "productCondition": {
+                    "type": "string",
+                    "enum": [
+                      "new",
+                      "refurbished",
+                      "used"
+                    ]
+                  },
                   "variantOption1Label": {
                     "type": "string",
                     "minLength": 1,
@@ -100754,6 +100773,7 @@
                   "freeDelivery",
                   "metaTitle",
                   "metaDescription",
+                  "productCondition",
                   "slug",
                   "images"
                 ]
@@ -101777,6 +101797,16 @@
                         "excludeFromProductFeed": {
                           "type": "boolean"
                         },
+                        "productCondition": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "new",
+                            "refurbished",
+                            "used",
+                            null
+                          ]
+                        },
                         "variantOption1Label": {
                           "type": "string"
                         },
@@ -102123,6 +102153,7 @@
                         "noIndex",
                         "excludeFromSitemap",
                         "excludeFromProductFeed",
+                        "productCondition",
                         "variantOption1Label",
                         "variantOption2Label",
                         "variantOption1Schema",
@@ -102285,6 +102316,14 @@
                     "type": "boolean",
                     "default": false
                   },
+                  "productCondition": {
+                    "type": "string",
+                    "enum": [
+                      "new",
+                      "refurbished",
+                      "used"
+                    ]
+                  },
                   "variantOption1Label": {
                     "type": "string",
                     "minLength": 1,
@@ -102420,6 +102459,7 @@
                   "freeDelivery",
                   "metaTitle",
                   "metaDescription",
+                  "productCondition",
                   "slug",
                   "images",
                   "id"

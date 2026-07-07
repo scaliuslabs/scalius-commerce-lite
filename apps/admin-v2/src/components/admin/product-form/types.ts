@@ -10,6 +10,11 @@ import {
   PRODUCT_OPTION_SCHEMA_VALUES,
   type ProductOptionSchema,
 } from "@scalius/shared/product-options";
+import {
+  DEFAULT_PRODUCT_CONDITION,
+  PRODUCT_CONDITION_VALUES,
+  type ProductCondition,
+} from "@scalius/shared/product-condition";
 
 const canonicalPathSchema = z
   .string()
@@ -26,7 +31,10 @@ export {
   DEFAULT_PRODUCT_OPTION_LABELS,
   DEFAULT_PRODUCT_OPTION_SCHEMA,
   PRODUCT_OPTION_SCHEMA_VALUES,
+  DEFAULT_PRODUCT_CONDITION,
+  PRODUCT_CONDITION_VALUES,
   type ProductOptionSchema,
+  type ProductCondition,
 };
 
 const productOptionLabelSchema = z
@@ -72,6 +80,7 @@ export const productFormSchema = z.object({
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   excludeFromProductFeed: z.boolean(),
+  productCondition: z.enum(PRODUCT_CONDITION_VALUES),
   variantOption1Label: productOptionLabelSchema,
   variantOption2Label: productOptionLabelSchema,
   variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),

@@ -53,8 +53,10 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("gtinJsonLdForVariant(variant.barcode, variant.barcodeType)");
     expect(source).toContain("buyerVariants[0]?.barcode");
     expect(source).not.toContain("priceValidUntil");
-    expect(source).not.toContain("itemCondition");
-    expect(source).not.toContain("NewCondition");
+    expect(source).toContain("normalizeSavedProductCondition(product.productCondition)");
+    expect(source).toContain("PRODUCT_CONDITION_SCHEMA_URLS[productCondition]");
+    expect(source).toContain("itemCondition: productConditionSchemaUrl");
+    expect(source).not.toContain('itemCondition: "https://schema.org/NewCondition"');
     expect(source).toContain("sellerSchemaName");
     expect(source).toContain("layoutData.business?.companyName");
     expect(source).toContain("layoutData.business?.legalName");

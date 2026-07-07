@@ -15,6 +15,7 @@ const productUpdate = {
     noIndex: false,
     excludeFromSitemap: false,
     excludeFromProductFeed: false,
+    productCondition: "new" as const,
     variantOption1Label: "Option 1",
     variantOption2Label: "Option 2",
     variantOption1Schema: "size" as const,

@@ -80,6 +80,7 @@ type StorefrontFeedProductListRow = {
     freeDelivery: boolean;
     categoryId: string | null;
     excludeFromProductFeed: boolean;
+    productCondition: "new" | "refurbished" | "used" | null;
     updatedAt: number;
     hasCustomerOptions: boolean;
     availableForSale: boolean;
@@ -527,6 +528,7 @@ export async function getStorefrontFeedProducts(
             price: products.price,
             slug: products.slug,
             canonicalPath: products.canonicalPath,
+            productCondition: products.productCondition,
             variantOption1Label: products.variantOption1Label,
             variantOption2Label: products.variantOption2Label,
             variantOption1Schema: products.variantOption1Schema,
@@ -607,6 +609,7 @@ export async function getStorefrontFeedProducts(
             freeDelivery: product.freeDelivery,
             categoryId: product.categoryId,
             excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
+            productCondition: product.productCondition,
             hasVariants: Boolean(product.hasCustomerOptions),
             availableForSale: Boolean(product.availableForSale),
             imageUrl: imgData?.url || null,
@@ -772,6 +775,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             metaTitle: products.metaTitle,
             metaDescription: products.metaDescription,
             canonicalPath: products.canonicalPath,
+            productCondition: products.productCondition,
             noIndex: products.noIndex,
             discountType: products.discountType,
             discountPercentage: products.discountPercentage,

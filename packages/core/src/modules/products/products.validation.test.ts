@@ -4,6 +4,7 @@ import {
     DEFAULT_PRODUCT_OPTION_LABELS,
     DEFAULT_PRODUCT_OPTION_SCHEMA,
 } from "@scalius/shared/product-options";
+import { DEFAULT_PRODUCT_CONDITION } from "@scalius/shared/product-condition";
 
 const productInput = {
     name: "Main Shoe",
@@ -21,6 +22,7 @@ const productInput = {
     noIndex: false,
     excludeFromSitemap: false,
     excludeFromProductFeed: false,
+    productCondition: DEFAULT_PRODUCT_CONDITION,
     variantOption1Label: DEFAULT_PRODUCT_OPTION_LABELS.option1,
     variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
     variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
@@ -55,5 +57,16 @@ describe("product validation", () => {
                 canonicalPath,
             ).toBe(false);
         }
+    });
+
+    it("accepts only explicit supported product conditions", () => {
+        expect(createProductSchema.parse(productInput).productCondition).toBe("new");
+        expect(createProductSchema.parse({ ...productInput, productCondition: "used" }).productCondition).toBe("used");
+        expect(
+            createProductSchema.safeParse({
+                ...productInput,
+                productCondition: "open-box",
+            }).success,
+        ).toBe(false);
     });
 });

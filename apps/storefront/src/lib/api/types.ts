@@ -38,6 +38,7 @@ import type {
 } from "@scalius/api-client/types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { ProductOptionSchema } from "@scalius/shared/product-options";
+import type { ProductCondition } from "@scalius/shared/product-condition";
 
 export type {
   GetProductsResponse,
@@ -117,6 +118,7 @@ export interface Product {
   metaTitle: string | null;
   metaDescription: string | null;
   canonicalPath?: string | null;
+  productCondition?: ProductCondition | null;
   variantOption1Label?: string | null;
   variantOption2Label?: string | null;
   variantOption1Schema?: ProductOptionSchema | null;

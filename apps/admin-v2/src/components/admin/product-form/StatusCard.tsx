@@ -11,8 +11,20 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  PRODUCT_CONDITION_DESCRIPTIONS,
+  PRODUCT_CONDITION_LABELS,
+  PRODUCT_CONDITION_VALUES,
+} from "@scalius/shared/product-condition";
 import type { ProductFormValues } from "./types";
 
 interface StatusCardProps {
@@ -77,6 +89,33 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
                   onCheckedChange={field.onChange}
                 />
               </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="productCondition"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-sm font-medium">Product condition</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select condition" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {PRODUCT_CONDITION_VALUES.map((condition) => (
+                    <SelectItem key={condition} value={condition}>
+                      {PRODUCT_CONDITION_LABELS[condition]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription className="text-xs">
+                {PRODUCT_CONDITION_DESCRIPTIONS[field.value]}
+              </FormDescription>
             </FormItem>
           )}
         />

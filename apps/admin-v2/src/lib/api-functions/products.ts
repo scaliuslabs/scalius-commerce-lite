@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { ProductOptionSchema } from "@scalius/shared/product-options";
+import type { ProductCondition } from "@scalius/shared/product-condition";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 
 type Timestamp = string | number;
@@ -112,6 +113,7 @@ export interface ProductWriteInput {
   noIndex: boolean;
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
+  productCondition: ProductCondition;
   variantOption1Label: string;
   variantOption2Label: string;
   variantOption1Schema: ProductOptionSchema;
@@ -185,6 +187,7 @@ export interface ProductDetailDto {
   noIndex: boolean;
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
+  productCondition: ProductCondition | null;
   variantOption1Label: string;
   variantOption2Label: string;
   variantOption1Schema: ProductOptionSchema;

@@ -77,6 +77,7 @@ function createProductBody(overrides: Record<string, unknown> = {}) {
     metaTitle: null,
     metaDescription: null,
     slug: "hilsa-fish",
+    productCondition: "new",
     images: [
       {
         id: "img_1",
