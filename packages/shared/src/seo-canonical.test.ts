@@ -41,13 +41,13 @@ describe("SEO canonical path helpers", () => {
       isValidResourceCanonicalPath("category", "/categories/summer-shoes"),
     ).toBe(true);
     expect(
-      isValidResourceCanonicalPath("collection", "/collections/summer-edit"),
-    ).toBe(true);
-    expect(
       isValidResourceCanonicalPath(
         "collection",
         "/collections/V1StGXR8_Z5jdHi6B-myT",
       ),
+    ).toBe(true);
+    expect(
+      isValidResourceCanonicalPath("collection", "/collections/col_1"),
     ).toBe(true);
     expect(isValidResourceCanonicalPath("page", "/returns")).toBe(true);
 
@@ -61,6 +61,9 @@ describe("SEO canonical path helpers", () => {
     expect(isValidResourceCanonicalPath("collection", "/collections")).toBe(
       false,
     );
+    expect(
+      isValidResourceCanonicalPath("collection", "/collections/summer-edit"),
+    ).toBe(false);
     expect(isValidResourceCanonicalPath("page", "/company/about")).toBe(false);
     expect(isValidResourceCanonicalPath("page", "/products")).toBe(false);
     expect(isValidResourceCanonicalPath("page", "/health")).toBe(false);

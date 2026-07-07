@@ -1,7 +1,7 @@
 import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
-import { getFeedProducts, getProductBySlug } from "@/lib/api/products";
+import { getFeedProducts } from "@/lib/api/products";
 import { getLayoutData, type CurrencyData } from "@/lib/api/storefront";
-import type { Product, ProductVariant } from "@/lib/api/types";
+import type { PaginatedResponse, Product, ProductVariant } from "@/lib/api/types";
 import {
   availableQuantityForVariant,
   isVariantAvailable,
@@ -604,6 +604,9 @@ function mapProduct(
   inputMatches?: Map<string, Array<{ id: string; match?: VariantMatchMode }>>,
 ): UcpProduct | null {
   if (product.isActive === false) return null;
+  if ((product as { excludeFromProductFeed?: unknown }).excludeFromProductFeed === true) {
+    return null;
+  }
 
   const resolution = resolveBuyerVariants(product.variants ?? []);
   if (resolution.variants.length === 0) return null;
@@ -708,6 +711,17 @@ function hasRecognizedSearchInput(body: SearchRequestBody): boolean {
   );
 }
 
+async function loadFeedProducts(
+  options: Parameters<typeof getFeedProducts>[0],
+): Promise<PaginatedResponse<Product> | null> {
+  try {
+    return await getFeedProducts(options);
+  } catch (error) {
+    console.error("Error loading UCP feed products:", error);
+    return null;
+  }
+}
+
 export async function searchCatalog(
   body: SearchRequestBody,
   context: UcpCatalogContext,
@@ -730,7 +744,7 @@ export async function searchCatalog(
   }
 
   const options = buildSearchOptions(body, context);
-  const result = await getFeedProducts(options);
+  const result = await loadFeedProducts(options);
   if (!result) {
     return {
       status: 503,
@@ -790,37 +804,20 @@ function lookupInputs(ids: unknown, context: UcpCatalogContext): LookupInput[] {
     .filter((input) => input.normalized.length > 0);
 }
 
-async function loadProductsByInputs(inputs: LookupInput[]): Promise<Product[]> {
+async function loadProductsByInputs(inputs: LookupInput[]): Promise<Product[] | null> {
   if (inputs.length === 0) return [];
 
-  const result = await getFeedProducts({
+  const result = await loadFeedProducts({
     page: 1,
     limit: Math.max(inputs.length, DEFAULT_SEARCH_LIMIT),
     ids: inputs.map((input) => input.normalized).join(","),
     sort: "newest",
   });
-  const productsById = new Map<string, Product>();
-  for (const product of result?.data ?? []) {
-    productsById.set(product.id, product);
-  }
+  if (!result) return null;
 
-  const slugs = inputs
-    .map((input) => input.normalized)
-    .filter((value) => !productsById.has(value) && /^[a-z0-9][a-z0-9-]*$/i.test(value));
-  await Promise.all(slugs.map(async (slug) => {
-    const detail = await getProductBySlug(slug);
-    if (!detail) return;
-    const primaryImage = detail.images.find((image) => image.isPrimary) ?? detail.images[0];
-    productsById.set(detail.product.id, {
-      ...detail.product,
-      imageUrl: detail.product.imageUrl ?? primaryImage?.url ?? null,
-      imageAlt: detail.product.imageAlt ?? primaryImage?.alt ?? null,
-      category: detail.product.category ?? detail.category ?? undefined,
-      variants: detail.variants,
-    });
-  }));
-
-  return [...productsById.values()];
+  return Array.from(
+    new Map(result.data.map((product) => [product.id, product])).values(),
+  );
 }
 
 function buildInputMatches(products: Product[], inputs: LookupInput[]) {
@@ -884,6 +881,23 @@ export async function lookupCatalog(
   }
 
   const products = await loadProductsByInputs(inputs);
+  if (products === null) {
+    return {
+      status: 503,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_LOOKUP_CAPABILITY]),
+        products: [],
+        messages: [
+          {
+            type: "error",
+            code: "temporarily_unavailable",
+            content: "Catalog lookup is temporarily unavailable.",
+          },
+        ],
+      },
+    };
+  }
+
   const inputMatches = buildInputMatches(products, inputs);
   const mappedProducts = products
     .map((product) => mapProduct(product, context, inputMatches.get(product.id)))
@@ -978,6 +992,22 @@ export async function getCatalogProduct(
 
   const inputs = lookupInputs([id], context);
   const products = await loadProductsByInputs(inputs);
+  if (products === null) {
+    return {
+      status: 503,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_LOOKUP_CAPABILITY]),
+        messages: [
+          {
+            type: "error",
+            code: "temporarily_unavailable",
+            content: "Catalog product lookup is temporarily unavailable.",
+          },
+        ],
+      },
+    };
+  }
+
   const sourceProduct = products[0];
   const product = sourceProduct ? mapProduct(sourceProduct, context) : null;
   if (!product) {

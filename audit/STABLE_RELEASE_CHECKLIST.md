@@ -17,6 +17,7 @@ Use this file before claiming the platform is ready for a stable merchant-facing
 ## SEO, Feed, AEO, And AIO Gate
 
 Treat "AIO" as crawlable, trustworthy commerce data for search and assistants, not as a magic markup layer.
+Official Google Search/Merchant guidance was rechecked on 2026-07-07: Product structured data still recommends combining merchant-listing JSON-LD with Merchant feeds, ProductGroup remains the current variant model, and Google generative-AI search guidance still depends on crawlable, useful, well-structured human-facing content.
 
 - `/robots.txt`, `/sitemap.xml`, `/sitemap-static.xml`, `/sitemap-products.xml`, `/sitemap-categories.xml`, `/sitemap-collections.xml`, `/sitemap-pages.xml`, canonical `/api/product-feed.xml?limit=5`, and compatibility `/api/facebook-feed.xml?limit=5` return valid XML/text with absolute URLs and production-safe cache headers. The canonical feed must use Google/Base availability values (`in_stock`/`out_of_stock`); the compatibility feed must keep Meta-style values (`in stock`/`out of stock`).
 - Static sitemap-advertised URLs have canonical URLs; search/listing query, sort, filter, and paginated variants must be canonicalized or noindexed with follow.
@@ -36,6 +37,7 @@ Primary references for future changes:
 ## Known P2 Release Follow-Ups
 
 - `SEO-011`: remaining structured-data preview UX, live child-sitemap/dashboard refinement, richer organization/contact/shipping/return policy schema, and FAQ/AEO controls where dashboard-owned data exists.
+- `SEO-026`: before Google Merchant's announced January 31, 2027 enforcement date, feed diagnostics should verify that primary catalog images meet the 500x500 minimum when dimensions are known or can be derived from first-party media metadata.
 - SEO dashboard live probes now cover `robots.txt`, the sitemap index, canonical product feed, and compatibility Facebook feed from the saved Store URL. The dashboard also has bounded aggregate product-feed diagnostics for emitted rows, skipped rows, reason counts, and safe product samples; latest live smoke showed `77` emitted rows, `0` skipped rows, `2` products to fix, `29` scanned products, and live proof checks OK.
 - Feed diagnostics: `/api/product-feed.xml` paginates the final flattened feed rows so skipped products and variant expansion cannot drop rows, while admin diagnostics explain which bounded catalog rows are skipped and why.
 - `UCP-001`/`UCP-002`: read-only catalog discovery is present without checkout/cart/order/payment advertisement, and `pnpm release:check` now verifies the HTTPS catalog-only profile plus opportunistic search/lookup correlation. Remaining UCP work is a P2/P1 roadmap item for dashboard control, D1-backed sessions, idempotency, signing/profile verification, and supported payment completion.

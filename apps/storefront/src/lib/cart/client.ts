@@ -101,6 +101,32 @@ function getCheckoutId(): string {
   return checkoutId;
 }
 
+function setCheckoutIdInputValue(checkoutId: string): void {
+  const checkoutIdInput = document.getElementById(
+    "checkoutIdInput",
+  ) as HTMLInputElement | null;
+  if (checkoutIdInput) {
+    checkoutIdInput.value = checkoutId;
+  }
+}
+
+function syncCheckoutIdInput(): void {
+  setCheckoutIdInputValue(getCheckoutId());
+}
+
+function rotateCheckoutId(): string {
+  const checkoutId = `chk_session_${nanoid()}`;
+  sessionStorage.setItem("checkoutId", checkoutId);
+  setCheckoutIdInputValue(checkoutId);
+  return checkoutId;
+}
+
+function rotateCheckoutIdIfCartBlocked(): void {
+  if (hasBlockingCartIssues()) {
+    rotateCheckoutId();
+  }
+}
+
 interface CheckoutFormData {
   [key: string]:
     | FormDataEntryValue
@@ -428,6 +454,8 @@ function updateCartValidationMessage() {
 function applyPendingCartRepairState(): boolean {
   const state = readAndClearCartRepairState() ?? readAndClearInlineCartRepairState();
   if (!state) return false;
+
+  rotateCheckoutId();
 
   if (state.issues.length > 0) {
     setCartValidationIssues(state.issues, cartStore.get().items, state.message);
@@ -843,12 +871,7 @@ export async function initCartFunctionality() {
   processQuickBuy();
 
   // Populate the hidden checkoutId input field
-  const checkoutIdInput = document.getElementById(
-    "checkoutIdInput",
-  ) as HTMLInputElement;
-  if (checkoutIdInput) {
-    checkoutIdInput.value = getCheckoutId();
-  }
+  syncCheckoutIdInput();
 
   window.handleAbandonedCheckout = handleAbandonedCheckout;
   window.validateCartSnapshot = validateCartSnapshot;
@@ -856,19 +879,23 @@ export async function initCartFunctionality() {
   window.getCartBlockedMessage = () => cartBlockedMessage();
 
   window.updateCartQuantity = (id, variantId, qty) => {
+    rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
     updateQuantity(id, variantId || undefined, qty);
   };
   window.removeFromCart = (id, variantId) => {
+    rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
     removeFromCart(id, variantId || undefined);
   };
   window.removeCartIssueItem = (cartKey) => {
+    rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
     delete cartValidationIssues[cartKey];
     removeCartItemByKey(cartKey);
   };
   window.reduceCartIssueItem = (cartKey) => {
+    rotateCheckoutIdIfCartBlocked();
     const issue = (cartValidationIssues[cartKey] ?? []).find(
       (item) => item.action === "reduce_quantity",
     );
@@ -882,6 +909,7 @@ export async function initCartFunctionality() {
     updateCartItemByKey(cartKey, { quantity: issue.availableQuantity });
   };
   window.refreshCartIssueItem = (cartKey) => {
+    rotateCheckoutIdIfCartBlocked();
     const issue = (cartValidationIssues[cartKey] ?? []).find(
       (item) => item.action === "refresh_item",
     );

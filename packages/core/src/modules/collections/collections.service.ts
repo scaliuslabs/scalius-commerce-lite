@@ -6,8 +6,9 @@ import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQ
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput } from "./collections.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { NotFoundError } from "@scalius/core/errors";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
 import {
     publicCollectionProductConditions,
     publicProductHasCustomerOptions,
@@ -140,6 +141,10 @@ export async function createCollection(
     db: Database,
     data: CreateCollectionInput,
 ) {
+    if (data.canonicalPath) {
+        throw new ValidationError("Collection canonical path should be blank until the collection has a saved ID route.");
+    }
+
     const maxSortOrder = await db
         .select({ max: max(collections.sortOrder) })
         .from(collections)
@@ -170,6 +175,13 @@ export async function updateCollection(
 ) {
     const existing = await db.select({ id: collections.id }).from(collections).where(eq(collections.id, id)).get();
     if (!existing) throw new NotFoundError("Collection not found");
+
+    if (
+        data.canonicalPath &&
+        getResourceCanonicalPathSegment("collection", data.canonicalPath) !== id
+    ) {
+        throw new ValidationError("Collection canonical path must match this collection's ID route, or be left blank.");
+    }
 
     const updateData: Record<string, unknown> = { updatedAt: sql`(unixepoch())` };
     if (data.name !== undefined) updateData.name = data.name;

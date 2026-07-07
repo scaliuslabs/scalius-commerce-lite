@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
-import { resolveCollectionProducts, resolveCollectionProductsBatch } from "./collections.service";
+import {
+    createCollection,
+    resolveCollectionProducts,
+    resolveCollectionProductsBatch,
+    updateCollection,
+} from "./collections.service";
 
 type QueryChain = {
     selection: Record<string, unknown>;
@@ -94,6 +99,32 @@ function createCategoryBatchDb(options: {
 }
 
 describe("resolveCollectionProducts", () => {
+    it("rejects create-time collection canonical overrides before an ID route exists", async () => {
+        await expect(createCollection(createDb([]), {
+            name: "Summer Edit",
+            type: "manual",
+            isActive: true,
+            canonicalPath: "/collections/col_1",
+            noIndex: false,
+            excludeFromSitemap: false,
+            config: { categoryIds: [], productIds: [], maxProducts: 8 },
+        })).rejects.toThrow(/blank until the collection has a saved ID route/);
+    });
+
+    it("rejects edit-time collection canonical overrides that do not match the collection ID", async () => {
+        const existing = createQueryChain();
+        existing.get.mockResolvedValue({ id: "V1StGXR8_Z5jdHi6B-myT" });
+        const db = {
+            select: vi.fn(() => existing),
+            update: vi.fn(),
+        } as unknown as Database;
+
+        await expect(updateCollection(db, "V1StGXR8_Z5jdHi6B-myT", {
+            canonicalPath: "/collections/Z9StGXR8_Z5jdHi6B-myT",
+        })).rejects.toThrow(/must match this collection's ID route/);
+        expect(db.update).not.toHaveBeenCalled();
+    });
+
     it("keeps manually configured product order and maxProducts stable", async () => {
         const db = createDb([
             [product("p1"), product("p2"), product("p3")],

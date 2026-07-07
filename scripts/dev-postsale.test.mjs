@@ -4,6 +4,7 @@ import {
   buildCheckoutPayload,
   buildFixtureSql,
   buildPaymentReadinessFixtureSql,
+  buildReceiptLookupRequest,
   getPostsaleConfig,
 } from "./dev-postsale.mjs";
 
@@ -79,6 +80,15 @@ describe("local post-sale smoke CLI", () => {
       area: "ops006_area_section_10",
       shippingMethodId: "ops006_shipping_standard",
     });
+  });
+
+  it("sends receipt proof through the header instead of the URL", () => {
+    const request = buildReceiptLookupRequest("order 1", "chk_private");
+
+    expect(request.path).toBe("/api/v1/orders/receipt/order%201");
+    expect(request.path).not.toContain("chk_private");
+    expect(request.path).not.toContain("token=");
+    expect(request.headers).toEqual({ "X-Receipt-Token": "chk_private" });
   });
 
   it("seeds checkout, auth policy, delivery, and one untracked default SKU", () => {

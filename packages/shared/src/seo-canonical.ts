@@ -7,7 +7,7 @@ export type CanonicalResourceKind =
   | "page";
 
 const CANONICAL_SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const CANONICAL_COLLECTION_SEGMENT_PATTERN = /^[A-Za-z0-9_-]+$/;
+const CANONICAL_COLLECTION_SEGMENT_PATTERN = /^(?:col_[A-Za-z0-9_-]+|[A-Za-z0-9_-]{18,32})$/;
 const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
   "account",
   "admin",
@@ -82,6 +82,14 @@ function getResourceCanonicalSegment(
 
   const segment = value.slice(prefix.length);
   return segment && !segment.includes("/") ? segment : null;
+}
+
+export function getResourceCanonicalPathSegment(
+  kind: CanonicalResourceKind,
+  value: string,
+): string | null {
+  if (!isValidResourceCanonicalPath(kind, value)) return null;
+  return getResourceCanonicalSegment(kind, value);
 }
 
 export function isValidResourceCanonicalPath(

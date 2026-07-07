@@ -26,11 +26,16 @@ describe("collection form canonical validation", () => {
   });
 
   it("rejects non-collection routes for collection canonical overrides", () => {
-    const result = collectionFormSchema.safeParse({
-      ...collectionValues,
-      canonicalPath: "/featured/summer",
-    });
+    for (const canonicalPath of [
+      "/featured/summer",
+      "/collections/summer-edit",
+    ]) {
+      const result = collectionFormSchema.safeParse({
+        ...collectionValues,
+        canonicalPath,
+      });
 
-    expect(result.success).toBe(false);
+      expect(result.success).toBe(false);
+    }
   });
 });
