@@ -488,7 +488,9 @@ Expected result: `storefront-cache-dlq` has `scalius-api` as a consumer, DLQ mes
 
 Workers Cache adoption rule:
 
-Do not enable Cloudflare Workers Cache globally on API, admin, or storefront Workers for release-critical behavior until host/tenant cache keys, private-route bypass, response headers, and purge semantics are explicitly designed and tested. Workers Cache can serve a hit before Worker code runs, so it must not bypass the current storefront middleware's session checks, canonicalization, KV generation checks, and Cache API exact-generation invalidation without a replacement proof. Treat Workers Cache as a narrow future pilot for public HTML/discovery responses only after queue/DLQ/purge observability is already green.
+Rechecked against Cloudflare's 2026-07-06 Workers Cache launch docs on 2026-07-08. Workers Cache is a separate front-of-Worker cache, not the same mechanism as the in-Worker Cache API used by `apps/storefront/src/lib/edge-cache.ts`; a hit can return before the Worker executes. It is tiered, honors response `Cache-Control`, bypasses standard private/auth cases such as `Set-Cookie` responses and `Authorization` requests, can cache service-binding and named-entrypoint calls, and supports programmatic purge primitives such as tags/path prefixes through the Worker cache API surface.
+
+Do not enable Cloudflare Workers Cache globally on API, admin, or storefront Workers for release-critical behavior until host/tenant cache keys, private-route bypass, response headers, and purge semantics are explicitly designed and tested. A global hit must not bypass the current storefront middleware's session checks, canonicalization, KV version/generation checks, browser-cache policy, receipt/account/checkout exclusions, or Cache API exact-generation invalidation without a replacement proof. Treat Workers Cache as a narrow future pilot for public HTML/discovery responses only after queue/DLQ/purge observability is already green and after tag/path-prefix purges are mapped to the existing storefront invalidation groups, exact product/feed/sitemap generations, and admin `/settings/cache` recovery UI.
 
 Widget cache invalidation checks:
 
