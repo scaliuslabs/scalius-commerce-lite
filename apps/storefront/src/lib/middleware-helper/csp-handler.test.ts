@@ -45,4 +45,15 @@ describe("setPageCspHeader", () => {
 
     expect(csp).toContain("https://analytics.tiktok.com");
   });
+
+  it("allows the Facebook Pixel script host for main-thread snippets", async () => {
+    const response = await setPageCspHeader(new Response("ok"), {});
+    const csp = response.headers.get("Content-Security-Policy");
+    const scriptSrc = csp
+      ?.split("; ")
+      .find((directive) => directive.startsWith("script-src "));
+
+    expect(scriptSrc).toContain("https://connect.facebook.net");
+    expect(scriptSrc).toContain("https://www.facebook.com");
+  });
 });

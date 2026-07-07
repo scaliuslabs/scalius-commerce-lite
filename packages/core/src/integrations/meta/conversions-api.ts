@@ -195,14 +195,6 @@ export async function sendCapiEvent(
 ): Promise<SendCapiEventResult> {
   const settings = await getCapiSettings(db, options.encryptionKey);
   if (!settings || !settings.isEnabled || !settings.pixelId || !settings.accessToken) {
-    let errorMessage = "CAPI integration is disabled in settings.";
-    if (!settings) {
-      errorMessage = "CAPI settings not found in database (id='singleton').";
-    } else if (!settings.pixelId || !settings.accessToken) {
-      errorMessage = "Missing Pixel ID or Access Token in CAPI settings.";
-    }
-
-    console.log("Meta CAPI is disabled or not configured. Skipping event.", { reason: errorMessage });
     return { success: false, error: "CAPI not configured", retryable: false, skipped: true };
   }
 
@@ -242,26 +234,28 @@ export async function sendCapiEvent(
       status: "success",
       responsePayload: JSON.stringify(responseData, null, 2),
     }, retentionHours);
-    console.log(`Successfully sent '${event.event_name}' event to Meta CAPI.`);
     return { success: true, response: responseData };
   } catch (error: unknown) {
     const capiError = error as CapiSendError;
-    console.error(
-      `Failed to send '${event.event_name}' event to Meta CAPI:`,
-      error,
-    );
+    const retryable = capiError.retryable ?? true;
+    const message = error instanceof Error ? error.message : String(error);
+    if (retryable) {
+      console.warn(`Retryable Meta CAPI '${event.event_name}' failure:`, message);
+    } else {
+      console.warn(`Meta CAPI '${event.event_name}' disabled until settings are fixed:`, message);
+    }
     await logCapiEvent(db, {
       ...logPayload,
       status: "failed",
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage: message,
       responsePayload: capiError.responsePayload
         ? JSON.stringify(capiError.responsePayload, null, 2)
         : "",
     }, retentionHours);
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
-      retryable: capiError.retryable ?? true,
+      error: message,
+      retryable,
     };
   }
 }
