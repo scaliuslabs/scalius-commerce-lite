@@ -113,7 +113,10 @@ export interface SeoDiscoveryLiveProbeCounts {
   robotsSitemapLines?: number;
   sitemapLocs?: number;
   feedItems?: number;
+  feedLinks?: number;
+  absoluteFeedLinks?: number;
   imageLinks?: number;
+  absoluteImageLinks?: number;
   availabilityValues?: number;
 }
 
@@ -357,6 +360,43 @@ function countXmlStartTags(xml: string, tagName: string): number {
   return Array.from(xml.matchAll(pattern)).length;
 }
 
+function extractXmlElementTexts(xml: string, tagName: string): string[] {
+  const pattern = new RegExp(
+    `<\\s*(?:[A-Za-z_][\\w.-]*:)?${tagName}\\b[^>]*>([\\s\\S]*?)<\\s*/\\s*(?:[A-Za-z_][\\w.-]*:)?${tagName}\\s*>`,
+    "gi",
+  );
+  return Array.from(xml.matchAll(pattern)).map((match) => match[1] ?? "");
+}
+
+function normalizeXmlTextValue(value: string): string {
+  return value
+    .replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/u, "$1")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .trim();
+}
+
+function firstXmlElementValue(xml: string, tagName: string): string | null {
+  const value = extractXmlElementTexts(xml, tagName)
+    .map(normalizeXmlTextValue)
+    .find((candidate) => candidate.length > 0);
+  return value ?? null;
+}
+
+function isAbsoluteHttpUrl(value: string | null): boolean {
+  if (!value) return false;
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function countRobotsSitemapLines(robotsTxt: string): number {
   return robotsTxt
     .split(/\r?\n/)
@@ -375,11 +415,91 @@ export function summarizeSeoDiscoveryProbeBody(
     return { sitemapLocs: countXmlStartTags(body, "loc") };
   }
 
+  const itemBodies = extractXmlElementTexts(body, "item");
+  const linkValues = itemBodies
+    .map((item) => firstXmlElementValue(item, "link"))
+    .filter((value): value is string => Boolean(value));
+  const imageLinkValues = itemBodies
+    .map((item) => firstXmlElementValue(item, "image_link"))
+    .filter((value): value is string => Boolean(value));
+  const availabilityValues = itemBodies
+    .map((item) => firstXmlElementValue(item, "availability"))
+    .filter((value): value is string => Boolean(value));
+
   return {
-    feedItems: countXmlStartTags(body, "item"),
-    imageLinks: countXmlStartTags(body, "image_link"),
-    availabilityValues: countXmlStartTags(body, "availability"),
+    feedItems: itemBodies.length,
+    feedLinks: linkValues.length,
+    absoluteFeedLinks: linkValues.filter(isAbsoluteHttpUrl).length,
+    imageLinks: imageLinkValues.length,
+    absoluteImageLinks: imageLinkValues.filter(isAbsoluteHttpUrl).length,
+    availabilityValues: availabilityValues.length,
   };
+}
+
+function formatMissingFeedField(
+  count: number,
+  itemCount: number,
+  label: string,
+): string | null {
+  return count < itemCount ? `${count}/${itemCount} ${label}` : null;
+}
+
+export function getSeoDiscoveryLiveProbeCountIssue(
+  resource: Pick<SeoDiscoveryLiveProbeResource, "counts" | "kind"> & {
+    bodyTruncated?: boolean;
+  },
+): string | undefined {
+  if (resource.kind !== "feed" || resource.bodyTruncated) return undefined;
+
+  const itemCount = resource.counts.feedItems ?? 0;
+  if (itemCount <= 0) return undefined;
+
+  const missingFields = [
+    resource.counts.feedLinks === undefined
+      ? null
+      : formatMissingFeedField(
+          resource.counts.feedLinks,
+          itemCount,
+          "link",
+        ),
+    formatMissingFeedField(
+      resource.counts.imageLinks ?? 0,
+      itemCount,
+      "image_link",
+    ),
+    formatMissingFeedField(
+      resource.counts.availabilityValues ?? 0,
+      itemCount,
+      "availability",
+    ),
+  ].filter((value): value is string => Boolean(value));
+  const issues: string[] = [];
+
+  if (missingFields.length > 0) {
+    issues.push(`Missing feed fields: ${missingFields.join(", ")}.`);
+  }
+
+  if (
+    resource.counts.feedLinks !== undefined &&
+    resource.counts.absoluteFeedLinks !== undefined &&
+    resource.counts.absoluteFeedLinks < resource.counts.feedLinks
+  ) {
+    issues.push(
+      `Feed links must be absolute http(s): ${resource.counts.absoluteFeedLinks}/${resource.counts.feedLinks}.`,
+    );
+  }
+
+  if (
+    resource.counts.imageLinks !== undefined &&
+    resource.counts.absoluteImageLinks !== undefined &&
+    resource.counts.absoluteImageLinks < resource.counts.imageLinks
+  ) {
+    issues.push(
+      `Feed images must be absolute http(s): ${resource.counts.absoluteImageLinks}/${resource.counts.imageLinks}.`,
+    );
+  }
+
+  return issues.length > 0 ? issues.join(" ") : undefined;
 }
 
 export function buildSeoDiscoveryStatus({
@@ -417,15 +537,32 @@ export function buildSeoDiscoveryStatus({
   const feedVariantStrategyLabel = getFeedVariantStrategyLabel(
     normalized.feeds.variantStrategy,
   );
+  const storeUrlRequirement =
+    storefrontMode === "path-only"
+      ? "Store URL must be an absolute http(s) URL."
+      : "Store URL is missing.";
+  const sitemapNeedsStoreUrl =
+    normalized.sitemap.enabled && !absoluteStorefrontUrl;
+  const feedNeedsStoreUrl =
+    normalized.feeds.productCatalogEnabled && !absoluteStorefrontUrl;
+  const robotsNeedsStoreUrl = !absoluteStorefrontUrl;
 
   return {
     sitemap: {
-      tone: normalized.sitemap.enabled ? "ok" : "disabled",
+      tone: normalized.sitemap.enabled
+        ? sitemapNeedsStoreUrl
+          ? "warning"
+          : "ok"
+        : "disabled",
       title: normalized.sitemap.enabled
-        ? "Sitemap index on"
+        ? sitemapNeedsStoreUrl
+          ? "Sitemap needs Store URL"
+          : "Sitemap index on"
         : "Sitemap index off",
       summary: normalized.sitemap.enabled
-        ? enabledSectionLabels.length > 0
+        ? sitemapNeedsStoreUrl
+          ? `${storeUrlRequirement} Runtime sitemap XML is unavailable until this is fixed.`
+          : enabledSectionLabels.length > 0
           ? `Includes ${enabledSectionLabels.join(", ")}.`
           : "Index is enabled, but every section is turned off."
         : "Search engines will not receive the generated sitemap index.",
@@ -433,12 +570,20 @@ export function buildSeoDiscoveryStatus({
       includedSections,
     },
     productFeed: {
-      tone: normalized.feeds.productCatalogEnabled ? "ok" : "disabled",
+      tone: normalized.feeds.productCatalogEnabled
+        ? feedNeedsStoreUrl
+          ? "warning"
+          : "ok"
+        : "disabled",
       title: normalized.feeds.productCatalogEnabled
-        ? "Product feed on"
+        ? feedNeedsStoreUrl
+          ? "Product feed needs Store URL"
+          : "Product feed on"
         : "Product feed off",
       summary: normalized.feeds.productCatalogEnabled
-        ? `${feedVariantStrategyLabel}; ${
+        ? feedNeedsStoreUrl
+          ? `${feedVariantStrategyLabel}; ${storeUrlRequirement} Feed XML is unavailable until this is fixed.`
+          : `${feedVariantStrategyLabel}; ${
             normalized.feeds.includeUnavailableProducts
               ? "sold-out catalog items are marked out of stock."
               : "only items currently available for sale are included."
@@ -453,16 +598,23 @@ export function buildSeoDiscoveryStatus({
         normalized.feeds.description ||
         "Complete product catalog for feed tools.",
       imagePolicy:
-        "Catalog items without an absolute http(s) primary image are skipped; rich-text descriptions are flattened to plain catalog text.",
+        "Feed rows require absolute http(s) product and image links; rich text is flattened to catalog text.",
     },
     robots: {
-      tone: customSitemapLines.length > 0 ? "warning" : "info",
-      title: normalized.robots.advertiseSitemap
-        ? "robots.txt advertises canonical sitemap"
-        : "robots.txt sitemap ad off",
-      summary: normalized.robots.advertiseSitemap
-        ? "Runtime strips saved Sitemap directives and advertises only the canonical current sitemap when the Store URL is absolute; otherwise it emits none."
-        : "Runtime strips all Sitemap directives and advertises no sitemap.",
+      tone:
+        robotsNeedsStoreUrl || customSitemapLines.length > 0
+          ? "warning"
+          : "info",
+      title: robotsNeedsStoreUrl
+        ? "robots.txt needs Store URL"
+        : normalized.robots.advertiseSitemap
+          ? "robots.txt advertises canonical sitemap"
+          : "robots.txt sitemap ad off",
+      summary: robotsNeedsStoreUrl
+        ? `${storeUrlRequirement} Runtime robots output cannot prove canonical sitemap advertising.`
+        : normalized.robots.advertiseSitemap
+          ? "Runtime strips saved Sitemap directives and advertises only the canonical current sitemap."
+          : "Runtime strips all Sitemap directives and advertises no sitemap.",
       advertiseSitemap: normalized.robots.advertiseSitemap,
       customSitemapLines,
       warning:

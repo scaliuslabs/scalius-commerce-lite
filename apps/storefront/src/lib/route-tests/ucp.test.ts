@@ -23,10 +23,11 @@ vi.mock("@/lib/api/runtime-env", () => ({
 }));
 
 import { GET as getProfile } from "../../pages/.well-known/ucp";
+import { POST as getCatalogProduct } from "../../pages/ucp/catalog/product";
 import { POST as searchCatalog } from "../../pages/ucp/catalog/search";
 
-function request(body: unknown, headers: HeadersInit = {}) {
-  return new Request("https://storefront.example.test/ucp/catalog/search", {
+function request(body: unknown, headers: HeadersInit = {}, path = "/ucp/catalog/search") {
+  return new Request(`https://storefront.example.test${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
@@ -102,5 +103,28 @@ describe("UCP storefront routes", () => {
     expect(response.status).toBe(422);
     expect(body.messages[0].code).toBe("invalid_profile_url");
     expect(mocks.getFeedProducts).not.toHaveBeenCalled();
+  });
+
+  it("returns product not_found as a non-cacheable UCP application error", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [],
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+    });
+
+    const response = await getCatalogProduct({
+      request: request(
+        { id: "missing-product" },
+        { "UCP-Agent": 'profile="https://agent.example.test/.well-known/ucp"' },
+        "/ucp/catalog/product",
+      ),
+    } as never);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toMatchObject({
+      ucp: { status: "error" },
+      messages: [{ type: "error", code: "not_found" }],
+    });
   });
 });

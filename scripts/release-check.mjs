@@ -69,7 +69,13 @@ const STRICT_SEO_DISCOVERY_POLICY = Object.freeze({
     advertiseSitemap: true,
   }),
   structuredData: Object.freeze({
+    organization: true,
+    websiteSearch: true,
     products: true,
+    productGroups: true,
+    offerShippingDetails: true,
+    breadcrumbs: true,
+    collections: true,
   }),
 });
 
@@ -358,7 +364,13 @@ function parseSeoDiscoveryPolicyPayload(payload) {
       advertiseSitemap: readBoolean(robots, "advertiseSitemap"),
     },
     structuredData: {
+      organization: readBoolean(structuredData, "organization"),
+      websiteSearch: readBoolean(structuredData, "websiteSearch"),
       products: readBoolean(structuredData, "products"),
+      productGroups: readBoolean(structuredData, "productGroups"),
+      offerShippingDetails: readBoolean(structuredData, "offerShippingDetails"),
+      breadcrumbs: readBoolean(structuredData, "breadcrumbs"),
+      collections: readBoolean(structuredData, "collections"),
     },
   };
 
@@ -366,7 +378,7 @@ function parseSeoDiscoveryPolicyPayload(payload) {
     Object.values(parsed.sitemap).every((value) => typeof value === "boolean") &&
     typeof parsed.feeds.productCatalogEnabled === "boolean" &&
     typeof parsed.robots.advertiseSitemap === "boolean" &&
-    typeof parsed.structuredData.products === "boolean";
+    Object.values(parsed.structuredData).every((value) => typeof value === "boolean");
 
   return complete ? parsed : null;
 }
@@ -386,7 +398,11 @@ function summarizeSeoDiscoveryPolicy(policy) {
   const productSchemaStatus = policy.structuredData.products
     ? "Product schema enabled"
     : "Product schema disabled";
-  return `sitemap ${policy.sitemap.enabled ? `${enabledSections} sections enabled` : "disabled"}, ${feedStatus}, ${robotsStatus}, ${productSchemaStatus}`;
+  const globalSchemaStatus =
+    policy.structuredData.organization || policy.structuredData.websiteSearch
+      ? "global schema enabled"
+      : "global schema disabled";
+  return `sitemap ${policy.sitemap.enabled ? `${enabledSections} sections enabled` : "disabled"}, ${feedStatus}, ${robotsStatus}, ${productSchemaStatus}, ${globalSchemaStatus}`;
 }
 
 function strictSeoPolicyResult(url, reason, extra = {}) {
@@ -781,6 +797,156 @@ function collectProductOffers(productNode) {
   return offers.filter((offer) => offer && typeof offer === "object");
 }
 
+function hasSchemaType(node, type) {
+  return schemaTypes(node).includes(type);
+}
+
+function validateSameOriginHttpUrl(value, { label, storefrontOrigin, errors }) {
+  if (!isHttpUrl(String(value ?? ""))) {
+    errors.push(`${label} is not absolute http(s): ${String(value ?? "")}`);
+    return false;
+  }
+  if (storefrontOrigin && !isSameOrigin(value, storefrontOrigin)) {
+    errors.push(`${label} is not on storefront origin: ${value}`);
+    return false;
+  }
+  return true;
+}
+
+function validateMerchantReturnPolicySchema(policy, errors) {
+  if (!isRecord(policy) || !hasSchemaType(policy, "MerchantReturnPolicy")) {
+    errors.push("MerchantReturnPolicy JSON-LD must be an object with @type MerchantReturnPolicy.");
+    return;
+  }
+
+  if (policy.merchantReturnLink !== undefined && !isHttpUrl(String(policy.merchantReturnLink))) {
+    errors.push(`MerchantReturnPolicy link is not absolute http(s): ${String(policy.merchantReturnLink)}`);
+  }
+  if (
+    policy.returnPolicyCategory !== undefined &&
+    !String(policy.returnPolicyCategory).startsWith("https://schema.org/")
+  ) {
+    errors.push("MerchantReturnPolicy returnPolicyCategory must use a schema.org URL.");
+  }
+  if (
+    policy.merchantReturnDays !== undefined &&
+    (!Number.isInteger(Number(policy.merchantReturnDays)) || Number(policy.merchantReturnDays) <= 0)
+  ) {
+    errors.push("MerchantReturnPolicy merchantReturnDays must be a positive integer.");
+  }
+  for (const country of asArray(policy.applicableCountry)) {
+    if (typeof country !== "string" || country.trim().length === 0) {
+      errors.push("MerchantReturnPolicy applicableCountry must contain non-empty country values.");
+    }
+  }
+}
+
+function validateOnlineStoreSchema(node, { storefrontOrigin }, errors) {
+  validateSameOriginHttpUrl(node.url, {
+    label: "OnlineStore URL",
+    storefrontOrigin,
+    errors,
+  });
+  if (!node.name || typeof node.name !== "string" || node.name.trim() === "Store") {
+    errors.push('OnlineStore name must use saved business identity, not "Store".');
+  }
+
+  const logoUrl = typeof node.logo === "string" ? node.logo : node.logo?.url;
+  if (!isHttpUrl(String(logoUrl ?? ""))) {
+    errors.push(`OnlineStore logo is not absolute http(s): ${String(logoUrl ?? "")}`);
+  }
+
+  for (const url of asArray(node.sameAs)) {
+    if (!isHttpUrl(String(url ?? ""))) {
+      errors.push(`OnlineStore sameAs URL is not absolute http(s): ${String(url ?? "")}`);
+    }
+  }
+
+  if (node.hasMerchantReturnPolicy !== undefined) {
+    validateMerchantReturnPolicySchema(node.hasMerchantReturnPolicy, errors);
+  }
+}
+
+function validateWebsiteSchema(node, { storefrontOrigin }, errors) {
+  validateSameOriginHttpUrl(node.url, {
+    label: "WebSite URL",
+    storefrontOrigin,
+    errors,
+  });
+  if (!node.name || typeof node.name !== "string" || node.name.trim() === "Store") {
+    errors.push('WebSite name must use saved business identity, not "Store".');
+  }
+
+  const action = node.potentialAction;
+  if (!isRecord(action) || !hasSchemaType(action, "SearchAction")) {
+    errors.push("WebSite JSON-LD must include SearchAction potentialAction.");
+    return;
+  }
+  const target = typeof action.target === "string" ? action.target : action.target?.urlTemplate;
+  validateSameOriginHttpUrl(target, {
+    label: "WebSite SearchAction target",
+    storefrontOrigin,
+    errors,
+  });
+  if (typeof target !== "string" || !target.includes("{search_term_string}")) {
+    errors.push("WebSite SearchAction target must include {search_term_string}.");
+  }
+  if (action["query-input"] !== "required name=search_term_string") {
+    errors.push("WebSite SearchAction query-input must be required name=search_term_string.");
+  }
+}
+
+export function evaluateHomepageJsonLdHtml(html, {
+  storefrontOrigin,
+  policy,
+} = {}) {
+  const errors = [];
+  const scripts = extractJsonLdScripts(html);
+  const parsedRoots = [];
+
+  for (const script of scripts) {
+    try {
+      parsedRoots.push(JSON.parse(script));
+    } catch (error) {
+      errors.push(`JSON-LD script is invalid JSON: ${errorMessage(error)}`);
+    }
+  }
+
+  const nodes = parsedRoots.flatMap(collectSchemaNodes);
+  const onlineStoreNodes = nodes.filter((node) => hasSchemaType(node, "OnlineStore"));
+  const websiteNodes = nodes.filter((node) => hasSchemaType(node, "WebSite"));
+  const returnPolicyNodes = nodes.filter((node) => hasSchemaType(node, "MerchantReturnPolicy"));
+  const nestedReturnPolicyCount = onlineStoreNodes.filter((node) =>
+    node.hasMerchantReturnPolicy !== undefined
+  ).length;
+
+  if (policy?.structuredData?.organization === false && onlineStoreNodes.length > 0) {
+    errors.push("OnlineStore JSON-LD emitted while organization schema is disabled.");
+  }
+  if (policy?.structuredData?.websiteSearch === false && websiteNodes.length > 0) {
+    errors.push("WebSite JSON-LD emitted while website search schema is disabled.");
+  }
+
+  for (const node of onlineStoreNodes) {
+    validateOnlineStoreSchema(node, { storefrontOrigin }, errors);
+  }
+  for (const node of websiteNodes) {
+    validateWebsiteSchema(node, { storefrontOrigin }, errors);
+  }
+  for (const node of returnPolicyNodes) {
+    validateMerchantReturnPolicySchema(node, errors);
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    scriptCount: scripts.length,
+    onlineStoreCount: onlineStoreNodes.length,
+    websiteCount: websiteNodes.length,
+    returnPolicyCount: returnPolicyNodes.length + nestedReturnPolicyCount,
+  };
+}
+
 function validateProductSchemaImage(productNode, errors) {
   const images = asArray(productNode.image);
   if (images.length === 0) {
@@ -911,23 +1077,56 @@ function collectUcpCapabilityNames(profile) {
   return Object.keys(capabilities);
 }
 
-function readUcpShoppingEndpoint(profile) {
+function readUcpShoppingService(profile) {
   const services = isRecord(profile?.ucp?.services) ? profile.ucp.services : null;
   const shoppingServices = Array.isArray(services?.[UCP_SHOPPING_SERVICE])
     ? services[UCP_SHOPPING_SERVICE]
     : [];
-  const restService = shoppingServices.find((service) =>
+  return shoppingServices.find((service) =>
     isRecord(service) &&
     service.transport === "rest" &&
     typeof service.endpoint === "string"
-  );
-  return typeof restService?.endpoint === "string" ? restService.endpoint : null;
+  ) ?? null;
+}
+
+function firstUcpCapabilityDescriptor(profile, capability) {
+  const descriptors = isRecord(profile?.ucp?.capabilities) &&
+    Array.isArray(profile.ucp.capabilities[capability])
+    ? profile.ucp.capabilities[capability]
+    : [];
+  return descriptors.find(isRecord) ?? null;
+}
+
+function validateUcpDescriptor(
+  descriptor,
+  {
+    label,
+    version,
+    spec,
+    schema,
+    errors,
+  },
+) {
+  if (!isRecord(descriptor)) {
+    errors.push(`${label} descriptor must be an object.`);
+    return;
+  }
+  if (descriptor.version !== version) {
+    errors.push(`${label} descriptor version must be ${version}.`);
+  }
+  if (descriptor.spec !== spec) {
+    errors.push(`${label} descriptor spec must be ${spec}.`);
+  }
+  if (descriptor.schema !== schema) {
+    errors.push(`${label} descriptor schema must be ${schema}.`);
+  }
 }
 
 export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
   const errors = [];
   const version = typeof profile?.ucp?.version === "string" ? profile.ucp.version : null;
-  const endpoint = readUcpShoppingEndpoint(profile);
+  const service = readUcpShoppingService(profile);
+  const endpoint = typeof service?.endpoint === "string" ? service.endpoint : null;
   const capabilities = collectUcpCapabilityNames(profile);
   const forbiddenCapabilities = capabilities.filter((name) =>
     UCP_FORBIDDEN_CAPABILITY_PATTERN.test(name)
@@ -955,11 +1154,47 @@ export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
     if (endpointUrl.pathname !== "/ucp" && !endpointUrl.pathname.startsWith("/ucp/")) {
       errors.push(`UCP service endpoint must be under /ucp: ${endpoint}`);
     }
+    if (endpointUrl.pathname.endsWith("/") && endpointUrl.pathname !== "/") {
+      errors.push("UCP service endpoint should not have a trailing slash.");
+    }
+  }
+
+  if (version && service) {
+    validateUcpDescriptor(service, {
+      label: "UCP shopping REST service",
+      version,
+      spec: `https://ucp.dev/${version}/specification/overview`,
+      schema: `https://ucp.dev/${version}/services/shopping/rest.openapi.json`,
+      errors,
+    });
   }
 
   for (const capability of requiredCapabilities) {
     if (!capabilities.includes(capability)) {
       errors.push(`UCP profile must advertise ${capability}.`);
+      continue;
+    }
+
+    if (version) {
+      const suffix = capability === UCP_CATALOG_SEARCH_CAPABILITY
+        ? { spec: "catalog/search", schema: "catalog_search" }
+        : { spec: "catalog/lookup", schema: "catalog_lookup" };
+      validateUcpDescriptor(firstUcpCapabilityDescriptor(profile, capability), {
+        label: capability,
+        version,
+        spec: `https://ucp.dev/${version}/specification/${suffix.spec}`,
+        schema: `https://ucp.dev/${version}/schemas/shopping/${suffix.schema}.json`,
+        errors,
+      });
+    }
+    if (capability.startsWith("dev.ucp.")) {
+      const descriptor = firstUcpCapabilityDescriptor(profile, capability);
+      for (const field of ["spec", "schema"]) {
+        const value = descriptor?.[field];
+        if (typeof value === "string" && !value.startsWith("https://ucp.dev/")) {
+          errors.push(`${capability} descriptor ${field} must be hosted on https://ucp.dev/.`);
+        }
+      }
     }
   }
   if (unexpectedCapabilities.length > 0) {
@@ -1036,6 +1271,39 @@ function lookupPayloadHasInputCorrelation(lookupPayload, inputId) {
       return variant.inputs.some((input) => isRecord(input) && input.id === inputId);
     });
   });
+}
+
+function evaluateUcpProductPayload(productPayload, { expectedFirstVariantId } = {}) {
+  const errors = [];
+  const product = isRecord(productPayload?.product) ? productPayload.product : null;
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  const firstVariant = variants.find((variant, index) => index === 0 && isRecord(variant)) ?? null;
+  const firstVariantId = typeof firstVariant?.id === "string" ? firstVariant.id : null;
+
+  if (productPayload?.ucp?.status !== "success") {
+    errors.push("UCP catalog product must return ucp.status=success.");
+  }
+  if (!product) {
+    errors.push("UCP catalog product must include a product object.");
+  }
+  if (variants.length === 0) {
+    errors.push("UCP catalog product must include at least one variant.");
+  }
+  if (!firstVariantId) {
+    errors.push("UCP catalog product first variant must include an id.");
+  } else if (expectedFirstVariantId && firstVariantId !== expectedFirstVariantId) {
+    errors.push(
+      `UCP catalog product first variant ${firstVariantId} did not match requested variant ${expectedFirstVariantId}.`,
+    );
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    productId: typeof product?.id === "string" ? product.id : null,
+    firstVariantId,
+    variantCount: variants.length,
+  };
 }
 
 function createCheckError(message, result) {
@@ -1196,6 +1464,28 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
     logger,
   });
   responses.policy = policyResult;
+
+  const homepage = await fetchText(buildUrl(options.storefrontUrl, "/"), {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    accept: "text/html, */*;q=0.8",
+  });
+  requireStatus(homepage, "Storefront homepage for structured data", (status) =>
+    status >= 200 && status < 300);
+  checks.homepageStructuredData = evaluateHomepageJsonLdHtml(homepage.body, {
+    storefrontOrigin,
+    policy,
+  });
+  if (!checks.homepageStructuredData.ok) {
+    throw new Error(
+      `Homepage JSON-LD failed: ${checks.homepageStructuredData.errors.join("; ")}`,
+    );
+  }
+  responses.homepageStructuredData = {
+    statusCode: homepage.statusCode,
+    durationMs: homepage.durationMs,
+    ...checks.homepageStructuredData,
+  };
 
   const robots = await fetchText(buildUrl(options.storefrontUrl, "/robots.txt"), {
     fetchImpl,
@@ -1580,8 +1870,38 @@ async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
     productCount: Array.isArray(lookupPayload?.products) ? lookupPayload.products.length : 0,
   };
 
+  const productResponse = await fetchJson(`${serviceEndpoint}/catalog/product`, {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    method: "POST",
+    headers: {
+      "UCP-Agent": UCP_AGENT_HEADER,
+    },
+    body: {
+      ...(profileEvaluation.version ? { ucp: { version: profileEvaluation.version } } : {}),
+      id: candidate.id,
+    },
+  });
+  requireStatus(productResponse, "UCP catalog product", (status) => status >= 200 && status < 300);
+  const productPayload = requireJsonResponse(productResponse, "UCP catalog product");
+  const productEvaluation = evaluateUcpProductPayload(productPayload, {
+    expectedFirstVariantId: candidate.variantId,
+  });
+  if (!productEvaluation.ok) {
+    throw new Error(`UCP catalog product failed: ${productEvaluation.errors.join("; ")}`);
+  }
+  result.catalog.product = {
+    url: redactUrl(`${serviceEndpoint}/catalog/product`),
+    statusCode: productResponse.statusCode,
+    durationMs: productResponse.durationMs,
+    inputId: candidate.id,
+    productId: productEvaluation.productId,
+    firstVariantId: productEvaluation.firstVariantId,
+    variantCount: productEvaluation.variantCount,
+  };
+
   logger?.log(
-    `PASS UCP discovery: HTTPS profile plus catalog search/lookup for ${candidate.id}.`,
+    `PASS UCP discovery: HTTPS profile plus catalog search/lookup/product for ${candidate.id}.`,
   );
   return result;
 }

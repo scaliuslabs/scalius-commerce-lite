@@ -2,6 +2,7 @@ import {
   SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS,
   SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS,
   buildSeoDiscoveryHref,
+  getSeoDiscoveryLiveProbeCountIssue,
   normalizeSeoDiscoverySettingsWithReturnPolicy,
   parseSeoDiscoveryStorefrontUrl,
   summarizeSeoDiscoveryProbeBody,
@@ -176,7 +177,15 @@ async function probeEndpoint({
       },
     });
     const body = await readBoundedResponseText(response, maxBodyBytes);
-    const error = formatHttpFailure(response.status);
+    const counts = summarizeSeoDiscoveryProbeBody(key, body.text);
+    const countIssue = body.truncated
+      ? undefined
+      : getSeoDiscoveryLiveProbeCountIssue({
+          bodyTruncated: body.truncated,
+          counts,
+          kind,
+        });
+    const error = formatHttpFailure(response.status) ?? countIssue;
 
     return {
       key,
@@ -184,11 +193,11 @@ async function probeEndpoint({
       label,
       path,
       href,
-      ok: response.ok,
+      ok: response.ok && !countIssue,
       status: response.status,
       contentType: safeHeaderValue(response.headers.get("content-type")),
       cacheControl: safeHeaderValue(response.headers.get("cache-control")),
-      counts: summarizeSeoDiscoveryProbeBody(key, body.text),
+      counts,
       bodyTruncated: body.truncated || undefined,
       error,
       expectedRobotsSitemapLines: target.expectedRobotsSitemapLines,

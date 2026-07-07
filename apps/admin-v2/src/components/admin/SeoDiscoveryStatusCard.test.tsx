@@ -95,7 +95,14 @@ function createHealthyLiveProbe() {
         status: 200,
         contentType: "application/rss+xml",
         cacheControl: "public, max-age=600",
-        counts: { feedItems: 1, imageLinks: 1, availabilityValues: 1 },
+        counts: {
+          feedItems: 1,
+          feedLinks: 1,
+          absoluteFeedLinks: 1,
+          imageLinks: 1,
+          absoluteImageLinks: 1,
+          availabilityValues: 1,
+        },
       },
       {
         key: "facebookFeed",
@@ -107,7 +114,14 @@ function createHealthyLiveProbe() {
         status: 200,
         contentType: "application/rss+xml",
         cacheControl: "public, max-age=600",
-        counts: { feedItems: 1, imageLinks: 1, availabilityValues: 1 },
+        counts: {
+          feedItems: 1,
+          feedLinks: 1,
+          absoluteFeedLinks: 1,
+          imageLinks: 1,
+          absoluteImageLinks: 1,
+          availabilityValues: 1,
+        },
       },
       {
         key: "staticPagesSitemap",
@@ -342,7 +356,9 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain("No feed blockers found");
     expect(host.textContent).toContain("1/1 Sitemap line");
     expect(host.textContent).toContain("Home + search sitemap");
-    expect(host.textContent).toContain("1 item; 1 image_link; 1 availability");
+    expect(host.textContent).toContain(
+      "1 item; 1 link; 1 image_link; 1 availability",
+    );
     expect(links).toEqual([
       "https://shop.example.com/robots.txt",
       "https://shop.example.com/sitemap.xml",
@@ -357,9 +373,43 @@ describe("SeoDiscoveryStatusCard", () => {
 
     expect(host.querySelector("a")).toBeNull();
     expect(host.textContent).toContain("Path-only preview");
+    expect(host.textContent).toContain("Sitemap needs Store URL");
+    expect(host.textContent).toContain("Product feed needs Store URL");
+    expect(host.textContent).toContain("robots.txt needs Store URL");
     expect(host.textContent).toContain("/sitemap.xml");
     expect(host.textContent).toContain(
       "Live proof waits for an absolute http(s) Store URL.",
+    );
+  });
+
+  it("warns when live feed proof counts are incomplete", () => {
+    const result = createHealthyLiveProbe();
+    liveProbeState.data = {
+      ...result,
+      ok: true,
+      resources: result.resources.map((resource) =>
+        resource.key === "productFeed"
+          ? {
+              ...resource,
+              ok: true,
+              counts: {
+                feedItems: 2,
+                feedLinks: 2,
+                absoluteFeedLinks: 2,
+                imageLinks: 1,
+                absoluteImageLinks: 1,
+                availabilityValues: 1,
+              },
+            }
+          : resource,
+      ),
+    };
+
+    renderCard();
+
+    expect(host.textContent).toContain("Live proof needs review");
+    expect(host.textContent).toContain(
+      "Missing feed fields: 1/2 image_link, 1/2 availability.",
     );
   });
 

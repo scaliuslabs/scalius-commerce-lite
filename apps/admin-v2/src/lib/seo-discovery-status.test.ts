@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSeoDiscoveryStatus,
+  getSeoDiscoveryLiveProbeCountIssue,
   normalizeSeoDiscoverySettingsWithReturnPolicy,
   summarizeSeoDiscoveryProbeBody,
 } from "./seo-discovery-status";
@@ -64,7 +65,7 @@ describe("buildSeoDiscoveryStatus", () => {
       { key: "pages", label: "Pages", enabled: true },
     ]);
     expect(status.productFeed.imagePolicy).toContain(
-      "absolute http(s) primary image",
+      "absolute http(s) product and image links",
     );
     expect(status.productFeed.summary).toBe(
       "Product rows; only items currently available for sale are included.",
@@ -126,9 +127,14 @@ describe("buildSeoDiscoveryStatus", () => {
     });
 
     expect(relative.storefront.mode).toBe("path-only");
+    expect(relative.sitemap.tone).toBe("warning");
+    expect(relative.sitemap.title).toBe("Sitemap needs Store URL");
+    expect(relative.robots.tone).toBe("warning");
+    expect(relative.robots.title).toBe("robots.txt needs Store URL");
     expect(relative.productFeed.variantStrategy).toBe("variants");
+    expect(relative.productFeed.tone).toBe("warning");
     expect(relative.productFeed.summary).toBe(
-      "SKU / variant rows; sold-out catalog items are marked out of stock.",
+      "SKU / variant rows; Store URL must be an absolute http(s) URL. Feed XML is unavailable until this is fixed.",
     );
     expect(relative.storefront.links.every((link) => link.href === null)).toBe(
       true,
@@ -283,14 +289,41 @@ describe("summarizeSeoDiscoveryProbeBody", () => {
       summarizeSeoDiscoveryProbeBody(
         "productFeed",
         `<rss><channel>
-          <item><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item>
-          <item><image_link>https://img.example.com/b.jpg</image_link><availability>out of stock</availability></item>
+          <item><g:link>https://shop.example.com/products/a</g:link><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item>
+          <item><link>https://shop.example.com/products/b</link><image_link>https://img.example.com/b.jpg</image_link><availability>out of stock</availability></item>
         </channel></rss>`,
       ),
     ).toEqual({
       feedItems: 2,
+      feedLinks: 2,
+      absoluteFeedLinks: 2,
       imageLinks: 2,
+      absoluteImageLinks: 2,
       availabilityValues: 2,
     });
+  });
+
+  it("detects non-empty feed items missing required fields or absolute links", () => {
+    const counts = summarizeSeoDiscoveryProbeBody(
+      "productFeed",
+      `<rss><channel>
+        <item><g:link>/products/a</g:link><g:image_link>/images/a.jpg</g:image_link></item>
+        <item><g:availability>out of stock</g:availability></item>
+      </channel></rss>`,
+    );
+
+    expect(counts).toEqual({
+      feedItems: 2,
+      feedLinks: 1,
+      absoluteFeedLinks: 0,
+      imageLinks: 1,
+      absoluteImageLinks: 0,
+      availabilityValues: 1,
+    });
+    expect(
+      getSeoDiscoveryLiveProbeCountIssue({ counts, kind: "feed" }),
+    ).toBe(
+      "Missing feed fields: 1/2 link, 1/2 image_link, 1/2 availability. Feed links must be absolute http(s): 0/1. Feed images must be absolute http(s): 0/1.",
+    );
   });
 });
