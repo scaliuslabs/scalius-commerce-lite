@@ -41,6 +41,26 @@ describe("storefront HTML cache policy boundaries", () => {
     expect(source).toContain("isCacheablePublicResponse(response)");
   });
 
+  it("preserves public discovery headers when exact generation lookup is unavailable", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/middleware.ts`,
+      "utf8",
+    );
+
+    const branchStart = source.indexOf("if (!htmlGeneration.cacheEnabled) {");
+    const branchEnd = source.indexOf(
+      "return await setPageCspHeader(response, env ?? undefined);",
+      branchStart,
+    );
+    const branch = source.slice(branchStart, branchEnd);
+
+    expect(branchStart).toBeGreaterThan(-1);
+    expect(branchEnd).toBeGreaterThan(branchStart);
+    expect(branch).toContain("isCacheablePublicResponse(response)");
+    expect(branch).toContain("applyBrowserCachePolicyForPublicResponse(response, url.pathname)");
+    expect(branch).toContain('"no-cache, no-store, must-revalidate"');
+  });
+
   it("keeps health checks out of the cache and CSP middleware lane", () => {
     const source = readFileSync(
       `${STOREFRONT_SRC_ROOT}/middleware.ts`,

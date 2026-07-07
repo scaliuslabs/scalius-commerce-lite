@@ -17,7 +17,10 @@ import {
 } from "./lib/cache-generations";
 import { resolveCacheNamespace } from "./lib/cache-namespace";
 import { buildHtmlCacheBaseUrl } from "./lib/cache-key";
-import { applyBrowserCachePolicyForPublicResponse } from "./lib/public-discovery-cache";
+import {
+  applyBrowserCachePolicyForPublicResponse,
+  isSuccessfulPublicDiscoveryResponse,
+} from "./lib/public-discovery-cache";
 
 // Timeout constants to prevent hanging on slow/unavailable services
 const KV_TIMEOUT_MS = 1000;
@@ -208,12 +211,19 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
       if (!htmlGeneration.cacheEnabled) {
         const response = await next();
         response.headers.set("X-Cache-Status", "BYPASS_GENERATION");
-        response.headers.set(
-          "Cache-Control",
-          "no-cache, no-store, must-revalidate",
-        );
-        response.headers.set("Pragma", "no-cache");
-        response.headers.set("Expires", "0");
+        if (
+          isCacheablePublicResponse(response) ||
+          isSuccessfulPublicDiscoveryResponse(response, url.pathname)
+        ) {
+          applyBrowserCachePolicyForPublicResponse(response, url.pathname);
+        } else {
+          response.headers.set(
+            "Cache-Control",
+            "no-cache, no-store, must-revalidate",
+          );
+          response.headers.set("Pragma", "no-cache");
+          response.headers.set("Expires", "0");
+        }
         console.warn(
           `Bypassing exact HTML cache for ${url.pathname}: ${htmlGeneration.reason}`,
         );

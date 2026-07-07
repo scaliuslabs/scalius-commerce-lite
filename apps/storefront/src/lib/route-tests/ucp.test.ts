@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getProductBySlug: vi.fn(),
   getLayoutData: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
+  setRuntimeImageCdnPolicy: vi.fn(),
 }));
 
 vi.mock("@/lib/api/products", () => ({
@@ -20,6 +21,7 @@ vi.mock("@/lib/api/storefront", () => ({
 
 vi.mock("@/lib/api/runtime-env", () => ({
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
+  setRuntimeImageCdnPolicy: mocks.setRuntimeImageCdnPolicy,
 }));
 
 import { GET as getProfile } from "../../pages/.well-known/ucp";
@@ -40,6 +42,7 @@ describe("UCP storefront routes", () => {
     mocks.getProductBySlug.mockReset();
     mocks.getLayoutData.mockReset();
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
+    mocks.setRuntimeImageCdnPolicy.mockReset();
     mocks.getLayoutData.mockResolvedValue({
       currency: { code: "BDT", decimalPlaces: 2 },
     });
@@ -102,6 +105,21 @@ describe("UCP storefront routes", () => {
 
     expect(response.status).toBe(422);
     expect(body.messages[0].code).toBe("invalid_profile_url");
+    expect(mocks.getFeedProducts).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported UCP versions before catalog work", async () => {
+    const response = await searchCatalog({
+      request: request(
+        { ucp: { version: "2026-07" }, query: "shoe" },
+        { "UCP-Agent": 'profile="https://agent.example.test/.well-known/ucp"' },
+      ),
+    } as never);
+    const body = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(body.messages[0].code).toBe("version_unsupported");
+    expect(body.messages[0].path).toBe("$.ucp.version");
     expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
 

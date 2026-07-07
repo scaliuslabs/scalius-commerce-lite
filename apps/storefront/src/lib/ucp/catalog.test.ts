@@ -244,6 +244,27 @@ describe("UCP catalog mapping", () => {
     ]);
   });
 
+  it("correlates product URL lookup inputs to the featured variant", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [productFixture()],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const productUrl = "https://storefront.example.test/products/khaki-shoes";
+    const result = await lookupCatalog({ ids: [productUrl] }, context);
+
+    expect(result.status).toBe(200);
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      page: 1,
+      limit: 10,
+      ids: "khaki-shoes",
+      sort: "newest",
+    });
+    expect(result.body.products[0].variants[0].inputs).toEqual([
+      { id: productUrl, match: "featured" },
+    ]);
+  });
+
   it("rejects lookup requests with too many unique identifiers", async () => {
     const ids = Array.from({ length: 26 }, (_, index) => `SKU-${index}`);
 
