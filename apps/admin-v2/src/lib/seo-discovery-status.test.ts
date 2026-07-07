@@ -145,6 +145,49 @@ describe("buildSeoDiscoveryStatus", () => {
     );
   });
 
+  it("warns when URL-bearing structured data lacks an absolute dashboard Store URL", () => {
+    const discovery = {
+      sitemap: { enabled: false },
+      feeds: { productCatalogEnabled: false },
+      robots: { advertiseSitemap: false },
+      structuredData: {
+        organization: false,
+        websiteSearch: false,
+        products: false,
+        productGroups: false,
+        offerShippingDetails: false,
+        breadcrumbs: false,
+        collections: false,
+      },
+      returnPolicy: {
+        enabled: true,
+        country: "BD",
+        category: "finite",
+        returnWindowDays: 14,
+        returnFees: "customer_responsibility",
+        returnMethod: "mail",
+        policyUrl: "/returns",
+      },
+    };
+    const expectedWarning =
+      "Add a full absolute http(s) Store URL in dashboard settings before relying on URL-bearing structured data; path-only values only help dashboard preview/sidebar navigation.";
+
+    for (const storefrontUrl of ["", "/demo-store", "ftp://shop.example.com"]) {
+      const status = buildSeoDiscoveryStatus({
+        discovery,
+        storefrontUrl,
+        businessIdentity: {
+          companyName: "Scalius Mart",
+          legalName: "",
+        },
+        hasStoreLogo: true,
+      });
+
+      expect(status.structuredData.tone).toBe("warning");
+      expect(status.structuredData.identityWarning).toBe(expectedWarning);
+    }
+  });
+
   it("reports unavailable preview links when Store URL is missing", () => {
     const status = buildSeoDiscoveryStatus({
       discovery: {

@@ -481,6 +481,10 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain("Products to fix: 2");
     expect(host.textContent).toContain("Missing primary image");
     expect(host.textContent).toContain("Sample: No Photo Tee");
+    const sampleLink = host.querySelector<HTMLAnchorElement>(
+      'a[href="/admin/products/prod_1/edit"]',
+    );
+    expect(sampleLink?.textContent).toBe("No Photo Tee");
     expect(host.textContent).toContain(
       "More products exist outside this bounded scan.",
     );
