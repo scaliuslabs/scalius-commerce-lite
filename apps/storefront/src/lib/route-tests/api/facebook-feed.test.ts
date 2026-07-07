@@ -142,6 +142,75 @@ describe("Facebook product feed route", () => {
     expect(body).not.toContain("<g:condition>");
   });
 
+  it("does not fabricate taxonomy categories for unmapped merchant categories", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_unmapped_category",
+          slug: "linen-panjabi",
+          name: "Linen Panjabi",
+          description: "Custom apparel category",
+          price: 2800,
+          discountedPrice: 2800,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/linen-panjabi.jpg",
+          category: {
+            id: "cat_custom_apparel",
+            slug: "eid-collection",
+            name: "Eid Collection",
+          },
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).not.toContain("<g:google_product_category>");
+    expect(body).not.toContain("<g:fb_product_category>");
+    expect(body).not.toContain("Health &amp; Beauty");
+    expect(body).toContain("<g:product_type>Eid Collection</g:product_type>");
+  });
+
+  it("emits taxonomy categories only for explicit mappings", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_electronics",
+          slug: "smart-watch",
+          name: "Smart Watch",
+          description: "Mapped electronics product",
+          price: 4200,
+          discountedPrice: 4200,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/smart-watch.jpg",
+          category: {
+            id: "cat_electronics",
+            slug: "electronics",
+            name: "Electronics",
+          },
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(
+      "<g:google_product_category>Electronics</g:google_product_category>",
+    );
+    expect(body).toContain(
+      "<g:fb_product_category>Electronics &amp; Accessories</g:fb_product_category>",
+    );
+    expect(body).toContain("<g:product_type>Electronics</g:product_type>");
+  });
+
   it("rejects malformed page and limit query parameters", async () => {
     const badPage = await GET(
       context("https://storefront.example.test/api/facebook-feed.xml?page=2abc"),

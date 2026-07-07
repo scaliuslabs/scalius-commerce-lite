@@ -521,8 +521,8 @@ function generateProductItem(
   // Get category mappings
   const categorySlug = product.category?.slug || "";
   const categoryName = product.category?.name || "";
-  const googleCategory = escapeXmlCategory(getGoogleCategory(categorySlug));
-  const facebookCategory = escapeXmlCategory(getFacebookCategory(categorySlug));
+  const googleCategory = getGoogleCategory(categorySlug);
+  const facebookCategory = getFacebookCategory(categorySlug);
 
   // Build the item XML
   let item = "  <item>\n";
@@ -580,9 +580,15 @@ function generateProductItem(
   }
 
   // Categories
-  item += `    <g:google_product_category>${googleCategory}</g:google_product_category>\n`;
-  item += `    <g:fb_product_category>${facebookCategory}</g:fb_product_category>\n`;
-  item += `    <g:product_type>${escapeXml(categoryName)}</g:product_type>\n`;
+  if (googleCategory) {
+    item += `    <g:google_product_category>${escapeXmlCategory(googleCategory)}</g:google_product_category>\n`;
+  }
+  if (facebookCategory) {
+    item += `    <g:fb_product_category>${escapeXmlCategory(facebookCategory)}</g:fb_product_category>\n`;
+  }
+  if (categoryName.trim()) {
+    item += `    <g:product_type>${escapeXml(categoryName)}</g:product_type>\n`;
+  }
 
   if (feedItem.kind === "variant") {
     const optionValues = [
