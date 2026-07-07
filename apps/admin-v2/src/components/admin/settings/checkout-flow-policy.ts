@@ -1,3 +1,9 @@
+import { SSL_COMMERZ_BDT_AMOUNT_LIMITS } from "@scalius/core/modules/payments/sslcommerz";
+
+export const CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS = SSL_COMMERZ_BDT_AMOUNT_LIMITS;
+export const CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL =
+    `BDT ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min.toLocaleString("en-US")} and BDT ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max.toLocaleString("en-US")}`;
+
 export interface CheckoutFlowPreviewOptions {
     checkoutMode: string;
     partialPaymentEnabled: boolean;
@@ -6,6 +12,19 @@ export interface CheckoutFlowPreviewOptions {
     paymentMethodsLoaded: boolean;
     codEnabled: boolean;
     activeOnlineMethodCount: number;
+}
+
+export function getCheckoutAdvancePaymentAmountIssue(amount: unknown): string | null {
+    const numericAmount = Number(amount);
+    if (
+        Number.isFinite(numericAmount) &&
+        numericAmount >= CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min &&
+        numericAmount <= CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max
+    ) {
+        return null;
+    }
+
+    return `Set an advance amount between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`;
 }
 
 export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions): string[] {
@@ -32,9 +51,8 @@ export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions
 
     if (!options.partialPaymentEnabled) return issues;
 
-    if (!Number.isFinite(options.partialPaymentAmount) || options.partialPaymentAmount <= 0) {
-        issues.push("Set an advance amount greater than 0.");
-    }
+    const amountIssue = getCheckoutAdvancePaymentAmountIssue(options.partialPaymentAmount);
+    if (amountIssue) issues.push(amountIssue);
     if (options.checkoutMode === "guest_cod_only") {
         issues.push("Fast COD Only cannot be used with advance payments.");
     }

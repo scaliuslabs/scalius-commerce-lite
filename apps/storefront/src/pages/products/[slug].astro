@@ -214,26 +214,38 @@ const PRODUCT_OPTION_SCHEMA_URLS: Record<Exclude<ProductOptionSchema, "none">, s
   pattern: "https://schema.org/pattern",
 };
 
+const productOptionMetadata: Record<
+  VariantOptionAxis,
+  { label: string; schema: ProductOptionSchema }
+> = {
+  option1: {
+    label: normalizeProductOptionLabel(
+      product.variantOption1Label,
+      DEFAULT_PRODUCT_OPTION_LABELS.option1,
+    ),
+    schema: normalizeProductOptionSchema(
+      product.variantOption1Schema,
+      DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+    ),
+  },
+  option2: {
+    label: normalizeProductOptionLabel(
+      product.variantOption2Label,
+      DEFAULT_PRODUCT_OPTION_LABELS.option2,
+    ),
+    schema: normalizeProductOptionSchema(
+      product.variantOption2Schema,
+      DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+    ),
+  },
+};
+
 function getProductOptionSchema(axis: VariantOptionAxis): ProductOptionSchema {
-  return normalizeProductOptionSchema(
-    axis === "option1"
-      ? product.variantOption1Schema
-      : product.variantOption2Schema,
-    axis === "option1"
-      ? DEFAULT_PRODUCT_OPTION_SCHEMA.option1
-      : DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
-  );
+  return productOptionMetadata[axis].schema;
 }
 
 function getProductOptionLabel(axis: VariantOptionAxis): string {
-  return normalizeProductOptionLabel(
-    axis === "option1"
-      ? product.variantOption1Label
-      : product.variantOption2Label,
-    axis === "option1"
-      ? DEFAULT_PRODUCT_OPTION_LABELS.option1
-      : DEFAULT_PRODUCT_OPTION_LABELS.option2,
-  );
+  return productOptionMetadata[axis].label;
 }
 
 function mappedVariantSchemaProps(variant: typeof buyerVariants[number]): Record<string, string> {

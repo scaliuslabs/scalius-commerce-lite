@@ -100,9 +100,17 @@ describe("storefront orders API client", () => {
         data: {
           status: "completed",
           orderId: "order_processing",
-          receiptToken: "chk_receipt_ready",
         },
-      }), { status: 200 }));
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          orderId: "order_processing",
+          receiptToken: "chk_receipt_ready",
+          totalAmount: 125,
+          paymentMethod: "cod",
+        },
+      }), { status: 201 }));
 
     try {
       const result = await createOrder(buildOrderPayload());
@@ -115,6 +123,7 @@ describe("storefront orders API client", () => {
       });
       expect(result.receiptToken).not.toBe(result.statusToken);
       expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toBe("https://api.example.test/api/v1/orders/status/cst_poll_token");
+      expect(mocks.fetchWithRetry.mock.calls[2]?.[0]).toBe("https://api.example.test/api/v1/orders");
       expect(JSON.stringify(mocks.fetchWithRetry.mock.calls.map((call) => call[0]))).not.toContain("/orders/status/chk_");
       expect(JSON.stringify(mocks.fetchWithRetry.mock.calls.map((call) => call[0]))).not.toContain("chk_must_not_be_polled");
     } finally {
@@ -122,7 +131,7 @@ describe("storefront orders API client", () => {
     }
   });
 
-  it("does not use the status token as receipt proof when polling completes without a receipt token", async () => {
+  it("replays a completed duplicate privately instead of expecting receipt proof from status", async () => {
     const timers = mockImmediatePollingTimers();
     mocks.fetchWithRetry
       .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -139,6 +148,57 @@ describe("storefront orders API client", () => {
           status: "completed",
           orderId: "order_processing",
         },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          orderId: "order_processing",
+          receiptToken: "chk_replayed_receipt",
+          totalAmount: 125,
+          paymentMethod: "cod",
+        },
+      }), { status: 201 }));
+
+    try {
+      const result = await createOrder(buildOrderPayload());
+
+      expect(result).toMatchObject({
+        success: true,
+        orderId: "order_processing",
+        receiptToken: "chk_replayed_receipt",
+        statusToken: "cst_poll_without_receipt",
+      });
+      expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toBe("https://api.example.test/api/v1/orders/status/cst_poll_without_receipt");
+      expect(mocks.fetchWithRetry.mock.calls[2]?.[0]).toBe("https://api.example.test/api/v1/orders");
+      expect(JSON.stringify(mocks.fetchWithRetry.mock.calls.map((call) => call[0]))).not.toContain("/orders/status/chk_");
+    } finally {
+      timers.mockRestore();
+    }
+  });
+
+  it("does not use the status token as receipt proof when private replay lacks a receipt token", async () => {
+    const timers = mockImmediatePollingTimers();
+    mocks.fetchWithRetry
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          statusToken: "cst_poll_without_receipt",
+          orderId: "order_processing",
+          status: "processing",
+        },
+      }), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          status: "completed",
+          orderId: "order_processing",
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          orderId: "order_processing",
+        },
       }), { status: 200 }));
 
     try {
@@ -150,6 +210,7 @@ describe("storefront orders API client", () => {
       });
       expect(result.receiptToken).toBeUndefined();
       expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toBe("https://api.example.test/api/v1/orders/status/cst_poll_without_receipt");
+      expect(mocks.fetchWithRetry.mock.calls[2]?.[0]).toBe("https://api.example.test/api/v1/orders");
     } finally {
       timers.mockRestore();
     }
@@ -217,9 +278,15 @@ describe("storefront orders API client", () => {
         data: {
           status: "completed",
           orderId: "order_1",
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: {
+          orderId: "order_1",
           receiptToken: "chk_private_receipt",
         },
-      }), { status: 200 }));
+      }), { status: 201 }));
 
     const result = await createOrder({
       checkoutRequestId: "checkout_req_123456",
@@ -244,5 +311,6 @@ describe("storefront orders API client", () => {
     });
     expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toContain("/orders/status/cst_");
     expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).not.toContain("/orders/status/chk_");
+    expect(mocks.fetchWithRetry.mock.calls[2]?.[0]).toBe("https://api.example.test/api/v1/orders");
   });
 });

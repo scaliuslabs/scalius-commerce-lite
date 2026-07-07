@@ -86,7 +86,6 @@ export type CartValidationOptions = {
 type OrderStatusData = {
   status?: string;
   orderId?: string;
-  receiptToken?: string;
   error?: string;
 };
 
@@ -203,14 +202,47 @@ export async function createOrder(
           // Status endpoint uses ok() wrapper: { success: true, data: { status, orderId } }
           // But 202 responses use raw c.json(): { status: "processing" }
           const statusData = statusJson.data ?? statusJson;
-          if (statusData.status === "completed" && statusData.receiptToken) {
-            return {
-              success: true,
-              orderId: statusData.orderId || initialOrderId,
-              receiptToken: statusData.receiptToken,
-              statusToken,
+          if (statusData.status === "completed") {
+            const replayResponse = await fetchWithRetry(
+              url,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(options.customerSessionToken
+                    ? { "X-Customer-Session": options.customerSessionToken }
+                    : {}),
+                },
+                body: JSON.stringify(payload),
+                cache: "no-store",
+              },
+              0,
+              15000,
+              false,
+            );
+            const replayData = await replayResponse.json() as {
+              success?: boolean;
+              data?: {
+                id?: string;
+                orderId?: string;
+                receiptToken?: string;
+                totalAmount?: number;
+                paymentMethod?: string;
+              };
             };
-          } else if (statusData.status === "completed") {
+
+            if (replayResponse.ok && replayData.success && replayData.data?.receiptToken) {
+              return {
+                success: true,
+                orderId: replayData.data.orderId || replayData.data.id || statusData.orderId || initialOrderId,
+                receiptToken: replayData.data.receiptToken,
+                statusToken,
+                totalAmount: typeof replayData.data.totalAmount === "number" ? replayData.data.totalAmount : undefined,
+                paymentMethod: replayData.data.paymentMethod,
+                status: replayResponse.status,
+              };
+            }
+
             return { success: false, error: "Order completed but receipt proof is unavailable. Please check your order history." };
           } else if (statusData.status === "failed") {
             return { success: false, error: statusData.error || "Order ingestion failed during high traffic. Please try again." };

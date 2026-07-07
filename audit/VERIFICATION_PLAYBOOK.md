@@ -434,6 +434,8 @@ pnpm --filter @scalius/core test -- src/modules/orders/order-receipts.test.ts sr
 
 For `PRIV-003`, receipt proof remains required for guest receipt/payment recovery, but bearer proof must not travel in URLs. Public order-success URLs, receipt API calls from the browser, SSLCommerz success/fail/cancel redirects, Polar success URLs, payment-recovery links, and same-origin payment-session proxies must avoid `token`, `receipt_token`, or `receiptToken` URL parameters. Use same-origin httpOnly cookies plus POST body or header proof forwarding with explicit expiry, origin checks, and no raw proof in KV keys, logs, analytics, or clipboard URLs. Admin recovery copy links are clean same-browser receipt URLs only; merchant-sendable cross-browser recovery requires `POSTSALE-021`, not a renamed bearer URL. Keep backend callback validation deterministic and ensure live read-only smokes prove receipt access still fails closed without proof.
 
+Checkout status polling must stay metadata-only. `/orders/status/{token}` accepts only derived `cst_` status tokens, rejects receipt proofs before KV/D1 reads, stores no raw `chk_` proof in checkout-status KV values, and never returns `receiptToken`/`checkoutToken` from the status response. If duplicate/in-flight checkout polling needs receipt access after completion, the storefront must recover it through an idempotent same-origin order replay or another proof-preserving handoff that can set the HttpOnly receipt cookie without exposing `chk_` through status JSON.
+
 Payment settings and checkout-cache checks:
 
 ```bash

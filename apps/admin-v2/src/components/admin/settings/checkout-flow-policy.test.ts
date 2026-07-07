@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { getCheckoutFlowPreviewIssues, type CheckoutFlowPreviewOptions } from "./checkout-flow-policy";
+import {
+    CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL,
+    getCheckoutFlowPreviewIssues,
+    type CheckoutFlowPreviewOptions,
+} from "./checkout-flow-policy";
 
 const baseOptions: CheckoutFlowPreviewOptions = {
     checkoutMode: "all",
@@ -53,7 +57,7 @@ describe("checkout flow preview policy", () => {
         })).toContain("Enable and configure at least one online gateway in Payment Gateways.");
     });
 
-    it("requires an online gateway and positive amount for advance payments", () => {
+    it("requires an online gateway and provider-valid amount for advance payments", () => {
         expect(issues({
             checkoutMode: "all",
             partialPaymentEnabled: true,
@@ -61,9 +65,32 @@ describe("checkout flow preview policy", () => {
             codEnabled: true,
             activeOnlineMethodCount: 0,
         })).toEqual(expect.arrayContaining([
-            "Set an advance amount greater than 0.",
+            `Set an advance amount between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`,
             "Advance payments need at least one enabled and configured online gateway.",
         ]));
+    });
+
+    it.each([
+        { label: "below the SSLCommerz minimum", amount: 5 },
+        { label: "above the SSLCommerz maximum", amount: 500001 },
+    ])("warns in the preview before save when the advance amount is $label", ({ amount }) => {
+        expect(issues({
+            checkoutMode: "all",
+            partialPaymentEnabled: true,
+            partialPaymentAmount: amount,
+            codEnabled: true,
+            activeOnlineMethodCount: 1,
+        })).toContain(`Set an advance amount between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`);
+    });
+
+    it("allows the preview when the advance amount is inside the provider range", () => {
+        expect(issues({
+            checkoutMode: "all",
+            partialPaymentEnabled: true,
+            partialPaymentAmount: 10,
+            codEnabled: true,
+            activeOnlineMethodCount: 1,
+        })).toEqual([]);
     });
 
     it("locks saves behind a successfully loaded payment-method payload", () => {
