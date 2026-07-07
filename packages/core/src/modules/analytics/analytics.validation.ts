@@ -35,6 +35,16 @@ const ACTIVE_ANALYTICS_PLACEHOLDER_PATTERNS: Array<{
     },
 ];
 
+const GA4_MEASUREMENT_ID_PATTERN = /\bG-[A-Z0-9]{4,32}\b/i;
+const GOOGLE_TAG_MANAGER_ID_PATTERN = /\bGTM-[A-Z0-9]{4,32}\b/i;
+const FACEBOOK_PIXEL_INIT_PATTERN =
+    /\bfbq\s*\(\s*(['"])init\1\s*,\s*(['"])(\d{5,32})\2/i;
+const TIKTOK_PIXEL_LOAD_PATTERN =
+    /\bttq\.load\s*\(\s*(['"])([A-Z0-9_-]{6,64})\1/i;
+const TIKTOK_PIXEL_EVENTS_URL_PATTERN =
+    /analytics\.tiktok\.com\/i18n\/pixel\/events\.js/i;
+const TIKTOK_PIXEL_SDK_ID_PATTERN = /\bsdkid=([A-Z0-9_-]{6,64})\b/i;
+
 export function isMainThreadOnlyAnalyticsType(type: string): boolean {
     return type === "cloudflare_web_analytics";
 }
@@ -102,7 +112,7 @@ const analyticsFields = {
 };
 
 type AnalyticsConfigInput = {
-    type: AnalyticsScriptType;
+    type: AnalyticsScriptType | string;
     config: string;
     isActive?: boolean;
 };
@@ -124,22 +134,92 @@ export function getActiveAnalyticsPlaceholderConfigError(
     return `Replace the placeholder ${matchedPlaceholder.label} before activating this analytics script.`;
 }
 
+function hasGa4GtagSignal(config: string): boolean {
+    return (
+        /\bgtag\s*\(/i.test(config) ||
+        /googletagmanager\.com\/gtag\/js\?/i.test(config) ||
+        /\bgtag\.js\b/i.test(config)
+    );
+}
+
+function hasTikTokPixelLoadSignal(config: string): boolean {
+    return (
+        TIKTOK_PIXEL_LOAD_PATTERN.test(config) ||
+        (TIKTOK_PIXEL_EVENTS_URL_PATTERN.test(config) &&
+            TIKTOK_PIXEL_SDK_ID_PATTERN.test(config))
+    );
+}
+
+export function getActiveAnalyticsProviderConfigError(
+    data: Pick<AnalyticsConfigInput, "type" | "config" | "isActive">,
+): string | null {
+    if (data.isActive !== true) {
+        return null;
+    }
+
+    switch (data.type) {
+        case "google_analytics":
+            if (
+                !GA4_MEASUREMENT_ID_PATTERN.test(data.config) ||
+                !hasGa4GtagSignal(data.config)
+            ) {
+                return "Active Google Analytics scripts must use a GA4 gtag.js snippet with a G- measurement ID, not a GTM container snippet.";
+            }
+            return null;
+        case "google_tag_manager":
+            if (!GOOGLE_TAG_MANAGER_ID_PATTERN.test(data.config)) {
+                return "Active Google Tag Manager scripts must include a GTM- container ID.";
+            }
+            return null;
+        case "facebook_pixel":
+            if (!FACEBOOK_PIXEL_INIT_PATTERN.test(data.config)) {
+                return "Active Facebook Pixel scripts must include a readable numeric fbq('init', '...') Pixel ID.";
+            }
+            return null;
+        case "tiktok_pixel":
+            if (!hasTikTokPixelLoadSignal(data.config)) {
+                return "Active TikTok Pixel scripts must include the official Pixel load call, such as ttq.load('...').";
+            }
+            return null;
+        default:
+            return null;
+    }
+}
+
+export function getActiveAnalyticsConfigError(
+    data: Pick<AnalyticsConfigInput, "type" | "config" | "isActive">,
+): string | null {
+    return (
+        getActiveAnalyticsPlaceholderConfigError(data) ??
+        getActiveAnalyticsProviderConfigError(data)
+    );
+}
+
 export function isPubliclyInjectableAnalyticsConfig(
-    data: Pick<AnalyticsConfigInput, "config" | "isActive">,
+    data: Pick<AnalyticsConfigInput, "config" | "isActive"> &
+        Partial<Pick<AnalyticsConfigInput, "type">>,
 ): boolean {
-    return getActiveAnalyticsPlaceholderConfigError(data) === null;
+    if (!data.type) {
+        return getActiveAnalyticsPlaceholderConfigError(data) === null;
+    }
+
+    return getActiveAnalyticsConfigError({
+        type: data.type,
+        config: data.config,
+        isActive: data.isActive,
+    }) === null;
 }
 
 function validateAnalyticsConfig(
     data: AnalyticsConfigInput,
     ctx: z.RefinementCtx,
 ) {
-    const placeholderError = getActiveAnalyticsPlaceholderConfigError(data);
-    if (placeholderError) {
+    const activeConfigError = getActiveAnalyticsConfigError(data);
+    if (activeConfigError) {
         ctx.addIssue({
             code: "custom",
             path: ["config"],
-            message: placeholderError,
+            message: activeConfigError,
         });
     }
 

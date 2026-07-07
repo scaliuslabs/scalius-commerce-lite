@@ -38,6 +38,13 @@ measurement IDs. Use `google_tag_manager` for GTM web container snippets with
 `GTM-` container IDs; if a merchant wants the optional GTM noscript iframe, add
 it as a separate `body_start` custom snippet.
 
+Active first-class analytics snippets are shape-checked before create/update,
+legacy toggle activation, and public injection. GA4 must look like `gtag.js`
+with a `G-` measurement ID, GTM must include a `GTM-` container ID, Facebook
+Pixel must include a readable numeric `fbq('init', ...)`, and TikTok Pixel must
+include the official load signal. Keep inactive drafts permissive so merchants
+can paste and repair snippets without publishing broken tracking.
+
 TikTok Pixel is a first-class browser provider type. Use `tiktok_pixel` for the
 TikTok base code that loads `https://analytics.tiktok.com/i18n/pixel/events.js`,
 calls `ttq.load('PIXEL_ID')`, and calls `ttq.page()`. It remains Partytown-capable
@@ -109,6 +116,13 @@ that marker exists, later browser events return success-shaped skip responses
 without rate-limit writes, D1 settings reads, Meta fetches, or log rows. Saving
 Meta CAPI settings clears the marker so corrected credentials can retry
 immediately.
+
+Storefront layout enables browser Meta CAPI only after strict-reading the saved
+access token with the dedicated `CREDENTIAL_ENCRYPTION_KEY`; unreadable
+ciphertext is treated as not ready, not as a configured token. Browser event
+dispatch uses one short unauthenticated direct POST with no hot retry loop, so
+bad credentials or provider outages do not turn normal browsing into repeated
+SDK retries.
 
 ### Browser Pixel Parity (`meta-pixel-parity.ts`)
 

@@ -14,6 +14,33 @@ import {
   extractFacebookPixelIdsFromScript,
 } from "./meta-pixel-parity";
 
+const VALID_GA4_CONFIG = `
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ABC123DEF4"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ABC123DEF4');
+</script>`;
+
+const VALID_GTM_CONFIG = `
+<script>
+  (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-ABC1234');
+</script>`;
+
+const VALID_FACEBOOK_PIXEL_CONFIG = `
+<script>
+  fbq('init', '123456789012345');
+  fbq('track', 'PageView');
+</script>`;
+
+const VALID_TIKTOK_PIXEL_CONFIG =
+  "<script>ttq.load('C1234567890ABCDEFG');ttq.page();</script>";
+
 describe("analytics validation", () => {
   it("accepts Google Tag Manager as a first-class script type", () => {
     expect(analyticsScriptTypes).toContain("google_tag_manager");
@@ -23,7 +50,7 @@ describe("analytics validation", () => {
       type: "google_tag_manager",
       isActive: true,
       usePartytown: true,
-      config: "<script>window.dataLayer = window.dataLayer || [];</script>",
+      config: VALID_GTM_CONFIG,
       location: "head",
     });
 
@@ -38,11 +65,43 @@ describe("analytics validation", () => {
       type: "tiktok_pixel",
       isActive: true,
       usePartytown: true,
-      config: "<script>ttq.load('C1234567890ABCDEFG');ttq.page();</script>",
+      config: VALID_TIKTOK_PIXEL_CONFIG,
       location: "head",
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("accepts valid active first-class provider snippets on create and update", () => {
+    const cases = [
+      { type: "google_analytics", config: VALID_GA4_CONFIG },
+      { type: "google_tag_manager", config: VALID_GTM_CONFIG },
+      { type: "facebook_pixel", config: VALID_FACEBOOK_PIXEL_CONFIG },
+      { type: "tiktok_pixel", config: VALID_TIKTOK_PIXEL_CONFIG },
+    ] as const;
+
+    for (const testCase of cases) {
+      const createResult = createAnalyticsSchema.safeParse({
+        name: "Analytics Script",
+        type: testCase.type,
+        isActive: true,
+        usePartytown: true,
+        config: testCase.config,
+        location: "head",
+      });
+      const updateResult = updateAnalyticsSchema.safeParse({
+        id: "analytics_1",
+        name: "Analytics Script",
+        type: testCase.type,
+        isActive: true,
+        usePartytown: true,
+        config: testCase.config,
+        location: "head",
+      });
+
+      expect(createResult.success, `${testCase.type} create`).toBe(true);
+      expect(updateResult.success, `${testCase.type} update`).toBe(true);
+    }
   });
 
   it("accepts a Cloudflare Web Analytics token", () => {
@@ -154,6 +213,80 @@ describe("analytics validation", () => {
     }
   });
 
+  it("rejects active provider snippets that do not match the selected type on create", () => {
+    const cases = [
+      {
+        type: "google_analytics",
+        config: VALID_GTM_CONFIG,
+        message: "GA4 gtag.js",
+      },
+      {
+        type: "google_tag_manager",
+        config: VALID_GA4_CONFIG,
+        message: "GTM-",
+      },
+      {
+        type: "facebook_pixel",
+        config: VALID_GA4_CONFIG,
+        message: "fbq('init'",
+      },
+      {
+        type: "tiktok_pixel",
+        config: VALID_FACEBOOK_PIXEL_CONFIG,
+        message: "ttq.load",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const result = createAnalyticsSchema.safeParse({
+        name: "Analytics Script",
+        type: testCase.type,
+        isActive: true,
+        usePartytown: true,
+        config: testCase.config,
+        location: "head",
+      });
+
+      expect(result.success, testCase.type).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toContain(testCase.message);
+      }
+    }
+  });
+
+  it("rejects active provider mismatches on update but keeps inactive drafts permissive", () => {
+    const inactiveCreate = createAnalyticsSchema.safeParse({
+      name: "Draft Analytics Script",
+      type: "google_analytics",
+      isActive: false,
+      usePartytown: true,
+      config: VALID_GTM_CONFIG,
+      location: "head",
+    });
+    const inactiveUpdate = updateAnalyticsSchema.safeParse({
+      id: "analytics_1",
+      name: "Draft Analytics Script",
+      type: "facebook_pixel",
+      isActive: false,
+      usePartytown: true,
+      config: VALID_TIKTOK_PIXEL_CONFIG,
+      location: "head",
+    });
+    const activeUpdate = updateAnalyticsSchema.safeParse({
+      id: "analytics_1",
+      name: "Draft Analytics Script",
+      type: "tiktok_pixel",
+      isActive: true,
+      usePartytown: true,
+      config: VALID_FACEBOOK_PIXEL_CONFIG,
+      location: "head",
+    });
+
+    expect(inactiveCreate.success).toBe(true);
+    expect(inactiveUpdate.success).toBe(true);
+    expect(activeUpdate.success).toBe(false);
+  });
+
   it("allows placeholder snippets to be saved inactive but not updated active", () => {
     const inactiveDraft = createAnalyticsSchema.safeParse({
       name: "Draft Facebook Pixel",
@@ -188,6 +321,23 @@ describe("analytics validation", () => {
       isPubliclyInjectableAnalyticsConfig({
         isActive: false,
         config: "<script>gtag('config', 'G-XXXXXXXXXX');</script>",
+      }),
+    ).toBe(true);
+  });
+
+  it("marks legacy active provider mismatches as unsafe for public injection", () => {
+    expect(
+      isPubliclyInjectableAnalyticsConfig({
+        type: "tiktok_pixel",
+        isActive: true,
+        config: VALID_GA4_CONFIG,
+      }),
+    ).toBe(false);
+    expect(
+      isPubliclyInjectableAnalyticsConfig({
+        type: "custom",
+        isActive: true,
+        config: VALID_GA4_CONFIG,
       }),
     ).toBe(true);
   });

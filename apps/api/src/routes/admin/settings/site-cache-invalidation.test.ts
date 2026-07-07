@@ -289,6 +289,24 @@ describe("site settings cache invalidation", () => {
         },
       },
     );
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["homepage", "layout", "discovery"],
+      expect.anything(),
+      {
+        htmlPaths: [
+          "/",
+          "/robots.txt",
+          "/sitemap.xml",
+          "/sitemap-static.xml",
+          "/sitemap-categories.xml",
+          "/sitemap-collections.xml",
+          "/sitemap-pages.xml",
+          "/sitemap-products.xml?page=1",
+          "/api/product-feed.xml",
+          "/api/facebook-feed.xml",
+        ],
+      },
+    );
   });
 
   it("accepts return policy saves through the SEO settings route", async () => {
@@ -319,7 +337,7 @@ describe("site settings cache invalidation", () => {
       },
     });
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["homepage", "layout"],
+      ["homepage", "layout", "discovery"],
       expect.objectContaining({ env }),
       expect.objectContaining({
         htmlPaths: expect.arrayContaining(["/robots.txt", "/sitemap.xml"]),
@@ -431,7 +449,7 @@ describe("site settings cache invalidation", () => {
       path: "/seo",
       method: "POST" as const,
       body: { siteTitle: "Site", homepageTitle: "Home" },
-      groups: ["homepage", "layout"],
+      groups: ["homepage", "layout", "discovery"],
       options: {
         htmlPaths: [
           "/",

@@ -44,6 +44,7 @@ import {
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
+const DISCOVERY_CACHE_GROUPS = ["discovery"] as const;
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const CURRENCY_CACHE_GROUPS = ["layout", "checkout"] as const;
 const MEDIA_CACHE_GROUPS = ["media"] as const;
@@ -673,7 +674,11 @@ app.openapi(saveSeoRoute, async (c) => {
   await saveSeoSettings(db, data);
   await invalidateSiteSettingsCache(getKv());
   await invalidateApiAndScheduleStorefrontGroups(
-    [...HOMEPAGE_CACHE_GROUPS, ...LAYOUT_CACHE_GROUPS] as const,
+    [
+      ...HOMEPAGE_CACHE_GROUPS,
+      ...LAYOUT_CACHE_GROUPS,
+      ...DISCOVERY_CACHE_GROUPS,
+    ] as const,
     c,
     { htmlPaths: SEO_DISCOVERY_WARM_PATHS },
   );

@@ -1,7 +1,6 @@
 // src/lib/api/tracking.ts
 
-import { getConfiguredSdkClient } from "./client";
-import { postApiV1MetaEvents } from "@scalius/api-client/sdk";
+import { createApiUrl, fetchWithRetry } from "./client";
 
 /**
  * Defines the payload structure for sending a server-side event
@@ -62,13 +61,26 @@ export interface MetaCapiEventPayload {
  */
 export async function sendMetaCapiEvent(payload: MetaCapiEventPayload): Promise<void> {
   try {
-    await postApiV1MetaEvents({
-      client: getConfiguredSdkClient(),
-      body: payload as unknown as typeof payload,
-    });
+    await fetchWithRetry(
+      createApiUrl("/meta/events"),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        keepalive: true,
+      },
+      0,
+      2500,
+      false,
+    );
   } catch (error: unknown) {
-    // The error is logged by fetchWithRetry, so we just swallow it here
-    // to prevent it from crashing the client application.
-    console.error("Error in sendMetaCapiEvent, but swallowing to prevent UI crash:", error);
+    console.warn(
+      "Meta browser event skipped after one bounded dispatch attempt:",
+      error,
+    );
   }
 }

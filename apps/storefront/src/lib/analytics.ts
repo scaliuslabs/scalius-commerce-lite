@@ -26,6 +26,9 @@ interface AnalyticsConfig {
   updatedAt: Date;
 }
 
+const CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC =
+  "https://static.cloudflareinsights.com/beacon.min.js";
+
 // CAPI: Define a type for user data that can be passed into tracking functions.
 interface CapiUserData {
   em?: string; // Email
@@ -65,6 +68,9 @@ export function processAnalyticsScript(script: AnalyticsConfig): string {
  */
 export function shouldUsePartytown(script: AnalyticsConfig): boolean {
   if (script.type === "cloudflare_web_analytics") {
+    return false;
+  }
+  if (script.config.includes(CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC)) {
     return false;
   }
 

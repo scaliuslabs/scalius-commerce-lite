@@ -5,6 +5,7 @@ import {
   shouldInjectAnalyticsScript,
   shouldUsePartytown,
 } from "./analytics";
+import { CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC } from "../modules/analytics/analytics.validation";
 
 const baseScript = {
   id: "analytics_1",
@@ -25,6 +26,17 @@ describe("analytics script processing", () => {
         ...baseScript,
         type: "cloudflare_web_analytics",
         usePartytown: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps Cloudflare Web Analytics beacon snippets on the main thread even as custom scripts", () => {
+    expect(
+      shouldUsePartytown({
+        ...baseScript,
+        type: "custom",
+        usePartytown: true,
+        config: `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
       }),
     ).toBe(false);
   });

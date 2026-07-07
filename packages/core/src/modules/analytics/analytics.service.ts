@@ -7,7 +7,7 @@ import type { Analytics } from "@scalius/database/schema";
 import type { z } from "zod";
 import { ValidationError } from "@scalius/core/errors";
 import {
-    getActiveAnalyticsPlaceholderConfigError,
+    getActiveAnalyticsConfigError,
     isMainThreadOnlyAnalyticsType,
     normalizeCloudflareWebAnalyticsConfig,
     type createAnalyticsSchema,
@@ -51,10 +51,11 @@ function normalizeAnalyticsScriptValues(
 }
 
 function assertAnalyticsScriptCanBeActive(data: {
+    type: string;
     config: string;
     isActive: boolean;
 }) {
-    const error = getActiveAnalyticsPlaceholderConfigError(data);
+    const error = getActiveAnalyticsConfigError(data);
     if (error) {
         throw new ValidationError(error);
     }
@@ -79,6 +80,7 @@ export async function createAnalyticsScript(db: Database, data: CreateAnalyticsI
     const analyticsId = "analytics_" + nanoid();
     const normalized = normalizeAnalyticsScriptValues(data);
     assertAnalyticsScriptCanBeActive({
+        type: data.type,
         config: normalized.config,
         isActive: data.isActive,
     });
@@ -114,6 +116,7 @@ export async function updateAnalyticsScript(db: Database, id: string, data: Upda
 
     const normalized = normalizeAnalyticsScriptValues(data);
     assertAnalyticsScriptCanBeActive({
+        type: data.type,
         config: normalized.config,
         isActive: data.isActive,
     });
@@ -138,6 +141,7 @@ export async function toggleAnalyticsScript(db: Database, id: string, isActive: 
     const existingScript = await db
         .select({
             id: analytics.id,
+            type: analytics.type,
             config: analytics.config,
         })
         .from(analytics)
@@ -149,6 +153,7 @@ export async function toggleAnalyticsScript(db: Database, id: string, isActive: 
     }
 
     assertAnalyticsScriptCanBeActive({
+        type: existingScript.type,
         config: existingScript.config,
         isActive,
     });

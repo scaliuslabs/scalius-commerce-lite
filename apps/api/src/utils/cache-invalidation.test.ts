@@ -510,6 +510,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(getGroupsForPath("/api/v1/admin/settings/seo")).toEqual([
       "homepage",
       "layout",
+      "discovery",
+    ]);
+    expect(getStorefrontPrefixesForGroups(["discovery"])).toEqual([
+      "global_seo_settings",
+      "feed_products_",
+      "sitemap_products_",
     ]);
     expect(getGroupsForPath("/api/v1/admin/pages/about-us")).toEqual([
       "pages",

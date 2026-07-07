@@ -20,6 +20,7 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const READYZ_SAMPLE_DELAY_MS = 1_000;
 const MAX_BODY_PREVIEW_LENGTH = 240;
 const EXPECTED_API_CRON = "*/15 * * * *";
+const ALLOWED_QUEUE_ACTORS = new Set(["worker:scalius-ops-monitor"]);
 
 const booleanOptions = new Set(["help", "json", "skip-wrangler", "queues"]);
 const stringOptions = new Set(["api-base-url", "samples", "timeout-ms"]);
@@ -666,6 +667,10 @@ function parseOptionalInteger(value) {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function getUnexpectedActors(actualActors, expectedActors, allowedActors = ALLOWED_QUEUE_ACTORS) {
+  return actualActors.filter((actor) => !expectedActors.includes(actor) && !allowedActors.has(actor));
+}
+
 export function parseWranglerQueueInfoOutput(output) {
   const fields = new Map();
   for (const line of stripAnsi(output).split(/\r?\n/)) {
@@ -699,7 +704,13 @@ export function evaluateQueueInfoOutput(queueName, output, expectation = {}) {
   const info = parseWranglerQueueInfoOutput(output);
   const expectedProducers = expectation.expectedProducers ?? [];
   const expectedConsumers = expectation.expectedConsumers ?? [];
+  const allowedActors = expectation.allowedActors instanceof Set
+    ? expectation.allowedActors
+    : new Set(expectation.allowedActors ?? ALLOWED_QUEUE_ACTORS);
+  const unexpectedProducers = getUnexpectedActors(info.producers, expectedProducers, allowedActors);
+  const unexpectedConsumers = getUnexpectedActors(info.consumers, expectedConsumers, allowedActors);
   const errors = [];
+  const warnings = [];
 
   if (info.name && info.name !== queueName) {
     errors.push(`expected queue name ${queueName}, got ${info.name}`);
@@ -714,10 +725,17 @@ export function evaluateQueueInfoOutput(queueName, output, expectation = {}) {
       errors.push(`missing expected consumer ${consumer}`);
     }
   }
+  for (const producer of unexpectedProducers) {
+    warnings.push(`unexpected producer ${producer}`);
+  }
+  for (const consumer of unexpectedConsumers) {
+    warnings.push(`unexpected consumer ${consumer}`);
+  }
 
   return {
     ok: errors.length === 0,
     errors,
+    warnings,
     summary: summarizeQueueInfoOutput(queueName, output),
     name: info.name ?? queueName,
     producerCount: info.producerCount,
@@ -726,6 +744,8 @@ export function evaluateQueueInfoOutput(queueName, output, expectation = {}) {
     consumers: info.consumers,
     expectedProducers,
     expectedConsumers,
+    unexpectedProducers,
+    unexpectedConsumers,
   };
 }
 
@@ -737,6 +757,7 @@ async function checkQueues(options, {
   logger,
 }) {
   const queues = [];
+  const warnings = [];
   for (const expectation of queueExpectations) {
     const queueName = expectation.name;
     const commandSpec = buildWranglerQueueInfoCommand(queueName, { pnpmExecutable, rootDir });
@@ -759,6 +780,13 @@ async function checkQueues(options, {
     }
 
     const summary = queueInfo.summary;
+    if (queueInfo.warnings.length > 0) {
+      for (const warning of queueInfo.warnings) {
+        const message = `Queue ${queueName}: ${warning}`;
+        warnings.push(message);
+        logger?.warn(`⚠ ${message}`);
+      }
+    }
     logger?.log(`✓ queue ${queueName}: ${summary}`);
     queues.push({
       name: queueName,
@@ -773,12 +801,16 @@ async function checkQueues(options, {
       consumers: queueInfo.consumers,
       expectedProducers: queueInfo.expectedProducers,
       expectedConsumers: queueInfo.expectedConsumers,
+      unexpectedProducers: queueInfo.unexpectedProducers,
+      unexpectedConsumers: queueInfo.unexpectedConsumers,
+      warnings: queueInfo.warnings,
     });
   }
 
   return {
     queueCount: queues.length,
     queues,
+    warnings,
   };
 }
 
@@ -854,8 +886,9 @@ export async function runOpsCheck(options, {
     if (queueExpectations.length === 0) {
       throw createCheckError("No API queues found in apps/api/wrangler.jsonc.", result);
     }
-    await runStep(result, "queues", () =>
+    const queueCheck = await runStep(result, "queues", () =>
       checkQueues(options, { execFileImpl, pnpmExecutable, rootDir, queueExpectations, logger }));
+    result.warnings.push(...queueCheck.warnings);
   } else {
     result.checks.queues = {
       status: "skipped",
