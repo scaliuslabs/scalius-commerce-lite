@@ -3,8 +3,7 @@ import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
 import { getRequestCorrelation } from "../utils/http-correlation";
 import { logOpsEvent } from "../utils/ops-log";
 
-const READINESS_TIMEOUT_MS = 1500;
-const READINESS_D1_TIMEOUT_MS = 3000;
+const READINESS_REMOTE_PROBE_TIMEOUT_MS = 5000;
 const READINESS_D1_RETRY_DELAYS_MS = [75, 200, 400] as const;
 const READINESS_KV_PROBE_KEY = "__scalius:readyz:probe";
 
@@ -45,7 +44,7 @@ function missing(name: string, detail = "binding is not configured"): CheckResul
 
 async function withTimeout<T>(
   task: Promise<T>,
-  timeoutMs = READINESS_TIMEOUT_MS,
+  timeoutMs = READINESS_REMOTE_PROBE_TIMEOUT_MS,
 ): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -67,7 +66,7 @@ async function runProbe(
   name: string,
   required: boolean,
   probe: () => Promise<string | undefined>,
-  timeoutMs = READINESS_TIMEOUT_MS,
+  timeoutMs = READINESS_REMOTE_PROBE_TIMEOUT_MS,
 ): Promise<CheckResult> {
   const started = nowMs();
 
@@ -135,7 +134,7 @@ async function d1Check(env: Env): Promise<CheckResult> {
       throw new Error("unexpected D1 probe result");
     }
     return "SELECT 1";
-  }, READINESS_D1_TIMEOUT_MS);
+  }, READINESS_REMOTE_PROBE_TIMEOUT_MS);
 }
 
 async function kvCheck(name: string, kv: KVNamespace | undefined): Promise<CheckResult> {
@@ -153,7 +152,7 @@ async function r2Check(env: Env): Promise<CheckResult> {
   return runProbe("r2", true, async () => {
     await env.BUCKET.list({ limit: 1 });
     return "list limit 1";
-  });
+  }, READINESS_REMOTE_PROBE_TIMEOUT_MS);
 }
 
 function configCheck(env: Env): CheckResult {

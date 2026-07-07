@@ -271,9 +271,9 @@ Catalog invalidation lives in `src/utils/cache-invalidation.ts`. Product writes 
 
 It returns `200` with `status: "ready"` only when required platform dependencies respond:
 
-- D1: bounded `SELECT 1` probe with a D1-specific 3s budget and transient overload retries.
-- API KV and shared auth KV: bounded read-only probe.
-- R2: bounded `list({ limit: 1 })` probe.
+- D1: bounded `SELECT 1` probe with a 5s remote-storage budget and transient overload retries.
+- API KV and shared auth KV: bounded read-only probes with the same 5s remote-storage budget.
+- R2: bounded `list({ limit: 1 })` probe with the same 5s remote-storage budget.
 - Durable Object and Queue bindings: binding-shape checks only; no messages are sent.
 - Runtime config: required public URLs and purge credentials are present.
 

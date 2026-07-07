@@ -1862,6 +1862,12 @@ async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
     timeoutMs: options.timeoutMs,
   });
   requireStatus(profileResponse, "Storefront /.well-known/ucp", (status) => status >= 200 && status < 300);
+  const profileCache = evaluateDiscoveryCacheHeaders(profileResponse.headers, {
+    label: "UCP profile",
+  });
+  if (!profileCache.ok) {
+    throw new Error(`UCP profile cache headers failed: ${profileCache.errors.join("; ")}`);
+  }
   const profilePayload = requireJsonResponse(profileResponse, "Storefront /.well-known/ucp");
   const profileEvaluation = evaluateUcpProfile(profilePayload, { storefrontOrigin });
   if (!profileEvaluation.ok) {
@@ -1873,6 +1879,7 @@ async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
       url: redactUrl(profileUrl),
       statusCode: profileResponse.statusCode,
       durationMs: profileResponse.durationMs,
+      cacheControl: profileCache.cacheControl,
       version: profileEvaluation.version,
       endpoint: profileEvaluation.endpoint,
       capabilities: profileEvaluation.capabilities,
@@ -1907,7 +1914,12 @@ async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
   requireStatus(searchResponse, "UCP catalog search", (status) => status >= 200 && status < 300);
   const searchPayload = requireJsonResponse(searchResponse, "UCP catalog search");
   const searchedProducts = Array.isArray(searchPayload?.products) ? searchPayload.products.length : 0;
-  const candidate = firstUcpSearchCandidate(searchPayload);
+  const searchCandidate = firstUcpSearchCandidate(searchPayload);
+  const candidate = searchCandidate ?? {
+    id: productUrl,
+    productId: null,
+    variantId: null,
+  };
 
   result.catalog = {
     search: {
@@ -1916,19 +1928,9 @@ async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
       durationMs: searchResponse.durationMs,
       query: searchQuery,
       productCount: searchedProducts,
+      ...(searchCandidate ? {} : { fallbackInputId: redactUrl(productUrl) }),
     },
   };
-
-  if (!candidate) {
-    result.catalog.lookup = {
-      status: "skipped",
-      reason: "UCP catalog search returned no product/variant candidate.",
-    };
-    logger?.log(
-      "PASS UCP discovery: HTTPS profile advertises catalog search/lookup only; catalog search returned no products.",
-    );
-    return result;
-  }
 
   const lookupResponse = await fetchJson(`${serviceEndpoint}/catalog/lookup`, {
     fetchImpl,

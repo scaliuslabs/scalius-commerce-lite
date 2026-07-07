@@ -4,9 +4,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readinessRoutes } from "./readiness";
 import { requestCorrelationMiddleware } from "../utils/http-correlation";
 
-function createKv() {
+function createKv(options: { delayMs?: number } = {}) {
   return {
-    get: vi.fn(async () => null),
+    get: vi.fn(async () => {
+      if (options.delayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+      }
+
+      return null;
+    }),
   } as unknown as KVNamespace;
 }
 
@@ -35,13 +41,19 @@ function createDb(options: {
   } as unknown as D1Database;
 }
 
-function createBucket() {
+function createBucket(options: { delayMs?: number } = {}) {
   return {
-    list: vi.fn(async () => ({
-      objects: [],
-      truncated: false,
-      delimitedPrefixes: [],
-    })),
+    list: vi.fn(async () => {
+      if (options.delayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+      }
+
+      return {
+        objects: [],
+        truncated: false,
+        delimitedPrefixes: [],
+      };
+    }),
   } as unknown as R2Bucket;
 }
 
@@ -207,14 +219,14 @@ describe("API readiness route", () => {
     }
   });
 
-  it("allows remote D1 queue variance within the D1-specific readiness budget", async () => {
+  it("allows remote D1 variance within the remote-storage readiness budget", async () => {
     vi.useFakeTimers();
     const app = createApp();
-    const env = createEnv({ DB: createDb({ delayMs: 2000 }) });
+    const env = createEnv({ DB: createDb({ delayMs: 4000 }) });
 
     try {
       const responsePromise = app.request("/api/v1/readyz", {}, env);
-      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(4000);
       const response = await responsePromise;
       const json = await response.json() as {
         success?: boolean;
@@ -228,6 +240,60 @@ describe("API readiness route", () => {
       expect(json.checks?.d1).toMatchObject({
         status: "ok",
         detail: "SELECT 1",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("allows remote KV variance within the remote-storage readiness budget", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const env = createEnv({ SHARED_AUTH_CACHE: createKv({ delayMs: 4000 }) });
+
+    try {
+      const responsePromise = app.request("/api/v1/readyz", {}, env);
+      await vi.advanceTimersByTimeAsync(4000);
+      const response = await responsePromise;
+      const json = await response.json() as {
+        success?: boolean;
+        status?: string;
+        checks?: Record<string, { status?: string; detail?: string }>;
+      };
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(json.status).toBe("ready");
+      expect(json.checks?.shared_auth_kv).toMatchObject({
+        status: "ok",
+        detail: "read probe",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("allows remote R2 variance within the remote-storage readiness budget", async () => {
+    vi.useFakeTimers();
+    const app = createApp();
+    const env = createEnv({ BUCKET: createBucket({ delayMs: 4000 }) });
+
+    try {
+      const responsePromise = app.request("/api/v1/readyz", {}, env);
+      await vi.advanceTimersByTimeAsync(4000);
+      const response = await responsePromise;
+      const json = await response.json() as {
+        success?: boolean;
+        status?: string;
+        checks?: Record<string, { status?: string; detail?: string }>;
+      };
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(json.status).toBe("ready");
+      expect(json.checks?.r2).toMatchObject({
+        status: "ok",
+        detail: "list limit 1",
       });
     } finally {
       vi.useRealTimers();
