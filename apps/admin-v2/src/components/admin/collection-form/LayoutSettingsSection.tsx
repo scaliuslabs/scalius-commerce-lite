@@ -25,6 +25,7 @@ import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
 import { Switch } from "../../ui/switch";
 import { X } from "lucide-react";
+import { ResourceDiscoveryReadiness } from "@/components/admin/shared/ResourceDiscoveryReadiness";
 import type { CollectionFormValues, Product } from "./types";
 import { collectionTypes } from "./types";
 import { ProductPickerPopover } from "./ProductPickerPopover";
@@ -148,6 +149,14 @@ export const LayoutSettingsSection = React.memo(
                   </FormControl>
                 </FormItem>
               )}
+            />
+            <ResourceDiscoveryReadiness
+              kind="collection"
+              id={form.watch("id")}
+              canonicalPath={form.watch("canonicalPath")}
+              noIndex={form.watch("noIndex")}
+              excludeFromSitemap={form.watch("excludeFromSitemap")}
+              isActive={form.watch("isActive")}
             />
           </CardContent>
         </Card>
