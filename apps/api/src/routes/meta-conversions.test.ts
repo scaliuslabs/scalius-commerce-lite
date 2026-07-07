@@ -18,7 +18,10 @@ vi.mock("@scalius/shared/rate-limit", () => ({
   rateLimit: mocks.rateLimit,
 }));
 
-import { metaConversionsRoutes } from "./meta-conversions";
+import {
+  META_CAPI_BROWSER_CIRCUIT_KEY,
+  metaConversionsRoutes,
+} from "./meta-conversions";
 
 function createTestApp() {
   const db = { id: "db" };
@@ -180,5 +183,65 @@ describe("Meta conversions public event route", () => {
 
     expect(response.status).toBe(429);
     expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
+  });
+
+  it("opens a short circuit after non-retryable provider failures", async () => {
+    mocks.sendCapiEvent.mockResolvedValueOnce({
+      success: false,
+      error: "Invalid OAuth access token.",
+      retryable: false,
+    });
+    const cache = {
+      get: vi.fn(async () => null),
+      put: vi.fn(async () => undefined),
+    };
+
+    const { app } = createTestApp();
+    const response = await app.request(
+      "/api/v1/meta/events",
+      createRequest({ eventId: "Purchase:order_1" }),
+      {
+        CACHE: cache,
+        STOREFRONT_URL: "https://store.example",
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.sendCapiEvent).toHaveBeenCalledTimes(1);
+    expect(cache.put).toHaveBeenCalledWith(
+      META_CAPI_BROWSER_CIRCUIT_KEY,
+      expect.stringContaining("Invalid OAuth access token."),
+      { expirationTtl: 900 },
+    );
+  });
+
+  it("skips provider dispatch while the browser-event circuit is open", async () => {
+    const cache = {
+      get: vi.fn(async () =>
+        JSON.stringify({
+          reason: "Invalid OAuth access token.",
+          eventName: "Purchase",
+          openedAt: Date.now(),
+        }),
+      ),
+      put: vi.fn(async () => undefined),
+    };
+
+    const { app } = createTestApp();
+    const response = await app.request(
+      "/api/v1/meta/events",
+      createRequest({ eventId: "Purchase:order_1" }),
+      {
+        CACHE: cache,
+        STOREFRONT_URL: "https://store.example",
+      } as never,
+    );
+    const body = await response.json() as { data?: { message?: string } };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.message).toContain("recently failed");
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
   });
 });

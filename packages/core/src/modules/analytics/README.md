@@ -99,6 +99,17 @@ slow/retry hotspot.
 | `performLogCleanup` | `(db: Database, retentionHours: number)` | Delete logs older than retention period. |
 | `manualLogCleanup` | `(db: Database, retentionHours: number)` | Admin-triggered cleanup, returns `{ success: boolean; message: string }`. Uses `error instanceof Error` check in catch. |
 
+### Meta Browser Event Cost Control
+
+`POST /api/v1/meta/events` is for first-party storefront browser events only.
+It validates the `eventSourceUrl` origin against `STOREFRONT_URL` before
+provider work. When Meta returns a non-retryable provider/config failure, the
+route opens the KV key `meta-capi:browser-events:circuit` for 15 minutes. While
+that marker exists, later browser events return success-shaped skip responses
+without rate-limit writes, D1 settings reads, Meta fetches, or log rows. Saving
+Meta CAPI settings clears the marker so corrected credentials can retry
+immediately.
+
 ### Browser Pixel Parity (`meta-pixel-parity.ts`)
 
 `GET /api/v1/admin/settings/meta-conversions` includes a non-persisted

@@ -2,7 +2,10 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
-import { sendCapiEvent } from "@scalius/core/integrations/meta/conversions-api";
+import {
+  sendCapiEvent,
+  type SendCapiEventResult,
+} from "@scalius/core/integrations/meta/conversions-api";
 import { getClientIp, rateLimit } from "@scalius/shared/rate-limit";
 
 import { ok } from "../utils/api-response";
@@ -11,6 +14,9 @@ import { RateLimitError, ValidationError } from "../utils/api-error";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { getOptionalExecutionContext } from "../utils/cache-invalidation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+export const META_CAPI_BROWSER_CIRCUIT_KEY =
+  "meta-capi:browser-events:circuit";
+const META_CAPI_BROWSER_CIRCUIT_TTL_SECONDS = 15 * 60;
 
 const eventPayloadSchema = z.object({
   eventId: z.string().min(8).max(128).optional(),
@@ -94,6 +100,48 @@ function isTrustedEventSource(eventSourceUrl: string, storefrontUrl?: string): b
   }
 }
 
+async function readMetaCapiBrowserCircuit(kv: KVNamespace | undefined) {
+  if (!kv) return null;
+  try {
+    const raw = await kv.get(META_CAPI_BROWSER_CIRCUIT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as {
+      reason?: string;
+      eventName?: string;
+      openedAt?: number;
+    };
+  } catch (error) {
+    console.warn("[Meta CAPI] Failed to read browser event circuit", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+async function openMetaCapiBrowserCircuit(
+  kv: KVNamespace | undefined,
+  result: SendCapiEventResult,
+  eventName: string,
+) {
+  if (!kv || result.success || result.retryable !== false) return;
+
+  try {
+    await kv.put(
+      META_CAPI_BROWSER_CIRCUIT_KEY,
+      JSON.stringify({
+        reason: result.error || "non-retryable Meta CAPI failure",
+        eventName,
+        openedAt: Date.now(),
+      }),
+      { expirationTtl: META_CAPI_BROWSER_CIRCUIT_TTL_SECONDS },
+    );
+  } catch (error) {
+    console.warn("[Meta CAPI] Failed to open browser event circuit", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 // ─── POST /events ────────────────────────────────────────────────────────────
 
 const postEventRoute = createRoute({
@@ -123,7 +171,6 @@ const postEventRoute = createRoute({
 });
 
 app.openapi(postEventRoute, async (c) => {
-  console.log("[Hono /meta/events] Received event request.");
   const body = c.req.valid("json");
   const eventId = body.eventId ?? createId();
 
@@ -133,6 +180,15 @@ app.openapi(postEventRoute, async (c) => {
 
   const kv = c.env.CACHE as KVNamespace | undefined;
   if (kv) {
+    const circuit = await readMetaCapiBrowserCircuit(kv);
+    if (circuit) {
+      return ok(c, {
+        message:
+          "Event skipped because Meta CAPI recently failed. Save valid Meta settings to retry sooner.",
+        eventId,
+      });
+    }
+
     const ip = getClientIp(c.req.raw);
     const result = await rateLimit({
       kv,
@@ -167,14 +223,15 @@ app.openapi(postEventRoute, async (c) => {
     custom_data: body.customData
   }, {
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+  }).then(async (result) => {
+    await openMetaCapiBrowserCircuit(kv, result, body.eventName);
+    return result;
   });
 
   const executionCtx = getOptionalExecutionContext(c);
   if (executionCtx && typeof executionCtx.waitUntil === "function") {
     executionCtx.waitUntil(eventPromise);
-    console.log("[Hono /meta/events] Event processing scheduled with waitUntil.");
   } else {
-    console.warn("[Hono /meta/events] c.executionCtx.waitUntil not available. Awaiting promise directly.");
     await eventPromise;
   }
 

@@ -289,6 +289,13 @@ The storefront is an **Astro 7 SSR** application with React 19 islands for inter
 - Open Graph + Twitter Card meta tags with absolute storefront-safe images
 - Cloudflare Image Resizing for responsive images
 
+### Growth Analytics
+
+- Cloudflare Web Analytics as the native low-setup analytics option, with active placeholder tokens blocked and pasted beacon snippets normalized before public injection
+- GA4/GTM, Meta Pixel/CAPI, TikTok Pixel, and Zaraz-compatible ecommerce events for product views, search, add-to-cart, checkout, payment info, and purchase, using stable event IDs and avoiding broad-event buyer PII leakage
+- Meta CAPI browser events fail closed on trusted storefront origins only, open a short KV circuit breaker after non-retryable provider/config failures, and skip provider/rate-limit/log work while the circuit is open until settings are saved again
+- Partytown remains opt-in per script; HTTPS-only same-origin proxying covers supported analytics script hosts, and CSP includes Meta/TikTok/Google/Cloudflare analytics hosts for both workerized and main-thread snippets
+
 ---
 
 ## API Worker (`apps/api/`)

@@ -16,6 +16,7 @@ import { ValidationError } from "../../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 import { requireEncryptionKey } from "../../../utils/encryption-key";
+import { META_CAPI_BROWSER_CIRCUIT_KEY } from "../../meta-conversions";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
@@ -183,6 +184,16 @@ const saveSettingsRoute = createRoute({
     }
 });
 
+async function clearMetaCapiBrowserCircuit(env: Env): Promise<void> {
+    try {
+        await env.CACHE?.delete(META_CAPI_BROWSER_CIRCUIT_KEY);
+    } catch (error) {
+        console.warn("Meta CAPI browser-event circuit could not be cleared", {
+            error: error instanceof Error ? error.message : String(error),
+        });
+    }
+}
+
 app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRoute>) => {
     const db = c.get("db");
     const validation = c.req.valid("json");
@@ -235,6 +246,7 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
     const result = resultArr[0];
 
     if (!result) throw new ValidationError("Failed to save settings");
+    await clearMetaCapiBrowserCircuit(c.env);
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     const maskedResult = { ...result, accessToken: result.accessToken ? MASKED_VALUE : null };
     return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);

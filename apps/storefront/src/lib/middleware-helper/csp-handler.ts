@@ -127,6 +127,10 @@ const COMMON_THIRD_PARTY_DOMAINS = [
   "https://cloudflareinsights.com",
   // TikTok Pixel
   "https://analytics.tiktok.com",
+  // Meta/Facebook Pixel
+  "https://connect.facebook.net",
+  "https://www.facebook.com",
+  "https://*.facebook.com",
   // Stripe payment gateway
   "https://js.stripe.com",
   "https://*.stripe.com",

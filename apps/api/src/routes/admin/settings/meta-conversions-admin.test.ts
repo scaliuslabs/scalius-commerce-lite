@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
     encryptCredentials: vi.fn(async (value: string) => `encrypted:${value}`),
     requireEncryptionKey: vi.fn(() => "credential-key"),
     invalidateApiAndScheduleStorefrontGroups: vi.fn(async () => undefined),
+    cacheDelete: vi.fn(async () => undefined),
 }));
 
 vi.mock("@scalius/core/utils/credential-encryption", () => ({
@@ -116,7 +117,11 @@ function createDb(options: {
 
 function createTestApp(db: ReturnType<typeof createDb>) {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin/settings");
-    const env = {} as Env;
+    const env = {
+        CACHE: {
+            delete: mocks.cacheDelete,
+        },
+    } as unknown as Env;
 
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
@@ -176,6 +181,7 @@ beforeEach(() => {
     mocks.encryptCredentials.mockClear();
     mocks.requireEncryptionKey.mockClear();
     mocks.invalidateApiAndScheduleStorefrontGroups.mockClear();
+    mocks.cacheDelete.mockClear();
 });
 
 afterEach(() => {
@@ -264,6 +270,7 @@ describe("Meta Conversions admin settings", () => {
         expect(body.data?.accessToken).toBe("••••••••••••");
         expect(body.data?.testEventCode).toBe("TEST12345");
         expect(db.settings?.accessToken).toBe("encrypted:live-access-token");
+        expect(mocks.cacheDelete).toHaveBeenCalledWith("meta-capi:browser-events:circuit");
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalled();
     });
 
