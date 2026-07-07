@@ -214,6 +214,7 @@ export function AnalyticsForm({
     updateFn: (data) => updateAnalyticsScript({ data: data as Record<string, unknown> & { id: string } }),
     invalidateKeys: [
       queryKeys.analytics.list(),
+      queryKeys.analytics.providerHealth(),
       ...(isEdit && defaultValues?.id ? [queryKeys.analytics.detail(defaultValues.id)] : []),
     ],
     navigateTo: "/admin/analytics",

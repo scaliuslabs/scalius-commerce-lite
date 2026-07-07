@@ -220,6 +220,45 @@ function UcpCatalogDetails({
   );
 }
 
+function StructuredDataPreviewRows({
+  rows,
+}: {
+  rows: SeoDiscoveryStatus["structuredData"]["schemaPreviewRows"];
+}) {
+  return (
+    <div className="divide-y divide-border border-t border-border">
+      {rows.map((row) => {
+        const Icon = TONE_ICONS[row.tone];
+
+        return (
+          <div
+            key={row.key}
+            className="grid gap-2 py-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+          >
+            <div className="min-w-0 space-y-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-xs font-medium text-foreground">
+                  {row.title}
+                </span>
+              </div>
+              <p className="text-[11px] leading-4 text-muted-foreground">
+                {row.summary}
+              </p>
+            </div>
+            <Badge
+              variant="outline"
+              className={`w-fit shrink-0 self-start ${toneClassName(row.tone)}`}
+            >
+              {TONE_LABELS[row.tone]}
+            </Badge>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function getLiveProbeSummaryTone(
   result: SeoDiscoveryLiveProbeResult | undefined,
   enabled: boolean,
@@ -749,6 +788,9 @@ export function SeoDiscoveryStatusCard({
       >
         <div className="space-y-1 text-xs leading-5 text-muted-foreground">
           <p>{status.structuredData.organizationNote}</p>
+          <StructuredDataPreviewRows
+            rows={status.structuredData.schemaPreviewRows}
+          />
           {status.structuredData.identityWarning ? (
             <p className="text-amber-700">
               {status.structuredData.identityWarning}

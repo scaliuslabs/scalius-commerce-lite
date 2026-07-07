@@ -1,8 +1,27 @@
 // src/server/routes/admin/analytics.ts
 // Admin OpenAPI routes for analytics scripts.
 
-import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { listAnalyticsScripts, getAnalyticsScript, createAnalyticsScript, updateAnalyticsScript, deleteAnalyticsScript, toggleAnalyticsScript, createAnalyticsSchema, updateAnalyticsSchema, toggleAnalyticsSchema } from "@scalius/core/modules/analytics";
+import {
+    OpenAPIHono,
+    createRoute,
+    z,
+    type RouteConfig,
+    type RouteHandler,
+} from "@hono/zod-openapi";
+import {
+    listAnalyticsScripts,
+    getAnalyticsScript,
+    createAnalyticsScript,
+    updateAnalyticsScript,
+    deleteAnalyticsScript,
+    toggleAnalyticsScript,
+    createAnalyticsSchema,
+    updateAnalyticsSchema,
+    toggleAnalyticsSchema,
+    getAnalyticsProviderHealth,
+    analyticsProviderHealthBrowserStatuses,
+    analyticsProviderHealthServerStatuses,
+} from "@scalius/core/modules/analytics";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
@@ -56,6 +75,78 @@ app.openapi(createScriptRoute, (async (c: AdminRouteContext<typeof createScriptR
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     return created(c, result);
 }) as unknown as AdminRouteHandler<typeof createScriptRoute>);
+
+// ── Analytics Provider Health ──
+
+const providerHealthBrowserSchema = z.object({
+    status: z.enum(analyticsProviderHealthBrowserStatuses),
+    configured: z.boolean(),
+    activeScriptCount: z.number().int().nonnegative(),
+    readyScriptCount: z.number().int().nonnegative(),
+    draftScriptCount: z.number().int().nonnegative(),
+    blockedScriptCount: z.number().int().nonnegative(),
+    message: z.string(),
+    issues: z.array(z.string()),
+});
+
+const providerHealthServerSchema = z.object({
+    status: z.enum(analyticsProviderHealthServerStatuses),
+    configured: z.boolean(),
+    label: z.string(),
+    message: z.string(),
+});
+
+const providerHealthRoute = createRoute({
+    method: "get",
+    path: "/health",
+    tags: ["Admin - Analytics"],
+    summary: "Get analytics provider health",
+    responses: {
+        200: {
+            description: "Analytics provider health",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(
+                        z.object({
+                            summary: z.object({
+                                totalProviders: z.number().int().nonnegative(),
+                                browserReadyProviders: z.number().int().nonnegative(),
+                                draftProviders: z.number().int().nonnegative(),
+                                blockedProviders: z.number().int().nonnegative(),
+                                notConfiguredProviders: z.number().int().nonnegative(),
+                                serverReadyProviders: z.number().int().nonnegative(),
+                            }),
+                            providers: z.array(
+                                z.object({
+                                    provider: z.enum([
+                                        "google_analytics",
+                                        "google_tag_manager",
+                                        "facebook_pixel",
+                                        "tiktok_pixel",
+                                        "cloudflare_web_analytics",
+                                        "custom",
+                                    ]),
+                                    label: z.string(),
+                                    browser: providerHealthBrowserSchema,
+                                    serverSide: providerHealthServerSchema,
+                                }),
+                            ),
+                        }),
+                    ),
+                },
+            },
+        },
+        ...errorResponses,
+    }
+});
+
+app.openapi(providerHealthRoute, (async (c: AdminRouteContext<typeof providerHealthRoute>) => {
+    const db = c.get("db");
+    const health = await getAnalyticsProviderHealth(db, {
+        credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
+    });
+    return ok(c, health);
+}) as unknown as AdminRouteHandler<typeof providerHealthRoute>);
 
 // ── Get Analytics Script ──
 

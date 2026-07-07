@@ -353,6 +353,7 @@ describe("SeoDiscoveryStatusCard", () => {
           discovery={normalizeSeoDiscoverySettingsWithReturnPolicy(discovery)}
           robotsTxt={robotsTxt}
           businessIdentity={{ companyName: "Scalius Mart", legalName: "" }}
+          hasStoreLogo
         />,
       );
     });
@@ -373,6 +374,14 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain("Live proof complete");
     expect(host.textContent).toContain("Catalog diagnostics");
     expect(host.textContent).toContain("Rows ready: 11");
+    expect(host.textContent).toContain("OnlineStore ready");
+    expect(host.textContent).toContain("WebSite SearchAction ready");
+    expect(host.textContent).toContain("MerchantReturnPolicy off");
+    expect(host.textContent).toContain(
+      "That is valid when a public policy is disabled or still incomplete.",
+    );
+    expect(host.textContent).toContain("Product page schema ready");
+    expect(host.textContent).toContain("Category/collection schema ready");
     expect(host.textContent).toContain("No feed blockers found");
     expect(host.textContent).toContain("UCP catalog discovery on");
     expect(host.textContent).toContain(
@@ -685,6 +694,10 @@ describe("SeoDiscoveryStatusCard", () => {
     expect(host.textContent).toContain(
       "Return policy facts are saved but will not emit until Organization or Product schema is enabled.",
     );
+    expect(host.textContent).toContain("MerchantReturnPolicy waiting");
+    expect(host.textContent).toContain(
+      "they only emit through OnlineStore or Product offer schema",
+    );
   });
 
   it("names the return policy schema targets when Organization and Product schema are on", () => {
@@ -708,6 +721,10 @@ describe("SeoDiscoveryStatusCard", () => {
 
     expect(host.textContent).toContain(
       "Return policy can emit through OnlineStore and Product offers; normal schema prerequisites still apply.",
+    );
+    expect(host.textContent).toContain("MerchantReturnPolicy ready");
+    expect(host.textContent).toContain(
+      "Can attach through OnlineStore and Product offers when those pages are public and schema is eligible.",
     );
   });
 });
