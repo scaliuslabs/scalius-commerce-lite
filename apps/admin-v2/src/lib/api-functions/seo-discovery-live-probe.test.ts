@@ -99,7 +99,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
           );
         }
         return textResponse(
-          "<rss><channel><item><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item></channel></rss>",
+          "<rss><channel><item><g:link>https://shop.example.com/products/a</g:link><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item></channel></rss>",
           {
             contentType: "application/rss+xml",
             cacheControl: "public, max-age=600",
@@ -170,14 +170,28 @@ describe("runSeoDiscoveryLiveProbe", () => {
           kind: "feed",
           ok: true,
           status: 200,
-          counts: { feedItems: 1, imageLinks: 1, availabilityValues: 1 },
+          counts: {
+            feedItems: 1,
+            feedLinks: 1,
+            absoluteFeedLinks: 1,
+            imageLinks: 1,
+            absoluteImageLinks: 1,
+            availabilityValues: 1,
+          },
         }),
         expect.objectContaining({
           key: "facebookFeed",
           kind: "feed",
           ok: true,
           status: 200,
-          counts: { feedItems: 1, imageLinks: 1, availabilityValues: 1 },
+          counts: {
+            feedItems: 1,
+            feedLinks: 1,
+            absoluteFeedLinks: 1,
+            imageLinks: 1,
+            absoluteImageLinks: 1,
+            availabilityValues: 1,
+          },
         }),
         expect.objectContaining({
           key: "staticPagesSitemap",
@@ -186,6 +200,76 @@ describe("runSeoDiscoveryLiveProbe", () => {
           status: 200,
           counts: { sitemapLocs: 1 },
           minimumSitemapLocs: 1,
+        }),
+      ]),
+    );
+  });
+
+  it("fails a non-empty feed proof when required item fields are missing or relative", async () => {
+    mocks.getStorefrontUrl.mockResolvedValue({
+      storefrontUrl: "https://shop.example.com/",
+    });
+    mocks.getDiscoveryPolicy.mockResolvedValue({
+      discovery: {
+        sitemap: { enabled: false },
+        feeds: { productCatalogEnabled: true },
+        robots: { advertiseSitemap: false },
+      },
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/robots.txt")) {
+        return textResponse("User-agent: *\nAllow: /", {
+          contentType: "text/plain",
+        });
+      }
+      if (url.endsWith("/sitemap.xml")) {
+        return textResponse("<sitemapindex></sitemapindex>", {
+          contentType: "application/xml",
+        });
+      }
+      if (url.includes("/api/product-feed.xml")) {
+        return textResponse(
+          `<rss><channel>
+            <item><g:link>/products/a</g:link><g:image_link>/images/a.jpg</g:image_link></item>
+            <item><g:availability>out of stock</g:availability></item>
+          </channel></rss>`,
+          { contentType: "application/rss+xml" },
+        );
+      }
+      return textResponse(
+        "<rss><channel><item><g:link>https://shop.example.com/products/a</g:link><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item></channel></rss>",
+        { contentType: "application/rss+xml" },
+      );
+    });
+
+    const result = await runSeoDiscoveryLiveProbe({
+      fetch: fetchMock as unknown as typeof fetch,
+      getDiscoveryPolicy: discoveryPolicyLookup,
+      getStorefrontUrl: storefrontUrlLookup,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "productFeed",
+          ok: false,
+          status: 200,
+          counts: {
+            feedItems: 2,
+            feedLinks: 1,
+            absoluteFeedLinks: 0,
+            imageLinks: 1,
+            absoluteImageLinks: 0,
+            availabilityValues: 1,
+          },
+          error:
+            "Missing feed fields: 1/2 link, 1/2 image_link, 1/2 availability. Feed links must be absolute http(s): 0/1. Feed images must be absolute http(s): 0/1.",
+        }),
+        expect.objectContaining({
+          key: "facebookFeed",
+          ok: true,
         }),
       ]),
     );
@@ -309,7 +393,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
             }
             resolve(
               textResponse(
-                "<rss><channel><item><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item></channel></rss>",
+                "<rss><channel><item><g:link>https://shop.example.com/products/a</g:link><g:image_link>https://img.example.com/a.jpg</g:image_link><g:availability>in stock</g:availability></item></channel></rss>",
                 { contentType: "application/rss+xml" },
               ),
             );

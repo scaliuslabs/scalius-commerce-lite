@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   evaluateDiscoveryCacheHeaders,
   evaluateFacebookFeedXml,
+  evaluateHomepageJsonLdHtml,
   evaluateProductJsonLdHtml,
   evaluateProductFeedXml,
   evaluateRemediationTracker,
@@ -219,9 +220,61 @@ function productHtml() {
   ].join("");
 }
 
+function homepageHtml() {
+  return [
+    "<!doctype html><html><head>",
+    '<script type="application/ld+json">',
+    JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "OnlineStore",
+      "@id": "https://storefront.example.test/#store",
+      name: "Demo Store",
+      url: "https://storefront.example.test",
+      logo: {
+        "@type": "ImageObject",
+        url: "https://storefront.example.test/logo.png",
+      },
+      sameAs: ["https://facebook.com/demo"],
+      hasMerchantReturnPolicy: {
+        "@type": "MerchantReturnPolicy",
+        applicableCountry: "BD",
+        returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+        merchantReturnDays: 7,
+        returnFees: "https://schema.org/FreeReturn",
+      },
+    }),
+    "</script>",
+    '<script type="application/ld+json">',
+    JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Demo Store",
+      url: "https://storefront.example.test",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: "https://storefront.example.test/search?q={search_term_string}",
+        },
+        "query-input": "required name=search_term_string",
+      },
+    }),
+    "</script>",
+    "</head><body></body></html>",
+  ].join("");
+}
+
 function ucpProfile(capabilities = {
-  "dev.ucp.shopping.catalog.search": [{ version: "2026-07" }],
-  "dev.ucp.shopping.catalog.lookup": [{ version: "2026-07" }],
+  "dev.ucp.shopping.catalog.search": [{
+    version: "2026-07",
+    spec: "https://ucp.dev/2026-07/specification/catalog/search",
+    schema: "https://ucp.dev/2026-07/schemas/shopping/catalog_search.json",
+  }],
+  "dev.ucp.shopping.catalog.lookup": [{
+    version: "2026-07",
+    spec: "https://ucp.dev/2026-07/specification/catalog/lookup",
+    schema: "https://ucp.dev/2026-07/schemas/shopping/catalog_lookup.json",
+  }],
 }) {
   return {
     ucp: {
@@ -229,10 +282,11 @@ function ucpProfile(capabilities = {
       services: {
         "dev.ucp.shopping": [
           {
+            version: "2026-07",
             transport: "rest",
             endpoint: "https://storefront.example.test/ucp",
-            spec: "https://ucp.dev/2026-07/services/shopping/rest.openapi.json",
-            schema: "https://ucp.dev/2026-07/schemas/shopping/catalog.json",
+            spec: "https://ucp.dev/2026-07/specification/overview",
+            schema: "https://ucp.dev/2026-07/services/shopping/rest.openapi.json",
           },
         ],
       },
@@ -287,6 +341,28 @@ function ucpLookupResponse(inputId = "gid://scalius/product-variant/var_1") {
         ],
       },
     ],
+  });
+}
+
+function ucpProductResponse(firstVariantId = "gid://scalius/product-variant/var_1") {
+  const variants = [
+    { id: firstVariantId, sku: "SKU-1" },
+    { id: "gid://scalius/product-variant/var_1", sku: "SKU-1" },
+  ].filter((variant, index, all) =>
+    all.findIndex((candidate) => candidate.id === variant.id) === index
+  );
+
+  return jsonResponse({
+    ucp: {
+      version: "2026-07",
+      status: "success",
+      capabilities: ["dev.ucp.shopping.catalog.lookup"],
+    },
+    product: {
+      id: "gid://scalius/product/prod_1",
+      title: "Demo Product",
+      variants,
+    },
   });
 }
 
@@ -548,6 +624,46 @@ describe("release-check discovery evaluators", () => {
     });
   });
 
+  it("validates homepage OnlineStore, WebSite, and return policy JSON-LD without requiring fabricated facts", () => {
+    expect(
+      evaluateHomepageJsonLdHtml(homepageHtml(), {
+        storefrontOrigin,
+        policy: { structuredData: { organization: true, websiteSearch: true } },
+      }),
+    ).toMatchObject({
+      ok: true,
+      onlineStoreCount: 1,
+      websiteCount: 1,
+      returnPolicyCount: 1,
+    });
+
+    expect(
+      evaluateHomepageJsonLdHtml(
+        '<script type="application/ld+json">{"@type":"OnlineStore","name":"Store","url":"https://storefront.example.test","logo":{"url":"/logo.png"}}</script>',
+        { storefrontOrigin },
+      ),
+    ).toMatchObject({
+      ok: false,
+      errors: [
+        'OnlineStore name must use saved business identity, not "Store".',
+        "OnlineStore logo is not absolute http(s): /logo.png",
+      ],
+    });
+
+    expect(
+      evaluateHomepageJsonLdHtml(homepageHtml(), {
+        storefrontOrigin,
+        policy: { structuredData: { organization: false, websiteSearch: false } },
+      }),
+    ).toMatchObject({
+      ok: false,
+      errors: [
+        "OnlineStore JSON-LD emitted while organization schema is disabled.",
+        "WebSite JSON-LD emitted while website search schema is disabled.",
+      ],
+    });
+  });
+
   it("validates UCP HTTPS catalog-only profile shape", () => {
     expect(evaluateUcpProfile(ucpProfile(), { storefrontOrigin })).toMatchObject({
       ok: true,
@@ -559,9 +675,9 @@ describe("release-check discovery evaluators", () => {
       ],
     });
 
+    const baseCapabilities = ucpProfile().ucp.capabilities;
     expect(evaluateUcpProfile(ucpProfile({
-      "dev.ucp.shopping.catalog.search": [{ version: "2026-07" }],
-      "dev.ucp.shopping.catalog.lookup": [{ version: "2026-07" }],
+      ...baseCapabilities,
       "dev.ucp.shopping.checkout": [{ version: "2026-07" }],
       "dev.ucp.shopping.payment_handlers": [{ version: "2026-07" }],
     }), { storefrontOrigin })).toMatchObject({
@@ -577,6 +693,19 @@ describe("release-check discovery evaluators", () => {
     expect(evaluateUcpProfile(offOrigin, { storefrontOrigin })).toMatchObject({
       ok: false,
       errors: ["UCP service endpoint is not on storefront origin: https://api.example.test/ucp"],
+    });
+
+    const wrongSchema = ucpProfile();
+    wrongSchema.ucp.services["dev.ucp.shopping"][0].schema =
+      "https://ucp.dev/2026-07/schemas/shopping/catalog.json";
+    wrongSchema.ucp.capabilities["dev.ucp.shopping.catalog.search"][0].schema =
+      "https://ucp.dev/2026-07/schemas/shopping/catalog.json";
+    expect(evaluateUcpProfile(wrongSchema, { storefrontOrigin })).toMatchObject({
+      ok: false,
+      errors: [
+        "UCP shopping REST service descriptor schema must be https://ucp.dev/2026-07/services/shopping/rest.openapi.json.",
+        "dev.ucp.shopping.catalog.search descriptor schema must be https://ucp.dev/2026-07/schemas/shopping/catalog_search.json.",
+      ],
     });
   });
 });
@@ -661,6 +790,13 @@ describe("runReleaseCheck", () => {
           });
           return ucpLookupResponse();
         }
+        if (parsed.pathname === "/ucp/catalog/product") {
+          ucpRequests.push(parsed.pathname);
+          expect(JSON.parse(init.body)).toMatchObject({
+            id: "gid://scalius/product-variant/var_1",
+          });
+          return ucpProductResponse();
+        }
         if (parsed.pathname === "/products/demo-product") return textResponse(productHtml());
       }
 
@@ -713,6 +849,11 @@ describe("runReleaseCheck", () => {
       feeds: { productCatalogEnabled: true },
       robots: { advertiseSitemap: true },
     });
+    expect(result.checks.discovery.homepageStructuredData).toMatchObject({
+      ok: true,
+      onlineStoreCount: 0,
+      websiteCount: 0,
+    });
     expect(result.checks.discovery.sitemaps["/sitemap.xml"].cacheControl).toBe(SITEMAP_CACHE_CONTROL);
     expect(result.checks.discovery.feed).toMatchObject({
       cacheControl: FEED_CACHE_CONTROL,
@@ -736,6 +877,7 @@ describe("runReleaseCheck", () => {
       "/.well-known/ucp",
       "/ucp/catalog/search",
       "/ucp/catalog/lookup",
+      "/ucp/catalog/product",
     ]);
     expect(result.checks.ucpDiscovery).toMatchObject({
       profile: {
@@ -754,6 +896,12 @@ describe("runReleaseCheck", () => {
         lookup: {
           inputId: "gid://scalius/product-variant/var_1",
           productCount: 1,
+        },
+        product: {
+          inputId: "gid://scalius/product-variant/var_1",
+          productId: "gid://scalius/product/prod_1",
+          firstVariantId: "gid://scalius/product-variant/var_1",
+          variantCount: 1,
         },
       },
     });
@@ -871,6 +1019,7 @@ describe("runReleaseCheck", () => {
       "/health",
       "/",
       "/search",
+      "/",
       "/robots.txt",
       "/sitemap.xml",
       "/.well-known/ucp",
@@ -1028,6 +1177,84 @@ describe("runReleaseCheck", () => {
     });
   });
 
+  it("fails UCP discovery when product detail does not keep the candidate variant first", async () => {
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return jsonResponse({ paths: { "/x": {} } });
+        if (parsed.pathname === "/api/v1/seo") return seoPolicyResponse();
+      }
+
+      if (parsed.hostname === "dashboard.example.test" && parsed.pathname === "/admin") {
+        return textResponse("", 307, { location: "/auth/login" });
+      }
+
+      if (parsed.hostname === "storefront.example.test") {
+        if (parsed.pathname === "/health") return textResponse("ok");
+        if (parsed.pathname === "/" || parsed.pathname === "/search") return textResponse("<html></html>");
+        if (parsed.pathname === "/robots.txt") return discoveryResponse(robotsTxt());
+        if (parsed.pathname.startsWith("/sitemap-") || parsed.pathname === "/sitemap.xml") {
+          return discoveryResponse(sitemapXml());
+        }
+        if (
+          (parsed.pathname === "/api/product-feed.xml" || parsed.pathname === "/api/facebook-feed.xml") &&
+          (parsed.search === "?limit=5" || parsed.search === "?page=2&limit=5")
+        ) {
+          return discoveryResponse(
+            feedXml({
+              availability: parsed.pathname === "/api/product-feed.xml"
+                ? "in_stock"
+                : "in stock",
+            }),
+            FEED_CACHE_CONTROL,
+          );
+        }
+        if (parsed.pathname === "/.well-known/ucp") return jsonResponse(ucpProfile());
+        if (parsed.pathname === "/ucp/catalog/search") return ucpSearchResponse();
+        if (parsed.pathname === "/ucp/catalog/lookup") return ucpLookupResponse();
+        if (parsed.pathname === "/ucp/catalog/product") {
+          expect(JSON.parse(init.body)).toMatchObject({
+            id: "gid://scalius/product-variant/var_1",
+          });
+          return ucpProductResponse("gid://scalius/product-variant/var_2");
+        }
+        if (parsed.pathname === "/products/demo-product") return textResponse(productHtml());
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    let thrown;
+    try {
+      await runReleaseCheck(parseReleaseCheckArgs([
+        "--skip-wrangler",
+        "--api-base-url", "https://api.example.test",
+        "--storefront-url", "https://storefront.example.test",
+        "--dashboard-url", "https://dashboard.example.test",
+      ]), {
+        apiConfig: monitoringApiConfig(),
+        fetchImpl,
+        execFileImpl: vi.fn(),
+        rootDir: "/repo",
+        readFileImpl: () => verifiedTracker(),
+        fileExistsImpl: () => true,
+        logger: null,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toContain("UCP catalog product first variant");
+    expect(thrown.result.checks.ucpDiscovery).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining("did not match requested variant"),
+    });
+  });
+
   it("uses product sitemap as the product route smoke source when catalog feeds are disabled", async () => {
     const requestedStorefrontPaths = [];
     const fetchImpl = vi.fn(async (url, init) => {
@@ -1106,6 +1333,7 @@ describe("runReleaseCheck", () => {
       "/health",
       "/",
       "/search",
+      "/",
       "/robots.txt",
       "/sitemap.xml",
       "/sitemap-products.xml?page=1",
@@ -1182,7 +1410,7 @@ describe("runReleaseCheck", () => {
     });
 
     expect(result.status).toBe("passed");
-    expect(result.checks.discovery.policy.structuredData).toEqual({
+    expect(result.checks.discovery.policy.structuredData).toMatchObject({
       products: false,
     });
     expect(result.checks.productRoute).toMatchObject({

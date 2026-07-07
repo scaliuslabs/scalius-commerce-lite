@@ -23,6 +23,7 @@ import { seoFeedDiagnosticsQueryOptions } from "../../lib/api-query-options/seo-
 import { seoDiscoveryLiveProbeQueryOptions } from "../../lib/api-query-options/seo-discovery-live-probe";
 import {
   buildSeoDiscoveryStatus,
+  getSeoDiscoveryLiveProbeCountIssue,
   type SeoDiscoveryBusinessIdentity,
   type SeoDiscoverySettingsWithReturnPolicy,
   type SeoDiscoveryLiveProbeResource,
@@ -196,6 +197,7 @@ function getLiveProbeResourceTone(
 ): SeoDiscoveryTone {
   if (resource.disabledReason) return "disabled";
   if (!resource.ok || resource.error) return "warning";
+  if (getSeoDiscoveryLiveProbeCountIssue(resource)) return "warning";
   if (
     resource.key === "robots" &&
     resource.expectedRobotsSitemapLines !== undefined &&
@@ -231,9 +233,15 @@ function formatProbeCounts(resource: SeoDiscoveryLiveProbeResource): string {
     return minimum > 0 ? `${count}/${minimum}+ loc` : `${count} loc`;
   }
 
-  return `${resource.counts.feedItems ?? 0} item; ${
-    resource.counts.imageLinks ?? 0
-  } image_link; ${resource.counts.availabilityValues ?? 0} availability`;
+  const countParts = [`${resource.counts.feedItems ?? 0} item`];
+  if (resource.counts.feedLinks !== undefined) {
+    countParts.push(`${resource.counts.feedLinks} link`);
+  }
+  countParts.push(`${resource.counts.imageLinks ?? 0} image_link`);
+  countParts.push(
+    `${resource.counts.availabilityValues ?? 0} availability`,
+  );
+  return countParts.join("; ");
 }
 
 function formatHeaderValue(value: string | null): string {
@@ -250,6 +258,7 @@ function LiveProbeRows({
       {resources.map((resource) => {
         const tone = getLiveProbeResourceTone(resource);
         const statusLabel = resource.status ? String(resource.status) : "No response";
+        const countIssue = getSeoDiscoveryLiveProbeCountIssue(resource);
 
         return (
           <div
@@ -276,6 +285,7 @@ function LiveProbeRows({
               </div>
               {resource.disabledReason ||
               resource.error ||
+              countIssue ||
               resource.bodyTruncated ? (
                 <p
                   className={`text-[11px] leading-4 ${
@@ -286,6 +296,7 @@ function LiveProbeRows({
                 >
                   {resource.disabledReason ??
                     resource.error ??
+                    countIssue ??
                     "Response body read reached the diagnostic cap."}
                 </p>
               ) : null}

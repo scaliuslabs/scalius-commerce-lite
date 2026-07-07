@@ -44,7 +44,7 @@ Expected healthy result: HTTP `200`, `Cache-Control: no-store`, `success: true`,
 
 Expected degraded result: HTTP `503`, `success: false`, `status: "degraded"`, and a per-check `status` of `missing`, `error`, or `timeout`. The endpoint must stay read-only: D1 uses `SELECT 1`, KV uses a read probe, R2 uses `list({ limit: 1 })`, and Queue/DO checks are binding-shape checks only.
 
-`pnpm ops:check`, `pnpm release:check`, and API deploy verification all use the same four-sample `/readyz` recovery window by default: the final sample must be ready and at least two samples must be ready. `pnpm release:check` also validates the storefront UCP profile as HTTPS/catalog-only and runs read-only UCP catalog search/lookup when discovery exposes a product candidate.
+`pnpm ops:check`, `pnpm release:check`, and API deploy verification all use the same four-sample `/readyz` recovery window by default: the final sample must be ready and at least two samples must be ready. `pnpm release:check` also validates emitted homepage OnlineStore/WebSite/SearchAction/MerchantReturnPolicy JSON-LD, then validates the storefront UCP profile as HTTPS/catalog-only and runs read-only UCP catalog search/lookup/product checks when discovery exposes a product candidate.
 
 Every API HTTP response should carry `X-Request-Id`; preserve a safe caller-supplied value during smoke tests when you want to match client output to Worker logs. Structured API ops logs include `requestId` and Cloudflare `cfRay` when available. Alert on repeated `api.readyz.degraded` events by required-check status, then use the same request id/CF-Ray to inspect the matching Worker invocation without exposing secrets or buyer data.
 

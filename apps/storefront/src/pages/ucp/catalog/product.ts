@@ -32,7 +32,13 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   const result = await getCatalogProduct(body, context);
-  return ucpJsonResponse(result.body, result.status, result.status >= 400
+  const isApplicationError =
+    result.body &&
+    typeof result.body === "object" &&
+    !Array.isArray(result.body) &&
+    (result.body as { ucp?: { status?: unknown } }).ucp?.status === "error";
+
+  return ucpJsonResponse(result.body, result.status, result.status >= 400 || isApplicationError
     ? { "Cache-Control": "private, no-cache, no-store, must-revalidate" }
     : {});
 };

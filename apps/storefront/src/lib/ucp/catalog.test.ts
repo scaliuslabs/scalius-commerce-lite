@@ -132,6 +132,19 @@ describe("UCP catalog mapping", () => {
     expect(profile.ucp.services["dev.ucp.shopping"][0].endpoint).toBe(
       "https://storefront.example.test/ucp",
     );
+    expect(profile.ucp.services["dev.ucp.shopping"][0]).toMatchObject({
+      version: "2026-04-08",
+      spec: "https://ucp.dev/2026-04-08/specification/overview",
+      schema: "https://ucp.dev/2026-04-08/services/shopping/rest.openapi.json",
+    });
+    expect(profile.ucp.capabilities["dev.ucp.shopping.catalog.search"][0]).toMatchObject({
+      spec: "https://ucp.dev/2026-04-08/specification/catalog/search",
+      schema: "https://ucp.dev/2026-04-08/schemas/shopping/catalog_search.json",
+    });
+    expect(profile.ucp.capabilities["dev.ucp.shopping.catalog.lookup"][0]).toMatchObject({
+      spec: "https://ucp.dev/2026-04-08/specification/catalog/lookup",
+      schema: "https://ucp.dev/2026-04-08/schemas/shopping/catalog_lookup.json",
+    });
     expect(Object.keys(profile.ucp.capabilities)).toEqual([
       "dev.ucp.shopping.catalog.search",
       "dev.ucp.shopping.catalog.lookup",
@@ -204,6 +217,27 @@ describe("UCP catalog mapping", () => {
     expect(result.body.products[0].variants[1].inputs).toEqual([
       { id: "SKU-BLUE", match: "exact" },
     ]);
+  });
+
+  it("rejects lookup requests with too many unique identifiers", async () => {
+    const ids = Array.from({ length: 26 }, (_, index) => `SKU-${index}`);
+
+    const result = await lookupCatalog({ ids }, context);
+
+    expect(result.status).toBe(400);
+    expect(mocks.getFeedProducts).not.toHaveBeenCalled();
+    expect(result.body).toMatchObject({
+      ucp: { status: "error" },
+      products: [],
+      messages: [
+        {
+          type: "error",
+          code: "request_too_large",
+          path: "$.ids",
+          severity: "recoverable",
+        },
+      ],
+    });
   });
 
   it("does not fall back to product detail for slug-like lookup misses", async () => {
@@ -283,6 +317,81 @@ describe("UCP catalog mapping", () => {
     expect(product.variants).toHaveLength(2);
     expect(product.variants[0].sku).toBe("SKU-BLUE");
     expect(product.variants[1].sku).toBe("SKU-RED");
+    expect(product.selected).toEqual([
+      { name: "Weight", label: "3KG" },
+      { name: "Style", label: "Blue" },
+    ]);
+    expect(product.options).toEqual([
+      {
+        name: "Weight",
+        values: [
+          { label: "2KG", exists: false, available: false },
+          { label: "3KG", exists: true, available: true },
+        ],
+      },
+      {
+        name: "Style",
+        values: [
+          { label: "Red", exists: false, available: false },
+          { label: "Blue", exists: true, available: true },
+        ],
+      },
+    ]);
+  });
+
+  it("keeps the requested variant first when selected options conflict", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [productFixture()],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await getCatalogProduct(
+      {
+        id: "SKU-BLUE",
+        selected: [
+          { name: "Weight", label: "2KG" },
+          { name: "Style", label: "Red" },
+        ],
+      },
+      context,
+    );
+    const product = result.body.product;
+
+    expect(result.status).toBe(200);
+    expect(product).toBeDefined();
+    if (!product) throw new Error("Expected UCP product detail");
+    expect(product.variants[0].sku).toBe("SKU-BLUE");
+    expect(product.variants[1].sku).toBe("SKU-RED");
+    expect(product.selected).toEqual([
+      { name: "Weight", label: "3KG" },
+      { name: "Style", label: "Blue" },
+    ]);
+  });
+
+  it("rejects duplicate selected option names for product detail", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [productFixture()],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await getCatalogProduct(
+      {
+        id: "khaki-shoes",
+        selected: [
+          { name: "Weight", label: "2KG" },
+          { name: "Weight", label: "3KG" },
+        ],
+      },
+      context,
+    );
+
+    expect(result.status).toBe(400);
+    expect(result.body.messages?.[0]).toMatchObject({
+      type: "error",
+      code: "request_invalid",
+      path: "$.selected",
+      severity: "recoverable",
+    });
   });
 
   it("does not fall back to product detail for slug-like product misses", async () => {
@@ -301,11 +410,12 @@ describe("UCP catalog mapping", () => {
 
     const result = await getCatalogProduct({ id: "khaki-shoes" }, context);
 
-    expect(result.status).toBe(404);
+    expect(result.status).toBe(200);
     expect(mocks.getProductBySlug).not.toHaveBeenCalled();
     expect(result.body.messages?.[0]).toMatchObject({
       type: "error",
       code: "not_found",
+      severity: "unrecoverable",
     });
   });
 
@@ -317,10 +427,11 @@ describe("UCP catalog mapping", () => {
 
     const result = await getCatalogProduct({ id: "khaki-shoes" }, context);
 
-    expect(result.status).toBe(404);
+    expect(result.status).toBe(200);
     expect(result.body.messages?.[0]).toMatchObject({
       type: "error",
       code: "not_found",
+      severity: "unrecoverable",
     });
   });
 

@@ -30,12 +30,18 @@ const GID_PREFIX = "gid://scalius/";
 type UcpStatus = "success" | "error";
 type UcpMessageType = "info" | "warning" | "error";
 type VariantMatchMode = "featured" | "exact";
+type UcpErrorSeverity =
+  | "recoverable"
+  | "requires_buyer_input"
+  | "requires_buyer_review"
+  | "unrecoverable";
 
 interface UcpMessage {
   type: UcpMessageType;
   code: string;
   content: string;
   path?: string;
+  severity?: UcpErrorSeverity;
 }
 
 interface UcpPrice {
@@ -72,7 +78,11 @@ interface UcpProduct {
   price_range: { min: UcpPrice; max: UcpPrice };
   list_price_range?: { min: UcpPrice; max: UcpPrice };
   variants: UcpVariant[];
-  options?: Array<{ name: string; values: Array<{ label: string }> }>;
+  selected?: Array<{ name: string; label: string }>;
+  options?: Array<{
+    name: string;
+    values: Array<{ label: string; available?: boolean; exists?: boolean }>;
+  }>;
   categories?: Array<{ value: string; taxonomy?: "merchant" }>;
   media?: Array<{ type: "image"; url: string; alt_text?: string }>;
   tags?: string[];
@@ -125,14 +135,21 @@ function ucpMetadata(status: UcpStatus, capabilities?: string[]) {
 }
 
 function buildCapability(name: string) {
-  const suffix = name === UCP_CATALOG_SEARCH_CAPABILITY
-    ? "catalog/search"
-    : "catalog/lookup";
+  const capability =
+    name === UCP_CATALOG_SEARCH_CAPABILITY
+      ? {
+          spec: "catalog/search",
+          schema: "catalog_search",
+        }
+      : {
+          spec: "catalog/lookup",
+          schema: "catalog_lookup",
+        };
 
   return {
     version: UCP_VERSION,
-    spec: `https://ucp.dev/${UCP_VERSION}/specification/${suffix}/`,
-    schema: `https://ucp.dev/${UCP_VERSION}/schemas/shopping/catalog.json`,
+    spec: `https://ucp.dev/${UCP_VERSION}/specification/${capability.spec}`,
+    schema: `https://ucp.dev/${UCP_VERSION}/schemas/shopping/${capability.schema}.json`,
   };
 }
 
@@ -144,10 +161,11 @@ export function buildUcpProfile(baseUrl: string) {
       services: {
         [UCP_SHOPPING_SERVICE]: [
           {
+            version: UCP_VERSION,
             transport: "rest",
             endpoint,
-            spec: `https://ucp.dev/${UCP_VERSION}/services/shopping/rest.openapi.json`,
-            schema: `https://ucp.dev/${UCP_VERSION}/schemas/shopping/catalog.json`,
+            spec: `https://ucp.dev/${UCP_VERSION}/specification/overview`,
+            schema: `https://ucp.dev/${UCP_VERSION}/services/shopping/rest.openapi.json`,
           },
         ],
       },
@@ -211,11 +229,20 @@ export function ucpErrorResponse(
   code: string,
   content: string,
   path?: string,
+  severity: UcpErrorSeverity = "recoverable",
 ): Response {
   return ucpJsonResponse(
     {
       ucp: ucpMetadata("error"),
-      messages: [{ type: "error", code, content, ...(path ? { path } : {}) }],
+      messages: [
+        {
+          type: "error",
+          code,
+          content,
+          severity,
+          ...(path ? { path } : {}),
+        },
+      ],
     },
     status,
     { "Cache-Control": "private, no-cache, no-store, must-revalidate" },
@@ -226,7 +253,14 @@ export function ucpUnavailableResponse(message: string): Response {
   return ucpJsonResponse(
     {
       ucp: ucpMetadata("error"),
-      messages: [{ type: "error", code: "temporarily_unavailable", content: message }],
+      messages: [
+        {
+          type: "error",
+          code: "temporarily_unavailable",
+          content: message,
+          severity: "recoverable",
+        },
+      ],
     },
     503,
     {
@@ -408,6 +442,10 @@ function uniqueStrings(values: string[], max = MAX_LOOKUP_IDS): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).slice(0, max);
 }
 
+function uniqueLookupIdentifiers(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
 function normalizedOption(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
@@ -450,6 +488,69 @@ function productOptions(product: Product, variants: ProductVariant[]) {
   }
 
   return options.length > 0 ? options : undefined;
+}
+
+function namesMatch(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
+function labelsMatch(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
+function variantMatchesSelection(
+  variant: UcpVariant,
+  selected: Array<{ name: string; label: string }>,
+): boolean {
+  return selected.every((selection) =>
+    variant.options?.some((option) =>
+      namesMatch(option.name, selection.name) &&
+      labelsMatch(option.label, selection.label)
+    ) ?? false
+  );
+}
+
+function detailOptionValues(
+  product: UcpProduct,
+  optionName: string,
+  selected: Array<{ name: string; label: string }>,
+  values: Array<{ label: string }>,
+) {
+  const selectedOtherOptions = selected.filter((selection) =>
+    !namesMatch(selection.name, optionName)
+  );
+
+  return values.map(({ label }) => {
+    const candidateSelection = [
+      ...selectedOtherOptions,
+      { name: optionName, label },
+    ];
+    const matchingVariants = product.variants.filter((variant) =>
+      variantMatchesSelection(variant, candidateSelection)
+    );
+
+    return {
+      label,
+      exists: matchingVariants.length > 0,
+      available: matchingVariants.some((variant) => variant.availability?.available === true),
+    };
+  });
+}
+
+function withDetailSelections(product: UcpProduct): UcpProduct {
+  if (!product.options || product.options.length === 0) return product;
+
+  const selected = product.variants[0]?.options ?? [];
+  if (selected.length === 0) return product;
+
+  return {
+    ...product,
+    selected,
+    options: product.options.map((option) => ({
+      ...option,
+      values: detailOptionValues(product, option.name, selected, option.values),
+    })),
+  };
 }
 
 function productUrl(product: Product, baseUrl: string): string {
@@ -737,6 +838,7 @@ export async function searchCatalog(
             type: "error",
             code: "request_invalid",
             content: "Catalog search requires a query, category filter, price filter, or extension input.",
+            severity: "recoverable",
           },
         ],
       },
@@ -756,6 +858,7 @@ export async function searchCatalog(
             type: "error",
             code: "temporarily_unavailable",
             content: "Catalog search is temporarily unavailable.",
+            severity: "recoverable",
           },
         ],
       },
@@ -796,7 +899,7 @@ function parseProductSlugFromUrl(value: string, baseUrl: string): string | null 
 function lookupInputs(ids: unknown, context: UcpCatalogContext): LookupInput[] {
   if (!Array.isArray(ids)) return [];
 
-  return uniqueStrings(ids.filter((id): id is string => typeof id === "string"))
+  return uniqueLookupIdentifiers(ids.filter((id): id is string => typeof id === "string"))
     .map((original) => ({
       original,
       normalized: parseProductSlugFromUrl(original, context.baseUrl) ?? normalizeLookupValue(original),
@@ -862,6 +965,25 @@ export async function lookupCatalog(
   context: UcpCatalogContext,
 ) {
   const inputs = lookupInputs(body.ids, context);
+  if (inputs.length > MAX_LOOKUP_IDS) {
+    return {
+      status: 400,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_LOOKUP_CAPABILITY]),
+        products: [],
+        messages: [
+          {
+            type: "error",
+            code: "request_too_large",
+            path: "$.ids",
+            content: `Catalog lookup accepts at most ${MAX_LOOKUP_IDS} unique identifiers per request.`,
+            severity: "recoverable",
+          },
+        ],
+      },
+    };
+  }
+
   if (inputs.length === 0) {
     return {
       status: 400,
@@ -874,6 +996,7 @@ export async function lookupCatalog(
             code: "request_invalid",
             path: "$.ids",
             content: "Catalog lookup requires at least one product, variant, SKU, handle, or product URL identifier.",
+            severity: "recoverable",
           },
         ],
       },
@@ -892,6 +1015,7 @@ export async function lookupCatalog(
             type: "error",
             code: "temporarily_unavailable",
             content: "Catalog lookup is temporarily unavailable.",
+            severity: "recoverable",
           },
         ],
       },
@@ -945,14 +1069,26 @@ function selectedOptionFilters(body: ProductRequestBody): Array<{ name: string; 
     : [];
 }
 
+function duplicateSelectedOptionName(
+  selected: Array<{ name: string; label: string }>,
+): string | null {
+  const seen = new Set<string>();
+  for (const selection of selected) {
+    const normalized = selection.name.trim().toLowerCase();
+    if (seen.has(normalized)) return selection.name;
+    seen.add(normalized);
+  }
+  return null;
+}
+
 function orderSelectedVariantFirst(product: UcpProduct, selected: Array<{ name: string; label: string }>): UcpProduct {
   if (selected.length === 0) return product;
 
   const selectedVariantIndex = product.variants.findIndex((variant) => (
     selected.every((selection) => (
       variant.options?.some((option) => (
-        option.name.toLowerCase() === selection.name.toLowerCase() &&
-        option.label.toLowerCase() === selection.label.toLowerCase()
+        namesMatch(option.name, selection.name) &&
+        labelsMatch(option.label, selection.label)
       ))
     ))
   ));
@@ -984,6 +1120,7 @@ export async function getCatalogProduct(
             code: "request_invalid",
             path: "$.id",
             content: "Catalog product lookup requires an id.",
+            severity: "recoverable",
           },
         ],
       },
@@ -1002,6 +1139,7 @@ export async function getCatalogProduct(
             type: "error",
             code: "temporarily_unavailable",
             content: "Catalog product lookup is temporarily unavailable.",
+            severity: "recoverable",
           },
         ],
       },
@@ -1012,7 +1150,7 @@ export async function getCatalogProduct(
   const product = sourceProduct ? mapProduct(sourceProduct, context) : null;
   if (!product) {
     return {
-      status: 404,
+      status: 200,
       body: {
         ucp: ucpMetadata("error", [UCP_CATALOG_LOOKUP_CAPABILITY]),
         messages: [
@@ -1020,22 +1158,60 @@ export async function getCatalogProduct(
             type: "error",
             code: "not_found",
             content: "Product was not found or is not currently buyer-visible.",
+            severity: "unrecoverable",
           },
         ],
       },
     };
   }
 
+  const input = inputs[0];
+  const requestedVariantId = findRequestedVariantId(sourceProduct, input);
+  const requestedFirstProduct = orderRequestedVariantFirst(product, sourceProduct, input);
+  const selected = selectedOptionFilters(body);
+  const duplicateSelectedName = duplicateSelectedOptionName(selected);
+  if (duplicateSelectedName) {
+    return {
+      status: 400,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_LOOKUP_CAPABILITY]),
+        messages: [
+          {
+            type: "error",
+            code: "request_invalid",
+            path: "$.selected",
+            content: `Catalog product selected options must include each option name once. Duplicate option: ${duplicateSelectedName}.`,
+            severity: "recoverable",
+          },
+        ],
+      },
+    };
+  }
+  const orderedProduct = requestedVariantId
+    ? requestedFirstProduct
+    : orderSelectedVariantFirst(requestedFirstProduct, selected);
+
   return {
     status: 200,
     body: {
       ucp: ucpMetadata("success", [UCP_CATALOG_LOOKUP_CAPABILITY]),
-      product: orderSelectedVariantFirst(
-        orderRequestedVariantFirst(product, sourceProduct, inputs[0]),
-        selectedOptionFilters(body),
-      ),
+      product: withDetailSelections(orderedProduct),
     },
   };
+}
+
+function findRequestedVariantId(
+  sourceProduct: Product,
+  input: LookupInput | undefined,
+): string | null {
+  if (!input) return null;
+
+  const requestedVariant = (sourceProduct.variants ?? []).find((variant) => (
+    input.normalized === variant.id ||
+    input.normalized === variant.sku ||
+    input.original === variantGid(variant.id)
+  ));
+  return requestedVariant?.id ?? null;
 }
 
 function orderRequestedVariantFirst(
@@ -1043,16 +1219,10 @@ function orderRequestedVariantFirst(
   sourceProduct: Product,
   input: LookupInput | undefined,
 ): UcpProduct {
-  if (!input) return product;
+  const requestedVariantId = findRequestedVariantId(sourceProduct, input);
+  if (!requestedVariantId) return product;
 
-  const requestedVariant = (sourceProduct.variants ?? []).find((variant) => (
-    input.normalized === variant.id ||
-    input.normalized === variant.sku ||
-    input.original === variantGid(variant.id)
-  ));
-  if (!requestedVariant) return product;
-
-  const requestedGid = variantGid(requestedVariant.id);
+  const requestedGid = variantGid(requestedVariantId);
   const index = product.variants.findIndex((variant) => variant.id === requestedGid);
   if (index <= 0) return product;
 
