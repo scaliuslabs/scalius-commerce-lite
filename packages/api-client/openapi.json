@@ -15451,6 +15451,32 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "variantOption1Label": {
+                                "type": "string"
+                              },
+                              "variantOption2Label": {
+                                "type": "string"
+                              },
+                              "variantOption1Schema": {
+                                "type": "string",
+                                "enum": [
+                                  "size",
+                                  "color",
+                                  "material",
+                                  "pattern",
+                                  "none"
+                                ]
+                              },
+                              "variantOption2Schema": {
+                                "type": "string",
+                                "enum": [
+                                  "size",
+                                  "color",
+                                  "material",
+                                  "pattern",
+                                  "none"
+                                ]
+                              },
                               "description": {
                                 "type": "string",
                                 "nullable": true
@@ -15646,6 +15672,10 @@
                               "name",
                               "slug",
                               "canonicalPath",
+                              "variantOption1Label",
+                              "variantOption2Label",
+                              "variantOption1Schema",
+                              "variantOption2Schema",
                               "description",
                               "price",
                               "discountType",
@@ -100540,6 +100570,40 @@
                     "type": "boolean",
                     "default": false
                   },
+                  "variantOption1Label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "default": "Size"
+                  },
+                  "variantOption2Label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "default": "Color"
+                  },
+                  "variantOption1Schema": {
+                    "type": "string",
+                    "enum": [
+                      "size",
+                      "color",
+                      "material",
+                      "pattern",
+                      "none"
+                    ],
+                    "default": "size"
+                  },
+                  "variantOption2Schema": {
+                    "type": "string",
+                    "enum": [
+                      "size",
+                      "color",
+                      "material",
+                      "pattern",
+                      "none"
+                    ],
+                    "default": "color"
+                  },
                   "slug": {
                     "type": "string",
                     "minLength": 3,
@@ -101661,6 +101725,32 @@
                         "excludeFromProductFeed": {
                           "type": "boolean"
                         },
+                        "variantOption1Label": {
+                          "type": "string"
+                        },
+                        "variantOption2Label": {
+                          "type": "string"
+                        },
+                        "variantOption1Schema": {
+                          "type": "string",
+                          "enum": [
+                            "size",
+                            "color",
+                            "material",
+                            "pattern",
+                            "none"
+                          ]
+                        },
+                        "variantOption2Schema": {
+                          "type": "string",
+                          "enum": [
+                            "size",
+                            "color",
+                            "material",
+                            "pattern",
+                            "none"
+                          ]
+                        },
                         "discountPercentage": {
                           "type": "number",
                           "nullable": true
@@ -101981,6 +102071,10 @@
                         "noIndex",
                         "excludeFromSitemap",
                         "excludeFromProductFeed",
+                        "variantOption1Label",
+                        "variantOption2Label",
+                        "variantOption1Schema",
+                        "variantOption2Schema",
                         "discountPercentage",
                         "discountType",
                         "discountAmount",
@@ -102138,6 +102232,40 @@
                   "excludeFromProductFeed": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "variantOption1Label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "default": "Size"
+                  },
+                  "variantOption2Label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "default": "Color"
+                  },
+                  "variantOption1Schema": {
+                    "type": "string",
+                    "enum": [
+                      "size",
+                      "color",
+                      "material",
+                      "pattern",
+                      "none"
+                    ],
+                    "default": "size"
+                  },
+                  "variantOption2Schema": {
+                    "type": "string",
+                    "enum": [
+                      "size",
+                      "color",
+                      "material",
+                      "pattern",
+                      "none"
+                    ],
+                    "default": "color"
                   },
                   "slug": {
                     "type": "string",

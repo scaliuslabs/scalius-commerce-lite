@@ -18,12 +18,24 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("discoverySettings.structuredData.productGroups");
     expect(source).toContain('buyerVariantResolution.mode === "optioned"');
     expect(source).toContain('"@type": "ProductGroup"');
+    expect(source).toContain("url: canonicalUrl");
     expect(source).toContain("hasVariant: buyerVariants.map");
+    expect(source).toContain("url: buildVariantProductUrl(variant) ?? canonicalUrl");
     expect(source).toContain('url.searchParams.set("size", size)');
     expect(source).toContain('url.searchParams.set("color", color)');
     expect(source).toContain("isVariantAvailable(variant)");
     expect(source).toContain('"@type": "Product"');
+    expect(source).toContain("mappedVariantSchemaProps(variant)");
     expect(source).toContain("shouldEmitProductGroupJsonLd");
+  });
+
+  it("uses category canonical overrides in product BreadcrumbList JSON-LD", () => {
+    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
+
+    expect(source).toContain("const productCategoryUrl = productCategory");
+    expect(source).toContain("productCategory.canonicalPath");
+    expect(source).toContain("item: productCategoryUrl");
+    expect(source).not.toContain('item: `${storefrontUrl}/categories/${productCategory.slug}`');
   });
 
   it("keeps Product offer schema tied to active shipping methods and schema-safe GTINs", () => {

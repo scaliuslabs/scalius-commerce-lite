@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { ProductOptionSchema } from "@scalius/shared/product-options";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 
 type Timestamp = string | number;
@@ -111,6 +112,10 @@ export interface ProductWriteInput {
   noIndex: boolean;
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
+  variantOption1Label: string;
+  variantOption2Label: string;
+  variantOption1Schema: ProductOptionSchema;
+  variantOption2Schema: ProductOptionSchema;
   slug: string;
   images: ProductImageInput[];
   attributes: ProductAttributeInput[];
@@ -180,6 +185,10 @@ export interface ProductDetailDto {
   noIndex: boolean;
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
+  variantOption1Label: string;
+  variantOption2Label: string;
+  variantOption1Schema: ProductOptionSchema;
+  variantOption2Schema: ProductOptionSchema;
   isActive: boolean;
   discountPercentage: number | null;
   discountType: ProductDiscountType | null;

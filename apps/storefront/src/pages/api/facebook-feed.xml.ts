@@ -21,6 +21,13 @@ import {
   normalizeSeoDiscoverySettings,
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
+import {
+  DEFAULT_PRODUCT_OPTION_LABELS,
+  DEFAULT_PRODUCT_OPTION_SCHEMA,
+  normalizeProductOptionLabel,
+  normalizeProductOptionSchema,
+  type ProductOptionSchema,
+} from "@scalius/shared/product-options";
 import { normalizeCanonicalPath } from "@scalius/shared/seo-canonical";
 import {
   isVariantAvailable,
@@ -61,6 +68,7 @@ type FeedVariantRow = {
 type FeedItem = FeedProductRow | FeedVariantRow;
 type FeedFormat = "google" | "meta";
 type FeedAvailability = "in_stock" | "out_of_stock";
+type VariantOptionAxis = "option1" | "option2";
 
 /**
  * Escapes XML special characters
@@ -169,6 +177,31 @@ function formatFeedAvailability(
 function normalizedOption(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function getProductOptionSchema(
+  product: Product,
+  axis: VariantOptionAxis,
+): ProductOptionSchema {
+  return normalizeProductOptionSchema(
+    axis === "option1"
+      ? product.variantOption1Schema
+      : product.variantOption2Schema,
+    axis === "option1"
+      ? DEFAULT_PRODUCT_OPTION_SCHEMA.option1
+      : DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+  );
+}
+
+function getProductOptionLabel(product: Product, axis: VariantOptionAxis): string {
+  return normalizeProductOptionLabel(
+    axis === "option1"
+      ? product.variantOption1Label
+      : product.variantOption2Label,
+    axis === "option1"
+      ? DEFAULT_PRODUCT_OPTION_LABELS.option1
+      : DEFAULT_PRODUCT_OPTION_LABELS.option2,
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -353,6 +386,60 @@ function getFeedItemAvailability(feedItem: FeedItem): FeedAvailability {
   return getAvailability(feedItem.product);
 }
 
+function getFeedItemTitle(feedItem: FeedItem): string {
+  if (feedItem.kind !== "variant") {
+    return feedItem.product.name;
+  }
+
+  const optionLabels = [
+    {
+      axis: "option1" as const,
+      value: normalizedOption(feedItem.variant.size),
+    },
+    {
+      axis: "option2" as const,
+      value: normalizedOption(feedItem.variant.color),
+    },
+  ]
+    .filter((option) => Boolean(option.value))
+    .map((option) => `${getProductOptionLabel(feedItem.product, option.axis)}: ${option.value}`);
+
+  return optionLabels.length > 0
+    ? `${feedItem.product.name} - ${optionLabels.join(" / ")}`
+    : feedItem.product.name;
+}
+
+function getFeedItemGroupTitle(product: Product): string {
+  return product.name.trim().slice(0, 150) || product.name;
+}
+
+function getVariantOptionPairs(
+  product: Product,
+  variant: ProductVariant,
+): Array<{ name: string; value: string }> {
+  return [
+    {
+      axis: "option1" as const,
+      value: normalizedOption(variant.size),
+    },
+    {
+      axis: "option2" as const,
+      value: normalizedOption(variant.color),
+    },
+  ].flatMap((option) => {
+    if (!option.value) {
+      return [];
+    }
+
+    return [
+      {
+        name: getProductOptionLabel(product, option.axis).slice(0, 250),
+        value: option.value.slice(0, 250),
+      },
+    ];
+  });
+}
+
 function getSupportedVariantGtin(variant: ProductVariant): string | null {
   const barcode = variant.barcode?.trim();
   if (!barcode) {
@@ -441,7 +528,7 @@ function generateProductItem(
 
   // Required fields
   item += `    <g:id>${escapeXml(getFeedItemId(feedItem))}</g:id>\n`;
-  item += `    <g:title>${escapeXml(product.name)}</g:title>\n`;
+  item += `    <g:title>${escapeXml(getFeedItemTitle(feedItem))}</g:title>\n`;
   item += `    <g:description>${escapeXml(toPlainFeedDescription(product.description) || product.name)}</g:description>\n`;
   item += `    <g:link>${escapeXml(productUrl)}</g:link>\n`;
   item += `    <g:availability>${availability}</g:availability>\n`;
@@ -478,6 +565,15 @@ function generateProductItem(
   if (feedItem.kind === "variant" || product.hasVariants) {
     item += `    <g:item_group_id>${escapeXml(product.id)}</g:item_group_id>\n`;
   }
+  if (format === "google" && feedItem.kind === "variant") {
+    item += `    <g:item_group_title>${escapeXml(getFeedItemGroupTitle(product))}</g:item_group_title>\n`;
+    for (const option of getVariantOptionPairs(product, feedItem.variant)) {
+      item += "    <g:variant_option>\n";
+      item += `      <g:name>${escapeXml(option.name)}</g:name>\n`;
+      item += `      <g:value>${escapeXml(option.value)}</g:value>\n`;
+      item += "    </g:variant_option>\n";
+    }
+  }
 
   // Categories
   item += `    <g:google_product_category>${googleCategory}</g:google_product_category>\n`;
@@ -485,13 +581,25 @@ function generateProductItem(
   item += `    <g:product_type>${escapeXml(categoryName)}</g:product_type>\n`;
 
   if (feedItem.kind === "variant") {
-    const color = normalizedOption(feedItem.variant.color);
-    const size = normalizedOption(feedItem.variant.size);
-    if (color) {
-      item += `    <g:color>${escapeXml(color)}</g:color>\n`;
-    }
-    if (size) {
-      item += `    <g:size>${escapeXml(size)}</g:size>\n`;
+    const optionValues = [
+      {
+        axis: "option1" as const,
+        value: normalizedOption(feedItem.variant.size),
+      },
+      {
+        axis: "option2" as const,
+        value: normalizedOption(feedItem.variant.color),
+      },
+    ];
+    const emittedOptionSchemas = new Set<ProductOptionSchema>();
+    for (const option of optionValues) {
+      if (!option.value) continue;
+      const optionSchema = getProductOptionSchema(product, option.axis);
+      if (optionSchema === "none" || emittedOptionSchemas.has(optionSchema)) {
+        continue;
+      }
+      emittedOptionSchemas.add(optionSchema);
+      item += `    <g:${optionSchema}>${escapeXml(option.value)}</g:${optionSchema}>\n`;
     }
   }
 

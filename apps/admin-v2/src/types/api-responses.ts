@@ -126,6 +126,10 @@ export interface Product {
   noIndex: boolean;
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
+  variantOption1Label: string;
+  variantOption2Label: string;
+  variantOption1Schema: "size" | "color" | "material" | "pattern" | "none";
+  variantOption2Schema: "size" | "color" | "material" | "pattern" | "none";
   createdAt: Date | string | number;
   updatedAt: Date | string | number;
   deletedAt: Date | string | number | null;

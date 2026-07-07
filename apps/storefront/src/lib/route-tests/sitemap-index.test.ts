@@ -53,6 +53,18 @@ describe("sitemap index route", () => {
     expect(mocks.getSitemapProducts).not.toHaveBeenCalled();
   });
 
+  it("returns non-cacheable 503 when the storefront URL includes a path", async () => {
+    mocks.getRuntimeStorefrontUrl.mockReturnValueOnce("https://storefront.example.test/base?x=1");
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toContain("Sitemap index is temporarily unavailable");
+    expect(mocks.getSitemapProducts).not.toHaveBeenCalled();
+  });
+
   it("includes sitemap documents and excludes product feeds", async () => {
     mocks.getSitemapProducts.mockResolvedValueOnce({
       data: [{ slug: "hilsa", updatedAt: "2026-06-23T00:00:00.000Z" }],

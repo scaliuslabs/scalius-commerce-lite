@@ -19,6 +19,7 @@ import {
   ProductImagesSection,
   TitleDescriptionSection,
   SeoSection,
+  OptionDiscoverySection,
   AttributesSection,
   PricingCard,
   StatusCard,
@@ -32,6 +33,8 @@ import {
   getVariantImagesAxis,
   resolveVariantImageAxis,
   generateSlug,
+  DEFAULT_PRODUCT_OPTION_LABELS,
+  DEFAULT_PRODUCT_OPTION_SCHEMA,
   type ProductFormValues,
   type Category,
 } from "./product-form";
@@ -112,6 +115,10 @@ export function ProductForm({
       noIndex: false,
       excludeFromSitemap: false,
       excludeFromProductFeed: false,
+      variantOption1Label: DEFAULT_PRODUCT_OPTION_LABELS.option1,
+      variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
+      variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+      variantOption2Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
       slug: "",
       images: [],
       slugEdited: false,
@@ -211,6 +218,9 @@ export function ProductForm({
                 }
                 storefrontUrl={storefrontUrl}
               />
+
+              {/* Catalog option mapping */}
+              <OptionDiscoverySection form={form} />
 
               {/* Attributes */}
               <AttributesSection form={form} />

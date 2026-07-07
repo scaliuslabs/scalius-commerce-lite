@@ -13,6 +13,12 @@ import { and, sql, desc, eq, isNull, inArray, or, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import {
+    DEFAULT_PRODUCT_OPTION_LABELS,
+    DEFAULT_PRODUCT_OPTION_SCHEMA,
+    normalizeProductOptionLabel,
+    normalizeProductOptionSchema,
+} from "@scalius/shared/product-options";
 import type {
     StorefrontFeedProduct,
     StorefrontFeedProductAttribute,
@@ -58,6 +64,10 @@ type StorefrontFeedProductListRow = {
     price: number;
     slug: string;
     canonicalPath: string | null;
+    variantOption1Label: string;
+    variantOption2Label: string;
+    variantOption1Schema: string;
+    variantOption2Schema: string;
     discountType: string | null;
     discountPercentage: number | null;
     discountAmount: number | null;
@@ -456,6 +466,10 @@ export async function getStorefrontFeedProducts(
             price: products.price,
             slug: products.slug,
             canonicalPath: products.canonicalPath,
+            variantOption1Label: products.variantOption1Label,
+            variantOption2Label: products.variantOption2Label,
+            variantOption1Schema: products.variantOption1Schema,
+            variantOption2Schema: products.variantOption2Schema,
             discountType: products.discountType,
             discountPercentage: products.discountPercentage,
             discountAmount: products.discountAmount,
@@ -502,6 +516,22 @@ export async function getStorefrontFeedProducts(
             name: product.name,
             slug: product.slug,
             canonicalPath: product.canonicalPath,
+            variantOption1Label: normalizeProductOptionLabel(
+                product.variantOption1Label,
+                DEFAULT_PRODUCT_OPTION_LABELS.option1,
+            ),
+            variantOption2Label: normalizeProductOptionLabel(
+                product.variantOption2Label,
+                DEFAULT_PRODUCT_OPTION_LABELS.option2,
+            ),
+            variantOption1Schema: normalizeProductOptionSchema(
+                product.variantOption1Schema,
+                DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+            ),
+            variantOption2Schema: normalizeProductOptionSchema(
+                product.variantOption2Schema,
+                DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+            ),
             description: product.description,
             price: product.price,
             discountType: product.discountType,

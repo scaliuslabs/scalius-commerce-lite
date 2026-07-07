@@ -2,6 +2,7 @@
 // Zod schemas and TypeScript interfaces shared across product modules.
 import { z } from "zod";
 import type { Product, ProductVariant, ProductImage } from "@scalius/database/schema";
+import type { ProductOptionSchema } from "@scalius/shared/product-options";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
@@ -163,6 +164,10 @@ export interface StorefrontFeedProduct {
     name: string;
     slug: string;
     canonicalPath: string | null;
+    variantOption1Label: string;
+    variantOption2Label: string;
+    variantOption1Schema: ProductOptionSchema;
+    variantOption2Schema: ProductOptionSchema;
     description: string | null;
     price: number;
     discountType: string | null;

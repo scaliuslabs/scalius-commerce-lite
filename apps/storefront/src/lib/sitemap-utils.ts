@@ -3,6 +3,7 @@
  * Following XML sitemap protocol: https://www.sitemaps.org/protocol.html
  */
 import { getRuntimeStorefrontUrl } from "./api/runtime-env";
+import { normalizeAbsoluteStorefrontOriginUrl } from "./storefront-origin";
 
 export interface SitemapUrl {
   loc: string;
@@ -129,24 +130,17 @@ export function generateSitemapIndex(sitemaps: SitemapIndexEntry[], baseUrl?: st
  * Gets the base URL from environment
  */
 export function getBaseUrl(): string {
-  const rawUrl = getRuntimeStorefrontUrl().trim();
-  if (!rawUrl) {
+  const rawUrl = getRuntimeStorefrontUrl();
+  if (!rawUrl.trim()) {
     throw new Error('STOREFRONT_URL environment variable is not set');
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    throw new Error('STOREFRONT_URL must be an absolute URL');
+  const normalized = normalizeAbsoluteStorefrontOriginUrl(rawUrl);
+  if (!normalized) {
+    throw new Error('STOREFRONT_URL must be an absolute http(s) origin URL');
   }
 
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error('STOREFRONT_URL must use http or https');
-  }
-
-  // Remove trailing slash if present
-  return parsed.toString().replace(/\/$/, '');
+  return normalized;
 }
 
 /**

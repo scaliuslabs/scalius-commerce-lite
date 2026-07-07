@@ -158,10 +158,6 @@ type OptionalFeedProductsSdk = {
   }) => Promise<{ data?: unknown; error?: unknown }>;
 };
 
-type DedicatedFeedProductsResult =
-  | { status: "missing" }
-  | { status: "read"; data: PaginatedResponse<Product> | null };
-
 function emptyProductPagination(
   options: ProductListOptions = {},
 ): PaginatedResponse<Product>["pagination"] {
@@ -234,10 +230,11 @@ function normalizeSitemapProductListPayload(
 
 async function readDedicatedFeedProducts(
   options: ProductListOptions,
-): Promise<DedicatedFeedProductsResult> {
+): Promise<PaginatedResponse<Product> | null> {
   const sdk = (await import("@scalius/api-client/sdk")) as OptionalFeedProductsSdk;
   if (typeof sdk.getApiV1ProductsFeed !== "function") {
-    return { status: "missing" };
+    console.error("Dedicated product feed SDK route is missing.");
+    return null;
   }
 
   try {
@@ -247,12 +244,12 @@ async function readDedicatedFeedProducts(
     });
     if (error) {
       console.error("Error fetching feed products:", error);
-      return { status: "read", data: null };
+      return null;
     }
-    return { status: "read", data: normalizeProductListPayload(data) };
+    return normalizeProductListPayload(data);
   } catch (error: unknown) {
     console.error("Error fetching feed products:", error);
-    return { status: "read", data: null };
+    return null;
   }
 }
 
@@ -367,9 +364,8 @@ export async function getAllProducts(
 /**
  * Fetches the product projection used by public catalog feeds.
  *
- * The dedicated API projection is optional while backend support rolls out. When
- * the generated SDK exposes it, use that richer endpoint. Until then, fall back
- * to the normal product list with variant inclusion explicitly requested.
+ * Feed XML must use the dedicated API projection so normal storefront listings
+ * stay card-light and feed-only fields do not leak into hot listing reads.
  */
 export async function getFeedProducts(
   options: ProductListOptions = {},
@@ -385,14 +381,7 @@ export async function getFeedProducts(
 
   return withEdgeCache(
     cacheKey,
-    async () => {
-      const dedicatedResponse = await readDedicatedFeedProducts(normalizedOptions);
-      if (dedicatedResponse.status === "read") {
-        return dedicatedResponse.data;
-      }
-
-      return getAllProducts(normalizedOptions);
-    },
+    () => readDedicatedFeedProducts(normalizedOptions),
     { ttlSeconds: CACHE_TTL.MEDIUM },
   );
 }

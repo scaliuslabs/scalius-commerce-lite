@@ -50,6 +50,23 @@ describe("robots.txt route", () => {
     expect(body).toContain("Robots policy is temporarily unavailable");
   });
 
+  it("returns non-cacheable 503 when the storefront URL is not an origin", async () => {
+    mocks.getRuntimeStorefrontUrl.mockReturnValueOnce("https://storefront.example.test/base?x=1");
+    mocks.getSeoSettings.mockResolvedValueOnce({
+      siteTitle: "Store",
+      homepageTitle: "Home",
+      homepageMetaDescription: "Description",
+      robotsTxt: "User-agent: *\nAllow: /",
+    });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body).toContain("Robots policy is temporarily unavailable");
+  });
+
   it("appends the sitemap URL to the configured robots policy", async () => {
     mocks.getSeoSettings.mockResolvedValueOnce({
       siteTitle: "Store",
