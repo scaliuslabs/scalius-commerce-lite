@@ -32,6 +32,18 @@ Secrets are encrypted with the same credential encryption key used by payment pr
 
 Runtime and admin reads must use `readStoredCredentialStrict()` for saved provider keys. Legacy plaintext keys remain readable, but encrypted rows without the dedicated `CREDENTIAL_ENCRYPTION_KEY` or rows that fail decrypt must return no API key plus the safe per-provider `credentialErrors` message; do not catch decrypt failures and collapse them into a silent `hasApiKey: false`.
 
+## Model Profiles
+
+`widget_generation_config` also normalizes canonical model profiles for future assistant surfaces:
+
+- `adminChat`
+- `storefrontChat`
+- `widgetGeneration`
+- `imageGeneration`
+- `voice`
+
+Future profiles are disabled by default. `widgetGeneration` is synthesized from the legacy active provider and provider default model so existing widget generation settings keep their current behavior. Profile resolution is a settings-layer guard only: `resolveAiModelProfile()` checks that the profile is enabled, the provider is enabled, credentials are available through the strict credential path, and the selected model is in the provider's configured allowlist. Do not add runtime assistant/model calls just because a profile exists.
+
 ## Files
 
 - `ai-settings.service.ts` reads, normalizes, masks, encrypts, and updates dashboard-managed AI settings.

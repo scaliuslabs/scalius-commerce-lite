@@ -1,8 +1,10 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
+  AI_MODEL_PROFILE_IDS,
   AI_PROVIDER_IDS,
   getWidgetAiAdminSettings,
   updateWidgetAiSettings,
+  type AiModelProfileId,
 } from "@scalius/core/modules/ai";
 import { ok } from "../../../utils/api-response";
 import { errorResponses, serviceUnavailableResponse, successEnvelope } from "../../../schemas/responses";
@@ -11,6 +13,21 @@ import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const providerEnum = z.enum(AI_PROVIDER_IDS);
+const aiModelProfileSchema = z
+  .object({
+    enabled: z.boolean(),
+    provider: providerEnum,
+    model: z.string().trim().max(200),
+  })
+  .strict();
+
+const aiModelProfileShape = Object.fromEntries(
+  AI_MODEL_PROFILE_IDS.map((profileId) => [profileId, aiModelProfileSchema.optional()]),
+) as Record<AiModelProfileId, z.ZodOptional<typeof aiModelProfileSchema>>;
+
+const aiModelProfilesSchema = z.object(aiModelProfileShape).strict();
+
+const settingsResponseSchema = z.object({ profiles: aiModelProfilesSchema.optional() }).passthrough();
 
 const providerConfigSchema = z.object({
   enabled: z.boolean().optional(),
@@ -55,6 +72,7 @@ const updateSchema = z.object({
     })
     .partial()
     .optional(),
+  profiles: aiModelProfilesSchema.optional(),
   apiKeys: z
     .object({
       openrouter: z.string().min(1).max(4096).optional(),
@@ -76,7 +94,7 @@ const getSettingsRoute = createRoute({
     200: {
       description: "Widget AI settings",
       content: {
-        "application/json": { schema: successEnvelope(z.object({}).passthrough()) },
+        "application/json": { schema: successEnvelope(settingsResponseSchema) },
       },
     },
     ...errorResponses,
@@ -102,7 +120,7 @@ const updateSettingsRoute = createRoute({
     200: {
       description: "Updated widget AI settings",
       content: {
-        "application/json": { schema: successEnvelope(z.object({}).passthrough()) },
+        "application/json": { schema: successEnvelope(settingsResponseSchema) },
       },
     },
     ...errorResponses,

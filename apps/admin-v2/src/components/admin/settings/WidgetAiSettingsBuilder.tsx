@@ -1,24 +1,34 @@
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { useSettingsForm } from "@/hooks/use-settings-form";
-import { getWidgetAiSettings, updateWidgetAiSettings } from "@/lib/api-functions/settings";
-import { queryKeys } from "@/lib/query-keys";
+} from "~/components/ui/select";
+import { Switch } from "~/components/ui/switch";
+import { Textarea } from "~/components/ui/textarea";
+import { useSettingsForm } from "~/hooks/use-settings-form";
+import {
+  getWidgetAiSettings,
+  updateWidgetAiSettings,
+  type UpdateWidgetAiSettingsInput,
+} from "~/lib/api-functions/settings";
+import { queryKeys } from "~/lib/query-keys";
 import { cn } from "@scalius/shared/utils";
 import { CheckCircle2, KeyRound, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";
 
 type ProviderId = "openrouter" | "openai" | "gemini" | "cloudflare";
 type PromptId = "widget" | "landing-page" | "collection";
+type ProfileId =
+  | "adminChat"
+  | "storefrontChat"
+  | "widgetGeneration"
+  | "imageGeneration"
+  | "voice";
 type StructuredOutputMode = "auto" | "sdk" | "text";
 type VisionInputMode = "auto" | "enabled" | "disabled";
 
@@ -43,9 +53,16 @@ interface ProviderValues {
   clearApiKey: boolean;
 }
 
-interface WidgetAiValues {
+interface ModelProfileValues {
+  enabled: boolean;
+  provider: ProviderId;
+  model: string;
+}
+
+export interface WidgetAiValues {
   activeProvider: ProviderId;
   providers: Record<ProviderId, ProviderValues>;
+  profiles: Record<ProfileId, ModelProfileValues>;
   generation: {
     planningTemperature: number;
     generationTemperature: number;
@@ -68,6 +85,44 @@ const PROMPTS: Array<{ id: PromptId; label: string }> = [
   { id: "widget", label: "Homepage Widget" },
   { id: "landing-page", label: "Landing Page" },
   { id: "collection", label: "Collection Page" },
+];
+
+export const PROFILE_DEFINITIONS: Array<{
+  id: ProfileId;
+  label: string;
+  badge: string;
+  description: string;
+}> = [
+  {
+    id: "adminChat",
+    label: "Admin chat",
+    badge: "Prerequisite only",
+    description: "For future dashboard assistant sessions.",
+  },
+  {
+    id: "storefrontChat",
+    label: "Storefront chat",
+    badge: "Prerequisite only",
+    description: "For future buyer-facing assistant sessions.",
+  },
+  {
+    id: "widgetGeneration",
+    label: "Widget generation",
+    badge: "Current tools",
+    description: "Keeps the existing widget generator model explicit.",
+  },
+  {
+    id: "imageGeneration",
+    label: "Image generation",
+    badge: "Prerequisite only",
+    description: "For future generated image and media workflows.",
+  },
+  {
+    id: "voice",
+    label: "Voice",
+    badge: "Prerequisite only",
+    description: "For future voice input and response workflows.",
+  },
 ];
 
 const STRUCTURED_OUTPUT_OPTIONS: Array<{ value: StructuredOutputMode; label: string }> = [
@@ -123,6 +178,33 @@ const defaultValues: WidgetAiValues = {
       defaultModel: "@cf/moonshotai/kimi-k2.6",
     },
   },
+  profiles: {
+    adminChat: {
+      enabled: false,
+      provider: "cloudflare",
+      model: "",
+    },
+    storefrontChat: {
+      enabled: false,
+      provider: "cloudflare",
+      model: "",
+    },
+    widgetGeneration: {
+      enabled: true,
+      provider: "cloudflare",
+      model: "@cf/moonshotai/kimi-k2.6",
+    },
+    imageGeneration: {
+      enabled: false,
+      provider: "cloudflare",
+      model: "",
+    },
+    voice: {
+      enabled: false,
+      provider: "cloudflare",
+      model: "",
+    },
+  },
   generation: {
     planningTemperature: 0.3,
     generationTemperature: 0.7,
@@ -156,6 +238,12 @@ function normalizeAllowedModels(value: unknown): string[] {
   }
 
   return models.slice(0, 50);
+}
+
+function normalizeModelId(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const model = value.trim();
+  return model.length > 200 ? model.slice(0, 200) : model;
 }
 
 function normalizeStructuredOutputMode(value: unknown): StructuredOutputMode {
@@ -211,27 +299,103 @@ function normalizeProvider(id: ProviderId, value: unknown): ProviderValues {
   };
 }
 
-function normalizeProviderId(value: unknown): ProviderId {
+function normalizeProviderId(
+  value: unknown,
+  fallback: ProviderId = defaultValues.activeProvider,
+): ProviderId {
   return PROVIDERS.some((provider) => provider.id === value)
     ? (value as ProviderId)
-    : defaultValues.activeProvider;
+    : fallback;
 }
 
-async function fetchWidgetAi(): Promise<WidgetAiValues> {
-  const data = (await getWidgetAiSettings()) as Record<string, unknown>;
+function getProviderModelOptions(
+  providers: Record<ProviderId, ProviderValues>,
+  provider: ProviderId,
+): string[] {
+  return normalizeAllowedModels([
+    providers[provider].defaultModel,
+    ...providers[provider].allowedModels,
+  ]);
+}
+
+function getDefaultProfile(
+  id: ProfileId,
+  activeProvider: ProviderId,
+  providers: Record<ProviderId, ProviderValues>,
+): ModelProfileValues {
+  const provider = activeProvider;
+  const futureProfileModel = defaultValues.profiles[id].model;
+  return {
+    enabled: id === "widgetGeneration",
+    provider,
+    model:
+      id === "widgetGeneration"
+        ? providers[provider]?.defaultModel || defaultValues.providers[provider].defaultModel
+        : futureProfileModel,
+  };
+}
+
+function normalizeProfile(
+  id: ProfileId,
+  value: unknown,
+  activeProvider: ProviderId,
+  providers: Record<ProviderId, ProviderValues>,
+): ModelProfileValues {
+  const fallback = getDefaultProfile(id, activeProvider, providers);
+  const data =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Partial<ModelProfileValues>)
+      : {};
+  const provider = normalizeProviderId(data.provider, fallback.provider);
+  const savedModel = normalizeModelId(data.model);
+  const model =
+    savedModel ||
+    (id === "widgetGeneration"
+      ? providers[provider]?.defaultModel || fallback.model
+      : fallback.model);
+
+  return {
+    enabled: typeof data.enabled === "boolean" ? data.enabled : fallback.enabled,
+    provider,
+    model,
+  };
+}
+
+function normalizeProfiles(
+  value: unknown,
+  activeProvider: ProviderId,
+  providers: Record<ProviderId, ProviderValues>,
+): WidgetAiValues["profiles"] {
+  const data =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  return Object.fromEntries(
+    PROFILE_DEFINITIONS.map((profile) => [
+      profile.id,
+      normalizeProfile(profile.id, data[profile.id], activeProvider, providers),
+    ]),
+  ) as WidgetAiValues["profiles"];
+}
+
+export function normalizeWidgetAiSettingsData(data: Record<string, unknown>): WidgetAiValues {
   const providers = (data.providers ?? {}) as Record<string, unknown>;
   const prompts = (data.prompts ?? {}) as Partial<Record<PromptId, string>>;
   const defaultPrompts = (data.defaultPrompts ?? {}) as Partial<Record<PromptId, string>>;
   const generation = (data.generation ?? {}) as Partial<WidgetAiValues["generation"]>;
+  const activeProvider = normalizeProviderId(data.activeProvider);
+  const normalizedProviders = {
+    openrouter: normalizeProvider("openrouter", providers.openrouter),
+    openai: normalizeProvider("openai", providers.openai),
+    gemini: normalizeProvider("gemini", providers.gemini),
+    cloudflare: normalizeProvider("cloudflare", providers.cloudflare),
+  };
 
   return {
-    activeProvider: normalizeProviderId(data.activeProvider),
-    providers: {
-      openrouter: normalizeProvider("openrouter", providers.openrouter),
-      openai: normalizeProvider("openai", providers.openai),
-      gemini: normalizeProvider("gemini", providers.gemini),
-      cloudflare: normalizeProvider("cloudflare", providers.cloudflare),
-    },
+    activeProvider,
+    providers: normalizedProviders,
+    profiles: normalizeProfiles(data.profiles, activeProvider, normalizedProviders),
     generation: {
       planningTemperature: Number(generation.planningTemperature ?? 0.3),
       generationTemperature: Number(generation.generationTemperature ?? 0.7),
@@ -252,50 +416,74 @@ async function fetchWidgetAi(): Promise<WidgetAiValues> {
   };
 }
 
-async function saveWidgetAi(values: WidgetAiValues) {
+async function fetchWidgetAi(): Promise<WidgetAiValues> {
+  const data = (await getWidgetAiSettings()) as Record<string, unknown>;
+  return normalizeWidgetAiSettingsData(data);
+}
+
+export function buildWidgetAiSettingsUpdate(
+  values: WidgetAiValues,
+): UpdateWidgetAiSettingsInput {
   const apiKeys = Object.fromEntries(
     PROVIDERS
       .map(({ id }) => [id, values.providers[id].apiKeyInput.trim()] as const)
       .filter(([, value]) => value.length > 0),
   );
 
-  await updateWidgetAiSettings({
-    data: {
-      activeProvider: values.activeProvider,
-      providers: Object.fromEntries(
-        PROVIDERS.map(({ id }) => {
-          const provider = values.providers[id];
-          return [
-            id,
-            {
-              enabled: provider.enabled,
-              defaultModel: provider.defaultModel.trim(),
-              allowedModels: normalizeAllowedModels(provider.allowedModels),
-              capabilities: {
-                structuredOutput: provider.capabilities.structuredOutput,
-                visionInput: provider.capabilities.visionInput,
-                maxImages: normalizeMaxImages(provider.capabilities.maxImages),
-              },
-              baseUrl: provider.baseUrl.trim(),
-              appName: provider.appName.trim(),
-              appUrl: provider.appUrl.trim(),
-              accountId: provider.accountId.trim(),
+  return {
+    activeProvider: values.activeProvider,
+    providers: Object.fromEntries(
+      PROVIDERS.map(({ id }) => {
+        const provider = values.providers[id];
+        return [
+          id,
+          {
+            enabled: provider.enabled,
+            defaultModel: provider.defaultModel.trim(),
+            allowedModels: normalizeAllowedModels(provider.allowedModels),
+            capabilities: {
+              structuredOutput: provider.capabilities.structuredOutput,
+              visionInput: provider.capabilities.visionInput,
+              maxImages: normalizeMaxImages(provider.capabilities.maxImages),
             },
-          ];
-        }),
-      ),
-      generation: values.generation,
-      prompts: values.prompts,
-      apiKeys,
-      clearApiKeys: PROVIDERS
-        .map(({ id }) => id)
-        .filter((id) => values.providers[id].clearApiKey && !values.providers[id].apiKeyInput.trim()),
-    },
+            baseUrl: provider.baseUrl.trim(),
+            appName: provider.appName.trim(),
+            appUrl: provider.appUrl.trim(),
+            accountId: provider.accountId.trim(),
+          },
+        ];
+      }),
+    ),
+    profiles: Object.fromEntries(
+      PROFILE_DEFINITIONS.map(({ id }) => {
+        const profile = values.profiles[id];
+        return [
+          id,
+          {
+            enabled: profile.enabled,
+            provider: profile.provider,
+            model: normalizeModelId(profile.model),
+          },
+        ];
+      }),
+    ),
+    generation: values.generation,
+    prompts: values.prompts,
+    apiKeys,
+    clearApiKeys: PROVIDERS
+      .map(({ id }) => id)
+      .filter((id) => values.providers[id].clearApiKey && !values.providers[id].apiKeyInput.trim()),
+  };
+}
+
+async function saveWidgetAi(values: WidgetAiValues) {
+  await updateWidgetAiSettings({
+    data: buildWidgetAiSettingsUpdate(values),
   });
 }
 
 export default function WidgetAiSettingsBuilder() {
-  const { values, setValue, setValues, isLoading, isSaving, handleSubmit } =
+  const { values, setValues, isLoading, isSaving, handleSubmit } =
     useSettingsForm<WidgetAiValues>({
       queryKey: queryKeys.settings.widgetAi(),
       fetchFn: fetchWidgetAi,
@@ -314,6 +502,24 @@ export default function WidgetAiSettingsBuilder() {
   const activeReady = Boolean(
     active?.enabled && active?.defaultModel.trim() && activeHasUsableCredential,
   );
+
+  const setActiveProvider = (provider: ProviderId) => {
+    setValues((prev) => {
+      const model = prev.providers[provider].defaultModel || prev.profiles.widgetGeneration.model;
+      return {
+        ...prev,
+        activeProvider: provider,
+        profiles: {
+          ...prev.profiles,
+          widgetGeneration: {
+            ...prev.profiles.widgetGeneration,
+            provider,
+            model,
+          },
+        },
+      };
+    });
+  };
 
   const setProviderValue = <K extends keyof ProviderValues>(
     provider: ProviderId,
@@ -352,6 +558,41 @@ export default function WidgetAiSettingsBuilder() {
     }));
   };
 
+  const setProfileValue = <K extends keyof ModelProfileValues>(
+    profile: ProfileId,
+    key: K,
+    value: ModelProfileValues[K],
+  ) => {
+    setValues((prev) => ({
+      ...prev,
+      profiles: {
+        ...prev.profiles,
+        [profile]: {
+          ...prev.profiles[profile],
+          [key]: value,
+        },
+      },
+    }));
+  };
+
+  const setProfileProvider = (profile: ProfileId, provider: ProviderId) => {
+    setValues((prev) => {
+      const nextOptions = getProviderModelOptions(prev.providers, provider);
+      const current = prev.profiles[profile];
+      return {
+        ...prev,
+        profiles: {
+          ...prev.profiles,
+          [profile]: {
+            ...current,
+            provider,
+            model: current.model || nextOptions[0] || "",
+          },
+        },
+      };
+    });
+  };
+
   const setGenerationValue = <K extends keyof WidgetAiValues["generation"]>(
     key: K,
     value: WidgetAiValues["generation"][K],
@@ -384,7 +625,7 @@ export default function WidgetAiSettingsBuilder() {
           <Label htmlFor="widget-ai-provider">Active provider</Label>
           <Select
             value={values.activeProvider}
-            onValueChange={(value) => setValue("activeProvider", value as ProviderId)}
+            onValueChange={(value) => setActiveProvider(value as ProviderId)}
           >
             <SelectTrigger id="widget-ai-provider">
               <SelectValue />
@@ -418,6 +659,107 @@ export default function WidgetAiSettingsBuilder() {
           </p>
         </div>
       </div>
+
+      <section className="space-y-3 rounded-md border border-border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">Model profiles</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Future assistant profiles stay disabled until the matching assistant surface is released.
+            </p>
+          </div>
+          <Badge variant="outline">Compact setup</Badge>
+        </div>
+
+        <div className="grid gap-2">
+          {PROFILE_DEFINITIONS.map((profile) => {
+            const profileValues = values.profiles[profile.id];
+            const modelOptions = getProviderModelOptions(values.providers, profileValues.provider);
+            return (
+              <div
+                key={profile.id}
+                className={cn(
+                  "grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(180px,1fr)_160px_minmax(180px,1fr)_auto] md:items-center",
+                  profileValues.enabled ? "bg-background" : "bg-muted/20",
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-sm font-medium">{profile.label}</h4>
+                    <Badge variant={profile.id === "widgetGeneration" ? "secondary" : "outline"}>
+                      {profile.badge}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{profile.description}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="sr-only" htmlFor={`profile-${profile.id}-provider`}>
+                    Provider
+                  </Label>
+                  <Select
+                    value={profileValues.provider}
+                    onValueChange={(value) => setProfileProvider(profile.id, value as ProviderId)}
+                    disabled={!profileValues.enabled}
+                  >
+                    <SelectTrigger id={`profile-${profile.id}-provider`} className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROVIDERS.map((provider) => (
+                        <SelectItem key={provider.id} value={provider.id}>
+                          {provider.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="sr-only" htmlFor={`profile-${profile.id}-model`}>
+                    Model
+                  </Label>
+                  <Input
+                    id={`profile-${profile.id}-model`}
+                    name={`widget-ai-profile-${profile.id}-model`}
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    className="h-9"
+                    list={`profile-${profile.id}-models`}
+                    value={profileValues.model}
+                    disabled={!profileValues.enabled}
+                    onChange={(event) => setProfileValue(profile.id, "model", event.target.value)}
+                    placeholder="Model ID"
+                  />
+                  {modelOptions.length > 0 && (
+                    <datalist id={`profile-${profile.id}-models`}>
+                      {modelOptions.map((model) => (
+                        <option key={model} value={model} />
+                      ))}
+                    </datalist>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-3 md:justify-end">
+                  <Label
+                    htmlFor={`profile-${profile.id}-enabled`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    Enabled
+                  </Label>
+                  <Switch
+                    id={`profile-${profile.id}-enabled`}
+                    checked={profileValues.enabled}
+                    onCheckedChange={(checked) => setProfileValue(profile.id, "enabled", checked)}
+                    aria-label={`Enable ${profile.label} profile`}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="grid gap-4">
         {PROVIDERS.map((provider) => {

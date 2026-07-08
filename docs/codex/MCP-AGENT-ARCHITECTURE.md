@@ -78,6 +78,8 @@ Add assistant model profiles under the AI settings domain when implementation st
 - `imageGeneration`
 - `voice`
 
+Only `widgetGeneration` should inherit the current widget provider's default model. Future assistant profiles (`adminChat`, `storefrontChat`, `imageGeneration`, and `voice`) default disabled with an empty model until a saved API profile explicitly configures them, so the dashboard does not imply unreleased assistants are active.
+
 Environment variables may provide safe defaults; dashboard settings may override them. Secrets stay encrypted with `CREDENTIAL_ENCRYPTION_KEY`. Hot send paths must fail closed when credentials are missing, dummy, or undecryptable. Existing widget AI settings already strict-read encrypted provider keys through `readStoredCredentialStrict()` and surface safe `credentialErrors`; keep future assistant profiles on that same path instead of adding permissive fallback reads.
 
 ## Required Guards

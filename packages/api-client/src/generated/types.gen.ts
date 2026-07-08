@@ -5927,7 +5927,8 @@ export type GetApiV1OrdersStatusByTokenResponses = {
         data: {
             status: string;
             orderId?: string;
-            [key: string]: unknown;
+            error?: string;
+            message?: string;
         };
     };
     /**
@@ -25960,6 +25961,33 @@ export type GetApiV1AdminSettingsWidgetAiResponses = {
     200: {
         success: true;
         data: {
+            profiles?: {
+                adminChat?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+                storefrontChat?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+                widgetGeneration?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+                imageGeneration?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+                voice?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+            };
             [key: string]: unknown;
         };
     };
@@ -26019,6 +26047,33 @@ export type PostApiV1AdminSettingsWidgetAiData = {
             widget?: string;
             'landing-page'?: string;
             collection?: string;
+        };
+        profiles?: {
+            adminChat?: {
+                enabled: boolean;
+                provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                model: string;
+            };
+            storefrontChat?: {
+                enabled: boolean;
+                provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                model: string;
+            };
+            widgetGeneration?: {
+                enabled: boolean;
+                provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                model: string;
+            };
+            imageGeneration?: {
+                enabled: boolean;
+                provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                model: string;
+            };
+            voice?: {
+                enabled: boolean;
+                provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                model: string;
+            };
         };
         apiKeys?: {
             openrouter?: string;
@@ -26122,6 +26177,33 @@ export type PostApiV1AdminSettingsWidgetAiResponses = {
     200: {
         success: true;
         data: {
+            profiles?: {
+                adminChat?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+                storefrontChat?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+                widgetGeneration?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+                imageGeneration?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+                voice?: {
+                    enabled: boolean;
+                    provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+                    model: string;
+                };
+            };
             [key: string]: unknown;
         };
     };

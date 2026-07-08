@@ -9,11 +9,14 @@ import {
   normalizeWidgetAiConfig,
   providerHasCredentials,
   requireAllowedWidgetAiModel,
+  resolveAiModelProfile,
+  updateWidgetAiSettings,
   type WidgetAiRuntimeSettings,
 } from "./ai-settings.service";
 import { ValidationError } from "@scalius/core/errors";
 import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 import {
+  AI_MODEL_PROFILE_IDS,
   resolveWidgetAiModelCapabilities,
   supportsWidgetAiVisionInput,
 } from "./ai-config";
@@ -31,6 +34,30 @@ function createAiSettingsDb(rows: Array<{ key: string; value: string }>) {
           all: async () => rows,
         }),
       }),
+    }),
+  };
+}
+
+function createWritableAiSettingsDb(
+  rows: Array<{ key: string; value: string }>,
+  writes: Array<{ key: string; value: string; type?: string }>,
+) {
+  return {
+    ...createAiSettingsDb(rows),
+    insert: () => ({
+      values: (value: { key: string; value: string; type?: string }) => ({
+        onConflictDoUpdate: async () => {
+          writes.push(value);
+        },
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: async () => undefined,
+      }),
+    }),
+    delete: () => ({
+      where: async () => undefined,
     }),
   };
 }
@@ -85,6 +112,111 @@ describe("widget AI settings", () => {
     expect(config.generation.generationTemperature).toBe(2);
     expect(config.generation.fastGenerationMaxOutputTokens).toBe(2200);
     expect(config.generation.maxOutputTokens).toBe(64000);
+  });
+
+  it("normalizes legacy widget config into the widgetGeneration model profile", () => {
+    const config = normalizeWidgetAiConfig({
+      activeProvider: "openai",
+      providers: {
+        openai: {
+          enabled: true,
+          defaultModel: "gpt-5.4",
+          allowedModels: ["gpt-5.4-mini"],
+        },
+      },
+    });
+
+    expect(config.profiles.widgetGeneration).toEqual({
+      enabled: true,
+      provider: "openai",
+      model: "gpt-5.4",
+    });
+    expect(config.profiles.adminChat.enabled).toBe(false);
+    expect(config.profiles.storefrontChat.enabled).toBe(false);
+    expect(config.profiles.imageGeneration.enabled).toBe(false);
+    expect(config.profiles.voice.enabled).toBe(false);
+  });
+
+  it("keeps future assistant profiles disabled by default", () => {
+    const config = normalizeWidgetAiConfig({});
+    const runtime: WidgetAiRuntimeSettings = {
+      ...config,
+      apiKeys: {},
+      credentialErrors: {},
+      hasCloudflareBinding: true,
+    };
+
+    expect(config.profiles.widgetGeneration).toEqual({
+      enabled: true,
+      provider: "cloudflare",
+      model: "@cf/moonshotai/kimi-k2.6",
+    });
+    for (const profileId of [
+      "adminChat",
+      "storefrontChat",
+      "imageGeneration",
+      "voice",
+    ] as const) {
+      expect(config.profiles[profileId]).toEqual({
+        enabled: false,
+        provider: "cloudflare",
+        model: "",
+      });
+      expect(() => resolveAiModelProfile(runtime, profileId)).toThrow(
+        `AI model profile "${profileId}" is disabled.`,
+      );
+    }
+  });
+
+  it("normalizes unknown and malformed model profiles safely", () => {
+    const config = normalizeWidgetAiConfig({
+      profiles: {
+        adminChat: {
+          enabled: true,
+          provider: "not-a-provider",
+          model: "gpt-5.4",
+        },
+        storefrontChat: "enabled",
+        widgetGeneration: {
+          enabled: true,
+          provider: "gemini",
+          model: 42,
+        },
+        imageGeneration: {
+          enabled: true,
+          provider: "openai",
+          model: "x".repeat(201),
+        },
+        madeUpProfile: {
+          enabled: true,
+          provider: "openai",
+          model: "gpt-5.4",
+        },
+      },
+    });
+
+    expect(Object.keys(config.profiles)).toEqual([...AI_MODEL_PROFILE_IDS]);
+    expect("madeUpProfile" in config.profiles).toBe(false);
+    expect(config.profiles.adminChat).toEqual({
+      enabled: false,
+      provider: "cloudflare",
+      model: "gpt-5.4",
+    });
+    expect(config.profiles.storefrontChat).toEqual({
+      enabled: false,
+      provider: "cloudflare",
+      model: "",
+    });
+    expect(config.profiles.widgetGeneration).toEqual({
+      enabled: false,
+      provider: "gemini",
+      model: "",
+    });
+    expect(config.profiles.imageGeneration).toEqual({
+      enabled: false,
+      provider: "openai",
+      model: "",
+    });
   });
 
   it("rejects arbitrary provider base URLs", () => {
@@ -165,6 +297,124 @@ describe("widget AI settings", () => {
         "@cf/openai/gpt-oss-120b",
       ),
     ).toThrow(ValidationError);
+  });
+
+  it("rejects profile models that are outside the provider allowlist", () => {
+    const runtime: WidgetAiRuntimeSettings = {
+      ...DEFAULT_WIDGET_AI_CONFIG,
+      providers: {
+        ...DEFAULT_WIDGET_AI_CONFIG.providers,
+        openai: {
+          ...DEFAULT_WIDGET_AI_CONFIG.providers.openai,
+          enabled: true,
+          defaultModel: "gpt-5.4",
+          allowedModels: ["gpt-5.4-mini"],
+        },
+      },
+      profiles: {
+        ...DEFAULT_WIDGET_AI_CONFIG.profiles,
+        adminChat: {
+          enabled: true,
+          provider: "openai",
+          model: "gpt-5.4-unapproved",
+        },
+      },
+      apiKeys: { openai: "sk-prod-openai" },
+      credentialErrors: {},
+      hasCloudflareBinding: false,
+    };
+
+    expect(() => resolveAiModelProfile(runtime, "adminChat")).toThrow(
+      'AI model "gpt-5.4-unapproved" is not enabled for openai.',
+    );
+  });
+
+  it("resolves an enabled model profile through provider credentials and allowlist", () => {
+    const runtime: WidgetAiRuntimeSettings = {
+      ...DEFAULT_WIDGET_AI_CONFIG,
+      providers: {
+        ...DEFAULT_WIDGET_AI_CONFIG.providers,
+        openai: {
+          ...DEFAULT_WIDGET_AI_CONFIG.providers.openai,
+          enabled: true,
+          defaultModel: "gpt-5.4",
+          allowedModels: ["gpt-5.4-mini"],
+        },
+      },
+      profiles: {
+        ...DEFAULT_WIDGET_AI_CONFIG.profiles,
+        adminChat: {
+          enabled: true,
+          provider: "openai",
+          model: "gpt-5.4-mini",
+        },
+      },
+      apiKeys: { openai: "sk-prod-openai" },
+      credentialErrors: {},
+      hasCloudflareBinding: false,
+    };
+
+    expect(resolveAiModelProfile(runtime, "adminChat")).toMatchObject({
+      id: "adminChat",
+      provider: "openai",
+      model: "gpt-5.4-mini",
+    });
+  });
+
+  it("preserves explicit widgetGeneration profile state on partial profile updates", async () => {
+    const writes: Array<{ key: string; value: string; type?: string }> = [];
+    const db = createWritableAiSettingsDb(
+      [
+        widgetAiConfigRow({
+          activeProvider: "openai",
+          providers: {
+            openai: {
+              enabled: true,
+              defaultModel: "gpt-5.4",
+              allowedModels: ["gpt-5.4-mini"],
+            },
+          },
+          profiles: {
+            widgetGeneration: {
+              enabled: true,
+              provider: "openai",
+              model: "gpt-5.4-mini",
+            },
+            adminChat: {
+              enabled: false,
+              provider: "openai",
+              model: "",
+            },
+          },
+        }),
+      ],
+      writes,
+    );
+
+    await updateWidgetAiSettings(db as never, {
+      profiles: {
+        adminChat: {
+          enabled: true,
+          provider: "openai",
+          model: "gpt-5.4",
+        },
+      },
+    });
+
+    const saved = writes.find((write) => write.key === "widget_generation_config");
+    expect(saved).toBeDefined();
+    const config = JSON.parse(saved?.value ?? "{}") as ReturnType<typeof normalizeWidgetAiConfig>;
+
+    expect(config.profiles.widgetGeneration).toEqual({
+      enabled: true,
+      provider: "openai",
+      model: "gpt-5.4-mini",
+    });
+    expect(config.profiles.adminChat).toEqual({
+      enabled: true,
+      provider: "openai",
+      model: "gpt-5.4",
+    });
   });
 
   it("keeps Cloudflare widget generation text-only until image bytes are adapted server-side", () => {
