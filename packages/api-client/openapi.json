@@ -116463,6 +116463,31 @@
                               "type": "number"
                             }
                           }
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "navigate"
+                                ]
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "path",
+                              "label"
+                            ]
+                          }
                         }
                       },
                       "required": [

@@ -148,6 +148,12 @@ export interface AdminAssistantChatUsage {
   totalTokens?: number;
 }
 
+export interface AdminAssistantNavigateAction {
+  type: "navigate";
+  path: string;
+  label: string;
+}
+
 export interface AdminAssistantChatApiMessage {
   role: "user" | "assistant";
   content: string;
@@ -162,6 +168,7 @@ export type AdminAssistantChatResult =
       status: "ok";
       message: { role: "assistant"; content: string };
       usage?: AdminAssistantChatUsage | null;
+      actions?: AdminAssistantNavigateAction[];
     }
   | {
       status: "disabled";
@@ -178,6 +185,8 @@ const ADMIN_ASSISTANT_MAX_HISTORY_ITEMS = 6;
 const ADMIN_ASSISTANT_MAX_CONTEXT_TEXT_CHARS = 180;
 const ADMIN_ASSISTANT_MAX_SURFACES = 12;
 const ADMIN_ASSISTANT_MAX_ROUTE_CHARS = 240;
+const ADMIN_ASSISTANT_MAX_ACTIONS = 3;
+const ADMIN_ASSISTANT_MAX_ACTION_LABEL_CHARS = 80;
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const BANGLADESH_PHONE_PATTERN = /(^|[^\d])(?:\+?88)?01[3-9]\d{8}(?!\d)/g;
@@ -386,7 +395,7 @@ function formatAdminAssistantPageContext(
   return boundText(parts.filter(Boolean).join("\n"), 1_200) || null;
 }
 
-function normalizeAdminAssistantChatResult(
+export function normalizeAdminAssistantChatResult(
   result: unknown,
 ): AdminAssistantChatResult {
   if (!result || typeof result !== "object") {
@@ -416,11 +425,34 @@ function normalizeAdminAssistantChatResult(
     return { status: "error", message: "Assistant returned no readable message." };
   }
 
+  const actions = normalizeAdminAssistantActions(record.actions);
   return {
     status: "ok",
     message: { role: "assistant", content },
     usage: normalizeAdminAssistantUsage(record.usage),
+    ...(actions ? { actions } : {}),
   };
+}
+
+function normalizeAdminAssistantActions(
+  actions: unknown,
+): AdminAssistantNavigateAction[] | undefined {
+  if (!Array.isArray(actions)) return undefined;
+
+  const normalized: AdminAssistantNavigateAction[] = [];
+  for (const action of actions.slice(0, ADMIN_ASSISTANT_MAX_ACTIONS)) {
+    if (!action || typeof action !== "object") continue;
+    const record = action as Record<string, unknown>;
+    if (record.type !== "navigate") continue;
+    const path = sanitizeAdminAssistantNavigationPath(record.path);
+    if (!path) continue;
+    const label =
+      sanitizeContextText(record.label, ADMIN_ASSISTANT_MAX_ACTION_LABEL_CHARS) ??
+      "Open dashboard page";
+    normalized.push({ type: "navigate", path, label });
+  }
+
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function normalizeAdminAssistantUsage(
@@ -473,6 +505,29 @@ function sanitizeRoutePath(value: unknown): string {
   const pathOnly = raw.split("?")[0]?.split("#")[0] ?? "";
   const sanitized = sanitizeContextText(pathOnly, ADMIN_ASSISTANT_MAX_ROUTE_CHARS);
   return sanitized?.startsWith("/admin") ? sanitized : "/admin";
+}
+
+function sanitizeAdminAssistantNavigationPath(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const path = value.trim();
+  if (!/^\/admin(?:\/[a-z0-9-]+)*$/.test(path)) return null;
+  const segments = path.split("/").filter(Boolean);
+  const resourceRoots = new Set([
+    "attributes",
+    "categories",
+    "collections",
+    "customers",
+    "discounts",
+    "inventory",
+    "media",
+    "orders",
+    "pages",
+    "products",
+    "widgets",
+  ]);
+  if (segments.slice(1).some((segment) => /^\d+$/.test(segment))) return null;
+  if (segments.length > 2 && resourceRoots.has(segments[1] ?? "")) return null;
+  return path;
 }
 
 function sanitizeContextText(

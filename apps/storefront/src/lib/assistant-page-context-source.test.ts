@@ -15,10 +15,18 @@ describe("storefront assistant page-context source boundaries", () => {
     );
 
     expect(source).toContain('from "@/store/cart"');
+    expect(source).toContain("__SCALIUS_STOREFRONT_ASSISTANT__");
+    expect(source).toContain("getContext");
+    expect(source).toContain("navigate");
+    expect(source).not.toMatch(/\bfetch\s*\(/);
+    expect(source).not.toMatch(/\bXMLHttpRequest\b/);
+    expect(source).not.toMatch(/\bnavigator\.sendBeacon\b/);
+    expect(source).not.toMatch(/\bindexedDB\b/);
     expect(source).not.toMatch(/\bhydrateCartFromStorage\b/);
     expect(source).not.toMatch(/\baddToCart\b/);
     expect(source).not.toMatch(/\bremoveFromCart\b/);
     expect(source).not.toMatch(/\bupdateQuantity\b/);
+    expect(source).not.toMatch(/\bcartStore\.set\b/);
     expect(source).not.toMatch(/\blocalStorage\b/);
     expect(source).not.toMatch(/\bsessionStorage\b/);
     expect(source).not.toMatch(/\bdocument\.cookie\b/);

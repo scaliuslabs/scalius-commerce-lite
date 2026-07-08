@@ -48,12 +48,19 @@ const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 const ADMIN_CHAT_MAX_MESSAGES = 24;
 const ADMIN_CHAT_MAX_TEXT_CHARS = 24_000;
 const ADMIN_CHAT_MAX_OUTPUT_TOKENS = 1_200;
+const ADMIN_CHAT_MAX_NAVIGATION_PAGES = 24;
+const ADMIN_CHAT_MAX_NAVIGATION_CONTEXT_CHARS = 1_800;
+const ADMIN_CHAT_MAX_NAVIGATION_ACTIONS = 1;
+const ADMIN_AGENT_MCP_URL = 'http://agent.internal/mcp/admin';
+const ADMIN_NAVIGATION_CONTEXT_TOOL = 'admin_navigation_context';
+const ADMIN_AGENT_MCP_PROTOCOL_VERSION = '2025-06-18';
 const NO_COMMERCE_FACTS_PROMPT_MARKER = 'FACTUALITY GATE - NO COMMERCE FACTS PROVIDED';
 const AI_NO_OBJECT_GENERATED_MARKER = 'vercel.ai.error.AI_NoObjectGeneratedError';
 const AI_UNSUPPORTED_FUNCTIONALITY_MARKER = 'vercel.ai.error.AI_UnsupportedFunctionalityError';
 const ADMIN_CHAT_SYSTEM_PROMPT = [
   'You are the Scalius Commerce admin assistant for merchants and operators.',
   'Answer from the conversation and general platform knowledge only. This endpoint cannot read live store data, change settings, mutate products, modify orders, adjust inventory, trigger payments, deploy code, inspect logs, or clear caches.',
+  'When a safe dashboard destination list is provided, you may mention those real dashboard pages, but you cannot navigate automatically.',
   'When the merchant asks for an action, give safe step-by-step guidance and say that they must perform it in the dashboard or ask an operator to run a verified workflow.',
   'Do not ask for or repeat secrets, OTPs, API keys, credential material, payment proofs, customer contact details, or session tokens. If the user includes sensitive data, acknowledge only that it should be removed or rotated.',
   'Keep answers concise, practical, and explicit about uncertainty.',
@@ -131,6 +138,17 @@ type GenerationUsage = {
   totalTokens?: number;
 };
 type ApiContext = Context<{ Bindings: Env }>;
+type JsonRecord = Record<string, unknown>;
+type AdminChatNavigationEntry = {
+  path: string;
+  name: string;
+  section: string;
+};
+type AdminChatNavigateAction = {
+  type: 'navigate';
+  path: string;
+  label: string;
+};
 
 export interface WidgetGenerationResult {
   text: string;
@@ -284,6 +302,238 @@ function validateAdminChatPayload(messages: Array<z.infer<typeof chatMessageSche
   if (textChars > ADMIN_CHAT_MAX_TEXT_CHARS) {
     throw new ValidationError(`AI chat is too large. Maximum is ${ADMIN_CHAT_MAX_TEXT_CHARS} characters.`);
   }
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function compactAdminChatText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') return null;
+  const compacted = value.replace(/\s+/g, ' ').trim();
+  if (!compacted) return null;
+  return compacted.length <= maxLength ? compacted : compacted.slice(0, maxLength).trimEnd();
+}
+
+function safeAgentUserAgent(value: unknown): string | null {
+  const compacted = compactAdminChatText(value, 256);
+  if (!compacted) return null;
+  const safe = compacted.replace(/[^\x20-\x7E]/g, '').trim();
+  return safe || null;
+}
+
+function safeAdminNavigationPath(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const path = value.trim();
+  if (!/^\/admin(?:\/[a-z0-9-]+)*$/.test(path)) return null;
+  const segments = path.split('/').filter(Boolean);
+  const resourceRoots = new Set([
+    'attributes',
+    'categories',
+    'collections',
+    'customers',
+    'discounts',
+    'inventory',
+    'media',
+    'orders',
+    'pages',
+    'products',
+    'widgets',
+  ]);
+  if (segments.slice(1).some((segment) => /^\d+$/.test(segment))) return null;
+  if (segments.length > 2 && resourceRoots.has(segments[1] ?? '')) return null;
+  return path;
+}
+
+function compactNavigationEntry(value: unknown, sectionLabel: unknown): AdminChatNavigationEntry | null {
+  if (!isJsonRecord(value)) return null;
+  const path = safeAdminNavigationPath(value.path);
+  const name = compactAdminChatText(value.name, 80);
+  const section = compactAdminChatText(sectionLabel, 80);
+  if (!path || !name || !section) return null;
+  return { path, name, section };
+}
+
+function compactAdminNavigationEntries(body: unknown): AdminChatNavigationEntry[] {
+  const response = isJsonRecord(body) ? body : null;
+  const result = isJsonRecord(response?.result) ? response.result : null;
+  if (!result || result.isError === true) return [];
+
+  const structuredContent = isJsonRecord(result.structuredContent) ? result.structuredContent : null;
+  const context = isJsonRecord(structuredContent?.adminNavigationContext)
+    ? structuredContent.adminNavigationContext
+    : null;
+  const sections = Array.isArray(context?.sections) ? context.sections : [];
+  const entries: AdminChatNavigationEntry[] = [];
+  const seenPaths = new Set<string>();
+
+  for (const section of sections) {
+    if (!isJsonRecord(section) || !Array.isArray(section.pages)) continue;
+    for (const page of section.pages) {
+      const entry = compactNavigationEntry(page, section.label);
+      if (!entry || seenPaths.has(entry.path)) continue;
+      seenPaths.add(entry.path);
+      entries.push(entry);
+      if (entries.length >= ADMIN_CHAT_MAX_NAVIGATION_PAGES) return entries;
+    }
+  }
+
+  return entries;
+}
+
+function createAgentNavigationHeaders(c: ApiContext): Headers {
+  const headers = new Headers({
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  });
+  const cookie = c.req.header('cookie')?.trim();
+  if (cookie) headers.set('Cookie', cookie);
+  const userAgent = safeAgentUserAgent(c.req.header('user-agent'));
+  if (userAgent) headers.set('User-Agent', userAgent);
+  return headers;
+}
+
+async function getAdminChatNavigationEntries(c: ApiContext): Promise<AdminChatNavigationEntry[]> {
+  const agent = c.env.AGENT;
+  if (!agent || typeof agent.fetch !== 'function') return [];
+
+  try {
+    const initializeResponse = await agent.fetch(ADMIN_AGENT_MCP_URL, {
+      method: 'POST',
+      headers: createAgentNavigationHeaders(c),
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'admin-chat-navigation-initialize',
+        method: 'initialize',
+        params: {
+          protocolVersion: ADMIN_AGENT_MCP_PROTOCOL_VERSION,
+          capabilities: {},
+          clientInfo: { name: 'scalius-api-admin-chat', version: '0.1.0' },
+        },
+      }),
+      signal: c.req.raw.signal,
+    });
+    if (!initializeResponse.ok) return [];
+
+    const initializeBody = await initializeResponse.json();
+    const initializeResult = isJsonRecord(initializeBody) && isJsonRecord(initializeBody.result)
+      ? initializeBody.result
+      : null;
+    const protocolVersion = compactAdminChatText(initializeResult?.protocolVersion, 80);
+    const sessionId = compactAdminChatText(initializeResponse.headers.get('mcp-session-id'), 160);
+    const toolHeaders = createAgentNavigationHeaders(c);
+    if (sessionId) toolHeaders.set('Mcp-Session-Id', sessionId);
+    if (protocolVersion) toolHeaders.set('MCP-Protocol-Version', protocolVersion);
+
+    const response = await agent.fetch(ADMIN_AGENT_MCP_URL, {
+      method: 'POST',
+      headers: toolHeaders,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'admin-chat-navigation-context',
+        method: 'tools/call',
+        params: {
+          name: ADMIN_NAVIGATION_CONTEXT_TOOL,
+          arguments: {},
+        },
+      }),
+      signal: c.req.raw.signal,
+    });
+    if (!response.ok) return [];
+    return compactAdminNavigationEntries(await response.json());
+  } catch {
+    return [];
+  }
+}
+
+function formatAdminChatNavigationContext(entries: AdminChatNavigationEntry[]): string | null {
+  if (entries.length === 0) return null;
+  const lines = entries.map((entry) => `- ${entry.section} > ${entry.name}: ${entry.path}`);
+  return compactAdminChatText(
+    [
+      'Allowed dashboard destinations from the current admin session:',
+      ...lines,
+      'Only mention these destinations when relevant. Do not invent dashboard paths.',
+    ].join('\n'),
+    ADMIN_CHAT_MAX_NAVIGATION_CONTEXT_CHARS,
+  );
+}
+
+function latestUserChatText(messages: Array<z.infer<typeof chatMessageSchema>>): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'user') return message.content;
+  }
+  return '';
+}
+
+function normalizeNavigationMatchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\/admin(?:\/[a-z0-9-]+)*/g, (path) => ` ${path} `)
+    .replace(/[^a-z0-9/]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function navigationTokens(value: string): string[] {
+  return normalizeNavigationMatchText(value)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function tokenVariants(token: string): string[] {
+  if (token.length > 3 && token.endsWith('s')) return [token, token.slice(0, -1)];
+  return [token];
+}
+
+function textContainsPhrase(haystack: string, needle: string): boolean {
+  const normalizedNeedle = normalizeNavigationMatchText(needle);
+  if (!normalizedNeedle) return false;
+  return ` ${haystack} `.includes(` ${normalizedNeedle} `);
+}
+
+function textContainsTokens(haystackTokens: Set<string>, needle: string): boolean {
+  const tokens = navigationTokens(needle);
+  if (tokens.length === 0) return false;
+  return tokens.every((token) => tokenVariants(token).some((variant) => haystackTokens.has(variant)));
+}
+
+function hasNavigationIntent(text: string): boolean {
+  return /\b(?:go|open|navigate|visit|show|view|take|send|jump|link|page|screen|section|where|manage)\b/i.test(text);
+}
+
+function createAdminChatNavigationActions(
+  entries: AdminChatNavigationEntry[],
+  messages: Array<z.infer<typeof chatMessageSchema>>,
+): AdminChatNavigateAction[] {
+  if (entries.length === 0) return [];
+
+  const latestText = latestUserChatText(messages);
+  const normalizedText = normalizeNavigationMatchText(latestText);
+  if (!normalizedText) return [];
+
+  const tokens = new Set(navigationTokens(latestText).flatMap(tokenVariants));
+  const intent = hasNavigationIntent(latestText);
+  const candidates = entries
+    .map((entry, index) => {
+      const exactPath = latestText.toLowerCase().includes(entry.path.toLowerCase());
+      let score = exactPath ? 100 : 0;
+      if (textContainsPhrase(normalizedText, entry.name)) score += 50;
+      else if (textContainsTokens(tokens, entry.name)) score += 35;
+      if (textContainsPhrase(normalizedText, entry.section)) score += 10;
+      else if (textContainsTokens(tokens, entry.section)) score += 5;
+      return { entry, exactPath, index, score };
+    })
+    .filter((candidate) => candidate.score > 0 && (intent || candidate.exactPath))
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+
+  return candidates.slice(0, ADMIN_CHAT_MAX_NAVIGATION_ACTIONS).map(({ entry }) => ({
+    type: 'navigate' as const,
+    path: entry.path,
+    label: `Open ${entry.name}`,
+  }));
 }
 
 export async function enforceAiRateLimit(c: ApiContext): Promise<void> {
@@ -1239,6 +1489,15 @@ const chatRoute = createRoute({
                   totalTokens: z.number().optional(),
                 })
                 .optional(),
+              actions: z
+                .array(
+                  z.object({
+                    type: z.literal('navigate'),
+                    path: z.string(),
+                    label: z.string(),
+                  }),
+                )
+                .optional(),
             }),
           ),
         },
@@ -1260,8 +1519,12 @@ app.openapi(chatRoute, async (c) => {
   const settings = await runtimeSettings(c);
   const profile = resolveAiModelProfile(settings, 'adminChat');
   const model = await getLanguageModel(profile.provider, profile.model, settings, c.env);
+  const navigationEntries = await getAdminChatNavigationEntries(c);
+  const navigationContext = formatAdminChatNavigationContext(navigationEntries);
+  const navigationActions = createAdminChatNavigationActions(navigationEntries, payload.messages);
   const messages: ModelMessage[] = [
     { role: 'system', content: ADMIN_CHAT_SYSTEM_PROMPT },
+    ...(navigationContext ? [{ role: 'system' as const, content: navigationContext }] : []),
     ...normalizeMessages(payload.messages),
   ];
 
@@ -1286,6 +1549,7 @@ app.openapi(chatRoute, async (c) => {
       content: result.text.trim(),
     },
     usage: usageFromResult(result),
+    ...(navigationActions.length > 0 ? { actions: navigationActions } : {}),
   });
 });
 

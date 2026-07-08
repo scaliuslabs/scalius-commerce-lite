@@ -34219,6 +34219,11 @@ export type PostApiV1AdminAiChatResponses = {
                 outputTokens?: number;
                 totalTokens?: number;
             };
+            actions?: Array<{
+                type: 'navigate';
+                path: string;
+                label: string;
+            }>;
         };
     };
 };

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { createAdminAssistantChatApiRequest } from "./ai";
+import {
+  createAdminAssistantChatApiRequest,
+  normalizeAdminAssistantChatResult,
+} from "./ai";
 
 describe("admin assistant API adapter", () => {
   it("builds the /ai/chat message contract with bounded sanitized page context", () => {
@@ -68,5 +71,28 @@ describe("admin assistant API adapter", () => {
     expect(serialized).not.toContain("01775528888");
     expect(serialized).not.toContain("chk_secretToken123456");
     expect(serialized).not.toContain("old 1");
+  });
+
+  it("normalizes assistant navigation actions and drops unsafe API output", () => {
+    const result = normalizeAdminAssistantChatResult({
+      message: { role: "assistant", content: "Open the products page." },
+      usage: { totalTokens: 12 },
+      actions: [
+        { type: "navigate", path: "/admin/products", label: "Open Products" },
+        { type: "navigate", path: "https://evil.test/admin", label: "Evil" },
+        { type: "navigate", path: "/admin/orders/123", label: "Order detail" },
+        { type: "copy", path: "/admin/settings", label: "Copy" },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      status: "ok",
+      message: { role: "assistant", content: "Open the products page." },
+      actions: [
+        { type: "navigate", path: "/admin/products", label: "Open Products" },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain("evil.test");
+    expect(JSON.stringify(result)).not.toContain("/admin/orders/123");
   });
 });

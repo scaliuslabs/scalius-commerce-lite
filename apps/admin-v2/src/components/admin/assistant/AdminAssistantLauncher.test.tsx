@@ -6,10 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   sendAdminAssistantMessage: vi.fn(),
+  navigate: vi.fn(),
 }));
 
 vi.mock("../../../lib/api-functions/ai", () => ({
   sendAdminAssistantMessage: mocks.sendAdminAssistantMessage,
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mocks.navigate,
 }));
 
 import { AdminAssistantLauncher } from "./AdminAssistantLauncher";
@@ -29,6 +34,7 @@ describe("AdminAssistantLauncher", () => {
     document.body.innerHTML = "";
     delete window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL];
     mocks.sendAdminAssistantMessage.mockReset();
+    mocks.navigate.mockReset();
 
     host = document.createElement("div");
     document.body.append(host);
@@ -133,6 +139,52 @@ describe("AdminAssistantLauncher", () => {
 
     expect(document.body.textContent).toContain("Admin chat is not ready.");
     expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("renders navigation actions only after the assistant returns them and navigates on click", async () => {
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: { role: "assistant", content: "Use Products to manage catalog items." },
+      usage: null,
+      actions: [
+        { type: "navigate", path: "/admin/products", label: "Open Products" },
+      ],
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Open products");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    const action = queryButton("Open Products");
+    expect(action).toBeTruthy();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+
+    await click(action);
+    expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products" });
+  });
+
+  it("drops unsafe navigation actions before rendering buttons", async () => {
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: { role: "assistant", content: "I can point you to safe dashboard pages." },
+      usage: null,
+      actions: [
+        { type: "navigate", path: "https://evil.test/admin", label: "Open Evil" },
+        { type: "navigate", path: "/admin/orders/123", label: "Open Order Detail" },
+      ],
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Open that order");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    expect(queryButton("Open Evil")).toBeNull();
+    expect(queryButton("Open Order Detail")).toBeNull();
+    expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
   function renderLauncher() {
