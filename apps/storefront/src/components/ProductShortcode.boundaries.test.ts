@@ -14,4 +14,16 @@ describe("product shortcode purchase boundaries", () => {
     expect(source).toContain("This product is not available right now.");
     expect(source.match(/disabled=\{isUnavailable\}/g)?.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("uses merchant-defined option labels for cart context and visible selectors", () => {
+    const source = readFileSync(`${COMPONENT_DIR}/ProductShortcode.tsx`, "utf8");
+
+    expect(source).toContain("product.variantOption1Label");
+    expect(source).toContain("product.variantOption2Label");
+    expect(source).toContain("type CartItemOption");
+    expect(source).toContain("name: option1Label");
+    expect(source).toContain("name: option2Label");
+    expect(source).not.toContain("(size/weight)");
+    expect(source).not.toContain("(color/style)");
+  });
 });

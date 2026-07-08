@@ -82,7 +82,10 @@ describe("buildStorefrontAssistantPageContext", () => {
       quantity: 2,
       unitPrice: 12.35,
       lineTotal: 24.7,
-      options: { size: "Large", color: "Blue" },
+      options: [
+        { name: "Option 1", label: "Large" },
+        { name: "Option 2", label: "Blue" },
+      ],
     });
     expect(snapshot.cart.lines[0]?.name).toHaveLength(160);
 
@@ -94,6 +97,74 @@ describe("buildStorefrontAssistantPageContext", () => {
     expect(serialized).not.toContain("chk_private_receipt");
     expect(serialized).not.toContain("order_private_123");
     expect(serialized).not.toContain("private-tracker");
+  });
+
+  it("exposes merchant-defined cart option labels as sanitized pairs", () => {
+    const snapshot = buildStorefrontAssistantPageContext({
+      path: "/cart",
+      title: "Cart",
+      cart: {
+        items: {
+          "prod_weight-var_2kg": {
+            id: "prod_weight",
+            name: "Premium Rice",
+            price: 850,
+            quantity: 1,
+            variantId: "var_2kg",
+            size: "legacy-size-should-not-win",
+            color: "legacy-color-should-not-win",
+            options: [
+              { name: "Weight", label: "2KG" },
+              { name: "Style", label: "Gift Box" },
+            ],
+          },
+        },
+        totalItems: 1,
+        totalAmount: 850,
+        discount: null,
+      },
+    });
+
+    expect(snapshot.cart.lines[0]?.options).toEqual([
+      { name: "Weight", label: "2KG" },
+      { name: "Style", label: "Gift Box" },
+    ]);
+    expect(JSON.stringify(snapshot.cart.lines[0]?.options)).not.toContain(
+      "size",
+    );
+    expect(JSON.stringify(snapshot.cart.lines[0]?.options)).not.toContain(
+      "color",
+    );
+  });
+
+  it("normalizes legacy size/color cart options through the same safe array shape", () => {
+    const snapshot = buildStorefrontAssistantPageContext({
+      path: "/cart",
+      title: "Cart",
+      cart: {
+        items: {
+          "prod_1-legacy": {
+            id: "prod_1",
+            name: "Legacy Product",
+            price: 10,
+            quantity: 1,
+            size: "Bearer abc.def.ghi",
+            color: "01711111111",
+          },
+        },
+        totalItems: 1,
+        totalAmount: 10,
+        discount: null,
+      },
+    });
+
+    expect(snapshot.cart.lines[0]?.options).toEqual([
+      { name: "Option 1", label: "Bearer [redacted-token]" },
+      { name: "Option 2", label: "[redacted-phone]" },
+    ]);
+    const serialized = JSON.stringify(snapshot);
+    expect(serialized).not.toContain("abc.def.ghi");
+    expect(serialized).not.toContain("01711111111");
   });
 
   it("redacts contact and token-like display text without hiding normal long product names", () => {
@@ -125,6 +196,10 @@ describe("buildStorefrontAssistantPageContext", () => {
       "Premium SuperComfortableTravelBackpack",
     );
     expect(snapshot.cart.lines[0]?.name).toContain("xxxxxxxx");
+    expect(snapshot.cart.lines[0]?.options).toEqual([
+      { name: "Option 1", label: "Bearer [redacted-token]" },
+      { name: "Option 2", label: "[redacted-phone]" },
+    ]);
     expect(serialized).not.toContain("buyer@example.test");
     expect(serialized).not.toContain("+8801711111111");
     expect(serialized).not.toContain("01711111111");

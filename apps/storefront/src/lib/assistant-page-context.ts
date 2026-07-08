@@ -47,10 +47,12 @@ export type StorefrontAssistantCartLineSummary = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
-  options?: {
-    size?: string;
-    color?: string;
-  };
+  options?: StorefrontAssistantCartLineOption[];
+};
+
+export type StorefrontAssistantCartLineOption = {
+  name: string;
+  label: string;
 };
 
 export type StorefrontAssistantCartSummary = {
@@ -244,15 +246,7 @@ function cleanCartLine(value: unknown): StorefrontAssistantCartLineSummary | nul
   const lineTotal = clampNumber(unitPrice * quantity, MAX_ASSISTANT_CART_AMOUNT);
   const variantId = cleanText(value.variantId, MAX_ASSISTANT_ID_LENGTH);
   const slug = cleanText(value.slug, MAX_ASSISTANT_ID_LENGTH);
-  const size = cleanText(value.size, MAX_ASSISTANT_OPTION_LENGTH);
-  const color = cleanText(value.color, MAX_ASSISTANT_OPTION_LENGTH);
-  const options =
-    size || color
-      ? {
-          ...(size ? { size } : {}),
-          ...(color ? { color } : {}),
-        }
-      : undefined;
+  const options = cleanCartLineOptions(value);
 
   return {
     productId,
@@ -264,6 +258,41 @@ function cleanCartLine(value: unknown): StorefrontAssistantCartLineSummary | nul
     lineTotal,
     ...(options ? { options } : {}),
   };
+}
+
+function cleanCartLineOption(value: unknown): StorefrontAssistantCartLineOption | null {
+  if (!isRecord(value)) return null;
+
+  const name = cleanText(value.name, MAX_ASSISTANT_OPTION_LENGTH);
+  const label = cleanText(value.label, MAX_ASSISTANT_OPTION_LENGTH);
+  if (!name || !label) return null;
+
+  return { name, label };
+}
+
+function cleanCartLineOptions(
+  value: Record<string, unknown>,
+): StorefrontAssistantCartLineOption[] | undefined {
+  if (Array.isArray(value.options)) {
+    const options = value.options
+      .slice(0, 2)
+      .map(cleanCartLineOption)
+      .filter((option): option is StorefrontAssistantCartLineOption =>
+        Boolean(option),
+      );
+    if (options.length > 0) return options;
+  }
+
+  const legacyOptions = [
+    { name: "Option 1", label: value.size },
+    { name: "Option 2", label: value.color },
+  ]
+    .map(cleanCartLineOption)
+    .filter((option): option is StorefrontAssistantCartLineOption =>
+      Boolean(option),
+    );
+
+  return legacyOptions.length > 0 ? legacyOptions : undefined;
 }
 
 export function buildStorefrontAssistantCartSummary(

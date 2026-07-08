@@ -49,6 +49,8 @@ const basePrice = product.price;
 const discountedPrice = product.discountedPrice;
 
 const hasDiscount = discountedPrice < basePrice;
+const option1Label = product.variantOption1Label?.trim() || "Option 1";
+const option2Label = product.variantOption2Label?.trim() || "Option 2";
 
 const discountBadgeText = formatDiscountBadge(
   product.discountType,
@@ -197,17 +199,21 @@ const productVariantsJson = serializeJsonForInlineScript(
       set:html={productVariantsJson}
     />
 
-    <div id="product-actions" class="space-y-2 lg:space-y-3 pt-1 lg:pt-2">
+    <div
+      id="product-actions"
+      class="space-y-2 lg:space-y-3 pt-1 lg:pt-2"
+      data-option1-label={option1Label}
+      data-option2-label={option2Label}
+    >
       {
         sizeOptions.length > 0 && (
           <div class="size-selector">
             <h2 class="text-sm font-medium text-foreground mb-1">
-              <span class="text-destructive">*</span> Option 1
-              <span class="ml-1 text-xs font-normal text-muted-foreground">(size/weight)</span>
+              <span class="text-destructive">*</span> {option1Label}
             </h2>
             <div class="flex flex-wrap gap-1.5">
               {sizeOptions.map((size) => (
-                <label class="group relative" aria-label={`Option 1: ${size}`}>
+                <label class="group relative" aria-label={`${option1Label}: ${size}`}>
                   <input
                     type="radio"
                     name="size"
@@ -231,12 +237,11 @@ const productVariantsJson = serializeJsonForInlineScript(
         colorOptions.length > 0 && (
           <div class="color-selector">
             <h2 class="text-sm font-medium text-foreground mb-1">
-              <span class="text-destructive">*</span> Option 2
-              <span class="ml-1 text-xs font-normal text-muted-foreground">(color/style)</span>
+              <span class="text-destructive">*</span> {option2Label}
             </h2>
             <div class="flex flex-wrap gap-1.5">
               {colorOptions.map((color) => (
-                <label class="group relative" aria-label={`Option 2: ${color}`}>
+                <label class="group relative" aria-label={`${option2Label}: ${color}`}>
                   <input
                     type="radio"
                     name="color"

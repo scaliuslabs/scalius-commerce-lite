@@ -75,6 +75,18 @@ function simpleDefaultVariant() {
   };
 }
 
+function extractQuickBuyData(html: string) {
+  const match = html.match(/const quickBuyData = (.*?);\s+try/s);
+  expect(match).not.toBeNull();
+  return JSON.parse(JSON.parse(match?.[1] ?? "\"{}\"")) as {
+    cartItem?: {
+      size?: string;
+      color?: string;
+      options?: Array<{ name: string; label: string }>;
+    };
+  };
+}
+
 describe("/buy/[slug]", () => {
   beforeEach(() => {
     mocks.getProductBySlug.mockReset();
@@ -216,6 +228,63 @@ describe("/buy/[slug]", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("Location")).toBe("/products/cotton-panjabi?error=variant_not_found");
     expect(mocks.validateCartItems).not.toHaveBeenCalled();
+  });
+
+  it("stores merchant option labels in quick-buy cart data", async () => {
+    mocks.getProductBySlug.mockResolvedValueOnce({
+      product: {
+        id: "prod_1",
+        slug: "premium-rice",
+        name: "Premium Rice",
+        discountedPrice: 850,
+        price: 850,
+        discountType: null,
+        discountAmount: null,
+        discountPercentage: null,
+        freeDelivery: false,
+        hasVariants: true,
+        imageUrl: null,
+        variantOption1Label: "Weight",
+        variantOption2Label: "Style",
+      },
+      images: [],
+      variants: [{
+        id: "var_2kg_gift",
+        productId: "prod_1",
+        price: 850,
+        size: "2KG",
+        color: "Gift Box",
+        isDefault: false,
+        deletedAt: null,
+      }],
+      category: null,
+    });
+    mocks.validateCartItems.mockResolvedValueOnce(
+      validCartValidation({
+        cartKey: "quick_buy:prod_1:var_2kg_gift",
+        variantId: "var_2kg_gift",
+        quantity: 2,
+        unitPrice: 850,
+        productName: "Premium Rice",
+      }),
+    );
+
+    const response = await GET({
+      params: { slug: "premium-rice" },
+      url: new URL("https://storefront.example.test/buy/premium-rice?variant=var_2kg_gift&qty=2"),
+    } as never);
+    const html = await response.text();
+    const quickBuyData = extractQuickBuyData(html);
+
+    expect(response.status).toBe(200);
+    expect(quickBuyData.cartItem).toMatchObject({
+      size: "2KG",
+      color: "Gift Box",
+      options: [
+        { name: "Weight", label: "2KG" },
+        { name: "Style", label: "Gift Box" },
+      ],
+    });
   });
 
   it("does not create quick-buy cart data when validation reports out of stock", async () => {

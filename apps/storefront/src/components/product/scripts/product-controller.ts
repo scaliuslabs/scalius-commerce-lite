@@ -1,6 +1,6 @@
 // src/components/product/scripts/product-controller.ts
 
-import { addToCart } from "@/store/cart";
+import { addToCart, type CartItemOption } from "@/store/cart";
 import {
   calculateVariantPrice,
   formatPrice,
@@ -368,6 +368,29 @@ function updatePriceDisplay() {
     }
   }
 }
+
+function optionName(axis: "option1" | "option2"): string {
+  const fallback = axis === "option1" ? "Option 1" : "Option 2";
+  return cache.actionsContainer?.dataset[
+    axis === "option1" ? "option1Label" : "option2Label"
+  ]?.trim() || fallback;
+}
+
+function selectedOption(name: string, label?: string | null): CartItemOption | null {
+  const optionLabel = label?.trim();
+  if (!optionLabel) return null;
+  return { name, label: optionLabel };
+}
+
+function buildSelectedCartOptions(): CartItemOption[] {
+  if (!state.selection) return [];
+
+  return [
+    selectedOption(optionName("option1"), state.selection.selectedSize),
+    selectedOption(optionName("option2"), state.selection.selectedColor),
+  ].filter((option): option is CartItemOption => Boolean(option));
+}
+
 function initActionButtons() {
   const container = cache.actionsContainer;
   if (!container) return;
@@ -444,7 +467,11 @@ function handleAddToCart(redirect: boolean) {
       return;
     }
 
-    addToCart(cartData.data);
+    const options = buildSelectedCartOptions();
+    addToCart({
+      ...cartData.data,
+      ...(options.length > 0 ? { options } : {}),
+    });
 
     const pData = extractProductDataFromDOM(container);
     if (pData) {
