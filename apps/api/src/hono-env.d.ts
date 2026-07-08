@@ -47,6 +47,7 @@ declare global {
     BUCKET: R2Bucket;
     SHARED_AUTH_CACHE: KVNamespace;
     AI?: Ai;
+    AGENT?: Fetcher;
     WidgetDesignAgent: DurableObjectNamespace;
     EMAIL?: CloudflareSendEmailBinding;
 

@@ -1,9 +1,11 @@
 import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import { AlertCircle, Bot, Loader2, SendHorizontal, X } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { AlertCircle, ArrowRight, Bot, Loader2, SendHorizontal, X } from "lucide-react";
 
 import {
   sendAdminAssistantMessage,
   type AdminAssistantChatResult,
+  type AdminAssistantNavigateAction,
 } from "../../../lib/api-functions/ai";
 import { Button } from "../../ui/button";
 import {
@@ -29,6 +31,7 @@ interface AssistantMessage {
   id: string;
   role: MessageRole;
   content: string;
+  actions?: AdminAssistantNavigateAction[];
 }
 
 type AssistantStatus =
@@ -42,6 +45,7 @@ export function AdminAssistantPanel({
   open,
   onOpenChange,
 }: AdminAssistantPanelProps) {
+  const navigate = useNavigate();
   const pageState = useAdminAssistantPageState();
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
@@ -103,6 +107,7 @@ export function AdminAssistantPanel({
           id: createMessageId("assistant"),
           role: "assistant",
           content: result.message.content,
+          actions: safePanelNavigationActions(result.actions),
         },
       ]);
       setStatus({ kind: "idle", message: "Ready on the current admin page." });
@@ -121,6 +126,19 @@ export function AdminAssistantPanel({
     }
     event.preventDefault();
     event.currentTarget.form?.requestSubmit();
+  }
+
+  function handleNavigationAction(action: AdminAssistantNavigateAction) {
+    const path = safeAdminNavigationPath(action.path);
+    if (!path) return;
+
+    try {
+      void Promise.resolve(navigate({ to: path as string })).catch(() => {
+        if (typeof window !== "undefined") window.location.assign(path);
+      });
+    } catch {
+      if (typeof window !== "undefined") window.location.assign(path);
+    }
   }
 
   return (
@@ -179,6 +197,24 @@ export function AdminAssistantPanel({
                 )}
               >
                 {message.content}
+                {message.role === "assistant" && message.actions?.length ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {message.actions.map((action) => (
+                      <Button
+                        key={`${message.id}-${action.path}`}
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-8 max-w-full gap-1.5 px-2 text-xs"
+                        aria-label={action.label}
+                        onClick={() => handleNavigationAction(action)}
+                      >
+                        <span className="truncate">{action.label}</span>
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ))}
             {sending ? (
@@ -251,4 +287,34 @@ export function AdminAssistantPanel({
 
 function createMessageId(role: MessageRole): string {
   return `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function safeAdminNavigationPath(value: string): string | null {
+  const path = value.trim();
+  if (!/^\/admin(?:\/[a-z0-9-]+)*$/.test(path)) return null;
+  const segments = path.split("/").filter(Boolean);
+  const resourceRoots = new Set([
+    "attributes",
+    "categories",
+    "collections",
+    "customers",
+    "discounts",
+    "inventory",
+    "media",
+    "orders",
+    "pages",
+    "products",
+    "widgets",
+  ]);
+  if (segments.slice(1).some((segment) => /^\d+$/.test(segment))) return null;
+  if (segments.length > 2 && resourceRoots.has(segments[1] ?? "")) return null;
+  return path;
+}
+
+function safePanelNavigationActions(
+  actions: AdminAssistantNavigateAction[] | undefined,
+): AdminAssistantNavigateAction[] | undefined {
+  if (!actions?.length) return undefined;
+  const safeActions = actions.filter((action) => safeAdminNavigationPath(action.path));
+  return safeActions.length > 0 ? safeActions : undefined;
 }

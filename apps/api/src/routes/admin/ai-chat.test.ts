@@ -80,10 +80,13 @@ function runtimeSettings(
   };
 }
 
-function createTestApp() {
+function createTestApp(envOverrides: Partial<Env> = {}) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = { id: "db" };
-  const env = { CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as unknown as Env;
+  const env = {
+    CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+    ...envOverrides,
+  } as unknown as Env;
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -99,12 +102,17 @@ function createTestApp() {
   return { app, db, env };
 }
 
-async function postChat(app: OpenAPIHono<{ Bindings: Env }>, env: Env, body: unknown) {
+async function postChat(
+  app: OpenAPIHono<{ Bindings: Env }>,
+  env: Env,
+  body: unknown,
+  headers: Record<string, string> = {},
+) {
   return app.request(
     "/api/v1/admin/ai/chat",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
     },
     env,
@@ -203,5 +211,193 @@ describe("admin AI chat route", () => {
       usage: { inputTokens: 10, outputTokens: 12, totalTokens: 22 },
     });
     expect(JSON.stringify(body)).not.toContain("sk-test-secret");
+  });
+
+  it("reads only admin_navigation_context through the Agent binding and returns catalog-derived actions", async () => {
+    const agentCalls: Array<{
+      input: string;
+      method: string | undefined;
+      headers: Headers;
+      body: unknown;
+    }> = [];
+    const agentFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      const rpcBody = await new Response(init?.body).json();
+      agentCalls.push({
+        input: String(input),
+        method: init?.method,
+        headers,
+        body: rpcBody,
+      });
+      if (
+        typeof rpcBody === "object" &&
+        rpcBody !== null &&
+        "method" in rpcBody &&
+        rpcBody.method === "initialize"
+      ) {
+        return Response.json(
+          {
+            jsonrpc: "2.0",
+            id: "admin-chat-navigation-initialize",
+            result: {
+              protocolVersion: "2025-06-18",
+              serverInfo: { name: "scalius-admin-agent", version: "0.1.0" },
+            },
+          },
+          { headers: { "Mcp-Session-Id": "agent-session" } },
+        );
+      }
+
+      return Response.json({
+        jsonrpc: "2.0",
+        id: "admin-chat-navigation-context",
+        result: {
+          structuredContent: {
+            adminNavigationContext: {
+              source: { permissions: "/api/v1/admin/rbac/my-permissions" },
+              session: { userId: "admin_123", permissionCount: 10 },
+              sections: [
+                {
+                  label: "Catalog",
+                  pages: [
+                    {
+                      name: "Products",
+                      path: "/admin/products",
+                      requiredPermission: "products.view",
+                    },
+                    {
+                      name: "Product detail",
+                      path: "/admin/products/123",
+                    },
+                    {
+                      name: "Unsafe external",
+                      path: "https://evil.test/admin/products",
+                    },
+                  ],
+                },
+                {
+                  label: "Sales",
+                  pages: [{ name: "Orders", path: "/admin/orders" }],
+                },
+              ],
+            },
+          },
+          content: [{ type: "text", text: "raw mcp output should not leak" }],
+        },
+      });
+    });
+    const { app, env } = createTestApp({ AGENT: { fetch: agentFetch } as Fetcher });
+
+    const response = await postChat(
+      app,
+      env,
+      {
+        messages: [{ role: "user", content: "Please open products." }],
+      },
+      {
+        Authorization: "Bearer should-not-forward",
+        Cookie: "better-auth.session_token=session.signature",
+        "User-Agent": "Mozilla/5.0 TestAgent",
+        "X-Extra-Header": "drop-me",
+      },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(agentFetch).toHaveBeenCalledTimes(2);
+    for (const call of agentCalls) {
+      expect(call.input).toBe("http://agent.internal/mcp/admin");
+      expect(call.method).toBe("POST");
+      expect(call.headers.get("cookie")).toBe(
+        "better-auth.session_token=session.signature",
+      );
+      expect(call.headers.get("user-agent")).toBe("Mozilla/5.0 TestAgent");
+      expect(call.headers.has("authorization")).toBe(false);
+      expect(call.headers.has("x-extra-header")).toBe(false);
+    }
+    expect(agentCalls[1]?.headers.get("mcp-session-id")).toBe("agent-session");
+    expect(agentCalls[1]?.headers.get("mcp-protocol-version")).toBe(
+      "2025-06-18",
+    );
+    expect(
+      agentCalls.map(({ body }) =>
+        typeof body === "object" && body !== null && "method" in body
+          ? body.method
+          : null,
+      ),
+    ).toEqual(["initialize", "tools/call"]);
+    expect(agentCalls[1]?.body).toEqual({
+      jsonrpc: "2.0",
+      id: "admin-chat-navigation-context",
+      method: "tools/call",
+      params: {
+        name: "admin_navigation_context",
+        arguments: {},
+      },
+    });
+    expect(JSON.stringify(agentCalls.map(({ body }) => body))).toContain(
+      "admin_navigation_context",
+    );
+    expect(JSON.stringify(agentCalls.map(({ body }) => body))).not.toContain(
+      "tools/list",
+    );
+    expect(JSON.stringify(agentCalls.map(({ body }) => body))).not.toContain(
+      "admin_product_search",
+    );
+
+    const options = mocks.generateText.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+      tools?: unknown;
+    };
+    expect(options.tools).toBeUndefined();
+    const navContext = options.messages.find((message) =>
+      message.content.includes("Allowed dashboard destinations"),
+    )?.content;
+    expect(navContext).toContain("Catalog > Products: /admin/products");
+    expect(navContext).toContain("Sales > Orders: /admin/orders");
+    expect(navContext).not.toContain("requiredPermission");
+    expect(navContext).not.toContain("admin_123");
+    expect(navContext).not.toContain("raw mcp output");
+    expect(navContext).not.toContain("/admin/products/123");
+    expect((navContext ?? "").length).toBeLessThanOrEqual(1_800);
+
+    const body = (await response.json()) as {
+      success: true;
+      data: {
+        actions?: Array<{ type: string; path: string; label: string }>;
+      };
+    };
+    expect(body.data.actions).toEqual([
+      { type: "navigate", path: "/admin/products", label: "Open Products" },
+    ]);
+    expect(JSON.stringify(body)).not.toContain("raw mcp output");
+  });
+
+  it("fails soft without the Agent binding and still returns guidance-only chat", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Where do I manage products?" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.generateText).toHaveBeenCalledTimes(1);
+    const options = mocks.generateText.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(
+      options.messages.some((message) =>
+        message.content.includes("Allowed dashboard destinations"),
+      ),
+    ).toBe(false);
+
+    const body = (await response.json()) as {
+      success: true;
+      data: { message: { content: string }; actions?: unknown };
+    };
+    expect(body.data.message.content).toBe(
+      "Open Settings, review the saved configuration, and save when ready.",
+    );
+    expect(body.data.actions).toBeUndefined();
   });
 });

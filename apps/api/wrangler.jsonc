@@ -47,6 +47,12 @@
       "name": "EMAIL"
     }
   ],
+  "services": [
+    {
+      "binding": "AGENT",
+      "service": "scalius-agent"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {
