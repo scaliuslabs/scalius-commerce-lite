@@ -42,6 +42,7 @@
     "db:migrate:remote": "node scripts/turbo-run.mjs db:migrate:remote --filter=@scalius/api",
     "db:studio": "drizzle-kit studio --config packages/database/drizzle.config.ts",
     "check:env": "node scripts/check-worker-env.mjs",
+    "check:admin-perf": "node scripts/admin-perf-check.mjs",
     "check:dist-secrets": "node scripts/clean-dist-env-files.mjs --check",
     "generate:sdk": "node scripts/turbo-run.mjs generate --filter=@scalius/api-client",
     "lint": "node scripts/turbo-run.mjs lint --filter=!@scalius/tsconfig",
