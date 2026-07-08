@@ -40,11 +40,12 @@ Excluded from the first release: RBAC writes, admin-user invites/deletes, perman
 Storefront MCP is public and catalog-first.
 
 - Use typed tools over the existing UCP/feed/catalog projection, not Code Mode.
-- The first implemented slice is `@scalius/agent` with `GET /health` and stateless `/mcp` read tools: catalog tools `catalog_search`, `catalog_lookup`, `catalog_product`, and `catalog_profile`, plus `cart_validate` for bounded read-only cart snapshot validation.
+- The first implemented slice is `@scalius/agent` with `GET /health` and stateless `/mcp` read tools: catalog tools `catalog_search`, `catalog_lookup`, `catalog_product`, `catalog_profile`, and `catalog_categories`, plus `cart_validate` for bounded read-only cart snapshot validation.
 - That first slice has no D1, R2, KV, queue, Durable Object, provider-secret, admin, customer, order, checkout, payment, fulfillment, support, recovery, or cart-mutation bindings/tools.
+- `catalog_categories` is public, read-only, API service-binding-only, and compact: it may expose category identifiers, labels, slugs/paths, hierarchy/count hints, and discovery metadata needed for catalog browsing, but it must not send cookies/auth headers or expose private customer, order, payment, checkout, receipt, recovery, support, session, provider, or admin data.
 - The first page-context bridge is mounted in the storefront layout at `apps/storefront/src/components/assistant/**` and `apps/storefront/src/lib/assistant-page-context*`. It publishes a sanitized browser-only snapshot under `window.__SCALIUS_STOREFRONT_PAGE_CONTEXT__` and `scalius:storefront-page-context:change`, limited to public route/canonical/title/page kind plus a bounded allowlisted cart summary.
 - Storefront page-context code must not call `hydrateCartFromStorage()`, read raw cookies/storage payloads, customer sessions, order/receipt proofs, phone/email/address/payment details, discount codes, or mutate cart/checkout state. Cart context is summary-only, passively read from the current cart store snapshot, until a signed D1-backed assistant session exists. Cart line options must use merchant-defined `{ name, label }` pairs from the product option labels; legacy `size`/`color` fields are fallback compatibility only.
-- Expose catalog search, catalog lookup, product context, category reads, discovery policy reads, visible page context, same-origin navigation, and read-only cart snapshot validation.
+- Expose catalog search, catalog lookup, product context, compact category reads, discovery policy reads, visible page context, same-origin navigation, and read-only cart snapshot validation.
 - Cart validation may explain stale cart issues using existing `PRODUCT_UNAVAILABLE`, `VARIANT_UNAVAILABLE`, `VARIANT_MISMATCH`, `VARIANT_REQUIRED`, `QUANTITY_UNAVAILABLE`, and `PRICE_CHANGED` repair semantics.
 
 Do not expose checkout, cart mutation, order, payment, fulfillment, customer-profile, hosted-payment recovery, or support-request tools until there is a D1-backed session, idempotency, signing, and payment-recovery design verified in code and live smokes.
@@ -89,7 +90,7 @@ Before exposing any MCP endpoint publicly:
 - Admin MCP must stay hidden from the public agent host. Direct public `/mcp/admin` requests must return a bland no-store 404 before cookie/API preflight; the dashboard `/api/assistant/mcp` proxy is the only external entry point, and it must prove no access without a signed Better Auth admin cookie, completed onboarding, verified 2FA, and matching RBAC permission.
 - Admin page tools must use the same page-permission source as the dashboard route guard, or have a drift test that fails when maps diverge.
 - Admin form tools must operate only on registered visible forms and must refuse hidden credential fields unless a dedicated, human-confirmed credential-flow design exists.
-- Storefront UCP tests must prove only catalog capabilities are advertised. Storefront MCP tools may add only the explicitly allowlisted read-only cart-validation surface; no cart mutation or transaction capability is allowed.
+- Storefront UCP tests must prove only catalog read capabilities such as search, lookup, and product are advertised. Storefront MCP tools may add only explicitly allowlisted public read-only catalog tools, including `catalog_categories`, and the read-only cart-validation surface; do not advertise `catalog_categories` as a UCP capability and do not add cart mutation or transaction capability.
 - Storefront page tools must refuse off-origin navigation and must not read private customer/order/session data.
 - MCP errors and logs must use masked metadata only. No OTPs, credentials, receipt proofs, provider payloads, raw phone/email, or buyer PII.
 
@@ -105,7 +106,7 @@ Minimum local gates for the first tracked agent Worker:
 - `pnpm check:env`
 - MCP Inspector or equivalent JSON-RPC smoke for both MCP route groups, including public agent-host `/mcp/admin` rejection and dashboard-proxied Admin MCP initialize/tools/list/call proof
 - Admin 401/403/RBAC/2FA/onboarding tests
-- Storefront catalog plus read-only cart-validation tool tests
+- Storefront catalog, compact category, and read-only cart-validation tool tests
 - Browser smoke: admin assistant can read page state and navigate without console errors
 - Browser smoke: storefront assistant can read public product/cart-validation context without private data exposure
 

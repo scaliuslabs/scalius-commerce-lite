@@ -109,6 +109,7 @@ const UNSAFE_TERMS = [
   "payment",
   "fulfillment",
   "customer",
+  "private",
   "recovery",
   "provider-secret",
   "admin",
@@ -180,8 +181,11 @@ function createEnv(apiFetch: FetchLike = mockJsonFetch(adminPermissionsBody())):
   };
 }
 
-async function boot(fetchImpl: FetchLike = vi.fn().mockResolvedValue(json({ ucp: { status: "success" } }))) {
-  const server = createStorefrontCatalogMcpServer(createEnv(), { fetchImpl });
+async function boot(
+  fetchImpl: FetchLike = vi.fn().mockResolvedValue(json({ ucp: { status: "success" } })),
+  env: Env = createEnv(),
+) {
+  const server = createStorefrontCatalogMcpServer(env, { fetchImpl });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
   await Promise.all([
@@ -373,6 +377,14 @@ function adminOrderSearchContext(result: Record<string, unknown>): Record<string
   return structuredContent.adminOrderSearch;
 }
 
+function catalogCategoriesContext(result: Record<string, unknown>): Record<string, unknown> {
+  const structuredContent = result.structuredContent;
+  if (!isRecord(structuredContent) || !isRecord(structuredContent.catalogCategories)) {
+    throw new Error("Expected catalogCategories structured content");
+  }
+  return structuredContent.catalogCategories;
+}
+
 function adminNavigationPaths(context: Record<string, unknown>): string[] {
   const sections = Array.isArray(context.sections) ? context.sections : [];
   return sections.flatMap((section) => {
@@ -409,6 +421,7 @@ describe("storefront catalog MCP server", () => {
     const names = result.tools.map((tool) => tool.name).sort();
     expect(names).toEqual([
       "cart_validate",
+      "catalog_categories",
       "catalog_lookup",
       "catalog_product",
       "catalog_profile",
@@ -471,6 +484,42 @@ describe("storefront catalog MCP server", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it("rejects unbounded or private catalog category inputs before API fetches", async () => {
+    const storefrontFetch = vi.fn<FetchLike>().mockResolvedValue(json({ ucp: { status: "success" } }));
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: { categories: [] },
+    });
+    const { client } = await boot(storefrontFetch, createEnv(apiFetch));
+
+    await expectValidationToolError(client.callTool({
+      name: "catalog_categories",
+      arguments: { limit: 0 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "catalog_categories",
+      arguments: { limit: 51 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "catalog_categories",
+      arguments: { slug: "x".repeat(101) },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "catalog_categories",
+      arguments: {
+        limit: 5,
+        includePrivate: true,
+        includeProducts: true,
+        Authorization: "Bearer must-not-forward",
+        customerEmail: "customer@example.test",
+        paymentToken: "secret",
+      },
+    }));
+
+    expect(storefrontFetch).not.toHaveBeenCalled();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
   it("calls storefront UCP search with bounded body and safe profile header", async () => {
     const fetchImpl = vi.fn<FetchLike>().mockResolvedValue(json({
       ucp: { status: "success", version: UCP_VERSION },
@@ -505,6 +554,187 @@ describe("storefront catalog MCP server", () => {
       pagination: { limit: 3 },
       filters: { categories: ["shoes"] },
     });
+  });
+
+  it("calls the public categories API binding with safe GET headers and compact output", async () => {
+    const storefrontFetch = vi.fn<FetchLike>().mockResolvedValue(json({ ucp: { status: "success" } }));
+    const apiFetch = vi.fn<FetchLike>().mockResolvedValue(json({
+      success: true,
+      data: {
+        categories: [
+          {
+            id: "cat_drinks",
+            name: "Drinks",
+            slug: "drinks",
+            description: "<p>Cold &amp; fizzy</p><script>checkout payment customer@example.test</script>",
+            canonicalPath: "/categories/beverages",
+            noIndex: true,
+            excludeFromSitemap: false,
+            updatedAt: "2026-07-07T10:30:00.000Z",
+            imageUrl: "https://cdn.example.test/private-category.jpg",
+            metaTitle: "must-not-leak",
+            metaDescription: "must-not-leak",
+            createdAt: "must-not-leak",
+            customerEmail: "customer@example.test",
+            orderCount: 12,
+            paymentStatus: "paid",
+            privateNote: "must-not-leak",
+          },
+          {
+            id: "cat_over_limit",
+            name: "Over Limit",
+            slug: "over-limit",
+          },
+        ],
+        ignored: "must-not-leak",
+      },
+      rawMessage: "must-not-leak",
+    }));
+    const { client } = await boot(storefrontFetch, createEnv(apiFetch));
+
+    const result = await client.callTool({
+      name: "catalog_categories",
+      arguments: { limit: 1 },
+    });
+
+    expect(storefrontFetch).not.toHaveBeenCalled();
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [input, init] = fetchCall(apiFetch);
+    expect(requestUrl(input)).toBe("http://api.internal/api/v1/categories");
+    expect(init?.method).toBe("GET");
+    expect(init?.body).toBeUndefined();
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Cookie")).toBeNull();
+    expect(headers.get("Authorization")).toBeNull();
+    expect([...headers.keys()].sort()).toEqual(["accept"]);
+
+    expect(result.isError).toBeUndefined();
+    const context = catalogCategoriesContext(result as Record<string, unknown>);
+    expect(context).toEqual({
+      categories: [{
+        id: "cat_drinks",
+        name: "Drinks",
+        slug: "drinks",
+        path: "/categories/beverages",
+        url: "https://storefront.example.test/categories/beverages",
+        description: "Cold & fizzy",
+        updatedAt: "2026-07-07T10:30:00.000Z",
+        discovery: {
+          noIndex: true,
+          excludeFromSitemap: false,
+        },
+      }],
+    });
+    const category = (context.categories as Array<Record<string, unknown>>)[0];
+    expect(Object.keys(category ?? {}).sort()).toEqual([
+      "description",
+      "discovery",
+      "id",
+      "name",
+      "path",
+      "slug",
+      "updatedAt",
+      "url",
+    ]);
+    const serialized = JSON.stringify(result).toLowerCase();
+    for (const unsafeTerm of UNSAFE_TERMS) {
+      expect(serialized).not.toContain(unsafeTerm);
+    }
+    expect(serialized).not.toContain("imageurl");
+    expect(serialized).not.toContain("cdn.example.test");
+    expect(serialized).not.toContain("meta");
+    expect(serialized).not.toContain("must-not-leak");
+  });
+
+  it("reads a single category slug through the public category API route", async () => {
+    const apiFetch = vi.fn<FetchLike>().mockResolvedValue(json({
+      success: true,
+      data: {
+        category: {
+          id: "cat_summer",
+          name: "Summer Sale",
+          slug: "summer-sale",
+          description: "Seasonal picks",
+          canonicalPath: "https://evil.example.test/categories/summer-sale",
+          noIndex: false,
+          excludeFromSitemap: true,
+          updatedAt: "2026-07-08T08:00:00.000Z",
+        },
+      },
+    }));
+    const { client } = await boot(undefined, createEnv(apiFetch));
+
+    const result = await client.callTool({
+      name: "catalog_categories",
+      arguments: { slug: "summer-sale" },
+    });
+
+    const [input, init] = fetchCall(apiFetch);
+    expect(requestUrl(input)).toBe("http://api.internal/api/v1/categories/summer-sale");
+    expect(init?.method).toBe("GET");
+    const headers = new Headers(init?.headers);
+    expect([...headers.keys()].sort()).toEqual(["accept"]);
+
+    const context = catalogCategoriesContext(result as Record<string, unknown>);
+    expect(context).toEqual({
+      categories: [{
+        id: "cat_summer",
+        name: "Summer Sale",
+        slug: "summer-sale",
+        path: "/categories/summer-sale",
+        url: "https://storefront.example.test/categories/summer-sale",
+        description: "Seasonal picks",
+        updatedAt: "2026-07-08T08:00:00.000Z",
+        discovery: {
+          noIndex: false,
+          excludeFromSitemap: true,
+        },
+      }],
+    });
+  });
+
+  it("keeps catalog_categories upstream failures sanitized without leaking bodies", async () => {
+    const leak = "raw upstream checkout order payment customer@example.test private receipt token";
+    const cases: Array<() => Response> = [
+      () => json({ success: false, error: { code: "server_error", message: leak } }, 500),
+      () => json({ success: false, error: { code: "not_found", message: leak } }, 404),
+      () => new Response(`not json ${leak}`, {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      }),
+      () => json({ success: true, data: { categories: "not-an-array", message: leak } }),
+    ];
+
+    for (const makeResponse of cases) {
+      const apiFetch = vi.fn<FetchLike>().mockImplementation(() => Promise.resolve(makeResponse()));
+      const { client } = await boot(undefined, createEnv(apiFetch));
+
+      const result = await client.callTool({
+        name: "catalog_categories",
+        arguments: { limit: 5 },
+      });
+
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toEqual({
+        catalogCategories: {
+          categories: [],
+        },
+        error: {
+          code: "temporarily_unavailable",
+          message: "Storefront categories are temporarily unavailable.",
+        },
+      });
+      const serialized = JSON.stringify(result).toLowerCase();
+      expect(serialized).not.toContain(leak);
+      expect(serialized).not.toContain("customer@example.test");
+      expect(serialized).not.toContain("receipt");
+      for (const unsafeTerm of UNSAFE_TERMS) {
+        expect(serialized).not.toContain(unsafeTerm);
+      }
+    }
   });
 
   it("preserves UCP application errors as MCP tool errors", async () => {

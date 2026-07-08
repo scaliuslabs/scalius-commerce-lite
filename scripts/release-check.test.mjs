@@ -154,6 +154,7 @@ function agentMcpTool(name, extra = {}) {
 function agentMcpTools(overrides = {}) {
   return [
     agentMcpTool("cart_validate", overrides.cart_validate),
+    agentMcpTool("catalog_categories", overrides.catalog_categories),
     agentMcpTool("catalog_search", overrides.catalog_search),
     agentMcpTool("catalog_lookup", overrides.catalog_lookup),
     agentMcpTool("catalog_product", overrides.catalog_product),
@@ -164,6 +165,7 @@ function agentMcpTools(overrides = {}) {
 function mcpSseResponse(message, headers = {}) {
   return textResponse(`event: message\ndata: ${JSON.stringify(message)}\n\n`, 200, {
     "Content-Type": "text/event-stream",
+    "Cache-Control": "no-store",
     ...headers,
   });
 }
@@ -172,6 +174,26 @@ function agentCatalogProfileMcpResult(profile = ucpProfile()) {
   return {
     content: [{ type: "text", text: JSON.stringify(profile) }],
     structuredContent: profile,
+  };
+}
+
+function agentCatalogCategoriesMcpResult() {
+  const result = {
+    catalogCategories: {
+      categories: [{
+        id: "cat_demo",
+        slug: "demo",
+        name: "Demo",
+        path: "/categories/demo",
+      }],
+      limit: 1,
+      hasMore: true,
+    },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
   };
 }
 
@@ -205,7 +227,11 @@ function agentCartValidationMcpResult() {
 function agentMcpSmokeFetch({
   tools = agentMcpTools(),
   toolResult = agentCatalogProfileMcpResult(),
+  catalogCategoriesToolResult = agentCatalogCategoriesMcpResult(),
   cartValidationToolResult = agentCartValidationMcpResult(),
+  toolCacheControl = "no-store",
+  catalogCategoriesToolCacheControl = toolCacheControl,
+  cartValidationToolCacheControl = toolCacheControl,
   onToolCall,
 } = {}) {
   return vi.fn(async (url, init = {}) => {
@@ -245,14 +271,20 @@ function agentMcpSmokeFetch({
 
       if (body.method === "tools/call") {
         onToolCall?.(body);
-        const result = body.params?.name === "cart_validate"
-          ? cartValidationToolResult
-          : toolResult;
+        let result = toolResult;
+        let cacheControl = toolCacheControl;
+        if (body.params?.name === "catalog_categories") {
+          result = catalogCategoriesToolResult;
+          cacheControl = catalogCategoriesToolCacheControl;
+        } else if (body.params?.name === "cart_validate") {
+          result = cartValidationToolResult;
+          cacheControl = cartValidationToolCacheControl;
+        }
         return mcpSseResponse({
           jsonrpc: "2.0",
           id: body.id,
           result: typeof result === "function" ? result(body) : result,
-        });
+        }, { "Cache-Control": cacheControl });
       }
     }
 
@@ -1042,12 +1074,13 @@ describe("release-check local evaluators", () => {
       errors: [],
       toolNames: [
         "cart_validate",
+        "catalog_categories",
         "catalog_lookup",
         "catalog_product",
         "catalog_profile",
         "catalog_search",
       ],
-      readOnlyToolCount: 5,
+      readOnlyToolCount: 6,
     });
   });
 
@@ -1386,6 +1419,14 @@ describe("release-check local evaluators", () => {
             arguments: {},
           });
         }
+        if (body.params?.name === "catalog_categories") {
+          expect(body.params).toEqual({
+            name: "catalog_categories",
+            arguments: {
+              limit: 1,
+            },
+          });
+        }
         if (body.params?.name === "cart_validate") {
           expect(body.params).toEqual({
             name: "cart_validate",
@@ -1412,11 +1453,13 @@ describe("release-check local evaluators", () => {
 
     expect(mcpRequests).toEqual([
       "tools/call:catalog_profile",
+      "tools/call:catalog_categories",
       "tools/call:cart_validate",
     ]);
     expect(result.mcp.catalogTool).toMatchObject({
       name: "catalog_profile",
       statusCode: 200,
+      cacheControl: "no-store",
       contentCount: 1,
       profile: {
         version: "2026-07",
@@ -1427,9 +1470,16 @@ describe("release-check local evaluators", () => {
         ],
       },
     });
+    expect(result.mcp.catalogCategoriesTool).toMatchObject({
+      name: "catalog_categories",
+      statusCode: 200,
+      cacheControl: "no-store",
+      contentCount: 1,
+    });
     expect(result.mcp.cartValidationTool).toMatchObject({
       name: "cart_validate",
       statusCode: 200,
+      cacheControl: "no-store",
       contentCount: 1,
       issueCount: 1,
       firstIssueCode: "PRODUCT_UNAVAILABLE",
@@ -1456,6 +1506,56 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow(/catalog_profile failed: .*checkout\/cart\/order\/payment/);
+  });
+
+  it("fails the category MCP tool smoke when the call is cacheable, an error, or content-empty", async () => {
+    await expect(smokeAgentWorker({
+      agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
+      catalogToolSmoke: true,
+      fetchImpl: agentMcpSmokeFetch({
+        catalogCategoriesToolCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("catalog_categories Cache-Control must include no-store");
+
+    await expect(smokeAgentWorker({
+      agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
+      catalogToolSmoke: true,
+      fetchImpl: agentMcpSmokeFetch({
+        catalogCategoriesToolResult: {
+          isError: true,
+          content: [{ type: "text", text: "temporary failure" }],
+          structuredContent: {
+            catalogCategories: {
+              categories: [],
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("catalog_categories returned an MCP tool error");
+
+    await expect(smokeAgentWorker({
+      agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
+      catalogToolSmoke: true,
+      fetchImpl: agentMcpSmokeFetch({
+        catalogCategoriesToolResult: {
+          content: [],
+          structuredContent: {
+            catalogCategories: {
+              categories: [],
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("catalog_categories must return at least one content block");
   });
 
   it("accepts an unauthenticated admin MCP 401/403 with no-store-ish cache headers", async () => {
@@ -1984,6 +2084,14 @@ describe("runReleaseCheck", () => {
                 arguments: {},
               });
             }
+            if (body.params?.name === "catalog_categories") {
+              expect(body.params).toEqual({
+                name: "catalog_categories",
+                arguments: {
+                  limit: 1,
+                },
+              });
+            }
             if (body.params?.name === "cart_validate") {
               expect(body.params).toEqual({
                 name: "cart_validate",
@@ -2001,7 +2109,9 @@ describe("runReleaseCheck", () => {
               id: body.id,
               result: body.params?.name === "cart_validate"
                 ? agentCartValidationMcpResult()
-                : agentCatalogProfileMcpResult(),
+                : body.params?.name === "catalog_categories"
+                  ? agentCatalogCategoriesMcpResult()
+                  : agentCatalogProfileMcpResult(),
             });
           }
         }
@@ -2190,6 +2300,7 @@ describe("runReleaseCheck", () => {
       "initialize",
       "tools/list",
       "tools/call:catalog_profile",
+      "tools/call:catalog_categories",
       "tools/call:cart_validate",
     ]);
     expect(result.checks.agentMcp).toMatchObject({
@@ -2209,16 +2320,18 @@ describe("runReleaseCheck", () => {
           statusCode: 200,
           toolNames: [
             "cart_validate",
+            "catalog_categories",
             "catalog_lookup",
             "catalog_product",
             "catalog_profile",
             "catalog_search",
           ],
-          readOnlyToolCount: 5,
+          readOnlyToolCount: 6,
         },
         catalogTool: {
           name: "catalog_profile",
           statusCode: 200,
+          cacheControl: "no-store",
           contentCount: 1,
           profile: {
             version: "2026-07",
@@ -2229,9 +2342,16 @@ describe("runReleaseCheck", () => {
             ],
           },
         },
+        catalogCategoriesTool: {
+          name: "catalog_categories",
+          statusCode: 200,
+          cacheControl: "no-store",
+          contentCount: 1,
+        },
         cartValidationTool: {
           name: "cart_validate",
           statusCode: 200,
+          cacheControl: "no-store",
           contentCount: 1,
           issueCount: 1,
           firstIssueCode: "PRODUCT_UNAVAILABLE",
