@@ -19,6 +19,10 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { AdminAssistantLauncher } from "./AdminAssistantLauncher";
 import {
+  registerAdminAssistantPageActionHandler,
+  resetAdminAssistantPageActionsForTest,
+} from "./page-actions";
+import {
   ADMIN_ASSISTANT_PAGE_STATE_GLOBAL,
   type AdminAssistantPageStateSnapshot,
 } from "./page-state";
@@ -33,6 +37,7 @@ describe("AdminAssistantLauncher", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     delete window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL];
+    resetAdminAssistantPageActionsForTest();
     mocks.sendAdminAssistantMessage.mockReset();
     mocks.navigate.mockReset();
 
@@ -46,6 +51,7 @@ describe("AdminAssistantLauncher", () => {
       root.unmount();
     });
     delete window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL];
+    resetAdminAssistantPageActionsForTest();
     vi.restoreAllMocks();
   });
 
@@ -174,6 +180,50 @@ describe("AdminAssistantLauncher", () => {
 
     await click(action);
     expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products" });
+  });
+
+  it("runs click-confirmed registered page actions through the browser executor", async () => {
+    const handler = vi.fn(() => true);
+    registerAdminAssistantPageActionHandler(
+      "product-edit-form:apply_field_draft",
+      handler,
+    );
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: { role: "assistant", content: "Here is the replacement description." },
+      usage: null,
+      actions: [
+        {
+          type: "apply_field_draft",
+          id: "product-edit-form:apply_field_draft",
+          targetId: "product-edit-form",
+          label: "Apply to description",
+          fieldName: "description",
+          value: "<p>Here is the replacement description.</p>",
+        },
+      ],
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Improve this product description");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    const action = queryButton("Apply to description");
+    expect(action).toBeTruthy();
+    expect(handler).not.toHaveBeenCalled();
+
+    await click(action);
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "apply_field_draft",
+        id: "product-edit-form:apply_field_draft",
+        targetId: "product-edit-form",
+        fieldName: "description",
+        value: "<p>Here is the replacement description.</p>",
+      }),
+    );
   });
 
   it("renders assistant markdown as chat typography instead of raw syntax", async () => {

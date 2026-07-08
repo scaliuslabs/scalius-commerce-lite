@@ -53,6 +53,8 @@ const ADMIN_CHAT_MAX_NAVIGATION_CONTEXT_CHARS = 1_800;
 const ADMIN_CHAT_MAX_NAVIGATION_ACTIONS = 1;
 const ADMIN_CHAT_MAX_PRODUCT_COPY_CONTEXT_CHARS = 18_000;
 const ADMIN_CHAT_MAX_PRODUCT_DESCRIPTION_CHARS = 14_000;
+const ADMIN_CHAT_MAX_PAGE_ACTION_CONTEXT_CHARS = 1_200;
+const ADMIN_CHAT_MAX_PAGE_ACTION_VALUE_CHARS = 12_000;
 const ADMIN_AGENT_MCP_URL = 'http://agent.internal/mcp/admin';
 const ADMIN_NAVIGATION_CONTEXT_TOOL = 'admin_navigation_context';
 const ADMIN_PRODUCT_SEARCH_TOOL = 'admin_product_search';
@@ -68,11 +70,12 @@ const ADMIN_CHAT_TOKEN_PREFIX_PATTERN = /\b(?:chk|cst|otp|tok|token|session|secr
 const ADMIN_CHAT_LONG_TOKEN_PATTERN = /\b[A-Za-z0-9_-]{32,}\b/g;
 const ADMIN_CHAT_SYSTEM_PROMPT = [
   'You are the Scalius Commerce admin assistant for merchants and operators.',
-  'Answer from the conversation and general platform knowledge only. This endpoint cannot read live store data, change settings, mutate products, modify orders, adjust inventory, trigger payments, deploy code, inspect logs, or clear caches.',
-  'When a safe dashboard destination list is provided, you may mention those real dashboard pages. The API may attach a separate click-confirmed navigation button for a matched destination; do not claim navigation is impossible when that safe action is available.',
-  'When read-only product or page context is provided, use it for drafting and explanation only. Never claim that a product, setting, order, payment, inventory row, or credential has been changed unless a verified workflow explicitly reports success.',
-  'When the merchant asks for an action, give safe step-by-step guidance and say that they must perform it in the dashboard or ask an operator to run a verified workflow.',
-  'Do not ask for or repeat secrets, OTPs, API keys, credential material, payment proofs, customer contact details, or session tokens. If the user includes sensitive data, acknowledge only that it should be removed or rotated.',
+  'Use only the conversation, verified read-only context, and current visible dashboard context. This endpoint cannot directly change settings, mutate products, modify orders, adjust inventory, trigger payments, deploy code, inspect logs, or clear caches.',
+  'If a safe destination list exists, mention only those pages; the API may attach a separate click-confirmed navigation button. Do not claim navigation is impossible when that button is available.',
+  'If the visible page advertises safe page actions, the API may attach click-confirmed buttons for focus, draft, selection, or form-save actions. Never claim an action happened until the visible UI reports success.',
+  'Use read-only product/page context for drafting only. Never claim a product, setting, order, payment, inventory row, or credential changed unless a verified workflow reports success.',
+  'For unsupported actions, give safe dashboard steps or tell the merchant to ask an operator to run a verified workflow.',
+  'Do not ask for or repeat secrets, OTPs, API keys, credential material, payment proofs, customer contact details, or session tokens.',
   'Keep answers concise, practical, and explicit about uncertainty.',
 ].join('\n');
 
@@ -136,8 +139,45 @@ const chatMessageSchema = z.object({
   content: z.string().trim().min(1).max(MAX_TEXT_CHARS),
 });
 
+const adminChatPageActionTypeSchema = z.enum([
+  'focus_surface',
+  'apply_field_draft',
+  'save_registered_form',
+  'select_visible_rows',
+  'clear_selection',
+]);
+
+const adminChatSurfaceActionSchema = z
+  .object({
+    id: z.string().max(80),
+    type: adminChatPageActionTypeSchema,
+    label: z.string().max(160).optional(),
+    safeFields: z.array(z.string().max(80)).max(12).optional(),
+  })
+  .passthrough();
+
+const adminChatSurfaceSchema = z
+  .object({
+    id: z.string().max(80),
+    kind: z.enum(['dialog', 'form', 'panel', 'surface', 'table']).optional(),
+    label: z.string().max(160).optional(),
+    dirty: z.boolean().optional(),
+    submitting: z.boolean().optional(),
+    validationErrorCount: z.number().int().min(0).max(10_000).optional(),
+    assistantActions: z.array(adminChatSurfaceActionSchema).max(10).optional(),
+  })
+  .passthrough();
+
+const adminChatPageContextSchema = z
+  .object({
+    routePath: z.string().max(240).optional(),
+    surfaces: z.array(adminChatSurfaceSchema).max(20).optional(),
+  })
+  .passthrough();
+
 const chatSchema = z.object({
   messages: z.array(chatMessageSchema).min(1).max(ADMIN_CHAT_MAX_MESSAGES),
+  pageContext: adminChatPageContextSchema.nullable().optional(),
 });
 
 type GenerateTextOptions = Parameters<typeof import('ai')['generateText']>[0];
@@ -159,6 +199,17 @@ type AdminChatNavigateAction = {
   path: string;
   label: string;
 };
+type AdminChatPageActionType = z.infer<typeof adminChatPageActionTypeSchema>;
+type AdminChatPageAction = {
+  type: AdminChatPageActionType;
+  id: string;
+  targetId: string;
+  label: string;
+  fieldName?: string;
+  value?: string | number | boolean | null;
+  rowIds?: string[];
+};
+type AdminChatAction = AdminChatNavigateAction | AdminChatPageAction;
 type AdminChatGenerationResult = {
   text: string;
   usage: GenerationUsage;
@@ -724,6 +775,137 @@ function formatAdminChatNavigationActionContext(actions: AdminChatNavigateAction
       'Tell the merchant they can use the visible action button. Do not say you cannot navigate, do not invent a different path, and do not imply the page was opened automatically.',
     ].join('\n'),
     500,
+  );
+}
+
+function formatAdminChatPageActionContext(
+  pageContext: z.infer<typeof chatSchema>['pageContext'],
+): string | null {
+  const surfaces = pageContext?.surfaces ?? [];
+  const lines: string[] = [];
+
+  for (const surface of surfaces) {
+    const actions = surface.assistantActions ?? [];
+    if (actions.length === 0) continue;
+
+    const actionFacts = actions.map((action) => {
+      const fields = action.safeFields?.length
+        ? ` fields=${action.safeFields.join('/')}`
+        : '';
+      return `${action.type}${fields}`;
+    });
+    lines.push(`- ${surface.id}: ${actionFacts.join(', ')}`);
+  }
+
+  if (lines.length === 0) return null;
+  return compactAdminChatText(
+    [
+      'Current visible page action buttons may be attached only for these browser-advertised actions:',
+      ...lines,
+      'If drafting a product name or description, write the exact replacement content so the dashboard can show a click-confirmed Apply button. Do not say the form was saved unless the user clicks a visible save action and the UI reports success.',
+    ].join('\n'),
+    ADMIN_CHAT_MAX_PAGE_ACTION_CONTEXT_CHARS,
+  );
+}
+
+function readRegisteredPageAction(
+  pageContext: z.infer<typeof chatSchema>['pageContext'],
+  options: {
+    type: AdminChatPageActionType;
+    fieldName?: string;
+  },
+): { action: z.infer<typeof adminChatSurfaceActionSchema>; targetId: string; surface: z.infer<typeof adminChatSurfaceSchema> } | null {
+  const surfaces = pageContext?.surfaces ?? [];
+
+  for (const surface of surfaces) {
+    const actions = surface.assistantActions ?? [];
+    for (const action of actions) {
+      if (action.type !== options.type) continue;
+      if (
+        options.fieldName &&
+        action.safeFields?.length &&
+        !action.safeFields.includes(options.fieldName)
+      ) {
+        continue;
+      }
+
+      return { action, targetId: surface.id, surface };
+    }
+  }
+
+  return null;
+}
+
+function createAdminChatPageActions(
+  pageContext: z.infer<typeof chatSchema>['pageContext'],
+  messages: Array<z.infer<typeof chatMessageSchema>>,
+  assistantText: string,
+): AdminChatPageAction[] {
+  const latestText = latestUserChatText(messages);
+  const actions: AdminChatPageAction[] = [];
+
+  const draftField = inferVisibleProductDraftField(latestText);
+  if (draftField) {
+    const registered = readRegisteredPageAction(pageContext, {
+      type: 'apply_field_draft',
+      fieldName: draftField,
+    });
+    const value = compactAdminChatText(
+      assistantText,
+      draftField === 'description'
+        ? ADMIN_CHAT_MAX_PAGE_ACTION_VALUE_CHARS
+        : 160,
+    );
+    if (registered && value) {
+      actions.push({
+        type: 'apply_field_draft',
+        id: registered.action.id,
+        targetId: registered.targetId,
+        label:
+          draftField === 'description'
+            ? 'Apply to description'
+            : 'Apply to product name',
+        fieldName: draftField,
+        value,
+      });
+    }
+  }
+
+  if (hasVisibleSaveIntent(latestText)) {
+    const registered = readRegisteredPageAction(pageContext, {
+      type: 'save_registered_form',
+    });
+    if (
+      registered &&
+      registered.surface.dirty === true &&
+      registered.surface.submitting !== true &&
+      (registered.surface.validationErrorCount ?? 0) === 0
+    ) {
+      actions.push({
+        type: 'save_registered_form',
+        id: registered.action.id,
+        targetId: registered.targetId,
+        label: 'Save visible form',
+      });
+    }
+  }
+
+  return actions.slice(0, 2);
+}
+
+function inferVisibleProductDraftField(text: string): 'name' | 'description' | null {
+  if (!hasProductCopyIntent(text)) return null;
+  if (/\b(?:description|copy|content|seo|listing)\b/i.test(text)) {
+    return 'description';
+  }
+  if (/\b(?:name|title|headline)\b/i.test(text)) return 'name';
+  return 'description';
+}
+
+function hasVisibleSaveIntent(text: string): boolean {
+  return (
+    /\b(?:save|submit|update)\b/i.test(text) &&
+    /\b(?:form|product|changes|draft)\b/i.test(text)
   );
 }
 
@@ -1911,11 +2093,22 @@ const chatRoute = createRoute({
                 .optional(),
               actions: z
                 .array(
-                  z.object({
-                    type: z.literal('navigate'),
-                    path: z.string(),
-                    label: z.string(),
-                  }),
+                  z.union([
+                    z.object({
+                      type: z.literal('navigate'),
+                      path: z.string(),
+                      label: z.string(),
+                    }),
+                    z.object({
+                      type: adminChatPageActionTypeSchema,
+                      id: z.string(),
+                      targetId: z.string(),
+                      label: z.string(),
+                      fieldName: z.string().optional(),
+                      value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+                      rowIds: z.array(z.string()).optional(),
+                    }),
+                  ]),
                 )
                 .optional(),
             }),
@@ -1943,6 +2136,7 @@ app.openapi(chatRoute, async (c) => {
   const navigationContext = formatAdminChatNavigationContext(navigationEntries);
   const navigationActions = createAdminChatNavigationActions(navigationEntries, payload.messages);
   const navigationActionContext = formatAdminChatNavigationActionContext(navigationActions);
+  const pageActionContext = formatAdminChatPageActionContext(payload.pageContext);
   const productCopyContext = formatAdminChatProductCopyContext(
     await getAdminChatProductCopyContext(c, agentSession, payload.messages),
   );
@@ -1950,6 +2144,7 @@ app.openapi(chatRoute, async (c) => {
     { role: 'system', content: ADMIN_CHAT_SYSTEM_PROMPT },
     ...(navigationContext ? [{ role: 'system' as const, content: navigationContext }] : []),
     ...(navigationActionContext ? [{ role: 'system' as const, content: navigationActionContext }] : []),
+    ...(pageActionContext ? [{ role: 'system' as const, content: pageActionContext }] : []),
     ...(productCopyContext ? [{ role: 'system' as const, content: productCopyContext }] : []),
     ...normalizeMessages(payload.messages),
   ];
@@ -1963,6 +2158,15 @@ app.openapi(chatRoute, async (c) => {
     maxOutputTokens: Math.min(settings.generation.maxOutputTokens, ADMIN_CHAT_MAX_OUTPUT_TOKENS),
     abortSignal: c.req.raw.signal,
   });
+  const pageActions = createAdminChatPageActions(
+    payload.pageContext,
+    payload.messages,
+    result.text,
+  );
+  const actions: AdminChatAction[] = [
+    ...navigationActions,
+    ...pageActions,
+  ].slice(0, 3);
 
   return ok(c, {
     profile: 'adminChat' as const,
@@ -1973,7 +2177,7 @@ app.openapi(chatRoute, async (c) => {
       content: result.text,
     },
     usage: result.usage,
-    ...(navigationActions.length > 0 ? { actions: navigationActions } : {}),
+    ...(actions.length > 0 ? { actions } : {}),
   });
 });
 

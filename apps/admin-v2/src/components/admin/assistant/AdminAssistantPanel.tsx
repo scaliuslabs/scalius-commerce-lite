@@ -12,6 +12,7 @@ import {
   AlertCircle,
   ArrowRight,
   Bot,
+  CheckCircle2,
   GripHorizontal,
   Loader2,
   Minimize2,
@@ -20,10 +21,11 @@ import {
   SendHorizontal,
 } from "lucide-react";
 
+import { executeAdminAssistantPageAction } from "./page-actions";
 import {
   sendAdminAssistantMessage,
   type AdminAssistantChatResult,
-  type AdminAssistantNavigateAction,
+  type AdminAssistantChatAction,
 } from "../../../lib/api-functions/ai";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "../../ui/button";
@@ -54,11 +56,12 @@ interface AssistantMessage {
   id: string;
   role: MessageRole;
   content: string;
-  actions?: AdminAssistantNavigateAction[];
+  actions?: AdminAssistantChatAction[];
 }
 
 type AssistantStatus =
   | { kind: "idle"; message: string }
+  | { kind: "success"; message: string }
   | { kind: "disabled"; message: string }
   | { kind: "error"; message: string };
 
@@ -139,7 +142,7 @@ export function AdminAssistantPanel({
           id: createMessageId("assistant"),
           role: "assistant",
           content: result.message.content,
-          actions: safePanelNavigationActions(result.actions),
+          actions: safePanelActions(result.actions),
         },
       ]);
       setStatus({ kind: "idle", message: "Ready on the current admin page." });
@@ -189,7 +192,18 @@ export function AdminAssistantPanel({
     window.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
-  function handleNavigationAction(action: AdminAssistantNavigateAction) {
+  async function handleAssistantAction(action: AdminAssistantChatAction) {
+    if (action.type !== "navigate") {
+      const executed = await executeAdminAssistantPageAction(action);
+      setStatus({
+        kind: executed ? "success" : "error",
+        message: executed
+          ? "Page action applied. Review the visible page before saving."
+          : "That page action is no longer available here. Nothing was changed.",
+      });
+      return;
+    }
+
     const path = safeAdminNavigationPath(action.path);
     if (!path) return;
 
@@ -321,13 +335,15 @@ export function AdminAssistantPanel({
                 <div className="mt-3 flex flex-wrap gap-2">
                   {message.actions.map((action) => (
                     <Button
-                      key={`${message.id}-${action.path}`}
+                      key={`${message.id}-${action.type}-${getActionKey(action)}`}
                       type="button"
                       variant="secondary"
                       size="sm"
                       className="h-8 max-w-full gap-1.5 px-2 text-xs"
                       aria-label={action.label}
-                      onClick={() => handleNavigationAction(action)}
+                      onClick={() => {
+                        void handleAssistantAction(action);
+                      }}
                     >
                       <span className="truncate">{action.label}</span>
                       <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -352,10 +368,16 @@ export function AdminAssistantPanel({
               "mx-4 mb-3 flex items-start gap-2 rounded-md border px-3 py-2 text-sm",
               status.kind === "disabled"
                 ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                : status.kind === "success"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                 : "border-destructive/30 bg-destructive/10 text-destructive",
             )}
           >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            {status.kind === "success" ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            )}
             <span>{status.message}</span>
           </div>
         ) : null}
@@ -537,12 +559,35 @@ function safeAdminNavigationPath(value: string): string | null {
   return path;
 }
 
-function safePanelNavigationActions(
-  actions: AdminAssistantNavigateAction[] | undefined,
-): AdminAssistantNavigateAction[] | undefined {
+function safePanelActions(
+  actions: AdminAssistantChatAction[] | undefined,
+): AdminAssistantChatAction[] | undefined {
   if (!actions?.length) return undefined;
-  const safeActions = actions.filter((action) => safeAdminNavigationPath(action.path));
+  const safeActions = actions.filter((action) => {
+    if (action.type === "navigate") return Boolean(safeAdminNavigationPath(action.path));
+    return isSafePageAction(action);
+  });
   return safeActions.length > 0 ? safeActions : undefined;
+}
+
+function isSafePageAction(action: AdminAssistantChatAction): boolean {
+  if (action.type === "navigate") return true;
+  if (!action.id || !action.targetId || !action.label) return false;
+  if (
+    action.type === "focus_surface" ||
+    action.type === "apply_field_draft" ||
+    action.type === "save_registered_form" ||
+    action.type === "select_visible_rows" ||
+    action.type === "clear_selection"
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function getActionKey(action: AdminAssistantChatAction): string {
+  if (action.type === "navigate") return action.path;
+  return action.id;
 }
 
 function clampViewportPosition(

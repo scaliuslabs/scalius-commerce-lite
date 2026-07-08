@@ -62,6 +62,7 @@ describe("admin assistant API adapter", () => {
       role: "user",
       content: "What should I check next?",
     });
+    expect(request.pageContext?.surfaces[0]?.assistantActions).toBeUndefined();
 
     const serialized = JSON.stringify(request);
     expect(serialized).toContain("Current safe dashboard context");
@@ -94,5 +95,47 @@ describe("admin assistant API adapter", () => {
     });
     expect(JSON.stringify(result)).not.toContain("evil.test");
     expect(JSON.stringify(result)).not.toContain("/admin/orders/123");
+  });
+
+  it("normalizes page actions and drops unsupported assistant actions", () => {
+    const result = normalizeAdminAssistantChatResult({
+      message: { role: "assistant", content: "Here is a tighter product description." },
+      actions: [
+        {
+          type: "apply_field_draft",
+          id: "product-edit-form:apply_field_draft",
+          targetId: "product-edit-form",
+          label: "Apply to description",
+          fieldName: "description",
+          value: `Fresh description for buyer@example.com ${"x".repeat(20_000)}`,
+        },
+        {
+          type: "delete_product",
+          id: "product-edit-form:delete",
+          targetId: "product-edit-form",
+          label: "Delete product",
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      status: "ok",
+      actions: [
+        {
+          type: "apply_field_draft",
+          id: "product-edit-form:apply_field_draft",
+          targetId: "product-edit-form",
+          label: "Apply to description",
+          fieldName: "description",
+        },
+      ],
+    });
+    expect(JSON.stringify(result)).toContain("[redacted-email]");
+    expect(JSON.stringify(result)).not.toContain("buyer@example.com");
+    expect(JSON.stringify(result)).not.toContain("delete_product");
+    if (result.status !== "ok" || !result.actions?.[0] || result.actions[0].type !== "apply_field_draft") {
+      throw new Error("expected apply_field_draft action");
+    }
+    expect(String(result.actions[0].value).length).toBeLessThanOrEqual(12_000);
   });
 });
