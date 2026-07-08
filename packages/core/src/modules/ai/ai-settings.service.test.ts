@@ -230,7 +230,7 @@ describe("widget AI settings", () => {
     );
   });
 
-  it("falls back to the Cloudflare default when adminChat has an invalid Cloudflare model and the binding exists", async () => {
+  it("honors an explicitly configured Cloudflare catalog model outside the local suggestions", async () => {
     const runtime = await getWidgetAiRuntimeSettings(
       createAiSettingsDb([
         widgetAiConfigRow({
@@ -248,7 +248,7 @@ describe("widget AI settings", () => {
             adminChat: {
               enabled: true,
               provider: "cloudflare",
-              model: "@google/gemini-3.5-flash",
+              model: "google/gemini-3.5-flash",
             },
           },
         }),
@@ -259,12 +259,12 @@ describe("widget AI settings", () => {
     expect(runtime.profiles.adminChat).toEqual({
       enabled: true,
       provider: "cloudflare",
-      model: "@cf/openai/gpt-oss-120b",
+      model: "google/gemini-3.5-flash",
     });
     expect(resolveAiModelProfile(runtime, "adminChat")).toMatchObject({
       id: "adminChat",
       provider: "cloudflare",
-      model: "@cf/openai/gpt-oss-120b",
+      model: "google/gemini-3.5-flash",
     });
   });
 
@@ -382,7 +382,38 @@ describe("widget AI settings", () => {
     ).toBe("@cf/openai/gpt-oss-120b");
   });
 
-  it("rejects widget generation models that are not enabled by settings", () => {
+  it("accepts any well-formed Cloudflare catalog model ID without a local allowlist entry", () => {
+    const runtime: WidgetAiRuntimeSettings = {
+      ...DEFAULT_WIDGET_AI_CONFIG,
+      apiKeys: {},
+      credentialErrors: {},
+      hasCloudflareBinding: true,
+    };
+
+    expect(
+      requireAllowedWidgetAiModel(
+        runtime,
+        "cloudflare",
+        "@cf/openai/gpt-oss-120b",
+      ),
+    ).toBe("@cf/openai/gpt-oss-120b");
+    expect(
+      requireAllowedWidgetAiModel(
+        runtime,
+        "cloudflare",
+        "google/gemini-3.5-flash",
+      ),
+    ).toBe("google/gemini-3.5-flash");
+    expect(
+      requireAllowedWidgetAiModel(
+        runtime,
+        "cloudflare",
+        "@google/gemini-3.5-flash",
+      ),
+    ).toBe("google/gemini-3.5-flash");
+  });
+
+  it("rejects malformed Cloudflare model IDs before provider dispatch", () => {
     const runtime: WidgetAiRuntimeSettings = {
       ...DEFAULT_WIDGET_AI_CONFIG,
       apiKeys: {},
@@ -394,9 +425,14 @@ describe("widget AI settings", () => {
       requireAllowedWidgetAiModel(
         runtime,
         "cloudflare",
-        "@cf/openai/gpt-oss-120b",
+        "https://api.example/model",
       ),
     ).toThrow(ValidationError);
+    expect(() =>
+      requireAllowedWidgetAiModel(runtime, "cloudflare", "google"),
+    ).toThrow(
+      'AI model "google" is not a valid Cloudflare AI model ID.',
+    );
   });
 
   it("rejects profile models that are outside the provider allowlist", () => {

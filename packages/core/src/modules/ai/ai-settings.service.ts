@@ -49,6 +49,9 @@ const API_KEY_LABELS: Record<WidgetAiProvider, string> = {
   cloudflare: "Widget AI Cloudflare API token",
 };
 
+const CLOUDFLARE_AI_MODEL_ID_PATTERN =
+  /^(?:@cf\/)?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*){1,4}$/i;
+
 export type WidgetAiCredentialErrors = Partial<Record<WidgetAiProvider, string>>;
 
 const DEFAULT_BASE_URLS: Record<"openrouter" | "openai" | "gemini", string> = {
@@ -248,6 +251,23 @@ function normalizeProfileModel(value: unknown): string {
   if (typeof value !== "string") return "";
   const model = value.trim();
   return model && model.length <= 200 ? model : "";
+}
+
+function normalizeCloudflareAiModelId(model: string): string {
+  const trimmed = model.trim();
+  if (/^@cf\//i.test(trimmed)) return trimmed;
+
+  // Cloudflare's unified AI catalog uses IDs like `google/gemini-3.5-flash`.
+  // Merchants sometimes paste them with an `@` from older Workers AI examples.
+  if (/^@[a-z0-9][a-z0-9._-]*\//i.test(trimmed)) {
+    return trimmed.slice(1);
+  }
+
+  return trimmed;
+}
+
+function isCloudflareAiModelId(model: string): boolean {
+  return CLOUDFLARE_AI_MODEL_ID_PATTERN.test(model);
 }
 
 function normalizeStructuredOutputMode(value: unknown): WidgetAiStructuredOutputMode {
@@ -541,25 +561,15 @@ function applyCloudflareBindingProfileDefaults(
   const cloudflare = config.providers.cloudflare;
   const adminChat = config.profiles.adminChat;
   const defaultModel = cloudflare.defaultModel.trim();
-  const allowedCloudflareModels = new Set(
-    [defaultModel, ...cloudflare.allowedModels]
-      .map((model) => model.trim())
-      .filter(Boolean),
-  );
   const adminChatIsUnconfiguredDefault =
     !adminChat.enabled &&
     adminChat.provider === "cloudflare" &&
     !adminChat.model.trim();
-  const adminChatUsesInvalidCloudflareModel =
-    adminChat.enabled &&
-    adminChat.provider === "cloudflare" &&
-    Boolean(adminChat.model.trim()) &&
-    !allowedCloudflareModels.has(adminChat.model.trim());
 
   if (
     !cloudflare.enabled ||
     !defaultModel ||
-    (!adminChatIsUnconfiguredDefault && !adminChatUsesInvalidCloudflareModel)
+    !adminChatIsUnconfiguredDefault
   ) {
     return config;
   }
@@ -905,6 +915,16 @@ export function requireAllowedWidgetAiModel(
   if (!model) throw new ValidationError(ERROR_MESSAGES.modelNotSelected);
   if (model.length > 200) {
     throw new ValidationError("AI model ID is too long.");
+  }
+
+  if (provider === "cloudflare") {
+    const cloudflareModel = normalizeCloudflareAiModelId(model);
+    if (!isCloudflareAiModelId(cloudflareModel)) {
+      throw new ValidationError(
+        `AI model "${model}" is not a valid Cloudflare AI model ID. Use a Cloudflare model catalog ID such as "@cf/vendor/model" or "provider/model".`,
+      );
+    }
+    return cloudflareModel;
   }
 
   const allowedModels = getAllowedWidgetAiModels(settings, provider);

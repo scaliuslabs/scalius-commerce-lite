@@ -85,7 +85,7 @@ function runtimeSettings(
   };
 }
 
-function cloudflareRuntimeSettings(): WidgetAiRuntimeSettings {
+function cloudflareRuntimeSettings(model = "@cf/moonshotai/kimi-k2.6"): WidgetAiRuntimeSettings {
   return {
     ...DEFAULT_WIDGET_AI_CONFIG,
     providers: {
@@ -101,7 +101,7 @@ function cloudflareRuntimeSettings(): WidgetAiRuntimeSettings {
       adminChat: {
         enabled: true,
         provider: "cloudflare",
-        model: "@cf/moonshotai/kimi-k2.6",
+        model,
       },
     },
     apiKeys: {},
@@ -278,6 +278,96 @@ describe("admin AI chat route", () => {
     expect(body.data.provider).toBe("cloudflare");
     expect(body.data.model).toBe("@cf/moonshotai/kimi-k2.6");
     expect(JSON.stringify(body)).not.toMatch(/apiKey|secret|credential|sk-/i);
+  });
+
+  it("runs Cloudflare Gemini catalog models through the documented Worker binding schema", async () => {
+    const aiBinding = {
+      run: vi.fn().mockResolvedValue({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: "I can help improve the description." }],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 40,
+          candidatesTokenCount: 8,
+          totalTokenCount: 48,
+        },
+      }),
+    };
+    mocks.getWidgetAiRuntimeSettings.mockResolvedValue(
+      cloudflareRuntimeSettings("@google/gemini-3.5-flash"),
+    );
+    const { app, env } = createTestApp({ AI: aiBinding } as unknown as Partial<Env>);
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Can you improve a product description?" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.createWorkersAI).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(aiBinding.run).toHaveBeenCalledTimes(1);
+    expect(aiBinding.run).toHaveBeenCalledWith(
+      "google/gemini-3.5-flash",
+      expect.objectContaining({
+        contents: [
+          expect.objectContaining({
+            role: "user",
+            parts: [expect.objectContaining({ text: expect.stringContaining("Merchant:") })],
+          }),
+        ],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
+        systemInstruction: {
+          parts: [expect.objectContaining({ text: expect.stringContaining("admin assistant") })],
+        },
+      }),
+    );
+
+    const body = (await response.json()) as {
+      success: true;
+      data: {
+        provider: string;
+        model: string;
+        message: { content: string };
+        usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+      };
+    };
+    expect(body.data.provider).toBe("cloudflare");
+    expect(body.data.model).toBe("google/gemini-3.5-flash");
+    expect(body.data.message.content).toBe("I can help improve the description.");
+    expect(body.data.usage).toEqual({
+      inputTokens: 40,
+      outputTokens: 8,
+      totalTokens: 48,
+    });
+  });
+
+  it("returns a safe 503 when a Cloudflare Gemini catalog model fails", async () => {
+    const aiBinding = {
+      run: vi.fn().mockRejectedValue(new Error("model not found request abcdefghijklmnopqrstuvwxyz123456")),
+    };
+    mocks.getWidgetAiRuntimeSettings.mockResolvedValue(
+      cloudflareRuntimeSettings("@google/gemini-3.5-flash"),
+    );
+    const { app, env } = createTestApp({ AI: aiBinding } as unknown as Partial<Env>);
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Say hello." }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(503);
+    const body = (await response.json()) as {
+      success: false;
+      error: { message: string };
+    };
+    expect(body.error.message).toContain(
+      'Cloudflare AI model "google/gemini-3.5-flash" failed.',
+    );
+    expect(body.error.message).toContain("[redacted-token]");
+    expect(JSON.stringify(body)).not.toContain("abcdefghijklmnopqrstuvwxyz123456");
   });
 
   it("reads only admin_navigation_context through the Agent binding and returns catalog-derived actions", async () => {

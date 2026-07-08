@@ -78,7 +78,7 @@ const PROVIDERS: Array<{ id: ProviderId; label: string; hint: string }> = [
   { id: "openrouter", label: "OpenRouter", hint: "Multi-provider router" },
   { id: "openai", label: "OpenAI", hint: "Direct OpenAI API" },
   { id: "gemini", label: "Gemini", hint: "Google Generative AI" },
-  { id: "cloudflare", label: "Cloudflare", hint: "Workers AI binding or API token" },
+  { id: "cloudflare", label: "Cloudflare", hint: "Workers AI binding or model-catalog API token" },
 ];
 
 const PROMPTS: Array<{ id: PromptId; label: string }> = [
@@ -804,7 +804,7 @@ export default function WidgetAiSettingsBuilder() {
                   <p className="mt-1 text-xs text-muted-foreground">{provider.hint}</p>
                   {isCloudflare && (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      The Worker binding is preferred for production generation. Account ID and API key are optional REST fallback/model-catalog credentials.
+                      The Worker binding is preferred for production generation. Use @cf/vendor/model for Workers AI models or provider/model for unified catalog models that your Cloudflare account can access.
                     </p>
                   )}
                 </div>
@@ -826,12 +826,14 @@ export default function WidgetAiSettingsBuilder() {
                     data-1p-ignore="true"
                     value={valuesForProvider.defaultModel}
                     onChange={(event) => setProviderValue(provider.id, "defaultModel", event.target.value)}
-                    placeholder={provider.id === "cloudflare" ? "@cf/vendor/model" : "Model ID"}
+                    placeholder={provider.id === "cloudflare" ? "@cf/vendor/model or google/gemini-3.5-flash" : "Model ID"}
                   />
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor={`${provider.id}-allowed-models`}>Additional allowed models</Label>
+                  <Label htmlFor={`${provider.id}-allowed-models`}>
+                    {isCloudflare ? "Quick-pick model suggestions" : "Additional allowed models"}
+                  </Label>
                   <Textarea
                     id={`${provider.id}-allowed-models`}
                     name={`widget-ai-${provider.id}-allowed-models`}
@@ -844,10 +846,16 @@ export default function WidgetAiSettingsBuilder() {
                         parseAllowedModelsText(event.target.value),
                       )
                     }
-                    placeholder="One model ID per line. The default model is always allowed."
+                    placeholder={
+                      isCloudflare
+                        ? "One Cloudflare model ID per line for dropdown suggestions."
+                        : "One model ID per line. The default model is always allowed."
+                    }
                   />
                   <p className="text-xs text-muted-foreground">
-                    Widget generation can only use the default model and these additional model IDs.
+                    {isCloudflare
+                      ? "Cloudflare profiles can use any valid Cloudflare AI text model ID. This list only keeps common choices easy to pick."
+                      : "Widget generation can only use the default model and these additional model IDs."}
                   </p>
                 </div>
 

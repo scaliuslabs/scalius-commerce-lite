@@ -236,6 +236,13 @@ export const sendAdminAssistantMessage = createServerFn({ method: "POST" })
             "Admin chat is not ready. Enable Admin chat in General Settings > Widget AI and choose a model. Cloudflare Workers AI works through the binding; other providers need saved credentials.",
         };
       }
+      const safeProviderMessage = getSafeAdminChatProviderError(error);
+      if (safeProviderMessage) {
+        return {
+          status: "error",
+          message: safeProviderMessage,
+        };
+      }
       return {
         status: "error",
         message: "Assistant request failed. Nothing was changed.",
@@ -495,9 +502,23 @@ function isAdminChatApiMissing(error: unknown): boolean {
 
 function isAdminChatConfigurationError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /(?:adminChat|api key|credential|disabled|unconfigured|not configured|not enabled|provider)/i.test(
+  return /(?:adminChat|api key|credential|disabled|unconfigured|not configured|not enabled)/i.test(
     message,
   );
+}
+
+function getSafeAdminChatProviderError(error: unknown): string | null {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  if (
+    !/(?:AI model|model|Cloudflare|Workers AI|provider|unsupported|not found|invalid|rate limit|quota)/i.test(
+      rawMessage,
+    )
+  ) {
+    return null;
+  }
+
+  const message = sanitizeContextText(rawMessage, 500);
+  return message ? `Assistant model request failed: ${message}` : null;
 }
 
 function sanitizeRoutePath(value: unknown): string {
