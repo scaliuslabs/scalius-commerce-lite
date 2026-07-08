@@ -215,9 +215,10 @@ describe("admin AI chat route", () => {
 
     const systemPrompt = options.messages[0]?.content ?? "";
     expect(systemPrompt.length).toBeLessThan(1_400);
-    expect(systemPrompt).toContain("cannot read live store data");
+    expect(systemPrompt).toContain("current visible dashboard context");
     expect(systemPrompt).toContain("mutate products");
-    expect(systemPrompt).toContain("must perform it in the dashboard");
+    expect(systemPrompt).toContain("click-confirmed buttons");
+    expect(systemPrompt).toContain("safe dashboard steps");
     expect(systemPrompt).not.toMatch(/\bMCP\b|service binding|bearer|cookie/i);
     expect(systemPrompt).not.toMatch(/can .*mutate|will .*mutate|use .*tool|call .*tool/i);
 
@@ -654,11 +655,39 @@ describe("admin AI chat route", () => {
       return Response.json({ jsonrpc: "2.0", id: "unknown", result: { isError: true } });
     });
     const { app, env } = createTestApp({ AGENT: { fetch: agentFetch } as Fetcher });
+    mocks.generateText.mockResolvedValueOnce({
+      text: "<p>Flagship iPhone with a sharper camera story and clearer everyday benefits.</p>",
+      totalUsage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+    });
 
     const response = await postChat(
       app,
       env,
       {
+        pageContext: {
+          routePath: "/admin/products/prod_iphone",
+          surfaces: [
+            {
+              id: "product-edit-form",
+              kind: "form",
+              label:
+                "Edit product | safe fields: name, description | actions: focus, draft, save",
+              assistantActions: [
+                {
+                  id: "product-edit-form:apply_field_draft",
+                  type: "apply_field_draft",
+                  label: "Apply product draft",
+                  safeFields: ["name", "description"],
+                },
+                {
+                  id: "product-edit-form:save_registered_form",
+                  type: "save_registered_form",
+                  label: "Save product form",
+                },
+              ],
+            },
+          ],
+        },
         messages: [
           {
             role: "user",
@@ -716,6 +745,9 @@ describe("admin AI chat route", () => {
     const copyContext = options.messages.find((message) =>
       message.content.includes("Read-only product copy context"),
     )?.content;
+    const pageActionContext = options.messages.find((message) =>
+      message.content.includes("Current visible page action buttons"),
+    )?.content;
     expect(copyContext).toContain("Product: iPhone 16 (prod_iphone)");
     expect(copyContext).toContain("Current description:");
     expect(copyContext).toContain("Flagship phone with excellent camera.");
@@ -727,14 +759,31 @@ describe("admin AI chat route", () => {
     expect(copyContext).not.toContain("private.jpg");
     expect(copyContext).not.toContain("raw copy output");
     expect(copyContext?.length ?? 0).toBeLessThanOrEqual(18_000);
+    expect(pageActionContext).toContain(
+      "product-edit-form: apply_field_draft fields=name/description, save_registered_form",
+    );
 
     const body = (await response.json()) as {
       success: true;
-      data: { message: { content: string } };
+      data: {
+        message: { content: string };
+        actions?: Array<Record<string, unknown>>;
+      };
     };
     expect(body.data.message.content).toBe(
-      "Open Settings, review the saved configuration, and save when ready.",
+      "<p>Flagship iPhone with a sharper camera story and clearer everyday benefits.</p>",
     );
+    expect(body.data.actions).toEqual([
+      {
+        type: "apply_field_draft",
+        id: "product-edit-form:apply_field_draft",
+        targetId: "product-edit-form",
+        label: "Apply to description",
+        fieldName: "description",
+        value:
+          "<p>Flagship iPhone with a sharper camera story and clearer everyday benefits.</p>",
+      },
+    ]);
   });
 
   it("prefers the current product edit route id before searching by product name", async () => {

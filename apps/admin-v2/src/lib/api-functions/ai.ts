@@ -118,6 +118,21 @@ export interface AdminAssistantSurfaceContext {
   selectedCount?: number;
   rowCount?: number;
   validationErrorCount?: number;
+  assistantActions?: AdminAssistantSurfaceActionContext[];
+}
+
+export type AdminAssistantPageActionType =
+  | "focus_surface"
+  | "apply_field_draft"
+  | "save_registered_form"
+  | "select_visible_rows"
+  | "clear_selection";
+
+export interface AdminAssistantSurfaceActionContext {
+  id: string;
+  type: AdminAssistantPageActionType;
+  label?: string;
+  safeFields?: string[];
 }
 
 export interface AdminAssistantPageContext {
@@ -154,6 +169,20 @@ export interface AdminAssistantNavigateAction {
   label: string;
 }
 
+export interface AdminAssistantPageActionProposal {
+  type: AdminAssistantPageActionType;
+  id: string;
+  targetId: string;
+  label: string;
+  fieldName?: string;
+  value?: string | number | boolean | null;
+  rowIds?: string[];
+}
+
+export type AdminAssistantChatAction =
+  | AdminAssistantNavigateAction
+  | AdminAssistantPageActionProposal;
+
 export interface AdminAssistantChatApiMessage {
   role: "user" | "assistant";
   content: string;
@@ -161,6 +190,7 @@ export interface AdminAssistantChatApiMessage {
 
 export interface AdminAssistantChatApiRequest {
   messages: AdminAssistantChatApiMessage[];
+  pageContext?: AdminAssistantPageContext | null;
 }
 
 export type AdminAssistantChatResult =
@@ -168,7 +198,7 @@ export type AdminAssistantChatResult =
       status: "ok";
       message: { role: "assistant"; content: string };
       usage?: AdminAssistantChatUsage | null;
-      actions?: AdminAssistantNavigateAction[];
+      actions?: AdminAssistantChatAction[];
     }
   | {
       status: "disabled";
@@ -187,6 +217,10 @@ const ADMIN_ASSISTANT_MAX_SURFACES = 12;
 const ADMIN_ASSISTANT_MAX_ROUTE_CHARS = 240;
 const ADMIN_ASSISTANT_MAX_ACTIONS = 3;
 const ADMIN_ASSISTANT_MAX_ACTION_LABEL_CHARS = 80;
+const ADMIN_ASSISTANT_MAX_ACTION_VALUE_CHARS = 12_000;
+const ADMIN_ASSISTANT_MAX_ACTION_FIELD_CHARS = 80;
+const ADMIN_ASSISTANT_MAX_ACTION_ROW_IDS = 100;
+const ADMIN_ASSISTANT_MAX_SAFE_FIELDS = 12;
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const BANGLADESH_PHONE_PATTERN = /(^|[^\d])(?:\+?88)?01[3-9]\d{8}(?!\d)/g;
@@ -269,7 +303,10 @@ export function createAdminAssistantChatApiRequest(
     messages.push({ role: "user", content: normalized.message });
   }
 
-  return { messages };
+  return {
+    messages,
+    pageContext: normalized.pageContext,
+  };
 }
 
 function normalizeAdminAssistantChatInput(
@@ -348,9 +385,55 @@ function normalizeSurfaceContext(
       selectedCount: optionalBoundNumber(surface.selectedCount),
       rowCount: optionalBoundNumber(surface.rowCount),
       validationErrorCount: optionalBoundNumber(surface.validationErrorCount),
+      assistantActions: normalizeSurfaceActions(surface.assistantActions),
     });
   }
   return normalized;
+}
+
+function normalizeSurfaceActions(
+  actions: AdminAssistantSurfaceContext["assistantActions"],
+): AdminAssistantSurfaceActionContext[] | undefined {
+  if (!Array.isArray(actions)) return undefined;
+
+  const normalized: AdminAssistantSurfaceActionContext[] = [];
+  for (const action of actions.slice(0, ADMIN_ASSISTANT_MAX_ACTIONS * 4)) {
+    if (!action || typeof action !== "object") continue;
+    const id = sanitizeContextText(
+      action.id,
+      ADMIN_ASSISTANT_MAX_ACTION_FIELD_CHARS,
+    );
+    if (!id || !isAdminAssistantPageActionType(action.type)) continue;
+
+    const safeFields = normalizeSafeFieldList(action.safeFields);
+    normalized.push({
+      id,
+      type: action.type,
+      label:
+        sanitizeContextText(
+          action.label,
+          ADMIN_ASSISTANT_MAX_ACTION_LABEL_CHARS,
+        ) ?? undefined,
+      ...(safeFields.length > 0 ? { safeFields } : {}),
+    });
+  }
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeSafeFieldList(fields: unknown): string[] {
+  if (!Array.isArray(fields)) return [];
+
+  const safeFields: string[] = [];
+  for (const field of fields.slice(0, ADMIN_ASSISTANT_MAX_SAFE_FIELDS)) {
+    const sanitized = sanitizeContextText(
+      field,
+      ADMIN_ASSISTANT_MAX_ACTION_FIELD_CHARS,
+    );
+    if (!sanitized || safeFields.includes(sanitized)) continue;
+    safeFields.push(sanitized);
+  }
+  return safeFields;
 }
 
 function formatAdminAssistantPageContext(
@@ -389,6 +472,20 @@ function formatAdminAssistantPageContext(
         typeof surface.rowCount === "number" ? `${surface.rowCount} rows` : null,
         typeof surface.validationErrorCount === "number"
           ? `${surface.validationErrorCount} validation errors`
+          : null,
+        surface.assistantActions?.length
+          ? `assistant actions: ${surface.assistantActions
+              .map((action) =>
+                [
+                  action.type,
+                  action.safeFields?.length
+                    ? `(${action.safeFields.join("/")})`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
+              )
+              .join(", ")}`
           : null,
       ].filter(Boolean);
       return facts.join(", ");
@@ -443,23 +540,94 @@ export function normalizeAdminAssistantChatResult(
 
 function normalizeAdminAssistantActions(
   actions: unknown,
-): AdminAssistantNavigateAction[] | undefined {
+): AdminAssistantChatAction[] | undefined {
   if (!Array.isArray(actions)) return undefined;
 
-  const normalized: AdminAssistantNavigateAction[] = [];
+  const normalized: AdminAssistantChatAction[] = [];
   for (const action of actions.slice(0, ADMIN_ASSISTANT_MAX_ACTIONS)) {
     if (!action || typeof action !== "object") continue;
     const record = action as Record<string, unknown>;
-    if (record.type !== "navigate") continue;
-    const path = sanitizeAdminAssistantNavigationPath(record.path);
-    if (!path) continue;
-    const label =
-      sanitizeContextText(record.label, ADMIN_ASSISTANT_MAX_ACTION_LABEL_CHARS) ??
-      "Open dashboard page";
-    normalized.push({ type: "navigate", path, label });
+    if (record.type === "navigate") {
+      const path = sanitizeAdminAssistantNavigationPath(record.path);
+      if (!path) continue;
+      const label =
+        sanitizeContextText(record.label, ADMIN_ASSISTANT_MAX_ACTION_LABEL_CHARS) ??
+        "Open dashboard page";
+      normalized.push({ type: "navigate", path, label });
+      continue;
+    }
+
+    const pageAction = normalizeAdminAssistantPageAction(record);
+    if (pageAction) normalized.push(pageAction);
   }
 
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeAdminAssistantPageAction(
+  record: Record<string, unknown>,
+): AdminAssistantPageActionProposal | null {
+  if (!isAdminAssistantPageActionType(record.type)) return null;
+
+  const id = sanitizeContextText(record.id, ADMIN_ASSISTANT_MAX_ACTION_FIELD_CHARS);
+  const targetId = sanitizeContextText(
+    record.targetId,
+    ADMIN_ASSISTANT_MAX_ACTION_FIELD_CHARS,
+  );
+  if (!id || !targetId) return null;
+
+  const label =
+    sanitizeContextText(record.label, ADMIN_ASSISTANT_MAX_ACTION_LABEL_CHARS) ??
+    "Run page action";
+  const action: AdminAssistantPageActionProposal = {
+    type: record.type,
+    id,
+    targetId,
+    label,
+  };
+
+  const fieldName = sanitizeContextText(
+    record.fieldName,
+    ADMIN_ASSISTANT_MAX_ACTION_FIELD_CHARS,
+  );
+  if (fieldName) action.fieldName = fieldName;
+
+  if (record.type === "apply_field_draft") {
+    action.value = normalizeAdminAssistantActionValue(record.value);
+  }
+
+  if (record.type === "select_visible_rows") {
+    const rowIds = normalizeAdminAssistantActionRowIds(record.rowIds);
+    action.rowIds = rowIds;
+  }
+
+  return action;
+}
+
+function normalizeAdminAssistantActionValue(
+  value: unknown,
+): string | number | boolean | null {
+  if (typeof value === "string") {
+    return sanitizeContextText(value, ADMIN_ASSISTANT_MAX_ACTION_VALUE_CHARS) ?? "";
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "boolean" || value === null) return value;
+  return null;
+}
+
+function normalizeAdminAssistantActionRowIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const rowIds: string[] = [];
+  for (const rowId of value.slice(0, ADMIN_ASSISTANT_MAX_ACTION_ROW_IDS)) {
+    const sanitized = sanitizeContextText(
+      rowId,
+      ADMIN_ASSISTANT_MAX_ACTION_FIELD_CHARS,
+    );
+    if (!sanitized) continue;
+    rowIds.push(sanitized);
+  }
+  return rowIds;
 }
 
 function normalizeAdminAssistantUsage(
@@ -490,6 +658,18 @@ function isAdminAssistantSurfaceKind(
     value === "panel" ||
     value === "surface" ||
     value === "table"
+  );
+}
+
+function isAdminAssistantPageActionType(
+  value: unknown,
+): value is AdminAssistantPageActionType {
+  return (
+    value === "focus_surface" ||
+    value === "apply_field_draft" ||
+    value === "save_registered_form" ||
+    value === "select_visible_rows" ||
+    value === "clear_selection"
   );
 }
 

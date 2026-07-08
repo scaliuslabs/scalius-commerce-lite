@@ -34123,6 +34123,26 @@ export type PostApiV1AdminAiChatData = {
             role: 'user' | 'assistant';
             content: string;
         }>;
+        pageContext?: {
+            routePath?: string;
+            surfaces?: Array<{
+                id: string;
+                kind?: 'dialog' | 'form' | 'panel' | 'surface' | 'table';
+                label?: string;
+                dirty?: boolean;
+                submitting?: boolean;
+                validationErrorCount?: number;
+                assistantActions?: Array<{
+                    id: string;
+                    type: 'focus_surface' | 'apply_field_draft' | 'save_registered_form' | 'select_visible_rows' | 'clear_selection';
+                    label?: string;
+                    safeFields?: Array<string>;
+                    [key: string]: unknown;
+                }>;
+                [key: string]: unknown;
+            }>;
+            [key: string]: unknown;
+        } | null;
     };
     path?: never;
     query?: never;
@@ -34223,6 +34243,14 @@ export type PostApiV1AdminAiChatResponses = {
                 type: 'navigate';
                 path: string;
                 label: string;
+            } | {
+                type: 'focus_surface' | 'apply_field_draft' | 'save_registered_form' | 'select_visible_rows' | 'clear_selection';
+                id: string;
+                targetId: string;
+                label: string;
+                fieldName?: string;
+                value?: string | number | boolean | null;
+                rowIds?: Array<string>;
             }>;
         };
     };

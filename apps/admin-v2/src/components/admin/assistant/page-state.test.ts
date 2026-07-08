@@ -64,6 +64,22 @@ describe("admin assistant page state", () => {
         rowCount: 1_000_000,
         selectedCount: -5,
         validationErrorCount: Number.POSITIVE_INFINITY,
+        assistantActions:
+          index === 0
+            ? [
+                {
+                  id: "select:buyer@example.com",
+                  type: "select_visible_rows",
+                  label: "Select +8801712345678",
+                  safeFields: ["visibleRowId", "receiptToken chk_shouldNotLeak"],
+                },
+                {
+                  id: "orders-table-delete",
+                  type: "delete_everything" as never,
+                  label: "Delete",
+                },
+              ]
+            : undefined,
       });
     }
 
@@ -98,6 +114,14 @@ describe("admin assistant page state", () => {
       label: "Orders for [redacted-email] [redacted-phone]",
       rowCount: 10_000,
       selectedCount: 0,
+      assistantActions: [
+        {
+          id: "select:[redacted-email]",
+          type: "select_visible_rows",
+          label: "Select [redacted-phone]",
+          safeFields: ["visibleRowId", "receiptToken [redacted-token]"],
+        },
+      ],
     });
     expect(snapshot.surfaces[0]).not.toHaveProperty("validationErrorCount");
     expect(JSON.stringify(snapshot)).not.toContain("buyer@example.com");

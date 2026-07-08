@@ -36,6 +36,21 @@ export interface AdminAssistantSurfaceRegistration {
   selectedCount?: number | null;
   rowCount?: number | null;
   validationErrorCount?: number | null;
+  assistantActions?: AdminAssistantSurfaceActionRegistration[];
+}
+
+export type AdminAssistantSurfaceActionType =
+  | "focus_surface"
+  | "apply_field_draft"
+  | "save_registered_form"
+  | "select_visible_rows"
+  | "clear_selection";
+
+export interface AdminAssistantSurfaceActionRegistration {
+  id: string;
+  type: AdminAssistantSurfaceActionType;
+  label?: string | null;
+  safeFields?: string[];
 }
 
 export interface AdminAssistantSurfaceSnapshot {
@@ -48,6 +63,14 @@ export interface AdminAssistantSurfaceSnapshot {
   selectedCount?: number;
   rowCount?: number;
   validationErrorCount?: number;
+  assistantActions?: AdminAssistantSurfaceActionSnapshot[];
+}
+
+export interface AdminAssistantSurfaceActionSnapshot {
+  id: string;
+  type: AdminAssistantSurfaceActionType;
+  label?: string;
+  safeFields?: string[];
 }
 
 export interface AdminAssistantSurfaceHandle {
@@ -242,11 +265,64 @@ function sanitizeSurface(
     snapshot.validationErrorCount = validationErrorCount;
   }
 
+  const actions = sanitizeSurfaceActions(surface.assistantActions);
+  if (actions.length > 0) snapshot.assistantActions = actions;
+
   return snapshot;
 }
 
 function sanitizeSurfaceId(value: unknown): string | null {
   return sanitizeAdminAssistantText(value, MAX_SURFACE_ID_LENGTH);
+}
+
+function sanitizeSurfaceActions(
+  actions: AdminAssistantSurfaceRegistration["assistantActions"],
+): AdminAssistantSurfaceActionSnapshot[] {
+  if (!Array.isArray(actions)) return [];
+
+  const snapshots: AdminAssistantSurfaceActionSnapshot[] = [];
+  for (const action of actions.slice(0, 10)) {
+    const id = sanitizeAdminAssistantText(action.id, MAX_SURFACE_ID_LENGTH);
+    if (!id || !isSurfaceActionType(action.type)) continue;
+
+    const snapshot: AdminAssistantSurfaceActionSnapshot = {
+      id,
+      type: action.type,
+    };
+    const label = sanitizeAdminAssistantText(action.label);
+    if (label) snapshot.label = label;
+
+    const safeFields = sanitizeSafeFieldList(action.safeFields);
+    if (safeFields.length > 0) snapshot.safeFields = safeFields;
+
+    snapshots.push(snapshot);
+  }
+
+  return snapshots;
+}
+
+function sanitizeSafeFieldList(fields: unknown): string[] {
+  if (!Array.isArray(fields)) return [];
+
+  const safeFields: string[] = [];
+  for (const field of fields.slice(0, 12)) {
+    const sanitized = sanitizeAdminAssistantText(field, 48);
+    if (!sanitized || safeFields.includes(sanitized)) continue;
+    safeFields.push(sanitized);
+  }
+  return safeFields;
+}
+
+function isSurfaceActionType(
+  value: unknown,
+): value is AdminAssistantSurfaceActionType {
+  return (
+    value === "focus_surface" ||
+    value === "apply_field_draft" ||
+    value === "save_registered_form" ||
+    value === "select_visible_rows" ||
+    value === "clear_selection"
+  );
 }
 
 function sanitizeRoutePath(value: unknown): string {
