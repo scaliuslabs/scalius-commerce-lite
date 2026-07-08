@@ -5,6 +5,7 @@ import * as z from "zod/v4";
 const ADMIN_PERMISSIONS_PATH = "/api/v1/admin/rbac/my-permissions";
 const ADMIN_API_TARGET = `http://api.internal${ADMIN_PERMISSIONS_PATH}`;
 const ADMIN_PRODUCTS_PATH = "/api/v1/admin/products";
+const ADMIN_ORDERS_PATH = "/api/v1/admin/orders";
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
@@ -21,7 +22,9 @@ const ADMIN_READ_ONLY_TOOL_ANNOTATIONS = {
 const MAX_ADMIN_NAVIGATION_PAGES = 24;
 const ADMIN_NAVIGATION_CATALOG_VERSION = "admin-navigation-context:v1";
 const ADMIN_PRODUCT_SEARCH_MAX_PRODUCTS = 10;
+const ADMIN_ORDER_SEARCH_MAX_ORDERS = 10;
 const ADMIN_PRODUCTS_MAX_STRING_LENGTH = 220;
+const ADMIN_ORDERS_MAX_STRING_LENGTH = 220;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -32,6 +35,14 @@ const adminProductSearchInputSchema = z.object({
 }).strict();
 
 type AdminProductSearchInput = z.infer<typeof adminProductSearchInputSchema>;
+
+const adminOrderSearchInputSchema = z.object({
+  query: z.string().trim().min(1).max(80),
+  limit: z.number().int().min(1).max(ADMIN_ORDER_SEARCH_MAX_ORDERS).default(5),
+  page: z.number().int().min(1).max(20).default(1),
+}).strict();
+
+type AdminOrderSearchInput = z.infer<typeof adminOrderSearchInputSchema>;
 
 interface AdminPermissionContext {
   userId?: string;
@@ -427,6 +438,34 @@ function adminProductToolError(
   }, true);
 }
 
+function adminOrderToolError(
+  code: string,
+  query?: JsonRecord,
+  status = 503,
+): CallToolResult {
+  return toolResult({
+    adminOrderSearch: {
+      source: { path: ADMIN_ORDERS_PATH },
+      ...(query ? { query } : {}),
+      orders: [],
+      pagination: null,
+      limits: {
+        maxOrders: ADMIN_ORDER_SEARCH_MAX_ORDERS,
+        includesTrashed: false,
+        includesAddresses: false,
+        includesItems: false,
+        includesPaymentRecovery: false,
+        includesTracking: false,
+      },
+    },
+    error: {
+      code,
+      status: failClosedStatus(status),
+      message: "Admin orders are temporarily unavailable.",
+    },
+  }, true);
+}
+
 function stringArray(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   return value.filter((item): item is string => typeof item === "string");
@@ -622,6 +661,17 @@ function setCompactBoolean(target: JsonRecord, key: string, value: unknown): voi
   if (compact !== null) target[key] = compact;
 }
 
+function compactMaskedContact(value: unknown): string | null {
+  const compact = compactString(value, 160);
+  if (!compact) return null;
+  return /[*•…xX]/.test(compact) ? compact : null;
+}
+
+function setCompactTimestamp(target: JsonRecord, key: string, value: unknown): void {
+  const compact = compactTimestamp(value);
+  if (compact !== null) target[key] = compact;
+}
+
 function compactAdminProduct(value: unknown): JsonRecord | null {
   if (!isRecord(value)) return null;
   const id = compactString(value.id);
@@ -740,6 +790,125 @@ async function fetchAdminProductSearch(
   }
 }
 
+function compactAdminOrder(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const id = compactString(value.id, ADMIN_ORDERS_MAX_STRING_LENGTH);
+  const orderNumber = compactString(value.orderNumber, ADMIN_ORDERS_MAX_STRING_LENGTH);
+  const code = compactString(value.code, ADMIN_ORDERS_MAX_STRING_LENGTH);
+  if (!id && !orderNumber && !code) return null;
+
+  const order: JsonRecord = {};
+  if (id) order.id = id;
+  if (orderNumber) order.orderNumber = orderNumber;
+  if (code) order.code = code;
+
+  setCompactTimestamp(order, "createdAt", value.createdAt);
+  setCompactTimestamp(order, "updatedAt", value.updatedAt);
+  setCompactString(order, "orderStatus", value.orderStatus ?? value.status, ADMIN_ORDERS_MAX_STRING_LENGTH);
+  setCompactString(order, "paymentStatus", value.paymentStatus, ADMIN_ORDERS_MAX_STRING_LENGTH);
+  setCompactString(order, "fulfillmentStatus", value.fulfillmentStatus, ADMIN_ORDERS_MAX_STRING_LENGTH);
+  setCompactString(order, "paymentMethod", value.paymentMethod, ADMIN_ORDERS_MAX_STRING_LENGTH);
+  setCompactNumber(order, "totalAmount", value.totalAmount);
+  setCompactString(order, "currency", value.currency, 12);
+  setCompactNumber(order, "itemCount", value.itemCount);
+
+  const customerEmailMasked = compactMaskedContact(
+    value.customerEmailMasked ?? value.maskedCustomerEmail,
+  );
+  if (customerEmailMasked) order.customerEmailMasked = customerEmailMasked;
+
+  const customerPhoneMasked = compactMaskedContact(
+    value.customerPhoneMasked ?? value.maskedCustomerPhone,
+  );
+  if (customerPhoneMasked) order.customerPhoneMasked = customerPhoneMasked;
+
+  return order;
+}
+
+function buildAdminOrderSearchUrl(input: AdminOrderSearchInput): { url: URL; query: JsonRecord } {
+  const url = new URL(`http://api.internal${ADMIN_ORDERS_PATH}`);
+  const query: JsonRecord = {
+    query: input.query,
+    page: input.page,
+    limit: input.limit,
+    sort: "updatedAt",
+    order: "desc",
+  };
+
+  url.searchParams.set("search", input.query);
+  url.searchParams.set("page", String(input.page));
+  url.searchParams.set("limit", String(input.limit));
+  url.searchParams.set("sort", "updatedAt");
+  url.searchParams.set("order", "desc");
+
+  return { url, query };
+}
+
+async function fetchAdminOrderSearch(
+  env: Env,
+  input: AdminOrderSearchInput,
+  {
+    cookie,
+    userAgent,
+    signal,
+  }: {
+    cookie: string;
+    userAgent?: string | null;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  const { url, query } = buildAdminOrderSearchUrl(input);
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return adminOrderToolError("admin_api_unavailable", query);
+  }
+
+  try {
+    const response = await env.API.fetch(url, {
+      method: "GET",
+      headers: adminApiHeaders(cookie, userAgent),
+      signal,
+    });
+    if (!response.ok) {
+      return adminOrderToolError("admin_order_unavailable", query, response.status);
+    }
+
+    const body = await parseJsonResponse(response);
+    const data = body && isRecord(body.data) ? body.data : null;
+    if (!body || body.success !== true || !data || !Array.isArray(data.orders)) {
+      return adminOrderToolError("admin_order_unavailable", query);
+    }
+
+    const pagination = compactAdminPagination(data.pagination);
+    if (!pagination) {
+      return adminOrderToolError("admin_order_unavailable", query);
+    }
+
+    const orders = data.orders
+      .map(compactAdminOrder)
+      .filter((order): order is JsonRecord => order !== null)
+      .slice(0, ADMIN_ORDER_SEARCH_MAX_ORDERS);
+
+    return toolResult({
+      adminOrderSearch: {
+        source: { path: ADMIN_ORDERS_PATH },
+        query,
+        orders,
+        pagination,
+        limits: {
+          maxOrders: ADMIN_ORDER_SEARCH_MAX_ORDERS,
+          includesTrashed: false,
+          includesAddresses: false,
+          includesItems: false,
+          includesPaymentRecovery: false,
+          includesTracking: false,
+        },
+      },
+    });
+  } catch {
+    return adminOrderToolError("admin_order_unavailable", query);
+  }
+}
+
 export function createAdminMcpServer(
   env: Env,
   options: AdminMcpOptions = {},
@@ -840,6 +1009,32 @@ export function createAdminMcpServer(
       }
 
       return fetchAdminProductSearch(env, input, {
+        cookie,
+        userAgent: options.userAgent,
+        signal: extra.signal,
+      });
+    },
+  );
+
+  server.registerTool(
+    "admin_order_search",
+    {
+      title: "Admin Order Search",
+      description: "Searches the dashboard order list through API-verified permissions and returns compact order identifiers.",
+      inputSchema: adminOrderSearchInputSchema,
+      annotations: ADMIN_READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (input, extra) => {
+      const cookie = options.cookie?.trim() ? options.cookie : null;
+      if (!cookie) {
+        return adminToolError({
+          ok: false,
+          status: 401,
+          code: "admin_session_required",
+        });
+      }
+
+      return fetchAdminOrderSearch(env, input, {
         cookie,
         userAgent: options.userAgent,
         signal: extra.signal,
