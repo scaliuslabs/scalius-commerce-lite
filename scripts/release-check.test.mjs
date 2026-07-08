@@ -14,6 +14,7 @@ import {
   normalizeHttpBaseUrl,
   parseReleaseCheckArgs,
   runReleaseCheck,
+  smokeAgentWorker,
 } from "./release-check.mjs";
 
 const SITEMAP_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
@@ -156,6 +157,67 @@ function mcpSseResponse(message, headers = {}) {
   return textResponse(`event: message\ndata: ${JSON.stringify(message)}\n\n`, 200, {
     "Content-Type": "text/event-stream",
     ...headers,
+  });
+}
+
+function agentCatalogProfileMcpResult(profile = ucpProfile()) {
+  return {
+    content: [{ type: "text", text: JSON.stringify(profile) }],
+    structuredContent: profile,
+  };
+}
+
+function agentMcpSmokeFetch({
+  tools = agentMcpTools(),
+  toolResult = agentCatalogProfileMcpResult(),
+  onToolCall,
+} = {}) {
+  return vi.fn(async (url, init = {}) => {
+    const parsed = new URL(url);
+
+    if (parsed.pathname === "/health") {
+      expect(init.method).toBe("GET");
+      return agentHealthResponse();
+    }
+
+    if (parsed.pathname === "/mcp") {
+      expect(init.method).toBe("POST");
+      const headers = new Headers(init.headers);
+      expect(headers.get("accept")).toBe("application/json, text/event-stream");
+      expect(headers.get("content-type")).toBe("application/json");
+      const body = JSON.parse(init.body);
+
+      if (body.method === "initialize") {
+        return mcpSseResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            protocolVersion: "2025-06-18",
+            capabilities: { tools: { listChanged: true } },
+            serverInfo: { name: "scalius-agent", version: "0.1.0" },
+          },
+        });
+      }
+
+      if (body.method === "tools/list") {
+        return mcpSseResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { tools },
+        });
+      }
+
+      if (body.method === "tools/call") {
+        onToolCall?.(body);
+        return mcpSseResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: typeof toolResult === "function" ? toolResult(body) : toolResult,
+        });
+      }
+    }
+
+    throw new Error(`Unexpected URL ${url}`);
   });
 }
 
@@ -731,6 +793,65 @@ describe("release-check local evaluators", () => {
       ]),
     });
   });
+
+  it("calls a safe read-only catalog MCP tool when the agent smoke opts in", async () => {
+    const mcpRequests = [];
+    const fetchImpl = agentMcpSmokeFetch({
+      onToolCall: (body) => {
+        mcpRequests.push(`${body.method}:${body.params?.name}`);
+        expect(body.params).toEqual({
+          name: "catalog_profile",
+          arguments: {},
+        });
+      },
+    });
+
+    const result = await smokeAgentWorker({
+      agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
+      catalogToolSmoke: true,
+      fetchImpl,
+      timeoutMs: 5_000,
+      logger: null,
+    });
+
+    expect(mcpRequests).toEqual(["tools/call:catalog_profile"]);
+    expect(result.mcp.catalogTool).toMatchObject({
+      name: "catalog_profile",
+      statusCode: 200,
+      contentCount: 1,
+      profile: {
+        version: "2026-07",
+        endpoint: "https://storefront.example.test/ucp",
+        capabilities: [
+          "dev.ucp.shopping.catalog.search",
+          "dev.ucp.shopping.catalog.lookup",
+        ],
+      },
+    });
+  });
+
+  it("fails the catalog MCP tool smoke when the live profile advertises commerce capabilities", async () => {
+    const fetchImpl = agentMcpSmokeFetch({
+      toolResult: agentCatalogProfileMcpResult(ucpProfile({
+        ...ucpProfile().ucp.capabilities,
+        "dev.ucp.shopping.checkout": [{
+          version: "2026-07",
+          spec: "https://ucp.dev/2026-07/specification/checkout",
+          schema: "https://ucp.dev/2026-07/schemas/shopping/checkout.json",
+        }],
+      })),
+    });
+
+    await expect(smokeAgentWorker({
+      agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
+      catalogToolSmoke: true,
+      fetchImpl,
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow(/catalog_profile failed: .*checkout\/cart\/order\/payment/);
+  });
 });
 
 describe("release-check discovery evaluators", () => {
@@ -1157,7 +1278,11 @@ describe("runReleaseCheck", () => {
         if (parsed.pathname === "/health") return agentHealthResponse();
         if (parsed.pathname === "/mcp") {
           const body = JSON.parse(init.body);
-          agentMcpRequests.push(body.method);
+          agentMcpRequests.push(
+            body.method === "tools/call"
+              ? `${body.method}:${body.params?.name}`
+              : body.method,
+          );
           if (body.method === "initialize") {
             return mcpSseResponse({
               jsonrpc: "2.0",
@@ -1174,6 +1299,17 @@ describe("runReleaseCheck", () => {
               jsonrpc: "2.0",
               id: body.id,
               result: { tools: agentMcpTools() },
+            });
+          }
+          if (body.method === "tools/call") {
+            expect(body.params).toEqual({
+              name: "catalog_profile",
+              arguments: {},
+            });
+            return mcpSseResponse({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: agentCatalogProfileMcpResult(),
             });
           }
         }
@@ -1317,7 +1453,11 @@ describe("runReleaseCheck", () => {
         cacheControl: "no-store",
       },
     });
-    expect(agentMcpRequests).toEqual(["initialize", "tools/list"]);
+    expect(agentMcpRequests).toEqual([
+      "initialize",
+      "tools/list",
+      "tools/call:catalog_profile",
+    ]);
     expect(result.checks.agentMcp).toMatchObject({
       agentUrl: "https://agent.example.test/",
       health: {
@@ -1340,6 +1480,19 @@ describe("runReleaseCheck", () => {
             "catalog_search",
           ],
           readOnlyToolCount: 4,
+        },
+        catalogTool: {
+          name: "catalog_profile",
+          statusCode: 200,
+          contentCount: 1,
+          profile: {
+            version: "2026-07",
+            endpoint: "https://storefront.example.test/ucp",
+            capabilities: [
+              "dev.ucp.shopping.catalog.search",
+              "dev.ucp.shopping.catalog.lookup",
+            ],
+          },
         },
       },
     });

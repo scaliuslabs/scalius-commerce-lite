@@ -40,6 +40,10 @@ const AGENT_EXPECTED_TOOL_NAMES = Object.freeze([
   "catalog_product",
   "catalog_profile",
 ]);
+const AGENT_CATALOG_TOOL_SMOKE = Object.freeze({
+  name: "catalog_profile",
+  arguments: Object.freeze({}),
+});
 const AGENT_FORBIDDEN_TOOL_TERM_PATTERN =
   /(?:^|[^a-z0-9])(?:checkout|carts?|orders?|payments?|customers?|recovery)(?:$|[^a-z0-9])/i;
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
@@ -1504,13 +1508,64 @@ export function evaluateAgentMcpTools(tools, {
   };
 }
 
+function evaluateAgentCatalogToolSmokeResult(result, {
+  toolName = AGENT_CATALOG_TOOL_SMOKE.name,
+  storefrontOrigin,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+
+  if (result?.isError === true) {
+    errors.push(`Agent MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Agent MCP ${toolName} must return at least one content block.`);
+  }
+  if (!structuredContent) {
+    errors.push(`Agent MCP ${toolName} must return structured catalog content.`);
+  }
+
+  let profileEvaluation = null;
+  if (toolName === "catalog_profile" && structuredContent) {
+    profileEvaluation = evaluateUcpProfile(structuredContent, { storefrontOrigin });
+    if (!profileEvaluation.ok) {
+      errors.push(
+        `Agent MCP ${toolName} returned an invalid catalog-only UCP profile: ` +
+        profileEvaluation.errors.join("; "),
+      );
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
+    profile: profileEvaluation
+      ? {
+          version: profileEvaluation.version,
+          endpoint: profileEvaluation.endpoint,
+          capabilities: profileEvaluation.capabilities,
+        }
+      : null,
+  };
+}
+
 export async function smokeAgentWorker({
   agentUrl = DEFAULT_AGENT_URL,
+  storefrontUrl,
+  catalogToolSmoke = false,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   fetchImpl = fetch,
   logger = console,
 } = {}) {
   const normalizedAgentUrl = normalizeHttpBaseUrl(agentUrl, "Agent URL");
+  const storefrontOrigin = storefrontUrl
+    ? new URL(normalizeHttpBaseUrl(storefrontUrl, "Storefront URL")).origin
+    : undefined;
   const healthUrl = buildUrl(normalizedAgentUrl, "/health");
   const healthResponse = await fetchJson(healthUrl, {
     fetchImpl,
@@ -1585,8 +1640,49 @@ export async function smokeAgentWorker({
     throw new Error(`Agent MCP tools/list failed: ${toolEvaluation.errors.join("; ")}`);
   }
 
+  let catalogToolResult = null;
+  if (catalogToolSmoke) {
+    const catalogToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+      fetchImpl,
+      timeoutMs,
+      sessionId,
+      protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+      body: {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: AGENT_CATALOG_TOOL_SMOKE,
+      },
+    });
+    const toolCallResult = requireMcpJsonRpcResult(
+      catalogToolResponse,
+      `Agent MCP ${AGENT_CATALOG_TOOL_SMOKE.name}`,
+      3,
+    );
+    const catalogToolEvaluation = evaluateAgentCatalogToolSmokeResult(toolCallResult, {
+      toolName: AGENT_CATALOG_TOOL_SMOKE.name,
+      storefrontOrigin,
+    });
+    if (!catalogToolEvaluation.ok) {
+      throw new Error(
+        `Agent MCP ${AGENT_CATALOG_TOOL_SMOKE.name} failed: ` +
+        catalogToolEvaluation.errors.join("; "),
+      );
+    }
+    catalogToolResult = {
+      name: AGENT_CATALOG_TOOL_SMOKE.name,
+      statusCode: catalogToolResponse.statusCode,
+      durationMs: catalogToolResponse.durationMs,
+      contentCount: catalogToolEvaluation.contentCount,
+      profile: catalogToolEvaluation.profile,
+    };
+  }
+
+  const catalogToolSummary = catalogToolResult
+    ? `, ${catalogToolResult.name} call ok`
+    : "";
   logger?.log(
-    `PASS agent MCP: /health ${healthResponse.statusCode}, tools ${toolEvaluation.toolNames.join(", ")}.`,
+    `PASS agent MCP: /health ${healthResponse.statusCode}, tools ${toolEvaluation.toolNames.join(", ")}${catalogToolSummary}.`,
   );
   return {
     agentUrl: redactUrl(normalizedAgentUrl),
@@ -1611,6 +1707,7 @@ export async function smokeAgentWorker({
         toolNames: toolEvaluation.toolNames,
         readOnlyToolCount: toolEvaluation.readOnlyToolCount,
       },
+      ...(catalogToolResult ? { catalogTool: catalogToolResult } : {}),
     },
   };
 }
@@ -2174,6 +2271,8 @@ async function checkAgentMcp(options, { fetchImpl, logger }) {
 
   return smokeAgentWorker({
     agentUrl: options.agentUrl,
+    storefrontUrl: options.storefrontUrl,
+    catalogToolSmoke: true,
     timeoutMs: options.timeoutMs,
     fetchImpl,
     logger,
