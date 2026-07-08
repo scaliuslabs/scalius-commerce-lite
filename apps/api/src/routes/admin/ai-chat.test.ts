@@ -208,13 +208,13 @@ describe("admin AI chat route", () => {
       tools?: unknown;
     };
     expect(options.model).toBe(languageModel);
-    expect(options.maxOutputTokens).toBe(1_200);
+    expect(options.maxOutputTokens).toBe(2_000);
     expect(options.temperature).toBe(0.3);
     expect(options.tools).toBeUndefined();
     expect(options.messages[0]).toMatchObject({ role: "system" });
 
     const systemPrompt = options.messages[0]?.content ?? "";
-    expect(systemPrompt.length).toBeLessThan(1_200);
+    expect(systemPrompt.length).toBeLessThan(1_400);
     expect(systemPrompt).toContain("cannot read live store data");
     expect(systemPrompt).toContain("mutate products");
     expect(systemPrompt).toContain("must perform it in the dashboard");
@@ -319,7 +319,7 @@ describe("admin AI chat route", () => {
             parts: [expect.objectContaining({ text: expect.stringContaining("Merchant:") })],
           }),
         ],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
+        generationConfig: { temperature: 0.3, maxOutputTokens: 2400 },
         systemInstruction: {
           parts: [expect.objectContaining({ text: expect.stringContaining("admin assistant") })],
         },
@@ -510,6 +510,14 @@ describe("admin AI chat route", () => {
     const navContext = options.messages.find((message) =>
       message.content.includes("Allowed dashboard destinations"),
     )?.content;
+    const systemPrompt = options.messages.find((message) =>
+      message.content.includes("Scalius Commerce admin assistant"),
+    )?.content;
+    const actionContext = options.messages.find((message) =>
+      message.content.includes("Click-confirmed navigation action"),
+    )?.content;
+    expect(systemPrompt).toContain("click-confirmed navigation button");
+    expect(systemPrompt).not.toContain("you cannot navigate automatically");
     expect(navContext).toContain("Catalog > Products: /admin/products");
     expect(navContext).toContain("Sales > Orders: /admin/orders");
     expect(navContext).not.toContain("requiredPermission");
@@ -517,6 +525,9 @@ describe("admin AI chat route", () => {
     expect(navContext).not.toContain("raw mcp output");
     expect(navContext).not.toContain("/admin/products/123");
     expect((navContext ?? "").length).toBeLessThanOrEqual(1_800);
+    expect(actionContext).toContain("Open Products: /admin/products");
+    expect(actionContext).toContain("use the visible action button");
+    expect(actionContext).not.toContain("raw mcp output");
 
     const body = (await response.json()) as {
       success: true;
@@ -528,6 +539,326 @@ describe("admin AI chat route", () => {
       { type: "navigate", path: "/admin/products", label: "Open Products" },
     ]);
     expect(JSON.stringify(body)).not.toContain("raw mcp output");
+  });
+
+  it("adds bounded read-only product copy context for product description requests", async () => {
+    const agentCalls: Array<{
+      input: string;
+      method: string | undefined;
+      headers: Headers;
+      body: unknown;
+    }> = [];
+    const agentFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      const rpcBody = await new Response(init?.body).json();
+      agentCalls.push({
+        input: String(input),
+        method: init?.method,
+        headers,
+        body: rpcBody,
+      });
+      if (
+        typeof rpcBody === "object" &&
+        rpcBody !== null &&
+        "method" in rpcBody &&
+        rpcBody.method === "initialize"
+      ) {
+        return Response.json(
+          {
+            jsonrpc: "2.0",
+            id: "admin-chat-navigation-initialize",
+            result: {
+              protocolVersion: "2025-06-18",
+              serverInfo: { name: "scalius-admin-agent", version: "0.1.0" },
+            },
+          },
+          { headers: { "Mcp-Session-Id": "agent-session" } },
+        );
+      }
+
+      const toolName =
+        typeof rpcBody === "object" &&
+        rpcBody !== null &&
+        "params" in rpcBody &&
+        typeof (rpcBody as { params?: { name?: unknown } }).params?.name === "string"
+          ? (rpcBody as { params: { name: string } }).params.name
+          : "";
+
+      if (toolName === "admin_navigation_context") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "admin-chat-navigation-context",
+          result: {
+            structuredContent: {
+              adminNavigationContext: {
+                sections: [{ label: "Catalog", pages: [{ name: "Products", path: "/admin/products" }] }],
+              },
+            },
+          },
+        });
+      }
+
+      if (toolName === "admin_product_search") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "admin-chat-product-search",
+          result: {
+            structuredContent: {
+              adminProductSearch: {
+                products: [{
+                  id: "prod_iphone",
+                  name: "iPhone 16",
+                  slug: "iphone-16",
+                  price: 120000,
+                  sku: "SKU-SECRET",
+                }],
+              },
+            },
+            content: [{ type: "text", text: "raw search output must not leak" }],
+          },
+        });
+      }
+
+      if (toolName === "admin_product_copy_context") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "admin-chat-product-copy-context",
+          result: {
+            structuredContent: {
+              adminProductCopyContext: {
+                product: {
+                  id: "prod_iphone",
+                  name: "iPhone 16",
+                  slug: "iphone-16",
+                  route: "/products/iphone-16",
+                  isActive: true,
+                  categoryName: "Phones",
+                  description: {
+                    content:
+                      "Flagship phone with excellent camera. Call 01775528888 or email buyer@example.com for private launch notes.",
+                    excerpt: "Flagship phone with excellent camera.",
+                  },
+                  price: 120000,
+                  sku: "SKU-SECRET",
+                  stock: 99,
+                  barcode: "BARCODE-SECRET",
+                  primaryImage: "https://cdn.example.test/private.jpg",
+                },
+              },
+            },
+            content: [{ type: "text", text: "raw copy output must not leak" }],
+          },
+        });
+      }
+
+      return Response.json({ jsonrpc: "2.0", id: "unknown", result: { isError: true } });
+    });
+    const { app, env } = createTestApp({ AGENT: { fetch: agentFetch } as Fetcher });
+
+    const response = await postChat(
+      app,
+      env,
+      {
+        messages: [
+          {
+            role: "user",
+            content: "Can you improve our iPhone product's description?",
+          },
+        ],
+      },
+      {
+        Authorization: "Bearer should-not-forward",
+        Cookie: "better-auth.session_token=session.signature",
+      },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(agentFetch).toHaveBeenCalledTimes(4);
+    const toolNames = agentCalls
+      .map(({ body }) =>
+        typeof body === "object" &&
+        body !== null &&
+        "params" in body &&
+        typeof (body as { params?: { name?: unknown } }).params?.name === "string"
+          ? (body as { params: { name: string } }).params.name
+          : null,
+      )
+      .filter(Boolean);
+    expect(toolNames).toEqual([
+      "admin_navigation_context",
+      "admin_product_search",
+      "admin_product_copy_context",
+    ]);
+    for (const call of agentCalls) {
+      expect(call.headers.get("authorization")).toBeNull();
+      if (call.body && typeof call.body === "object" && "method" in call.body && call.body.method !== "initialize") {
+        expect(call.headers.get("mcp-session-id")).toBe("agent-session");
+      }
+    }
+    expect(agentCalls[2]?.body).toMatchObject({
+      params: {
+        name: "admin_product_search",
+        arguments: { query: "iPhone", limit: 2, page: 1 },
+      },
+    });
+    expect(agentCalls[3]?.body).toMatchObject({
+      params: {
+        name: "admin_product_copy_context",
+        arguments: { id: "prod_iphone" },
+      },
+    });
+
+    const options = mocks.generateText.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+      maxOutputTokens?: number;
+    };
+    expect(options.maxOutputTokens).toBe(2_000);
+    const copyContext = options.messages.find((message) =>
+      message.content.includes("Read-only product copy context"),
+    )?.content;
+    expect(copyContext).toContain("Product: iPhone 16 (prod_iphone)");
+    expect(copyContext).toContain("Current description:");
+    expect(copyContext).toContain("Flagship phone with excellent camera.");
+    expect(copyContext).toContain("[redacted-phone]");
+    expect(copyContext).toContain("[redacted-email]");
+    expect(copyContext).not.toContain("120000");
+    expect(copyContext).not.toContain("SKU-SECRET");
+    expect(copyContext).not.toContain("BARCODE-SECRET");
+    expect(copyContext).not.toContain("private.jpg");
+    expect(copyContext).not.toContain("raw copy output");
+    expect(copyContext?.length ?? 0).toBeLessThanOrEqual(18_000);
+
+    const body = (await response.json()) as {
+      success: true;
+      data: { message: { content: string } };
+    };
+    expect(body.data.message.content).toBe(
+      "Open Settings, review the saved configuration, and save when ready.",
+    );
+  });
+
+  it("prefers the current product edit route id before searching by product name", async () => {
+    const agentCalls: Array<{ body: unknown }> = [];
+    const agentFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const rpcBody = await new Response(init?.body).json();
+      agentCalls.push({ body: rpcBody });
+      if (
+        typeof rpcBody === "object" &&
+        rpcBody !== null &&
+        "method" in rpcBody &&
+        rpcBody.method === "initialize"
+      ) {
+        return Response.json(
+          {
+            jsonrpc: "2.0",
+            id: "admin-chat-navigation-initialize",
+            result: {
+              protocolVersion: "2025-06-18",
+              serverInfo: { name: "scalius-admin-agent", version: "0.1.0" },
+            },
+          },
+          { headers: { "Mcp-Session-Id": "agent-session" } },
+        );
+      }
+
+      const toolName =
+        typeof rpcBody === "object" &&
+        rpcBody !== null &&
+        "params" in rpcBody &&
+        typeof (rpcBody as { params?: { name?: unknown } }).params?.name === "string"
+          ? (rpcBody as { params: { name: string } }).params.name
+          : "";
+
+      if (toolName === "admin_navigation_context") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "admin-chat-navigation-context",
+          result: {
+            structuredContent: {
+              adminNavigationContext: {
+                sections: [{ label: "Catalog", pages: [{ name: "Products", path: "/admin/products" }] }],
+              },
+            },
+          },
+        });
+      }
+
+      if (toolName === "admin_product_copy_context") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "admin-chat-product-copy-context",
+          result: {
+            structuredContent: {
+              adminProductCopyContext: {
+                product: {
+                  id: "prod_current",
+                  name: "Current Product",
+                  slug: "current-product",
+                  route: "/products/current-product",
+                  isActive: true,
+                  description: {
+                    content: "Current page product description.",
+                    excerpt: "Current page product description.",
+                  },
+                },
+              },
+            },
+            content: [{ type: "text", text: "Current product copy context." }],
+          },
+        });
+      }
+
+      throw new Error(`Unexpected tool ${toolName}`);
+    });
+    const { app, env } = createTestApp({ AGENT: { fetch: agentFetch } as Fetcher });
+
+    const response = await postChat(app, env, {
+      messages: [
+        {
+          role: "user",
+          content:
+            "Current safe dashboard context:\nRoute: /admin/products/prod_current\nHeading: Current Product",
+        },
+        {
+          role: "user",
+          content: "Improve this product description.",
+        },
+      ],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const toolNames = agentCalls
+      .map(({ body }) =>
+        typeof body === "object" &&
+        body !== null &&
+        "params" in body &&
+        typeof (body as { params?: { name?: unknown } }).params?.name === "string"
+          ? (body as { params: { name: string } }).params.name
+          : null,
+      )
+      .filter(Boolean);
+    expect(toolNames).toEqual([
+      "admin_navigation_context",
+      "admin_product_copy_context",
+    ]);
+    expect(JSON.stringify(agentCalls.map(({ body }) => body))).not.toContain(
+      "admin_product_search",
+    );
+    expect(agentCalls[2]?.body).toMatchObject({
+      params: {
+        name: "admin_product_copy_context",
+        arguments: { id: "prod_current" },
+      },
+    });
+
+    const options = mocks.generateText.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const copyContext = options.messages.find((message) =>
+      message.content.includes("Read-only product copy context"),
+    )?.content;
+    expect(copyContext).toContain("Product: Current Product (prod_current)");
+    expect(copyContext).toContain("Current page product description.");
   });
 
   it("fails soft without the Agent binding and still returns guidance-only chat", async () => {

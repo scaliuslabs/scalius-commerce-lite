@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
+import { registerAdminAssistantSurface } from "./assistant/page-state";
 import {
   ProductImagesSection,
   TitleDescriptionSection,
@@ -39,6 +40,10 @@ import {
   type ProductFormValues,
   type Category,
 } from "./product-form";
+import {
+  buildProductAssistantSurfaceLabel,
+  countProductAssistantValidationErrors,
+} from "./product-form/assistantSurface";
 import type { VariantOptionLabels } from "./product-form/variants/types";
 
 interface ProductFormProps {
@@ -152,6 +157,81 @@ export function ProductForm({
       variantImageAxis: effectiveVariantImageAxis,
       form,
     });
+
+  // Assistant context is allowlisted product drafting state only; never widen to raw form values.
+  const assistantSurfaceId = isEdit
+    ? "product-edit-form"
+    : "product-create-form";
+  const assistantName = form.watch("name");
+  const assistantDescription = form.watch("description");
+  const assistantSlug = form.watch("slug");
+  const assistantCanonicalPath = form.watch("canonicalPath");
+  const assistantIsActive = form.watch("isActive");
+  const assistantNoIndex = form.watch("noIndex");
+  const assistantExcludeFromSitemap = form.watch("excludeFromSitemap");
+  const assistantExcludeFromProductFeed = form.watch("excludeFromProductFeed");
+  const assistantValidationErrorCount = countProductAssistantValidationErrors(
+    form.formState.errors,
+  );
+  const assistantSurfaceLabel = React.useMemo(
+    () =>
+      buildProductAssistantSurfaceLabel({
+        mode: isEdit ? "edit" : "create",
+        name: assistantName,
+        description: assistantDescription,
+        isActive: assistantIsActive,
+        slug: assistantSlug,
+        canonicalPath: assistantCanonicalPath,
+        noIndex: assistantNoIndex,
+        excludeFromSitemap: assistantExcludeFromSitemap,
+        excludeFromProductFeed: assistantExcludeFromProductFeed,
+      }),
+    [
+      assistantCanonicalPath,
+      assistantDescription,
+      assistantExcludeFromProductFeed,
+      assistantExcludeFromSitemap,
+      assistantIsActive,
+      assistantName,
+      assistantNoIndex,
+      assistantSlug,
+      isEdit,
+    ],
+  );
+  const assistantSurfaceHandleRef = React.useRef<ReturnType<
+    typeof registerAdminAssistantSurface
+  > | null>(null);
+
+  React.useEffect(() => {
+    const handle = registerAdminAssistantSurface({
+      id: assistantSurfaceId,
+      kind: "form",
+    });
+    assistantSurfaceHandleRef.current = handle;
+
+    return () => {
+      handle.unregister();
+      if (assistantSurfaceHandleRef.current === handle) {
+        assistantSurfaceHandleRef.current = null;
+      }
+    };
+  }, [assistantSurfaceId]);
+
+  React.useEffect(() => {
+    assistantSurfaceHandleRef.current?.update({
+      id: assistantSurfaceId,
+      label: assistantSurfaceLabel,
+      dirty: form.formState.isDirty,
+      submitting: isSubmitting,
+      validationErrorCount: assistantValidationErrorCount,
+    });
+  }, [
+    assistantSurfaceId,
+    assistantSurfaceLabel,
+    assistantValidationErrorCount,
+    form.formState.isDirty,
+    isSubmitting,
+  ]);
 
   // Auto-generate slug from name - ONLY for new products
   React.useEffect(() => {

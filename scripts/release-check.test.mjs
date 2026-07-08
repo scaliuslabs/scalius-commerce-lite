@@ -483,6 +483,7 @@ function adminMcpTools(overrides = {}) {
     adminMcpTool("admin_inventory_lookup", overrides.admin_inventory_lookup),
     adminMcpTool("admin_media_search", overrides.admin_media_search),
     adminMcpTool("admin_page_search", overrides.admin_page_search),
+    adminMcpTool("admin_product_copy_context", overrides.admin_product_copy_context),
     adminMcpTool("admin_product_search", overrides.admin_product_search),
     adminMcpTool("admin_order_search", overrides.admin_order_search),
   ];
@@ -768,8 +769,61 @@ function adminProductSearchMcpResult(extra = {}) {
       query: "test",
       page: 1,
       limit: 1,
-      total: 0,
-      products: [],
+      total: 1,
+      products: [
+        {
+          id: "prod_demo",
+          name: "Test Product",
+          slug: "test-product",
+          isActive: true,
+          status: "active",
+        },
+      ],
+      ...extra,
+    },
+  };
+  return {
+    content: [{ type: "text", text: JSON.stringify(body) }],
+    structuredContent: body,
+  };
+}
+
+function adminProductCopyContextMcpResult(extra = {}) {
+  const body = {
+    adminProductCopyContext: {
+      source: {
+        path: "/api/v1/admin/products/{id}",
+        permission: "products.view",
+      },
+      request: {
+        id: "prod_demo",
+      },
+      product: {
+        id: "prod_demo",
+        name: "Test Product",
+        slug: "test-product",
+        isActive: true,
+        status: "active",
+        route: "/products/test-product",
+        categoryName: "Demo",
+        description: {
+          content: "A compact public-facing description.",
+          excerpt: "A compact public-facing description.",
+        },
+      },
+      limits: {
+        maxDescriptionLength: 14000,
+        maxDescriptionExcerptLength: 600,
+        includesPrices: false,
+        includesVariants: false,
+        includesSku: false,
+        includesStock: false,
+        includesBarcodes: false,
+        includesImages: false,
+        includesDeletedFields: false,
+        includesProviderPayloads: false,
+        canMutate: false,
+      },
       ...extra,
     },
   };
@@ -944,6 +998,7 @@ function authenticatedAdminMcpSmokeFetch({
   pageSearchToolResult = adminPageSearchMcpResult(),
   mediaSearchToolResult = adminMediaSearchMcpResult(),
   productSearchToolResult = adminProductSearchMcpResult(),
+  productCopyContextToolResult = adminProductCopyContextMcpResult(),
   orderSearchToolResult = adminOrderSearchMcpResult(),
   customerSearchToolResult = adminCustomerSearchMcpResult(),
   inventoryLookupToolResult = adminInventoryLookupMcpResult(),
@@ -957,6 +1012,7 @@ function authenticatedAdminMcpSmokeFetch({
   pageSearchToolCacheControl = toolCacheControl,
   mediaSearchToolCacheControl = toolCacheControl,
   productSearchToolCacheControl = toolCacheControl,
+  productCopyContextToolCacheControl = toolCacheControl,
   orderSearchToolCacheControl = toolCacheControl,
   customerSearchToolCacheControl = toolCacheControl,
   inventoryLookupToolCacheControl = toolCacheControl,
@@ -1128,6 +1184,17 @@ function authenticatedAdminMcpSmokeFetch({
             ? productSearchToolResult(body)
             : productSearchToolResult;
           cacheControl = productSearchToolCacheControl;
+        } else if (body.params?.name === "admin_product_copy_context") {
+          expect(body.params).toEqual({
+            name: "admin_product_copy_context",
+            arguments: {
+              id: "prod_demo",
+            },
+          });
+          result = typeof productCopyContextToolResult === "function"
+            ? productCopyContextToolResult(body)
+            : productCopyContextToolResult;
+          cacheControl = productCopyContextToolCacheControl;
         } else if (body.params?.name === "admin_order_search") {
           expect(body.params).toEqual({
             name: "admin_order_search",
@@ -1814,11 +1881,12 @@ describe("release-check local evaluators", () => {
         "admin_notification_settings_summary",
         "admin_order_search",
         "admin_page_search",
+        "admin_product_copy_context",
         "admin_product_search",
         "admin_session_context",
         "admin_settings_summary",
       ],
-      readOnlyToolCount: 14,
+      readOnlyToolCount: 15,
     });
   });
 
@@ -1840,6 +1908,7 @@ describe("release-check local evaluators", () => {
         "admin_inventory_lookup",
         "admin_media_search",
         "admin_page_search",
+        "admin_product_copy_context",
         "admin_product_search",
         "admin_order_search",
         "admin_product_update",
@@ -1855,7 +1924,7 @@ describe("release-check local evaluators", () => {
     });
   });
 
-  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, settings summaries, analytics summary, category, collection, page, media, product, order, customer search, and inventory lookup smokes", async () => {
+  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, settings summaries, analytics summary, category, collection, page, media, product, product-copy, order, customer search, and inventory lookup smokes", async () => {
     const mcpRequests = [];
     const fetchImpl = authenticatedAdminMcpSmokeFetch({
       onMcpRequest: (body) => {
@@ -1890,6 +1959,7 @@ describe("release-check local evaluators", () => {
       "tools/call:admin_page_search",
       "tools/call:admin_media_search",
       "tools/call:admin_product_search",
+      "tools/call:admin_product_copy_context",
       "tools/call:admin_order_search",
       "tools/call:admin_customer_search",
       "tools/call:admin_inventory_lookup",
@@ -1922,11 +1992,12 @@ describe("release-check local evaluators", () => {
           "admin_notification_settings_summary",
           "admin_order_search",
           "admin_page_search",
+          "admin_product_copy_context",
           "admin_product_search",
           "admin_session_context",
           "admin_settings_summary",
         ],
-        readOnlyToolCount: 14,
+        readOnlyToolCount: 15,
       },
       navigationTool: {
         name: "admin_navigation_context",
@@ -2017,6 +2088,14 @@ describe("release-check local evaluators", () => {
         cacheControl: "no-store",
         contentCount: 1,
       },
+      productCopyContextTool: {
+        name: "admin_product_copy_context",
+        statusCode: 200,
+        cacheControl: "no-store",
+        contentCount: 1,
+        productId: "prod_demo",
+        descriptionLength: 36,
+      },
       orderSearchTool: {
         name: "admin_order_search",
         statusCode: 200,
@@ -2038,7 +2117,7 @@ describe("release-check local evaluators", () => {
       },
     });
     expect(logger.log).toHaveBeenCalledWith(
-      "PASS admin MCP authenticated: tools admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_notification_settings_summary, admin_order_search, admin_page_search, admin_product_search, admin_session_context, admin_settings_summary, calls admin_navigation_context, admin_dashboard_summary, admin_settings_summary, admin_notification_settings_summary, admin_analytics_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_order_search, admin_customer_search, admin_inventory_lookup ok.",
+      "PASS admin MCP authenticated: tools admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_notification_settings_summary, admin_order_search, admin_page_search, admin_product_copy_context, admin_product_search, admin_session_context, admin_settings_summary, calls admin_navigation_context, admin_dashboard_summary, admin_settings_summary, admin_notification_settings_summary, admin_analytics_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_product_copy_context, admin_order_search, admin_customer_search, admin_inventory_lookup ok.",
     );
 
     const logged = JSON.stringify(logger.log.mock.calls);
@@ -2060,7 +2139,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_notification_settings_summary, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary.*unexpected admin_write_context/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_notification_settings_summary, admin_order_search, admin_page_search, admin_product_copy_context, admin_product_search, admin_settings_summary.*unexpected admin_write_context/);
 
     await expect(smokeAdminMcpAuthenticated({
       dashboardUrl: "https://dashboard.example.test",
@@ -2071,7 +2150,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_notification_settings_summary, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_notification_settings_summary, admin_order_search, admin_page_search, admin_product_copy_context, admin_product_search, admin_settings_summary/);
   });
 
   it("fails authenticated Admin MCP smoke when tool calls lack no-store or return an error", async () => {
@@ -2154,6 +2233,58 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow("admin_product_search must return at least one content block");
+  });
+
+  it("fails authenticated Admin MCP smoke when product copy context lacks no-store, errors, or leaks unsafe fields", async () => {
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        productCopyContextToolCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_product_copy_context Cache-Control must include no-store");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        productCopyContextToolResult: {
+          isError: true,
+          content: [{ type: "text", text: "denied" }],
+          structuredContent: {
+            error: {
+              code: "admin_product_copy_context_failed",
+              status: 500,
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_product_copy_context returned an MCP tool error");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        productCopyContextToolResult: adminProductCopyContextMcpResult({
+          product: {
+            id: "prod_demo",
+            name: "Test Product",
+            sku: "SKU-SECRET",
+            stock: 10,
+            images: ["https://cdn.example.test/private.jpg"],
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_product_copy_context must not leak price, SKU, stock, barcode, image, variant, deleted, or provider-payload fields");
   });
 
   it("fails authenticated Admin MCP smoke when dashboard summary lacks no-store, errors, empty content, malformed structure, or leaks sensitive data", async () => {

@@ -54,4 +54,40 @@ describe("storefront assistant page-context source boundaries", () => {
     expect(componentSource).not.toMatch(/set:html=\{JSON\.stringify/);
     expect(layoutSource).toContain("<StorefrontAssistantPageContext");
   });
+
+  it("keeps the visible storefront assistant shell local, read-only, and plain text", () => {
+    const bubbleSource = readFileSync(
+      join(
+        storefrontSrcRoot,
+        "components/assistant/StorefrontAssistantBubble.tsx",
+      ),
+      "utf8",
+    );
+    const layoutSource = readFileSync(
+      join(storefrontSrcRoot, "layouts/Layout.astro"),
+      "utf8",
+    );
+
+    expect(bubbleSource).toContain("STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL");
+    expect(bubbleSource).toContain("__SCALIUS_STOREFRONT_ASSISTANT__");
+    expect(bubbleSource).toContain("Catalog assistant is not ready");
+    expect(bubbleSource).toContain("It cannot complete checkout");
+    expect(bubbleSource).not.toMatch(/\bfetch\s*\(/);
+    expect(bubbleSource).not.toMatch(/\bXMLHttpRequest\b/);
+    expect(bubbleSource).not.toMatch(/\bnavigator\.sendBeacon\b/);
+    expect(bubbleSource).not.toMatch(/\bindexedDB\b/);
+    expect(bubbleSource).not.toMatch(/\blocalStorage\b/);
+    expect(bubbleSource).not.toMatch(/\bsessionStorage\b/);
+    expect(bubbleSource).not.toMatch(/\bdocument\.cookie\b/);
+    expect(bubbleSource).not.toMatch(/\bcookieStore\b/);
+    expect(bubbleSource).not.toMatch(/from ["']@\/store\/cart["']/);
+    expect(bubbleSource).not.toMatch(/from ["']@\/lib\/api/);
+    expect(bubbleSource).not.toMatch(/\baddToCart\b/);
+    expect(bubbleSource).not.toMatch(/\bremoveFromCart\b/);
+    expect(bubbleSource).not.toMatch(/\bupdateQuantity\b/);
+    expect(bubbleSource).not.toMatch(/\bdangerouslySetInnerHTML\b/);
+    expect(bubbleSource).not.toMatch(/\bmarked\b|react-markdown|markdown-it/);
+    expect(bubbleSource).not.toMatch(/<form\b|<input\b|<textarea\b/);
+    expect(layoutSource).toContain("<StorefrontAssistantBubble client:idle");
+  });
 });

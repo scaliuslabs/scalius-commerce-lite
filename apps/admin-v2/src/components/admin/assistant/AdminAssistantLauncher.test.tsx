@@ -176,6 +176,32 @@ describe("AdminAssistantLauncher", () => {
     expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products" });
   });
 
+  it("renders assistant markdown as chat typography instead of raw syntax", async () => {
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: {
+        role: "assistant",
+        content:
+          "Use **Products** for catalog edits.\n\n1. Open `Products`.\n2. Save after reviewing.",
+      },
+      usage: null,
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("How do I edit products?");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    expect(document.body.textContent).toContain("Use Products for catalog edits.");
+    expect(document.body.textContent).toContain("Open Products.");
+    expect(document.body.textContent).not.toContain("**Products**");
+    expect(document.body.textContent).not.toContain("`Products`");
+    expect(document.querySelector("strong")?.textContent).toBe("Products");
+    expect(document.querySelector("code")?.textContent).toBe("Products");
+    expect(document.querySelectorAll("ol li")).toHaveLength(2);
+  });
+
   it("drops unsafe navigation actions before rendering buttons", async () => {
     mocks.sendAdminAssistantMessage.mockResolvedValue({
       status: "ok",

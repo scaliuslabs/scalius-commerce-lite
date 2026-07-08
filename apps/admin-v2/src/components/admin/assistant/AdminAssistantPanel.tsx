@@ -1,9 +1,11 @@
 import {
+  Fragment,
   useMemo,
   useState,
   type FormEvent,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -314,7 +316,7 @@ export function AdminAssistantPanel({
                   : "mr-auto border border-border bg-muted/60 text-foreground",
               )}
             >
-              {message.content}
+              <AssistantMessageContent content={message.content} />
               {message.role === "assistant" && message.actions?.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {message.actions.map((action) => (
@@ -397,6 +399,116 @@ export function AdminAssistantPanel({
       </div>
     </section>
   );
+}
+
+function AssistantMessageContent({ content }: { content: string }) {
+  const blocks = useMemo(() => parseAssistantMessageBlocks(content), [content]);
+
+  return (
+    <div className="space-y-2">
+      {blocks.map((block, index) => {
+        if (block.type === "ordered-list") {
+          return (
+            <ol key={index} className="list-decimal space-y-1 pl-5">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}>{renderInlineAssistantMarkdown(item)}</li>
+              ))}
+            </ol>
+          );
+        }
+        if (block.type === "unordered-list") {
+          return (
+            <ul key={index} className="list-disc space-y-1 pl-5">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}>{renderInlineAssistantMarkdown(item)}</li>
+              ))}
+            </ul>
+          );
+        }
+        return (
+          <p key={index} className="whitespace-pre-wrap">
+            {renderInlineAssistantMarkdown(block.text)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+type AssistantMessageBlock =
+  | { type: "paragraph"; text: string }
+  | { type: "ordered-list"; items: string[] }
+  | { type: "unordered-list"; items: string[] };
+
+function parseAssistantMessageBlocks(content: string): AssistantMessageBlock[] {
+  const blocks: AssistantMessageBlock[] = [];
+  const paragraphs = content
+    .replace(/\r\n?/g, "\n")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  for (const paragraph of paragraphs) {
+    const lines = paragraph
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const orderedItems = lines.map((line) => line.match(/^\d+[.)]\s+(.+)$/)?.[1] ?? null);
+    if (orderedItems.length > 0 && orderedItems.every(Boolean)) {
+      blocks.push({ type: "ordered-list", items: orderedItems as string[] });
+      continue;
+    }
+
+    const unorderedItems = lines.map((line) => line.match(/^[-*]\s+(.+)$/)?.[1] ?? null);
+    if (unorderedItems.length > 0 && unorderedItems.every(Boolean)) {
+      blocks.push({ type: "unordered-list", items: unorderedItems as string[] });
+      continue;
+    }
+
+    blocks.push({ type: "paragraph", text: paragraph });
+  }
+
+  return blocks.length > 0 ? blocks : [{ type: "paragraph", text: content }];
+}
+
+function renderInlineAssistantMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+  let lastIndex = 0;
+  let index = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const marker = match[0];
+    const start = match.index ?? 0;
+    if (start > lastIndex) {
+      nodes.push(
+        <Fragment key={`text-${index}`}>{text.slice(lastIndex, start)}</Fragment>,
+      );
+      index += 1;
+    }
+
+    if (marker.startsWith("`")) {
+      nodes.push(
+        <code key={`code-${index}`} className="rounded bg-background/70 px-1 py-0.5 font-mono text-[0.92em]">
+          {marker.slice(1, -1)}
+        </code>,
+      );
+    } else {
+      nodes.push(
+        <strong key={`strong-${index}`} className="font-semibold">
+          {marker.slice(2, -2)}
+        </strong>,
+      );
+    }
+    index += 1;
+    lastIndex = start + marker.length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(<Fragment key={`text-${index}`}>{text.slice(lastIndex)}</Fragment>);
+  }
+
+  return nodes.length > 0 ? nodes : [text];
 }
 
 function createMessageId(role: MessageRole): string {

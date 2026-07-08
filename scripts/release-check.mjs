@@ -33,6 +33,7 @@ const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH =
   "/api/v1/admin/settings/notification-channels/mcp-summary";
 const ADMIN_ANALYTICS_HEALTH_PATH = "/api/v1/admin/analytics/health";
 const ADMIN_CUSTOMERS_MCP_SEARCH_PATH = "/api/v1/admin/customers/mcp-search";
+const ADMIN_PRODUCT_COPY_CONTEXT_PATH = "/api/v1/admin/products/{id}";
 const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_VERSION =
   "admin-notification-settings-summary:v1";
 const ADMIN_ANALYTICS_SUMMARY_VERSION = "admin-analytics-summary:v1";
@@ -63,6 +64,7 @@ const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_inventory_lookup",
   "admin_media_search",
   "admin_page_search",
+  "admin_product_copy_context",
   "admin_product_search",
   "admin_order_search",
 ]);
@@ -134,6 +136,7 @@ const ADMIN_PRODUCT_SEARCH_TOOL_SMOKE = Object.freeze({
     page: 1,
   }),
 });
+const ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME = "admin_product_copy_context";
 const ADMIN_ORDER_SEARCH_TOOL_SMOKE = Object.freeze({
   name: "admin_order_search",
   arguments: Object.freeze({
@@ -233,6 +236,8 @@ const ADMIN_CUSTOMER_SEARCH_EMAIL_VALUE_PATTERN =
   /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const ADMIN_CUSTOMER_SEARCH_PHONE_VALUE_PATTERN =
   /(?:\+?880|0)1[3-9]\d{8}/;
+const ADMIN_PRODUCT_COPY_CONTEXT_FORBIDDEN_KEY_PATTERN =
+  /(?:prices?|discounts?|skus?|stock|barcodes?|images?|primaryImage|variants?|deleted|providerPayloads?)/i;
 const ADMIN_CUSTOMER_SEARCH_ALLOWED_TOP_LEVEL_KEYS = new Set([
   "source",
   "request",
@@ -2949,6 +2954,134 @@ function evaluateAdminCustomerSearchToolSmokeResult(result, {
   };
 }
 
+function firstAdminProductSearchCandidateId(result) {
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+  const productSearch = isRecord(structuredContent?.adminProductSearch)
+    ? structuredContent.adminProductSearch
+    : null;
+  const products = Array.isArray(productSearch?.products) ? productSearch.products : [];
+  for (const product of products) {
+    if (!isRecord(product)) continue;
+    const id = typeof product.id === "string" ? product.id.trim() : "";
+    if (id) return id;
+  }
+  return null;
+}
+
+function findForbiddenAdminProductCopyContextPaths(value, path = "$", seen = new Set()) {
+  const leaks = [];
+  if (!isRecord(value) && !Array.isArray(value)) return leaks;
+  if (seen.has(value)) return leaks;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      leaks.push(...findForbiddenAdminProductCopyContextPaths(item, `${path}[${index}]`, seen));
+    });
+    return leaks;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "limits") continue;
+    const childPath = `${path}.${key}`;
+    if (ADMIN_PRODUCT_COPY_CONTEXT_FORBIDDEN_KEY_PATTERN.test(key)) {
+      leaks.push(childPath);
+    }
+    leaks.push(...findForbiddenAdminProductCopyContextPaths(child, childPath, seen));
+  }
+  return leaks;
+}
+
+function evaluateAdminProductCopyContextToolSmokeResult(result, {
+  toolName = ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+  const context = isRecord(structuredContent?.adminProductCopyContext)
+    ? structuredContent.adminProductCopyContext
+    : null;
+  const source = isRecord(context?.source) ? context.source : null;
+  const product = isRecord(context?.product) ? context.product : null;
+  const description = isRecord(product?.description) ? product.description : null;
+  const limits = isRecord(context?.limits) ? context.limits : null;
+
+  if (result?.isError === true) {
+    errors.push(`Admin MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Admin MCP ${toolName} must return at least one content block.`);
+  }
+  if (!context) {
+    errors.push(`Admin MCP ${toolName} must return structured adminProductCopyContext content.`);
+  }
+  if (source?.path !== ADMIN_PRODUCT_COPY_CONTEXT_PATH) {
+    errors.push(`Admin MCP ${toolName} source.path must be ${ADMIN_PRODUCT_COPY_CONTEXT_PATH}.`);
+  }
+  if (source?.permission !== "products.view") {
+    errors.push(`Admin MCP ${toolName} source.permission must be products.view.`);
+  }
+  if (!product) {
+    errors.push(`Admin MCP ${toolName} must return product copy context.`);
+  } else {
+    if (typeof product.id !== "string" || !product.id.trim()) {
+      errors.push(`Admin MCP ${toolName} product must include a non-empty id.`);
+    }
+    if (typeof product.name !== "string" || !product.name.trim()) {
+      errors.push(`Admin MCP ${toolName} product must include a non-empty name.`);
+    }
+    if (description) {
+      if (typeof description.content !== "string" || description.content.length > 14_000) {
+        errors.push(`Admin MCP ${toolName} description.content must be a bounded string.`);
+      }
+      if (typeof description.excerpt !== "string" || description.excerpt.length > 600) {
+        errors.push(`Admin MCP ${toolName} description.excerpt must be a bounded string.`);
+      }
+    }
+  }
+  if (!limits) {
+    errors.push(`Admin MCP ${toolName} must return limits metadata.`);
+  } else {
+    const unsafeLimits = [
+      "includesPrices",
+      "includesVariants",
+      "includesSku",
+      "includesStock",
+      "includesBarcodes",
+      "includesImages",
+      "includesDeletedFields",
+      "includesProviderPayloads",
+      "canMutate",
+    ].filter((key) => limits[key] !== false);
+    if (unsafeLimits.length > 0) {
+      errors.push(`Admin MCP ${toolName} limits must explicitly disable ${unsafeLimits.join(", ")}.`);
+    }
+  }
+
+  const forbiddenPaths = context
+    ? findForbiddenAdminProductCopyContextPaths(context).slice(0, 8)
+    : [];
+  if (forbiddenPaths.length > 0) {
+    errors.push(
+      `Admin MCP ${toolName} must not leak price, SKU, stock, barcode, image, variant, deleted, or provider-payload fields: ` +
+      forbiddenPaths.join(", "),
+    );
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
+    productId: typeof product?.id === "string" ? product.id : null,
+    descriptionLength: typeof description?.content === "string" ? description.content.length : 0,
+  };
+}
+
 function evaluateAdminReadOnlyToolSmokeResult(result, {
   toolName = ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name,
 } = {}) {
@@ -3842,6 +3975,51 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
+  const productCopyCandidateId = firstAdminProductSearchCandidateId(productSearchToolResult);
+  let productCopyContextToolResponse = null;
+  let productCopyContextToolCacheControl = null;
+  let productCopyContextToolEvaluation = null;
+  if (productCopyCandidateId) {
+    const productCopyContextToolSmoke = {
+      name: ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME,
+      arguments: {
+        id: productCopyCandidateId,
+      },
+    };
+    productCopyContextToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+      fetchImpl,
+      timeoutMs,
+      headers: authenticatedHeaders,
+      sessionId,
+      protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+      body: {
+        jsonrpc: "2.0",
+        id: 13,
+        method: "tools/call",
+        params: productCopyContextToolSmoke,
+      },
+    });
+    productCopyContextToolCacheControl = requireNoStoreCacheControl(
+      productCopyContextToolResponse,
+      `Authenticated Admin MCP ${ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME}`,
+    );
+    const productCopyContextToolResult = requireMcpJsonRpcResult(
+      productCopyContextToolResponse,
+      `Authenticated Admin MCP ${ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME}`,
+      13,
+    );
+    productCopyContextToolEvaluation = evaluateAdminProductCopyContextToolSmokeResult(
+      productCopyContextToolResult,
+      { toolName: ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME },
+    );
+    if (!productCopyContextToolEvaluation.ok) {
+      throw new Error(
+        `Admin MCP ${ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME} failed: ` +
+        productCopyContextToolEvaluation.errors.join("; "),
+      );
+    }
+  }
+
   const orderSearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
     fetchImpl,
     timeoutMs,
@@ -3850,7 +4028,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 13,
+      id: 14,
       method: "tools/call",
       params: ADMIN_ORDER_SEARCH_TOOL_SMOKE,
     },
@@ -3862,7 +4040,7 @@ export async function smokeAdminMcpAuthenticated({
   const orderSearchToolResult = requireMcpJsonRpcResult(
     orderSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}`,
-    13,
+    14,
   );
   const orderSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     orderSearchToolResult,
@@ -3883,7 +4061,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 14,
+      id: 15,
       method: "tools/call",
       params: ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE,
     },
@@ -3895,7 +4073,7 @@ export async function smokeAdminMcpAuthenticated({
   const customerSearchToolResult = requireMcpJsonRpcResult(
     customerSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name}`,
-    14,
+    15,
   );
   const customerSearchToolEvaluation = evaluateAdminCustomerSearchToolSmokeResult(
     customerSearchToolResult,
@@ -3916,7 +4094,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 15,
+      id: 16,
       method: "tools/call",
       params: ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE,
     },
@@ -3928,7 +4106,7 @@ export async function smokeAdminMcpAuthenticated({
   const inventoryLookupToolResult = requireMcpJsonRpcResult(
     inventoryLookupToolResponse,
     `Authenticated Admin MCP ${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name}`,
-    15,
+    16,
   );
   const inventoryLookupToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     inventoryLookupToolResult,
@@ -3941,6 +4119,10 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
+  const productCopyContextCallSummary = productCopyContextToolEvaluation
+    ? ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME
+    : `${ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME} skipped (no product candidate)`;
+
   logger?.log(
     `PASS admin MCP authenticated: tools ${toolEvaluation.toolNames.join(", ")}, ` +
     `calls ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}, ` +
@@ -3952,7 +4134,8 @@ export async function smokeAdminMcpAuthenticated({
     `${ADMIN_COLLECTION_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_PAGE_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name}, ` +
-    `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}, ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}, ` +
+    `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}, ${productCopyContextCallSummary}, ` +
+    `${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name} ok.`,
   );
@@ -4054,6 +4237,21 @@ export async function smokeAdminMcpAuthenticated({
         cacheControl: productSearchToolCacheControl,
         contentCount: productSearchToolEvaluation.contentCount,
       },
+      productCopyContextTool: productCopyContextToolEvaluation && productCopyContextToolResponse
+        ? {
+            name: ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME,
+            statusCode: productCopyContextToolResponse.statusCode,
+            durationMs: productCopyContextToolResponse.durationMs,
+            cacheControl: productCopyContextToolCacheControl,
+            contentCount: productCopyContextToolEvaluation.contentCount,
+            productId: productCopyContextToolEvaluation.productId,
+            descriptionLength: productCopyContextToolEvaluation.descriptionLength,
+          }
+        : {
+            name: ADMIN_PRODUCT_COPY_CONTEXT_TOOL_NAME,
+            skipped: true,
+            reason: "admin_product_search returned no product candidate",
+          },
       orderSearchTool: {
         name: ADMIN_ORDER_SEARCH_TOOL_SMOKE.name,
         statusCode: orderSearchToolResponse.statusCode,
