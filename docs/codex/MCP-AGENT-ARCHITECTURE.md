@@ -40,9 +40,10 @@ Excluded from the first release: RBAC writes, admin-user invites/deletes, perman
 Storefront MCP is public and catalog-first.
 
 - Use typed tools over the existing UCP/feed/catalog projection, not Code Mode.
-- The first implemented slice is `@scalius/agent` with `GET /health` and stateless `/mcp` read tools: catalog tools `catalog_search`, `catalog_lookup`, `catalog_product`, `catalog_profile`, and `catalog_categories`, plus `cart_validate` for bounded read-only cart snapshot validation.
+- The first implemented slice is `@scalius/agent` with `GET /health` and stateless `/mcp` read tools: catalog tools `catalog_search`, `catalog_lookup`, `catalog_product`, `catalog_profile`, and `catalog_categories`, `storefront_discovery_policy` for public discovery/return-policy facts, plus `cart_validate` for bounded read-only cart snapshot validation.
 - That first slice has no D1, R2, KV, queue, Durable Object, provider-secret, admin, customer, order, checkout, payment, fulfillment, support, recovery, or cart-mutation bindings/tools.
 - `catalog_categories` is public, read-only, API service-binding-only, and compact: it may expose category identifiers, labels, slugs/paths, hierarchy/count hints, and discovery metadata needed for catalog browsing, but it must not send cookies/auth headers or expose private customer, order, payment, checkout, receipt, recovery, support, session, provider, or admin data.
+- `storefront_discovery_policy` is public, read-only, API service-binding-only, and compact: it calls only `GET /api/v1/seo`, sends no cookies/auth headers, returns sitemap/feed/robots/structured-data toggles, absolute storefront discovery URLs, and merchant-saved return-policy facts, and exposes explicit read-only/no-private-data limits. It must not expose raw robots text, checkout/payment/order/customer/session/cart data, analytics snippets, provider payloads, upstream error bodies, or mutation authority.
 - The first page-context bridge is mounted in the storefront layout at `apps/storefront/src/components/assistant/**` and `apps/storefront/src/lib/assistant-page-context*`. It publishes a sanitized browser-only snapshot under `window.__SCALIUS_STOREFRONT_PAGE_CONTEXT__` and `scalius:storefront-page-context:change`, limited to public route/canonical/title/page kind plus a bounded allowlisted cart summary.
 - Storefront page-context code must not call `hydrateCartFromStorage()`, read raw cookies/storage payloads, customer sessions, order/receipt proofs, phone/email/address/payment details, discount codes, or mutate cart/checkout state. Cart context is summary-only, passively read from the current cart store snapshot, until a signed D1-backed assistant session exists. Cart line options must use merchant-defined `{ name, label }` pairs from the product option labels; legacy `size`/`color` fields are fallback compatibility only.
 - Expose catalog search, catalog lookup, product context, compact category reads, discovery policy reads, visible page context, same-origin navigation, and read-only cart snapshot validation.
@@ -91,7 +92,7 @@ Before exposing any MCP endpoint publicly:
 - Admin page tools must use the same page-permission source as the dashboard route guard, or have a drift test that fails when maps diverge.
 - Admin form tools must operate only on registered visible forms and must refuse hidden credential fields unless a dedicated, human-confirmed credential-flow design exists.
 - Storefront UCP tests must prove only catalog read capabilities such as search, lookup, and product are advertised. Storefront MCP tools may add only explicitly allowlisted public read-only catalog tools, including `catalog_categories`, and the read-only cart-validation surface; do not advertise `catalog_categories` as a UCP capability and do not add cart mutation or transaction capability.
-- Storefront MCP release proof must execute the public wrappers, not only inspect `tools/list`: `catalog_profile`, `catalog_categories`, `catalog_search`, `cart_validate`, and `catalog_lookup`/`catalog_product` when search returns a product candidate. MCP initialize, initialized notification, tools/list, and every tool call must be `Cache-Control: no-store`.
+- Storefront MCP release proof must execute the public wrappers, not only inspect `tools/list`: `catalog_profile`, `catalog_categories`, `storefront_discovery_policy`, `catalog_search`, `cart_validate`, and `catalog_lookup`/`catalog_product` when search returns a product candidate. MCP initialize, initialized notification, tools/list, and every tool call must be `Cache-Control: no-store`.
 - Storefront page tools must refuse off-origin navigation and must not read private customer/order/session data.
 - MCP errors and logs must use masked metadata only. No OTPs, credentials, receipt proofs, provider payloads, raw phone/email, or buyer PII.
 
@@ -107,7 +108,7 @@ Minimum local gates for the first tracked agent Worker:
 - `pnpm check:env`
 - MCP Inspector or equivalent JSON-RPC smoke for both MCP route groups, including public agent-host `/mcp/admin` rejection, public Storefront MCP wrapper execution, and dashboard-proxied Admin MCP initialize/tools/list/call proof
 - Admin 401/403/RBAC/2FA/onboarding tests
-- Storefront catalog, compact category, and read-only cart-validation tool tests
+- Storefront catalog, compact category, public discovery-policy, and read-only cart-validation tool tests
 - Browser smoke: admin assistant can read page state and navigate without console errors
 - Browser smoke: storefront assistant can read public product/cart-validation context without private data exposure
 

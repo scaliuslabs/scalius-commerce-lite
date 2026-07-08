@@ -148,6 +148,7 @@ const AGENT_EXPECTED_TOOL_NAMES = Object.freeze([
   "catalog_lookup",
   "catalog_product",
   "catalog_profile",
+  "storefront_discovery_policy",
 ]);
 const AGENT_CATALOG_TOOL_SMOKE = Object.freeze({
   name: "catalog_profile",
@@ -158,6 +159,10 @@ const AGENT_CATALOG_CATEGORIES_TOOL_SMOKE = Object.freeze({
   arguments: Object.freeze({
     limit: 1,
   }),
+});
+const AGENT_POLICY_TOOL_SMOKE = Object.freeze({
+  name: "storefront_discovery_policy",
+  arguments: Object.freeze({}),
 });
 const AGENT_CATALOG_SEARCH_TOOL_SMOKE = Object.freeze({
   name: "catalog_search",
@@ -2065,6 +2070,85 @@ function evaluateAgentCartValidationSmokeResult(result, {
   };
 }
 
+function evaluateAgentPolicySmokeResult(result, {
+  toolName = AGENT_POLICY_TOOL_SMOKE.name,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+  const storefrontDiscoveryPolicy = isRecord(structuredContent?.storefrontDiscoveryPolicy)
+    ? structuredContent.storefrontDiscoveryPolicy
+    : null;
+  const discovery = isRecord(storefrontDiscoveryPolicy?.discovery)
+    ? storefrontDiscoveryPolicy.discovery
+    : null;
+  const returnPolicy = isRecord(storefrontDiscoveryPolicy?.returnPolicy)
+    ? storefrontDiscoveryPolicy.returnPolicy
+    : null;
+  const limits = isRecord(storefrontDiscoveryPolicy?.limits)
+    ? storefrontDiscoveryPolicy.limits
+    : null;
+  const sitemap = isRecord(discovery?.sitemap) ? discovery.sitemap : null;
+  const feeds = isRecord(discovery?.feeds) ? discovery.feeds : null;
+  const robots = isRecord(discovery?.robots) ? discovery.robots : null;
+  const structuredData = isRecord(discovery?.structuredData) ? discovery.structuredData : null;
+
+  if (result?.isError === true) {
+    errors.push(`Agent MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Agent MCP ${toolName} must return at least one content block.`);
+  }
+  if (!storefrontDiscoveryPolicy) {
+    errors.push(`Agent MCP ${toolName} must return structured storefrontDiscoveryPolicy content.`);
+  } else {
+    if (!sitemap || typeof sitemap.enabled !== "boolean" || !Array.isArray(sitemap.urls)) {
+      errors.push(`Agent MCP ${toolName} must return discovery.sitemap enabled and urls.`);
+    }
+    if (
+      !feeds ||
+      typeof feeds.productCatalogEnabled !== "boolean" ||
+      typeof feeds.includeUnavailableProducts !== "boolean" ||
+      !Array.isArray(feeds.urls)
+    ) {
+      errors.push(`Agent MCP ${toolName} must return discovery.feeds policy and urls.`);
+    }
+    if (!robots || typeof robots.advertiseSitemap !== "boolean") {
+      errors.push(`Agent MCP ${toolName} must return discovery.robots.advertiseSitemap.`);
+    }
+    if (!structuredData || typeof structuredData.products !== "boolean") {
+      errors.push(`Agent MCP ${toolName} must return discovery.structuredData products flag.`);
+    }
+    if (!returnPolicy || typeof returnPolicy.enabled !== "boolean") {
+      errors.push(`Agent MCP ${toolName} must return returnPolicy.enabled as a boolean.`);
+    }
+    if (
+      !limits ||
+      limits.readOnly !== true ||
+      limits.canMutate !== false ||
+      limits.includesCustomerData !== false ||
+      limits.includesPaymentData !== false ||
+      limits.includesCheckoutData !== false
+    ) {
+      errors.push(`Agent MCP ${toolName} must return explicit read-only/no-private-data limits.`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
+    sitemapEnabled: typeof sitemap?.enabled === "boolean" ? sitemap.enabled : null,
+    feedEnabled: typeof feeds?.productCatalogEnabled === "boolean"
+      ? feeds.productCatalogEnabled
+      : null,
+    returnsEnabled: typeof returnPolicy?.enabled === "boolean" ? returnPolicy.enabled : null,
+  };
+}
+
 function evaluateAdminNavigationToolSmokeResult(result, {
   toolName = ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name,
 } = {}) {
@@ -2812,6 +2896,7 @@ export async function smokeAgentWorker({
 
   let catalogToolResult = null;
   let catalogCategoriesToolResult = null;
+  let policyToolResult = null;
   let catalogSearchToolResult = null;
   let catalogLookupToolResult = null;
   let catalogProductToolResult = null;
@@ -2883,6 +2968,30 @@ export async function smokeAgentWorker({
       cacheControl: catalogCategoriesToolCall.cacheControl,
       contentCount: catalogCategoriesToolEvaluation.contentCount,
       categoryCount: catalogCategoriesToolEvaluation.categoryCount,
+    };
+
+    const policyToolCall = await callAgentMcpTool(AGENT_POLICY_TOOL_SMOKE);
+    const policyToolEvaluation = evaluateAgentPolicySmokeResult(
+      policyToolCall.result,
+      {
+        toolName: AGENT_POLICY_TOOL_SMOKE.name,
+      },
+    );
+    if (!policyToolEvaluation.ok) {
+      throw new Error(
+        `Agent MCP ${AGENT_POLICY_TOOL_SMOKE.name} failed: ` +
+        policyToolEvaluation.errors.join("; "),
+      );
+    }
+    policyToolResult = {
+      name: AGENT_POLICY_TOOL_SMOKE.name,
+      statusCode: policyToolCall.response.statusCode,
+      durationMs: policyToolCall.response.durationMs,
+      cacheControl: policyToolCall.cacheControl,
+      contentCount: policyToolEvaluation.contentCount,
+      sitemapEnabled: policyToolEvaluation.sitemapEnabled,
+      feedEnabled: policyToolEvaluation.feedEnabled,
+      returnsEnabled: policyToolEvaluation.returnsEnabled,
     };
 
     const catalogSearchToolCall = await callAgentMcpTool(AGENT_CATALOG_SEARCH_TOOL_SMOKE);
@@ -3008,6 +3117,9 @@ export async function smokeAgentWorker({
   const catalogCategoriesToolSummary = catalogCategoriesToolResult
     ? `, ${catalogCategoriesToolResult.name} call ok`
     : "";
+  const policyToolSummary = policyToolResult
+    ? `, ${policyToolResult.name} call ok`
+    : "";
   const catalogSearchToolSummary = catalogSearchToolResult
     ? `, ${catalogSearchToolResult.name} call ok`
     : "";
@@ -3025,7 +3137,7 @@ export async function smokeAgentWorker({
     ? `, ${cartValidationToolResult.name} call ok`
     : "";
   logger?.log(
-    `PASS agent MCP: /health ${healthResponse.statusCode}, tools ${toolEvaluation.toolNames.join(", ")}${catalogToolSummary}${catalogCategoriesToolSummary}${catalogSearchToolSummary}${catalogLookupToolSummary}${catalogProductToolSummary}${cartValidationToolSummary}.`,
+    `PASS agent MCP: /health ${healthResponse.statusCode}, tools ${toolEvaluation.toolNames.join(", ")}${catalogToolSummary}${catalogCategoriesToolSummary}${policyToolSummary}${catalogSearchToolSummary}${catalogLookupToolSummary}${catalogProductToolSummary}${cartValidationToolSummary}.`,
   );
   return {
     agentUrl: redactUrl(normalizedAgentUrl),
@@ -3054,6 +3166,7 @@ export async function smokeAgentWorker({
       },
       ...(catalogToolResult ? { catalogTool: catalogToolResult } : {}),
       ...(catalogCategoriesToolResult ? { catalogCategoriesTool: catalogCategoriesToolResult } : {}),
+      ...(policyToolResult ? { policyTool: policyToolResult } : {}),
       ...(catalogSearchToolResult ? { catalogSearchTool: catalogSearchToolResult } : {}),
       ...(catalogLookupToolResult ? { catalogLookupTool: catalogLookupToolResult } : {}),
       ...(catalogProductToolResult ? { catalogProductTool: catalogProductToolResult } : {}),

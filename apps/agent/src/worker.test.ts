@@ -498,6 +498,7 @@ describe("storefront catalog MCP server", () => {
       "catalog_product",
       "catalog_profile",
       "catalog_search",
+      "storefront_discovery_policy",
     ]);
 
     for (const tool of result.tools) {
@@ -552,6 +553,14 @@ describe("storefront catalog MCP server", () => {
         }],
       },
     }));
+    await expectValidationToolError(client.callTool({
+      name: "storefront_discovery_policy",
+      arguments: {
+        includePrivate: true,
+        customerEmail: "customer@example.test",
+        paymentToken: "secret",
+      },
+    }));
 
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -590,6 +599,193 @@ describe("storefront catalog MCP server", () => {
 
     expect(storefrontFetch).not.toHaveBeenCalled();
     expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("summarizes public storefront discovery policy through API binding with compact safe output", async () => {
+    const storefrontFetch = vi.fn<FetchLike>().mockResolvedValue(json({ ucp: { status: "success" } }));
+    const apiFetch = vi.fn<FetchLike>().mockResolvedValue(json({
+      success: true,
+      data: {
+        discovery: {
+          sitemap: {
+            enabled: true,
+            staticPages: true,
+            products: true,
+            categories: true,
+            collections: false,
+            pages: true,
+          },
+          feeds: {
+            productCatalogEnabled: true,
+            includeUnavailableProducts: false,
+            variantStrategy: "variants",
+            title: "Demo feed",
+            description: "Public products",
+            privateNote: "must-not-leak",
+          },
+          robots: { advertiseSitemap: true, rawRobotsTxt: "must-not-leak" },
+          structuredData: {
+            organization: true,
+            websiteSearch: true,
+            products: true,
+            productGroups: true,
+            offerShippingDetails: true,
+            breadcrumbs: true,
+            collections: false,
+          },
+        },
+        returnPolicy: {
+          enabled: true,
+          country: "BD",
+          category: "https://schema.org/MerchantReturnFiniteReturnWindow",
+          returnWindowDays: 7,
+          returnFees: "https://schema.org/FreeReturn",
+          returnMethod: "https://schema.org/ReturnByMail",
+          policyUrl: "/returns",
+          rawProviderError: "must-not-leak",
+        },
+        robotsTxt: "must-not-leak",
+        checkout: "must-not-leak",
+        payment: "must-not-leak",
+      },
+    }));
+    const { client } = await boot(storefrontFetch, createEnv(apiFetch));
+
+    const result = await client.callTool({
+      name: "storefront_discovery_policy",
+      arguments: {},
+    });
+
+    expect(storefrontFetch).not.toHaveBeenCalled();
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(apiFetch.mock.calls.map(([input]) => requestUrl(input))).toEqual([
+      "http://api.internal/api/v1/seo",
+    ]);
+    for (const [, init] of apiFetch.mock.calls) {
+      expect(init?.method).toBe("GET");
+      expect(init?.body).toBeUndefined();
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      const headers = new Headers(init?.headers);
+      expect(headers.get("Accept")).toBe("application/json");
+      expect(headers.get("Cookie")).toBeNull();
+      expect(headers.get("Authorization")).toBeNull();
+      expect([...headers.keys()].sort()).toEqual(["accept"]);
+    }
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      storefrontDiscoveryPolicy: {
+        source: { path: "/api/v1/seo" },
+        returnPolicy: {
+          enabled: true,
+          country: "BD",
+          returnWindowDays: 7,
+          policyUrl: "https://storefront.example.test/returns",
+        },
+        discovery: {
+          sitemap: {
+            enabled: true,
+            sections: {
+              staticPages: true,
+              products: true,
+              categories: true,
+              collections: false,
+              pages: true,
+            },
+            urls: [
+              { type: "index", url: "https://storefront.example.test/sitemap.xml" },
+              { type: "static", url: "https://storefront.example.test/sitemap-static.xml" },
+              { type: "products", url: "https://storefront.example.test/sitemap-products.xml" },
+              { type: "categories", url: "https://storefront.example.test/sitemap-categories.xml" },
+              { type: "pages", url: "https://storefront.example.test/sitemap-pages.xml" },
+            ],
+          },
+          feeds: {
+            productCatalogEnabled: true,
+            includeUnavailableProducts: false,
+            variantStrategy: "variants",
+            urls: [
+              { type: "google", url: "https://storefront.example.test/api/product-feed.xml" },
+              { type: "facebook", url: "https://storefront.example.test/api/facebook-feed.xml" },
+            ],
+          },
+          robots: {
+            advertiseSitemap: true,
+            robotsUrl: "https://storefront.example.test/robots.txt",
+          },
+          structuredData: { products: true },
+        },
+        limits: {
+          readOnly: true,
+          canMutate: false,
+          includesCustomerData: false,
+          includesPaymentData: false,
+          includesCheckoutData: false,
+        },
+      },
+    });
+    const serialized = JSON.stringify(result).toLowerCase();
+    expect(serialized).not.toContain("must-not-leak");
+    expect(serialized).not.toContain("robotstxt");
+    expect(serialized).not.toContain("rawrobotstxt");
+  });
+
+  it("keeps disabled storefront return policy compact", async () => {
+    const apiFetch = vi.fn<FetchLike>().mockResolvedValue(json({
+      success: true,
+      data: {
+        discovery: {},
+        returnPolicy: {
+          enabled: false,
+          country: "BD",
+          policyUrl: "https://storefront.example.test/returns",
+        },
+      },
+    }));
+    const { client } = await boot(undefined, createEnv(apiFetch));
+
+    const result = await client.callTool({
+      name: "storefront_discovery_policy",
+      arguments: {},
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      storefrontDiscoveryPolicy: {
+        returnPolicy: { enabled: false },
+      },
+    });
+    expect(Object.keys(
+      ((result.structuredContent as Record<string, unknown>).storefrontDiscoveryPolicy as Record<string, unknown>)
+        .returnPolicy as Record<string, unknown>,
+    )).toEqual(["enabled"]);
+  });
+
+  it("fails storefront_discovery_policy closed when public policy is unavailable", async () => {
+    const apiFetch = vi.fn<FetchLike>()
+      .mockResolvedValue(json({ success: false, error: { code: "SERVICE_UNAVAILABLE" } }, 503));
+    const { client } = await boot(undefined, createEnv(apiFetch));
+
+    const result = await client.callTool({
+      name: "storefront_discovery_policy",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: { code: "public_seo_unavailable" },
+      storefrontDiscoveryPolicy: {
+        source: { path: "/api/v1/seo" },
+        returnPolicy: { enabled: false },
+        limits: {
+          readOnly: true,
+          canMutate: false,
+          includesCustomerData: false,
+          includesPaymentData: false,
+          includesCheckoutData: false,
+        },
+      },
+    });
   });
 
   it("calls storefront UCP search with bounded body and safe profile header", async () => {

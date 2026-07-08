@@ -161,6 +161,7 @@ function agentMcpTools(overrides = {}) {
     agentMcpTool("catalog_lookup", overrides.catalog_lookup),
     agentMcpTool("catalog_product", overrides.catalog_product),
     agentMcpTool("catalog_profile", overrides.catalog_profile),
+    agentMcpTool("storefront_discovery_policy", overrides.storefront_discovery_policy),
   ];
 }
 
@@ -296,10 +297,69 @@ function agentCartValidationMcpResult() {
   };
 }
 
+function agentDiscoveryPolicyMcpResult() {
+  const result = {
+    storefrontDiscoveryPolicy: {
+      source: { path: "/api/v1/seo" },
+      discovery: {
+        sitemap: {
+          enabled: true,
+          sections: {
+            staticPages: true,
+            products: true,
+            categories: true,
+            collections: false,
+            pages: true,
+          },
+          urls: [{ type: "index", url: "https://storefront.example.test/sitemap.xml" }],
+        },
+        feeds: {
+          productCatalogEnabled: true,
+          includeUnavailableProducts: false,
+          variantStrategy: "variants",
+          urls: [{
+            type: "google",
+            url: "https://storefront.example.test/api/product-feed.xml",
+          }],
+        },
+        robots: {
+          advertiseSitemap: true,
+          robotsUrl: "https://storefront.example.test/robots.txt",
+        },
+        structuredData: {
+          organization: true,
+          websiteSearch: true,
+          products: true,
+          productGroups: true,
+          offerShippingDetails: true,
+          breadcrumbs: true,
+          collections: false,
+        },
+      },
+      returnPolicy: {
+        enabled: false,
+      },
+      limits: {
+        readOnly: true,
+        canMutate: false,
+        includesCustomerData: false,
+        includesPaymentData: false,
+        includesCheckoutData: false,
+      },
+    },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
 function agentMcpSmokeFetch({
   tools = agentMcpTools(),
   toolResult = agentCatalogProfileMcpResult(),
   catalogCategoriesToolResult = agentCatalogCategoriesMcpResult(),
+  discoveryPolicyToolResult = agentDiscoveryPolicyMcpResult(),
   catalogSearchToolResult = agentCatalogSearchMcpResult(),
   catalogLookupToolResult = (body) =>
     agentCatalogLookupMcpResult(body.params?.arguments?.ids?.[0]),
@@ -310,6 +370,7 @@ function agentMcpSmokeFetch({
   toolsCacheControl = "no-store",
   toolCacheControl = "no-store",
   catalogCategoriesToolCacheControl = toolCacheControl,
+  discoveryPolicyToolCacheControl = toolCacheControl,
   catalogSearchToolCacheControl = toolCacheControl,
   catalogLookupToolCacheControl = toolCacheControl,
   catalogProductToolCacheControl = toolCacheControl,
@@ -358,6 +419,9 @@ function agentMcpSmokeFetch({
         if (body.params?.name === "catalog_categories") {
           result = catalogCategoriesToolResult;
           cacheControl = catalogCategoriesToolCacheControl;
+        } else if (body.params?.name === "storefront_discovery_policy") {
+          result = discoveryPolicyToolResult;
+          cacheControl = discoveryPolicyToolCacheControl;
         } else if (body.params?.name === "catalog_search") {
           result = catalogSearchToolResult;
           cacheControl = catalogSearchToolCacheControl;
@@ -1593,8 +1657,9 @@ describe("release-check local evaluators", () => {
         "catalog_product",
         "catalog_profile",
         "catalog_search",
+        "storefront_discovery_policy",
       ],
-      readOnlyToolCount: 6,
+      readOnlyToolCount: 7,
     });
   });
 
@@ -2910,6 +2975,12 @@ describe("release-check local evaluators", () => {
             },
           });
         }
+        if (body.params?.name === "storefront_discovery_policy") {
+          expect(body.params).toEqual({
+            name: "storefront_discovery_policy",
+            arguments: {},
+          });
+        }
         if (body.params?.name === "catalog_search") {
           expect(body.params).toEqual({
             name: "catalog_search",
@@ -2962,6 +3033,7 @@ describe("release-check local evaluators", () => {
     expect(mcpRequests).toEqual([
       "tools/call:catalog_profile",
       "tools/call:catalog_categories",
+      "tools/call:storefront_discovery_policy",
       "tools/call:catalog_search",
       "tools/call:catalog_lookup",
       "tools/call:catalog_product",
@@ -2974,7 +3046,7 @@ describe("release-check local evaluators", () => {
     expect(result.mcp.tools).toMatchObject({
       statusCode: 200,
       cacheControl: "no-store",
-      readOnlyToolCount: 6,
+      readOnlyToolCount: 7,
     });
     expect(result.mcp.catalogTool).toMatchObject({
       name: "catalog_profile",
@@ -2989,6 +3061,15 @@ describe("release-check local evaluators", () => {
           "dev.ucp.shopping.catalog.lookup",
         ],
       },
+    });
+    expect(result.mcp.policyTool).toMatchObject({
+      name: "storefront_discovery_policy",
+      statusCode: 200,
+      cacheControl: "no-store",
+      contentCount: 1,
+      sitemapEnabled: true,
+      feedEnabled: true,
+      returnsEnabled: false,
     });
     expect(result.mcp.catalogCategoriesTool).toMatchObject({
       name: "catalog_categories",
@@ -3678,6 +3759,12 @@ describe("runReleaseCheck", () => {
                 },
               });
             }
+            if (body.params?.name === "storefront_discovery_policy") {
+              expect(body.params).toEqual({
+                name: "storefront_discovery_policy",
+                arguments: {},
+              });
+            }
             if (body.params?.name === "catalog_search") {
               expect(body.params).toEqual({
                 name: "catalog_search",
@@ -3722,13 +3809,15 @@ describe("runReleaseCheck", () => {
                 ? agentCartValidationMcpResult()
                 : body.params?.name === "catalog_categories"
                   ? agentCatalogCategoriesMcpResult()
-                  : body.params?.name === "catalog_search"
-                    ? agentCatalogSearchMcpResult()
-                    : body.params?.name === "catalog_lookup"
-                      ? agentCatalogLookupMcpResult(body.params?.arguments?.ids?.[0])
-                      : body.params?.name === "catalog_product"
-                        ? agentCatalogProductMcpResult(body.params?.arguments?.id)
-                        : agentCatalogProfileMcpResult(),
+                  : body.params?.name === "storefront_discovery_policy"
+                    ? agentDiscoveryPolicyMcpResult()
+                    : body.params?.name === "catalog_search"
+                      ? agentCatalogSearchMcpResult()
+                      : body.params?.name === "catalog_lookup"
+                        ? agentCatalogLookupMcpResult(body.params?.arguments?.ids?.[0])
+                        : body.params?.name === "catalog_product"
+                          ? agentCatalogProductMcpResult(body.params?.arguments?.id)
+                          : agentCatalogProfileMcpResult(),
             });
           }
         }
@@ -3918,6 +4007,7 @@ describe("runReleaseCheck", () => {
       "tools/list",
       "tools/call:catalog_profile",
       "tools/call:catalog_categories",
+      "tools/call:storefront_discovery_policy",
       "tools/call:catalog_search",
       "tools/call:catalog_lookup",
       "tools/call:catalog_product",
@@ -3947,8 +4037,9 @@ describe("runReleaseCheck", () => {
             "catalog_product",
             "catalog_profile",
             "catalog_search",
+            "storefront_discovery_policy",
           ],
-          readOnlyToolCount: 6,
+          readOnlyToolCount: 7,
         },
         catalogTool: {
           name: "catalog_profile",
@@ -3970,6 +4061,15 @@ describe("runReleaseCheck", () => {
           cacheControl: "no-store",
           contentCount: 1,
           categoryCount: 1,
+        },
+        policyTool: {
+          name: "storefront_discovery_policy",
+          statusCode: 200,
+          cacheControl: "no-store",
+          contentCount: 1,
+          sitemapEnabled: true,
+          feedEnabled: true,
+          returnsEnabled: false,
         },
         catalogSearchTool: {
           name: "catalog_search",

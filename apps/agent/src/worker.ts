@@ -3,6 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod/v4";
 import { createAdminMcpServer, resolveAdminMcpRequestAuth } from "./mcp/admin/session-context";
 import { registerStorefrontCartValidationTool, type FetchLike } from "./mcp/storefront/cart-validation";
+import { registerStorefrontDiscoveryPolicyTool } from "./mcp/storefront/discovery-policy";
 
 export type { FetchLike } from "./mcp/storefront/cart-validation";
 
@@ -565,6 +566,7 @@ export function createStorefrontCatalogMcpServer(
     fetchImpl,
     resolveStorefrontBaseUrl: () => resolveStorefrontBaseUrl(env),
   });
+  registerStorefrontDiscoveryPolicyTool(server, env);
 
   return server;
 }
