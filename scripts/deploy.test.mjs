@@ -61,9 +61,12 @@ function adminMcpUnauthenticatedResponse(status = 401, headers = {}) {
 }
 
 function agentTool(name, extra = {}) {
+  const description = name === "cart_validate"
+    ? "Checks a public storefront cart snapshot for current availability and price truth."
+    : `Reads public catalog data for ${name}.`;
   return {
     name,
-    description: `Reads public catalog data for ${name}.`,
+    description,
     inputSchema: { type: "object" },
     annotations: {
       readOnlyHint: true,
@@ -76,6 +79,7 @@ function agentTool(name, extra = {}) {
 
 function agentTools(overrides = {}) {
   return [
+    agentTool("cart_validate", overrides.cart_validate),
     agentTool("catalog_search", overrides.catalog_search),
     agentTool("catalog_lookup", overrides.catalog_lookup),
     agentTool("catalog_product", overrides.catalog_product),
@@ -121,6 +125,33 @@ function agentCatalogProfileMcpResult(profile = ucpProfile()) {
   return {
     content: [{ type: "text", text: JSON.stringify(profile) }],
     structuredContent: profile,
+  };
+}
+
+function agentCartValidationMcpResult() {
+  const result = {
+    cartValidation: {
+      valid: false,
+      issueCount: 1,
+      issues: [{
+        index: 0,
+        productId: "release-check-missing-product",
+        variantId: null,
+        code: "PRODUCT_UNAVAILABLE",
+        action: "remove",
+        message: "This item is no longer available.",
+        productName: null,
+        variantLabel: null,
+        requestedQuantity: 1,
+      }],
+      items: [],
+      subtotal: 0,
+    },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
   };
 }
 
@@ -262,7 +293,7 @@ describe("deploy agent verification", () => {
     vi.restoreAllMocks();
   });
 
-  it("passes when health and MCP catalog_profile smoke are catalog-only", async () => {
+  it("passes when health, MCP tools, and catalog_profile smoke stay read-only", async () => {
     const requests = [];
     const fetchImpl = vi.fn(async (url, init = {}) => {
       const parsed = new URL(url);
@@ -301,14 +332,30 @@ describe("deploy agent verification", () => {
           });
         }
         if (body.method === "tools/call") {
-          expect(body.params).toEqual({
-            name: "catalog_profile",
-            arguments: {},
-          });
+          if (body.params?.name === "catalog_profile") {
+            expect(body.params).toEqual({
+              name: "catalog_profile",
+              arguments: {},
+            });
+          }
+          if (body.params?.name === "cart_validate") {
+            expect(body.params).toEqual({
+              name: "cart_validate",
+              arguments: {
+                items: [{
+                  productId: "release-check-missing-product",
+                  quantity: 1,
+                  unitPrice: 1,
+                }],
+              },
+            });
+          }
           return mcpSseResponse({
             jsonrpc: "2.0",
             id: body.id,
-            result: agentCatalogProfileMcpResult(),
+            result: body.params?.name === "cart_validate"
+              ? agentCartValidationMcpResult()
+              : agentCatalogProfileMcpResult(),
           });
         }
       }
@@ -328,8 +375,10 @@ describe("deploy agent verification", () => {
       "POST /mcp initialize",
       "POST /mcp tools/list",
       "POST /mcp tools/call:catalog_profile",
+      "POST /mcp tools/call:cart_validate",
     ]);
     expect(result.mcp.tools.toolNames).toEqual([
+      "cart_validate",
       "catalog_lookup",
       "catalog_product",
       "catalog_profile",
@@ -346,10 +395,16 @@ describe("deploy agent verification", () => {
         ],
       },
     });
+    expect(result.mcp.cartValidationTool).toMatchObject({
+      name: "cart_validate",
+      contentCount: 1,
+      issueCount: 1,
+      firstIssueCode: "PRODUCT_UNAVAILABLE",
+    });
     expect(console.log).toHaveBeenCalledWith(
-      "✓ Agent /health returned 200; MCP tools: catalog_lookup, catalog_product, " +
+      "✓ Agent /health returned 200; MCP tools: cart_validate, catalog_lookup, catalog_product, " +
       "catalog_profile, catalog_search; catalog_profile call ok (2 catalog capabilities, " +
-      "endpoint https://storefront.example.test/ucp).",
+      "endpoint https://storefront.example.test/ucp); cart_validate call ok.",
     );
   });
 
@@ -433,7 +488,7 @@ describe("deploy agent verification", () => {
       agentUrl: "https://agent.example.test",
       fetchImpl,
       timeoutMs: 5_000,
-    })).rejects.toThrow("checkout/cart/order/payment/customer/recovery terms");
+    })).rejects.toThrow("checkout/order/payment/customer/recovery or cart mutation terms");
   });
 });
 

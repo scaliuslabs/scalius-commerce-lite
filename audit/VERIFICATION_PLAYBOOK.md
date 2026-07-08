@@ -110,7 +110,7 @@ pnpm --filter @scalius/agent build
 pnpm run deploy:agent -- --dry-run
 ```
 
-The first public agent Worker is intentionally stateless and catalog-only. It must expose only `GET /health` and `/mcp` read tools backed by storefront UCP catalog/profile endpoints, and it must not gain D1, R2, KV, queue, Durable Object, provider-secret, checkout, cart mutation, order, payment, fulfillment, customer, support, or recovery bindings without a new architecture note and focused tests. `pnpm run deploy:agent` now performs the live `/health` plus MCP JSON-RPC initialize/tools-list smoke after deploy, and `pnpm release:check` repeats the same catalog-only tool-list gate for release candidates unless `--skip-live` or `--skip-wrangler` is intentionally used.
+The first public agent Worker is intentionally stateless and read-only. It must expose only `GET /health` and `/mcp` read tools backed by storefront UCP catalog/profile endpoints plus the bounded `cart_validate` snapshot-validation tool, and it must not gain D1, R2, KV, queue, Durable Object, provider-secret, checkout, cart mutation, order, payment, fulfillment, customer, support, or recovery bindings without a new architecture note and focused tests. `pnpm run deploy:agent` now performs the live `/health` plus MCP JSON-RPC initialize/tools-list smoke after deploy, and `pnpm release:check` repeats the same catalog plus read-only cart-validation tool-list gate for release candidates unless `--skip-live` or `--skip-wrangler` is intentionally used. Storefront UCP discovery remains catalog-only.
 
 `pnpm ops:check --queues` fails when expected API queue producers/consumers are
 missing. Extra queue producers are warning-level evidence in logs/JSON with

@@ -2,6 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod/v4";
 import { createAdminMcpServer, resolveAdminMcpRequestAuth } from "./mcp/admin/session-context";
+import { registerStorefrontCartValidationTool, type FetchLike } from "./mcp/storefront/cart-validation";
+
+export type { FetchLike } from "./mcp/storefront/cart-validation";
 
 export const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
 export const DEFAULT_AGENT_PROFILE_URL = "https://agent.scalius.com/.well-known/ucp";
@@ -30,8 +33,6 @@ const GENERIC_UPSTREAM_ERROR = {
     },
   ],
 };
-
-export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 export interface StorefrontCatalogMcpOptions {
   fetchImpl?: FetchLike;
@@ -272,6 +273,11 @@ export function createStorefrontCatalogMcpServer(
         signal: extra.signal,
       }, fetchImpl),
   );
+
+  registerStorefrontCartValidationTool(server, {
+    fetchImpl,
+    resolveStorefrontBaseUrl: () => resolveStorefrontBaseUrl(env),
+  });
 
   return server;
 }
