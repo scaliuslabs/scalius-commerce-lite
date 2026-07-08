@@ -45,6 +45,7 @@ const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_session_context",
   "admin_navigation_context",
   "admin_product_search",
+  "admin_order_search",
 ]);
 const ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE = Object.freeze({
   name: "admin_navigation_context",
@@ -54,6 +55,14 @@ const ADMIN_PRODUCT_SEARCH_TOOL_SMOKE = Object.freeze({
   name: "admin_product_search",
   arguments: Object.freeze({
     query: "test",
+    limit: 1,
+    page: 1,
+  }),
+});
+const ADMIN_ORDER_SEARCH_TOOL_SMOKE = Object.freeze({
+  name: "admin_order_search",
+  arguments: Object.freeze({
+    query: "DW8W05",
     limit: 1,
     page: 1,
   }),
@@ -2301,10 +2310,43 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
+  const orderSearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 5,
+      method: "tools/call",
+      params: ADMIN_ORDER_SEARCH_TOOL_SMOKE,
+    },
+  });
+  const orderSearchToolCacheControl = requireNoStoreCacheControl(
+    orderSearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}`,
+  );
+  const orderSearchToolResult = requireMcpJsonRpcResult(
+    orderSearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}`,
+    5,
+  );
+  const orderSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
+    orderSearchToolResult,
+    { toolName: ADMIN_ORDER_SEARCH_TOOL_SMOKE.name },
+  );
+  if (!orderSearchToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name} failed: ` +
+      orderSearchToolEvaluation.errors.join("; "),
+    );
+  }
+
   logger?.log(
     `PASS admin MCP authenticated: tools ${toolEvaluation.toolNames.join(", ")}, ` +
     `calls ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}, ` +
-    `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name} ok.`,
+    `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}, ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name} ok.`,
   );
   return {
     dashboardUrl: redactUrl(normalizedDashboardUrl),
@@ -2341,6 +2383,13 @@ export async function smokeAdminMcpAuthenticated({
         durationMs: productSearchToolResponse.durationMs,
         cacheControl: productSearchToolCacheControl,
         contentCount: productSearchToolEvaluation.contentCount,
+      },
+      orderSearchTool: {
+        name: ADMIN_ORDER_SEARCH_TOOL_SMOKE.name,
+        statusCode: orderSearchToolResponse.statusCode,
+        durationMs: orderSearchToolResponse.durationMs,
+        cacheControl: orderSearchToolCacheControl,
+        contentCount: orderSearchToolEvaluation.contentCount,
       },
     },
   };
