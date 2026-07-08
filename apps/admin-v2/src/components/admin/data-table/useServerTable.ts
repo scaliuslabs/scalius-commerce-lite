@@ -95,6 +95,7 @@ export function useServerTable<TData>({
   } = useQuery({
     ...qOpts,
     placeholderData: keepPreviousData,
+    refetchOnMount: "always",
   });
 
   // Extract typed data from API response
