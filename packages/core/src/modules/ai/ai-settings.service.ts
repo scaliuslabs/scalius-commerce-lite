@@ -7,6 +7,7 @@ import {
 } from "@scalius/core/utils/credential-encryption";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import {
+  AI_MODEL_PROFILE_IDS,
   AI_PROVIDER_IDS,
   DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES,
   ERROR_MESSAGES,
@@ -14,6 +15,7 @@ import {
   SYSTEM_PROMPT_FALLBACKS,
   WIDGET_AI_STRUCTURED_OUTPUT_MODES,
   WIDGET_AI_VISION_INPUT_MODES,
+  type AiModelProfileId,
   type PromptType,
   type WidgetAiProviderCapabilityConfig,
   type WidgetAiProvider,
@@ -24,6 +26,8 @@ import { AI_PROMPT_TYPES, DEFAULT_AI_PROMPTS } from "./default-prompts";
 
 const AI_SETTINGS_CATEGORY = "ai";
 const WIDGET_AI_CONFIG_KEY = "widget_generation_config";
+const DEFAULT_WIDGET_AI_ACTIVE_PROVIDER: WidgetAiProvider = "cloudflare";
+const DEFAULT_WIDGET_AI_CLOUDFLARE_MODEL = "@cf/moonshotai/kimi-k2.6";
 
 const PROMPT_KEYS: Record<PromptType, string> = {
   widget: "prompt_widget",
@@ -70,9 +74,23 @@ export interface WidgetAiProviderConfig {
   accountId?: string;
 }
 
+export interface AiModelProfileConfig {
+  enabled: boolean;
+  provider: WidgetAiProvider;
+  model: string;
+}
+
+export interface ResolvedAiModelProfile {
+  id: AiModelProfileId;
+  provider: WidgetAiProvider;
+  model: string;
+  profile: AiModelProfileConfig;
+}
+
 export interface WidgetAiGenerationConfig {
   activeProvider: WidgetAiProvider;
   providers: Record<WidgetAiProvider, WidgetAiProviderConfig>;
+  profiles: Record<AiModelProfileId, AiModelProfileConfig>;
   generation: {
     planningTemperature: number;
     generationTemperature: number;
@@ -105,6 +123,7 @@ export interface WidgetAiRuntimeSettings extends WidgetAiGenerationConfig {
 export interface WidgetAiSettingsUpdate {
   activeProvider?: WidgetAiProvider;
   providers?: Partial<Record<WidgetAiProvider, Partial<WidgetAiProviderConfig>>>;
+  profiles?: Partial<Record<AiModelProfileId, Partial<AiModelProfileConfig>>>;
   generation?: Partial<WidgetAiGenerationConfig["generation"]>;
   prompts?: Partial<Record<PromptType, string>>;
   apiKeys?: Partial<Record<WidgetAiProvider, string>>;
@@ -112,7 +131,7 @@ export interface WidgetAiSettingsUpdate {
 }
 
 export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
-  activeProvider: "cloudflare",
+  activeProvider: DEFAULT_WIDGET_AI_ACTIVE_PROVIDER,
   providers: {
     openrouter: {
       enabled: false,
@@ -139,10 +158,37 @@ export const DEFAULT_WIDGET_AI_CONFIG: WidgetAiGenerationConfig = {
     },
     cloudflare: {
       enabled: true,
-      defaultModel: "@cf/moonshotai/kimi-k2.6",
+      defaultModel: DEFAULT_WIDGET_AI_CLOUDFLARE_MODEL,
       allowedModels: [],
       capabilities: DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES.cloudflare,
       accountId: "",
+    },
+  },
+  profiles: {
+    adminChat: {
+      enabled: false,
+      provider: DEFAULT_WIDGET_AI_ACTIVE_PROVIDER,
+      model: "",
+    },
+    storefrontChat: {
+      enabled: false,
+      provider: DEFAULT_WIDGET_AI_ACTIVE_PROVIDER,
+      model: "",
+    },
+    widgetGeneration: {
+      enabled: true,
+      provider: DEFAULT_WIDGET_AI_ACTIVE_PROVIDER,
+      model: DEFAULT_WIDGET_AI_CLOUDFLARE_MODEL,
+    },
+    imageGeneration: {
+      enabled: false,
+      provider: DEFAULT_WIDGET_AI_ACTIVE_PROVIDER,
+      model: "",
+    },
+    voice: {
+      enabled: false,
+      provider: DEFAULT_WIDGET_AI_ACTIVE_PROVIDER,
+      model: "",
     },
   },
   generation: {
@@ -159,6 +205,10 @@ function isProvider(value: unknown): value is WidgetAiProvider {
     typeof value === "string" &&
     (AI_PROVIDER_IDS as readonly string[]).includes(value)
   );
+}
+
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
 }
 
 function isPromptType(value: unknown): value is PromptType {
@@ -192,6 +242,12 @@ function normalizeModelList(value: unknown): string[] {
   }
 
   return models.slice(0, 50);
+}
+
+function normalizeProfileModel(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const model = value.trim();
+  return model && model.length <= 200 ? model : "";
 }
 
 function normalizeStructuredOutputMode(value: unknown): WidgetAiStructuredOutputMode {
@@ -323,6 +379,71 @@ function normalizeProvider(
   return normalized;
 }
 
+function defaultAiModelProfiles(
+  activeProvider: WidgetAiProvider,
+  providers: Record<WidgetAiProvider, WidgetAiProviderConfig>,
+): Record<AiModelProfileId, AiModelProfileConfig> {
+  return {
+    adminChat: {
+      enabled: false,
+      provider: activeProvider,
+      model: "",
+    },
+    storefrontChat: {
+      enabled: false,
+      provider: activeProvider,
+      model: "",
+    },
+    widgetGeneration: {
+      enabled: true,
+      provider: activeProvider,
+      model: providers[activeProvider].defaultModel,
+    },
+    imageGeneration: {
+      enabled: false,
+      provider: activeProvider,
+      model: "",
+    },
+    voice: {
+      enabled: false,
+      provider: activeProvider,
+      model: "",
+    },
+  };
+}
+
+function normalizeAiModelProfile(
+  value: unknown,
+  defaults: AiModelProfileConfig,
+  providers: Record<WidgetAiProvider, WidgetAiProviderConfig>,
+): AiModelProfileConfig {
+  const input =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  const rawProvider = input.provider;
+  const hasProvider = hasOwn(input, "provider");
+  const provider = isProvider(rawProvider) ? rawProvider : defaults.provider;
+  const providerMalformed = hasProvider && !isProvider(rawProvider);
+
+  const hasModel = hasOwn(input, "model");
+  const fallbackModel = hasProvider && isProvider(rawProvider)
+    ? providers[rawProvider].defaultModel
+    : defaults.model;
+  const model = normalizeProfileModel(hasModel ? input.model : fallbackModel);
+  const modelMalformed = hasModel && !model;
+
+  const enabled =
+    typeof input.enabled === "boolean" ? input.enabled : defaults.enabled;
+
+  return {
+    enabled: providerMalformed || modelMalformed ? false : enabled,
+    provider,
+    model,
+  };
+}
+
 export function normalizeWidgetAiConfig(
   value: unknown,
 ): WidgetAiGenerationConfig {
@@ -339,6 +460,12 @@ export function normalizeWidgetAiConfig(
     input.generation && typeof input.generation === "object"
       ? (input.generation as Record<string, unknown>)
       : {};
+  const rawProfiles =
+    input.profiles &&
+    typeof input.profiles === "object" &&
+    !Array.isArray(input.profiles)
+      ? (input.profiles as Record<string, unknown>)
+      : {};
 
   const providers = Object.fromEntries(
     AI_PROVIDER_IDS.map((provider) => [
@@ -350,10 +477,22 @@ export function normalizeWidgetAiConfig(
   const activeProvider = isProvider(input.activeProvider)
     ? input.activeProvider
     : DEFAULT_WIDGET_AI_CONFIG.activeProvider;
+  const profileDefaults = defaultAiModelProfiles(activeProvider, providers);
+  const profiles = Object.fromEntries(
+    AI_MODEL_PROFILE_IDS.map((profileId) => [
+      profileId,
+      normalizeAiModelProfile(
+        rawProfiles[profileId],
+        profileDefaults[profileId],
+        providers,
+      ),
+    ]),
+  ) as WidgetAiGenerationConfig["profiles"];
 
   return {
     activeProvider,
     providers,
+    profiles,
     generation: {
       planningTemperature: clampNumber(
         rawGeneration.planningTemperature,
@@ -406,10 +545,19 @@ function mergeWidgetAiConfig(
       }),
     ]),
   ) as WidgetAiGenerationConfig["providers"];
+  const profiles = {
+    ...current.profiles,
+    ...(update.profiles ?? {}),
+  } as Record<string, unknown>;
+
+  if (!update.profiles) {
+    delete profiles.widgetGeneration;
+  }
 
   return normalizeWidgetAiConfig({
     activeProvider: update.activeProvider ?? current.activeProvider,
     providers,
+    profiles,
     generation: {
       ...current.generation,
       ...(update.generation ?? {}),
@@ -720,4 +868,38 @@ export function requireAllowedWidgetAiModel(
   }
 
   return model;
+}
+
+export function resolveAiModelProfile(
+  settings: WidgetAiRuntimeSettings,
+  profileId: AiModelProfileId,
+  requestedModel?: string,
+): ResolvedAiModelProfile {
+  const profile = settings.profiles[profileId];
+  if (!profile?.enabled) {
+    throw new ValidationError(`AI model profile "${profileId}" is disabled.`);
+  }
+
+  const provider = profile.provider;
+  if (!settings.providers[provider]?.enabled) {
+    throw new ValidationError(`AI provider "${provider}" is disabled.`);
+  }
+
+  if (!providerHasCredentials(settings, provider)) {
+    throw new ValidationError(
+      getWidgetAiProviderCredentialError(settings, provider) ??
+        ERROR_MESSAGES.apiKeyMissing,
+    );
+  }
+
+  return {
+    id: profileId,
+    provider,
+    model: requireAllowedWidgetAiModel(
+      settings,
+      provider,
+      requestedModel ?? profile.model,
+    ),
+    profile,
+  };
 }

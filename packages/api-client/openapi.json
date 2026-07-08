@@ -19865,14 +19865,17 @@
                         },
                         "orderId": {
                           "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
                         }
                       },
                       "required": [
                         "status"
-                      ],
-                      "additionalProperties": {
-                        "nullable": true
-                      }
+                      ]
                     }
                   },
                   "required": [
@@ -86608,7 +86611,149 @@
                     },
                     "data": {
                       "type": "object",
-                      "properties": {},
+                      "properties": {
+                        "profiles": {
+                          "type": "object",
+                          "properties": {
+                            "adminChat": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "storefrontChat": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "widgetGeneration": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "imageGeneration": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "voice": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
                       "additionalProperties": {
                         "nullable": true
                       }
@@ -87129,6 +87274,147 @@
                       }
                     }
                   },
+                  "profiles": {
+                    "type": "object",
+                    "properties": {
+                      "adminChat": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "openrouter",
+                              "openai",
+                              "gemini",
+                              "cloudflare"
+                            ]
+                          },
+                          "model": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        },
+                        "required": [
+                          "enabled",
+                          "provider",
+                          "model"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "storefrontChat": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "openrouter",
+                              "openai",
+                              "gemini",
+                              "cloudflare"
+                            ]
+                          },
+                          "model": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        },
+                        "required": [
+                          "enabled",
+                          "provider",
+                          "model"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "widgetGeneration": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "openrouter",
+                              "openai",
+                              "gemini",
+                              "cloudflare"
+                            ]
+                          },
+                          "model": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        },
+                        "required": [
+                          "enabled",
+                          "provider",
+                          "model"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "imageGeneration": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "openrouter",
+                              "openai",
+                              "gemini",
+                              "cloudflare"
+                            ]
+                          },
+                          "model": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        },
+                        "required": [
+                          "enabled",
+                          "provider",
+                          "model"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "voice": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "openrouter",
+                              "openai",
+                              "gemini",
+                              "cloudflare"
+                            ]
+                          },
+                          "model": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        },
+                        "required": [
+                          "enabled",
+                          "provider",
+                          "model"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
                   "apiKeys": {
                     "type": "object",
                     "properties": {
@@ -87187,7 +87473,149 @@
                     },
                     "data": {
                       "type": "object",
-                      "properties": {},
+                      "properties": {
+                        "profiles": {
+                          "type": "object",
+                          "properties": {
+                            "adminChat": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "storefrontChat": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "widgetGeneration": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "imageGeneration": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "voice": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "openrouter",
+                                    "openai",
+                                    "gemini",
+                                    "cloudflare"
+                                  ]
+                                },
+                                "model": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "provider",
+                                "model"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
                       "additionalProperties": {
                         "nullable": true
                       }

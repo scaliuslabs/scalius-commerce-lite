@@ -17,10 +17,18 @@ export const SYSTEM_PROMPT_CACHE_TTL = 300;
 // ============================================================================
 
 export const AI_PROVIDER_IDS = ["openrouter", "openai", "gemini", "cloudflare"] as const;
+export const AI_MODEL_PROFILE_IDS = [
+  "adminChat",
+  "storefrontChat",
+  "widgetGeneration",
+  "imageGeneration",
+  "voice",
+] as const;
 export const WIDGET_AI_STRUCTURED_OUTPUT_MODES = ["auto", "sdk", "text"] as const;
 export const WIDGET_AI_VISION_INPUT_MODES = ["auto", "enabled", "disabled"] as const;
 
 export type WidgetAiProvider = (typeof AI_PROVIDER_IDS)[number];
+export type AiModelProfileId = (typeof AI_MODEL_PROFILE_IDS)[number];
 export type WidgetAiStructuredOutputMode = (typeof WIDGET_AI_STRUCTURED_OUTPUT_MODES)[number];
 export type WidgetAiVisionInputMode = (typeof WIDGET_AI_VISION_INPUT_MODES)[number];
 
