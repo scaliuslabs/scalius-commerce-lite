@@ -1,4 +1,4 @@
-import { cartStore, hydrateCartFromStorage } from "@/store/cart";
+import { cartStore } from "@/store/cart";
 
 import {
   STOREFRONT_ASSISTANT_PAGE_CONTEXT_EVENT,
@@ -102,8 +102,6 @@ export function installStorefrontAssistantPageContextBridge(): StorefrontAssista
   if (typeof window === "undefined" || typeof document === "undefined") {
     return null;
   }
-
-  hydrateCartFromStorage();
 
   if (!installed) {
     installed = true;

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  evaluateAdminMcpTools,
   evaluateDiscoveryCacheHeaders,
   evaluateAgentMcpTools,
   evaluateFacebookFeedXml,
@@ -14,6 +15,7 @@ import {
   normalizeHttpBaseUrl,
   parseReleaseCheckArgs,
   runReleaseCheck,
+  smokeAdminMcpAuthenticated,
   smokeAdminMcpUnauthenticated,
   smokeAgentWorker,
 } from "./release-check.mjs";
@@ -251,6 +253,144 @@ function agentMcpSmokeFetch({
           id: body.id,
           result: typeof result === "function" ? result(body) : result,
         });
+      }
+    }
+
+    throw new Error(`Unexpected URL ${url}`);
+  });
+}
+
+function adminMcpTool(name, extra = {}) {
+  return {
+    name,
+    title: name.replace(/_/g, " "),
+    description: `Reads ${name} for the current dashboard admin session.`,
+    inputSchema: { type: "object", properties: {} },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+    ...extra,
+  };
+}
+
+function adminMcpTools(overrides = {}) {
+  return [
+    adminMcpTool("admin_session_context", overrides.admin_session_context),
+    adminMcpTool("admin_navigation_context", overrides.admin_navigation_context),
+  ];
+}
+
+function adminNavigationContextMcpResult(extra = {}) {
+  const context = {
+    source: {
+      permissions: "/api/v1/admin/rbac/my-permissions",
+      catalog: "admin-navigation-context:v1",
+    },
+    session: {
+      userId: "admin_123",
+      isSuperAdmin: false,
+      roles: [],
+      roleCount: 0,
+      permissionCount: 2,
+      deniedPermissionCount: 0,
+    },
+    defaultPath: "/admin",
+    limits: {
+      maxPages: 24,
+      returnedPages: 2,
+      catalogPages: 24,
+      includesDynamicRoutes: false,
+    },
+    sections: [
+      {
+        section: "Dashboard",
+        pages: [{ name: "Dashboard", path: "/admin" }],
+      },
+    ],
+    ...extra,
+  };
+  const body = { adminNavigationContext: context };
+  return {
+    content: [{ type: "text", text: JSON.stringify(body) }],
+    structuredContent: body,
+  };
+}
+
+function authenticatedAdminMcpSmokeFetch({
+  tools = adminMcpTools(),
+  toolResult = adminNavigationContextMcpResult(),
+  toolCacheControl = "no-store",
+  onMcpRequest,
+} = {}) {
+  return vi.fn(async (url, init = {}) => {
+    const parsed = new URL(url);
+
+    if (parsed.pathname === "/api/auth/sign-in/email") {
+      expect(parsed.href).toBe("https://dashboard.example.test/api/auth/sign-in/email");
+      expect(init.method).toBe("POST");
+      const headers = new Headers(init.headers);
+      expect(headers.get("origin")).toBe("https://dashboard.example.test");
+      expect(headers.get("content-type")).toBe("application/json");
+      expect(headers.has("cookie")).toBe(false);
+      expect(JSON.parse(init.body)).toEqual({
+        email: "admin@example.test",
+        password: "correct-password",
+        rememberMe: false,
+      });
+      return jsonResponse({ success: true }, 200, {
+        "Set-Cookie": [
+          "better-auth.session_data=cache.signature; Path=/; HttpOnly",
+          "better-auth.session_token=session.signature; Path=/; HttpOnly",
+        ].join(", "),
+      });
+    }
+
+    if (parsed.pathname === ADMIN_ASSISTANT_MCP_PATH) {
+      expect(parsed.href).toBe("https://dashboard.example.test/api/assistant/mcp");
+      expect(init.method).toBe("POST");
+      const headers = new Headers(init.headers);
+      expect(headers.get("accept")).toBe("application/json, text/event-stream");
+      expect(headers.get("content-type")).toBe("application/json");
+      expect(headers.get("origin")).toBe("https://dashboard.example.test");
+      expect(headers.get("cookie")).toBe("better-auth.session_token=session.signature");
+      expect(headers.has("authorization")).toBe(false);
+
+      const body = JSON.parse(init.body);
+      onMcpRequest?.(body);
+
+      if (body.method === "initialize") {
+        return mcpSseResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            protocolVersion: "2025-06-18",
+            capabilities: { tools: { listChanged: true } },
+            serverInfo: { name: "scalius-admin-agent", version: "0.1.0" },
+          },
+        }, { "Cache-Control": "no-store" });
+      }
+
+      if (body.method === "tools/list") {
+        return mcpSseResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { tools },
+        }, { "Cache-Control": "no-store" });
+      }
+
+      if (body.method === "tools/call") {
+        expect(body.params).toEqual({
+          name: "admin_navigation_context",
+          arguments: {},
+        });
+        const result = typeof toolResult === "function" ? toolResult(body) : toolResult;
+        return mcpSseResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result,
+        }, { "Cache-Control": toolCacheControl });
       }
     }
 
@@ -872,6 +1012,144 @@ describe("release-check local evaluators", () => {
     });
   });
 
+  it("accepts exactly the read-only admin MCP context tools", () => {
+    expect(evaluateAdminMcpTools(adminMcpTools())).toMatchObject({
+      ok: true,
+      errors: [],
+      toolNames: [
+        "admin_navigation_context",
+        "admin_session_context",
+      ],
+      readOnlyToolCount: 2,
+    });
+  });
+
+  it("signs in and runs authenticated Admin MCP tools/list plus navigation context smoke", async () => {
+    const mcpRequests = [];
+    const fetchImpl = authenticatedAdminMcpSmokeFetch({
+      onMcpRequest: (body) => {
+        mcpRequests.push(
+          body.method === "tools/call"
+            ? `${body.method}:${body.params?.name}`
+            : body.method,
+        );
+      },
+    });
+    const logger = { log: vi.fn(), warn: vi.fn() };
+
+    const result = await smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl,
+      timeoutMs: 5_000,
+      logger,
+    });
+
+    expect(mcpRequests).toEqual([
+      "initialize",
+      "tools/list",
+      "tools/call:admin_navigation_context",
+    ]);
+    expect(result.signIn).toMatchObject({
+      url: "https://dashboard.example.test/api/auth/sign-in/email",
+      statusCode: 200,
+      sessionCookieNames: ["better-auth.session_token"],
+    });
+    expect(result.mcp).toMatchObject({
+      url: "https://dashboard.example.test/api/assistant/mcp",
+      initialize: {
+        statusCode: 200,
+        cacheControl: "no-store",
+        protocolVersion: "2025-06-18",
+        session: "none",
+      },
+      tools: {
+        statusCode: 200,
+        cacheControl: "no-store",
+        toolNames: [
+          "admin_navigation_context",
+          "admin_session_context",
+        ],
+        readOnlyToolCount: 2,
+      },
+      navigationTool: {
+        name: "admin_navigation_context",
+        statusCode: 200,
+        cacheControl: "no-store",
+        contentCount: 1,
+        defaultPath: "/admin",
+        returnedPages: 2,
+        sectionCount: 1,
+      },
+    });
+
+    const logged = JSON.stringify(logger.log.mock.calls);
+    expect(logged).not.toContain("admin@example.test");
+    expect(logged).not.toContain("correct-password");
+    expect(logged).not.toContain("session.signature");
+  });
+
+  it("fails authenticated Admin MCP smoke with extra or missing tools", async () => {
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        tools: [
+          adminMcpTool("admin_session_context"),
+          adminMcpTool("admin_write_context"),
+        ],
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_navigation_context.*unexpected admin_write_context/);
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        tools: [adminMcpTool("admin_session_context")],
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_navigation_context/);
+  });
+
+  it("fails authenticated Admin MCP smoke when navigation tool lacks no-store or returns an error", async () => {
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        toolCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_navigation_context Cache-Control must include no-store");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        toolResult: {
+          isError: true,
+          content: [{ type: "text", text: "denied" }],
+          structuredContent: {
+            error: {
+              code: "admin_session_invalid",
+              status: 401,
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_navigation_context returned an MCP tool error");
+  });
+
   it("calls safe read-only catalog and cart-validation MCP tools when the agent smoke opts in", async () => {
     const mcpRequests = [];
     const fetchImpl = agentMcpSmokeFetch({
@@ -1365,6 +1643,18 @@ describe("runReleaseCheck", () => {
       "Ops-monitor alert channel: Set ALERT_EMAIL_TO to one or more verified Cloudflare Email Service destinations.";
 
     expect(result.status).toBe("passed");
+    expect(result.checks.adminMcpAuthenticated).toMatchObject({
+      status: "skipped",
+      reason: "Set SCALIUS_RELEASE_ADMIN_EMAIL and SCALIUS_RELEASE_ADMIN_PASSWORD to enable authenticated Admin MCP smoke.",
+      env: {
+        email: "SCALIUS_RELEASE_ADMIN_EMAIL",
+        password: "SCALIUS_RELEASE_ADMIN_PASSWORD",
+      },
+      missingEnv: [
+        "SCALIUS_RELEASE_ADMIN_EMAIL",
+        "SCALIUS_RELEASE_ADMIN_PASSWORD",
+      ],
+    });
     expect(result.checks.apiOps.opsMonitorAlertChannel).toMatchObject({
       status: "warning",
       alertMode: "logs_only",
@@ -1385,6 +1675,9 @@ describe("runReleaseCheck", () => {
       warnings: expect.arrayContaining([warning]),
       requiredActions: expect.arrayContaining([action]),
     });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "WARN admin MCP authenticated smoke skipped (SCALIUS_RELEASE_ADMIN_EMAIL, SCALIUS_RELEASE_ADMIN_PASSWORD not set).",
+    );
     expect(logger.warn).toHaveBeenCalledWith(`WARN API ops: ${warning}`);
     expect(logger.warn).toHaveBeenCalledWith(`ACTION API ops: ${action}`);
     expect(logger.log).toHaveBeenCalledWith("Release readiness check passed.");

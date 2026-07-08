@@ -10,6 +10,8 @@ export const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
 export const DEFAULT_AGENT_PROFILE_URL = "https://agent.scalius.com/.well-known/ucp";
 export const UCP_VERSION = "2026-04-08";
 
+const INTERNAL_ADMIN_MCP_HOSTNAME = "agent.internal";
+
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
   "Content-Type": "application/json; charset=utf-8",
@@ -33,6 +35,25 @@ const GENERIC_UPSTREAM_ERROR = {
     },
   ],
 };
+
+const FORBIDDEN_UCP_PROFILE_CAPABILITY_TOKENS = new Set([
+  "cart",
+  "carts",
+  "checkout",
+  "checkouts",
+  "customer",
+  "customers",
+  "fulfillment",
+  "fulfillments",
+  "mutation",
+  "mutations",
+  "order",
+  "orders",
+  "payment",
+  "payments",
+  "recovery",
+  "recoveries",
+]);
 
 export interface StorefrontCatalogMcpOptions {
   fetchImpl?: FetchLike;
@@ -78,6 +99,69 @@ function genericToolError(code = "temporarily_unavailable"): CallToolResult {
     ...GENERIC_UPSTREAM_ERROR,
     messages: GENERIC_UPSTREAM_ERROR.messages.map((message) => ({ ...message, code })),
   }, true);
+}
+
+function tokenizeCapabilityName(value: string): string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function isForbiddenUcpProfileCapabilityName(value: string): boolean {
+  const tokens = tokenizeCapabilityName(value);
+  return tokens.some((token) => FORBIDDEN_UCP_PROFILE_CAPABILITY_TOKENS.has(token));
+}
+
+function containsForbiddenUcpProfileCapability(value: unknown): boolean {
+  if (typeof value === "string") {
+    return isForbiddenUcpProfileCapabilityName(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) =>
+      typeof item === "string" && isForbiddenUcpProfileCapabilityName(item)
+    );
+  }
+
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return Object.entries(value).some(([key, item]) =>
+    isForbiddenUcpProfileCapabilityName(key) ||
+    (Array.isArray(item) && item.some((arrayItem) =>
+      typeof arrayItem === "string" && isForbiddenUcpProfileCapabilityName(arrayItem)
+    ))
+  );
+}
+
+function hasAdvertisedPaymentHandlers(value: unknown): boolean {
+  if (value == null || value === false) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (isRecord(value)) return Object.keys(value).length > 0;
+  return true;
+}
+
+function hasForbiddenUcpProfileAdvertisement(body: JsonRecord): boolean {
+  const ucp = isRecord(body.ucp) ? body.ucp : {};
+  const capabilityBranches = [
+    ucp.capabilities,
+    body.capabilities,
+  ];
+
+  if (capabilityBranches.some((branch) => containsForbiddenUcpProfileCapability(branch))) {
+    return true;
+  }
+
+  return [
+    ucp.payment_handlers,
+    ucp.paymentHandlers,
+    body.payment_handlers,
+    body.paymentHandlers,
+  ].some((branch) => hasAdvertisedPaymentHandlers(branch));
 }
 
 export function resolveStorefrontBaseUrl(env: Pick<Env, "STOREFRONT_URL">): string {
@@ -136,6 +220,9 @@ async function callStorefrontUcp(
     signal?: AbortSignal;
   },
   fetchImpl: FetchLike,
+  options: {
+    validateBody?: (body: JsonRecord) => CallToolResult | null;
+  } = {},
 ): Promise<CallToolResult> {
   let url: URL;
   try {
@@ -164,10 +251,24 @@ async function callStorefrontUcp(
       return genericToolError("upstream_response_invalid");
     }
 
+    const validationError = options.validateBody?.(body);
+    if (validationError) return validationError;
+
     return toolResult(body, isUcpApplicationError(response.status, body));
   } catch {
     return genericToolError();
   }
+}
+
+function validateCatalogProfileBody(body: JsonRecord): CallToolResult | null {
+  if (!hasForbiddenUcpProfileAdvertisement(body)) return null;
+  return genericToolError("ucp_profile_not_catalog_only");
+}
+
+function isInternalAdminMcpUrl(url: URL): boolean {
+  return url.protocol === "http:" &&
+    url.hostname === INTERNAL_ADMIN_MCP_HOSTNAME &&
+    url.pathname === "/mcp/admin";
 }
 
 export function createStorefrontCatalogMcpServer(
@@ -271,7 +372,9 @@ export function createStorefrontCatalogMcpServer(
       callStorefrontUcp(env, "/.well-known/ucp", {
         method: "GET",
         signal: extra.signal,
-      }, fetchImpl),
+      }, fetchImpl, {
+        validateBody: validateCatalogProfileBody,
+      }),
   );
 
   registerStorefrontCartValidationTool(server, {
@@ -296,6 +399,13 @@ export function createAgentWorker(options: StorefrontCatalogMcpOptions = {}) {
       }
 
       if (url.pathname === "/mcp/admin") {
+        if (!isInternalAdminMcpUrl(url)) {
+          return jsonResponse({
+            success: false,
+            error: "not_found",
+          }, 404);
+        }
+
         const auth = await resolveAdminMcpRequestAuth(request, env);
         if (auth instanceof Response) return auth;
 

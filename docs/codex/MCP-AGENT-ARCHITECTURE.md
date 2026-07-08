@@ -24,7 +24,7 @@ Admin MCP is authenticated, admin-only, and starts small.
 
 - Use the active dashboard/admin session and API service binding. Do not add bearer/JWT fallback.
 - Enforce Better Auth session validity, onboarding gates, 2FA truth, and API RBAC through existing admin API middleware.
-- The first implemented admin slice is intentionally tiny: `apps/agent` exposes `/mcp/admin`, `apps/admin-v2` proxies it from `/api/assistant/mcp`, and the only tools are read-only context helpers: `admin_session_context` and `admin_navigation_context`.
+- The first implemented admin slice is intentionally tiny: `apps/agent` accepts `/mcp/admin` only on the internal service-binding host `http://agent.internal/mcp/admin`, `apps/admin-v2` proxies it from `/api/assistant/mcp`, and the only tools are read-only context helpers: `admin_session_context` and `admin_navigation_context`.
 - That first admin slice forwards only the dashboard cookie and MCP protocol headers, strips `Authorization`, checks `/api/v1/admin/rbac/my-permissions` through the API service binding, returns `Cache-Control: no-store`, and has no direct D1/KV/R2/queue/provider-secret bindings. `admin_navigation_context` returns a bounded static dashboard entry-page catalog filtered by effective API permissions; it does not navigate, mutate, expose dynamic routes, or import dashboard/core route guards into the agent Worker.
 - The first page-state bridge is mounted in the admin shell at `apps/admin-v2/src/components/admin/assistant/**`. It publishes a sanitized browser-only snapshot under `window.__SCALIUS_ADMIN_ASSISTANT_PAGE_STATE__` and `scalius:admin-assistant-page-state`, limited to pathname, title, heading, scroll state, and explicitly registered visible surfaces.
 - Admin page-state code must not query arbitrary form controls, read DOM field values, observe the entire admin content subtree, call APIs, or read cookies/storage. Forms/tables/dialogs must register safe aggregate state through `registerAdminAssistantSurface()` when page tools need them.
@@ -43,7 +43,7 @@ Storefront MCP is public and catalog-first.
 - The first implemented slice is `@scalius/agent` with `GET /health` and stateless `/mcp` read tools: catalog tools `catalog_search`, `catalog_lookup`, `catalog_product`, and `catalog_profile`, plus `cart_validate` for bounded read-only cart snapshot validation.
 - That first slice has no D1, R2, KV, queue, Durable Object, provider-secret, admin, customer, order, checkout, payment, fulfillment, support, recovery, or cart-mutation bindings/tools.
 - The first page-context bridge is mounted in the storefront layout at `apps/storefront/src/components/assistant/**` and `apps/storefront/src/lib/assistant-page-context*`. It publishes a sanitized browser-only snapshot under `window.__SCALIUS_STOREFRONT_PAGE_CONTEXT__` and `scalius:storefront-page-context:change`, limited to public route/canonical/title/page kind plus a bounded allowlisted cart summary.
-- Storefront page-context code must not read raw cookies/storage payloads, customer sessions, order/receipt proofs, phone/email/address/payment details, discount codes, or mutate cart/checkout state. Cart context is summary-only until a signed D1-backed assistant session exists.
+- Storefront page-context code must not call `hydrateCartFromStorage()`, read raw cookies/storage payloads, customer sessions, order/receipt proofs, phone/email/address/payment details, discount codes, or mutate cart/checkout state. Cart context is summary-only, passively read from the current cart store snapshot, until a signed D1-backed assistant session exists.
 - Expose catalog search, catalog lookup, product context, category reads, discovery policy reads, visible page context, same-origin navigation, and read-only cart snapshot validation.
 - Cart validation may explain stale cart issues using existing `PRODUCT_UNAVAILABLE`, `VARIANT_UNAVAILABLE`, `VARIANT_MISMATCH`, `VARIANT_REQUIRED`, `QUANTITY_UNAVAILABLE`, and `PRICE_CHANGED` repair semantics.
 
@@ -78,13 +78,13 @@ Add assistant model profiles under the AI settings domain when implementation st
 - `imageGeneration`
 - `voice`
 
-Environment variables may provide safe defaults; dashboard settings may override them. Secrets stay encrypted with `CREDENTIAL_ENCRYPTION_KEY`. Hot send paths must fail closed when credentials are missing, dummy, or undecryptable.
+Environment variables may provide safe defaults; dashboard settings may override them. Secrets stay encrypted with `CREDENTIAL_ENCRYPTION_KEY`. Hot send paths must fail closed when credentials are missing, dummy, or undecryptable. Existing widget AI settings already strict-read encrypted provider keys through `readStoredCredentialStrict()` and surface safe `credentialErrors`; keep future assistant profiles on that same path instead of adding permissive fallback reads.
 
 ## Required Guards
 
 Before exposing any MCP endpoint publicly:
 
-- Admin MCP must prove no access without a signed Better Auth admin cookie, completed onboarding, verified 2FA, and matching RBAC permission.
+- Admin MCP must stay hidden from the public agent host. Direct public `/mcp/admin` requests must return a bland no-store 404 before cookie/API preflight; the dashboard `/api/assistant/mcp` proxy is the only external entry point, and it must prove no access without a signed Better Auth admin cookie, completed onboarding, verified 2FA, and matching RBAC permission.
 - Admin page tools must use the same page-permission source as the dashboard route guard, or have a drift test that fails when maps diverge.
 - Admin form tools must operate only on registered visible forms and must refuse hidden credential fields unless a dedicated, human-confirmed credential-flow design exists.
 - Storefront UCP tests must prove only catalog capabilities are advertised. Storefront MCP tools may add only the explicitly allowlisted read-only cart-validation surface; no cart mutation or transaction capability is allowed.
@@ -101,7 +101,7 @@ Minimum local gates for the first tracked agent Worker:
 - `pnpm --filter @scalius/agent build`
 - `pnpm run deploy:agent -- --dry-run`
 - `pnpm check:env`
-- MCP Inspector or equivalent JSON-RPC smoke for both MCP route groups
+- MCP Inspector or equivalent JSON-RPC smoke for both MCP route groups, including public agent-host `/mcp/admin` rejection and dashboard-proxied Admin MCP initialize/tools/list/call proof
 - Admin 401/403/RBAC/2FA/onboarding tests
 - Storefront catalog plus read-only cart-validation tool tests
 - Browser smoke: admin assistant can read page state and navigate without console errors

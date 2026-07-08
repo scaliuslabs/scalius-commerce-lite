@@ -29,11 +29,25 @@ const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
+const RELEASE_ADMIN_EMAIL_ENV = "SCALIUS_RELEASE_ADMIN_EMAIL";
+const RELEASE_ADMIN_PASSWORD_ENV = "SCALIUS_RELEASE_ADMIN_PASSWORD";
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MCP_ACCEPT_HEADER = "application/json, text/event-stream";
 const MCP_CLIENT_INFO = Object.freeze({
   name: "scalius-release-check",
   version: "1.0.0",
+});
+const ADMIN_SESSION_COOKIE_NAMES = Object.freeze([
+  "better-auth.session_token",
+  "__Secure-better-auth.session_token",
+]);
+const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
+  "admin_session_context",
+  "admin_navigation_context",
+]);
+const ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE = Object.freeze({
+  name: "admin_navigation_context",
+  arguments: Object.freeze({}),
 });
 const AGENT_EXPECTED_TOOL_NAMES = Object.freeze([
   "cart_validate",
@@ -1414,6 +1428,7 @@ async function fetchMcpJsonRpc(url, {
   body,
   sessionId,
   protocolVersion,
+  headers: additionalHeaders = {},
 }) {
   const startedAt = Date.now();
   const controller = new AbortController();
@@ -1425,6 +1440,9 @@ async function fetchMcpJsonRpc(url, {
   };
   if (sessionId) headers["Mcp-Session-Id"] = sessionId;
   if (protocolVersion) headers["MCP-Protocol-Version"] = protocolVersion;
+  for (const [name, value] of Object.entries(additionalHeaders)) {
+    if (typeof value === "string" && value) headers[name] = value;
+  }
 
   try {
     const response = await fetchImpl(url, {
@@ -1445,6 +1463,64 @@ async function fetchMcpJsonRpc(url, {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function splitSetCookieHeaderValue(value) {
+  return value
+    .split(/,(?=\s*[^;,=\s]+=)/g)
+    .map((cookie) => cookie.trim())
+    .filter(Boolean);
+}
+
+function getSetCookieHeaderValues(headers) {
+  if (typeof headers.getSetCookie === "function") {
+    return headers.getSetCookie().flatMap(splitSetCookieHeaderValue);
+  }
+  const combined = headers.get("set-cookie") ?? "";
+  return combined ? splitSetCookieHeaderValue(combined) : [];
+}
+
+function adminSessionCookiePairFromSetCookie(value) {
+  const firstPart = value.split(";")[0]?.trim() ?? "";
+  const equalsIndex = firstPart.indexOf("=");
+  if (equalsIndex <= 0) return null;
+
+  const name = firstPart.slice(0, equalsIndex).trim();
+  const cookieValue = firstPart.slice(equalsIndex + 1).trim();
+  if (!ADMIN_SESSION_COOKIE_NAMES.includes(name) || !cookieValue) return null;
+
+  return `${name}=${cookieValue}`;
+}
+
+function adminSessionCookieHeaderFromSetCookie(headers) {
+  const pairs = [];
+  const seen = new Set();
+  for (const setCookie of getSetCookieHeaderValues(headers)) {
+    const pair = adminSessionCookiePairFromSetCookie(setCookie);
+    if (!pair) continue;
+    const name = pair.slice(0, pair.indexOf("="));
+    if (seen.has(name)) continue;
+    seen.add(name);
+    pairs.push(pair);
+  }
+  return pairs.join("; ");
+}
+
+function cookieNamesFromCookieHeader(cookieHeader) {
+  return cookieHeader
+    .split(";")
+    .map((part) => part.trim().split("=")[0])
+    .filter(Boolean);
+}
+
+function requireNoStoreCacheControl(response, label) {
+  const cacheControl = response.headers.get("cache-control") ?? "";
+  if (!hasHeaderToken(cacheControl, "no-store")) {
+    throw new Error(
+      `${label} Cache-Control must include no-store; got ${cacheControl || "missing Cache-Control"}.`,
+    );
+  }
+  return cacheControl;
 }
 
 function listDiff(actual, expected) {
@@ -1548,6 +1624,76 @@ export function evaluateAgentMcpTools(tools, {
   };
 }
 
+export function evaluateAdminMcpTools(tools, {
+  expectedToolNames = ADMIN_MCP_EXPECTED_TOOL_NAMES,
+} = {}) {
+  const errors = [];
+  const expectedSorted = [...expectedToolNames].sort();
+
+  if (!Array.isArray(tools)) {
+    return {
+      ok: false,
+      errors: ["Admin MCP tools/list result must include a tools array."],
+      toolNames: [],
+      expectedToolNames: expectedSorted,
+      readOnlyToolCount: 0,
+    };
+  }
+
+  const toolNames = [];
+  let readOnlyToolCount = 0;
+  const duplicateNames = new Set();
+  const seenNames = new Set();
+
+  tools.forEach((tool, index) => {
+    if (!isRecord(tool)) {
+      errors.push(`Admin MCP tool ${index + 1} must be an object.`);
+      return;
+    }
+
+    const name = typeof tool.name === "string" ? tool.name : "";
+    if (!name) {
+      errors.push(`Admin MCP tool ${index + 1} must include a name.`);
+    } else {
+      toolNames.push(name);
+      if (seenNames.has(name)) duplicateNames.add(name);
+      seenNames.add(name);
+    }
+
+    const annotations = isRecord(tool.annotations) ? tool.annotations : null;
+    if (annotations?.readOnlyHint === true) {
+      readOnlyToolCount += 1;
+    } else {
+      errors.push(`Admin MCP tool ${name || index + 1} must set annotations.readOnlyHint=true.`);
+    }
+    if (annotations?.destructiveHint === true) {
+      errors.push(`Admin MCP tool ${name || index + 1} must not be marked destructive.`);
+    }
+  });
+
+  const sortedNames = [...toolNames].sort();
+  const missing = listDiff(sortedNames, expectedSorted);
+  const unexpected = listDiff(expectedSorted, sortedNames);
+  if (missing.length > 0 || unexpected.length > 0 || duplicateNames.size > 0) {
+    const details = [
+      missing.length ? `missing ${missing.join(", ")}` : "",
+      unexpected.length ? `unexpected ${unexpected.join(", ")}` : "",
+      duplicateNames.size ? `duplicate ${[...duplicateNames].sort().join(", ")}` : "",
+    ].filter(Boolean).join("; ");
+    errors.push(
+      `Admin MCP tools must list exactly ${expectedSorted.join(", ")}${details ? ` (${details})` : ""}.`,
+    );
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolNames: sortedNames,
+    expectedToolNames: expectedSorted,
+    readOnlyToolCount,
+  };
+}
+
 function evaluateAgentCatalogToolSmokeResult(result, {
   toolName = AGENT_CATALOG_TOOL_SMOKE.name,
   storefrontOrigin,
@@ -1634,6 +1780,47 @@ function evaluateAgentCartValidationSmokeResult(result, {
       ? cartValidation.issueCount
       : issues.length,
     firstIssueCode: typeof firstIssue?.code === "string" ? firstIssue.code : null,
+  };
+}
+
+function evaluateAdminNavigationToolSmokeResult(result, {
+  toolName = ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+  const navigationContext = isRecord(structuredContent?.adminNavigationContext)
+    ? structuredContent.adminNavigationContext
+    : null;
+  const limits = isRecord(navigationContext?.limits) ? navigationContext.limits : null;
+  const sections = Array.isArray(navigationContext?.sections)
+    ? navigationContext.sections
+    : [];
+
+  if (result?.isError === true) {
+    errors.push(`Admin MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Admin MCP ${toolName} must return at least one content block.`);
+  }
+  if (!navigationContext) {
+    errors.push(`Admin MCP ${toolName} must return structured adminNavigationContext content.`);
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
+    defaultPath: typeof navigationContext?.defaultPath === "string"
+      ? navigationContext.defaultPath
+      : null,
+    returnedPages: typeof limits?.returnedPages === "number"
+      ? limits.returnedPages
+      : null,
+    sectionCount: sections.length,
   };
 }
 
@@ -1831,6 +2018,244 @@ export async function smokeAgentWorker({
       },
       ...(catalogToolResult ? { catalogTool: catalogToolResult } : {}),
       ...(cartValidationToolResult ? { cartValidationTool: cartValidationToolResult } : {}),
+    },
+  };
+}
+
+function releaseAdminCredentialEnvStatus(env) {
+  const email = typeof env?.[RELEASE_ADMIN_EMAIL_ENV] === "string"
+    ? env[RELEASE_ADMIN_EMAIL_ENV].trim()
+    : "";
+  const password = typeof env?.[RELEASE_ADMIN_PASSWORD_ENV] === "string"
+    ? env[RELEASE_ADMIN_PASSWORD_ENV]
+    : "";
+  const missing = [];
+  if (!email) missing.push(RELEASE_ADMIN_EMAIL_ENV);
+  if (!password) missing.push(RELEASE_ADMIN_PASSWORD_ENV);
+  return {
+    missing,
+    credentials: missing.length === 0 ? { email, password } : null,
+  };
+}
+
+async function signInReleaseAdmin({
+  dashboardUrl,
+  email,
+  password,
+  timeoutMs,
+  fetchImpl,
+}) {
+  const signInUrl = buildUrl(dashboardUrl, "/api/auth/sign-in/email");
+  const response = await fetchJson(signInUrl, {
+    fetchImpl,
+    timeoutMs,
+    method: "POST",
+    headers: {
+      Origin: new URL(dashboardUrl).origin,
+    },
+    body: {
+      email,
+      password,
+      rememberMe: false,
+    },
+  });
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(
+      `Admin MCP authenticated sign-in returned HTTP ${response.statusCode}; ` +
+      `check ${RELEASE_ADMIN_EMAIL_ENV}/${RELEASE_ADMIN_PASSWORD_ENV}.`,
+    );
+  }
+
+  const cookieHeader = adminSessionCookieHeaderFromSetCookie(response.headers);
+  if (!cookieHeader) {
+    throw new Error(
+      "Admin MCP authenticated sign-in did not return a Better Auth session cookie.",
+    );
+  }
+
+  return {
+    cookieHeader,
+    result: {
+      url: redactUrl(signInUrl),
+      statusCode: response.statusCode,
+      durationMs: response.durationMs,
+      sessionCookieNames: cookieNamesFromCookieHeader(cookieHeader),
+    },
+  };
+}
+
+export async function smokeAdminMcpAuthenticated({
+  dashboardUrl = DEFAULT_DASHBOARD_URL,
+  email,
+  password,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  fetchImpl = fetch,
+  logger = console,
+} = {}) {
+  if (!email || !password) {
+    throw new Error(
+      `Admin MCP authenticated smoke requires ${RELEASE_ADMIN_EMAIL_ENV} and ${RELEASE_ADMIN_PASSWORD_ENV}.`,
+    );
+  }
+
+  const normalizedDashboardUrl = normalizeHttpBaseUrl(dashboardUrl, "Dashboard URL");
+  const { cookieHeader, result: signIn } = await signInReleaseAdmin({
+    dashboardUrl: normalizedDashboardUrl,
+    email,
+    password,
+    timeoutMs,
+    fetchImpl,
+  });
+  const mcpUrl = buildUrl(normalizedDashboardUrl, ADMIN_ASSISTANT_MCP_PATH);
+  const authenticatedHeaders = {
+    Cookie: cookieHeader,
+    Origin: new URL(normalizedDashboardUrl).origin,
+  };
+
+  const initializeResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        capabilities: {},
+        clientInfo: MCP_CLIENT_INFO,
+      },
+    },
+  });
+  const initializeCacheControl = requireNoStoreCacheControl(
+    initializeResponse,
+    "Authenticated Admin MCP initialize",
+  );
+  const initializeResult = requireMcpJsonRpcResult(
+    initializeResponse,
+    "Authenticated Admin MCP initialize",
+    1,
+  );
+  const sessionId = initializeResponse.headers.get("mcp-session-id") || null;
+  const negotiatedProtocolVersion =
+    typeof initializeResult.protocolVersion === "string"
+      ? initializeResult.protocolVersion
+      : MCP_PROTOCOL_VERSION;
+
+  if (sessionId) {
+    const initializedResponse = await fetchMcpJsonRpc(mcpUrl, {
+      fetchImpl,
+      timeoutMs,
+      headers: authenticatedHeaders,
+      sessionId,
+      protocolVersion: negotiatedProtocolVersion,
+      body: {
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+      },
+    });
+    requireNoStoreCacheControl(
+      initializedResponse,
+      "Authenticated Admin MCP initialized notification",
+    );
+    requireStatus(initializedResponse, "Authenticated Admin MCP initialized notification", (status) =>
+      status >= 200 && status < 300);
+  }
+
+  const toolsResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    },
+  });
+  const toolsCacheControl = requireNoStoreCacheControl(
+    toolsResponse,
+    "Authenticated Admin MCP tools/list",
+  );
+  const toolsResult = requireMcpJsonRpcResult(
+    toolsResponse,
+    "Authenticated Admin MCP tools/list",
+    2,
+  );
+  const toolEvaluation = evaluateAdminMcpTools(toolsResult.tools);
+  if (!toolEvaluation.ok) {
+    throw new Error(`Admin MCP tools/list failed: ${toolEvaluation.errors.join("; ")}`);
+  }
+
+  const navigationToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE,
+    },
+  });
+  const navigationToolCacheControl = requireNoStoreCacheControl(
+    navigationToolResponse,
+    `Authenticated Admin MCP ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}`,
+  );
+  const navigationToolResult = requireMcpJsonRpcResult(
+    navigationToolResponse,
+    `Authenticated Admin MCP ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}`,
+    3,
+  );
+  const navigationToolEvaluation = evaluateAdminNavigationToolSmokeResult(
+    navigationToolResult,
+    { toolName: ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name },
+  );
+  if (!navigationToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name} failed: ` +
+      navigationToolEvaluation.errors.join("; "),
+    );
+  }
+
+  logger?.log(
+    `PASS admin MCP authenticated: tools ${toolEvaluation.toolNames.join(", ")}, ` +
+    `${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name} call ok.`,
+  );
+  return {
+    dashboardUrl: redactUrl(normalizedDashboardUrl),
+    signIn,
+    mcp: {
+      url: redactUrl(mcpUrl),
+      initialize: {
+        statusCode: initializeResponse.statusCode,
+        durationMs: initializeResponse.durationMs,
+        cacheControl: initializeCacheControl,
+        protocolVersion: negotiatedProtocolVersion,
+        session: sessionId ? "present" : "none",
+      },
+      tools: {
+        statusCode: toolsResponse.statusCode,
+        durationMs: toolsResponse.durationMs,
+        cacheControl: toolsCacheControl,
+        toolNames: toolEvaluation.toolNames,
+        readOnlyToolCount: toolEvaluation.readOnlyToolCount,
+      },
+      navigationTool: {
+        name: ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name,
+        statusCode: navigationToolResponse.statusCode,
+        durationMs: navigationToolResponse.durationMs,
+        cacheControl: navigationToolCacheControl,
+        contentCount: navigationToolEvaluation.contentCount,
+        defaultPath: navigationToolEvaluation.defaultPath,
+        returnedPages: navigationToolEvaluation.returnedPages,
+        sectionCount: navigationToolEvaluation.sectionCount,
+      },
     },
   };
 }
@@ -2482,6 +2907,36 @@ async function checkAdminMcpAuth(options, { fetchImpl, logger }) {
   });
 }
 
+async function checkAdminMcpAuthenticated(options, { fetchImpl, logger, env }) {
+  const credentialStatus = releaseAdminCredentialEnvStatus(env);
+  if (!credentialStatus.credentials) {
+    const reason =
+      `Set ${RELEASE_ADMIN_EMAIL_ENV} and ${RELEASE_ADMIN_PASSWORD_ENV} ` +
+      "to enable authenticated Admin MCP smoke.";
+    logger?.warn(
+      `WARN admin MCP authenticated smoke skipped (${credentialStatus.missing.join(", ")} not set).`,
+    );
+    return {
+      status: "skipped",
+      reason,
+      env: {
+        email: RELEASE_ADMIN_EMAIL_ENV,
+        password: RELEASE_ADMIN_PASSWORD_ENV,
+      },
+      missingEnv: credentialStatus.missing,
+    };
+  }
+
+  return smokeAdminMcpAuthenticated({
+    dashboardUrl: options.dashboardUrl,
+    email: credentialStatus.credentials.email,
+    password: credentialStatus.credentials.password,
+    timeoutMs: options.timeoutMs,
+    fetchImpl,
+    logger,
+  });
+}
+
 async function checkDiscovery(options, { fetchImpl, logger }) {
   const storefrontOrigin = new URL(options.storefrontUrl).origin;
   const responses = {};
@@ -2954,6 +3409,7 @@ export async function runReleaseCheck(options, {
   readFileImpl = readFileSync,
   fileExistsImpl = existsSync,
   opsMonitorConfig,
+  env = {},
 } = {}) {
   const result = {
     status: "running",
@@ -3006,6 +3462,8 @@ export async function runReleaseCheck(options, {
     checkInvalidAdminCookieAuth(options, { fetchImpl, logger }));
   await runStep(result, "adminMcpAuth", () =>
     checkAdminMcpAuth(options, { fetchImpl, logger }));
+  await runStep(result, "adminMcpAuthenticated", () =>
+    checkAdminMcpAuthenticated(options, { fetchImpl, logger, env }));
   await runStep(result, "dashboard", () =>
     checkDashboard(options, { fetchImpl, logger }));
   await runStep(result, "storefront", () =>
@@ -3054,6 +3512,10 @@ Options:
                            Continue with strict discovery defaults if public SEO policy cannot be read
   --json                   Emit JSON
   -h, --help               Show this help
+
+Environment:
+  ${RELEASE_ADMIN_EMAIL_ENV} / ${RELEASE_ADMIN_PASSWORD_ENV}
+                           Optional Better Auth admin credentials for authenticated Admin MCP smoke
 `);
 }
 
@@ -3068,6 +3530,7 @@ export async function main(rawArgs = process.argv.slice(2), {
   rootDir = defaultRootDir,
   readFileImpl = readFileSync,
   fileExistsImpl = existsSync,
+  env = process.env,
 } = {}) {
   const wantsJson = rawArgs.includes("--json");
   let options;
@@ -3084,7 +3547,7 @@ export async function main(rawArgs = process.argv.slice(2), {
       defaultApiBaseUrl: apiConfig.vars?.PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL,
       defaultStorefrontUrl: apiConfig.vars?.STOREFRONT_URL ?? DEFAULT_STOREFRONT_URL,
       defaultDashboardUrl: DEFAULT_DASHBOARD_URL,
-      defaultAgentUrl: process.env.SCALIUS_AGENT_URL ?? DEFAULT_AGENT_URL,
+      defaultAgentUrl: env.SCALIUS_AGENT_URL ?? DEFAULT_AGENT_URL,
     });
 
     const result = await runReleaseCheck(options, {
@@ -3096,6 +3559,7 @@ export async function main(rawArgs = process.argv.slice(2), {
       rootDir,
       readFileImpl,
       fileExistsImpl,
+      env,
       logger: options.json ? null : console,
     });
 

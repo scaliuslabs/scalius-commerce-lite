@@ -2,8 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
 import {
-  decryptCredentials,
   encryptCredentials,
+  readStoredCredentialStrict,
 } from "@scalius/core/utils/credential-encryption";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import {
@@ -37,6 +37,15 @@ const API_KEY_KEYS: Record<WidgetAiProvider, string> = {
   gemini: "api_key_gemini",
   cloudflare: "api_key_cloudflare",
 };
+
+const API_KEY_LABELS: Record<WidgetAiProvider, string> = {
+  openrouter: "Widget AI OpenRouter API key",
+  openai: "Widget AI OpenAI API key",
+  gemini: "Widget AI Gemini API key",
+  cloudflare: "Widget AI Cloudflare API token",
+};
+
+export type WidgetAiCredentialErrors = Partial<Record<WidgetAiProvider, string>>;
 
 const DEFAULT_BASE_URLS: Record<"openrouter" | "openai" | "gemini", string> = {
   openrouter: "https://openrouter.ai/api/v1",
@@ -79,14 +88,17 @@ export interface WidgetAiAdminSettings extends WidgetAiGenerationConfig {
     WidgetAiProviderConfig & {
       hasApiKey: boolean;
       hasBinding?: boolean;
+      credentialError?: string;
     }
   >;
+  credentialErrors: WidgetAiCredentialErrors;
   prompts: Record<PromptType, string>;
   defaultPrompts: Record<PromptType, string>;
 }
 
 export interface WidgetAiRuntimeSettings extends WidgetAiGenerationConfig {
   apiKeys: Partial<Record<WidgetAiProvider, string>>;
+  credentialErrors?: WidgetAiCredentialErrors;
   hasCloudflareBinding: boolean;
 }
 
@@ -418,25 +430,31 @@ async function readCategory(db: Database): Promise<Record<string, string>> {
 async function readApiKeys(
   values: Record<string, string>,
   encryptionKey?: string,
-): Promise<Partial<Record<WidgetAiProvider, string>>> {
-  if (!encryptionKey) return {};
-
+): Promise<{
+  apiKeys: Partial<Record<WidgetAiProvider, string>>;
+  credentialErrors: WidgetAiCredentialErrors;
+}> {
   const entries = await Promise.all(
     AI_PROVIDER_IDS.map(async (provider) => {
       const stored = values[API_KEY_KEYS[provider]];
-      if (!stored) return [provider, undefined] as const;
-      try {
-        const decrypted = await decryptCredentials(stored, encryptionKey);
-        return [provider, decrypted] as const;
-      } catch {
-        return [provider, undefined] as const;
-      }
+      const read = await readStoredCredentialStrict(
+        stored,
+        encryptionKey,
+        API_KEY_LABELS[provider],
+      );
+      return [provider, read.value || undefined, read.error] as const;
     }),
   );
 
-  return Object.fromEntries(
-    entries.filter(([, value]) => Boolean(value)),
-  ) as Partial<Record<WidgetAiProvider, string>>;
+  const apiKeys: Partial<Record<WidgetAiProvider, string>> = {};
+  const credentialErrors: WidgetAiCredentialErrors = {};
+
+  for (const [provider, value, error] of entries) {
+    if (value) apiKeys[provider] = value;
+    if (error) credentialErrors[provider] = error;
+  }
+
+  return { apiKeys, credentialErrors };
 }
 
 export async function getWidgetAiPrompts(
@@ -469,11 +487,12 @@ export async function getWidgetAiRuntimeSettings(
   const config = normalizeWidgetAiConfig(
     parseJsonObject(values[WIDGET_AI_CONFIG_KEY]),
   );
-  const apiKeys = await readApiKeys(values, encryptionKey);
+  const { apiKeys, credentialErrors } = await readApiKeys(values, encryptionKey);
 
   return {
     ...config,
     apiKeys,
+    credentialErrors,
     hasCloudflareBinding: Boolean(env.AI),
   };
 }
@@ -482,7 +501,7 @@ export function maskWidgetAiAdminSettings(
   runtime: WidgetAiRuntimeSettings,
   prompts: Record<PromptType, string>,
 ): WidgetAiAdminSettings {
-  const { apiKeys, hasCloudflareBinding, ...config } = runtime;
+  const { apiKeys, credentialErrors = {}, hasCloudflareBinding, ...config } = runtime;
   return {
     ...config,
     providers: Object.fromEntries(
@@ -491,12 +510,16 @@ export function maskWidgetAiAdminSettings(
         {
           ...config.providers[provider],
           hasApiKey: Boolean(apiKeys[provider]),
+          ...(credentialErrors[provider]
+            ? { credentialError: credentialErrors[provider] }
+            : {}),
           ...(provider === "cloudflare"
             ? { hasBinding: hasCloudflareBinding }
             : {}),
         },
       ]),
     ) as WidgetAiAdminSettings["providers"],
+    credentialErrors,
     prompts,
     defaultPrompts: DEFAULT_AI_PROMPTS,
   };
@@ -640,11 +663,20 @@ export function providerHasCredentials(
       settings.hasCloudflareBinding ||
       Boolean(
         settings.providers.cloudflare.accountId &&
-          settings.apiKeys.cloudflare,
+          settings.apiKeys.cloudflare &&
+          !getWidgetAiProviderCredentialError(settings, "cloudflare"),
       )
     );
   }
+  if (getWidgetAiProviderCredentialError(settings, provider)) return false;
   return Boolean(settings.apiKeys[provider]);
+}
+
+export function getWidgetAiProviderCredentialError(
+  settings: WidgetAiRuntimeSettings,
+  provider: WidgetAiProvider = settings.activeProvider,
+): string | undefined {
+  return settings.credentialErrors?.[provider];
 }
 
 export function getAllowedWidgetAiModels(
