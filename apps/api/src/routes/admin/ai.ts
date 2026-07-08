@@ -12,6 +12,7 @@ import {
   getWidgetAiRuntimeSettings,
   providerHasCredentials,
   requireAllowedWidgetAiModel,
+  resolveAiModelProfile,
   resolveWidgetAiModelCapabilities,
   WIDGET_DESTINATION_RUNTIME_CONTRACTS,
   type WidgetAiProvider,
@@ -44,9 +45,19 @@ const MAX_TEXT_CHARS = GENERATION_CONFIG.context.maxPromptChars;
 const MAX_IMAGES = GENERATION_CONFIG.context.maxImages;
 const MAX_MODEL_ID_CHARS = 200;
 const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+const ADMIN_CHAT_MAX_MESSAGES = 24;
+const ADMIN_CHAT_MAX_TEXT_CHARS = 24_000;
+const ADMIN_CHAT_MAX_OUTPUT_TOKENS = 1_200;
 const NO_COMMERCE_FACTS_PROMPT_MARKER = 'FACTUALITY GATE - NO COMMERCE FACTS PROVIDED';
 const AI_NO_OBJECT_GENERATED_MARKER = 'vercel.ai.error.AI_NoObjectGeneratedError';
 const AI_UNSUPPORTED_FUNCTIONALITY_MARKER = 'vercel.ai.error.AI_UnsupportedFunctionalityError';
+const ADMIN_CHAT_SYSTEM_PROMPT = [
+  'You are the Scalius Commerce admin assistant for merchants and operators.',
+  'Answer from the conversation and general platform knowledge only. This endpoint cannot read live store data, change settings, mutate products, modify orders, adjust inventory, trigger payments, deploy code, inspect logs, or clear caches.',
+  'When the merchant asks for an action, give safe step-by-step guidance and say that they must perform it in the dashboard or ask an operator to run a verified workflow.',
+  'Do not ask for or repeat secrets, OTPs, API keys, credential material, payment proofs, customer contact details, or session tokens. If the user includes sensitive data, acknowledge only that it should be removed or rotated.',
+  'Keep answers concise, practical, and explicit about uncertainty.',
+].join('\n');
 
 const providerEnum = z.enum(AI_PROVIDER_IDS);
 const promptTypeEnum = z.enum(['widget', 'landing-page', 'collection']);
@@ -101,6 +112,15 @@ const generateStagedSchema = z.object({
     .min(GENERATION_CONFIG.stagedGeneration.minSections)
     .max(GENERATION_CONFIG.stagedGeneration.maxSections)
     .optional(),
+});
+
+const chatMessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string().trim().min(1).max(MAX_TEXT_CHARS),
+});
+
+const chatSchema = z.object({
+  messages: z.array(chatMessageSchema).min(1).max(ADMIN_CHAT_MAX_MESSAGES),
 });
 
 type GenerateTextOptions = Parameters<typeof import('ai')['generateText']>[0];
@@ -256,6 +276,13 @@ function validatePromptPayload(prompt: string, images: Array<{ url: string; mime
     if (!isAllowedImageUrl(image.url)) {
       throw new ValidationError('AI image URLs must use HTTPS or data URLs.');
     }
+  }
+}
+
+function validateAdminChatPayload(messages: Array<z.infer<typeof chatMessageSchema>>): void {
+  const textChars = messages.reduce((total, message) => total + message.content.length, 0);
+  if (textChars > ADMIN_CHAT_MAX_TEXT_CHARS) {
+    throw new ValidationError(`AI chat is too large. Maximum is ${ADMIN_CHAT_MAX_TEXT_CHARS} characters.`);
   }
 }
 
@@ -1181,6 +1208,85 @@ app.openapi(generateStagedRoute, async (c) => {
   if (payload.totalSections !== undefined) response.totalSections = payload.totalSections;
 
   return ok(c, response);
+});
+
+const chatRoute = createRoute({
+  method: 'post',
+  path: '/chat',
+  tags: ['Admin - AI'],
+  summary: 'Chat with the read-only admin assistant',
+  request: {
+    body: { content: { 'application/json': { schema: chatSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Admin chat response',
+      content: {
+        'application/json': {
+          schema: successEnvelope(
+            z.object({
+              profile: z.literal('adminChat'),
+              provider: providerEnum,
+              model: z.string(),
+              message: z.object({
+                role: z.literal('assistant'),
+                content: z.string(),
+              }),
+              usage: z
+                .object({
+                  inputTokens: z.number().optional(),
+                  outputTokens: z.number().optional(),
+                  totalTokens: z.number().optional(),
+                })
+                .optional(),
+            }),
+          ),
+        },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(chatRoute, async (c) => {
+  c.header('Cache-Control', 'no-store');
+  c.header('Pragma', 'no-cache');
+
+  await enforceAiRateLimit(c);
+  const payload = c.req.valid('json');
+  validateMessagePayload(payload.messages);
+  validateAdminChatPayload(payload.messages);
+
+  const settings = await runtimeSettings(c);
+  const profile = resolveAiModelProfile(settings, 'adminChat');
+  const model = await getLanguageModel(profile.provider, profile.model, settings, c.env);
+  const messages: ModelMessage[] = [
+    { role: 'system', content: ADMIN_CHAT_SYSTEM_PROMPT },
+    ...normalizeMessages(payload.messages),
+  ];
+
+  const { generateText } = await import('ai');
+  const result = await generateText({
+    model,
+    messages,
+    allowSystemInMessages: true,
+    temperature: Math.min(settings.generation.planningTemperature, 0.3),
+    maxOutputTokens: Math.min(settings.generation.maxOutputTokens, ADMIN_CHAT_MAX_OUTPUT_TOKENS),
+    timeout: { totalMs: getTimeout('planning') },
+    maxRetries: 1,
+    abortSignal: c.req.raw.signal,
+  });
+
+  return ok(c, {
+    profile: 'adminChat' as const,
+    provider: profile.provider,
+    model: profile.model,
+    message: {
+      role: 'assistant' as const,
+      content: result.text.trim(),
+    },
+    usage: usageFromResult(result),
+  });
 });
 
 export { app as adminAiRoutes };

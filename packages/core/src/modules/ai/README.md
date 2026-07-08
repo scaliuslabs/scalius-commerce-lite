@@ -13,6 +13,12 @@ Admin widget form
   -> POST /api/v1/admin/ai/generate or /api/v1/admin/ai/generate-staged
        -> Vercel AI SDK provider adapter
        -> OpenRouter | OpenAI | Gemini | Cloudflare Workers AI
+
+Admin assistant panel
+  -> POST /api/v1/admin/ai/chat
+       -> resolves settings.ai.profiles.adminChat
+       -> Vercel AI SDK provider adapter
+       -> OpenRouter | OpenAI | Gemini | Cloudflare Workers AI
 ```
 
 System prompts are stored in the `settings` table under category `ai`. The default prompt text lives in `default-prompts.ts`; the API no longer fetches prompts from third-party URLs.
@@ -42,7 +48,9 @@ Runtime and admin reads must use `readStoredCredentialStrict()` for saved provid
 - `imageGeneration`
 - `voice`
 
-Future profiles are disabled by default. `widgetGeneration` is synthesized from the legacy active provider and provider default model so existing widget generation settings keep their current behavior. Profile resolution is a settings-layer guard only: `resolveAiModelProfile()` checks that the profile is enabled, the provider is enabled, credentials are available through the strict credential path, and the selected model is in the provider's configured allowlist. Do not add runtime assistant/model calls just because a profile exists.
+Profiles other than `widgetGeneration` are disabled by default. `widgetGeneration` is synthesized from the legacy active provider and provider default model so existing widget generation settings keep their current behavior. Profile resolution is a settings-layer guard: `resolveAiModelProfile()` checks that the profile is enabled, the provider is enabled, credentials are available through the strict credential path, and the selected model is in the provider's configured allowlist.
+
+`adminChat` now has a first stateless dashboard route and visible admin panel. It is still disabled until a merchant explicitly enables the `adminChat` profile with a provider, allowed model, and usable credential. The first route is guidance-only: it receives bounded conversation history plus sanitized page-state context, does not call MCP tools, does not read live domain data, and cannot mutate settings, products, orders, inventory, payments, cache, logs, or credentials.
 
 ## Files
 
@@ -59,9 +67,10 @@ Future profiles are disabled by default. `widgetGeneration` is synthesized from 
   - `POST /api/v1/admin/settings/widget-ai`
 - `apps/api/src/routes/admin/ai.ts`
   - `GET /api/v1/admin/ai/models`
+  - `POST /api/v1/admin/ai/chat`
   - `POST /api/v1/admin/ai/generate`
   - `POST /api/v1/admin/ai/generate-staged`
 - `apps/api/src/routes/admin/ai-prompts.ts`
   - `GET /api/v1/admin/ai-prompts?type=widget|landing-page|collection`
 
-The generation routes use the Vercel AI SDK and preserve the OpenAI-style response shape expected by the widget editor parser.
+The generation routes use the Vercel AI SDK and preserve the OpenAI-style response shape expected by the widget editor parser. The chat route uses the same lazy provider-loading discipline but a separate assistant prompt and response DTO; do not reuse widget artifact generation/repair helpers for admin chat.

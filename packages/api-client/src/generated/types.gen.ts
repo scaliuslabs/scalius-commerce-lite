@@ -34117,6 +34117,114 @@ export type PostApiV1AdminAiGenerateStagedResponses = {
 
 export type PostApiV1AdminAiGenerateStagedResponse = PostApiV1AdminAiGenerateStagedResponses[keyof PostApiV1AdminAiGenerateStagedResponses];
 
+export type PostApiV1AdminAiChatData = {
+    body?: {
+        messages: Array<{
+            role: 'user' | 'assistant';
+            content: string;
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/ai/chat';
+};
+
+export type PostApiV1AdminAiChatErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAiChatError = PostApiV1AdminAiChatErrors[keyof PostApiV1AdminAiChatErrors];
+
+export type PostApiV1AdminAiChatResponses = {
+    /**
+     * Admin chat response
+     */
+    200: {
+        success: true;
+        data: {
+            profile: 'adminChat';
+            provider: 'openrouter' | 'openai' | 'gemini' | 'cloudflare';
+            model: string;
+            message: {
+                role: 'assistant';
+                content: string;
+            };
+            usage?: {
+                inputTokens?: number;
+                outputTokens?: number;
+                totalTokens?: number;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminAiChatResponse = PostApiV1AdminAiChatResponses[keyof PostApiV1AdminAiChatResponses];
+
 export type GetApiV1AdminAttributesData = {
     body?: never;
     path?: never;
