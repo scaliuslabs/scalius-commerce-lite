@@ -135,6 +135,10 @@ const MCP_ACCEPT_HEADER = "application/json, text/event-stream";
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const INTERNAL_ADMIN_MCP_URL = "http://agent.internal/mcp/admin";
 const PUBLIC_ADMIN_MCP_URL = "https://agent.example.test/mcp/admin";
+const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH =
+  "/api/v1/admin/settings/notification-channels/mcp-summary";
+const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_VERSION =
+  "admin-notification-settings-summary:v1";
 
 interface BootedClient {
   client: Client;
@@ -163,6 +167,77 @@ function adminPermissionsBody(overrides: Record<string, unknown> = {}) {
       overrides: { grants: ["orders.view"], denials: ["settings.edit"] },
       ...overrides,
     },
+  };
+}
+
+function adminNotificationSettingsSummaryFixture(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    source: {
+      path: ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH,
+      permission: "settings.general.view",
+      version: ADMIN_NOTIFICATION_SETTINGS_SUMMARY_VERSION,
+    },
+    customer: {
+      supportedChannels: ["email", "sms", "whatsapp"],
+      readiness: {
+        email: { configured: true, ready: true, issueCount: 0 },
+        sms: { configured: false, ready: false, issueCount: 1 },
+        whatsapp: { configured: true, ready: true, issueCount: 0 },
+      },
+      enabledEventCounts: {
+        email: 1,
+        sms: 0,
+        whatsapp: 0,
+      },
+      events: [
+        {
+          type: "order_created",
+          label: "Order Created",
+          enabledChannels: ["email"],
+          hasAnyChannel: true,
+        },
+      ],
+      whatsappTemplate: {
+        configured: true,
+        languageConfigured: true,
+      },
+    },
+    merchant: {
+      supportedChannels: ["push"],
+      readiness: {
+        push: { configured: true, ready: true, issueCount: 0 },
+      },
+      enabledEventCounts: {
+        push: 1,
+      },
+      events: [
+        {
+          type: "order_created",
+          label: "Order Created",
+          enabledChannels: ["push"],
+          hasAnyChannel: true,
+        },
+      ],
+    },
+    totals: {
+      orderEventCount: 15,
+      customerEventsWithAnyChannel: 1,
+      merchantEventsWithPush: 1,
+      readinessIssueCount: 1,
+    },
+    limits: {
+      includesCredentials: false,
+      includesMaskedSecrets: false,
+      includesProviderIdentifiers: false,
+      includesRawProviderErrors: false,
+      includesRecipients: false,
+      includesOrderIds: false,
+      includesDeliveryReceipts: false,
+      canMutate: false,
+    },
+    ...overrides,
   };
 }
 
@@ -439,6 +514,14 @@ function adminSettingsSummaryContext(result: Record<string, unknown>): Record<st
     throw new Error("Expected adminSettingsSummary structured content");
   }
   return structuredContent.adminSettingsSummary;
+}
+
+function adminNotificationSettingsSummaryContext(result: Record<string, unknown>): Record<string, unknown> {
+  const structuredContent = result.structuredContent;
+  if (!isRecord(structuredContent) || !isRecord(structuredContent.adminNotificationSettingsSummary)) {
+    throw new Error("Expected adminNotificationSettingsSummary structured content");
+  }
+  return structuredContent.adminNotificationSettingsSummary;
 }
 
 function adminAnalyticsSummaryContext(result: Record<string, unknown>): Record<string, unknown> {
@@ -1466,6 +1549,7 @@ describe("admin MCP route", () => {
       "admin_inventory_lookup",
       "admin_dashboard_summary",
       "admin_settings_summary",
+      "admin_notification_settings_summary",
       "admin_analytics_summary",
     ]);
     for (const tool of tools) {
@@ -1558,6 +1642,98 @@ describe("admin MCP route", () => {
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("ignoredRootSecret");
     expect(serialized).not.toContain("must-not-leak");
+  });
+
+  it("calls admin_notification_settings_summary through the route with no-store response and cookie-only API forwarding", async () => {
+    const notificationSummary = adminNotificationSettingsSummaryFixture();
+    const rawNotificationSummary = {
+      ...notificationSummary,
+      ignoredRawProviderError: `raw provider error ${ADMIN_COOKIE}`,
+      customer: {
+        ...(notificationSummary.customer as Record<string, unknown>),
+        provider: "smsnetbd",
+        events: [
+          {
+            ...((notificationSummary.customer as Record<string, unknown>).events as Record<string, unknown>[])[0],
+            recipientEmail: "buyer@example.test",
+            rawMessage: "HTTP 401 provider said nope",
+          },
+        ],
+      },
+    };
+    const apiFetch = vi.fn<FetchLike>().mockImplementation((input) => {
+      const url = requestUrl(input);
+      if (url === "http://api.internal/api/v1/admin/settings/notification-channels/mcp-summary") {
+        return Promise.resolve(json({
+          success: true,
+          data: {
+            adminNotificationSettingsSummary: rawNotificationSummary,
+          },
+          ignoredRootSecret: `must-not-leak ${ADMIN_COOKIE}`,
+        }));
+      }
+      return Promise.resolve(json(adminPermissionsBody()));
+    });
+    const worker = createAgentWorker();
+    const env = createEnv(apiFetch);
+    const init = await initializeAdminMcp(worker, env, {
+      Cookie: ADMIN_COOKIE,
+      Authorization: "Bearer must-not-forward",
+      "User-Agent": "vitest-admin-client",
+    });
+    const headers: Record<string, string> = {
+      Cookie: ADMIN_COOKIE,
+      Authorization: "Bearer must-not-forward",
+      "User-Agent": "vitest-admin-client",
+    };
+    if (init.sessionId) headers["Mcp-Session-Id"] = init.sessionId;
+    if (init.protocolVersion) headers["MCP-Protocol-Version"] = init.protocolVersion;
+
+    const callsBeforeTool = apiFetch.mock.calls.length;
+    const message = await adminMcpRpc(worker, env, {
+      jsonrpc: "2.0",
+      id: 22,
+      method: "tools/call",
+      params: {
+        name: "admin_notification_settings_summary",
+        arguments: {},
+      },
+    }, headers);
+    const result = requireMcpResult(message);
+
+    expect(apiFetch.mock.calls.length).toBe(callsBeforeTool + 2);
+    const [preflightInput, preflightInit] = fetchCall(apiFetch, callsBeforeTool);
+    expect(requestUrl(preflightInput)).toBe("http://api.internal/api/v1/admin/rbac/my-permissions");
+    expect(new Headers(preflightInit?.headers).get("Authorization")).toBeNull();
+
+    const [summaryInput, summaryInit] = fetchCall(apiFetch, callsBeforeTool + 1);
+    expect(requestUrl(summaryInput)).toBe(
+      "http://api.internal/api/v1/admin/settings/notification-channels/mcp-summary",
+    );
+    expect(summaryInit?.method).toBe("GET");
+    expect(summaryInit?.body).toBeUndefined();
+    const summaryHeaders = new Headers(summaryInit?.headers);
+    expect(summaryHeaders.get("Accept")).toBe("application/json");
+    expect(summaryHeaders.get("Cookie")).toBe(ADMIN_COOKIE);
+    expect(summaryHeaders.get("User-Agent")).toBe("vitest-admin-client");
+    expect(summaryHeaders.get("Authorization")).toBeNull();
+    expect([...summaryHeaders.keys()].sort()).toEqual(["accept", "cookie", "user-agent"]);
+    expect(result.isError).toBeUndefined();
+    expect(adminNotificationSettingsSummaryContext(result)).toEqual(notificationSummary);
+    expect(firstContentBlock(result)).toEqual({
+      type: "text",
+      text: "Admin notification settings summary is available.",
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("ignoredRawProviderError");
+    expect(serialized).not.toContain("raw provider error");
+    expect(serialized).not.toContain("smsnetbd");
+    expect(serialized).not.toContain("buyer@example.test");
+    expect(serialized).not.toContain("rawMessage");
+    expect(serialized).not.toContain("HTTP 401");
+    expect(serialized).not.toContain("ignoredRootSecret");
+    expect(serialized).not.toContain("must-not-leak");
+    expect(serialized).not.toContain(ADMIN_COOKIE);
   });
 
   it("calls the RBAC endpoint for admin_session_context and returns compact structured content", async () => {

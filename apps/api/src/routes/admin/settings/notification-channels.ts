@@ -19,6 +19,11 @@ import {
     describeNotificationProviderBlock,
     getNotificationProviderBlock,
 } from "@scalius/core/modules/notifications/notification-provider-health";
+import {
+    ORDER_NOTIFICATION_LABELS,
+    ORDER_NOTIFICATION_TYPES,
+    type OrderNotificationType,
+} from "@scalius/core/modules/notifications/notification-types";
 import type { Database } from "@scalius/database/client";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
@@ -58,6 +63,96 @@ const customerNotificationSettingsSchema = z.object({
 const updateCustomerNotificationSettingsSchema = z.object({
     channels: channelsSchema,
     whatsappTemplate: whatsappTemplateSchema.optional(),
+});
+
+const CUSTOMER_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp"] as const;
+const MERCHANT_NOTIFICATION_CHANNELS = ["push"] as const;
+
+type CustomerNotificationChannel = (typeof CUSTOMER_NOTIFICATION_CHANNELS)[number];
+type MerchantNotificationChannel = (typeof MERCHANT_NOTIFICATION_CHANNELS)[number];
+
+const SUMMARY_SOURCE = {
+    path: "/api/v1/admin/settings/notification-channels/mcp-summary",
+    permission: "settings.general.view",
+    version: "admin-notification-settings-summary:v1",
+} as const;
+
+const REDACTION_LIMITS = {
+    includesCredentials: false,
+    includesMaskedSecrets: false,
+    includesProviderIdentifiers: false,
+    includesRawProviderErrors: false,
+    includesRecipients: false,
+    includesOrderIds: false,
+    includesDeliveryReceipts: false,
+    canMutate: false,
+} as const;
+
+const readinessSummarySchema = z.object({
+    configured: z.boolean(),
+    ready: z.boolean(),
+    issueCount: z.number(),
+});
+
+const notificationEventSummarySchema = z.object({
+    type: z.enum(ORDER_NOTIFICATION_TYPES),
+    label: z.string(),
+    enabledChannels: z.array(z.string()),
+    hasAnyChannel: z.boolean(),
+});
+
+const adminNotificationSettingsSummarySchema = z.object({
+    adminNotificationSettingsSummary: z.object({
+        source: z.object({
+            path: z.literal(SUMMARY_SOURCE.path),
+            permission: z.literal(SUMMARY_SOURCE.permission),
+            version: z.literal(SUMMARY_SOURCE.version),
+        }),
+        customer: z.object({
+            supportedChannels: z.array(z.enum(CUSTOMER_NOTIFICATION_CHANNELS)),
+            readiness: z.object({
+                email: readinessSummarySchema,
+                sms: readinessSummarySchema,
+                whatsapp: readinessSummarySchema,
+            }),
+            enabledEventCounts: z.object({
+                email: z.number(),
+                sms: z.number(),
+                whatsapp: z.number(),
+            }),
+            events: z.array(notificationEventSummarySchema),
+            whatsappTemplate: z.object({
+                configured: z.boolean(),
+                languageConfigured: z.boolean(),
+            }),
+        }),
+        merchant: z.object({
+            supportedChannels: z.array(z.enum(MERCHANT_NOTIFICATION_CHANNELS)),
+            readiness: z.object({
+                push: readinessSummarySchema,
+            }),
+            enabledEventCounts: z.object({
+                push: z.number(),
+            }),
+            events: z.array(notificationEventSummarySchema),
+        }),
+        totals: z.object({
+            orderEventCount: z.number(),
+            customerEventsWithAnyChannel: z.number(),
+            merchantEventsWithPush: z.number(),
+            readinessIssueCount: z.number(),
+        }),
+        limits: z.object({
+            includesCredentials: z.literal(false),
+            includesMaskedSecrets: z.literal(false),
+            includesProviderIdentifiers: z.literal(false),
+            includesRawProviderErrors: z.literal(false),
+            includesRecipients: z.literal(false),
+            includesOrderIds: z.literal(false),
+            includesDeliveryReceipts: z.literal(false),
+            canMutate: z.literal(false),
+        }),
+    }),
 });
 
 // GET /notification-channels
@@ -217,8 +312,250 @@ app.openapi(updateAdminChannelsRoute, async (c) => {
     });
 });
 
+// GET /notification-channels/mcp-summary
+const getAdminNotificationSettingsSummaryRoute = createRoute({
+    method: "get",
+    path: "/mcp-summary",
+    tags: ["Admin - Settings"],
+    summary: "Get redacted Admin MCP notification settings summary",
+    responses: {
+        200: {
+            description: "Redacted Admin MCP notification settings summary",
+            content: {
+                "application/json": { schema: successEnvelope(adminNotificationSettingsSummarySchema) },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getAdminNotificationSettingsSummaryRoute, async (c) => {
+    const db = c.get("db");
+    const env = c.env as Record<string, unknown>;
+    const encryptionKey = getCredentialEncryptionKey(env);
+
+    const [
+        customerChannels,
+        merchantChannels,
+        whatsappTemplate,
+        customerReadiness,
+        merchantReadiness,
+    ] = await Promise.all([
+        getNotificationChannels(db),
+        getAdminNotificationChannels(db),
+        getWhatsAppTemplateSummary(db),
+        getCustomerReadinessSummary(db, encryptionKey, env),
+        getMerchantReadinessSummary(db, encryptionKey, env),
+    ]);
+
+    const customerEvents = buildNotificationEventSummaries(
+        customerChannels,
+        CUSTOMER_NOTIFICATION_CHANNELS,
+    );
+    const merchantEvents = buildNotificationEventSummaries(
+        merchantChannels,
+        MERCHANT_NOTIFICATION_CHANNELS,
+    );
+    const customerEnabledEventCounts = countEnabledEvents(
+        customerEvents,
+        CUSTOMER_NOTIFICATION_CHANNELS,
+    );
+    const merchantEnabledEventCounts = countEnabledEvents(
+        merchantEvents,
+        MERCHANT_NOTIFICATION_CHANNELS,
+    );
+
+    const readinessIssueCount =
+        customerReadiness.email.issueCount
+        + customerReadiness.sms.issueCount
+        + customerReadiness.whatsapp.issueCount
+        + merchantReadiness.push.issueCount;
+
+    return ok(c, {
+        adminNotificationSettingsSummary: {
+            source: SUMMARY_SOURCE,
+            customer: {
+                supportedChannels: [...CUSTOMER_NOTIFICATION_CHANNELS],
+                readiness: customerReadiness,
+                enabledEventCounts: customerEnabledEventCounts,
+                events: customerEvents,
+                whatsappTemplate,
+            },
+            merchant: {
+                supportedChannels: [...MERCHANT_NOTIFICATION_CHANNELS],
+                readiness: merchantReadiness,
+                enabledEventCounts: merchantEnabledEventCounts,
+                events: merchantEvents,
+            },
+            totals: {
+                orderEventCount: ORDER_NOTIFICATION_TYPES.length,
+                customerEventsWithAnyChannel: customerEvents.filter((event) => event.hasAnyChannel).length,
+                merchantEventsWithPush: merchantEnabledEventCounts.push,
+                readinessIssueCount,
+            },
+            limits: REDACTION_LIMITS,
+        },
+    });
+});
+
 function adminChannelsRequirePush(channels: Record<string, string[]>): boolean {
     return Object.values(channels).some((enabledChannels) => enabledChannels.includes("push"));
+}
+
+function countReadinessHints(readiness: { blockers?: unknown[]; error?: unknown }): number {
+    if (Array.isArray(readiness.blockers) && readiness.blockers.length > 0) {
+        return readiness.blockers.length;
+    }
+    return readiness.error ? 1 : 0;
+}
+
+function redactedUnavailableReadiness() {
+    return { configured: false, ready: false, issueCount: 1 };
+}
+
+function summarizeNotificationReadiness(
+    providerConfigured: boolean,
+    notificationReady: boolean,
+    issueHintCount: number,
+) {
+    return {
+        configured: providerConfigured,
+        ready: notificationReady,
+        issueCount: notificationReady ? 0 : Math.max(1, issueHintCount),
+    };
+}
+
+async function getCustomerReadinessSummary(
+    db: Database,
+    encryptionKey: string | undefined,
+    env: Record<string, unknown>,
+): Promise<Record<CustomerNotificationChannel, { configured: boolean; ready: boolean; issueCount: number }>> {
+    const [email, sms, whatsapp] = await Promise.all([
+        getEmailReadinessSummary(db, encryptionKey, env),
+        getSmsReadinessSummary(db, encryptionKey),
+        getWhatsAppReadinessSummary(db, encryptionKey),
+    ]);
+    return { email, sms, whatsapp };
+}
+
+async function getMerchantReadinessSummary(
+    db: Database,
+    encryptionKey: string | undefined,
+    env: Record<string, unknown>,
+): Promise<Record<MerchantNotificationChannel, { configured: boolean; ready: boolean; issueCount: number }>> {
+    try {
+        const providerReadiness = await getFirebaseServiceAccountReadiness(db, encryptionKey, env);
+        const notificationReadiness = await getPushNotificationReadiness(db, providerReadiness);
+        return {
+            push: summarizeNotificationReadiness(
+                providerReadiness.configured,
+                notificationReadiness.configured,
+                providerReadiness.error || notificationReadiness.error ? 1 : 0,
+            ),
+        };
+    } catch {
+        return { push: redactedUnavailableReadiness() };
+    }
+}
+
+async function getEmailReadinessSummary(
+    db: Database,
+    encryptionKey: string | undefined,
+    env: Record<string, unknown>,
+): Promise<{ configured: boolean; ready: boolean; issueCount: number }> {
+    try {
+        const providerReadiness = await getEmailProviderReadiness({ db, encryptionKey, env });
+        const notificationReadiness = await getEmailNotificationReadiness(db, providerReadiness);
+        return summarizeNotificationReadiness(
+            providerReadiness.configured,
+            notificationReadiness.configured,
+            countReadinessHints(providerReadiness) || (notificationReadiness.error ? 1 : 0),
+        );
+    } catch {
+        return redactedUnavailableReadiness();
+    }
+}
+
+async function getSmsReadinessSummary(
+    db: Database,
+    encryptionKey: string | undefined,
+): Promise<{ configured: boolean; ready: boolean; issueCount: number }> {
+    try {
+        const providerReadiness = await getSmsProviderReadiness(db, encryptionKey);
+        const notificationReadiness = await getSmsNotificationReadiness(db, providerReadiness);
+        return summarizeNotificationReadiness(
+            providerReadiness.configured,
+            notificationReadiness.configured,
+            providerReadiness.error || notificationReadiness.error ? 1 : 0,
+        );
+    } catch {
+        return redactedUnavailableReadiness();
+    }
+}
+
+async function getWhatsAppReadinessSummary(
+    db: Database,
+    encryptionKey: string | undefined,
+): Promise<{ configured: boolean; ready: boolean; issueCount: number }> {
+    try {
+        const configured = await isWhatsAppCloudApiConfigured(db, encryptionKey);
+        const notificationReadiness = await getWhatsAppNotificationReadiness(db, encryptionKey, configured);
+        return summarizeNotificationReadiness(
+            configured,
+            notificationReadiness.configured,
+            notificationReadiness.error ? 1 : 0,
+        );
+    } catch {
+        return redactedUnavailableReadiness();
+    }
+}
+
+async function getWhatsAppTemplateSummary(
+    db: Database,
+): Promise<{ configured: boolean; languageConfigured: boolean }> {
+    try {
+        const whatsappTemplate = await getOrderWhatsAppTemplateSettings(db);
+        return {
+            configured: Boolean(whatsappTemplate.templateName.trim()),
+            languageConfigured: Boolean(whatsappTemplate.languageCode.trim()),
+        };
+    } catch {
+        return { configured: false, languageConfigured: false };
+    }
+}
+
+function buildNotificationEventSummaries<TChannel extends string>(
+    channels: Record<string, string[]>,
+    supportedChannels: readonly TChannel[],
+): Array<{
+    type: OrderNotificationType;
+    label: string;
+    enabledChannels: TChannel[];
+    hasAnyChannel: boolean;
+}> {
+    return ORDER_NOTIFICATION_TYPES.map((type) => {
+        const configuredChannels = new Set(channels[type] ?? []);
+        const enabledChannels = supportedChannels.filter((channel) => configuredChannels.has(channel));
+        return {
+            type,
+            label: ORDER_NOTIFICATION_LABELS[type],
+            enabledChannels,
+            hasAnyChannel: enabledChannels.length > 0,
+        };
+    });
+}
+
+function countEnabledEvents<TChannel extends string>(
+    events: Array<{ enabledChannels: TChannel[] }>,
+    supportedChannels: readonly TChannel[],
+): Record<TChannel, number> {
+    const counts = Object.fromEntries(supportedChannels.map((channel) => [channel, 0])) as Record<TChannel, number>;
+    for (const event of events) {
+        for (const channel of event.enabledChannels) {
+            counts[channel] += 1;
+        }
+    }
+    return counts;
 }
 
 async function getEmailNotificationReadiness(
@@ -261,8 +598,9 @@ async function getSmsNotificationReadiness(
 async function getWhatsAppNotificationReadiness(
     db: Database,
     encryptionKey: string | undefined,
+    configuredOverride?: boolean,
 ): Promise<{ configured: boolean; error: string | null }> {
-    const configured = await isWhatsAppCloudApiConfigured(db, encryptionKey);
+    const configured = configuredOverride ?? await isWhatsAppCloudApiConfigured(db, encryptionKey);
     if (!configured) {
         return {
             configured: false,

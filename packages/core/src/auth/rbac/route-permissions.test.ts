@@ -4,6 +4,15 @@ import { PERMISSIONS } from "./permissions";
 import { getRoutePermission } from "./route-permissions";
 
 describe("route permissions", () => {
+  it("gates redacted Admin MCP notification settings summary behind settings.general.view", () => {
+    expect(
+      getRoutePermission(
+        "/api/v1/admin/settings/notification-channels/mcp-summary",
+        "GET",
+      ),
+    ).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_VIEW });
+  });
+
   it("gates redacted Admin MCP customer search behind customers.view", () => {
     expect(getRoutePermission("/api/v1/admin/customers/mcp-search", "POST"))
       .toEqual({ permission: PERMISSIONS.CUSTOMERS_VIEW });

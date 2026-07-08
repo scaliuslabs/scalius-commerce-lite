@@ -25832,6 +25832,174 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses = {
 
 export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponse = PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses[keyof PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses];
 
+export type GetApiV1AdminSettingsNotificationChannelsMcpSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/notification-channels/mcp-summary';
+};
+
+export type GetApiV1AdminSettingsNotificationChannelsMcpSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsNotificationChannelsMcpSummaryError = GetApiV1AdminSettingsNotificationChannelsMcpSummaryErrors[keyof GetApiV1AdminSettingsNotificationChannelsMcpSummaryErrors];
+
+export type GetApiV1AdminSettingsNotificationChannelsMcpSummaryResponses = {
+    /**
+     * Redacted Admin MCP notification settings summary
+     */
+    200: {
+        success: true;
+        data: {
+            adminNotificationSettingsSummary: {
+                source: {
+                    path: '/api/v1/admin/settings/notification-channels/mcp-summary';
+                    permission: 'settings.general.view';
+                    version: 'admin-notification-settings-summary:v1';
+                };
+                customer: {
+                    supportedChannels: Array<'email' | 'sms' | 'whatsapp'>;
+                    readiness: {
+                        email: {
+                            configured: boolean;
+                            ready: boolean;
+                            issueCount: number;
+                        };
+                        sms: {
+                            configured: boolean;
+                            ready: boolean;
+                            issueCount: number;
+                        };
+                        whatsapp: {
+                            configured: boolean;
+                            ready: boolean;
+                            issueCount: number;
+                        };
+                    };
+                    enabledEventCounts: {
+                        email: number;
+                        sms: number;
+                        whatsapp: number;
+                    };
+                    events: Array<{
+                        type: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+                        label: string;
+                        enabledChannels: Array<string>;
+                        hasAnyChannel: boolean;
+                    }>;
+                    whatsappTemplate: {
+                        configured: boolean;
+                        languageConfigured: boolean;
+                    };
+                };
+                merchant: {
+                    supportedChannels: Array<'push'>;
+                    readiness: {
+                        push: {
+                            configured: boolean;
+                            ready: boolean;
+                            issueCount: number;
+                        };
+                    };
+                    enabledEventCounts: {
+                        push: number;
+                    };
+                    events: Array<{
+                        type: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+                        label: string;
+                        enabledChannels: Array<string>;
+                        hasAnyChannel: boolean;
+                    }>;
+                };
+                totals: {
+                    orderEventCount: number;
+                    customerEventsWithAnyChannel: number;
+                    merchantEventsWithPush: number;
+                    readinessIssueCount: number;
+                };
+                limits: {
+                    includesCredentials: false;
+                    includesMaskedSecrets: false;
+                    includesProviderIdentifiers: false;
+                    includesRawProviderErrors: false;
+                    includesRecipients: false;
+                    includesOrderIds: false;
+                    includesDeliveryReceipts: false;
+                    canMutate: false;
+                };
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsNotificationChannelsMcpSummaryResponse = GetApiV1AdminSettingsNotificationChannelsMcpSummaryResponses[keyof GetApiV1AdminSettingsNotificationChannelsMcpSummaryResponses];
+
 export type GetApiV1AdminSettingsSmsData = {
     body?: never;
     path?: never;

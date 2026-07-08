@@ -25,6 +25,10 @@ const FEED_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=43200";
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
 const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
+const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH =
+  "/api/v1/admin/settings/notification-channels/mcp-summary";
+const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_VERSION =
+  "admin-notification-settings-summary:v1";
 const ADMIN_CUSTOMERS_MCP_SEARCH_PATH = "/api/v1/admin/customers/mcp-search";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 
@@ -468,6 +472,10 @@ function adminMcpTools(overrides = {}) {
     adminMcpTool("admin_navigation_context", overrides.admin_navigation_context),
     adminMcpTool("admin_dashboard_summary", overrides.admin_dashboard_summary),
     adminMcpTool("admin_settings_summary", overrides.admin_settings_summary),
+    adminMcpTool(
+      "admin_notification_settings_summary",
+      overrides.admin_notification_settings_summary,
+    ),
     adminMcpTool("admin_analytics_summary", overrides.admin_analytics_summary),
     adminMcpTool("admin_category_search", overrides.admin_category_search),
     adminMcpTool("admin_collection_search", overrides.admin_collection_search),
@@ -554,6 +562,80 @@ function adminDashboardSummaryMcpResult(extra = {}) {
     ...extra,
   };
   const body = { adminDashboardSummary: summary };
+  return {
+    content: [{ type: "text", text: JSON.stringify(body) }],
+    structuredContent: body,
+  };
+}
+
+function adminNotificationSettingsSummaryMcpResult(extra = {}) {
+  const summary = {
+    source: {
+      path: ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH,
+      permission: "settings.general.view",
+      version: ADMIN_NOTIFICATION_SETTINGS_SUMMARY_VERSION,
+    },
+    customer: {
+      supportedChannels: ["email", "sms", "whatsapp"],
+      readiness: {
+        email: { configured: true, ready: true, issueCount: 0 },
+        sms: { configured: false, ready: false, issueCount: 1 },
+        whatsapp: { configured: true, ready: true, issueCount: 0 },
+      },
+      enabledEventCounts: {
+        email: 1,
+        sms: 0,
+        whatsapp: 0,
+      },
+      events: [
+        {
+          type: "order_created",
+          label: "Order Created",
+          enabledChannels: ["email"],
+          hasAnyChannel: true,
+        },
+      ],
+      whatsappTemplate: {
+        configured: true,
+        languageConfigured: true,
+      },
+    },
+    merchant: {
+      supportedChannels: ["push"],
+      readiness: {
+        push: { configured: true, ready: true, issueCount: 0 },
+      },
+      enabledEventCounts: {
+        push: 1,
+      },
+      events: [
+        {
+          type: "order_created",
+          label: "Order Created",
+          enabledChannels: ["push"],
+          hasAnyChannel: true,
+        },
+      ],
+    },
+    totals: {
+      orderEventCount: 15,
+      customerEventsWithAnyChannel: 1,
+      merchantEventsWithPush: 1,
+      readinessIssueCount: 1,
+    },
+    limits: {
+      includesCredentials: false,
+      includesMaskedSecrets: false,
+      includesProviderIdentifiers: false,
+      includesRawProviderErrors: false,
+      includesRecipients: false,
+      includesOrderIds: false,
+      includesDeliveryReceipts: false,
+      canMutate: false,
+    },
+    ...extra,
+  };
+  const body = { adminNotificationSettingsSummary: summary };
   return {
     content: [{ type: "text", text: JSON.stringify(body) }],
     structuredContent: body,
@@ -855,6 +937,7 @@ function authenticatedAdminMcpSmokeFetch({
   toolResult = adminNavigationContextMcpResult(),
   dashboardSummaryToolResult = adminDashboardSummaryMcpResult(),
   settingsSummaryToolResult = adminSettingsSummaryMcpResult(),
+  notificationSettingsSummaryToolResult = adminNotificationSettingsSummaryMcpResult(),
   analyticsSummaryToolResult = adminAnalyticsSummaryMcpResult(),
   categorySearchToolResult = adminCategorySearchMcpResult(),
   collectionSearchToolResult = adminCollectionSearchMcpResult(),
@@ -867,6 +950,7 @@ function authenticatedAdminMcpSmokeFetch({
   toolCacheControl = "no-store",
   dashboardSummaryToolCacheControl = toolCacheControl,
   settingsSummaryToolCacheControl = toolCacheControl,
+  notificationSettingsSummaryToolCacheControl = toolCacheControl,
   analyticsSummaryToolCacheControl = toolCacheControl,
   categorySearchToolCacheControl = toolCacheControl,
   collectionSearchToolCacheControl = toolCacheControl,
@@ -961,6 +1045,15 @@ function authenticatedAdminMcpSmokeFetch({
             ? settingsSummaryToolResult(body)
             : settingsSummaryToolResult;
           cacheControl = settingsSummaryToolCacheControl;
+        } else if (body.params?.name === "admin_notification_settings_summary") {
+          expect(body.params).toEqual({
+            name: "admin_notification_settings_summary",
+            arguments: {},
+          });
+          result = typeof notificationSettingsSummaryToolResult === "function"
+            ? notificationSettingsSummaryToolResult(body)
+            : notificationSettingsSummaryToolResult;
+          cacheControl = notificationSettingsSummaryToolCacheControl;
         } else if (body.params?.name === "admin_analytics_summary") {
           expect(body.params).toEqual({
             name: "admin_analytics_summary",
@@ -1718,13 +1811,14 @@ describe("release-check local evaluators", () => {
         "admin_inventory_lookup",
         "admin_media_search",
         "admin_navigation_context",
+        "admin_notification_settings_summary",
         "admin_order_search",
         "admin_page_search",
         "admin_product_search",
         "admin_session_context",
         "admin_settings_summary",
       ],
-      readOnlyToolCount: 13,
+      readOnlyToolCount: 14,
     });
   });
 
@@ -1738,6 +1832,7 @@ describe("release-check local evaluators", () => {
         "admin_navigation_context",
         "admin_dashboard_summary",
         "admin_settings_summary",
+        "admin_notification_settings_summary",
         "admin_analytics_summary",
         "admin_category_search",
         "admin_collection_search",
@@ -1760,7 +1855,7 @@ describe("release-check local evaluators", () => {
     });
   });
 
-  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, settings summary, analytics summary, category, collection, page, media, product, order, customer search, and inventory lookup smokes", async () => {
+  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, settings summaries, analytics summary, category, collection, page, media, product, order, customer search, and inventory lookup smokes", async () => {
     const mcpRequests = [];
     const fetchImpl = authenticatedAdminMcpSmokeFetch({
       onMcpRequest: (body) => {
@@ -1788,6 +1883,7 @@ describe("release-check local evaluators", () => {
       "tools/call:admin_navigation_context",
       "tools/call:admin_dashboard_summary",
       "tools/call:admin_settings_summary",
+      "tools/call:admin_notification_settings_summary",
       "tools/call:admin_analytics_summary",
       "tools/call:admin_category_search",
       "tools/call:admin_collection_search",
@@ -1823,13 +1919,14 @@ describe("release-check local evaluators", () => {
           "admin_inventory_lookup",
           "admin_media_search",
           "admin_navigation_context",
+          "admin_notification_settings_summary",
           "admin_order_search",
           "admin_page_search",
           "admin_product_search",
           "admin_session_context",
           "admin_settings_summary",
         ],
-        readOnlyToolCount: 13,
+        readOnlyToolCount: 14,
       },
       navigationTool: {
         name: "admin_navigation_context",
@@ -1865,6 +1962,15 @@ describe("release-check local evaluators", () => {
         statusCode: 200,
         cacheControl: "no-store",
         contentCount: 1,
+      },
+      notificationSettingsSummaryTool: {
+        name: "admin_notification_settings_summary",
+        statusCode: 200,
+        cacheControl: "no-store",
+        contentCount: 1,
+        customerEventCount: 1,
+        merchantEventCount: 1,
+        readinessIssueCount: 1,
       },
       analyticsSummaryTool: {
         name: "admin_analytics_summary",
@@ -1932,7 +2038,7 @@ describe("release-check local evaluators", () => {
       },
     });
     expect(logger.log).toHaveBeenCalledWith(
-      "PASS admin MCP authenticated: tools admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_session_context, admin_settings_summary, calls admin_navigation_context, admin_dashboard_summary, admin_settings_summary, admin_analytics_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_order_search, admin_customer_search, admin_inventory_lookup ok.",
+      "PASS admin MCP authenticated: tools admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_notification_settings_summary, admin_order_search, admin_page_search, admin_product_search, admin_session_context, admin_settings_summary, calls admin_navigation_context, admin_dashboard_summary, admin_settings_summary, admin_notification_settings_summary, admin_analytics_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_order_search, admin_customer_search, admin_inventory_lookup ok.",
     );
 
     const logged = JSON.stringify(logger.log.mock.calls);
@@ -1954,7 +2060,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary.*unexpected admin_write_context/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_notification_settings_summary, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary.*unexpected admin_write_context/);
 
     await expect(smokeAdminMcpAuthenticated({
       dashboardUrl: "https://dashboard.example.test",
@@ -1965,7 +2071,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_notification_settings_summary, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary/);
   });
 
   it("fails authenticated Admin MCP smoke when tool calls lack no-store or return an error", async () => {
@@ -2363,6 +2469,135 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow("summary must not leak credentials, tokens, API keys");
+  });
+
+  it("fails authenticated Admin MCP smoke when notification settings summary lacks no-store, errors, malformed structure, unsafe limits, or leaks sensitive data", async () => {
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        notificationSettingsSummaryToolCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_notification_settings_summary Cache-Control must include no-store");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        notificationSettingsSummaryToolResult: {
+          isError: true,
+          content: [{ type: "text", text: "denied" }],
+          structuredContent: {
+            error: {
+              code: "admin_notification_settings_summary_failed",
+              status: 500,
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_notification_settings_summary returned an MCP tool error");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        notificationSettingsSummaryToolResult: {
+          content: [{ type: "text", text: "{}" }],
+          structuredContent: {
+            adminNotificationSettingsSummary: {
+              source: {
+                path: "/api/v1/admin/settings/notification-channels",
+                permission: "settings.notifications.edit",
+                version: "admin-notification-settings-summary:v0",
+              },
+              customer: {},
+              merchant: {},
+              totals: {},
+              limits: {
+                includesCredentials: false,
+                includesMaskedSecrets: false,
+                includesProviderIdentifiers: false,
+                includesRawProviderErrors: false,
+                includesRecipients: false,
+                includesOrderIds: false,
+                includesDeliveryReceipts: false,
+                canMutate: false,
+              },
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_notification_settings_summary source.path must be /api/v1/admin/settings/notification-channels/mcp-summary");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        notificationSettingsSummaryToolResult: adminNotificationSettingsSummaryMcpResult({
+          limits: {
+            includesCredentials: false,
+            includesMaskedSecrets: false,
+            includesProviderIdentifiers: true,
+            includesRawProviderErrors: false,
+            includesRecipients: false,
+            includesOrderIds: false,
+            includesDeliveryReceipts: false,
+            canMutate: false,
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_notification_settings_summary limits must explicitly disable includesProviderIdentifiers");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        notificationSettingsSummaryToolResult: adminNotificationSettingsSummaryMcpResult({
+          customer: {
+            supportedChannels: ["email", "sms", "whatsapp"],
+            readiness: {
+              email: { configured: true, ready: true, issueCount: 0 },
+              sms: { configured: false, ready: false, issueCount: 1 },
+              whatsapp: { configured: true, ready: true, issueCount: 0 },
+            },
+            enabledEventCounts: {
+              email: 1,
+              sms: 0,
+              whatsapp: 0,
+            },
+            events: [
+              {
+                type: "order_created",
+                label: "Order Created",
+                enabledChannels: ["email"],
+                hasAnyChannel: true,
+                recipientEmail: "buyer@example.test",
+                rawMessage: "smsnetbd token failed",
+              },
+            ],
+            whatsappTemplate: {
+              configured: true,
+              languageConfigured: true,
+            },
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("summary must not leak credentials, tokens, provider identifiers");
   });
 
   it("fails authenticated Admin MCP smoke when analytics summary lacks no-store, errors, malformed structure, unsafe limits, or leaks sensitive data", async () => {
