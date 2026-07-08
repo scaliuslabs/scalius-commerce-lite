@@ -98,7 +98,7 @@ pnpm --dir apps/ops-monitor exec wrangler kv key get \
   --remote \
   --text
 ```
-- OPS-010: Do not delete `worker:testdash` blindly; it has served live traffic, so first migrate `store.wrygo.com` to the current `scalius-storefront`/`scalius-api` architecture or recover the `testdash` source/config and redeploy it without production queue producers for `payment-events`, `order-notifications`, `auth-otp`, or legacy `order-ingest`. Keep the investigation read-only with commands such as `curl -fsSI https://store.wrygo.com/`, `curl -fsSI https://store.wrygo.com/health`, `pnpm --dir apps/api exec wrangler queues info payment-events`, `pnpm --dir apps/api exec wrangler queues info order-notifications`, `pnpm --dir apps/api exec wrangler queues info auth-otp`, and `pnpm ops:check --queues --samples 1 --timeout-ms 30000 --json`. After migration or clean redeploy, rerun `pnpm ops:check --queues --samples 1 --timeout-ms 30000 --json` and close only when the `worker:testdash` unexpected-producer warnings are gone without allowlisting it as a production actor.
+- OPS-010: Do not delete `worker:testdash` blindly. Fresh read-only evidence shows `dash.wrygo.com` routes directly to `testdash`, while `store.wrygo.com` routes to a separate `storefront-test` Worker whose `BACKEND_API` service binding still points at `testdash`. First migrate `store.wrygo.com` to the current `scalius-storefront`/`scalius-api` architecture and `dash.wrygo.com` to the current dashboard/API architecture, or recover the legacy `testdash`/`storefront-test` source/config and redeploy those Workers without production queue producers for `payment-events`, `order-notifications`, `auth-otp`, or legacy `order-ingest`. Keep the investigation read-only with commands such as `curl -fsSI https://store.wrygo.com/`, `curl -fsSI https://store.wrygo.com/health`, `curl -fsSI https://dash.wrygo.com/`, `curl -fsSI https://dash.wrygo.com/health`, `pnpm --dir apps/api exec wrangler deployments status --name testdash --json`, `pnpm --dir apps/api exec wrangler versions view <version-id> --name testdash --json`, `pnpm --dir apps/api exec wrangler queues info payment-events`, `pnpm --dir apps/api exec wrangler queues info order-notifications`, `pnpm --dir apps/api exec wrangler queues info auth-otp`, `pnpm --dir apps/api exec wrangler queues info order-ingest`, and `pnpm ops:check --queues --samples 1 --timeout-ms 30000 --json`. After migration or clean redeploy, rerun `pnpm ops:check --queues --samples 1 --timeout-ms 30000 --json` and close only when the `worker:testdash` unexpected-producer warnings and required actions are gone without allowlisting it as a production actor.
 
 Agent MCP verification:
 
@@ -113,11 +113,15 @@ pnpm run deploy:agent -- --dry-run
 The first public agent Worker is intentionally stateless and catalog-only. It must expose only `GET /health` and `/mcp` read tools backed by storefront UCP catalog/profile endpoints, and it must not gain D1, R2, KV, queue, Durable Object, provider-secret, checkout, cart mutation, order, payment, fulfillment, customer, support, or recovery bindings without a new architecture note and focused tests. `pnpm run deploy:agent` now performs the live `/health` plus MCP JSON-RPC initialize/tools-list smoke after deploy, and `pnpm release:check` repeats the same catalog-only tool-list gate for release candidates unless `--skip-live` or `--skip-wrangler` is intentionally used.
 
 `pnpm ops:check --queues` fails when expected API queue producers/consumers are
-missing. Extra queue producers are warning-level evidence in logs/JSON, so a
-stale Worker such as an old test deployment should be cleaned up without
-confusing that cleanup with a failed queue-wiring smoke. Extra queue consumers
-are fail-level evidence unless they are source-owned expected actors, because a
-stray consumer can take production work off the intended handler path.
+missing. Extra queue producers are warning-level evidence in logs/JSON with
+required cleanup actions, so a stale Worker such as an old test deployment
+should be cleaned up without confusing that cleanup with a failed queue-wiring
+smoke. Extra queue consumers are fail-level evidence unless they are
+source-owned expected actors, because a stray consumer can take production work
+off the intended handler path. `pnpm release:check` runs the same queue metadata
+path whenever Wrangler proof is enabled; `--skip-wrangler` intentionally skips
+both deployment and queue proof and must be documented if used for a release
+candidate.
 
 ## Storefront Listing Query Plans
 

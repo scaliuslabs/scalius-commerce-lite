@@ -954,6 +954,7 @@ async function checkQueues(options, {
 }) {
   const queues = [];
   const warnings = [];
+  const requiredActions = [];
   for (const expectation of queueExpectations) {
     const queueName = expectation.name;
     const commandSpec = buildWranglerQueueInfoCommand(queueName, { pnpmExecutable, rootDir });
@@ -983,6 +984,11 @@ async function checkQueues(options, {
         logger?.warn(`⚠ ${message}`);
       }
     }
+    for (const producer of queueInfo.unexpectedProducers) {
+      requiredActions.push(
+        `Queue ${queueName}: migrate or redeploy ${producer} without this production queue producer binding; do not allowlist it unless it is intentionally source-owned.`,
+      );
+    }
     logger?.log(`✓ queue ${queueName}: ${summary}`);
     queues.push({
       name: queueName,
@@ -1007,6 +1013,7 @@ async function checkQueues(options, {
     queueCount: queues.length,
     queues,
     warnings,
+    requiredActions,
   };
 }
 
@@ -1096,6 +1103,7 @@ export async function runOpsCheck(options, {
     const queueCheck = await runStep(result, "queues", () =>
       checkQueues(options, { execFileImpl, pnpmExecutable, rootDir, queueExpectations, logger }));
     result.warnings.push(...queueCheck.warnings);
+    result.requiredActions.push(...queueCheck.requiredActions);
   } else {
     result.checks.queues = {
       status: "skipped",
