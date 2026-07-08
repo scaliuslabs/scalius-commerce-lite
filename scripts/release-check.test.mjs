@@ -279,6 +279,7 @@ function adminMcpTools(overrides = {}) {
   return [
     adminMcpTool("admin_session_context", overrides.admin_session_context),
     adminMcpTool("admin_navigation_context", overrides.admin_navigation_context),
+    adminMcpTool("admin_product_search", overrides.admin_product_search),
   ];
 }
 
@@ -318,10 +319,29 @@ function adminNavigationContextMcpResult(extra = {}) {
   };
 }
 
+function adminProductSearchMcpResult(extra = {}) {
+  const body = {
+    adminProductSearch: {
+      query: "test",
+      page: 1,
+      limit: 1,
+      total: 0,
+      products: [],
+      ...extra,
+    },
+  };
+  return {
+    content: [{ type: "text", text: JSON.stringify(body) }],
+    structuredContent: body,
+  };
+}
+
 function authenticatedAdminMcpSmokeFetch({
   tools = adminMcpTools(),
   toolResult = adminNavigationContextMcpResult(),
+  productSearchToolResult = adminProductSearchMcpResult(),
   toolCacheControl = "no-store",
+  productSearchToolCacheControl = toolCacheControl,
   onMcpRequest,
 } = {}) {
   return vi.fn(async (url, init = {}) => {
@@ -381,16 +401,35 @@ function authenticatedAdminMcpSmokeFetch({
       }
 
       if (body.method === "tools/call") {
-        expect(body.params).toEqual({
-          name: "admin_navigation_context",
-          arguments: {},
-        });
-        const result = typeof toolResult === "function" ? toolResult(body) : toolResult;
+        let result;
+        let cacheControl = toolCacheControl;
+        if (body.params?.name === "admin_navigation_context") {
+          expect(body.params).toEqual({
+            name: "admin_navigation_context",
+            arguments: {},
+          });
+          result = typeof toolResult === "function" ? toolResult(body) : toolResult;
+        } else if (body.params?.name === "admin_product_search") {
+          expect(body.params).toEqual({
+            name: "admin_product_search",
+            arguments: {
+              query: "test",
+              limit: 1,
+              page: 1,
+            },
+          });
+          result = typeof productSearchToolResult === "function"
+            ? productSearchToolResult(body)
+            : productSearchToolResult;
+          cacheControl = productSearchToolCacheControl;
+        } else {
+          throw new Error(`Unexpected Admin MCP tool call ${body.params?.name}`);
+        }
         return mcpSseResponse({
           jsonrpc: "2.0",
           id: body.id,
           result,
-        }, { "Cache-Control": toolCacheControl });
+        }, { "Cache-Control": cacheControl });
       }
     }
 
@@ -1018,13 +1057,36 @@ describe("release-check local evaluators", () => {
       errors: [],
       toolNames: [
         "admin_navigation_context",
+        "admin_product_search",
         "admin_session_context",
       ],
-      readOnlyToolCount: 2,
+      readOnlyToolCount: 3,
     });
   });
 
-  it("signs in and runs authenticated Admin MCP tools/list plus navigation context smoke", async () => {
+  it("rejects mutation-like admin MCP tool names even when otherwise expected", () => {
+    const unsafeToolName = evaluateAdminMcpTools([
+      ...adminMcpTools(),
+      adminMcpTool("admin_product_update"),
+    ], {
+      expectedToolNames: [
+        "admin_session_context",
+        "admin_navigation_context",
+        "admin_product_search",
+        "admin_product_update",
+      ],
+    });
+
+    expect(unsafeToolName).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        expect.stringContaining("mutation-like terms"),
+        expect.stringContaining("admin_product_update"),
+      ]),
+    });
+  });
+
+  it("signs in and runs authenticated Admin MCP tools/list plus navigation and product search smokes", async () => {
     const mcpRequests = [];
     const fetchImpl = authenticatedAdminMcpSmokeFetch({
       onMcpRequest: (body) => {
@@ -1050,6 +1112,7 @@ describe("release-check local evaluators", () => {
       "initialize",
       "tools/list",
       "tools/call:admin_navigation_context",
+      "tools/call:admin_product_search",
     ]);
     expect(result.signIn).toMatchObject({
       url: "https://dashboard.example.test/api/auth/sign-in/email",
@@ -1069,9 +1132,10 @@ describe("release-check local evaluators", () => {
         cacheControl: "no-store",
         toolNames: [
           "admin_navigation_context",
+          "admin_product_search",
           "admin_session_context",
         ],
-        readOnlyToolCount: 2,
+        readOnlyToolCount: 3,
       },
       navigationTool: {
         name: "admin_navigation_context",
@@ -1082,7 +1146,16 @@ describe("release-check local evaluators", () => {
         returnedPages: 2,
         sectionCount: 1,
       },
+      productSearchTool: {
+        name: "admin_product_search",
+        statusCode: 200,
+        cacheControl: "no-store",
+        contentCount: 1,
+      },
     });
+    expect(logger.log).toHaveBeenCalledWith(
+      "PASS admin MCP authenticated: tools admin_navigation_context, admin_product_search, admin_session_context, calls admin_navigation_context, admin_product_search ok.",
+    );
 
     const logged = JSON.stringify(logger.log.mock.calls);
     expect(logged).not.toContain("admin@example.test");
@@ -1103,7 +1176,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_navigation_context.*unexpected admin_write_context/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_navigation_context, admin_product_search.*unexpected admin_write_context/);
 
     await expect(smokeAdminMcpAuthenticated({
       dashboardUrl: "https://dashboard.example.test",
@@ -1114,10 +1187,10 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_navigation_context/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_navigation_context, admin_product_search/);
   });
 
-  it("fails authenticated Admin MCP smoke when navigation tool lacks no-store or returns an error", async () => {
+  it("fails authenticated Admin MCP smoke when tool calls lack no-store or return an error", async () => {
     await expect(smokeAdminMcpAuthenticated({
       dashboardUrl: "https://dashboard.example.test",
       email: "admin@example.test",
@@ -1148,6 +1221,55 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow("admin_navigation_context returned an MCP tool error");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        productSearchToolCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_product_search Cache-Control must include no-store");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        productSearchToolResult: {
+          isError: true,
+          content: [{ type: "text", text: "denied" }],
+          structuredContent: {
+            error: {
+              code: "admin_product_search_failed",
+              status: 500,
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_product_search returned an MCP tool error");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        productSearchToolResult: {
+          content: [],
+          structuredContent: {
+            adminProductSearch: {
+              products: [],
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_product_search must return at least one content block");
   });
 
   it("calls safe read-only catalog and cart-validation MCP tools when the agent smoke opts in", async () => {

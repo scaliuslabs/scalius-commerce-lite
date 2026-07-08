@@ -1,8 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import * as z from "zod/v4";
 
 const ADMIN_PERMISSIONS_PATH = "/api/v1/admin/rbac/my-permissions";
 const ADMIN_API_TARGET = `http://api.internal${ADMIN_PERMISSIONS_PATH}`;
+const ADMIN_PRODUCTS_PATH = "/api/v1/admin/products";
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
@@ -18,8 +20,18 @@ const ADMIN_READ_ONLY_TOOL_ANNOTATIONS = {
 
 const MAX_ADMIN_NAVIGATION_PAGES = 24;
 const ADMIN_NAVIGATION_CATALOG_VERSION = "admin-navigation-context:v1";
+const ADMIN_PRODUCT_SEARCH_MAX_PRODUCTS = 10;
+const ADMIN_PRODUCTS_MAX_STRING_LENGTH = 220;
 
 type JsonRecord = Record<string, unknown>;
+
+const adminProductSearchInputSchema = z.object({
+  query: z.string().trim().min(1).max(120),
+  limit: z.number().int().min(1).max(ADMIN_PRODUCT_SEARCH_MAX_PRODUCTS).default(5),
+  page: z.number().int().min(1).max(20).default(1),
+}).strict();
+
+type AdminProductSearchInput = z.infer<typeof adminProductSearchInputSchema>;
 
 interface AdminPermissionContext {
   userId?: string;
@@ -242,6 +254,18 @@ function getCookieHeader(headers: Headers): string | null {
   return cookie?.trim() ? cookie : null;
 }
 
+function adminApiHeaders(cookie: string, userAgent?: string | null): Headers {
+  const headers = new Headers({
+    Accept: "application/json",
+    Cookie: cookie,
+  });
+  const safeUserAgent = userAgent?.trim();
+  if (safeUserAgent) {
+    headers.set("User-Agent", safeUserAgent.slice(0, 256));
+  }
+  return headers;
+}
+
 function failureCodeForStatus(status: number): string {
   if (status === 401) return "admin_session_invalid";
   if (status === 403) return "admin_session_forbidden";
@@ -293,19 +317,10 @@ async function fetchAdminPermissions(
     return { ok: false, status: 503, code: "admin_api_unavailable" };
   }
 
-  const headers = new Headers({
-    Accept: "application/json",
-    Cookie: cookie,
-  });
-  const safeUserAgent = userAgent?.trim();
-  if (safeUserAgent) {
-    headers.set("User-Agent", safeUserAgent.slice(0, 256));
-  }
-
   try {
     const response = await env.API.fetch(ADMIN_API_TARGET, {
       method: "GET",
-      headers,
+      headers: adminApiHeaders(cookie, userAgent),
       signal,
     });
 
@@ -383,6 +398,31 @@ function adminToolError(failure: AdminPermissionsFailure): CallToolResult {
       message: failure.status >= 500
         ? "Admin session context is temporarily unavailable."
         : "Admin session is not authorized for MCP.",
+    },
+  }, true);
+}
+
+function adminProductToolError(
+  code: string,
+  query?: JsonRecord,
+  status = 503,
+): CallToolResult {
+  return toolResult({
+    adminProductSearch: {
+      source: { path: ADMIN_PRODUCTS_PATH },
+      ...(query ? { query } : {}),
+      products: [],
+      pagination: null,
+      limits: {
+        maxProducts: ADMIN_PRODUCT_SEARCH_MAX_PRODUCTS,
+        includesTrashed: false,
+        includesStock: false,
+      },
+    },
+    error: {
+      code,
+      status: failClosedStatus(status),
+      message: "Admin products are temporarily unavailable.",
     },
   }, true);
 }
@@ -543,6 +583,163 @@ function buildAdminNavigationContext(body: JsonRecord): JsonRecord {
   };
 }
 
+function compactString(value: unknown, maxLength = ADMIN_PRODUCTS_MAX_STRING_LENGTH): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : null;
+}
+
+function compactNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function compactBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function compactTimestamp(value: unknown): string | number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return compactString(value, 80);
+}
+
+function setCompactString(
+  target: JsonRecord,
+  key: string,
+  value: unknown,
+  maxLength = ADMIN_PRODUCTS_MAX_STRING_LENGTH,
+): void {
+  const compact = compactString(value, maxLength);
+  if (compact) target[key] = compact;
+}
+
+function setCompactNumber(target: JsonRecord, key: string, value: unknown): void {
+  const compact = compactNumber(value);
+  if (compact !== null) target[key] = compact;
+}
+
+function setCompactBoolean(target: JsonRecord, key: string, value: unknown): void {
+  const compact = compactBoolean(value);
+  if (compact !== null) target[key] = compact;
+}
+
+function compactAdminProduct(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const id = compactString(value.id);
+  if (!id) return null;
+
+  const product: JsonRecord = { id };
+  setCompactString(product, "name", value.name);
+  setCompactString(product, "slug", value.slug);
+  setCompactBoolean(product, "isActive", value.isActive);
+
+  const categoryName = compactString(
+    value.categoryName ?? (isRecord(value.category) ? value.category.name : undefined),
+  );
+  if (categoryName) product.categoryName = categoryName;
+
+  setCompactNumber(product, "variantCount", value.variantCount);
+  setCompactNumber(product, "imageCount", value.imageCount);
+
+  const updatedAt = compactTimestamp(value.updatedAt);
+  if (updatedAt !== null) product.updatedAt = updatedAt;
+
+  return product;
+}
+
+function compactAdminPagination(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const page = compactNumber(value.page);
+  const limit = compactNumber(value.limit);
+  const total = compactNumber(value.total);
+  const totalPages = compactNumber(value.totalPages);
+  if (page === null || limit === null || total === null || totalPages === null) {
+    return null;
+  }
+
+  return { page, limit, total, totalPages };
+}
+
+function buildAdminProductSearchUrl(input: AdminProductSearchInput): { url: URL; query: JsonRecord } {
+  const url = new URL(`http://api.internal${ADMIN_PRODUCTS_PATH}`);
+  const query: JsonRecord = {
+    query: input.query,
+    page: input.page,
+    limit: input.limit,
+    sort: "updatedAt",
+    order: "desc",
+  };
+
+  url.searchParams.set("search", input.query);
+  url.searchParams.set("page", String(input.page));
+  url.searchParams.set("limit", String(input.limit));
+  url.searchParams.set("sort", "updatedAt");
+  url.searchParams.set("order", "desc");
+
+  return { url, query };
+}
+
+async function fetchAdminProductSearch(
+  env: Env,
+  input: AdminProductSearchInput,
+  {
+    cookie,
+    userAgent,
+    signal,
+  }: {
+    cookie: string;
+    userAgent?: string | null;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  const { url, query } = buildAdminProductSearchUrl(input);
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return adminProductToolError("admin_api_unavailable", query);
+  }
+
+  try {
+    const response = await env.API.fetch(url, {
+      method: "GET",
+      headers: adminApiHeaders(cookie, userAgent),
+      signal,
+    });
+    if (!response.ok) {
+      return adminProductToolError("admin_product_unavailable", query, response.status);
+    }
+
+    const body = await parseJsonResponse(response);
+    const data = body && isRecord(body.data) ? body.data : null;
+    if (!body || body.success !== true || !data || !Array.isArray(data.products)) {
+      return adminProductToolError("admin_product_unavailable", query);
+    }
+
+    const pagination = compactAdminPagination(data.pagination);
+    if (!pagination) {
+      return adminProductToolError("admin_product_unavailable", query);
+    }
+
+    const products = data.products
+      .map(compactAdminProduct)
+      .filter((product): product is JsonRecord => product !== null)
+      .slice(0, ADMIN_PRODUCT_SEARCH_MAX_PRODUCTS);
+
+    return toolResult({
+      adminProductSearch: {
+        source: { path: ADMIN_PRODUCTS_PATH },
+        query,
+        products,
+        pagination,
+        limits: {
+          maxProducts: ADMIN_PRODUCT_SEARCH_MAX_PRODUCTS,
+          includesTrashed: false,
+          includesStock: false,
+        },
+      },
+    });
+  } catch {
+    return adminProductToolError("admin_product_unavailable", query);
+  }
+}
+
 export function createAdminMcpServer(
   env: Env,
   options: AdminMcpOptions = {},
@@ -621,6 +818,32 @@ export function createAdminMcpServer(
       }
 
       return toolResult(buildAdminNavigationContext(result.body));
+    },
+  );
+
+  server.registerTool(
+    "admin_product_search",
+    {
+      title: "Admin Product Search",
+      description: "Searches the dashboard product list through API-verified permissions and returns compact product identifiers.",
+      inputSchema: adminProductSearchInputSchema,
+      annotations: ADMIN_READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (input, extra) => {
+      const cookie = options.cookie?.trim() ? options.cookie : null;
+      if (!cookie) {
+        return adminToolError({
+          ok: false,
+          status: 401,
+          code: "admin_session_required",
+        });
+      }
+
+      return fetchAdminProductSearch(env, input, {
+        cookie,
+        userAgent: options.userAgent,
+        signal: extra.signal,
+      });
     },
   );
 

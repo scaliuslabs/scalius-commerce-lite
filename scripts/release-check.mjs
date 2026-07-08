@@ -44,10 +44,19 @@ const ADMIN_SESSION_COOKIE_NAMES = Object.freeze([
 const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_session_context",
   "admin_navigation_context",
+  "admin_product_search",
 ]);
 const ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE = Object.freeze({
   name: "admin_navigation_context",
   arguments: Object.freeze({}),
+});
+const ADMIN_PRODUCT_SEARCH_TOOL_SMOKE = Object.freeze({
+  name: "admin_product_search",
+  arguments: Object.freeze({
+    query: "test",
+    limit: 1,
+    page: 1,
+  }),
 });
 const AGENT_EXPECTED_TOOL_NAMES = Object.freeze([
   "cart_validate",
@@ -87,6 +96,8 @@ const AGENT_FORBIDDEN_TOOL_TERM_PATTERN =
 const AGENT_CART_TERM_PATTERN = /(?:^|[^a-z0-9])carts?(?:$|[^a-z0-9])/i;
 const AGENT_CART_MUTATION_TERM_PATTERN =
   /(?:^|[^a-z0-9])(?:mutate|mutation|mutations|write|update|add|remove|clear|checkout|orders?|payments?|customers?|recovery)(?:$|[^a-z0-9])/i;
+const ADMIN_MCP_MUTATION_TOOL_TERM_PATTERN =
+  /(?:^|[^a-z0-9])(?:add|archive|approve|cancel|capture|charge|clear|complete|create|delete|disable|enable|fulfill|import|invite|mark|mutate|mutation|mutations|publish|purge|reconcile|refund|remove|repair|restore|retry|set|ship|submit|sync|update|upsert|void|write)(?:$|[^a-z0-9])/i;
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
 const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
 const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
@@ -1641,6 +1652,7 @@ export function evaluateAdminMcpTools(tools, {
   }
 
   const toolNames = [];
+  const unsafeTools = [];
   let readOnlyToolCount = 0;
   const duplicateNames = new Set();
   const seenNames = new Set();
@@ -1669,6 +1681,11 @@ export function evaluateAdminMcpTools(tools, {
     if (annotations?.destructiveHint === true) {
       errors.push(`Admin MCP tool ${name || index + 1} must not be marked destructive.`);
     }
+
+    const serialized = serializableToolSafetyText(tool, name);
+    if (ADMIN_MCP_MUTATION_TOOL_TERM_PATTERN.test(serialized)) {
+      unsafeTools.push(name || `tool ${index + 1}`);
+    }
   });
 
   const sortedNames = [...toolNames].sort();
@@ -1682,6 +1699,13 @@ export function evaluateAdminMcpTools(tools, {
     ].filter(Boolean).join("; ");
     errors.push(
       `Admin MCP tools must list exactly ${expectedSorted.join(", ")}${details ? ` (${details})` : ""}.`,
+    );
+  }
+
+  if (unsafeTools.length > 0) {
+    errors.push(
+      "Admin MCP tools must not include mutation-like terms in tool names or metadata: " +
+      unsafeTools.join(", "),
     );
   }
 
@@ -1821,6 +1845,27 @@ function evaluateAdminNavigationToolSmokeResult(result, {
       ? limits.returnedPages
       : null,
     sectionCount: sections.length,
+  };
+}
+
+function evaluateAdminReadOnlyToolSmokeResult(result, {
+  toolName = ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+
+  if (result?.isError === true) {
+    errors.push(`Admin MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Admin MCP ${toolName} must return at least one content block.`);
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
   };
 }
 
@@ -2223,9 +2268,43 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
+  const productSearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE,
+    },
+  });
+  const productSearchToolCacheControl = requireNoStoreCacheControl(
+    productSearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}`,
+  );
+  const productSearchToolResult = requireMcpJsonRpcResult(
+    productSearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}`,
+    4,
+  );
+  const productSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
+    productSearchToolResult,
+    { toolName: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name },
+  );
+  if (!productSearchToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name} failed: ` +
+      productSearchToolEvaluation.errors.join("; "),
+    );
+  }
+
   logger?.log(
     `PASS admin MCP authenticated: tools ${toolEvaluation.toolNames.join(", ")}, ` +
-    `${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name} call ok.`,
+    `calls ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}, ` +
+    `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name} ok.`,
   );
   return {
     dashboardUrl: redactUrl(normalizedDashboardUrl),
@@ -2255,6 +2334,13 @@ export async function smokeAdminMcpAuthenticated({
         defaultPath: navigationToolEvaluation.defaultPath,
         returnedPages: navigationToolEvaluation.returnedPages,
         sectionCount: navigationToolEvaluation.sectionCount,
+      },
+      productSearchTool: {
+        name: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name,
+        statusCode: productSearchToolResponse.statusCode,
+        durationMs: productSearchToolResponse.durationMs,
+        cacheControl: productSearchToolCacheControl,
+        contentCount: productSearchToolEvaluation.contentCount,
       },
     },
   };
