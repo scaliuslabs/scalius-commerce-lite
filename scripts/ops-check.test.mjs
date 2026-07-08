@@ -617,6 +617,12 @@ describe("runOpsCheck", () => {
     expect(result.warnings).toEqual([
       "Queue payment-events: unexpected producer worker:testdash",
     ]);
+    expect(result.requiredActions).toEqual([
+      "Queue payment-events: migrate or redeploy worker:testdash without this production queue producer binding; do not allowlist it unless it is intentionally source-owned.",
+    ]);
+    expect(result.checks.queues.requiredActions).toEqual([
+      "Queue payment-events: migrate or redeploy worker:testdash without this production queue producer binding; do not allowlist it unless it is intentionally source-owned.",
+    ]);
     expect(result.checks.queues.queues[0]).toMatchObject({
       name: "payment-events",
       unexpectedProducers: ["worker:testdash"],

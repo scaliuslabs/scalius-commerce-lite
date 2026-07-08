@@ -1370,14 +1370,31 @@ describe("runReleaseCheck", () => {
     });
     const execFileImpl = vi.fn(async (command, args) => {
       expect(command).toBe("pnpm");
-      expect(args).toEqual(["--dir", "apps/api", "exec", "wrangler", "deployments", "list", "--json"]);
+      if (args.includes("deployments")) {
+        expect(args).toEqual(["--dir", "apps/api", "exec", "wrangler", "deployments", "list", "--json"]);
+        return {
+          stdout: JSON.stringify([
+            {
+              created_on: "2026-07-06T02:00:00Z",
+              versions: [{ version_id: "api-version", percentage: 100 }],
+            },
+          ]),
+        };
+      }
+
+      expect(args.slice(0, -1)).toEqual(["--dir", "apps/api", "exec", "wrangler", "queues", "info"]);
+      const queueName = args.at(-1);
+      const producerLines = queueName.endsWith("-dlq")
+        ? ["Number of Producers: 1", "Producers: worker:scalius-ops-monitor"]
+        : ["Number of Producers: 2", "Producers: worker:scalius-api, worker:testdash"];
       return {
-        stdout: JSON.stringify([
-          {
-            created_on: "2026-07-06T02:00:00Z",
-            versions: [{ version_id: "api-version", percentage: 100 }],
-          },
-        ]),
+        stdout: [
+          `Queue Name: ${queueName}`,
+          "Queue ID: queue-id",
+          ...producerLines,
+          "Number of Consumers: 1",
+          "Consumers: worker:scalius-api",
+        ].join("\n"),
       };
     });
 
@@ -1404,7 +1421,26 @@ describe("runReleaseCheck", () => {
       readySampleCount: 4,
       openApiPathCount: 4,
       deploymentVersionId: "api-version",
+      queueStatus: "passed",
+      queueCount: 2,
+      queues: {
+        queueCount: 2,
+        queues: [
+          {
+            name: "payment-events",
+            unexpectedProducers: ["worker:testdash"],
+          },
+          {
+            name: "payment-events-dlq",
+            unexpectedProducers: [],
+          },
+        ],
+      },
     });
+    expect(result.warnings).toContain("Queue payment-events: unexpected producer worker:testdash");
+    expect(result.requiredActions).toContain(
+      "Queue payment-events: migrate or redeploy worker:testdash without this production queue producer binding; do not allowlist it unless it is intentionally source-owned.",
+    );
     expect(result.checks.adminInvalidCookieAuth).toMatchObject({
       api: {
         url: "https://api.example.test/api/v1/admin/settings/business",
@@ -1567,7 +1603,11 @@ describe("runReleaseCheck", () => {
       shippingDetailsCount: 1,
     });
     expect(fetchImpl.mock.calls.filter(([url]) => new URL(url).pathname === "/api/v1/readyz")).toHaveLength(4);
-    expect(execFileImpl).toHaveBeenCalledTimes(1);
+    expect(execFileImpl.mock.calls.map(([, args]) => args.join(" "))).toEqual([
+      "--dir apps/api exec wrangler deployments list --json",
+      "--dir apps/api exec wrangler queues info payment-events",
+      "--dir apps/api exec wrangler queues info payment-events-dlq",
+    ]);
   });
 
   it.each([
