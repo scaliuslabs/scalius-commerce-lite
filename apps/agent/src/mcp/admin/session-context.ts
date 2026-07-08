@@ -6,6 +6,7 @@ const ADMIN_PERMISSIONS_PATH = "/api/v1/admin/rbac/my-permissions";
 const ADMIN_API_TARGET = `http://api.internal${ADMIN_PERMISSIONS_PATH}`;
 const ADMIN_PRODUCTS_PATH = "/api/v1/admin/products";
 const ADMIN_CATEGORIES_PATH = "/api/v1/admin/categories";
+const ADMIN_COLLECTIONS_PATH = "/api/v1/admin/collections";
 const ADMIN_ORDERS_PATH = "/api/v1/admin/orders";
 
 const NO_STORE_HEADERS = {
@@ -24,9 +25,11 @@ const MAX_ADMIN_NAVIGATION_PAGES = 24;
 const ADMIN_NAVIGATION_CATALOG_VERSION = "admin-navigation-context:v1";
 const ADMIN_PRODUCT_SEARCH_MAX_PRODUCTS = 10;
 const ADMIN_CATEGORY_SEARCH_MAX_CATEGORIES = 10;
+const ADMIN_COLLECTION_SEARCH_MAX_COLLECTIONS = 10;
 const ADMIN_ORDER_SEARCH_MAX_ORDERS = 10;
 const ADMIN_PRODUCTS_MAX_STRING_LENGTH = 220;
 const ADMIN_CATEGORIES_MAX_STRING_LENGTH = 220;
+const ADMIN_COLLECTIONS_MAX_STRING_LENGTH = 220;
 const ADMIN_ORDERS_MAX_STRING_LENGTH = 220;
 
 type JsonRecord = Record<string, unknown>;
@@ -46,6 +49,14 @@ const adminCategorySearchInputSchema = z.object({
 }).strict();
 
 type AdminCategorySearchInput = z.infer<typeof adminCategorySearchInputSchema>;
+
+const adminCollectionSearchInputSchema = z.object({
+  query: z.string().trim().min(1).max(120),
+  limit: z.number().int().min(1).max(ADMIN_COLLECTION_SEARCH_MAX_COLLECTIONS).default(5),
+  page: z.number().int().min(1).max(20).default(1),
+}).strict();
+
+type AdminCollectionSearchInput = z.infer<typeof adminCollectionSearchInputSchema>;
 
 const adminOrderSearchInputSchema = z.object({
   query: z.string().trim().min(1).max(80),
@@ -476,6 +487,35 @@ function adminCategoryToolError(
   }, true);
 }
 
+function adminCollectionToolError(
+  code: string,
+  query?: JsonRecord,
+  status = 503,
+): CallToolResult {
+  return toolResult({
+    adminCollectionSearch: {
+      source: { path: ADMIN_COLLECTIONS_PATH },
+      ...(query ? { query } : {}),
+      collections: [],
+      pagination: null,
+      limits: {
+        maxCollections: ADMIN_COLLECTION_SEARCH_MAX_COLLECTIONS,
+        includesTrashed: false,
+        includesProducts: false,
+        includesDescriptions: false,
+        includesMetaText: false,
+        includesRawImages: false,
+        includesDeletedFields: false,
+      },
+    },
+    error: {
+      code,
+      status: failClosedStatus(status),
+      message: "Admin collections are temporarily unavailable.",
+    },
+  }, true);
+}
+
 function adminOrderToolError(
   code: string,
   query?: JsonRecord,
@@ -763,6 +803,35 @@ function compactAdminCategory(value: unknown): JsonRecord | null {
   return category;
 }
 
+function compactCollectionCanonicalPath(value: unknown, id: string): string | null {
+  const canonicalPath = compactString(value, 180);
+  if (!canonicalPath) return null;
+  return canonicalPath === `/collections/${id}` &&
+    /^\/collections\/[A-Za-z0-9_-]{1,128}$/.test(canonicalPath)
+    ? canonicalPath
+    : null;
+}
+
+function compactAdminCollection(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const id = compactString(value.id, ADMIN_COLLECTIONS_MAX_STRING_LENGTH);
+  if (!id) return null;
+
+  const collection: JsonRecord = { id };
+  setCompactString(collection, "name", value.name, ADMIN_COLLECTIONS_MAX_STRING_LENGTH);
+  setCompactNumber(collection, "productCount", value.productCount);
+
+  setCompactBoolean(collection, "noIndex", value.noIndex);
+  setCompactBoolean(collection, "excludeFromSitemap", value.excludeFromSitemap);
+
+  const canonicalPath = compactCollectionCanonicalPath(value.canonicalPath, id);
+  if (canonicalPath) collection.canonicalPath = canonicalPath;
+
+  setCompactTimestamp(collection, "updatedAt", value.updatedAt);
+
+  return collection;
+}
+
 function compactAdminPagination(value: unknown): JsonRecord | null {
   if (!isRecord(value)) return null;
   const page = compactNumber(value.page);
@@ -937,6 +1006,91 @@ async function fetchAdminCategorySearch(
     });
   } catch {
     return adminCategoryToolError("admin_category_unavailable", query);
+  }
+}
+
+function buildAdminCollectionSearchUrl(input: AdminCollectionSearchInput): { url: URL; query: JsonRecord } {
+  const url = new URL(`http://api.internal${ADMIN_COLLECTIONS_PATH}`);
+  const query: JsonRecord = {
+    query: input.query,
+    page: input.page,
+    limit: input.limit,
+    sort: "updatedAt",
+    order: "desc",
+  };
+
+  url.searchParams.set("search", input.query);
+  url.searchParams.set("page", String(input.page));
+  url.searchParams.set("limit", String(input.limit));
+  url.searchParams.set("sort", "updatedAt");
+  url.searchParams.set("order", "desc");
+
+  return { url, query };
+}
+
+async function fetchAdminCollectionSearch(
+  env: Env,
+  input: AdminCollectionSearchInput,
+  {
+    cookie,
+    userAgent,
+    signal,
+  }: {
+    cookie: string;
+    userAgent?: string | null;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  const { url, query } = buildAdminCollectionSearchUrl(input);
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return adminCollectionToolError("admin_api_unavailable", query);
+  }
+
+  try {
+    const response = await env.API.fetch(url, {
+      method: "GET",
+      headers: adminApiHeaders(cookie, userAgent),
+      signal,
+    });
+    if (!response.ok) {
+      return adminCollectionToolError("admin_collection_unavailable", query, response.status);
+    }
+
+    const body = await parseJsonResponse(response);
+    const data = body && isRecord(body.data) ? body.data : null;
+    if (!body || body.success !== true || !data || !Array.isArray(data.collections)) {
+      return adminCollectionToolError("admin_collection_unavailable", query);
+    }
+
+    const pagination = compactAdminPagination(data.pagination);
+    if (!pagination) {
+      return adminCollectionToolError("admin_collection_unavailable", query);
+    }
+
+    const collections = data.collections
+      .map(compactAdminCollection)
+      .filter((collection): collection is JsonRecord => collection !== null)
+      .slice(0, ADMIN_COLLECTION_SEARCH_MAX_COLLECTIONS);
+
+    return toolResult({
+      adminCollectionSearch: {
+        source: { path: ADMIN_COLLECTIONS_PATH },
+        query,
+        collections,
+        pagination,
+        limits: {
+          maxCollections: ADMIN_COLLECTION_SEARCH_MAX_COLLECTIONS,
+          includesTrashed: false,
+          includesProducts: false,
+          includesDescriptions: false,
+          includesMetaText: false,
+          includesRawImages: false,
+          includesDeletedFields: false,
+        },
+      },
+    });
+  } catch {
+    return adminCollectionToolError("admin_collection_unavailable", query);
   }
 }
 
@@ -1185,6 +1339,32 @@ export function createAdminMcpServer(
       }
 
       return fetchAdminCategorySearch(env, input, {
+        cookie,
+        userAgent: options.userAgent,
+        signal: extra.signal,
+      });
+    },
+  );
+
+  server.registerTool(
+    "admin_collection_search",
+    {
+      title: "Admin Collection Search",
+      description: "Searches the dashboard collection list through API-verified permissions and returns compact collection identifiers.",
+      inputSchema: adminCollectionSearchInputSchema,
+      annotations: ADMIN_READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (input, extra) => {
+      const cookie = options.cookie?.trim() ? options.cookie : null;
+      if (!cookie) {
+        return adminToolError({
+          ok: false,
+          status: 401,
+          code: "admin_session_required",
+        });
+      }
+
+      return fetchAdminCollectionSearch(env, input, {
         cookie,
         userAgent: options.userAgent,
         signal: extra.signal,
