@@ -16991,6 +16991,46 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
 
 export type GetApiV1AdminDashboardHomeSummaryResponse = GetApiV1AdminDashboardHomeSummaryResponses[keyof GetApiV1AdminDashboardHomeSummaryResponses];
 
+export type GetApiV1AdminDashboardMetricsSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/dashboard/metrics-summary';
+};
+
+export type GetApiV1AdminDashboardMetricsSummaryResponses = {
+    /**
+     * Dashboard metrics summary data
+     */
+    200: {
+        success: true;
+        data: {
+            stats: {
+                totalProducts: number;
+                totalCustomers: number;
+                currentMonth: {
+                    orders: number;
+                    revenue: number;
+                    orderGrowth: number;
+                    revenueGrowth: number;
+                    orderStatus: {
+                        delivered: number;
+                        processing: number;
+                        shipping: number;
+                        cancelled: number;
+                    };
+                };
+                lastMonth: {
+                    orders: number;
+                    revenue: number;
+                };
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminDashboardMetricsSummaryResponse = GetApiV1AdminDashboardMetricsSummaryResponses[keyof GetApiV1AdminDashboardMetricsSummaryResponses];
+
 export type GetApiV1AdminDashboardSummaryData = {
     body?: never;
     path?: never;
