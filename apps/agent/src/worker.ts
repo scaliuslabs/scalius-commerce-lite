@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod/v4";
+import { createAdminMcpServer, resolveAdminMcpRequestAuth } from "./mcp/admin/session-context";
 
 export const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
 export const DEFAULT_AGENT_PROFILE_URL = "https://agent.scalius.com/.well-known/ucp";
@@ -42,6 +43,16 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: NO_STORE_HEADERS,
+  });
+}
+
+function withNoStore(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "no-store");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
 }
 
@@ -278,10 +289,25 @@ export function createAgentWorker(options: StorefrontCatalogMcpOptions = {}) {
         });
       }
 
+      if (url.pathname === "/mcp/admin") {
+        const auth = await resolveAdminMcpRequestAuth(request, env);
+        if (auth instanceof Response) return auth;
+
+        const { createMcpHandler } = await import("agents/mcp");
+        const server = createAdminMcpServer(env, {
+          cookie: auth.cookie,
+          userAgent: auth.userAgent,
+          permissionsBody: auth.permissionsBody,
+        });
+        const response = await createMcpHandler(server, { route: "/mcp/admin" })(request, env, ctx);
+        return withNoStore(response);
+      }
+
       if (url.pathname === "/mcp") {
         const { createMcpHandler } = await import("agents/mcp");
         const server = createStorefrontCatalogMcpServer(env, options);
-        return createMcpHandler(server, { route: "/mcp" })(request, env, ctx);
+        const response = await createMcpHandler(server, { route: "/mcp" })(request, env, ctx);
+        return withNoStore(response);
       }
 
       return jsonResponse({

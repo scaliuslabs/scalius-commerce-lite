@@ -40,6 +40,7 @@ import { Route as AdminCollectionsIndexRouteImport } from './routes/admin/collec
 import { Route as AdminCategoriesIndexRouteImport } from './routes/admin/categories/index'
 import { Route as AdminAnalyticsIndexRouteImport } from './routes/admin/analytics/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiAssistantMcpRouteImport } from './routes/api/assistant/mcp'
 import { Route as AdminWidgetsTrashRouteImport } from './routes/admin/widgets/trash'
 import { Route as AdminWidgetsWidgetIdRouteImport } from './routes/admin/widgets/$widgetId'
 import { Route as AdminSettingsThemeRouteImport } from './routes/admin/settings/theme'
@@ -228,6 +229,11 @@ const AdminAnalyticsIndexRoute = AdminAnalyticsIndexRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAssistantMcpRoute = ApiAssistantMcpRouteImport.update({
+  id: '/api/assistant/mcp',
+  path: '/api/assistant/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminWidgetsTrashRoute = AdminWidgetsTrashRouteImport.update({
@@ -451,6 +457,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
   '/admin/widgets/$widgetId': typeof AdminWidgetsWidgetIdRoute
   '/admin/widgets/trash': typeof AdminWidgetsTrashRoute
+  '/api/assistant/mcp': typeof ApiAssistantMcpRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/analytics/': typeof AdminAnalyticsIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -516,6 +523,7 @@ export interface FileRoutesByTo {
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
   '/admin/widgets/$widgetId': typeof AdminWidgetsWidgetIdRoute
   '/admin/widgets/trash': typeof AdminWidgetsTrashRoute
+  '/api/assistant/mcp': typeof ApiAssistantMcpRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/analytics': typeof AdminAnalyticsIndexRoute
   '/admin/categories': typeof AdminCategoriesIndexRoute
@@ -583,6 +591,7 @@ export interface FileRoutesById {
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
   '/admin/widgets/$widgetId': typeof AdminWidgetsWidgetIdRoute
   '/admin/widgets/trash': typeof AdminWidgetsTrashRoute
+  '/api/assistant/mcp': typeof ApiAssistantMcpRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/analytics/': typeof AdminAnalyticsIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -651,6 +660,7 @@ export interface FileRouteTypes {
     | '/admin/settings/theme'
     | '/admin/widgets/$widgetId'
     | '/admin/widgets/trash'
+    | '/api/assistant/mcp'
     | '/api/auth/$'
     | '/admin/analytics/'
     | '/admin/categories/'
@@ -716,6 +726,7 @@ export interface FileRouteTypes {
     | '/admin/settings/theme'
     | '/admin/widgets/$widgetId'
     | '/admin/widgets/trash'
+    | '/api/assistant/mcp'
     | '/api/auth/$'
     | '/admin/analytics'
     | '/admin/categories'
@@ -782,6 +793,7 @@ export interface FileRouteTypes {
     | '/admin/settings/theme'
     | '/admin/widgets/$widgetId'
     | '/admin/widgets/trash'
+    | '/api/assistant/mcp'
     | '/api/auth/$'
     | '/admin/analytics/'
     | '/admin/categories/'
@@ -816,6 +828,7 @@ export interface RootRouteChildren {
   ScannerRoute: typeof ScannerRoute
   ApiScannerTokenRoute: typeof ApiScannerTokenRoute
   InvoiceOrderIdRoute: typeof InvoiceOrderIdRoute
+  ApiAssistantMcpRoute: typeof ApiAssistantMcpRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiV1AdminSplatRoute: typeof ApiV1AdminSplatRoute
 }
@@ -1037,6 +1050,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/assistant/mcp': {
+      id: '/api/assistant/mcp'
+      path: '/api/assistant/mcp'
+      fullPath: '/api/assistant/mcp'
+      preLoaderRoute: typeof ApiAssistantMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/widgets/trash': {
@@ -1406,6 +1426,7 @@ const rootRouteChildren: RootRouteChildren = {
   ScannerRoute: ScannerRoute,
   ApiScannerTokenRoute: ApiScannerTokenRoute,
   InvoiceOrderIdRoute: InvoiceOrderIdRoute,
+  ApiAssistantMcpRoute: ApiAssistantMcpRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiV1AdminSplatRoute: ApiV1AdminSplatRoute,
 }

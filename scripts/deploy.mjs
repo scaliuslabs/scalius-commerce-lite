@@ -28,13 +28,16 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
 import {
   DEFAULT_AGENT_URL,
+  DEFAULT_DASHBOARD_URL,
   normalizeHttpBaseUrl,
+  smokeAdminMcpUnauthenticated,
   smokeAgentWorker,
 } from "./release-check.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
+const adminV2Dir = resolve(root, "apps", "admin-v2");
 const opsMonitorDir = resolve(root, "apps", "ops-monitor");
 const agentDir = resolve(root, "apps", "agent");
 const args = process.argv.slice(2);
@@ -165,7 +168,7 @@ export function getDeployCommandForTarget(target) {
       return {
         cmd: `${pnpm} exec wrangler deploy`,
         label: "Deploy Admin V2 Worker",
-        cwd: resolve(root, "apps", "admin-v2"),
+        cwd: adminV2Dir,
       };
     case "storefront":
       return {
@@ -580,6 +583,38 @@ function getAgentDeployUrl() {
   return normalizeHttpBaseUrl(process.env.SCALIUS_AGENT_URL ?? DEFAULT_AGENT_URL, "Agent URL");
 }
 
+function getDashboardDeployUrl() {
+  if (process.env.SCALIUS_DASHBOARD_URL) {
+    return normalizeHttpBaseUrl(process.env.SCALIUS_DASHBOARD_URL, "Dashboard URL");
+  }
+
+  const adminConfig = readJsoncFile(resolve(adminV2Dir, "wrangler.jsonc"));
+  return normalizeHttpBaseUrl(
+    adminConfig.vars?.BETTER_AUTH_URL ?? DEFAULT_DASHBOARD_URL,
+    "Dashboard URL",
+  );
+}
+
+export async function verifyAdminDeploy({
+  dashboardUrl = getDashboardDeployUrl(),
+  fetchImpl = fetch,
+  timeoutMs = AGENT_DEPLOY_TIMEOUT_MS,
+} = {}) {
+  console.log("\n▶ Verify live Admin MCP auth gate");
+  console.log(`  ${dashboardUrl}\n`);
+  const result = await smokeAdminMcpUnauthenticated({
+    dashboardUrl,
+    fetchImpl,
+    timeoutMs,
+    logger: null,
+  });
+  console.log(
+    `✓ Admin MCP rejected unauthenticated request with ${result.statusCode}; ` +
+    `Cache-Control: ${result.cacheControl || "missing"}.`,
+  );
+  return result;
+}
+
 export async function verifyAgentDeploy({
   agentUrl = getAgentDeployUrl(),
   storefrontUrl,
@@ -615,6 +650,9 @@ export async function verifyAgentDeploy({
 async function verifyPostDeployTarget(target, apiConfig) {
   if (target === "api") {
     await verifyApiDeploy(apiConfig);
+  }
+  if (target === "admin") {
+    await verifyAdminDeploy();
   }
   if (target === "storefront") {
     await verifyStorefrontDeploy();

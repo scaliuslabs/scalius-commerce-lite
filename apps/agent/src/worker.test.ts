@@ -2,6 +2,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAdminMcpServer } from "./mcp/admin/session-context";
+import type { AdminMcpOptions } from "./mcp/admin/session-context";
 import {
   DEFAULT_AGENT_PROFILE_URL,
   UCP_VERSION,
@@ -10,12 +12,96 @@ import {
 } from "./worker";
 import type { FetchLike } from "./worker";
 
-const TEST_ENV: Env = {
+type TestMcpServer = {
+  connect(transport: unknown): Promise<void>;
+  close(): Promise<void>;
+};
+
+vi.mock("agents/mcp", async () => {
+  const [{ Client: TestClient }, { InMemoryTransport: TestTransport }] = await Promise.all([
+    import("@modelcontextprotocol/sdk/client/index.js"),
+    import("@modelcontextprotocol/sdk/inMemory.js"),
+  ]);
+
+  const rpcResponse = (id: unknown, result: unknown, status = 200) =>
+    new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), {
+      status,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+
+  const rpcError = (id: unknown, code: number, message: string, status = 400) =>
+    new Response(JSON.stringify({
+      jsonrpc: "2.0",
+      id,
+      error: { code, message },
+    }), {
+      status,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+
+  const isTestRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+
+  return {
+    createMcpHandler: (server: TestMcpServer) => async (request: Request) => {
+      const body = await request.json();
+      if (!isTestRecord(body)) return rpcError(null, -32700, "Invalid JSON-RPC request");
+
+      if (body.method === "initialize") {
+        const params = isTestRecord(body.params) ? body.params : {};
+        return rpcResponse(body.id, {
+          protocolVersion: typeof params.protocolVersion === "string"
+            ? params.protocolVersion
+            : "2025-06-18",
+          capabilities: { tools: {} },
+          serverInfo: { name: "test-mcp-handler", version: "0.0.0" },
+        });
+      }
+
+      if (body.method === "notifications/initialized") {
+        return new Response(null, { status: 202 });
+      }
+
+      const [clientTransport, serverTransport] = TestTransport.createLinkedPair();
+      const client = new TestClient(
+        { name: "route-test-client", version: "1.0.0" },
+        { capabilities: {} },
+      );
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport),
+      ]);
+
+      try {
+        if (body.method === "tools/list") {
+          return rpcResponse(body.id, await client.listTools());
+        }
+        if (body.method === "tools/call") {
+          const params = isTestRecord(body.params) ? body.params : {};
+          return rpcResponse(body.id, await client.callTool({
+            name: typeof params.name === "string" ? params.name : "",
+            arguments: isTestRecord(params.arguments) ? params.arguments : {},
+          }));
+        }
+        return rpcError(body.id, -32601, "Method not found", 404);
+      } finally {
+        await Promise.allSettled([
+          client.close(),
+          server.close(),
+        ]);
+      }
+    },
+  };
+});
+
+const BASE_TEST_ENV = {
   STOREFRONT_URL: "https://storefront.example.test",
   AGENT_PROFILE_URL: DEFAULT_AGENT_PROFILE_URL,
   AGENT_NAME: "test-catalog-agent",
   AGENT_VERSION: "0.1.0-test",
 };
+
+const ADMIN_COOKIE = "better-auth.session_token=signed-session";
 
 const UNSAFE_TERMS = [
   "checkout",
@@ -28,12 +114,17 @@ const UNSAFE_TERMS = [
   "provider-secret",
 ];
 
+const MCP_ACCEPT_HEADER = "application/json, text/event-stream";
+const MCP_PROTOCOL_VERSION = "2025-06-18";
+
 interface BootedClient {
   client: Client;
   server: McpServer;
 }
 
 const openClients: BootedClient[] = [];
+
+type MockFetch = ReturnType<typeof vi.fn<FetchLike>>;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -42,8 +133,52 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+function adminPermissionsBody(overrides: Record<string, unknown> = {}) {
+  return {
+    success: true,
+    data: {
+      userId: "admin_123",
+      isSuperAdmin: false,
+      roles: [{ id: "role_manager", name: "Manager", ignored: "safe-to-drop" }],
+      permissions: ["dashboard.view", "products.view"],
+      overrides: { grants: ["orders.view"], denials: ["settings.edit"] },
+      ...overrides,
+    },
+  };
+}
+
+function mockJsonFetch(body: unknown, status = 200): MockFetch {
+  return vi.fn<FetchLike>().mockImplementation(() => Promise.resolve(json(body, status)));
+}
+
+function apiBinding(fetchImpl: FetchLike): Fetcher {
+  return { fetch: fetchImpl } as Fetcher;
+}
+
+function createEnv(apiFetch: FetchLike = mockJsonFetch(adminPermissionsBody())): Env {
+  return {
+    ...BASE_TEST_ENV,
+    API: apiBinding(apiFetch),
+  };
+}
+
 async function boot(fetchImpl: FetchLike = vi.fn().mockResolvedValue(json({ ucp: { status: "success" } }))) {
-  const server = createStorefrontCatalogMcpServer(TEST_ENV, { fetchImpl });
+  const server = createStorefrontCatalogMcpServer(createEnv(), { fetchImpl });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
+  openClients.push({ client, server });
+  return { client, server };
+}
+
+async function bootAdmin(
+  apiFetch: FetchLike = mockJsonFetch(adminPermissionsBody()),
+  options: AdminMcpOptions = { cookie: ADMIN_COOKIE, userAgent: "vitest-admin-mcp" },
+) {
+  const server = createAdminMcpServer(createEnv(apiFetch), options);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
   await Promise.all([
@@ -68,6 +203,87 @@ function requestUrl(input: RequestInfo | URL): string {
 function parseRequestBody(init: RequestInit | undefined): Record<string, unknown> {
   if (typeof init?.body !== "string") return {};
   return JSON.parse(init.body) as Record<string, unknown>;
+}
+
+function mcpRequest(
+  body: Record<string, unknown>,
+  headers: Record<string, string> = {},
+): Request {
+  return new Request("https://agent.example.test/mcp/admin", {
+    method: "POST",
+    headers: {
+      Accept: MCP_ACCEPT_HEADER,
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function parseMcpJson(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text();
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (contentType.includes("text/event-stream")) {
+    const dataLine = text.split(/\r?\n/).find((line) => line.startsWith("data:"));
+    if (!dataLine) throw new Error(`Missing MCP event data: ${text}`);
+    return JSON.parse(dataLine.slice("data:".length).trim()) as Record<string, unknown>;
+  }
+  return JSON.parse(text) as Record<string, unknown>;
+}
+
+function requireMcpResult(message: Record<string, unknown>): Record<string, unknown> {
+  expect(message.error).toBeUndefined();
+  expect(isRecord(message.result)).toBe(true);
+  return message.result as Record<string, unknown>;
+}
+
+async function initializeAdminMcp(
+  worker: ReturnType<typeof createAgentWorker>,
+  env: Env,
+  headers: Record<string, string>,
+): Promise<{ sessionId: string | null; protocolVersion: string | null }> {
+  const response = await worker.fetch(
+    mcpRequest({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        capabilities: {},
+        clientInfo: { name: "agent-test", version: "1.0.0" },
+      },
+    }, headers),
+    env,
+    createExecutionContext(),
+  );
+
+  expect(response.status).toBeGreaterThanOrEqual(200);
+  expect(response.status).toBeLessThan(300);
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  const result = requireMcpResult(await parseMcpJson(response));
+  return {
+    sessionId: response.headers.get("mcp-session-id"),
+    protocolVersion: typeof result.protocolVersion === "string"
+      ? result.protocolVersion
+      : null,
+  };
+}
+
+async function adminMcpRpc(
+  worker: ReturnType<typeof createAgentWorker>,
+  env: Env,
+  body: Record<string, unknown>,
+  headers: Record<string, string>,
+): Promise<Record<string, unknown>> {
+  const response = await worker.fetch(
+    mcpRequest(body, headers),
+    env,
+    createExecutionContext(),
+  );
+  expect(response.status).toBeGreaterThanOrEqual(200);
+  expect(response.status).toBeLessThan(300);
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  return parseMcpJson(response);
 }
 
 function createExecutionContext(): ExecutionContext {
@@ -275,7 +491,7 @@ describe("agent Worker routes", () => {
     const worker = createAgentWorker();
     const response = await worker.fetch(
       new Request("https://agent.example.test/health"),
-      TEST_ENV,
+      createEnv(),
       createExecutionContext(),
     );
 
@@ -292,7 +508,7 @@ describe("agent Worker routes", () => {
     const worker = createAgentWorker();
     const response = await worker.fetch(
       new Request("https://agent.example.test/unknown"),
-      TEST_ENV,
+      createEnv(),
       createExecutionContext(),
     );
 
@@ -302,5 +518,230 @@ describe("agent Worker routes", () => {
       success: false,
       error: "not_found",
     });
+  });
+
+  it("serves public catalog MCP responses with no-store cache headers", async () => {
+    const worker = createAgentWorker();
+    const response = await worker.fetch(
+      new Request("https://agent.example.test/mcp", {
+        method: "POST",
+        headers: {
+          Accept: MCP_ACCEPT_HEADER,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: MCP_PROTOCOL_VERSION,
+            capabilities: {},
+            clientInfo: { name: "agent-test", version: "1.0.0" },
+          },
+        }),
+      }),
+      createEnv(),
+      createExecutionContext(),
+    );
+
+    expect(response.status).toBeGreaterThanOrEqual(200);
+    expect(response.status).toBeLessThan(300);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+});
+
+describe("admin MCP route", () => {
+  it("fails closed with no-store 401 before MCP handling when Cookie is missing", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody());
+    const worker = createAgentWorker();
+    const response = await worker.fetch(
+      mcpRequest({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: {},
+      }),
+      createEnv(apiFetch),
+      createExecutionContext(),
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: { code: "admin_session_required" },
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not accept bearer-only auth or call the API without a Cookie", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody());
+    const worker = createAgentWorker();
+    const response = await worker.fetch(
+      mcpRequest({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: {},
+      }, {
+        Authorization: "Bearer not-a-session",
+      }),
+      createEnv(apiFetch),
+      createExecutionContext(),
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      error: { code: "admin_session_required" },
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("preflights with Cookie only and never forwards Authorization", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody());
+    const worker = createAgentWorker();
+
+    await initializeAdminMcp(worker, createEnv(apiFetch), {
+      Cookie: ADMIN_COOKIE,
+      Authorization: "Bearer must-not-forward",
+      "User-Agent": "vitest-admin-client",
+    });
+
+    const [input, init] = fetchCall(apiFetch);
+    expect(requestUrl(input)).toBe("http://api.internal/api/v1/admin/rbac/my-permissions");
+    expect(init?.method).toBe("GET");
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Cookie")).toBe(ADMIN_COOKIE);
+    expect(headers.get("User-Agent")).toBe("vitest-admin-client");
+    expect(headers.get("Authorization")).toBeNull();
+    expect([...headers.keys()].sort()).toEqual(["accept", "cookie", "user-agent"]);
+  });
+
+  it("lists exactly the admin session context tool after cookie preflight", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody());
+    const worker = createAgentWorker();
+    const env = createEnv(apiFetch);
+    const init = await initializeAdminMcp(worker, env, { Cookie: ADMIN_COOKIE });
+    const headers: Record<string, string> = { Cookie: ADMIN_COOKIE };
+    if (init.sessionId) headers["Mcp-Session-Id"] = init.sessionId;
+    if (init.protocolVersion) headers["MCP-Protocol-Version"] = init.protocolVersion;
+
+    const message = await adminMcpRpc(worker, env, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    }, headers);
+    const result = requireMcpResult(message);
+    expect(Array.isArray(result.tools)).toBe(true);
+    const tools = result.tools as Array<Record<string, unknown>>;
+    expect(tools.map((tool) => tool.name)).toEqual(["admin_session_context"]);
+    expect(tools[0]?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    });
+  });
+
+  it("calls the RBAC endpoint for admin_session_context and returns compact structured content", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody());
+    const worker = createAgentWorker();
+    const env = createEnv(apiFetch);
+    const init = await initializeAdminMcp(worker, env, { Cookie: ADMIN_COOKIE });
+    const headers: Record<string, string> = { Cookie: ADMIN_COOKIE };
+    if (init.sessionId) headers["Mcp-Session-Id"] = init.sessionId;
+    if (init.protocolVersion) headers["MCP-Protocol-Version"] = init.protocolVersion;
+
+    const callsBeforeTool = apiFetch.mock.calls.length;
+    const message = await adminMcpRpc(worker, env, {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: {
+        name: "admin_session_context",
+        arguments: {},
+      },
+    }, headers);
+    const result = requireMcpResult(message);
+
+    expect(apiFetch.mock.calls.length).toBe(callsBeforeTool + 1);
+    expect(requestUrl(fetchCall(apiFetch, apiFetch.mock.calls.length - 1)[0])).toBe(
+      "http://api.internal/api/v1/admin/rbac/my-permissions",
+    );
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      adminSessionContext: {
+        userId: "admin_123",
+        isSuperAdmin: false,
+        roles: [{ id: "role_manager", name: "Manager" }],
+        permissions: ["dashboard.view", "products.view"],
+        overrides: { grants: ["orders.view"], denials: ["settings.edit"] },
+      },
+    });
+    expect(firstContentBlock(result)).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("adminSessionContext"),
+    });
+  });
+
+  it("keeps upstream admin auth failures fail-closed without leaking upstream bodies", async () => {
+    const apiFetch = mockJsonFetch({
+      success: false,
+      error: {
+        code: "forbidden",
+        message: `raw upstream leak ${ADMIN_COOKIE} admin@example.test`,
+      },
+    }, 403);
+    const worker = createAgentWorker();
+    const response = await worker.fetch(
+      mcpRequest({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: {},
+      }, {
+        Cookie: ADMIN_COOKIE,
+      }),
+      createEnv(apiFetch),
+      createExecutionContext(),
+    );
+
+    const body = await response.text();
+    expect(response.status).toBe(403);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(body).toContain("admin_session_forbidden");
+    expect(body).not.toContain(ADMIN_COOKIE);
+    expect(body).not.toContain("admin@example.test");
+    expect(body).not.toContain("raw upstream leak");
+  });
+});
+
+describe("admin MCP server", () => {
+  it("returns a safe MCP tool error when the permissions endpoint rejects the cookie", async () => {
+    const apiFetch = mockJsonFetch({
+      success: false,
+      error: {
+        code: "unauthorized",
+        message: `raw upstream leak ${ADMIN_COOKIE}`,
+      },
+    }, 401);
+    const { client } = await bootAdmin(apiFetch);
+
+    const result = await client.callTool({
+      name: "admin_session_context",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        code: "admin_session_invalid",
+        status: 401,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(ADMIN_COOKIE);
+    expect(JSON.stringify(result)).not.toContain("raw upstream leak");
   });
 });

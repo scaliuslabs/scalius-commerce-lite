@@ -8,6 +8,12 @@
   "observability": {
     "enabled": true
   },
+  "services": [
+    {
+      "binding": "API",
+      "service": "scalius-api"
+    }
+  ],
   "vars": {
     "STOREFRONT_URL": "https://storefront.scalius.com",
     "AGENT_PROFILE_URL": "https://agent.scalius.com/.well-known/ucp",
