@@ -3,9 +3,11 @@
 import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
+import StorefrontAssistantPageContext from "../components/assistant/StorefrontAssistantPageContext.astro";
 import { Toaster } from "@/components/ui/sonner";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import type { AnalyticsConfig } from "@/lib/api";
+import type { StorefrontAssistantPageKind } from "@/lib/assistant-page-context";
 import CommandPalette from "@/components/search/CommandPalette";
 import AuthModal from "@/components/AuthModal";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
@@ -39,6 +41,7 @@ interface Props {
   ogPrice?: string;
   ogCurrency?: string;
   noindex?: boolean;
+  assistantPageKind?: StorefrontAssistantPageKind;
 }
 
 const {
@@ -53,6 +56,7 @@ const {
   ogPrice,
   ogCurrency,
   noindex,
+  assistantPageKind,
 } = Astro.props;
 
 // Use provided layout data when pages load it in parallel; otherwise fetch here.
@@ -344,6 +348,12 @@ const runtimeGlobalsScript = [
 
     {/* Robots — public pages can be excluded from indexing while links remain crawlable. */}
     {noindex && <meta name="robots" content="noindex,follow" />}
+
+    <StorefrontAssistantPageContext
+      title={title}
+      canonicalUrl={canonicalUrl}
+      pageKind={assistantPageKind}
+    />
 
     {/* Global JSON-LD: Organization + WebSite — per SEO-05, SEO-06 */}
     {orgJsonLd && <script is:inline type="application/ld+json" set:html={orgJsonLd} />}

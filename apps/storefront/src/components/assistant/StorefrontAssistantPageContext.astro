@@ -1,0 +1,42 @@
+---
+import {
+  STOREFRONT_ASSISTANT_PAGE_CONTEXT_EVENT,
+  buildStorefrontAssistantPageContext,
+  type StorefrontAssistantPageKind,
+} from "@/lib/assistant-page-context";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+
+interface Props {
+  title: string;
+  canonicalUrl?: string | null;
+  pageKind?: StorefrontAssistantPageKind | null;
+}
+
+const { title, canonicalUrl = null, pageKind = null } = Astro.props as Props;
+const astroContext = Astro as unknown as {
+  url: URL;
+  routePattern?: string;
+};
+
+const seed = buildStorefrontAssistantPageContext({
+  path: astroContext.url.pathname,
+  route: astroContext.routePattern,
+  canonicalUrl,
+  title,
+  pageKind,
+});
+const seedJson = serializeJsonForInlineScript(seed);
+const inlineScript = [
+  `window.__SCALIUS_STOREFRONT_PAGE_CONTEXT__=${seedJson};`,
+  `window.dispatchEvent(new CustomEvent(${serializeJsonForInlineScript(
+    STOREFRONT_ASSISTANT_PAGE_CONTEXT_EVENT,
+  )},{detail:window.__SCALIUS_STOREFRONT_PAGE_CONTEXT__}));`,
+].join("");
+---
+
+<script is:inline set:html={inlineScript} />
+<script>
+  import { installStorefrontAssistantPageContextBridge } from "@/lib/assistant-page-context.client";
+
+  installStorefrontAssistantPageContextBridge();
+</script>

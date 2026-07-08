@@ -1,11 +1,17 @@
 import { useEffect } from "react";
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useLocation,
+} from "@tanstack/react-router";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
 import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { DeferredToaster } from "@/components/ui/deferred-toaster";
+import { AdminAssistantPageStateBridge } from "@/components/admin/assistant/AdminAssistantPageStateBridge";
 import {
   getAdminRouteContext,
   primeAdminRouteContextCache,
@@ -38,6 +44,7 @@ export const Route = createFileRoute("/admin")({
 function AdminLayout() {
   const authContext = Route.useRouteContext();
   const { user, permissions, isSuperAdmin } = authContext;
+  const location = useLocation();
   useAdminNestedScrollRestoration();
 
   useEffect(() => {
@@ -60,6 +67,7 @@ function AdminLayout() {
                 <Outlet />
               </div>
             </div>
+            <AdminAssistantPageStateBridge routePath={location.pathname} />
             {/* Portal target for form action bars — sits OUTSIDE the scroll area */}
             <div id="form-action-bar-slot" />
           </SidebarInset>
