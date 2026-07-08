@@ -10,6 +10,7 @@ const MAX_SURFACE_ID_LENGTH = 80;
 const MAX_SURFACE_COUNT = 20;
 const MAX_COUNT = 10_000;
 const MAX_SCROLL_METRIC = 1_000_000;
+const MAX_ACTION_ROW_IDS = 100;
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const BANGLADESH_PHONE_PATTERN = /(^|[^\d])(?:\+?88)?01[3-9]\d{8}(?!\d)/g;
@@ -51,6 +52,7 @@ export interface AdminAssistantSurfaceActionRegistration {
   type: AdminAssistantSurfaceActionType;
   label?: string | null;
   safeFields?: string[];
+  visibleRowIds?: string[];
 }
 
 export interface AdminAssistantSurfaceSnapshot {
@@ -71,6 +73,7 @@ export interface AdminAssistantSurfaceActionSnapshot {
   type: AdminAssistantSurfaceActionType;
   label?: string;
   safeFields?: string[];
+  visibleRowIds?: string[];
 }
 
 export interface AdminAssistantSurfaceHandle {
@@ -137,6 +140,19 @@ export function sanitizeAdminAssistantText(
     .replace(LONG_TOKEN_PATTERN, "[redacted-token]");
 
   return boundText(redacted, maxLength);
+}
+
+export function sanitizeAdminAssistantOpaqueRowId(
+  value: unknown,
+  maxLength = MAX_SURFACE_ID_LENGTH,
+): string | null {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw || containsSensitiveOpaqueRowIdPattern(raw)) return null;
+
+  const sanitized = sanitizeAdminAssistantText(raw, maxLength);
+  if (!sanitized || containsSensitiveOpaqueRowIdPattern(sanitized)) return null;
+  return sanitized;
 }
 
 export function registerAdminAssistantSurface(
@@ -295,10 +311,40 @@ function sanitizeSurfaceActions(
     const safeFields = sanitizeSafeFieldList(action.safeFields);
     if (safeFields.length > 0) snapshot.safeFields = safeFields;
 
+    const visibleRowIds = sanitizeVisibleRowIds(action.visibleRowIds);
+    if (visibleRowIds.length > 0) snapshot.visibleRowIds = visibleRowIds;
+
     snapshots.push(snapshot);
   }
 
   return snapshots;
+}
+
+function sanitizeVisibleRowIds(rowIds: unknown): string[] {
+  if (!Array.isArray(rowIds)) return [];
+
+  const visibleRowIds: string[] = [];
+  for (const rowId of rowIds) {
+    const sanitized = sanitizeAdminAssistantOpaqueRowId(
+      rowId,
+      MAX_SURFACE_ID_LENGTH,
+    );
+    if (!sanitized || visibleRowIds.includes(sanitized)) continue;
+
+    visibleRowIds.push(sanitized);
+    if (visibleRowIds.length >= MAX_ACTION_ROW_IDS) break;
+  }
+  return visibleRowIds;
+}
+
+function containsSensitiveOpaqueRowIdPattern(value: string): boolean {
+  return (
+    value.includes("@") ||
+    /(?:\+?88)?01[3-9]\d{8}/.test(value) ||
+    /(?:chk|cst|otp|tok|token|session|secret|sk|pk)_[A-Za-z0-9_-]{6,}/i.test(
+      value,
+    )
+  );
 }
 
 function sanitizeSafeFieldList(fields: unknown): string[] {

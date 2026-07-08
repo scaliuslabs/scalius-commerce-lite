@@ -10,7 +10,7 @@
   },
   "scripts": {
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
     "check:migrations": "node scripts/check-migration-metadata.mjs"
   },
   "dependencies": {

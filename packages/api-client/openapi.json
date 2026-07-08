@@ -116426,6 +116426,11 @@
                             "submitting": {
                               "type": "boolean"
                             },
+                            "selectedCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 10000
+                            },
                             "validationErrorCount": {
                               "type": "integer",
                               "minimum": 0,
@@ -116461,6 +116466,14 @@
                                       "maxLength": 80
                                     },
                                     "maxItems": 12
+                                  },
+                                  "visibleRowIds": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "maxLength": 80
+                                    },
+                                    "maxItems": 400
                                   }
                                 },
                                 "required": [

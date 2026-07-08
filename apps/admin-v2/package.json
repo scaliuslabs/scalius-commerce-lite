@@ -8,7 +8,7 @@
     "build": "vite build && node ../../scripts/clean-dist-env-files.mjs apps/admin-v2",
     "preview": "vite preview",
     "deploy": "node ../../scripts/deploy.mjs --only admin",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
     "lint": "eslint src/",
     "cf-typegen": "pnpm exec wrangler types"
   },

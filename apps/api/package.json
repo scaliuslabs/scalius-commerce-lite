@@ -7,7 +7,7 @@
     "dev": "wrangler dev --config wrangler.local.jsonc --local --port 8787 --persist-to ${SCALIUS_WRANGLER_STATE:-../../.wrangler/state} --show-interactive-dev-session=false",
     "build": "wrangler deploy --dry-run --outdir dist",
     "deploy": "node ../../scripts/deploy.mjs --only api",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
     "db:generate": "cd ../../packages/database && drizzle-kit generate --config drizzle.config.ts",
     "db:migrate:local": "node ../../scripts/deploy.mjs --migrate-only --local",
     "db:migrate:remote": "node ../../scripts/deploy.mjs --migrate-only",

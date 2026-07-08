@@ -55,6 +55,12 @@ const ADMIN_CHAT_MAX_PRODUCT_COPY_CONTEXT_CHARS = 18_000;
 const ADMIN_CHAT_MAX_PRODUCT_DESCRIPTION_CHARS = 14_000;
 const ADMIN_CHAT_MAX_PAGE_ACTION_CONTEXT_CHARS = 1_200;
 const ADMIN_CHAT_MAX_PAGE_ACTION_VALUE_CHARS = 12_000;
+const ADMIN_CHAT_MAX_PAGE_ACTION_ROW_IDS = 100;
+const ADMIN_CHAT_MAX_PAGE_ACTION_ROW_ID_CHARS = 80;
+const ADMIN_CHAT_TOOL_ACTION_FALLBACK =
+  'I prepared a safe dashboard action for this request. Use the visible action button to continue.';
+const ADMIN_CHAT_TOOL_GUIDANCE_FALLBACK =
+  'I could not turn the model response into safe dashboard guidance. Please use the visible dashboard controls for this request.';
 const ADMIN_AGENT_MCP_URL = 'http://agent.internal/mcp/admin';
 const ADMIN_NAVIGATION_CONTEXT_TOOL = 'admin_navigation_context';
 const ADMIN_PRODUCT_SEARCH_TOOL = 'admin_product_search';
@@ -153,6 +159,7 @@ const adminChatSurfaceActionSchema = z
     type: adminChatPageActionTypeSchema,
     label: z.string().max(160).optional(),
     safeFields: z.array(z.string().max(80)).max(12).optional(),
+    visibleRowIds: z.array(z.string().max(80)).max(ADMIN_CHAT_MAX_PAGE_ACTION_ROW_IDS * 4).optional(),
   })
   .passthrough();
 
@@ -163,6 +170,7 @@ const adminChatSurfaceSchema = z
     label: z.string().max(160).optional(),
     dirty: z.boolean().optional(),
     submitting: z.boolean().optional(),
+    selectedCount: z.number().int().min(0).max(10_000).optional(),
     validationErrorCount: z.number().int().min(0).max(10_000).optional(),
     assistantActions: z.array(adminChatSurfaceActionSchema).max(10).optional(),
   })
@@ -213,6 +221,11 @@ type AdminChatAction = AdminChatNavigateAction | AdminChatPageAction;
 type AdminChatGenerationResult = {
   text: string;
   usage: GenerationUsage;
+};
+type AdminChatAssistantText = {
+  text: string;
+  safeForPageActionValue: boolean;
+  usedFallback: boolean;
 };
 type AdminAgentMcpSession = {
   protocolVersion?: string;
@@ -890,6 +903,42 @@ function createAdminChatPageActions(
     }
   }
 
+  if (!hasDestructiveBulkSelectionIntent(latestText)) {
+    if (hasClearSelectionIntent(latestText)) {
+      const registered = readRegisteredPageAction(pageContext, {
+        type: 'clear_selection',
+      });
+      if (
+        registered &&
+        registered.surface.kind === 'table' &&
+        !(typeof registered.surface.selectedCount === 'number' && registered.surface.selectedCount <= 0)
+      ) {
+        actions.push({
+          type: 'clear_selection',
+          id: registered.action.id,
+          targetId: registered.targetId,
+          label: 'Clear selection',
+        });
+      }
+    }
+
+    if (hasSelectVisibleRowsIntent(latestText)) {
+      const registered = readRegisteredPageAction(pageContext, {
+        type: 'select_visible_rows',
+      });
+      const rowIds = registered ? readVisibleRowIds(registered.action) : [];
+      if (registered && registered.surface.kind === 'table' && rowIds.length > 0) {
+        actions.push({
+          type: 'select_visible_rows',
+          id: registered.action.id,
+          targetId: registered.targetId,
+          label: 'Select visible rows',
+          rowIds,
+        });
+      }
+    }
+  }
+
   return actions.slice(0, 2);
 }
 
@@ -906,6 +955,56 @@ function hasVisibleSaveIntent(text: string): boolean {
   return (
     /\b(?:save|submit|update)\b/i.test(text) &&
     /\b(?:form|product|changes|draft)\b/i.test(text)
+  );
+}
+
+function hasClearSelectionIntent(text: string): boolean {
+  return (
+    /\bclear\s+(?:the\s+)?selection\b/i.test(text) ||
+    /\bunselect\s+(?:all|selected(?:\s+rows?)?|rows?)\b/i.test(text) ||
+    /\bdeselect\s+(?:all|selected(?:\s+rows?)?|rows?|(?:the\s+)?selection)\b/i.test(text)
+  );
+}
+
+function hasSelectVisibleRowsIntent(text: string): boolean {
+  return /\bselect\s+(?:all\s+visible(?:\s+(?:products|rows?|items?))?|visible\s+(?:products|rows?|items?)|all\s+(?:products|rows?|items?)\s+on\s+(?:this|the|current)\s+page)\b/i.test(text);
+}
+
+function hasDestructiveBulkSelectionIntent(text: string): boolean {
+  return (
+    /\b(?:bulk\s+delete|delete\s+(?:selected|all)|trash\s+(?:selected|all)|remove\s+(?:selected|all)|permanently\s+delete)\b/i.test(text) ||
+    (/\b(?:delete|trash|remove)\b/i.test(text) && /\b(?:selected|bulk|products|rows?|items?)\b/i.test(text))
+  );
+}
+
+function readVisibleRowIds(action: z.infer<typeof adminChatSurfaceActionSchema>): string[] {
+  const rowIds: string[] = [];
+  for (const rowId of action.visibleRowIds ?? []) {
+    const sanitized = sanitizeAdminChatOpaqueRowId(rowId);
+    if (!sanitized || rowIds.includes(sanitized)) continue;
+    rowIds.push(sanitized);
+    if (rowIds.length >= ADMIN_CHAT_MAX_PAGE_ACTION_ROW_IDS) break;
+  }
+  return rowIds;
+}
+
+function sanitizeAdminChatOpaqueRowId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const raw = value.trim();
+  if (!raw || containsSensitiveOpaqueRowIdPattern(raw)) return null;
+
+  const sanitized = compactAdminChatText(raw, ADMIN_CHAT_MAX_PAGE_ACTION_ROW_ID_CHARS);
+  if (!sanitized || containsSensitiveOpaqueRowIdPattern(sanitized)) return null;
+  return sanitized;
+}
+
+function containsSensitiveOpaqueRowIdPattern(value: string): boolean {
+  return (
+    value.includes('@') ||
+    /(?:\+?88)?01[3-9]\d{8}/.test(value) ||
+    /(?:chk|cst|otp|tok|token|session|secret|sk|pk)_[A-Za-z0-9_-]{6,}/i.test(
+      value,
+    )
   );
 }
 
@@ -1172,6 +1271,95 @@ function safeCloudflareAiErrorDetail(error: unknown): string | null {
     .replace(/\s+/g, ' ')
     .trim();
   return sanitized ? sanitized.slice(0, 240) : null;
+}
+
+function normalizeAdminChatAssistantWhitespace(value: string): string {
+  return value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function stripProviderToolCallSections(value: string): string {
+  return value
+    .replace(/<\|tool_calls_section_begin\|>[\s\S]*?(?:<\|tool_calls_section_end\|>|$)/gi, ' ')
+    .replace(/<\|tool_call_begin\|>[\s\S]*?(?:<\|tool_call_end\|>|$)/gi, ' ')
+    .replace(/<tool_calls?>[\s\S]*?<\/tool_calls?>/gi, ' ')
+    .replace(/<function_call>[\s\S]*?<\/function_call>/gi, ' ')
+    .replace(/<\|[^|>]*(?:tool|function)[^|>]*\|>/gi, ' ');
+}
+
+function containsProviderToolCallArtifact(value: string): boolean {
+  return (
+    /<\|[^|>]*(?:tool|function)[^|>]*\|>/i.test(value) ||
+    /<\/?(?:tool_calls?|function_call)\b/i.test(value)
+  );
+}
+
+function unfenceJsonCandidate(value: string): string {
+  const match = value.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return (match?.[1] ?? value).trim();
+}
+
+function isRawFunctionCallJsonValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(isRawFunctionCallJsonValue);
+  if (!isJsonRecord(value)) return false;
+
+  if (Array.isArray(value.tool_calls) || value.function_call !== undefined) return true;
+  if (typeof value.name === 'string' && (value.arguments !== undefined || value.parameters !== undefined)) {
+    return true;
+  }
+  if (value.type === 'function' && isJsonRecord(value.function) && typeof value.function.name === 'string') {
+    return true;
+  }
+
+  return Object.values(value).some(isRawFunctionCallJsonValue);
+}
+
+function looksLikeRawFunctionCallText(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (/\bfunctions\.[A-Za-z0-9_.:-]+\b/i.test(trimmed)) return true;
+  if (/"(?:tool_calls|function_call)"\s*:/i.test(trimmed)) return true;
+  if (/"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:/i.test(trimmed)) return true;
+
+  const jsonCandidate = unfenceJsonCandidate(trimmed);
+  if (!/^[{[]/.test(jsonCandidate)) return false;
+  try {
+    return isRawFunctionCallJsonValue(JSON.parse(jsonCandidate));
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeAdminChatAssistantText(rawText: string): AdminChatAssistantText {
+  const normalized = normalizeAdminChatAssistantWhitespace(rawText);
+  const withoutToolSections = normalizeAdminChatAssistantWhitespace(
+    stripProviderToolCallSections(normalized),
+  );
+  const unsafeToolOutput =
+    !withoutToolSections ||
+    containsProviderToolCallArtifact(normalized) ||
+    containsProviderToolCallArtifact(withoutToolSections) ||
+    looksLikeRawFunctionCallText(normalized) ||
+    looksLikeRawFunctionCallText(withoutToolSections);
+
+  if (unsafeToolOutput) {
+    return { text: '', safeForPageActionValue: false, usedFallback: true };
+  }
+
+  return {
+    text: withoutToolSections,
+    safeForPageActionValue: true,
+    usedFallback: false,
+  };
+}
+
+function fallbackAdminChatAssistantText(actions: AdminChatAction[]): string {
+  return actions.length > 0
+    ? ADMIN_CHAT_TOOL_ACTION_FALLBACK
+    : ADMIN_CHAT_TOOL_GUIDANCE_FALLBACK;
 }
 
 async function runCloudflareGeminiChat(
@@ -2158,15 +2346,19 @@ app.openapi(chatRoute, async (c) => {
     maxOutputTokens: Math.min(settings.generation.maxOutputTokens, ADMIN_CHAT_MAX_OUTPUT_TOKENS),
     abortSignal: c.req.raw.signal,
   });
+  const assistantText = sanitizeAdminChatAssistantText(result.text);
   const pageActions = createAdminChatPageActions(
     payload.pageContext,
     payload.messages,
-    result.text,
+    assistantText.safeForPageActionValue ? assistantText.text : '',
   );
   const actions: AdminChatAction[] = [
     ...navigationActions,
     ...pageActions,
   ].slice(0, 3);
+  const messageContent = assistantText.usedFallback
+    ? fallbackAdminChatAssistantText(actions)
+    : assistantText.text;
 
   return ok(c, {
     profile: 'adminChat' as const,
@@ -2174,7 +2366,7 @@ app.openapi(chatRoute, async (c) => {
     model: profile.model,
     message: {
       role: 'assistant' as const,
-      content: result.text,
+      content: messageContent,
     },
     usage: result.usage,
     ...(actions.length > 0 ? { actions } : {}),

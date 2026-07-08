@@ -133,6 +133,7 @@ export interface AdminAssistantSurfaceActionContext {
   type: AdminAssistantPageActionType;
   label?: string;
   safeFields?: string[];
+  visibleRowIds?: string[];
 }
 
 export interface AdminAssistantPageContext {
@@ -406,6 +407,9 @@ function normalizeSurfaceActions(
     if (!id || !isAdminAssistantPageActionType(action.type)) continue;
 
     const safeFields = normalizeSafeFieldList(action.safeFields);
+    const visibleRowIds = normalizeAdminAssistantActionRowIds(
+      action.visibleRowIds,
+    );
     normalized.push({
       id,
       type: action.type,
@@ -415,6 +419,7 @@ function normalizeSurfaceActions(
           ADMIN_ASSISTANT_MAX_ACTION_LABEL_CHARS,
         ) ?? undefined,
       ...(safeFields.length > 0 ? { safeFields } : {}),
+      ...(visibleRowIds.length > 0 ? { visibleRowIds } : {}),
     });
   }
 
