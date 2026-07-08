@@ -96,8 +96,8 @@ export const PROFILE_DEFINITIONS: Array<{
   {
     id: "adminChat",
     label: "Admin chat",
-    badge: "Prerequisite only",
-    description: "For future dashboard assistant sessions.",
+    badge: "Available now",
+    description: "Powers the dashboard assistant bubble with safe page context and click-confirmed navigation.",
   },
   {
     id: "storefrontChat",
@@ -575,6 +575,27 @@ export default function WidgetAiSettingsBuilder() {
     }));
   };
 
+  const setProfileEnabled = (profile: ProfileId, enabled: boolean) => {
+    setValues((prev) => {
+      const current = prev.profiles[profile];
+      const modelOptions = getProviderModelOptions(prev.providers, current.provider);
+      return {
+        ...prev,
+        profiles: {
+          ...prev.profiles,
+          [profile]: {
+            ...current,
+            enabled,
+            model:
+              enabled && !current.model.trim()
+                ? modelOptions[0] || prev.providers[current.provider].defaultModel || ""
+                : current.model,
+          },
+        },
+      };
+    });
+  };
+
   const setProfileProvider = (profile: ProfileId, provider: ProviderId) => {
     setValues((prev) => {
       const nextOptions = getProviderModelOptions(prev.providers, provider);
@@ -665,7 +686,7 @@ export default function WidgetAiSettingsBuilder() {
           <div>
             <h3 className="text-sm font-semibold">Model profiles</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Future assistant profiles stay disabled until the matching assistant surface is released.
+              Admin chat is live in the dashboard. Other assistant surfaces stay disabled until their UI is released.
             </p>
           </div>
           <Badge variant="outline">Compact setup</Badge>
@@ -751,7 +772,7 @@ export default function WidgetAiSettingsBuilder() {
                   <Switch
                     id={`profile-${profile.id}-enabled`}
                     checked={profileValues.enabled}
-                    onCheckedChange={(checked) => setProfileValue(profile.id, "enabled", checked)}
+                    onCheckedChange={(checked) => setProfileEnabled(profile.id, checked)}
                     aria-label={`Enable ${profile.label} profile`}
                   />
                 </div>
