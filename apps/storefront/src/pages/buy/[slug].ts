@@ -5,7 +5,7 @@ import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { validateCartItems, type CartValidationIssue } from "@/lib/api/orders";
-import type { CartItem } from "@/store/cart";
+import type { CartItem, CartItemOption } from "@/store/cart";
 import type { ProductVariant } from "@/lib/api/types";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
@@ -52,6 +52,38 @@ function variantLabel(variant: ProductVariant | null): string | null {
   if (!variant) return null;
   const parts = [variant.size, variant.color].filter((value): value is string => Boolean(value));
   return parts.length > 0 ? parts.join(" / ") : null;
+}
+
+function optionName(value: string | null | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  return trimmed || fallback;
+}
+
+function selectedCartOption(
+  name: string,
+  label: string | null | undefined,
+): CartItemOption | null {
+  const optionLabel = label?.trim();
+  if (!optionLabel) return null;
+  return { name, label: optionLabel };
+}
+
+function cartItemOptions(
+  product: { variantOption1Label?: string | null; variantOption2Label?: string | null },
+  variant: ProductVariant | null,
+): CartItemOption[] {
+  if (!variant) return [];
+
+  return [
+    selectedCartOption(
+      optionName(product.variantOption1Label, "Option 1"),
+      variant.size,
+    ),
+    selectedCartOption(
+      optionName(product.variantOption2Label, "Option 2"),
+      variant.color,
+    ),
+  ].filter((option): option is CartItemOption => Boolean(option));
 }
 
 export const GET: APIRoute = async ({ params, url }) => {
@@ -178,6 +210,7 @@ export const GET: APIRoute = async ({ params, url }) => {
       format: "auto",
       fit: "contain",
     });
+    const options = cartItemOptions(product, itemToAdd);
     const cartItem: CartItem = {
       id: product.id,
       slug: product.slug,
@@ -188,6 +221,7 @@ export const GET: APIRoute = async ({ params, url }) => {
       variantId: validatedItem.variantId ?? itemToAdd?.id,
       size: itemToAdd?.size || undefined,
       color: itemToAdd?.color || undefined,
+      ...(options.length > 0 ? { options } : {}),
       freeDelivery: validatedItem.freeDelivery,
     };
 

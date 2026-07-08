@@ -1,5 +1,9 @@
 import { map } from "nanostores";
 
+export type CartItemOption = {
+  name: string;
+  label: string;
+};
 
 export type CartItem = {
   id: string;
@@ -11,6 +15,7 @@ export type CartItem = {
   variantId?: string;
   size?: string;
   color?: string;
+  options?: CartItemOption[];
   freeDelivery?: boolean;
 };
 
@@ -64,6 +69,26 @@ function toNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function normalizeStoredCartOptions(value: unknown): CartItemOption[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const options: CartItemOption[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry.name !== "string" || typeof entry.label !== "string") {
+      continue;
+    }
+
+    const name = entry.name.trim();
+    const label = entry.label.trim();
+    if (!name || !label) continue;
+    options.push({ name, label });
+    if (options.length >= 2) break;
+  }
+
+  return options.length > 0 ? options : undefined;
+}
+
 function normalizeStoredCartItem(value: unknown): CartItem | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== "string" || typeof value.name !== "string") return null;
@@ -78,6 +103,7 @@ function normalizeStoredCartItem(value: unknown): CartItem | null {
     variantId: typeof value.variantId === "string" ? value.variantId : undefined,
     size: typeof value.size === "string" ? value.size : undefined,
     color: typeof value.color === "string" ? value.color : undefined,
+    options: normalizeStoredCartOptions(value.options),
     freeDelivery:
       typeof value.freeDelivery === "boolean" ? value.freeDelivery : undefined,
   };
@@ -197,6 +223,13 @@ function generateCartItemKey(
     const sizeKey = item.size || "no-size";
     const colorKey = item.color || "no-color";
     return `${item.id}-${sizeKey}-${colorKey}`;
+  }
+
+  if (item.options?.length) {
+    const optionKey = item.options
+      .map((option) => `${option.name}:${option.label}`)
+      .join("|");
+    return `${item.id}-${optionKey}`;
   }
 
   // Default to just the product ID/slug

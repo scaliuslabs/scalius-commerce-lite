@@ -155,4 +155,41 @@ describe("cart store hydration", () => {
       totalAmount: 80,
     });
   });
+
+  it("hydrates merchant-labeled cart option pairs without changing legacy size/color fields", async () => {
+    localStorage.setItem(
+      "cart",
+      JSON.stringify({
+        items: {
+          rice: {
+            id: "rice",
+            name: "Premium Rice",
+            price: 850,
+            quantity: 1,
+            size: "2KG",
+            color: "Gift Box",
+            options: [
+              { name: " Weight ", label: " 2KG " },
+              { name: "Style", label: "Gift Box" },
+              { name: "Ignored", label: "Extra" },
+            ],
+          },
+        },
+        totalItems: 1,
+        totalAmount: 850,
+        discount: null,
+      }),
+    );
+
+    const { hydrateCartFromStorage } = await importFreshCartModule();
+
+    expect(hydrateCartFromStorage().items.rice).toMatchObject({
+      size: "2KG",
+      color: "Gift Box",
+      options: [
+        { name: "Weight", label: "2KG" },
+        { name: "Style", label: "Gift Box" },
+      ],
+    });
+  });
 });

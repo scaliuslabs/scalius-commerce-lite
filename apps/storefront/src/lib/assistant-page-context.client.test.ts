@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { cartStore, type CartStore } from "@/store/cart";
@@ -134,7 +136,7 @@ describe("publishStorefrontAssistantPageContext", () => {
           quantity: 2,
           unitPrice: 125.5,
           lineTotal: 251,
-          options: { size: "M" },
+          options: [{ name: "Option 1", label: "M" }],
         },
       ],
     });

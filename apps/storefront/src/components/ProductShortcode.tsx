@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { ProductPageData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { addToCart } from "@/store/cart";
+import { addToCart, type CartItemOption } from "@/store/cart";
 import { trackFbAddToCart } from "@/lib/analytics";
 import { Minus, Plus, ShoppingCart, Check } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
@@ -31,6 +31,8 @@ export default function ProductShortcode({
     [variants],
   );
   const isUnavailable = buyerVariants.length === 0;
+  const option1Label = product.variantOption1Label?.trim() || "Option 1";
+  const option2Label = product.variantOption2Label?.trim() || "Option 2";
 
   const [selectedSize, setSelectedSize] = useState<string | undefined>();
   const [selectedColor, setSelectedColor] = useState<string | undefined>();
@@ -133,6 +135,11 @@ export default function ProductShortcode({
       return;
     }
 
+    const options: CartItemOption[] = [
+      selectedSize ? { name: option1Label, label: selectedSize } : null,
+      selectedColor ? { name: option2Label, label: selectedColor } : null,
+    ].filter((option): option is CartItemOption => Boolean(option));
+
     const itemToAdd = {
       id: product.id,
       slug: product.slug,
@@ -143,6 +150,7 @@ export default function ProductShortcode({
       variantId: matchingVariant?.id,
       size: selectedSize,
       color: selectedColor,
+      ...(options.length > 0 ? { options } : {}),
       freeDelivery: product.freeDelivery,
     };
 
@@ -237,7 +245,7 @@ export default function ProductShortcode({
           {sizeOptions.length > 0 && (
             <div>
               <h4 className="text-sm font-medium text-gray-900 mb-2">
-                Option 1 <span className="text-xs font-normal text-gray-500">(size/weight)</span>
+                {option1Label}
               </h4>
               <div className="flex flex-wrap gap-2">
                 {sizeOptions.map((size) => (
@@ -255,7 +263,7 @@ export default function ProductShortcode({
           {colorOptions.length > 0 && (
             <div>
               <h4 className="text-sm font-medium text-gray-900 mb-2">
-                Option 2 <span className="text-xs font-normal text-gray-500">(color/style)</span>
+                {option2Label}
               </h4>
               <div className="flex flex-wrap gap-2">
                 {colorOptions.map((color) => (
