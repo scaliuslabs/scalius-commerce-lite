@@ -26,6 +26,8 @@ Admin MCP is authenticated, admin-only, and starts small.
 - Enforce Better Auth session validity, onboarding gates, 2FA truth, and API RBAC through existing admin API middleware.
 - The first implemented admin slice is intentionally tiny: `apps/agent` exposes `/mcp/admin`, `apps/admin-v2` proxies it from `/api/assistant/mcp`, and the only tool is `admin_session_context`.
 - That first admin slice forwards only the dashboard cookie and MCP protocol headers, strips `Authorization`, checks `/api/v1/admin/rbac/my-permissions` through the API service binding, returns `Cache-Control: no-store`, and has no direct D1/KV/R2/queue/provider-secret bindings.
+- The first page-state bridge is mounted in the admin shell at `apps/admin-v2/src/components/admin/assistant/**`. It publishes a sanitized browser-only snapshot under `window.__SCALIUS_ADMIN_ASSISTANT_PAGE_STATE__` and `scalius:admin-assistant-page-state`, limited to pathname, title, heading, scroll state, and explicitly registered visible surfaces.
+- Admin page-state code must not query arbitrary form controls, read DOM field values, observe the entire admin content subtree, call APIs, or read cookies/storage. Forms/tables/dialogs must register safe aggregate state through `registerAdminAssistantSurface()` when page tools need them.
 - Use Cloudflare Code Mode only for the large admin OpenAPI/search surface, with an allowlisted execute path and host-owned auth callback.
 - Prefer typed high-value tools for risky or important workflows.
 - Expose read/search tools first: dashboard, products, categories, collections, CMS pages, orders, inventory lookup, media listing, and read-only settings.
@@ -40,6 +42,8 @@ Storefront MCP is public and catalog-first.
 - Use typed tools over the existing UCP/feed/catalog projection, not Code Mode.
 - The first implemented slice is `@scalius/agent` with `GET /health` and stateless `/mcp` catalog tools: `catalog_search`, `catalog_lookup`, `catalog_product`, and `catalog_profile`.
 - That first slice has no D1, R2, KV, queue, Durable Object, provider-secret, admin, customer, order, checkout, payment, fulfillment, support, or recovery bindings.
+- The first page-context bridge is mounted in the storefront layout at `apps/storefront/src/components/assistant/**` and `apps/storefront/src/lib/assistant-page-context*`. It publishes a sanitized browser-only snapshot under `window.__SCALIUS_STOREFRONT_PAGE_CONTEXT__` and `scalius:storefront-page-context:change`, limited to public route/canonical/title/page kind plus a bounded allowlisted cart summary.
+- Storefront page-context code must not read raw cookies/storage payloads, customer sessions, order/receipt proofs, phone/email/address/payment details, discount codes, or mutate cart/checkout state. Cart context is summary-only until a signed D1-backed assistant session exists.
 - Expose catalog search, catalog lookup, product context, category reads, discovery policy reads, visible page context, same-origin navigation, and read-only cart snapshot validation.
 - Cart validation may explain stale cart issues using existing `PRODUCT_UNAVAILABLE`, `VARIANT_UNAVAILABLE`, `VARIANT_MISMATCH`, `VARIANT_REQUIRED`, `QUANTITY_UNAVAILABLE`, and `PRICE_CHANGED` repair semantics.
 
