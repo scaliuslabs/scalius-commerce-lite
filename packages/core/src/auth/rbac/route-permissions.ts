@@ -852,6 +852,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
+  "/api/v1/admin/settings/notification-channels/mcp-summary": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
   "/api/v1/admin/settings/notification-channels/*": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },

@@ -29,8 +29,12 @@ const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
 const ADMIN_DASHBOARD_SUMMARY_PATH = "/api/v1/admin/dashboard/metrics-summary";
 const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
+const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH =
+  "/api/v1/admin/settings/notification-channels/mcp-summary";
 const ADMIN_ANALYTICS_HEALTH_PATH = "/api/v1/admin/analytics/health";
 const ADMIN_CUSTOMERS_MCP_SEARCH_PATH = "/api/v1/admin/customers/mcp-search";
+const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_VERSION =
+  "admin-notification-settings-summary:v1";
 const ADMIN_ANALYTICS_SUMMARY_VERSION = "admin-analytics-summary:v1";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
@@ -51,6 +55,7 @@ const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_navigation_context",
   "admin_dashboard_summary",
   "admin_settings_summary",
+  "admin_notification_settings_summary",
   "admin_analytics_summary",
   "admin_category_search",
   "admin_collection_search",
@@ -71,6 +76,10 @@ const ADMIN_DASHBOARD_SUMMARY_TOOL_SMOKE = Object.freeze({
 });
 const ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE = Object.freeze({
   name: "admin_settings_summary",
+  arguments: Object.freeze({}),
+});
+const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_TOOL_SMOKE = Object.freeze({
+  name: "admin_notification_settings_summary",
   arguments: Object.freeze({}),
 });
 const ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE = Object.freeze({
@@ -208,6 +217,10 @@ const ADMIN_SETTINGS_SUMMARY_FORBIDDEN_KEY_PATTERN =
   /(?:credentials?|tokens?|apiKeys?|secrets?|passwords?|cookies?|sessions?|otps?|receiptProof|providerPayloads?|rawSnippet|analyticsSnippet|customerEmail|customerPhone)/i;
 const ADMIN_SETTINGS_SUMMARY_FORBIDDEN_VALUE_PATTERN =
   /\b(?:credentials?|tokens?|apiKeys?|secrets?|passwords?|cookies?|sessions?|otps?|receiptProof|providerPayloads?|rawSnippet|analyticsSnippet|customerEmail|customerPhone)\b/i;
+const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_FORBIDDEN_KEY_PATTERN =
+  /(?:credentials?|tokens?|apiKeys?|secrets?|passwords?|cookies?|sessions?|otps?|recipients?|recipientEmail|recipientPhone|orderIds?|deliveryReceipts?|providerPayloads?|providerMessages?|rawProviderErrors?|rawErrors?|rawMessages?|message|messages|templateName|languageCode|provider|providers)/i;
+const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_FORBIDDEN_VALUE_PATTERN =
+  /\b(?:credentials?|tokens?|apiKeys?|secrets?|passwords?|cookies?|sessions?|otps?|recipient|recipientEmail|recipientPhone|orderIds?|deliveryReceipts?|providerPayloads?|providerMessages?|rawProviderErrors?|rawErrors?|rawMessages?|templateName|languageCode|smsnetbd|resend|firebase|private[_ -]?key|access[_ -]?token|api[_ -]?key|graph api|invalid_grant)\b/i;
 const ADMIN_ANALYTICS_SUMMARY_FORBIDDEN_KEY_PATTERN =
   /^(?:config|rawConfig|scriptConfig|snippet|rawSnippet|analyticsSnippet|customCode|htmlContent|jsContent|credential|credentials|token|accessToken|apiKey|secret|password|cookie|session|message|messages|issues|providerPayload|pixelId|measurementId|gtmId|beaconToken)$/i;
 const ADMIN_ANALYTICS_SUMMARY_FORBIDDEN_VALUE_PATTERN =
@@ -2252,6 +2265,47 @@ function findForbiddenAdminSettingsSummaryPaths(value, path = "$", seen = new Se
   return leaks;
 }
 
+function findForbiddenAdminNotificationSettingsSummaryPaths(value, path = "$", seen = new Set()) {
+  const leaks = [];
+  if (!isRecord(value) && !Array.isArray(value)) {
+    if (
+      typeof value === "string" &&
+      ADMIN_NOTIFICATION_SETTINGS_SUMMARY_FORBIDDEN_VALUE_PATTERN.test(value)
+    ) {
+      leaks.push(path);
+    }
+    return leaks;
+  }
+
+  if (seen.has(value)) return leaks;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      leaks.push(...findForbiddenAdminNotificationSettingsSummaryPaths(
+        item,
+        `${path}[${index}]`,
+        seen,
+      ));
+    });
+    return leaks;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = `${path}.${key}`;
+    if (
+      path !== "$.limits" &&
+      ADMIN_NOTIFICATION_SETTINGS_SUMMARY_FORBIDDEN_KEY_PATTERN.test(key)
+    ) {
+      leaks.push(childPath);
+      continue;
+    }
+    leaks.push(...findForbiddenAdminNotificationSettingsSummaryPaths(child, childPath, seen));
+  }
+
+  return leaks;
+}
+
 function findForbiddenAdminAnalyticsSummaryPaths(value, path = "$", seen = new Set()) {
   const leaks = [];
   if (!isRecord(value) && !Array.isArray(value)) {
@@ -2453,6 +2507,120 @@ function evaluateAdminSettingsSummaryToolSmokeResult(result, {
     errors,
     toolName,
     contentCount,
+  };
+}
+
+function evaluateAdminNotificationSettingsSummaryToolSmokeResult(result, {
+  toolName = ADMIN_NOTIFICATION_SETTINGS_SUMMARY_TOOL_SMOKE.name,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+  const summary = isRecord(structuredContent?.adminNotificationSettingsSummary)
+    ? structuredContent.adminNotificationSettingsSummary
+    : null;
+  const source = isRecord(summary?.source) ? summary.source : null;
+  const customer = isRecord(summary?.customer) ? summary.customer : null;
+  const merchant = isRecord(summary?.merchant) ? summary.merchant : null;
+  const totals = isRecord(summary?.totals) ? summary.totals : null;
+  const limits = isRecord(summary?.limits) ? summary.limits : null;
+  const customerEvents = Array.isArray(customer?.events) ? customer.events : null;
+  const merchantEvents = Array.isArray(merchant?.events) ? merchant.events : null;
+  const leakPaths = summary ? findForbiddenAdminNotificationSettingsSummaryPaths(summary) : [];
+
+  if (result?.isError === true) {
+    errors.push(`Admin MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Admin MCP ${toolName} must return at least one content block.`);
+  }
+  if (!summary) {
+    errors.push(`Admin MCP ${toolName} must return structured adminNotificationSettingsSummary content.`);
+  } else {
+    if (source?.path !== ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH) {
+      errors.push(
+        `Admin MCP ${toolName} source.path must be ${ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH}.`,
+      );
+    }
+    if (source?.permission !== "settings.general.view") {
+      errors.push(
+        `Admin MCP ${toolName} source.permission must be settings.general.view.`,
+      );
+    }
+    if (source?.version !== ADMIN_NOTIFICATION_SETTINGS_SUMMARY_VERSION) {
+      errors.push(
+        `Admin MCP ${toolName} source.version must be ${ADMIN_NOTIFICATION_SETTINGS_SUMMARY_VERSION}.`,
+      );
+    }
+    if (
+      !customer ||
+      !isRecord(customer.readiness) ||
+      !isRecord(customer.enabledEventCounts) ||
+      !Array.isArray(customer.supportedChannels) ||
+      !Array.isArray(customerEvents) ||
+      !isRecord(customer.whatsappTemplate)
+    ) {
+      errors.push(`Admin MCP ${toolName} must return customer notification readiness and events.`);
+    }
+    if (
+      !merchant ||
+      !isRecord(merchant.readiness) ||
+      !isRecord(merchant.enabledEventCounts) ||
+      !Array.isArray(merchant.supportedChannels) ||
+      !Array.isArray(merchantEvents)
+    ) {
+      errors.push(`Admin MCP ${toolName} must return merchant notification readiness and events.`);
+    }
+    if (
+      !totals ||
+      typeof totals.orderEventCount !== "number" ||
+      typeof totals.customerEventsWithAnyChannel !== "number" ||
+      typeof totals.merchantEventsWithPush !== "number" ||
+      typeof totals.readinessIssueCount !== "number"
+    ) {
+      errors.push(`Admin MCP ${toolName} must return numeric notification totals.`);
+    }
+    if (!limits) {
+      errors.push(`Admin MCP ${toolName} must return limits metadata.`);
+    } else {
+      const expectedLimitFlags = [
+        "includesCredentials",
+        "includesMaskedSecrets",
+        "includesProviderIdentifiers",
+        "includesRawProviderErrors",
+        "includesRecipients",
+        "includesOrderIds",
+        "includesDeliveryReceipts",
+        "canMutate",
+      ];
+      const unsafeLimits = expectedLimitFlags.filter((key) => limits[key] !== false);
+      if (unsafeLimits.length > 0) {
+        errors.push(
+          `Admin MCP ${toolName} limits must explicitly disable ${unsafeLimits.join(", ")}.`,
+        );
+      }
+    }
+    if (leakPaths.length > 0) {
+      errors.push(
+        `Admin MCP ${toolName} summary must not leak credentials, tokens, provider identifiers, ` +
+        `raw provider errors, recipients, order IDs, delivery receipts, or raw messages ` +
+        `(${leakPaths.join(", ")}).`,
+      );
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
+    customerEventCount: Array.isArray(customerEvents) ? customerEvents.length : null,
+    merchantEventCount: Array.isArray(merchantEvents) ? merchantEvents.length : null,
+    readinessIssueCount: typeof totals?.readinessIssueCount === "number"
+      ? totals.readinessIssueCount
+      : null,
   };
 }
 
@@ -3442,7 +3610,7 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
-  const analyticsSummaryToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+  const notificationSettingsSummaryToolResponse = await fetchMcpJsonRpc(mcpUrl, {
     fetchImpl,
     timeoutMs,
     headers: authenticatedHeaders,
@@ -3451,6 +3619,40 @@ export async function smokeAdminMcpAuthenticated({
     body: {
       jsonrpc: "2.0",
       id: 6,
+      method: "tools/call",
+      params: ADMIN_NOTIFICATION_SETTINGS_SUMMARY_TOOL_SMOKE,
+    },
+  });
+  const notificationSettingsSummaryToolCacheControl = requireNoStoreCacheControl(
+    notificationSettingsSummaryToolResponse,
+    `Authenticated Admin MCP ${ADMIN_NOTIFICATION_SETTINGS_SUMMARY_TOOL_SMOKE.name}`,
+  );
+  const notificationSettingsSummaryToolResult = requireMcpJsonRpcResult(
+    notificationSettingsSummaryToolResponse,
+    `Authenticated Admin MCP ${ADMIN_NOTIFICATION_SETTINGS_SUMMARY_TOOL_SMOKE.name}`,
+    6,
+  );
+  const notificationSettingsSummaryToolEvaluation =
+    evaluateAdminNotificationSettingsSummaryToolSmokeResult(
+      notificationSettingsSummaryToolResult,
+      { toolName: ADMIN_NOTIFICATION_SETTINGS_SUMMARY_TOOL_SMOKE.name },
+    );
+  if (!notificationSettingsSummaryToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_NOTIFICATION_SETTINGS_SUMMARY_TOOL_SMOKE.name} failed: ` +
+      notificationSettingsSummaryToolEvaluation.errors.join("; "),
+    );
+  }
+
+  const analyticsSummaryToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 7,
       method: "tools/call",
       params: ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE,
     },
@@ -3462,7 +3664,7 @@ export async function smokeAdminMcpAuthenticated({
   const analyticsSummaryToolResult = requireMcpJsonRpcResult(
     analyticsSummaryToolResponse,
     `Authenticated Admin MCP ${ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name}`,
-    6,
+    7,
   );
   const analyticsSummaryToolEvaluation = evaluateAdminAnalyticsSummaryToolSmokeResult(
     analyticsSummaryToolResult,
@@ -3483,7 +3685,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 7,
+      id: 8,
       method: "tools/call",
       params: ADMIN_CATEGORY_SEARCH_TOOL_SMOKE,
     },
@@ -3495,7 +3697,7 @@ export async function smokeAdminMcpAuthenticated({
   const categorySearchToolResult = requireMcpJsonRpcResult(
     categorySearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}`,
-    7,
+    8,
   );
   const categorySearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     categorySearchToolResult,
@@ -3516,7 +3718,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 8,
+      id: 9,
       method: "tools/call",
       params: ADMIN_COLLECTION_SEARCH_TOOL_SMOKE,
     },
@@ -3528,7 +3730,7 @@ export async function smokeAdminMcpAuthenticated({
   const collectionSearchToolResult = requireMcpJsonRpcResult(
     collectionSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_COLLECTION_SEARCH_TOOL_SMOKE.name}`,
-    8,
+    9,
   );
   const collectionSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     collectionSearchToolResult,
@@ -3549,7 +3751,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 9,
+      id: 10,
       method: "tools/call",
       params: ADMIN_PAGE_SEARCH_TOOL_SMOKE,
     },
@@ -3561,7 +3763,7 @@ export async function smokeAdminMcpAuthenticated({
   const pageSearchToolResult = requireMcpJsonRpcResult(
     pageSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_PAGE_SEARCH_TOOL_SMOKE.name}`,
-    9,
+    10,
   );
   const pageSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     pageSearchToolResult,
@@ -3582,7 +3784,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 10,
+      id: 11,
       method: "tools/call",
       params: ADMIN_MEDIA_SEARCH_TOOL_SMOKE,
     },
@@ -3594,7 +3796,7 @@ export async function smokeAdminMcpAuthenticated({
   const mediaSearchToolResult = requireMcpJsonRpcResult(
     mediaSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name}`,
-    10,
+    11,
   );
   const mediaSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     mediaSearchToolResult,
@@ -3615,7 +3817,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 11,
+      id: 12,
       method: "tools/call",
       params: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE,
     },
@@ -3627,7 +3829,7 @@ export async function smokeAdminMcpAuthenticated({
   const productSearchToolResult = requireMcpJsonRpcResult(
     productSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}`,
-    11,
+    12,
   );
   const productSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     productSearchToolResult,
@@ -3648,7 +3850,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 12,
+      id: 13,
       method: "tools/call",
       params: ADMIN_ORDER_SEARCH_TOOL_SMOKE,
     },
@@ -3660,7 +3862,7 @@ export async function smokeAdminMcpAuthenticated({
   const orderSearchToolResult = requireMcpJsonRpcResult(
     orderSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}`,
-    12,
+    13,
   );
   const orderSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     orderSearchToolResult,
@@ -3681,7 +3883,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 13,
+      id: 14,
       method: "tools/call",
       params: ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE,
     },
@@ -3693,7 +3895,7 @@ export async function smokeAdminMcpAuthenticated({
   const customerSearchToolResult = requireMcpJsonRpcResult(
     customerSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name}`,
-    13,
+    14,
   );
   const customerSearchToolEvaluation = evaluateAdminCustomerSearchToolSmokeResult(
     customerSearchToolResult,
@@ -3714,7 +3916,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 14,
+      id: 15,
       method: "tools/call",
       params: ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE,
     },
@@ -3726,7 +3928,7 @@ export async function smokeAdminMcpAuthenticated({
   const inventoryLookupToolResult = requireMcpJsonRpcResult(
     inventoryLookupToolResponse,
     `Authenticated Admin MCP ${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name}`,
-    14,
+    15,
   );
   const inventoryLookupToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     inventoryLookupToolResult,
@@ -3744,6 +3946,7 @@ export async function smokeAdminMcpAuthenticated({
     `calls ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}, ` +
     `${ADMIN_DASHBOARD_SUMMARY_TOOL_SMOKE.name}, ` +
     `${ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE.name}, ` +
+    `${ADMIN_NOTIFICATION_SETTINGS_SUMMARY_TOOL_SMOKE.name}, ` +
     `${ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name}, ` +
     `${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_COLLECTION_SEARCH_TOOL_SMOKE.name}, ` +
@@ -3796,6 +3999,16 @@ export async function smokeAdminMcpAuthenticated({
         durationMs: settingsSummaryToolResponse.durationMs,
         cacheControl: settingsSummaryToolCacheControl,
         contentCount: settingsSummaryToolEvaluation.contentCount,
+      },
+      notificationSettingsSummaryTool: {
+        name: ADMIN_NOTIFICATION_SETTINGS_SUMMARY_TOOL_SMOKE.name,
+        statusCode: notificationSettingsSummaryToolResponse.statusCode,
+        durationMs: notificationSettingsSummaryToolResponse.durationMs,
+        cacheControl: notificationSettingsSummaryToolCacheControl,
+        contentCount: notificationSettingsSummaryToolEvaluation.contentCount,
+        customerEventCount: notificationSettingsSummaryToolEvaluation.customerEventCount,
+        merchantEventCount: notificationSettingsSummaryToolEvaluation.merchantEventCount,
+        readinessIssueCount: notificationSettingsSummaryToolEvaluation.readinessIssueCount,
       },
       analyticsSummaryTool: {
         name: ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name,

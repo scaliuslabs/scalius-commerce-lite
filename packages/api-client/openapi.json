@@ -86547,6 +86547,691 @@
         ]
       }
     },
+    "/api/v1/admin/settings/notification-channels/mcp-summary": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get redacted Admin MCP notification settings summary",
+        "responses": {
+          "200": {
+            "description": "Redacted Admin MCP notification settings summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "adminNotificationSettingsSummary": {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "object",
+                              "properties": {
+                                "path": {
+                                  "type": "string",
+                                  "enum": [
+                                    "/api/v1/admin/settings/notification-channels/mcp-summary"
+                                  ]
+                                },
+                                "permission": {
+                                  "type": "string",
+                                  "enum": [
+                                    "settings.general.view"
+                                  ]
+                                },
+                                "version": {
+                                  "type": "string",
+                                  "enum": [
+                                    "admin-notification-settings-summary:v1"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "path",
+                                "permission",
+                                "version"
+                              ]
+                            },
+                            "customer": {
+                              "type": "object",
+                              "properties": {
+                                "supportedChannels": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "email",
+                                      "sms",
+                                      "whatsapp"
+                                    ]
+                                  }
+                                },
+                                "readiness": {
+                                  "type": "object",
+                                  "properties": {
+                                    "email": {
+                                      "type": "object",
+                                      "properties": {
+                                        "configured": {
+                                          "type": "boolean"
+                                        },
+                                        "ready": {
+                                          "type": "boolean"
+                                        },
+                                        "issueCount": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "configured",
+                                        "ready",
+                                        "issueCount"
+                                      ]
+                                    },
+                                    "sms": {
+                                      "type": "object",
+                                      "properties": {
+                                        "configured": {
+                                          "type": "boolean"
+                                        },
+                                        "ready": {
+                                          "type": "boolean"
+                                        },
+                                        "issueCount": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "configured",
+                                        "ready",
+                                        "issueCount"
+                                      ]
+                                    },
+                                    "whatsapp": {
+                                      "type": "object",
+                                      "properties": {
+                                        "configured": {
+                                          "type": "boolean"
+                                        },
+                                        "ready": {
+                                          "type": "boolean"
+                                        },
+                                        "issueCount": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "configured",
+                                        "ready",
+                                        "issueCount"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "email",
+                                    "sms",
+                                    "whatsapp"
+                                  ]
+                                },
+                                "enabledEventCounts": {
+                                  "type": "object",
+                                  "properties": {
+                                    "email": {
+                                      "type": "number"
+                                    },
+                                    "sms": {
+                                      "type": "number"
+                                    },
+                                    "whatsapp": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "email",
+                                    "sms",
+                                    "whatsapp"
+                                  ]
+                                },
+                                "events": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "order_created",
+                                          "order_confirmed",
+                                          "order_processing",
+                                          "order_shipped",
+                                          "order_delivered",
+                                          "order_completed",
+                                          "order_cancelled",
+                                          "order_returned",
+                                          "refund_processing",
+                                          "refund_failed",
+                                          "order_refunded",
+                                          "order_partially_refunded",
+                                          "payment_balance_paid",
+                                          "support_request_submitted",
+                                          "support_request_status_updated"
+                                        ]
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "enabledChannels": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "hasAnyChannel": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "label",
+                                      "enabledChannels",
+                                      "hasAnyChannel"
+                                    ]
+                                  }
+                                },
+                                "whatsappTemplate": {
+                                  "type": "object",
+                                  "properties": {
+                                    "configured": {
+                                      "type": "boolean"
+                                    },
+                                    "languageConfigured": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "configured",
+                                    "languageConfigured"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "supportedChannels",
+                                "readiness",
+                                "enabledEventCounts",
+                                "events",
+                                "whatsappTemplate"
+                              ]
+                            },
+                            "merchant": {
+                              "type": "object",
+                              "properties": {
+                                "supportedChannels": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "push"
+                                    ]
+                                  }
+                                },
+                                "readiness": {
+                                  "type": "object",
+                                  "properties": {
+                                    "push": {
+                                      "type": "object",
+                                      "properties": {
+                                        "configured": {
+                                          "type": "boolean"
+                                        },
+                                        "ready": {
+                                          "type": "boolean"
+                                        },
+                                        "issueCount": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "configured",
+                                        "ready",
+                                        "issueCount"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "push"
+                                  ]
+                                },
+                                "enabledEventCounts": {
+                                  "type": "object",
+                                  "properties": {
+                                    "push": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "push"
+                                  ]
+                                },
+                                "events": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "order_created",
+                                          "order_confirmed",
+                                          "order_processing",
+                                          "order_shipped",
+                                          "order_delivered",
+                                          "order_completed",
+                                          "order_cancelled",
+                                          "order_returned",
+                                          "refund_processing",
+                                          "refund_failed",
+                                          "order_refunded",
+                                          "order_partially_refunded",
+                                          "payment_balance_paid",
+                                          "support_request_submitted",
+                                          "support_request_status_updated"
+                                        ]
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "enabledChannels": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "hasAnyChannel": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "label",
+                                      "enabledChannels",
+                                      "hasAnyChannel"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "supportedChannels",
+                                "readiness",
+                                "enabledEventCounts",
+                                "events"
+                              ]
+                            },
+                            "totals": {
+                              "type": "object",
+                              "properties": {
+                                "orderEventCount": {
+                                  "type": "number"
+                                },
+                                "customerEventsWithAnyChannel": {
+                                  "type": "number"
+                                },
+                                "merchantEventsWithPush": {
+                                  "type": "number"
+                                },
+                                "readinessIssueCount": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "orderEventCount",
+                                "customerEventsWithAnyChannel",
+                                "merchantEventsWithPush",
+                                "readinessIssueCount"
+                              ]
+                            },
+                            "limits": {
+                              "type": "object",
+                              "properties": {
+                                "includesCredentials": {
+                                  "type": "boolean",
+                                  "enum": [
+                                    false
+                                  ]
+                                },
+                                "includesMaskedSecrets": {
+                                  "type": "boolean",
+                                  "enum": [
+                                    false
+                                  ]
+                                },
+                                "includesProviderIdentifiers": {
+                                  "type": "boolean",
+                                  "enum": [
+                                    false
+                                  ]
+                                },
+                                "includesRawProviderErrors": {
+                                  "type": "boolean",
+                                  "enum": [
+                                    false
+                                  ]
+                                },
+                                "includesRecipients": {
+                                  "type": "boolean",
+                                  "enum": [
+                                    false
+                                  ]
+                                },
+                                "includesOrderIds": {
+                                  "type": "boolean",
+                                  "enum": [
+                                    false
+                                  ]
+                                },
+                                "includesDeliveryReceipts": {
+                                  "type": "boolean",
+                                  "enum": [
+                                    false
+                                  ]
+                                },
+                                "canMutate": {
+                                  "type": "boolean",
+                                  "enum": [
+                                    false
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "includesCredentials",
+                                "includesMaskedSecrets",
+                                "includesProviderIdentifiers",
+                                "includesRawProviderErrors",
+                                "includesRecipients",
+                                "includesOrderIds",
+                                "includesDeliveryReceipts",
+                                "canMutate"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "source",
+                            "customer",
+                            "merchant",
+                            "totals",
+                            "limits"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "adminNotificationSettingsSummary"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/settings/sms": {
       "get": {
         "tags": [
