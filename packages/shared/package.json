@@ -9,7 +9,7 @@
   "scripts": {
     "lint": "eslint src/",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",

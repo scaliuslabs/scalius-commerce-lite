@@ -14,7 +14,7 @@
     "generate": "node --import tsx scripts/generate-spec.ts && openapi-ts",
     "generate:spec": "node --import tsx scripts/generate-spec.ts",
     "lint": "eslint src/ scripts/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.98.2",

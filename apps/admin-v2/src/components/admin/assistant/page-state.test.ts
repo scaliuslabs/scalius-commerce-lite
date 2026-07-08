@@ -72,6 +72,12 @@ describe("admin assistant page state", () => {
                   type: "select_visible_rows",
                   label: "Select +8801712345678",
                   safeFields: ["visibleRowId", "receiptToken chk_shouldNotLeak"],
+                  visibleRowIds: [
+                    "prod_safe_1",
+                    "prod_safe_1",
+                    "row-buyer@example.com-chk_shouldNotLeak",
+                    ...Array.from({ length: 110 }, (_, rowIndex) => `prod_${rowIndex}`),
+                  ],
                 },
                 {
                   id: "orders-table-delete",
@@ -120,6 +126,10 @@ describe("admin assistant page state", () => {
           type: "select_visible_rows",
           label: "Select [redacted-phone]",
           safeFields: ["visibleRowId", "receiptToken [redacted-token]"],
+          visibleRowIds: [
+            "prod_safe_1",
+            ...Array.from({ length: 99 }, (_, rowIndex) => `prod_${rowIndex}`),
+          ],
         },
       ],
     });

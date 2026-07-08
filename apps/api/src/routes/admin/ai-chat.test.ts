@@ -281,6 +281,125 @@ describe("admin AI chat route", () => {
     expect(JSON.stringify(body)).not.toMatch(/apiKey|secret|credential|sk-/i);
   });
 
+  it("falls back safely for provider tool-call sentinels while preserving click-confirmed page actions", async () => {
+    const aiBinding = { run: vi.fn() };
+    mocks.getWidgetAiRuntimeSettings.mockResolvedValue(cloudflareRuntimeSettings());
+    mocks.generateText.mockResolvedValueOnce({
+      text:
+        "<|tool_calls_section_begin|><|tool_call_begin|>functions.products_table_clear_selection<|tool_call_argument_begin|>{\"targetId\":\"products-table\"}<|tool_call_end|><|tool_calls_section_end|>",
+      totalUsage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 },
+    });
+    const { app, env } = createTestApp({ AI: aiBinding } as unknown as Partial<Env>);
+
+    const response = await postChat(app, env, {
+      pageContext: {
+        routePath: "/admin/products",
+        surfaces: [
+          {
+            id: "products-table",
+            kind: "table",
+            label: "Products table",
+            selectedCount: 2,
+            assistantActions: [
+              {
+                id: "products-table:clear-selection",
+                type: "clear_selection",
+                label: "Clear selection",
+              },
+            ],
+          },
+        ],
+      },
+      messages: [{ role: "user", content: "clear selection" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      success: true;
+      data: {
+        message: { content: string };
+        actions?: Array<Record<string, unknown>>;
+      };
+    };
+    expect(body.data.message.content).toBe(
+      "I prepared a safe dashboard action for this request. Use the visible action button to continue.",
+    );
+    expect(body.data.actions).toEqual([
+      {
+        type: "clear_selection",
+        id: "products-table:clear-selection",
+        targetId: "products-table",
+        label: "Clear selection",
+      },
+    ]);
+    expect(JSON.stringify(body)).not.toContain("<|tool");
+    expect(JSON.stringify(body)).not.toContain("functions.products_table_clear_selection");
+    expect(JSON.stringify(body)).not.toContain("tool_call_argument_begin");
+  });
+
+  it("falls back safely for raw function-call JSON in assistant content", async () => {
+    mocks.generateText.mockResolvedValueOnce({
+      text: JSON.stringify({
+        tool_calls: [
+          {
+            type: "function",
+            function: {
+              name: "products_table_clear_selection",
+              arguments: "{\"targetId\":\"products-table\"}",
+            },
+          },
+        ],
+      }),
+      totalUsage: { inputTokens: 9, outputTokens: 8, totalTokens: 17 },
+    });
+    const { app, env } = createTestApp();
+
+    const response = await postChat(app, env, {
+      pageContext: {
+        routePath: "/admin/products",
+        surfaces: [
+          {
+            id: "products-table",
+            kind: "table",
+            label: "Products table",
+            selectedCount: 1,
+            assistantActions: [
+              {
+                id: "products-table:clear-selection",
+                type: "clear_selection",
+                label: "Clear selection",
+              },
+            ],
+          },
+        ],
+      },
+      messages: [{ role: "user", content: "please clear the selection" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      success: true;
+      data: {
+        message: { content: string };
+        actions?: Array<Record<string, unknown>>;
+      };
+    };
+    expect(body.data.message.content).toBe(
+      "I prepared a safe dashboard action for this request. Use the visible action button to continue.",
+    );
+    expect(body.data.actions).toEqual([
+      {
+        type: "clear_selection",
+        id: "products-table:clear-selection",
+        targetId: "products-table",
+        label: "Clear selection",
+      },
+    ]);
+    expect(JSON.stringify(body)).not.toContain("tool_calls");
+    expect(JSON.stringify(body)).not.toContain("arguments");
+    expect(JSON.stringify(body)).not.toContain("products_table_clear_selection");
+  });
+
   it("runs Cloudflare Gemini catalog models through the documented Worker binding schema", async () => {
     const aiBinding = {
       run: vi.fn().mockResolvedValue({
@@ -784,6 +903,179 @@ describe("admin AI chat route", () => {
           "<p>Flagship iPhone with a sharper camera story and clearer everyday benefits.</p>",
       },
     ]);
+  });
+
+  it("returns a clear-selection page action for visible table clear intents", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await postChat(app, env, {
+      pageContext: {
+        routePath: "/admin/products",
+        surfaces: [
+          {
+            id: "products-table",
+            kind: "table",
+            label: "Products table",
+            selectedCount: 2,
+            assistantActions: [
+              {
+                id: "products-table:clear-selection",
+                type: "clear_selection",
+                label: "Clear selection",
+              },
+            ],
+          },
+        ],
+      },
+      messages: [{ role: "user", content: "clear selection" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      success: true;
+      data: { actions?: Array<Record<string, unknown>> };
+    };
+    expect(body.data.actions).toEqual([
+      {
+        type: "clear_selection",
+        id: "products-table:clear-selection",
+        targetId: "products-table",
+        label: "Clear selection",
+      },
+    ]);
+  });
+
+  it("returns a bounded select-visible-rows action from registered visible row ids", async () => {
+    const { app, env } = createTestApp();
+    const visibleRowIds = Array.from(
+      { length: 105 },
+      (_, index) => `prod_visible_${index}`,
+    );
+
+    const response = await postChat(app, env, {
+      pageContext: {
+        routePath: "/admin/products",
+        surfaces: [
+          {
+            id: "products-table",
+            kind: "table",
+            label: "Products table",
+            selectedCount: 0,
+            assistantActions: [
+              {
+                id: "products-table:select-visible",
+                type: "select_visible_rows",
+                label: "Select visible products",
+                visibleRowIds,
+              },
+            ],
+          },
+        ],
+      },
+      messages: [{ role: "user", content: "select all visible products" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const options = mocks.generateText.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const pageActionContext = options.messages.find((message) =>
+      message.content.includes("Current visible page action buttons"),
+    )?.content;
+    expect(pageActionContext).toContain("products-table: select_visible_rows");
+    expect(pageActionContext).not.toContain("prod_visible_0");
+    expect(pageActionContext).not.toContain("prod_visible_104");
+
+    const body = (await response.json()) as {
+      success: true;
+      data: { actions?: Array<Record<string, unknown>> };
+    };
+    expect(body.data.actions).toEqual([
+      {
+        type: "select_visible_rows",
+        id: "products-table:select-visible",
+        targetId: "products-table",
+        label: "Select visible rows",
+        rowIds: visibleRowIds.slice(0, 100),
+      },
+    ]);
+  });
+
+  it("does not propose select-visible-rows without explicit visible row ids", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await postChat(app, env, {
+      pageContext: {
+        routePath: "/admin/products",
+        surfaces: [
+          {
+            id: "products-table",
+            kind: "table",
+            label: "Products table",
+            selectedCount: 0,
+            assistantActions: [
+              {
+                id: "products-table:select-visible",
+                type: "select_visible_rows",
+                label: "Select visible products",
+              },
+            ],
+          },
+        ],
+      },
+      messages: [{ role: "user", content: "select visible rows" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      success: true;
+      data: { actions?: Array<Record<string, unknown>> };
+    };
+    expect(body.data.actions).toBeUndefined();
+  });
+
+  it("does not propose table selection actions for destructive bulk requests", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await postChat(app, env, {
+      pageContext: {
+        routePath: "/admin/products",
+        surfaces: [
+          {
+            id: "products-table",
+            kind: "table",
+            label: "Products table",
+            selectedCount: 2,
+            assistantActions: [
+              {
+                id: "products-table:select-visible",
+                type: "select_visible_rows",
+                label: "Select visible products",
+                visibleRowIds: ["prod_1", "prod_2"],
+              },
+              {
+                id: "products-table:clear-selection",
+                type: "clear_selection",
+                label: "Clear selection",
+              },
+            ],
+          },
+        ],
+      },
+      messages: [
+        {
+          role: "user",
+          content: "delete selected products and select all visible products",
+        },
+      ],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      success: true;
+      data: { actions?: Array<Record<string, unknown>> };
+    };
+    expect(body.data.actions).toBeUndefined();
   });
 
   it("prefers the current product edit route id before searching by product name", async () => {

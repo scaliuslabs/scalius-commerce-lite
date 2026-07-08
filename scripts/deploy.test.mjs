@@ -80,10 +80,12 @@ function agentTool(name, extra = {}) {
 function agentTools(overrides = {}) {
   return [
     agentTool("cart_validate", overrides.cart_validate),
+    agentTool("catalog_categories", overrides.catalog_categories),
     agentTool("catalog_search", overrides.catalog_search),
     agentTool("catalog_lookup", overrides.catalog_lookup),
     agentTool("catalog_product", overrides.catalog_product),
     agentTool("catalog_profile", overrides.catalog_profile),
+    agentTool("storefront_discovery_policy", overrides.storefront_discovery_policy),
   ];
 }
 
@@ -128,6 +130,154 @@ function agentCatalogProfileMcpResult(profile = ucpProfile()) {
   };
 }
 
+function agentCatalogCategoriesMcpResult() {
+  const result = {
+    catalogCategories: {
+      categories: [{
+        id: "cat_demo",
+        slug: "demo",
+        name: "Demo",
+        path: "/categories/demo",
+      }],
+      limit: 1,
+      hasMore: true,
+    },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
+function agentCatalogSearchMcpResult() {
+  const result = {
+    ucp: {
+      version: "2026-07",
+      status: "success",
+      capabilities: ["dev.ucp.shopping.catalog.search"],
+    },
+    products: [{
+      id: "gid://scalius/product/prod_release_check",
+      title: "Release Check Product",
+      url: "https://storefront.example.test/products/release-check-product",
+      variants: [{
+        id: "gid://scalius/product-variant/var_release_check",
+        sku: "REL-1",
+      }],
+    }],
+    pagination: { has_next_page: false, total_count: 1 },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
+function agentCatalogLookupMcpResult(inputId = "gid://scalius/product/prod_release_check") {
+  const result = {
+    ucp: {
+      version: "2026-07",
+      status: "success",
+      capabilities: ["dev.ucp.shopping.catalog.lookup"],
+    },
+    products: [{
+      id: "gid://scalius/product/prod_release_check",
+      variants: [{
+        id: "gid://scalius/product-variant/var_release_check",
+        inputs: [{ id: inputId, match: "exact" }],
+      }],
+    }],
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
+function agentCatalogProductMcpResult(inputId = "gid://scalius/product/prod_release_check") {
+  const result = {
+    ucp: {
+      version: "2026-07",
+      status: "success",
+      capabilities: ["dev.ucp.shopping.catalog.lookup"],
+    },
+    product: {
+      id: inputId,
+      title: "Release Check Product",
+      variants: [{
+        id: "gid://scalius/product-variant/var_release_check",
+        sku: "REL-1",
+      }],
+    },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
+function agentDiscoveryPolicyMcpResult() {
+  const result = {
+    storefrontDiscoveryPolicy: {
+      source: { path: "/api/v1/seo" },
+      discovery: {
+        sitemap: {
+          enabled: true,
+          sections: {
+            staticPages: true,
+            products: true,
+            categories: true,
+            collections: false,
+            pages: true,
+          },
+          urls: [{ type: "index", url: "https://storefront.example.test/sitemap.xml" }],
+        },
+        feeds: {
+          productCatalogEnabled: true,
+          includeUnavailableProducts: false,
+          variantStrategy: "variants",
+          urls: [{
+            type: "google",
+            url: "https://storefront.example.test/api/product-feed.xml",
+          }],
+        },
+        robots: {
+          advertiseSitemap: true,
+          robotsUrl: "https://storefront.example.test/robots.txt",
+        },
+        structuredData: {
+          organization: true,
+          websiteSearch: true,
+          products: true,
+          productGroups: true,
+          offerShippingDetails: true,
+          breadcrumbs: true,
+          collections: false,
+        },
+      },
+      returnPolicy: {
+        enabled: false,
+      },
+      limits: {
+        readOnly: true,
+        canMutate: false,
+        includesCustomerData: false,
+        includesPaymentData: false,
+        includesCheckoutData: false,
+      },
+    },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
 function agentCartValidationMcpResult() {
   const result = {
     cartValidation: {
@@ -158,7 +308,10 @@ function agentCartValidationMcpResult() {
 function mcpSseResponse(message) {
   return new Response(`event: message\ndata: ${JSON.stringify(message)}\n\n`, {
     status: 200,
-    headers: { "Content-Type": "text/event-stream" },
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-store",
+    },
   });
 }
 
@@ -338,6 +491,45 @@ describe("deploy agent verification", () => {
               arguments: {},
             });
           }
+          if (body.params?.name === "catalog_categories") {
+            expect(body.params).toEqual({
+              name: "catalog_categories",
+              arguments: {
+                limit: 1,
+              },
+            });
+          }
+          if (body.params?.name === "storefront_discovery_policy") {
+            expect(body.params).toEqual({
+              name: "storefront_discovery_policy",
+              arguments: {},
+            });
+          }
+          if (body.params?.name === "catalog_search") {
+            expect(body.params).toEqual({
+              name: "catalog_search",
+              arguments: {
+                query: "test",
+                limit: 1,
+              },
+            });
+          }
+          if (body.params?.name === "catalog_lookup") {
+            expect(body.params).toEqual({
+              name: "catalog_lookup",
+              arguments: {
+                ids: ["gid://scalius/product/prod_release_check"],
+              },
+            });
+          }
+          if (body.params?.name === "catalog_product") {
+            expect(body.params).toEqual({
+              name: "catalog_product",
+              arguments: {
+                id: "gid://scalius/product/prod_release_check",
+              },
+            });
+          }
           if (body.params?.name === "cart_validate") {
             expect(body.params).toEqual({
               name: "cart_validate",
@@ -355,7 +547,17 @@ describe("deploy agent verification", () => {
             id: body.id,
             result: body.params?.name === "cart_validate"
               ? agentCartValidationMcpResult()
-              : agentCatalogProfileMcpResult(),
+              : body.params?.name === "catalog_categories"
+                ? agentCatalogCategoriesMcpResult()
+                : body.params?.name === "storefront_discovery_policy"
+                  ? agentDiscoveryPolicyMcpResult()
+                  : body.params?.name === "catalog_search"
+                    ? agentCatalogSearchMcpResult()
+                    : body.params?.name === "catalog_lookup"
+                      ? agentCatalogLookupMcpResult(body.params?.arguments?.ids?.[0])
+                      : body.params?.name === "catalog_product"
+                        ? agentCatalogProductMcpResult(body.params?.arguments?.id)
+                        : agentCatalogProfileMcpResult(),
           });
         }
       }
@@ -375,14 +577,21 @@ describe("deploy agent verification", () => {
       "POST /mcp initialize",
       "POST /mcp tools/list",
       "POST /mcp tools/call:catalog_profile",
+      "POST /mcp tools/call:catalog_categories",
+      "POST /mcp tools/call:storefront_discovery_policy",
+      "POST /mcp tools/call:catalog_search",
+      "POST /mcp tools/call:catalog_lookup",
+      "POST /mcp tools/call:catalog_product",
       "POST /mcp tools/call:cart_validate",
     ]);
     expect(result.mcp.tools.toolNames).toEqual([
       "cart_validate",
+      "catalog_categories",
       "catalog_lookup",
       "catalog_product",
       "catalog_profile",
       "catalog_search",
+      "storefront_discovery_policy",
     ]);
     expect(result.mcp.catalogTool).toMatchObject({
       name: "catalog_profile",
@@ -402,8 +611,9 @@ describe("deploy agent verification", () => {
       firstIssueCode: "PRODUCT_UNAVAILABLE",
     });
     expect(console.log).toHaveBeenCalledWith(
-      "✓ Agent /health returned 200; MCP tools: cart_validate, catalog_lookup, catalog_product, " +
-      "catalog_profile, catalog_search; catalog_profile call ok (2 catalog capabilities, " +
+      "✓ Agent /health returned 200; MCP tools: cart_validate, catalog_categories, " +
+      "catalog_lookup, catalog_product, catalog_profile, catalog_search, " +
+      "storefront_discovery_policy; catalog_profile call ok (2 catalog capabilities, " +
       "endpoint https://storefront.example.test/ucp); cart_validate call ok.",
     );
   });

@@ -34131,12 +34131,14 @@ export type PostApiV1AdminAiChatData = {
                 label?: string;
                 dirty?: boolean;
                 submitting?: boolean;
+                selectedCount?: number;
                 validationErrorCount?: number;
                 assistantActions?: Array<{
                     id: string;
                     type: 'focus_surface' | 'apply_field_draft' | 'save_registered_form' | 'select_visible_rows' | 'clear_selection';
                     label?: string;
                     safeFields?: Array<string>;
+                    visibleRowIds?: Array<string>;
                     [key: string]: unknown;
                 }>;
                 [key: string]: unknown;

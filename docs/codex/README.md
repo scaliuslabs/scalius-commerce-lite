@@ -14,6 +14,12 @@ This folder is for Codex operational context only. Treat source code, tests, dep
 - `WIDGET-SYSTEM.md` - widget/page-builder purpose, quality bar, and reliability requirements.
 - `ISSUE-LOG.md` - historical GitHub issue verification log. Use `audit/REMEDIATION_TRACKER.md` for the current remediation queue.
 
+## Toolchain Rules
+
+- TypeScript 7 migration keeps root `typescript` on 6.x for JS compiler API consumers (`typescript-eslint`, Astro/Volar/`@astrojs/check`, `openapi-ts`/`tsx` as needed) and uses the root `typescript7` alias to `npm:typescript@7.0.2` as the stable TS7 compiler path.
+- Non-Astro package `typecheck` scripts run `../../node_modules/typescript7/bin/tsc --noEmit`; storefront stays on `astro check` until embedded-language tooling supports TS7 programmatic APIs.
+- Do not use `@typescript/native-preview`/`tsgo` for the stable path.
+
 ## Rules For Updating
 
 - Update these notes after a meaningful codebase discovery, fix, deploy, or browser verification.
