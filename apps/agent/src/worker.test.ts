@@ -369,6 +369,14 @@ function adminProductSearchContext(result: Record<string, unknown>): Record<stri
   return structuredContent.adminProductSearch;
 }
 
+function adminCategorySearchContext(result: Record<string, unknown>): Record<string, unknown> {
+  const structuredContent = result.structuredContent;
+  if (!isRecord(structuredContent) || !isRecord(structuredContent.adminCategorySearch)) {
+    throw new Error("Expected adminCategorySearch structured content");
+  }
+  return structuredContent.adminCategorySearch;
+}
+
 function adminOrderSearchContext(result: Record<string, unknown>): Record<string, unknown> {
   const structuredContent = result.structuredContent;
   if (!isRecord(structuredContent) || !isRecord(structuredContent.adminOrderSearch)) {
@@ -1189,6 +1197,7 @@ describe("admin MCP route", () => {
       "admin_session_context",
       "admin_navigation_context",
       "admin_product_search",
+      "admin_category_search",
       "admin_order_search",
     ]);
     for (const tool of tools) {
@@ -1430,6 +1439,275 @@ describe("admin MCP server", () => {
         status: 401,
       },
     });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("calls admin_category_search through the API binding with fixed search query and compact output", async () => {
+    const longUserAgent = `vitest-admin-mcp-${"x".repeat(300)}`;
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: {
+        categories: [{
+          id: "cat_1",
+          name: "Summer Shoes",
+          slug: "summer-shoes",
+          isActive: true,
+          status: "active",
+          description: "raw category description",
+          imageUrl: "https://cdn.example.test/private-category.jpg",
+          imageCount: 2,
+          metaTitle: "must-not-leak",
+          metaDescription: "must-not-leak",
+          canonicalPath: "/categories/summer-shoes",
+          noIndex: true,
+          excludeFromSitemap: false,
+          productCount: 7,
+          createdAt: "2026-07-07T08:00:00.000Z",
+          updatedAt: "2026-07-07T10:30:00.000Z",
+          deletedAt: "2026-07-08T00:00:00.000Z",
+          privateNote: "must-not-leak",
+          customerEmail: "customer@example.test",
+          orderCount: 12,
+          paymentStatus: "paid",
+        }, {
+          id: "cat_absolute",
+          name: "Absolute Canonical",
+          slug: "absolute-canonical",
+          canonicalPath: "https://evil.example.test/categories/absolute-canonical",
+          imageUrl: null,
+          noIndex: false,
+          excludeFromSitemap: true,
+          productCount: 0,
+          updatedAt: "2026-07-08T10:30:00.000Z",
+        }],
+        pagination: {
+          page: 2,
+          limit: 3,
+          total: 9,
+          totalPages: 3,
+          rawCursor: "must-not-leak",
+        },
+      },
+      rawMessage: `must-not-leak ${ADMIN_COOKIE}`,
+    });
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: ADMIN_COOKIE,
+      userAgent: longUserAgent,
+    });
+
+    const result = await client.callTool({
+      name: "admin_category_search",
+      arguments: { query: "  summer shoes  ", limit: 3, page: 2 },
+    });
+
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [input, init] = fetchCall(apiFetch);
+    const url = new URL(requestUrl(input));
+    expect(`${url.origin}${url.pathname}`).toBe("http://api.internal/api/v1/admin/categories");
+    expect([...url.searchParams.entries()]).toEqual([
+      ["search", "summer shoes"],
+      ["page", "2"],
+      ["limit", "3"],
+      ["sort", "updatedAt"],
+      ["order", "desc"],
+    ]);
+    expect(init?.method).toBe("GET");
+    expect(init?.body).toBeUndefined();
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Cookie")).toBe(ADMIN_COOKIE);
+    expect(headers.get("User-Agent")).toBe(longUserAgent.slice(0, 256));
+    expect(headers.get("Authorization")).toBeNull();
+    expect([...headers.keys()].sort()).toEqual(["accept", "cookie", "user-agent"]);
+
+    expect(result.isError).toBeUndefined();
+    const context = adminCategorySearchContext(result as Record<string, unknown>);
+    expect(context).toEqual({
+      source: { path: "/api/v1/admin/categories" },
+      query: {
+        query: "summer shoes",
+        page: 2,
+        limit: 3,
+        sort: "updatedAt",
+        order: "desc",
+      },
+      categories: [{
+        id: "cat_1",
+        name: "Summer Shoes",
+        slug: "summer-shoes",
+        productCount: 7,
+        noIndex: true,
+        excludeFromSitemap: false,
+        canonicalPath: "/categories/summer-shoes",
+        updatedAt: "2026-07-07T10:30:00.000Z",
+      }, {
+        id: "cat_absolute",
+        name: "Absolute Canonical",
+        slug: "absolute-canonical",
+        productCount: 0,
+        noIndex: false,
+        excludeFromSitemap: true,
+        updatedAt: "2026-07-08T10:30:00.000Z",
+      }],
+      pagination: {
+        page: 2,
+        limit: 3,
+        total: 9,
+        totalPages: 3,
+      },
+      limits: {
+        maxCategories: 10,
+        includesTrashed: false,
+        includesDescriptions: false,
+        includesMetaText: false,
+        includesRawImages: false,
+      },
+    });
+    const categories = context.categories as Array<Record<string, unknown>>;
+    expect(categories).toHaveLength(2);
+    const category = categories[0];
+    if (!category) throw new Error("Expected compact admin category");
+    expect(Object.keys(category).sort()).toEqual([
+      "canonicalPath",
+      "excludeFromSitemap",
+      "id",
+      "name",
+      "noIndex",
+      "productCount",
+      "slug",
+      "updatedAt",
+    ]);
+    expect(categories[1]).not.toHaveProperty("canonicalPath");
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("raw category description");
+    expect(serialized).not.toContain("https://cdn.example.test/private-category.jpg");
+    expect(serialized).not.toContain("https://evil.example.test");
+    expect(serialized).not.toContain("metaTitle");
+    expect(serialized).not.toContain("metaDescription");
+    expect(serialized).not.toContain("deletedAt");
+    expect(serialized).not.toContain("must-not-leak");
+    expect(serialized).not.toContain("customer@example.test");
+    expect(serialized).not.toContain(ADMIN_COOKIE);
+  });
+
+  it("keeps admin_category_search upstream failures fail-closed without leaking upstream bodies", async () => {
+    const leak = `raw upstream leak ${ADMIN_COOKIE} admin@example.test +8801712345678`;
+    const cases: Array<() => Response> = [
+      () => json({ success: false, error: { code: "forbidden", message: leak } }, 403),
+      () => json({ success: false, error: { code: "server_error", message: leak } }, 500),
+      () => new Response(`not json ${leak}`, {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      }),
+      () => json({ success: false, error: { code: "invalid", message: leak } }),
+      () => json({ success: true, data: { categories: [], message: leak } }),
+    ];
+
+    for (const makeResponse of cases) {
+      const apiFetch = vi.fn<FetchLike>().mockImplementation(() => Promise.resolve(makeResponse()));
+      const { client } = await bootAdmin(apiFetch);
+
+      const result = await client.callTool({
+        name: "admin_category_search",
+        arguments: { query: "summer" },
+      });
+
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        adminCategorySearch: {
+          source: { path: "/api/v1/admin/categories" },
+          query: {
+            query: "summer",
+            page: 1,
+            limit: 5,
+            sort: "updatedAt",
+            order: "desc",
+          },
+          categories: [],
+          pagination: null,
+          limits: {
+            maxCategories: 10,
+            includesTrashed: false,
+            includesDescriptions: false,
+            includesMetaText: false,
+            includesRawImages: false,
+          },
+        },
+        error: {
+          code: "admin_category_unavailable",
+        },
+      });
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain(ADMIN_COOKIE);
+      expect(serialized).not.toContain("admin@example.test");
+      expect(serialized).not.toContain("+8801712345678");
+      expect(serialized).not.toContain("raw upstream leak");
+    }
+  });
+
+  it("returns a safe admin_category_search tool error when no cookie option is present", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: { categories: [], pagination: { page: 1, limit: 5, total: 0, totalPages: 0 } },
+    });
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: null,
+      userAgent: "vitest-admin-mcp",
+    });
+
+    const result = await client.callTool({
+      name: "admin_category_search",
+      arguments: { query: "summer" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        code: "admin_session_required",
+        status: 401,
+      },
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects unbounded admin_category_search inputs before API fetches", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: { categories: [], pagination: { page: 1, limit: 5, total: 0, totalPages: 0 } },
+    });
+    const { client } = await bootAdmin(apiFetch);
+
+    await expectValidationToolError(client.callTool({
+      name: "admin_category_search",
+      arguments: { query: "", limit: 5 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_category_search",
+      arguments: { query: "x".repeat(121), limit: 5 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_category_search",
+      arguments: { query: "summer", limit: 11 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_category_search",
+      arguments: { query: "summer", page: 21 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_category_search",
+      arguments: {
+        query: "summer",
+        search: "old-field",
+        includeTrashed: true,
+        includeDescriptions: true,
+        imageUrl: "https://cdn.example.test/private.jpg",
+        deletedAt: "2026-07-08T00:00:00.000Z",
+        Authorization: "Bearer must-not-forward",
+      },
+    }));
+
     expect(apiFetch).not.toHaveBeenCalled();
   });
 

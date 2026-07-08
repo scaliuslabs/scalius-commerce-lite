@@ -44,12 +44,21 @@ const ADMIN_SESSION_COOKIE_NAMES = Object.freeze([
 const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_session_context",
   "admin_navigation_context",
+  "admin_category_search",
   "admin_product_search",
   "admin_order_search",
 ]);
 const ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE = Object.freeze({
   name: "admin_navigation_context",
   arguments: Object.freeze({}),
+});
+const ADMIN_CATEGORY_SEARCH_TOOL_SMOKE = Object.freeze({
+  name: "admin_category_search",
+  arguments: Object.freeze({
+    query: "test",
+    limit: 1,
+    page: 1,
+  }),
 });
 const ADMIN_PRODUCT_SEARCH_TOOL_SMOKE = Object.freeze({
   name: "admin_product_search",
@@ -2341,7 +2350,7 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
-  const productSearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+  const categorySearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
     fetchImpl,
     timeoutMs,
     headers: authenticatedHeaders,
@@ -2350,6 +2359,39 @@ export async function smokeAdminMcpAuthenticated({
     body: {
       jsonrpc: "2.0",
       id: 4,
+      method: "tools/call",
+      params: ADMIN_CATEGORY_SEARCH_TOOL_SMOKE,
+    },
+  });
+  const categorySearchToolCacheControl = requireNoStoreCacheControl(
+    categorySearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}`,
+  );
+  const categorySearchToolResult = requireMcpJsonRpcResult(
+    categorySearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}`,
+    4,
+  );
+  const categorySearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
+    categorySearchToolResult,
+    { toolName: ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name },
+  );
+  if (!categorySearchToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name} failed: ` +
+      categorySearchToolEvaluation.errors.join("; "),
+    );
+  }
+
+  const productSearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 5,
       method: "tools/call",
       params: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE,
     },
@@ -2361,7 +2403,7 @@ export async function smokeAdminMcpAuthenticated({
   const productSearchToolResult = requireMcpJsonRpcResult(
     productSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}`,
-    4,
+    5,
   );
   const productSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     productSearchToolResult,
@@ -2382,7 +2424,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 5,
+      id: 6,
       method: "tools/call",
       params: ADMIN_ORDER_SEARCH_TOOL_SMOKE,
     },
@@ -2394,7 +2436,7 @@ export async function smokeAdminMcpAuthenticated({
   const orderSearchToolResult = requireMcpJsonRpcResult(
     orderSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}`,
-    5,
+    6,
   );
   const orderSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     orderSearchToolResult,
@@ -2410,6 +2452,7 @@ export async function smokeAdminMcpAuthenticated({
   logger?.log(
     `PASS admin MCP authenticated: tools ${toolEvaluation.toolNames.join(", ")}, ` +
     `calls ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}, ` +
+    `${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}, ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name} ok.`,
   );
   return {
@@ -2440,6 +2483,13 @@ export async function smokeAdminMcpAuthenticated({
         defaultPath: navigationToolEvaluation.defaultPath,
         returnedPages: navigationToolEvaluation.returnedPages,
         sectionCount: navigationToolEvaluation.sectionCount,
+      },
+      categorySearchTool: {
+        name: ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name,
+        statusCode: categorySearchToolResponse.statusCode,
+        durationMs: categorySearchToolResponse.durationMs,
+        cacheControl: categorySearchToolCacheControl,
+        contentCount: categorySearchToolEvaluation.contentCount,
       },
       productSearchTool: {
         name: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name,
