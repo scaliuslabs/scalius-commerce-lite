@@ -5,6 +5,7 @@ import * as z from "zod/v4";
 const ADMIN_PERMISSIONS_PATH = "/api/v1/admin/rbac/my-permissions";
 const ADMIN_API_TARGET = `http://api.internal${ADMIN_PERMISSIONS_PATH}`;
 const ADMIN_PRODUCTS_PATH = "/api/v1/admin/products";
+const ADMIN_CATEGORIES_PATH = "/api/v1/admin/categories";
 const ADMIN_ORDERS_PATH = "/api/v1/admin/orders";
 
 const NO_STORE_HEADERS = {
@@ -22,8 +23,10 @@ const ADMIN_READ_ONLY_TOOL_ANNOTATIONS = {
 const MAX_ADMIN_NAVIGATION_PAGES = 24;
 const ADMIN_NAVIGATION_CATALOG_VERSION = "admin-navigation-context:v1";
 const ADMIN_PRODUCT_SEARCH_MAX_PRODUCTS = 10;
+const ADMIN_CATEGORY_SEARCH_MAX_CATEGORIES = 10;
 const ADMIN_ORDER_SEARCH_MAX_ORDERS = 10;
 const ADMIN_PRODUCTS_MAX_STRING_LENGTH = 220;
+const ADMIN_CATEGORIES_MAX_STRING_LENGTH = 220;
 const ADMIN_ORDERS_MAX_STRING_LENGTH = 220;
 
 type JsonRecord = Record<string, unknown>;
@@ -35,6 +38,14 @@ const adminProductSearchInputSchema = z.object({
 }).strict();
 
 type AdminProductSearchInput = z.infer<typeof adminProductSearchInputSchema>;
+
+const adminCategorySearchInputSchema = z.object({
+  query: z.string().trim().min(1).max(120),
+  limit: z.number().int().min(1).max(ADMIN_CATEGORY_SEARCH_MAX_CATEGORIES).default(5),
+  page: z.number().int().min(1).max(20).default(1),
+}).strict();
+
+type AdminCategorySearchInput = z.infer<typeof adminCategorySearchInputSchema>;
 
 const adminOrderSearchInputSchema = z.object({
   query: z.string().trim().min(1).max(80),
@@ -438,6 +449,33 @@ function adminProductToolError(
   }, true);
 }
 
+function adminCategoryToolError(
+  code: string,
+  query?: JsonRecord,
+  status = 503,
+): CallToolResult {
+  return toolResult({
+    adminCategorySearch: {
+      source: { path: ADMIN_CATEGORIES_PATH },
+      ...(query ? { query } : {}),
+      categories: [],
+      pagination: null,
+      limits: {
+        maxCategories: ADMIN_CATEGORY_SEARCH_MAX_CATEGORIES,
+        includesTrashed: false,
+        includesDescriptions: false,
+        includesMetaText: false,
+        includesRawImages: false,
+      },
+    },
+    error: {
+      code,
+      status: failClosedStatus(status),
+      message: "Admin categories are temporarily unavailable.",
+    },
+  }, true);
+}
+
 function adminOrderToolError(
   code: string,
   query?: JsonRecord,
@@ -696,6 +734,35 @@ function compactAdminProduct(value: unknown): JsonRecord | null {
   return product;
 }
 
+function compactCategoryCanonicalPath(value: unknown): string | null {
+  const canonicalPath = compactString(value, 160);
+  if (!canonicalPath) return null;
+  return /^\/categories\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(canonicalPath)
+    ? canonicalPath
+    : null;
+}
+
+function compactAdminCategory(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const id = compactString(value.id, ADMIN_CATEGORIES_MAX_STRING_LENGTH);
+  if (!id) return null;
+
+  const category: JsonRecord = { id };
+  setCompactString(category, "name", value.name, ADMIN_CATEGORIES_MAX_STRING_LENGTH);
+  setCompactString(category, "slug", value.slug, ADMIN_CATEGORIES_MAX_STRING_LENGTH);
+  setCompactNumber(category, "productCount", value.productCount);
+
+  setCompactBoolean(category, "noIndex", value.noIndex);
+  setCompactBoolean(category, "excludeFromSitemap", value.excludeFromSitemap);
+
+  const canonicalPath = compactCategoryCanonicalPath(value.canonicalPath);
+  if (canonicalPath) category.canonicalPath = canonicalPath;
+
+  setCompactTimestamp(category, "updatedAt", value.updatedAt);
+
+  return category;
+}
+
 function compactAdminPagination(value: unknown): JsonRecord | null {
   if (!isRecord(value)) return null;
   const page = compactNumber(value.page);
@@ -787,6 +854,89 @@ async function fetchAdminProductSearch(
     });
   } catch {
     return adminProductToolError("admin_product_unavailable", query);
+  }
+}
+
+function buildAdminCategorySearchUrl(input: AdminCategorySearchInput): { url: URL; query: JsonRecord } {
+  const url = new URL(`http://api.internal${ADMIN_CATEGORIES_PATH}`);
+  const query: JsonRecord = {
+    query: input.query,
+    page: input.page,
+    limit: input.limit,
+    sort: "updatedAt",
+    order: "desc",
+  };
+
+  url.searchParams.set("search", input.query);
+  url.searchParams.set("page", String(input.page));
+  url.searchParams.set("limit", String(input.limit));
+  url.searchParams.set("sort", "updatedAt");
+  url.searchParams.set("order", "desc");
+
+  return { url, query };
+}
+
+async function fetchAdminCategorySearch(
+  env: Env,
+  input: AdminCategorySearchInput,
+  {
+    cookie,
+    userAgent,
+    signal,
+  }: {
+    cookie: string;
+    userAgent?: string | null;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  const { url, query } = buildAdminCategorySearchUrl(input);
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return adminCategoryToolError("admin_api_unavailable", query);
+  }
+
+  try {
+    const response = await env.API.fetch(url, {
+      method: "GET",
+      headers: adminApiHeaders(cookie, userAgent),
+      signal,
+    });
+    if (!response.ok) {
+      return adminCategoryToolError("admin_category_unavailable", query, response.status);
+    }
+
+    const body = await parseJsonResponse(response);
+    const data = body && isRecord(body.data) ? body.data : null;
+    if (!body || body.success !== true || !data || !Array.isArray(data.categories)) {
+      return adminCategoryToolError("admin_category_unavailable", query);
+    }
+
+    const pagination = compactAdminPagination(data.pagination);
+    if (!pagination) {
+      return adminCategoryToolError("admin_category_unavailable", query);
+    }
+
+    const categories = data.categories
+      .map(compactAdminCategory)
+      .filter((category): category is JsonRecord => category !== null)
+      .slice(0, ADMIN_CATEGORY_SEARCH_MAX_CATEGORIES);
+
+    return toolResult({
+      adminCategorySearch: {
+        source: { path: ADMIN_CATEGORIES_PATH },
+        query,
+        categories,
+        pagination,
+        limits: {
+          maxCategories: ADMIN_CATEGORY_SEARCH_MAX_CATEGORIES,
+          includesTrashed: false,
+          includesDescriptions: false,
+          includesMetaText: false,
+          includesRawImages: false,
+        },
+      },
+    });
+  } catch {
+    return adminCategoryToolError("admin_category_unavailable", query);
   }
 }
 
@@ -1009,6 +1159,32 @@ export function createAdminMcpServer(
       }
 
       return fetchAdminProductSearch(env, input, {
+        cookie,
+        userAgent: options.userAgent,
+        signal: extra.signal,
+      });
+    },
+  );
+
+  server.registerTool(
+    "admin_category_search",
+    {
+      title: "Admin Category Search",
+      description: "Searches the dashboard category list through API-verified permissions and returns compact category identifiers.",
+      inputSchema: adminCategorySearchInputSchema,
+      annotations: ADMIN_READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (input, extra) => {
+      const cookie = options.cookie?.trim() ? options.cookie : null;
+      if (!cookie) {
+        return adminToolError({
+          ok: false,
+          status: 401,
+          code: "admin_session_required",
+        });
+      }
+
+      return fetchAdminCategorySearch(env, input, {
         cookie,
         userAgent: options.userAgent,
         signal: extra.signal,
