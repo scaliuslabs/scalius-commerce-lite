@@ -70,6 +70,10 @@ const dashboardHomeSummaryResponseSchema = successEnvelope(z.object({
     recentOrders: z.array(recentOrderSchema),
 }));
 
+const dashboardMetricsSummaryResponseSchema = successEnvelope(z.object({
+    stats: dashboardStatsSchema.omit({ totalRevenue: true }),
+}));
+
 const dashboardActivityResponseSchema = successEnvelope(z.object({
     dailyActivityData: z.array(dailyActivitySchema),
 }));
@@ -98,6 +102,27 @@ app.openapi(dashboardHomeSummaryRoute, async (c) => {
     ]);
 
     return ok(c, { stats, recentOrders });
+});
+
+const dashboardMetricsSummaryRoute = createRoute({
+    method: "get",
+    path: "/metrics-summary",
+    tags: ["Admin - Dashboard"],
+    summary: "Get lightweight dashboard metrics summary",
+    responses: {
+        200: {
+            description: "Dashboard metrics summary data",
+            content: { "application/json": { schema: dashboardMetricsSummaryResponseSchema } },
+        },
+    },
+});
+
+app.openapi(dashboardMetricsSummaryRoute, async (c) => {
+    const db = c.get("db");
+
+    const stats = await getDashboardSummaryStats(db);
+
+    return ok(c, { stats });
 });
 
 const dashboardSummaryRoute = createRoute({

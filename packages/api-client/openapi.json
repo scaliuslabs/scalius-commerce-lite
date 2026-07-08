@@ -57101,6 +57101,130 @@
         ]
       }
     },
+    "/api/v1/admin/dashboard/metrics-summary": {
+      "get": {
+        "tags": [
+          "Admin - Dashboard"
+        ],
+        "summary": "Get lightweight dashboard metrics summary",
+        "responses": {
+          "200": {
+            "description": "Dashboard metrics summary data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "stats": {
+                          "type": "object",
+                          "properties": {
+                            "totalProducts": {
+                              "type": "number"
+                            },
+                            "totalCustomers": {
+                              "type": "number"
+                            },
+                            "currentMonth": {
+                              "type": "object",
+                              "properties": {
+                                "orders": {
+                                  "type": "number"
+                                },
+                                "revenue": {
+                                  "type": "number"
+                                },
+                                "orderGrowth": {
+                                  "type": "number"
+                                },
+                                "revenueGrowth": {
+                                  "type": "number"
+                                },
+                                "orderStatus": {
+                                  "type": "object",
+                                  "properties": {
+                                    "delivered": {
+                                      "type": "number"
+                                    },
+                                    "processing": {
+                                      "type": "number"
+                                    },
+                                    "shipping": {
+                                      "type": "number"
+                                    },
+                                    "cancelled": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "delivered",
+                                    "processing",
+                                    "shipping",
+                                    "cancelled"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "orders",
+                                "revenue",
+                                "orderGrowth",
+                                "revenueGrowth",
+                                "orderStatus"
+                              ]
+                            },
+                            "lastMonth": {
+                              "type": "object",
+                              "properties": {
+                                "orders": {
+                                  "type": "number"
+                                },
+                                "revenue": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "orders",
+                                "revenue"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "totalProducts",
+                            "totalCustomers",
+                            "currentMonth",
+                            "lastMonth"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "stats"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/dashboard/summary": {
       "get": {
         "tags": [

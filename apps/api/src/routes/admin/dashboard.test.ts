@@ -55,6 +55,7 @@ const recentOrders = [
         createdAt: "2026-06-14T12:00:00.000Z",
     },
 ];
+const recentOrderId = recentOrders[0]?.id ?? "ord_1";
 
 const dailyActivityData = [
     {
@@ -100,6 +101,30 @@ describe("admin dashboard routes", () => {
         expect(mocks.getRecentOrders).toHaveBeenCalledWith(db, 11);
         expect(mocks.getDashboardStats).not.toHaveBeenCalled();
         expect(mocks.getDailyActivityData).not.toHaveBeenCalled();
+    });
+
+    it("serves metrics summary data without PII, orders, lifetime revenue, or activity data", async () => {
+        mocks.getDashboardSummaryStats.mockResolvedValue(homeStats);
+        const { app, db } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/dashboard/metrics-summary");
+        const responseText = await response.text();
+        const body = JSON.parse(responseText);
+
+        expect(response.status).toBe(200);
+        expect(body).toEqual({
+            success: true,
+            data: { stats: homeStats },
+        });
+        expect(mocks.getDashboardSummaryStats).toHaveBeenCalledWith(db);
+        expect(mocks.getDashboardStats).not.toHaveBeenCalled();
+        expect(mocks.getRecentOrders).not.toHaveBeenCalled();
+        expect(mocks.getDailyActivityData).not.toHaveBeenCalled();
+        expect(responseText).not.toContain("recentOrders");
+        expect(responseText).not.toContain("customerName");
+        expect(responseText).not.toContain("totalRevenue");
+        expect(responseText).not.toContain("dailyActivityData");
+        expect(responseText).not.toContain(recentOrderId);
     });
 
     it("serves full summary data without running the activity query", async () => {
