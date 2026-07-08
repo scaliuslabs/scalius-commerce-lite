@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
+import worker, {
   MONITORED_QUEUES,
+  OPS_ALERT_PROOF_MARKER_KEY,
+  OPS_ALERT_PROOF_RESULT_KEY_PREFIX,
   applyAlerting,
   checkReadiness,
   checkQueues,
@@ -52,13 +54,20 @@ function createEmailConfig(binding = createEmailBinding()): AlertEmailConfig {
   };
 }
 
-function createState(initial: Record<string, AlertState> = {}): OpsMonitorStateNamespace & { values: Map<string, string> } {
-  const values = new Map(Object.entries(initial).map(([key, value]) => [key, JSON.stringify(value)]));
+function createState(
+  initial: Record<string, AlertState | string> = {},
+): OpsMonitorStateNamespace & { values: Map<string, string> } {
+  const values = new Map(
+    Object.entries(initial).map(([key, value]) => [key, typeof value === "string" ? value : JSON.stringify(value)]),
+  );
   return {
     values,
     get: vi.fn(async (key: string) => values.get(key) ?? null),
     put: vi.fn(async (key: string, value: string) => {
       values.set(key, value);
+    }),
+    delete: vi.fn(async (key: string) => {
+      values.delete(key);
     }),
   };
 }
@@ -488,6 +497,182 @@ describe("streak and cooldown alerting", () => {
     });
   });
 
+  it("consumes a valid scheduled alert proof marker and sends one routed email", async () => {
+    const now = Date.UTC(2026, 0, 1, 0, 5, 0);
+    const nonce = "ops-005-test";
+    const resultKey = `${OPS_ALERT_PROOF_RESULT_KEY_PREFIX}:${nonce}`;
+    const state = createState({
+      [OPS_ALERT_PROOF_MARKER_KEY]: JSON.stringify({ nonce, expiresAt: now + 60_000 }),
+    });
+    const send = vi.fn(async (_message: Parameters<OpsMonitorEmailBinding["send"]>[0]) => ({
+      messageId: "email-safe",
+    }));
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        success: true,
+        status: "ready",
+        checks: { d1: { status: "ok" } },
+      }));
+
+    await runScheduledMonitor(createEnv({
+      OPS_MONITOR_STATE: state,
+      ALERT_EMAIL: createEmailBinding(send),
+      ALERT_EMAIL_FROM: "ops-alerts@example.test",
+      ALERT_EMAIL_TO: "oncall@example.test",
+    }), {
+      now,
+      fetchImpl,
+      logger,
+    });
+
+    expect(state.values.has(OPS_ALERT_PROOF_MARKER_KEY)).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0]).toMatchObject({
+      from: "ops-alerts@example.test",
+      to: ["oncall@example.test"],
+      subject: "[Scalius ops] threshold ops-monitor.routed-alert-proof",
+    });
+    expect(send.mock.calls[0]?.[0].text).toContain("key: proof:routed-alert:ops-005-test");
+    expect(send.mock.calls[0]?.[0].text).toContain("failedChecks: synthetic:scheduled-routed-alert-proof");
+    expect(JSON.stringify(send.mock.calls[0]?.[0])).not.toContain("oncall@example.test or provider payload");
+    expect(JSON.parse(state.values.get(resultKey) ?? "{}")).toMatchObject({
+      version: 1,
+      type: "routed-alert-proof-result",
+      nonce,
+      status: "sent",
+      attemptedAt: "2026-01-01T00:05:00.000Z",
+      runId: expect.stringMatching(/^ops-monitor-/),
+      monitorId: "proof:routed-alert:ops-005-test",
+      alertCount: 1,
+      routedAlertCount: 1,
+      deliveryFailureCount: 0,
+    });
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(logger.error.mock.calls[0]?.[1] as string)).toMatchObject({
+      event: "ops_monitor.alert",
+      monitorId: "proof:routed-alert:ops-005-test",
+      checkName: "ops-monitor.routed-alert-proof",
+    });
+    expect(JSON.parse(logger.log.mock.calls[0]?.[1] as string)).toMatchObject({
+      event: "ops_monitor.run_completed",
+      status: "issues",
+      issueCount: 1,
+      alertCount: 1,
+      routedAlertCount: 1,
+      deliveryFailureCount: 0,
+      alertProofMarker: {
+        consumed: true,
+        accepted: true,
+        nonce,
+        resultKey,
+        status: "sent",
+      },
+    });
+  });
+
+  it("consumes a valid alert proof marker when email config is missing without routed send", async () => {
+    const now = Date.UTC(2026, 0, 1, 0, 5, 0);
+    const nonce = "ops-005-log-only";
+    const resultKey = `${OPS_ALERT_PROOF_RESULT_KEY_PREFIX}:${nonce}`;
+    const state = createState({
+      [OPS_ALERT_PROOF_MARKER_KEY]: JSON.stringify({ nonce, expiresAt: now + 60_000 }),
+    });
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        success: true,
+        status: "ready",
+        checks: { d1: { status: "ok" } },
+      }));
+
+    await runScheduledMonitor(createEnv({
+      OPS_MONITOR_STATE: state,
+    }), {
+      now,
+      fetchImpl,
+      logger,
+    });
+
+    expect(state.values.has(OPS_ALERT_PROOF_MARKER_KEY)).toBe(false);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(logger.error.mock.calls[0]?.[1] as string)).toMatchObject({
+      event: "ops_monitor.alert",
+      monitorId: "proof:routed-alert:ops-005-log-only",
+    });
+    expect(JSON.parse(state.values.get(resultKey) ?? "{}")).toMatchObject({
+      version: 1,
+      type: "routed-alert-proof-result",
+      nonce,
+      status: "log_only",
+      monitorId: "proof:routed-alert:ops-005-log-only",
+      alertCount: 1,
+      routedAlertCount: 0,
+      deliveryFailureCount: 0,
+    });
+    expect(JSON.parse(logger.log.mock.calls[0]?.[1] as string)).toMatchObject({
+      event: "ops_monitor.run_completed",
+      issueCount: 1,
+      alertCount: 1,
+      routedAlertCount: 0,
+      deliveryFailureCount: 0,
+      alertProofMarker: {
+        consumed: true,
+        accepted: true,
+        nonce,
+        resultKey,
+        status: "log_only",
+      },
+    });
+  });
+
+  it.each([
+    ["expired", JSON.stringify({ expiresAt: Date.UTC(2026, 0, 1, 0, 4, 59) }), "expired"],
+    ["invalid", "not-json", "invalid"],
+    ["unsafe nonce", JSON.stringify({ nonce: "unsafe address@example.test", expiresAt: Date.UTC(2026, 0, 1, 0, 6, 0) }), "invalid"],
+  ])("ignores and consumes an %s scheduled alert proof marker safely", async (_label, markerValue, ignoredReason) => {
+    const now = Date.UTC(2026, 0, 1, 0, 5, 0);
+    const state = createState({
+      [OPS_ALERT_PROOF_MARKER_KEY]: markerValue,
+    });
+    const send = vi.fn(async () => ({ messageId: "email-safe" }));
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        success: true,
+        status: "ready",
+        checks: { d1: { status: "ok" } },
+      }));
+
+    await runScheduledMonitor(createEnv({
+      OPS_MONITOR_STATE: state,
+      ALERT_EMAIL: createEmailBinding(send),
+      ALERT_EMAIL_FROM: "ops-alerts@example.test",
+      ALERT_EMAIL_TO: "oncall@example.test",
+    }), {
+      now,
+      fetchImpl,
+      logger,
+    });
+
+    expect(state.values.has(OPS_ALERT_PROOF_MARKER_KEY)).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(JSON.parse(logger.log.mock.calls[0]?.[1] as string)).toMatchObject({
+      event: "ops_monitor.run_completed",
+      status: "ok",
+      issueCount: 0,
+      alertCount: 0,
+      routedAlertCount: 0,
+      deliveryFailureCount: 0,
+      alertProofMarker: {
+        consumed: true,
+        accepted: false,
+        ignoredReason,
+      },
+    });
+  });
+
   it("emits run completion when readiness fetch hangs", async () => {
     const logger = { log: vi.fn(), error: vi.fn() };
     const fetchImpl = vi.fn(() => new Promise<Response>(() => undefined));
@@ -598,5 +783,14 @@ describe("streak and cooldown alerting", () => {
       status: "ok",
       backlogCount: 0,
     });
+  });
+});
+
+describe("public fetch surface", () => {
+  it("keeps every public request closed with a 404", () => {
+    const response = worker.fetch(new Request("https://ops-monitor.example.test/alert-proof"));
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
   });
 });

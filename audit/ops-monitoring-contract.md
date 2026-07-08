@@ -2,7 +2,7 @@
 
 This is the repo-owned contract for OPS-005 and the remaining OPS-008 monitoring scope. It defines the Cloudflare-native ops monitor and the evidence required to claim monitoring complete. It does not store secrets or add external alert SaaS providers.
 
-Cloudflare remains the default continuous monitoring layer for this platform. The deployed monitor is a tiny scheduled Worker with no public route. It checks API `/readyz`, reads queue/DLQ backlog through `Queue.metrics()` on queue bindings, stores streak/cooldown state in KV, emits structured redacted logs, and can route alerts through Cloudflare Email Service when `ALERT_EMAIL_FROM` and `ALERT_EMAIL_TO` are configured for verified Email Service addresses. Until a live routed Email Service test is captured, OPS-005/OPS-008 monitoring must remain open as partially complete. The monitor avoids Cloudflare API tokens and dashboard scraping by using Worker bindings. `pnpm ops:check` stays the repo-owned read-only sampler for deploys and incidents; it does not replace continuous scheduled monitoring.
+Cloudflare remains the default continuous monitoring layer for this platform. The deployed monitor is a tiny scheduled Worker with no public route. It checks API `/readyz`, reads queue/DLQ backlog through `Queue.metrics()` on queue bindings, stores streak/cooldown state in KV, emits structured redacted logs, and can route alerts through Cloudflare Email Service when `ALERT_EMAIL_FROM` and `ALERT_EMAIL_TO` are configured for verified Email Service addresses. A one-shot `OPS_MONITOR_STATE` KV marker can ask the next scheduled run to send a synthetic routed-alert proof through the same alert path, then write a short-lived redacted result key. Until a live routed Email Service proof with `routedAlertCount:1` and `deliveryFailureCount:0` is captured, OPS-005/OPS-008 monitoring must remain open as partially complete. The monitor avoids Cloudflare API tokens and dashboard scraping by using Worker bindings. `pnpm ops:check` stays the repo-owned read-only sampler for deploys and incidents; it does not replace continuous scheduled monitoring.
 
 ## Source Inputs
 
@@ -28,7 +28,7 @@ Use a Cloudflare-native scheduled Worker as the primary continuous monitor:
 - Schedule: the ops monitor runs every two minutes through Cron Triggers (`*/2 * * * *`); no `fetch` route should be exposed. This is separate from the API Worker's scheduled maintenance cron (`*/15 * * * *`).
 - Readiness: call `https://api.scalius.com/api/v1/readyz` with `Cache-Control: no-cache` and a safe monitor request id.
 - Queues: bind every normal queue and DLQ, then read backlog count and oldest-message age through `Queue.metrics()`; do not require Cloudflare API tokens for queue checks.
-- State: store only alert streaks, last status, last notification time, and cooldown timestamps in KV. Do not store raw response bodies, queue payloads, request bodies, provider payloads, OTPs, receipt tokens, or buyer PII.
+- State: store only alert streaks, last status, last notification time, cooldown timestamps, the optional one-shot routed-alert proof marker, and its short-lived redacted result in KV. Do not store raw response bodies, queue payloads, request bodies, provider payloads, OTPs, receipt tokens, buyer PII, or personal inbox addresses.
 - Logs: emit compact structured `ops_monitor.run_completed` events every scheduled run and `ops_monitor.alert` events after configured streak/cooldown thresholds, with dependency names, queue names, statuses, durations, counts, ages, request ids, alert counts, routed alert counts, delivery failure counts, and deployment/version hints only.
 - Alert channel: Cloudflare Email Service is the default routed channel. The Worker has an `ALERT_EMAIL` `send_email` binding and empty source defaults for `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO`; configure those only with verified sender and destination addresses. Missing config is intentionally logs-only. Delivery failures emit redacted `ops_monitor.alert_delivery_failed` logs and do not fail the scheduled monitor.
 
@@ -71,7 +71,7 @@ Use this checklist before marking the monitoring part of OPS-005 or OPS-008 comp
 | Ops monitor deploys | `pnpm deploy:ops-monitor` deployment id/version, cron schedule, KV namespace binding name, queue binding list, and confirmation that no public route is exposed. |
 | Readiness check is active | Wrangler tail or Workers Logs evidence showing scheduled `/readyz` checks, safe request ids, healthy and degraded event shapes, and cooldown/streak behavior without raw response bodies. |
 | Queue metrics are active | Wrangler tail or Workers Logs evidence showing `Queue.metrics()` results for every queue/DLQ, plus `pnpm ops:check --queues --samples 1 --timeout-ms 20000` output summary proving API provider wiring still matches expectations. |
-| Notifications are routed | Cloudflare Email Service channel alias, verified sender/destination alias, test notification timestamp, cooldown state, and mute state. Do not paste API tokens, webhook URLs, raw email inbox screenshots, or personal email addresses into repo docs. If `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO` are empty or unverified, record logs-only monitoring as remaining scope. |
+| Notifications are routed | Cloudflare Email Service channel alias, verified sender/destination alias, one-shot KV proof nonce, result-key status, test notification timestamp, cooldown state, and mute state. Do not paste API tokens, webhook URLs, raw email inbox screenshots, or personal email addresses into repo docs. If `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO` are empty or unverified, record logs-only monitoring as remaining scope. |
 | Worker observability is enabled | `apps/api/wrangler.jsonc` still has `observability.enabled: true`, plus a current Cloudflare Workers Logs/Observability screenshot or exported note showing `scalius-api` filters for `api.readyz.degraded` and `api.error`. |
 | Ops monitor scheduled run is active | Latest `ops_monitor.run_completed` for the `*/2 * * * *` ops-monitor trigger. |
 | API scheduled maintenance covers cron | Latest `scheduled_run_completed` for the API `*/15 * * * *` trigger and an alert policy for missing or failed runs. |
@@ -108,7 +108,39 @@ The source `apps/ops-monitor/wrangler.jsonc` declares the `ALERT_EMAIL` binding 
 
 Current 2026-07-08 evidence: the repo code path is deployed but routed proof is externally blocked. Latest ops-monitor deployment `ab6d5333-ac17-441d-987f-c6fb7340189d` serves version `ed91cdf7-3aaa-4012-b655-c8071f60c4fc` at `100%`. Dry-run binding proof still shows `ALERT_EMAIL_FROM` and `ALERT_EMAIL_TO` deployed as empty strings, so the Worker cannot construct an alert email config or send a routed notification. The `ALERT_EMAIL` binding exists but has no sender or destination restriction. Live tail run `ops-monitor-20260707t210227309z-b1fd6197` reported `/readyz` ok, all eight queues/DLQs backlog `0`, `issueCount:0`, `alertCount:0`, `routedAlertCount:0`, and `deliveryFailureCount:0`. The active Wrangler OAuth token can list the `scalius.com` Email Routing zone, but `email routing settings scalius.com`, `email routing addresses list`, `email sending list scalius.com`, and `email sending settings scalius.com` previously failed with Cloudflare auth error `10000` because the token was missing `email_routing:write` and `email_sending:write`. No routed test notification has been sent.
 
-Owner unblock sequence: run `pnpm --dir apps/ops-monitor exec wrangler login` to refresh Email scopes; create or confirm the destination with `pnpm --dir apps/ops-monitor exec wrangler email routing addresses create <ops-destination-address>` and complete the human email verification; verify sender/domain readiness with `pnpm --dir apps/ops-monitor exec wrangler email sending settings scalius.com`; configure `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO` and restrict the `ALERT_EMAIL` binding to the verified aliases without committing personal addresses; deploy with `pnpm deploy:ops-monitor`; then trigger one controlled monitor alert and record the version id, timestamp, safe alias names, `routedAlertCount:1`, `deliveryFailureCount:0`, cooldown state, and matching tail/log run id. A direct `wrangler email sending send` may be used only as an account preflight; it is not sufficient by itself to close the ops-monitor routed-alert requirement.
+Owner unblock sequence: run `pnpm --dir apps/ops-monitor exec wrangler login` to refresh Email scopes; create or confirm the destination with `pnpm --dir apps/ops-monitor exec wrangler email routing addresses create <ops-destination-address>` and complete the human email verification; verify sender/domain readiness with `pnpm --dir apps/ops-monitor exec wrangler email sending settings scalius.com`; configure `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO` and restrict the `ALERT_EMAIL` binding to the verified aliases without committing personal addresses; deploy with `pnpm deploy:ops-monitor`; then trigger one scheduled proof alert through the KV marker below and record the version id, timestamp, safe alias names, proof nonce, result-key status, `routedAlertCount:1`, `deliveryFailureCount:0`, cooldown state, and matching tail/log run id. A direct `wrangler email sending send` may be used only as an account preflight; it is not sufficient by itself to close the ops-monitor routed-alert requirement.
+
+The scheduled proof marker uses the normal deployed Worker, not a temporary bad readiness URL. Use a short safe nonce and a near-future expiry; the Worker consumes the marker before attempting email delivery, so failure or missing email config cannot create a retry loop. The result key expires after 24 hours.
+
+```bash
+NONCE="ops-005-$(date -u +%Y%m%dT%H%M%SZ)"
+EXPIRES_AT="$(node -e 'console.log(new Date(Date.now() + 10 * 60 * 1000).toISOString())')"
+pnpm --dir apps/ops-monitor exec wrangler kv key put \
+  'ops-monitor:v1:control:routed-alert-proof' \
+  "{\"version\":1,\"type\":\"routed-alert-proof\",\"status\":\"pending\",\"nonce\":\"${NONCE}\",\"expiresAt\":\"${EXPIRES_AT}\"}" \
+  --binding OPS_MONITOR_STATE \
+  --remote \
+  --ttl 600
+```
+
+After the next `*/2 * * * *` scheduled run, read the redacted result:
+
+```bash
+pnpm --dir apps/ops-monitor exec wrangler kv key get \
+  "ops-monitor:v1:control:routed-alert-proof:result:${NONCE}" \
+  --binding OPS_MONITOR_STATE \
+  --remote \
+  --text
+```
+
+If the marker was set by mistake, delete it before the scheduled run:
+
+```bash
+pnpm --dir apps/ops-monitor exec wrangler kv key delete \
+  'ops-monitor:v1:control:routed-alert-proof' \
+  --binding OPS_MONITOR_STATE \
+  --remote
+```
 
 Cloudflare Email Service requires Cloudflare DNS for domain setup. Official pricing notes that sends to verified destination addresses are free on all plans, while arbitrary-recipient Email Sending requires Workers Paid. Keep the alert email plain text and compact; it must not contain raw response bodies, queue payloads, request bodies, OTPs, receipt tokens, provider payloads, credentials, or buyer contact data.
 
