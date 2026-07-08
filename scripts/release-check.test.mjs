@@ -403,6 +403,7 @@ function adminMcpTools(overrides = {}) {
     adminMcpTool("admin_navigation_context", overrides.admin_navigation_context),
     adminMcpTool("admin_dashboard_summary", overrides.admin_dashboard_summary),
     adminMcpTool("admin_settings_summary", overrides.admin_settings_summary),
+    adminMcpTool("admin_analytics_summary", overrides.admin_analytics_summary),
     adminMcpTool("admin_category_search", overrides.admin_category_search),
     adminMcpTool("admin_collection_search", overrides.admin_collection_search),
     adminMcpTool("admin_inventory_lookup", overrides.admin_inventory_lookup),
@@ -527,6 +528,61 @@ function adminSettingsSummaryMcpResult(extra = {}) {
     ...extra,
   };
   const body = { adminSettingsSummary: summary };
+  return {
+    content: [{ type: "text", text: JSON.stringify(body) }],
+    structuredContent: body,
+  };
+}
+
+function adminAnalyticsSummaryMcpResult(extra = {}) {
+  const summary = {
+    source: {
+      path: "/api/v1/admin/analytics/health",
+      permission: "analytics.view",
+      version: "admin-analytics-summary:v1",
+    },
+    summary: {
+      totalProviders: 6,
+      browserReadyProviders: 1,
+      draftProviders: 1,
+      blockedProviders: 1,
+      notConfiguredProviders: 3,
+      serverReadyProviders: 1,
+    },
+    providers: [
+      {
+        provider: "facebook_pixel",
+        label: "Facebook Pixel",
+        browser: {
+          status: "blocked",
+          configured: false,
+          activeScriptCount: 1,
+          readyScriptCount: 0,
+          draftScriptCount: 0,
+          blockedScriptCount: 1,
+          issueCount: 1,
+        },
+        serverSide: {
+          status: "ready",
+          configured: true,
+          label: "Server ready",
+        },
+      },
+    ],
+    limits: {
+      includesScriptConfig: false,
+      includesAnalyticsSnippets: false,
+      includesCustomCode: false,
+      includesProviderIdentifiers: false,
+      includesCredentials: false,
+      includesRawIssues: false,
+      includesProviderMessages: false,
+      includesProviderPayloads: false,
+      canMutate: false,
+    },
+    ...extra,
+  };
+  const body = { adminAnalyticsSummary: summary };
   return {
     content: [{ type: "text", text: JSON.stringify(body) }],
     structuredContent: body,
@@ -690,6 +746,7 @@ function authenticatedAdminMcpSmokeFetch({
   toolResult = adminNavigationContextMcpResult(),
   dashboardSummaryToolResult = adminDashboardSummaryMcpResult(),
   settingsSummaryToolResult = adminSettingsSummaryMcpResult(),
+  analyticsSummaryToolResult = adminAnalyticsSummaryMcpResult(),
   categorySearchToolResult = adminCategorySearchMcpResult(),
   collectionSearchToolResult = adminCollectionSearchMcpResult(),
   pageSearchToolResult = adminPageSearchMcpResult(),
@@ -700,6 +757,7 @@ function authenticatedAdminMcpSmokeFetch({
   toolCacheControl = "no-store",
   dashboardSummaryToolCacheControl = toolCacheControl,
   settingsSummaryToolCacheControl = toolCacheControl,
+  analyticsSummaryToolCacheControl = toolCacheControl,
   categorySearchToolCacheControl = toolCacheControl,
   collectionSearchToolCacheControl = toolCacheControl,
   pageSearchToolCacheControl = toolCacheControl,
@@ -792,6 +850,15 @@ function authenticatedAdminMcpSmokeFetch({
             ? settingsSummaryToolResult(body)
             : settingsSummaryToolResult;
           cacheControl = settingsSummaryToolCacheControl;
+        } else if (body.params?.name === "admin_analytics_summary") {
+          expect(body.params).toEqual({
+            name: "admin_analytics_summary",
+            arguments: {},
+          });
+          result = typeof analyticsSummaryToolResult === "function"
+            ? analyticsSummaryToolResult(body)
+            : analyticsSummaryToolResult;
+          cacheControl = analyticsSummaryToolCacheControl;
         } else if (body.params?.name === "admin_category_search") {
           expect(body.params).toEqual({
             name: "admin_category_search",
@@ -1518,6 +1585,7 @@ describe("release-check local evaluators", () => {
       ok: true,
       errors: [],
       toolNames: [
+        "admin_analytics_summary",
         "admin_category_search",
         "admin_collection_search",
         "admin_dashboard_summary",
@@ -1530,7 +1598,7 @@ describe("release-check local evaluators", () => {
         "admin_session_context",
         "admin_settings_summary",
       ],
-      readOnlyToolCount: 11,
+      readOnlyToolCount: 12,
     });
   });
 
@@ -1544,6 +1612,7 @@ describe("release-check local evaluators", () => {
         "admin_navigation_context",
         "admin_dashboard_summary",
         "admin_settings_summary",
+        "admin_analytics_summary",
         "admin_category_search",
         "admin_collection_search",
         "admin_inventory_lookup",
@@ -1564,7 +1633,7 @@ describe("release-check local evaluators", () => {
     });
   });
 
-  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, settings summary, category, collection, page, media, product, order search, and inventory lookup smokes", async () => {
+  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, settings summary, analytics summary, category, collection, page, media, product, order search, and inventory lookup smokes", async () => {
     const mcpRequests = [];
     const fetchImpl = authenticatedAdminMcpSmokeFetch({
       onMcpRequest: (body) => {
@@ -1592,6 +1661,7 @@ describe("release-check local evaluators", () => {
       "tools/call:admin_navigation_context",
       "tools/call:admin_dashboard_summary",
       "tools/call:admin_settings_summary",
+      "tools/call:admin_analytics_summary",
       "tools/call:admin_category_search",
       "tools/call:admin_collection_search",
       "tools/call:admin_page_search",
@@ -1617,6 +1687,7 @@ describe("release-check local evaluators", () => {
         statusCode: 200,
         cacheControl: "no-store",
         toolNames: [
+          "admin_analytics_summary",
           "admin_category_search",
           "admin_collection_search",
           "admin_dashboard_summary",
@@ -1629,7 +1700,7 @@ describe("release-check local evaluators", () => {
           "admin_session_context",
           "admin_settings_summary",
         ],
-        readOnlyToolCount: 11,
+        readOnlyToolCount: 12,
       },
       navigationTool: {
         name: "admin_navigation_context",
@@ -1665,6 +1736,21 @@ describe("release-check local evaluators", () => {
         statusCode: 200,
         cacheControl: "no-store",
         contentCount: 1,
+      },
+      analyticsSummaryTool: {
+        name: "admin_analytics_summary",
+        statusCode: 200,
+        cacheControl: "no-store",
+        contentCount: 1,
+        numericStatKeys: [
+          "totalProviders",
+          "browserReadyProviders",
+          "draftProviders",
+          "blockedProviders",
+          "notConfiguredProviders",
+          "serverReadyProviders",
+        ],
+        providerCount: 1,
       },
       categorySearchTool: {
         name: "admin_category_search",
@@ -1710,7 +1796,7 @@ describe("release-check local evaluators", () => {
       },
     });
     expect(logger.log).toHaveBeenCalledWith(
-      "PASS admin MCP authenticated: tools admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_session_context, admin_settings_summary, calls admin_navigation_context, admin_dashboard_summary, admin_settings_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_order_search, admin_inventory_lookup ok.",
+      "PASS admin MCP authenticated: tools admin_analytics_summary, admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_session_context, admin_settings_summary, calls admin_navigation_context, admin_dashboard_summary, admin_settings_summary, admin_analytics_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_order_search, admin_inventory_lookup ok.",
     );
 
     const logged = JSON.stringify(logger.log.mock.calls);
@@ -1732,7 +1818,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary.*unexpected admin_write_context/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary.*unexpected admin_write_context/);
 
     await expect(smokeAdminMcpAuthenticated({
       dashboardUrl: "https://dashboard.example.test",
@@ -1743,7 +1829,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary/);
   });
 
   it("fails authenticated Admin MCP smoke when tool calls lack no-store or return an error", async () => {
@@ -2141,6 +2227,175 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow("summary must not leak credentials, tokens, API keys");
+  });
+
+  it("fails authenticated Admin MCP smoke when analytics summary lacks no-store, errors, malformed structure, unsafe limits, or leaks sensitive data", async () => {
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        analyticsSummaryToolCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_analytics_summary Cache-Control must include no-store");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        analyticsSummaryToolResult: {
+          isError: true,
+          content: [{ type: "text", text: "denied" }],
+          structuredContent: {
+            error: {
+              code: "admin_analytics_summary_failed",
+              status: 500,
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_analytics_summary returned an MCP tool error");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        analyticsSummaryToolResult: {
+          content: [],
+          structuredContent: {
+            adminAnalyticsSummary: {
+              source: {
+                path: "/api/v1/admin/analytics/health",
+                permission: "analytics.view",
+                version: "admin-analytics-summary:v1",
+              },
+              summary: {
+                totalProviders: 6,
+                browserReadyProviders: 1,
+                draftProviders: 1,
+                blockedProviders: 1,
+                notConfiguredProviders: 3,
+                serverReadyProviders: 1,
+              },
+              providers: [],
+              limits: {
+                includesScriptConfig: false,
+                includesAnalyticsSnippets: false,
+                includesCustomCode: false,
+                includesProviderIdentifiers: false,
+                includesCredentials: false,
+                includesRawIssues: false,
+                includesProviderMessages: false,
+                includesProviderPayloads: false,
+                canMutate: false,
+              },
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_analytics_summary must return at least one content block");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        analyticsSummaryToolResult: {
+          content: [{ type: "text", text: "{}" }],
+          structuredContent: {
+            adminAnalyticsSummary: {
+              source: {
+                path: "/api/v1/admin/analytics",
+                permission: "analytics.write",
+                version: "admin-analytics-summary:v0",
+              },
+              summary: { totalProviders: "6" },
+              providers: {},
+              limits: {
+                includesScriptConfig: false,
+                includesAnalyticsSnippets: false,
+                includesCustomCode: false,
+                includesProviderIdentifiers: false,
+                includesCredentials: false,
+                includesRawIssues: false,
+                includesProviderMessages: false,
+                includesProviderPayloads: false,
+                canMutate: false,
+              },
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_analytics_summary source.path must be /api/v1/admin/analytics/health");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        analyticsSummaryToolResult: adminAnalyticsSummaryMcpResult({
+          limits: {
+            includesScriptConfig: false,
+            includesAnalyticsSnippets: false,
+            includesCustomCode: false,
+            includesProviderIdentifiers: false,
+            includesCredentials: true,
+            includesRawIssues: false,
+            includesProviderMessages: false,
+            includesProviderPayloads: false,
+            canMutate: false,
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_analytics_summary limits must explicitly disable includesCredentials");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        analyticsSummaryToolResult: adminAnalyticsSummaryMcpResult({
+          config: "<script>secret</script>",
+          providers: [
+            {
+              provider: "facebook_pixel",
+              label: "Facebook Pixel",
+              browser: {
+                status: "blocked",
+                configured: false,
+                activeScriptCount: 1,
+                readyScriptCount: 0,
+                draftScriptCount: 0,
+                blockedScriptCount: 1,
+                issueCount: 1,
+                issues: ["Access token leaked"],
+              },
+              serverSide: {
+                status: "blocked",
+                configured: false,
+                label: "Server blocked",
+                message: "pixel id 123456",
+                accessToken: "secret-token",
+              },
+            },
+          ],
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("summary must not leak analytics config, snippets, custom code");
   });
 
   it("fails authenticated Admin MCP smoke when category search lacks no-store, errors, or empty content", async () => {

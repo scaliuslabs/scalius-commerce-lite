@@ -433,6 +433,14 @@ function adminSettingsSummaryContext(result: Record<string, unknown>): Record<st
   return structuredContent.adminSettingsSummary;
 }
 
+function adminAnalyticsSummaryContext(result: Record<string, unknown>): Record<string, unknown> {
+  const structuredContent = result.structuredContent;
+  if (!isRecord(structuredContent) || !isRecord(structuredContent.adminAnalyticsSummary)) {
+    throw new Error("Expected adminAnalyticsSummary structured content");
+  }
+  return structuredContent.adminAnalyticsSummary;
+}
+
 function catalogCategoriesContext(result: Record<string, unknown>): Record<string, unknown> {
   const structuredContent = result.structuredContent;
   if (!isRecord(structuredContent) || !isRecord(structuredContent.catalogCategories)) {
@@ -1253,6 +1261,7 @@ describe("admin MCP route", () => {
       "admin_inventory_lookup",
       "admin_dashboard_summary",
       "admin_settings_summary",
+      "admin_analytics_summary",
     ]);
     for (const tool of tools) {
       expect(tool.annotations).toMatchObject({
@@ -1977,6 +1986,309 @@ describe("admin MCP server", () => {
       expect(serialized).not.toContain("admin@example.test");
       expect(serialized).not.toContain("+8801712345678");
       expect(serialized).not.toContain("provider-secret");
+      expect(serialized).not.toContain("raw upstream leak");
+    }
+  });
+
+  it("calls admin_analytics_summary through the API binding with redacted provider readiness", async () => {
+    const longUserAgent = `vitest-admin-mcp-${"x".repeat(300)}`;
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: {
+        summary: {
+          totalProviders: 6,
+          browserReadyProviders: 1,
+          draftProviders: 1,
+          blockedProviders: 1,
+          notConfiguredProviders: 3,
+          serverReadyProviders: 1,
+        },
+        providers: [{
+          provider: "facebook_pixel",
+          label: "Facebook Pixel",
+          browser: {
+            status: "blocked",
+            configured: false,
+            activeScriptCount: 2,
+            readyScriptCount: 1,
+            draftScriptCount: 1,
+            blockedScriptCount: 1,
+            message: "Blocked script message must not leak pixel ID 123456",
+            issues: [
+              "Access token must not leak",
+              "Pixel ID 123456 must not leak",
+            ],
+            config: "<script>secret pixel</script>",
+          },
+          serverSide: {
+            status: "ready",
+            configured: true,
+            label: "Server ready",
+            message: "Meta CAPI is enabled with access token secret-token.",
+            accessToken: "secret-token",
+            pixelId: "123456",
+          },
+          config: "<script>secret browser config</script>",
+          unknownSecret: `must-not-leak ${ADMIN_COOKIE}`,
+        }],
+      },
+      ignoredRootSecret: "accessToken secret-token",
+    });
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: ADMIN_COOKIE,
+      userAgent: longUserAgent,
+    });
+
+    const result = await client.callTool({
+      name: "admin_analytics_summary",
+      arguments: {},
+    });
+
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [input, init] = fetchCall(apiFetch);
+    expect(requestUrl(input)).toBe("http://api.internal/api/v1/admin/analytics/health");
+    expect(init?.method).toBe("GET");
+    expect(init?.body).toBeUndefined();
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Cookie")).toBe(ADMIN_COOKIE);
+    expect(headers.get("User-Agent")).toBe(longUserAgent.slice(0, 256));
+    expect(headers.get("Authorization")).toBeNull();
+    expect([...headers.keys()].sort()).toEqual(["accept", "cookie", "user-agent"]);
+
+    expect(result.isError).toBeUndefined();
+    expect(adminAnalyticsSummaryContext(result as Record<string, unknown>)).toEqual({
+      source: {
+        path: "/api/v1/admin/analytics/health",
+        permission: "analytics.view",
+        version: "admin-analytics-summary:v1",
+      },
+      summary: {
+        totalProviders: 6,
+        browserReadyProviders: 1,
+        draftProviders: 1,
+        blockedProviders: 1,
+        notConfiguredProviders: 3,
+        serverReadyProviders: 1,
+      },
+      providers: [{
+        provider: "facebook_pixel",
+        label: "Facebook Pixel",
+        browser: {
+          status: "blocked",
+          configured: false,
+          activeScriptCount: 2,
+          readyScriptCount: 1,
+          draftScriptCount: 1,
+          blockedScriptCount: 1,
+          issueCount: 2,
+        },
+        serverSide: {
+          status: "ready",
+          configured: true,
+          label: "Server ready",
+        },
+      }],
+      limits: {
+        includesScriptConfig: false,
+        includesAnalyticsSnippets: false,
+        includesCustomCode: false,
+        includesProviderIdentifiers: false,
+        includesCredentials: false,
+        includesRawIssues: false,
+        includesProviderMessages: false,
+        includesProviderPayloads: false,
+        canMutate: false,
+      },
+    });
+    expect(firstContentBlock(result)).toEqual({
+      type: "text",
+      text: "Admin analytics summary is available.",
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("message");
+    expect(serialized).not.toContain("issues");
+    expect(serialized).not.toContain("Access token");
+    expect(serialized).not.toContain("Pixel ID");
+    expect(serialized).not.toContain("secret-token");
+    expect(serialized).not.toContain("123456");
+    expect(serialized).not.toContain("<script>");
+    expect(serialized).not.toContain("unknownSecret");
+    expect(serialized).not.toContain("must-not-leak");
+    expect(serialized).not.toContain(ADMIN_COOKIE);
+  });
+
+  it("returns a safe admin_analytics_summary tool error when no cookie option is present", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: {
+        summary: {
+          totalProviders: 0,
+          browserReadyProviders: 0,
+          draftProviders: 0,
+          blockedProviders: 0,
+          notConfiguredProviders: 0,
+          serverReadyProviders: 0,
+        },
+        providers: [],
+      },
+    });
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: null,
+      userAgent: "vitest-admin-mcp",
+    });
+
+    const result = await client.callTool({
+      name: "admin_analytics_summary",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        code: "admin_session_required",
+        status: 401,
+      },
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects unexpected admin_analytics_summary inputs before API fetches", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: {
+        summary: {
+          totalProviders: 0,
+          browserReadyProviders: 0,
+          draftProviders: 0,
+          blockedProviders: 0,
+          notConfiguredProviders: 0,
+          serverReadyProviders: 0,
+        },
+        providers: [],
+      },
+    });
+    const { client } = await bootAdmin(apiFetch);
+
+    await expectValidationToolError(client.callTool({
+      name: "admin_analytics_summary",
+      arguments: {
+        includeConfig: true,
+        includeIssues: true,
+        accessToken: "secret-token",
+        Authorization: "Bearer must-not-forward",
+      },
+    }));
+
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps admin_analytics_summary upstream failures fail-closed without leaking upstream bodies", async () => {
+    const leak = `raw upstream leak ${ADMIN_COOKIE} admin@example.test accessToken secret-token pixel 123456`;
+    const cases: Array<{ makeResponse: () => Response; expectedStatus: number }> = [
+      {
+        makeResponse: () => json({ success: false, error: { code: "unauthorized", message: leak } }, 401),
+        expectedStatus: 401,
+      },
+      {
+        makeResponse: () => json({ success: false, error: { code: "forbidden", message: leak } }, 403),
+        expectedStatus: 403,
+      },
+      {
+        makeResponse: () => json({ success: false, error: { code: "server_error", message: leak } }, 500),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => new Response(`not json ${leak}`, {
+          status: 200,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        }),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => json({ success: true, data: { providers: [] }, message: leak }),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => json({
+          success: true,
+          data: {
+            summary: {
+              totalProviders: 1,
+              browserReadyProviders: 0,
+              draftProviders: 0,
+              blockedProviders: 1,
+              notConfiguredProviders: 0,
+              serverReadyProviders: 0,
+            },
+            providers: [{
+              provider: "facebook_pixel",
+              label: "Facebook Pixel",
+              browser: {
+                status: "leaky",
+                configured: false,
+                activeScriptCount: 1,
+                readyScriptCount: 0,
+                draftScriptCount: 0,
+                blockedScriptCount: 1,
+                issues: [leak],
+              },
+              serverSide: {
+                status: "blocked",
+                configured: false,
+                label: "Server blocked",
+                message: leak,
+              },
+            }],
+          },
+        }),
+        expectedStatus: 503,
+      },
+    ];
+
+    for (const { makeResponse, expectedStatus } of cases) {
+      const apiFetch = vi.fn<FetchLike>().mockImplementation(() => Promise.resolve(makeResponse()));
+      const { client } = await bootAdmin(apiFetch);
+
+      const result = await client.callTool({
+        name: "admin_analytics_summary",
+        arguments: {},
+      });
+
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        adminAnalyticsSummary: {
+          source: {
+            path: "/api/v1/admin/analytics/health",
+            permission: "analytics.view",
+            version: "admin-analytics-summary:v1",
+          },
+          summary: null,
+          providers: [],
+          limits: {
+            includesScriptConfig: false,
+            includesAnalyticsSnippets: false,
+            includesCustomCode: false,
+            includesProviderIdentifiers: false,
+            includesCredentials: false,
+            includesRawIssues: false,
+            includesProviderMessages: false,
+            includesProviderPayloads: false,
+            canMutate: false,
+          },
+        },
+        error: {
+          code: "admin_analytics_summary_unavailable",
+          status: expectedStatus,
+        },
+      });
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain(ADMIN_COOKIE);
+      expect(serialized).not.toContain("admin@example.test");
+      expect(serialized).not.toContain("secret-token");
+      expect(serialized).not.toContain("123456");
       expect(serialized).not.toContain("raw upstream leak");
     }
   });
