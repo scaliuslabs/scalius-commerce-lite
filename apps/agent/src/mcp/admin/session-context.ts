@@ -9,6 +9,7 @@ const ADMIN_CATEGORIES_PATH = "/api/v1/admin/categories";
 const ADMIN_COLLECTIONS_PATH = "/api/v1/admin/collections";
 const ADMIN_PAGES_PATH = "/api/v1/admin/pages";
 const ADMIN_ORDERS_PATH = "/api/v1/admin/orders";
+const ADMIN_MEDIA_PATH = "/api/v1/admin/media";
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
@@ -29,11 +30,13 @@ const ADMIN_CATEGORY_SEARCH_MAX_CATEGORIES = 10;
 const ADMIN_COLLECTION_SEARCH_MAX_COLLECTIONS = 10;
 const ADMIN_PAGE_SEARCH_MAX_PAGES = 10;
 const ADMIN_ORDER_SEARCH_MAX_ORDERS = 10;
+const ADMIN_MEDIA_SEARCH_MAX_FILES = 10;
 const ADMIN_PRODUCTS_MAX_STRING_LENGTH = 220;
 const ADMIN_CATEGORIES_MAX_STRING_LENGTH = 220;
 const ADMIN_COLLECTIONS_MAX_STRING_LENGTH = 220;
 const ADMIN_PAGES_MAX_STRING_LENGTH = 220;
 const ADMIN_ORDERS_MAX_STRING_LENGTH = 220;
+const ADMIN_MEDIA_MAX_STRING_LENGTH = 220;
 
 const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
   "account",
@@ -96,6 +99,16 @@ const adminOrderSearchInputSchema = z.object({
 }).strict();
 
 type AdminOrderSearchInput = z.infer<typeof adminOrderSearchInputSchema>;
+
+const adminMediaSearchInputSchema = z.object({
+  query: z.string().trim().max(120).optional(),
+  limit: z.number().int().min(1).max(ADMIN_MEDIA_SEARCH_MAX_FILES).default(5),
+  page: z.number().int().min(1).max(20).default(1),
+  folderId: z.string().trim().max(160).optional(),
+  mimeType: z.string().trim().max(80).optional(),
+}).strict();
+
+type AdminMediaSearchInput = z.infer<typeof adminMediaSearchInputSchema>;
 
 interface AdminPermissionContext {
   userId?: string;
@@ -599,6 +612,33 @@ function adminOrderToolError(
       code,
       status: failClosedStatus(status),
       message: "Admin orders are temporarily unavailable.",
+    },
+  }, true);
+}
+
+function adminMediaToolError(
+  code: string,
+  query?: JsonRecord,
+  status = 503,
+): CallToolResult {
+  return toolResult({
+    adminMediaSearch: {
+      source: { path: ADMIN_MEDIA_PATH },
+      ...(query ? { query } : {}),
+      files: [],
+      pagination: null,
+      limits: {
+        maxFiles: ADMIN_MEDIA_SEARCH_MAX_FILES,
+        includesDeletedFields: false,
+        includesStorageKeys: false,
+        includesUploadMetadata: false,
+        includesMutationAuthority: false,
+      },
+    },
+    error: {
+      code,
+      status: failClosedStatus(status),
+      message: "Admin media are temporarily unavailable.",
     },
   }, true);
 }
@@ -1306,6 +1346,53 @@ function compactAdminOrder(value: unknown): JsonRecord | null {
   return order;
 }
 
+function compactSafeMediaUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const url = value.trim();
+  if (!url) return null;
+  if (url.length > 1000) return null;
+  if (/[\s\\]/.test(url)) return null;
+  if (url.includes("?") || url.includes("#")) return null;
+
+  if (url.startsWith("/")) {
+    if (url.startsWith("//")) return null;
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    if (parsed.username || parsed.password) return null;
+    if (parsed.search || parsed.hash) return null;
+    return parsed.href.length <= 1000 ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function compactAdminMediaFile(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const id = compactString(value.id, ADMIN_MEDIA_MAX_STRING_LENGTH);
+  const filename = compactString(value.filename, ADMIN_MEDIA_MAX_STRING_LENGTH);
+  if (!id || !filename) return null;
+
+  const file: JsonRecord = { id, filename };
+
+  const url = compactSafeMediaUrl(value.url);
+  if (url) file.url = url;
+
+  setCompactString(file, "mimeType", value.mimeType, 80);
+  setCompactNumber(file, "size", value.size);
+  setCompactString(file, "altText", value.altText, ADMIN_MEDIA_MAX_STRING_LENGTH);
+  setCompactNumber(file, "width", value.width);
+  setCompactNumber(file, "height", value.height);
+  setCompactString(file, "folderId", value.folderId, 160);
+  setCompactTimestamp(file, "createdAt", value.createdAt);
+  setCompactTimestamp(file, "updatedAt", value.updatedAt);
+
+  return file;
+}
+
 function buildAdminOrderSearchUrl(input: AdminOrderSearchInput): { url: URL; query: JsonRecord } {
   const url = new URL(`http://api.internal${ADMIN_ORDERS_PATH}`);
   const query: JsonRecord = {
@@ -1387,6 +1474,103 @@ async function fetchAdminOrderSearch(
     });
   } catch {
     return adminOrderToolError("admin_order_unavailable", query);
+  }
+}
+
+function buildAdminMediaSearchUrl(input: AdminMediaSearchInput): { url: URL; query: JsonRecord } {
+  const url = new URL(`http://api.internal${ADMIN_MEDIA_PATH}`);
+  const query: JsonRecord = {
+    page: input.page,
+    limit: input.limit,
+    sortBy: "createdAt",
+    sortOrder: "desc",
+  };
+
+  url.searchParams.set("page", String(input.page));
+  url.searchParams.set("limit", String(input.limit));
+
+  if (input.query) {
+    query.query = input.query;
+    url.searchParams.set("search", input.query);
+  }
+
+  if (input.folderId) {
+    query.folderId = input.folderId;
+    url.searchParams.set("folderId", input.folderId);
+  }
+
+  if (input.mimeType) {
+    query.mimeType = input.mimeType;
+    url.searchParams.set("mimeType", input.mimeType);
+  }
+
+  url.searchParams.set("sortBy", "createdAt");
+  url.searchParams.set("sortOrder", "desc");
+
+  return { url, query };
+}
+
+async function fetchAdminMediaSearch(
+  env: Env,
+  input: AdminMediaSearchInput,
+  {
+    cookie,
+    userAgent,
+    signal,
+  }: {
+    cookie: string;
+    userAgent?: string | null;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  const { url, query } = buildAdminMediaSearchUrl(input);
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return adminMediaToolError("admin_api_unavailable", query);
+  }
+
+  try {
+    const response = await env.API.fetch(url, {
+      method: "GET",
+      headers: adminApiHeaders(cookie, userAgent),
+      signal,
+    });
+    if (!response.ok) {
+      return adminMediaToolError("admin_media_unavailable", query, response.status);
+    }
+
+    const body = await parseJsonResponse(response);
+    const data = body && isRecord(body.data) ? body.data : null;
+    if (!body || body.success !== true || !data || !Array.isArray(data.files)) {
+      return adminMediaToolError("admin_media_unavailable", query);
+    }
+
+    const pagination = compactAdminPagination(data.pagination);
+    if (!pagination) {
+      return adminMediaToolError("admin_media_unavailable", query);
+    }
+
+    const files = data.files
+      .map(compactAdminMediaFile)
+      .filter((file): file is JsonRecord => file !== null)
+      .slice(0, ADMIN_MEDIA_SEARCH_MAX_FILES);
+
+    return toolResult({
+      adminMediaSearch: {
+        source: { path: ADMIN_MEDIA_PATH },
+        query,
+        files,
+        pagination,
+        limits: {
+          maxFiles: ADMIN_MEDIA_SEARCH_MAX_FILES,
+          includesDeletedFields: false,
+          includesStorageKeys: false,
+          includesUploadMetadata: false,
+          includesMutationAuthority: false,
+        },
+      },
+    });
+  } catch {
+    return adminMediaToolError("admin_media_unavailable", query);
   }
 }
 
@@ -1594,6 +1778,32 @@ export function createAdminMcpServer(
       }
 
       return fetchAdminOrderSearch(env, input, {
+        cookie,
+        userAgent: options.userAgent,
+        signal: extra.signal,
+      });
+    },
+  );
+
+  server.registerTool(
+    "admin_media_search",
+    {
+      title: "Admin Media Search",
+      description: "Searches or lists the latest dashboard media files through API-verified permissions and returns compact media identifiers.",
+      inputSchema: adminMediaSearchInputSchema,
+      annotations: ADMIN_READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (input, extra) => {
+      const cookie = options.cookie?.trim() ? options.cookie : null;
+      if (!cookie) {
+        return adminToolError({
+          ok: false,
+          status: 401,
+          code: "admin_session_required",
+        });
+      }
+
+      return fetchAdminMediaSearch(env, input, {
         cookie,
         userAgent: options.userAgent,
         signal: extra.signal,

@@ -46,6 +46,7 @@ const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_navigation_context",
   "admin_category_search",
   "admin_collection_search",
+  "admin_media_search",
   "admin_page_search",
   "admin_product_search",
   "admin_order_search",
@@ -72,6 +73,14 @@ const ADMIN_COLLECTION_SEARCH_TOOL_SMOKE = Object.freeze({
 });
 const ADMIN_PAGE_SEARCH_TOOL_SMOKE = Object.freeze({
   name: "admin_page_search",
+  arguments: Object.freeze({
+    query: "test",
+    limit: 1,
+    page: 1,
+  }),
+});
+const ADMIN_MEDIA_SEARCH_TOOL_SMOKE = Object.freeze({
+  name: "admin_media_search",
   arguments: Object.freeze({
     query: "test",
     limit: 1,
@@ -2467,7 +2476,7 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
-  const productSearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+  const mediaSearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
     fetchImpl,
     timeoutMs,
     headers: authenticatedHeaders,
@@ -2476,6 +2485,39 @@ export async function smokeAdminMcpAuthenticated({
     body: {
       jsonrpc: "2.0",
       id: 7,
+      method: "tools/call",
+      params: ADMIN_MEDIA_SEARCH_TOOL_SMOKE,
+    },
+  });
+  const mediaSearchToolCacheControl = requireNoStoreCacheControl(
+    mediaSearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name}`,
+  );
+  const mediaSearchToolResult = requireMcpJsonRpcResult(
+    mediaSearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name}`,
+    7,
+  );
+  const mediaSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
+    mediaSearchToolResult,
+    { toolName: ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name },
+  );
+  if (!mediaSearchToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name} failed: ` +
+      mediaSearchToolEvaluation.errors.join("; "),
+    );
+  }
+
+  const productSearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 8,
       method: "tools/call",
       params: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE,
     },
@@ -2487,7 +2529,7 @@ export async function smokeAdminMcpAuthenticated({
   const productSearchToolResult = requireMcpJsonRpcResult(
     productSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}`,
-    7,
+    8,
   );
   const productSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     productSearchToolResult,
@@ -2508,7 +2550,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 8,
+      id: 9,
       method: "tools/call",
       params: ADMIN_ORDER_SEARCH_TOOL_SMOKE,
     },
@@ -2520,7 +2562,7 @@ export async function smokeAdminMcpAuthenticated({
   const orderSearchToolResult = requireMcpJsonRpcResult(
     orderSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}`,
-    8,
+    9,
   );
   const orderSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     orderSearchToolResult,
@@ -2539,6 +2581,7 @@ export async function smokeAdminMcpAuthenticated({
     `${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_COLLECTION_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_PAGE_SEARCH_TOOL_SMOKE.name}, ` +
+    `${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}, ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name} ok.`,
   );
   return {
@@ -2590,6 +2633,13 @@ export async function smokeAdminMcpAuthenticated({
         durationMs: pageSearchToolResponse.durationMs,
         cacheControl: pageSearchToolCacheControl,
         contentCount: pageSearchToolEvaluation.contentCount,
+      },
+      mediaSearchTool: {
+        name: ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name,
+        statusCode: mediaSearchToolResponse.statusCode,
+        durationMs: mediaSearchToolResponse.durationMs,
+        cacheControl: mediaSearchToolCacheControl,
+        contentCount: mediaSearchToolEvaluation.contentCount,
       },
       productSearchTool: {
         name: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name,
