@@ -26251,6 +26251,231 @@ export type PostApiV1AdminSettingsWidgetAiResponses = {
 
 export type PostApiV1AdminSettingsWidgetAiResponse = PostApiV1AdminSettingsWidgetAiResponses[keyof PostApiV1AdminSettingsWidgetAiResponses];
 
+export type GetApiV1AdminSettingsMcpSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/mcp-summary';
+};
+
+export type GetApiV1AdminSettingsMcpSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsMcpSummaryError = GetApiV1AdminSettingsMcpSummaryErrors[keyof GetApiV1AdminSettingsMcpSummaryErrors];
+
+export type GetApiV1AdminSettingsMcpSummaryResponses = {
+    /**
+     * Redacted Admin MCP settings readiness summary
+     */
+    200: {
+        success: true;
+        data: {
+            source: {
+                path: '/api/v1/admin/settings/mcp-summary';
+                permission: 'settings.general.view';
+                version: 'admin-settings-summary:v1';
+            };
+            store: {
+                storefrontUrl: string | null;
+                storefrontUrlValid: boolean;
+                companyNameConfigured: boolean;
+                legalNameConfigured: boolean;
+                country: string | null;
+                currency: {
+                    code: string;
+                    symbol: string;
+                };
+            };
+            checkout: {
+                ready: boolean;
+                issues: Array<string>;
+                hasActiveShippingMethod: boolean;
+                hasActiveDeliveryHierarchy: boolean;
+                phoneCollectionRequired: true;
+                guestCheckoutEnabled: boolean;
+                checkoutMode: string;
+                partialPaymentEnabled: boolean;
+                partialPaymentAmount: number | null;
+                allowedCountriesMode: string;
+                allowedCountries: Array<string>;
+            };
+            payments: {
+                selectedMethods: Array<string>;
+                visibleMethods: Array<string>;
+                defaultMethod: string | null;
+                activeDefaultMethod: string | null;
+                gateways: {
+                    cod: {
+                        configured: boolean;
+                        enabled: boolean;
+                        usable: boolean;
+                        issueCount: number;
+                    };
+                    stripe: {
+                        configured: boolean;
+                        enabled: boolean;
+                        usable: boolean;
+                        issueCount: number;
+                    };
+                    sslcommerz: {
+                        configured: boolean;
+                        enabled: boolean;
+                        usable: boolean;
+                        issueCount: number;
+                    };
+                    polar: {
+                        configured: boolean;
+                        enabled: boolean;
+                        usable: boolean;
+                        issueCount: number;
+                    };
+                };
+            };
+            discovery: {
+                sitemap: {
+                    enabled: boolean;
+                    staticPages: boolean;
+                    products: boolean;
+                    categories: boolean;
+                    collections: boolean;
+                    pages: boolean;
+                };
+                feeds: {
+                    productCatalogEnabled: boolean;
+                    includeUnavailableProducts: boolean;
+                    variantStrategy: 'products' | 'variants';
+                };
+                robots: {
+                    advertiseSitemap: boolean;
+                    customRobotsConfigured: boolean;
+                };
+                structuredData: {
+                    organization: boolean;
+                    websiteSearch: boolean;
+                    products: boolean;
+                    productGroups: boolean;
+                    offerShippingDetails: boolean;
+                    breadcrumbs: boolean;
+                    collections: boolean;
+                };
+                returnPolicy: {
+                    enabled: boolean;
+                    country: string | null;
+                    category: string;
+                    returnWindowDaysConfigured: boolean;
+                    policyUrlConfigured: boolean;
+                };
+            };
+            providers: {
+                email: {
+                    configured: boolean;
+                    ready: boolean;
+                    issueCount: number;
+                };
+                sms: {
+                    configured: boolean;
+                    ready: boolean;
+                    issueCount: number;
+                };
+                whatsapp: {
+                    configured: boolean;
+                    ready: boolean;
+                    issueCount: number;
+                };
+                push: {
+                    configured: boolean;
+                    ready: boolean;
+                    issueCount: number;
+                };
+                delivery: {
+                    activeCount: number;
+                    configuredCount: number;
+                    testedCount: number;
+                    blockedCount: number;
+                };
+            };
+            limits: {
+                includesCredentials: false;
+                includesMaskedSecrets: false;
+                includesProviderIdentifiers: false;
+                includesBusinessContacts: false;
+                includesAnalyticsSnippets: false;
+                includesRawLogs: false;
+                includesRawCustomCode: false;
+                canMutate: false;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsMcpSummaryResponse = GetApiV1AdminSettingsMcpSummaryResponses[keyof GetApiV1AdminSettingsMcpSummaryResponses];
+
 export type PutApiV1AdminOrdersByIdStatusData = {
     body?: {
         status: string;

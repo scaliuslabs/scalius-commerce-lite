@@ -88041,6 +88041,884 @@
         ]
       }
     },
+    "/api/v1/admin/settings/mcp-summary": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get redacted Admin MCP settings readiness summary",
+        "responses": {
+          "200": {
+            "description": "Redacted Admin MCP settings readiness summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string",
+                              "enum": [
+                                "/api/v1/admin/settings/mcp-summary"
+                              ]
+                            },
+                            "permission": {
+                              "type": "string",
+                              "enum": [
+                                "settings.general.view"
+                              ]
+                            },
+                            "version": {
+                              "type": "string",
+                              "enum": [
+                                "admin-settings-summary:v1"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "permission",
+                            "version"
+                          ]
+                        },
+                        "store": {
+                          "type": "object",
+                          "properties": {
+                            "storefrontUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "storefrontUrlValid": {
+                              "type": "boolean"
+                            },
+                            "companyNameConfigured": {
+                              "type": "boolean"
+                            },
+                            "legalNameConfigured": {
+                              "type": "boolean"
+                            },
+                            "country": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "currency": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "symbol": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "symbol"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "storefrontUrl",
+                            "storefrontUrlValid",
+                            "companyNameConfigured",
+                            "legalNameConfigured",
+                            "country",
+                            "currency"
+                          ]
+                        },
+                        "checkout": {
+                          "type": "object",
+                          "properties": {
+                            "ready": {
+                              "type": "boolean"
+                            },
+                            "issues": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "hasActiveShippingMethod": {
+                              "type": "boolean"
+                            },
+                            "hasActiveDeliveryHierarchy": {
+                              "type": "boolean"
+                            },
+                            "phoneCollectionRequired": {
+                              "type": "boolean",
+                              "enum": [
+                                true
+                              ]
+                            },
+                            "guestCheckoutEnabled": {
+                              "type": "boolean"
+                            },
+                            "checkoutMode": {
+                              "type": "string"
+                            },
+                            "partialPaymentEnabled": {
+                              "type": "boolean"
+                            },
+                            "partialPaymentAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "allowedCountriesMode": {
+                              "type": "string"
+                            },
+                            "allowedCountries": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "ready",
+                            "issues",
+                            "hasActiveShippingMethod",
+                            "hasActiveDeliveryHierarchy",
+                            "phoneCollectionRequired",
+                            "guestCheckoutEnabled",
+                            "checkoutMode",
+                            "partialPaymentEnabled",
+                            "partialPaymentAmount",
+                            "allowedCountriesMode",
+                            "allowedCountries"
+                          ]
+                        },
+                        "payments": {
+                          "type": "object",
+                          "properties": {
+                            "selectedMethods": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "visibleMethods": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "defaultMethod": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "activeDefaultMethod": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "gateways": {
+                              "type": "object",
+                              "properties": {
+                                "cod": {
+                                  "type": "object",
+                                  "properties": {
+                                    "configured": {
+                                      "type": "boolean"
+                                    },
+                                    "enabled": {
+                                      "type": "boolean"
+                                    },
+                                    "usable": {
+                                      "type": "boolean"
+                                    },
+                                    "issueCount": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "configured",
+                                    "enabled",
+                                    "usable",
+                                    "issueCount"
+                                  ]
+                                },
+                                "stripe": {
+                                  "type": "object",
+                                  "properties": {
+                                    "configured": {
+                                      "type": "boolean"
+                                    },
+                                    "enabled": {
+                                      "type": "boolean"
+                                    },
+                                    "usable": {
+                                      "type": "boolean"
+                                    },
+                                    "issueCount": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "configured",
+                                    "enabled",
+                                    "usable",
+                                    "issueCount"
+                                  ]
+                                },
+                                "sslcommerz": {
+                                  "type": "object",
+                                  "properties": {
+                                    "configured": {
+                                      "type": "boolean"
+                                    },
+                                    "enabled": {
+                                      "type": "boolean"
+                                    },
+                                    "usable": {
+                                      "type": "boolean"
+                                    },
+                                    "issueCount": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "configured",
+                                    "enabled",
+                                    "usable",
+                                    "issueCount"
+                                  ]
+                                },
+                                "polar": {
+                                  "type": "object",
+                                  "properties": {
+                                    "configured": {
+                                      "type": "boolean"
+                                    },
+                                    "enabled": {
+                                      "type": "boolean"
+                                    },
+                                    "usable": {
+                                      "type": "boolean"
+                                    },
+                                    "issueCount": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "configured",
+                                    "enabled",
+                                    "usable",
+                                    "issueCount"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "cod",
+                                "stripe",
+                                "sslcommerz",
+                                "polar"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "selectedMethods",
+                            "visibleMethods",
+                            "defaultMethod",
+                            "activeDefaultMethod",
+                            "gateways"
+                          ]
+                        },
+                        "discovery": {
+                          "type": "object",
+                          "properties": {
+                            "sitemap": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "staticPages": {
+                                  "type": "boolean"
+                                },
+                                "products": {
+                                  "type": "boolean"
+                                },
+                                "categories": {
+                                  "type": "boolean"
+                                },
+                                "collections": {
+                                  "type": "boolean"
+                                },
+                                "pages": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "staticPages",
+                                "products",
+                                "categories",
+                                "collections",
+                                "pages"
+                              ]
+                            },
+                            "feeds": {
+                              "type": "object",
+                              "properties": {
+                                "productCatalogEnabled": {
+                                  "type": "boolean"
+                                },
+                                "includeUnavailableProducts": {
+                                  "type": "boolean"
+                                },
+                                "variantStrategy": {
+                                  "type": "string",
+                                  "enum": [
+                                    "products",
+                                    "variants"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "productCatalogEnabled",
+                                "includeUnavailableProducts",
+                                "variantStrategy"
+                              ]
+                            },
+                            "robots": {
+                              "type": "object",
+                              "properties": {
+                                "advertiseSitemap": {
+                                  "type": "boolean"
+                                },
+                                "customRobotsConfigured": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "advertiseSitemap",
+                                "customRobotsConfigured"
+                              ]
+                            },
+                            "structuredData": {
+                              "type": "object",
+                              "properties": {
+                                "organization": {
+                                  "type": "boolean"
+                                },
+                                "websiteSearch": {
+                                  "type": "boolean"
+                                },
+                                "products": {
+                                  "type": "boolean"
+                                },
+                                "productGroups": {
+                                  "type": "boolean"
+                                },
+                                "offerShippingDetails": {
+                                  "type": "boolean"
+                                },
+                                "breadcrumbs": {
+                                  "type": "boolean"
+                                },
+                                "collections": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "organization",
+                                "websiteSearch",
+                                "products",
+                                "productGroups",
+                                "offerShippingDetails",
+                                "breadcrumbs",
+                                "collections"
+                              ]
+                            },
+                            "returnPolicy": {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "country": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "category": {
+                                  "type": "string"
+                                },
+                                "returnWindowDaysConfigured": {
+                                  "type": "boolean"
+                                },
+                                "policyUrlConfigured": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "enabled",
+                                "country",
+                                "category",
+                                "returnWindowDaysConfigured",
+                                "policyUrlConfigured"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "sitemap",
+                            "feeds",
+                            "robots",
+                            "structuredData",
+                            "returnPolicy"
+                          ]
+                        },
+                        "providers": {
+                          "type": "object",
+                          "properties": {
+                            "email": {
+                              "type": "object",
+                              "properties": {
+                                "configured": {
+                                  "type": "boolean"
+                                },
+                                "ready": {
+                                  "type": "boolean"
+                                },
+                                "issueCount": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "configured",
+                                "ready",
+                                "issueCount"
+                              ]
+                            },
+                            "sms": {
+                              "type": "object",
+                              "properties": {
+                                "configured": {
+                                  "type": "boolean"
+                                },
+                                "ready": {
+                                  "type": "boolean"
+                                },
+                                "issueCount": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "configured",
+                                "ready",
+                                "issueCount"
+                              ]
+                            },
+                            "whatsapp": {
+                              "type": "object",
+                              "properties": {
+                                "configured": {
+                                  "type": "boolean"
+                                },
+                                "ready": {
+                                  "type": "boolean"
+                                },
+                                "issueCount": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "configured",
+                                "ready",
+                                "issueCount"
+                              ]
+                            },
+                            "push": {
+                              "type": "object",
+                              "properties": {
+                                "configured": {
+                                  "type": "boolean"
+                                },
+                                "ready": {
+                                  "type": "boolean"
+                                },
+                                "issueCount": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "configured",
+                                "ready",
+                                "issueCount"
+                              ]
+                            },
+                            "delivery": {
+                              "type": "object",
+                              "properties": {
+                                "activeCount": {
+                                  "type": "number"
+                                },
+                                "configuredCount": {
+                                  "type": "number"
+                                },
+                                "testedCount": {
+                                  "type": "number"
+                                },
+                                "blockedCount": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "activeCount",
+                                "configuredCount",
+                                "testedCount",
+                                "blockedCount"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "email",
+                            "sms",
+                            "whatsapp",
+                            "push",
+                            "delivery"
+                          ]
+                        },
+                        "limits": {
+                          "type": "object",
+                          "properties": {
+                            "includesCredentials": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "includesMaskedSecrets": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "includesProviderIdentifiers": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "includesBusinessContacts": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "includesAnalyticsSnippets": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "includesRawLogs": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "includesRawCustomCode": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            },
+                            "canMutate": {
+                              "type": "boolean",
+                              "enum": [
+                                false
+                              ]
+                            }
+                          },
+                          "required": [
+                            "includesCredentials",
+                            "includesMaskedSecrets",
+                            "includesProviderIdentifiers",
+                            "includesBusinessContacts",
+                            "includesAnalyticsSnippets",
+                            "includesRawLogs",
+                            "includesRawCustomCode",
+                            "canMutate"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "source",
+                        "store",
+                        "checkout",
+                        "payments",
+                        "discovery",
+                        "providers",
+                        "limits"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/orders/{id}/status": {
       "put": {
         "tags": [

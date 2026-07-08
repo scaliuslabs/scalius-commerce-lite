@@ -13,6 +13,8 @@ const ADMIN_MEDIA_PATH = "/api/v1/admin/media";
 const ADMIN_INVENTORY_PATH = "/api/v1/admin/inventory";
 const ADMIN_DASHBOARD_SUMMARY_PATH = "/api/v1/admin/dashboard/metrics-summary";
 const ADMIN_DASHBOARD_SUMMARY_TARGET = `http://api.internal${ADMIN_DASHBOARD_SUMMARY_PATH}`;
+const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
+const ADMIN_SETTINGS_SUMMARY_TARGET = `http://api.internal${ADMIN_SETTINGS_SUMMARY_PATH}`;
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
@@ -129,6 +131,10 @@ type AdminInventoryLookupInput = z.infer<typeof adminInventoryLookupInputSchema>
 const adminDashboardSummaryInputSchema = z.object({}).strict();
 
 type AdminDashboardSummaryInput = z.infer<typeof adminDashboardSummaryInputSchema>;
+
+const adminSettingsSummaryInputSchema = z.object({}).strict();
+
+type AdminSettingsSummaryInput = z.infer<typeof adminSettingsSummaryInputSchema>;
 
 interface AdminPermissionContext {
   userId?: string;
@@ -711,6 +717,20 @@ function adminDashboardSummaryToolError(
       code,
       status: failClosedStatus(status),
       message: "Admin dashboard summary is temporarily unavailable.",
+    },
+  }, true);
+}
+
+function adminSettingsSummaryToolError(
+  code: string,
+  status = 503,
+): CallToolResult {
+  return toolResult({
+    adminSettingsSummary: null,
+    error: {
+      code,
+      status: failClosedStatus(status),
+      message: "Admin settings summary is temporarily unavailable.",
     },
   }, true);
 }
@@ -1922,6 +1942,53 @@ async function fetchAdminDashboardSummary(
   }
 }
 
+async function fetchAdminSettingsSummary(
+  env: Env,
+  _input: AdminSettingsSummaryInput,
+  {
+    cookie,
+    userAgent,
+    signal,
+  }: {
+    cookie: string;
+    userAgent?: string | null;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return adminSettingsSummaryToolError("admin_api_unavailable");
+  }
+
+  try {
+    const response = await env.API.fetch(ADMIN_SETTINGS_SUMMARY_TARGET, {
+      method: "GET",
+      headers: adminApiHeaders(cookie, userAgent),
+      signal,
+    });
+    if (!response.ok) {
+      return adminSettingsSummaryToolError("admin_settings_summary_unavailable", response.status);
+    }
+
+    const body = await parseJsonResponse(response);
+    const data = body && isRecord(body.data) ? body.data : null;
+    if (!body || body.success !== true || !data) {
+      return adminSettingsSummaryToolError("admin_settings_summary_unavailable");
+    }
+
+    return {
+      structuredContent: {
+        adminSettingsSummary: data,
+      },
+      content: [{
+        type: "text",
+        text: "Admin settings summary is available.",
+      }],
+    };
+  } catch {
+    return adminSettingsSummaryToolError("admin_settings_summary_unavailable");
+  }
+}
+
 export function createAdminMcpServer(
   env: Env,
   options: AdminMcpOptions = {},
@@ -2204,6 +2271,32 @@ export function createAdminMcpServer(
       }
 
       return fetchAdminDashboardSummary(env, input, {
+        cookie,
+        userAgent: options.userAgent,
+        signal: extra.signal,
+      });
+    },
+  );
+
+  server.registerTool(
+    "admin_settings_summary",
+    {
+      title: "Admin Settings Summary",
+      description: "Reads the redacted dashboard settings summary through API-verified settings permissions.",
+      inputSchema: adminSettingsSummaryInputSchema,
+      annotations: ADMIN_READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (input, extra) => {
+      const cookie = options.cookie?.trim() ? options.cookie : null;
+      if (!cookie) {
+        return adminToolError({
+          ok: false,
+          status: 401,
+          code: "admin_session_required",
+        });
+      }
+
+      return fetchAdminSettingsSummary(env, input, {
         cookie,
         userAgent: options.userAgent,
         signal: extra.signal,

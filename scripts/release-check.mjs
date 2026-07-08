@@ -28,6 +28,7 @@ const MAX_BODY_PREVIEW_LENGTH = 180;
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
 const ADMIN_DASHBOARD_SUMMARY_PATH = "/api/v1/admin/dashboard/metrics-summary";
+const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
 const RELEASE_ADMIN_EMAIL_ENV = "SCALIUS_RELEASE_ADMIN_EMAIL";
@@ -46,6 +47,7 @@ const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_session_context",
   "admin_navigation_context",
   "admin_dashboard_summary",
+  "admin_settings_summary",
   "admin_category_search",
   "admin_collection_search",
   "admin_inventory_lookup",
@@ -60,6 +62,10 @@ const ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE = Object.freeze({
 });
 const ADMIN_DASHBOARD_SUMMARY_TOOL_SMOKE = Object.freeze({
   name: "admin_dashboard_summary",
+  arguments: Object.freeze({}),
+});
+const ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE = Object.freeze({
+  name: "admin_settings_summary",
   arguments: Object.freeze({}),
 });
 const ADMIN_CATEGORY_SEARCH_TOOL_SMOKE = Object.freeze({
@@ -136,6 +142,13 @@ const AGENT_CATALOG_CATEGORIES_TOOL_SMOKE = Object.freeze({
     limit: 1,
   }),
 });
+const AGENT_CATALOG_SEARCH_TOOL_SMOKE = Object.freeze({
+  name: "catalog_search",
+  arguments: Object.freeze({
+    query: "test",
+    limit: 1,
+  }),
+});
 const AGENT_CART_VALIDATION_TOOL_SMOKE = Object.freeze({
   name: "cart_validate",
   arguments: Object.freeze({
@@ -169,6 +182,10 @@ const ADMIN_DASHBOARD_SUMMARY_FORBIDDEN_KEY_PATTERN =
   /^(?:recentOrders|customerName|customerEmail|customerPhone|orderIds?|orderNumbers?|paymentEvidence|providerPayloads?|totalRevenue|lifetimeRevenue|dailyActivity|mutation)$/i;
 const ADMIN_DASHBOARD_SUMMARY_FORBIDDEN_VALUE_PATTERN =
   /\b(?:recentOrders?|customerName|customerEmail|customerPhone|orderIds?|orderNumbers?|paymentEvidence|providerPayloads?|totalRevenue|lifetimeRevenue|dailyActivity|mutation)\b/i;
+const ADMIN_SETTINGS_SUMMARY_FORBIDDEN_KEY_PATTERN =
+  /(?:credentials?|tokens?|apiKeys?|secrets?|passwords?|cookies?|sessions?|otps?|receiptProof|providerPayloads?|rawSnippet|analyticsSnippet|customerEmail|customerPhone)/i;
+const ADMIN_SETTINGS_SUMMARY_FORBIDDEN_VALUE_PATTERN =
+  /\b(?:credentials?|tokens?|apiKeys?|secrets?|passwords?|cookies?|sessions?|otps?|receiptProof|providerPayloads?|rawSnippet|analyticsSnippet|customerEmail|customerPhone)\b/i;
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
 const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
 const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
@@ -1789,6 +1806,59 @@ export function evaluateAdminMcpTools(tools, {
   };
 }
 
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function catalogProductsFromStructuredContent(structuredContent) {
+  if (!isRecord(structuredContent)) return [];
+  const products = Array.isArray(structuredContent.products)
+    ? structuredContent.products
+    : Array.isArray(structuredContent.catalogSearch?.products)
+      ? structuredContent.catalogSearch.products
+      : Array.isArray(structuredContent.catalogLookup?.products)
+        ? structuredContent.catalogLookup.products
+        : [];
+  return products.filter(isRecord);
+}
+
+function catalogProductFromStructuredContent(structuredContent) {
+  if (!isRecord(structuredContent)) return null;
+  if (isRecord(structuredContent.product)) return structuredContent.product;
+  return firstNonEmptyString(structuredContent.id, structuredContent.url)
+    ? structuredContent
+    : null;
+}
+
+function readCatalogCandidateId(candidate) {
+  if (!isRecord(candidate)) return null;
+  const directId = firstNonEmptyString(
+    candidate.id,
+    candidate.url,
+    candidate.handle,
+    candidate.slug,
+    candidate.sku,
+  );
+  if (directId) return directId;
+  const variants = Array.isArray(candidate.variants) ? candidate.variants : [];
+  for (const variant of variants) {
+    const variantId = readCatalogCandidateId(variant);
+    if (variantId) return variantId;
+  }
+  return null;
+}
+
+function firstCatalogSearchCandidateId(structuredContent) {
+  for (const product of catalogProductsFromStructuredContent(structuredContent)) {
+    const candidateId = readCatalogCandidateId(product);
+    if (candidateId) return candidateId;
+  }
+  return null;
+}
+
 function evaluateAgentCatalogToolSmokeResult(result, {
   toolName = AGENT_CATALOG_TOOL_SMOKE.name,
   storefrontOrigin,
@@ -1810,6 +1880,11 @@ function evaluateAgentCatalogToolSmokeResult(result, {
   }
 
   let profileEvaluation = null;
+  let categoryCount = null;
+  let productCount = null;
+  let candidateId = null;
+  let productId = null;
+  let variantCount = null;
   if (toolName === "catalog_profile" && structuredContent) {
     profileEvaluation = evaluateUcpProfile(structuredContent, { storefrontOrigin });
     if (!profileEvaluation.ok) {
@@ -1818,6 +1893,42 @@ function evaluateAgentCatalogToolSmokeResult(result, {
         profileEvaluation.errors.join("; "),
       );
     }
+  } else if (toolName === "catalog_categories" && structuredContent) {
+    const catalogCategories = isRecord(structuredContent.catalogCategories)
+      ? structuredContent.catalogCategories
+      : null;
+    if (!catalogCategories) {
+      errors.push(`Agent MCP ${toolName} must return structured catalogCategories content.`);
+    } else if (!Array.isArray(catalogCategories.categories)) {
+      errors.push(`Agent MCP ${toolName} must return catalogCategories.categories as an array.`);
+    } else {
+      categoryCount = catalogCategories.categories.length;
+    }
+  } else if (toolName === "catalog_search" && structuredContent) {
+    const products = catalogProductsFromStructuredContent(structuredContent);
+    productCount = products.length;
+    candidateId = firstCatalogSearchCandidateId(structuredContent);
+    if (
+      hasOwnField(structuredContent, "products") &&
+      !Array.isArray(structuredContent.products)
+    ) {
+      errors.push(`Agent MCP ${toolName} must return products as an array when present.`);
+    }
+  } else if (toolName === "catalog_lookup" && structuredContent) {
+    const products = catalogProductsFromStructuredContent(structuredContent);
+    productCount = products.length;
+    if (productCount < 1) {
+      errors.push(`Agent MCP ${toolName} must return at least one product for the search candidate.`);
+    }
+  } else if (toolName === "catalog_product" && structuredContent) {
+    const product = catalogProductFromStructuredContent(structuredContent);
+    if (!product) {
+      errors.push(`Agent MCP ${toolName} must return structured product content.`);
+    } else {
+      productId = firstNonEmptyString(product.id);
+      const variants = Array.isArray(product.variants) ? product.variants : [];
+      variantCount = variants.length;
+    }
   }
 
   return {
@@ -1825,6 +1936,11 @@ function evaluateAgentCatalogToolSmokeResult(result, {
     errors,
     toolName,
     contentCount,
+    categoryCount,
+    productCount,
+    candidateId,
+    productId,
+    variantCount,
     profile: profileEvaluation
       ? {
           version: profileEvaluation.version,
@@ -1950,6 +2066,37 @@ function findForbiddenAdminDashboardSummaryPaths(value, path = "$", seen = new S
   return leaks;
 }
 
+function findForbiddenAdminSettingsSummaryPaths(value, path = "$", seen = new Set()) {
+  const leaks = [];
+  if (!isRecord(value) && !Array.isArray(value)) {
+    if (typeof value === "string" && ADMIN_SETTINGS_SUMMARY_FORBIDDEN_VALUE_PATTERN.test(value)) {
+      leaks.push(path);
+    }
+    return leaks;
+  }
+
+  if (seen.has(value)) return leaks;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      leaks.push(...findForbiddenAdminSettingsSummaryPaths(item, `${path}[${index}]`, seen));
+    });
+    return leaks;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = `${path}.${key}`;
+    if (path !== "$.limits" && ADMIN_SETTINGS_SUMMARY_FORBIDDEN_KEY_PATTERN.test(key)) {
+      leaks.push(childPath);
+      continue;
+    }
+    leaks.push(...findForbiddenAdminSettingsSummaryPaths(child, childPath, seen));
+  }
+
+  return leaks;
+}
+
 function evaluateAdminDashboardSummaryToolSmokeResult(result, {
   toolName = ADMIN_DASHBOARD_SUMMARY_TOOL_SMOKE.name,
 } = {}) {
@@ -2052,6 +2199,77 @@ function evaluateAdminDashboardSummaryToolSmokeResult(result, {
   };
 }
 
+function evaluateAdminSettingsSummaryToolSmokeResult(result, {
+  toolName = ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE.name,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+  const summary = isRecord(structuredContent?.adminSettingsSummary)
+    ? structuredContent.adminSettingsSummary
+    : null;
+  const source = isRecord(summary?.source) ? summary.source : null;
+  const limits = isRecord(summary?.limits) ? summary.limits : null;
+  const leakPaths = summary ? findForbiddenAdminSettingsSummaryPaths(summary) : [];
+
+  if (result?.isError === true) {
+    errors.push(`Admin MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Admin MCP ${toolName} must return at least one content block.`);
+  }
+  if (!summary) {
+    errors.push(`Admin MCP ${toolName} must return structured adminSettingsSummary content.`);
+  } else {
+    if (source?.path !== ADMIN_SETTINGS_SUMMARY_PATH) {
+      errors.push(
+        `Admin MCP ${toolName} source.path must be ${ADMIN_SETTINGS_SUMMARY_PATH}.`,
+      );
+    }
+    if (source?.permission !== "settings.general.view") {
+      errors.push(
+        "Admin MCP admin_settings_summary source.permission must be settings.general.view.",
+      );
+    }
+    if (!limits) {
+      errors.push(`Admin MCP ${toolName} must return limits metadata.`);
+    } else {
+      const expectedLimitFlags = [
+        "includesCredentials",
+        "includesMaskedSecrets",
+        "includesProviderIdentifiers",
+        "includesBusinessContacts",
+        "includesAnalyticsSnippets",
+        "includesRawLogs",
+        "includesRawCustomCode",
+        "canMutate",
+      ];
+      const unsafeLimits = expectedLimitFlags.filter((key) => limits[key] !== false);
+      if (unsafeLimits.length > 0) {
+        errors.push(
+          `Admin MCP ${toolName} limits must explicitly disable ${unsafeLimits.join(", ")}.`,
+        );
+      }
+    }
+    if (leakPaths.length > 0) {
+      errors.push(
+        `Admin MCP ${toolName} summary must not leak credentials, tokens, API keys, secrets, ` +
+        `passwords, cookies, sessions, OTPs, receipt proofs, provider payloads, snippets, ` +
+        `customer contacts, or mutation data (${leakPaths.join(", ")}).`,
+      );
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
+  };
+}
+
 function evaluateAdminReadOnlyToolSmokeResult(result, {
   toolName = ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name,
 } = {}) {
@@ -2115,6 +2333,10 @@ export async function smokeAgentWorker({
       },
     },
   });
+  const initializeCacheControl = requireNoStoreCacheControl(
+    initializeResponse,
+    "Agent MCP initialize",
+  );
   const initializeResult = requireMcpJsonRpcResult(
     initializeResponse,
     "Agent MCP initialize",
@@ -2139,6 +2361,7 @@ export async function smokeAgentWorker({
     });
     requireStatus(initializedResponse, "Agent MCP initialized notification", (status) =>
       status >= 200 && status < 300);
+    requireNoStoreCacheControl(initializedResponse, "Agent MCP initialized notification");
   }
 
   const toolsResponse = await fetchMcpJsonRpc(mcpUrl, {
@@ -2153,6 +2376,7 @@ export async function smokeAgentWorker({
       params: {},
     },
   });
+  const toolsCacheControl = requireNoStoreCacheControl(toolsResponse, "Agent MCP tools/list");
   const toolsResult = requireMcpJsonRpcResult(toolsResponse, "Agent MCP tools/list", 2);
   const toolEvaluation = evaluateAgentMcpTools(toolsResult.tools);
   if (!toolEvaluation.ok) {
@@ -2161,30 +2385,36 @@ export async function smokeAgentWorker({
 
   let catalogToolResult = null;
   let catalogCategoriesToolResult = null;
+  let catalogSearchToolResult = null;
+  let catalogLookupToolResult = null;
+  let catalogProductToolResult = null;
   let cartValidationToolResult = null;
-  if (catalogToolSmoke) {
-    const catalogToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+  let nextMcpRequestId = 3;
+
+  async function callAgentMcpTool(toolSmoke) {
+    const requestId = nextMcpRequestId;
+    nextMcpRequestId += 1;
+    const label = `Agent MCP ${toolSmoke.name}`;
+    const response = await fetchMcpJsonRpc(mcpUrl, {
       fetchImpl,
       timeoutMs,
       sessionId,
       protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
       body: {
         jsonrpc: "2.0",
-        id: 3,
+        id: requestId,
         method: "tools/call",
-        params: AGENT_CATALOG_TOOL_SMOKE,
+        params: toolSmoke,
       },
     });
-    const catalogToolCacheControl = requireNoStoreCacheControl(
-      catalogToolResponse,
-      `Agent MCP ${AGENT_CATALOG_TOOL_SMOKE.name}`,
-    );
-    const toolCallResult = requireMcpJsonRpcResult(
-      catalogToolResponse,
-      `Agent MCP ${AGENT_CATALOG_TOOL_SMOKE.name}`,
-      3,
-    );
-    const catalogToolEvaluation = evaluateAgentCatalogToolSmokeResult(toolCallResult, {
+    const cacheControl = requireNoStoreCacheControl(response, label);
+    const result = requireMcpJsonRpcResult(response, label, requestId);
+    return { response, cacheControl, result };
+  }
+
+  if (catalogToolSmoke) {
+    const catalogToolCall = await callAgentMcpTool(AGENT_CATALOG_TOOL_SMOKE);
+    const catalogToolEvaluation = evaluateAgentCatalogToolSmokeResult(catalogToolCall.result, {
       toolName: AGENT_CATALOG_TOOL_SMOKE.name,
       storefrontOrigin,
     });
@@ -2196,36 +2426,18 @@ export async function smokeAgentWorker({
     }
     catalogToolResult = {
       name: AGENT_CATALOG_TOOL_SMOKE.name,
-      statusCode: catalogToolResponse.statusCode,
-      durationMs: catalogToolResponse.durationMs,
-      cacheControl: catalogToolCacheControl,
+      statusCode: catalogToolCall.response.statusCode,
+      durationMs: catalogToolCall.response.durationMs,
+      cacheControl: catalogToolCall.cacheControl,
       contentCount: catalogToolEvaluation.contentCount,
       profile: catalogToolEvaluation.profile,
     };
 
-    const catalogCategoriesToolResponse = await fetchMcpJsonRpc(mcpUrl, {
-      fetchImpl,
-      timeoutMs,
-      sessionId,
-      protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
-      body: {
-        jsonrpc: "2.0",
-        id: 4,
-        method: "tools/call",
-        params: AGENT_CATALOG_CATEGORIES_TOOL_SMOKE,
-      },
-    });
-    const catalogCategoriesToolCacheControl = requireNoStoreCacheControl(
-      catalogCategoriesToolResponse,
-      `Agent MCP ${AGENT_CATALOG_CATEGORIES_TOOL_SMOKE.name}`,
-    );
-    const catalogCategoriesCallResult = requireMcpJsonRpcResult(
-      catalogCategoriesToolResponse,
-      `Agent MCP ${AGENT_CATALOG_CATEGORIES_TOOL_SMOKE.name}`,
-      4,
+    const catalogCategoriesToolCall = await callAgentMcpTool(
+      AGENT_CATALOG_CATEGORIES_TOOL_SMOKE,
     );
     const catalogCategoriesToolEvaluation = evaluateAgentCatalogToolSmokeResult(
-      catalogCategoriesCallResult,
+      catalogCategoriesToolCall.result,
       {
         toolName: AGENT_CATALOG_CATEGORIES_TOOL_SMOKE.name,
         storefrontOrigin,
@@ -2239,36 +2451,113 @@ export async function smokeAgentWorker({
     }
     catalogCategoriesToolResult = {
       name: AGENT_CATALOG_CATEGORIES_TOOL_SMOKE.name,
-      statusCode: catalogCategoriesToolResponse.statusCode,
-      durationMs: catalogCategoriesToolResponse.durationMs,
-      cacheControl: catalogCategoriesToolCacheControl,
+      statusCode: catalogCategoriesToolCall.response.statusCode,
+      durationMs: catalogCategoriesToolCall.response.durationMs,
+      cacheControl: catalogCategoriesToolCall.cacheControl,
       contentCount: catalogCategoriesToolEvaluation.contentCount,
+      categoryCount: catalogCategoriesToolEvaluation.categoryCount,
     };
 
-    const cartValidationToolResponse = await fetchMcpJsonRpc(mcpUrl, {
-      fetchImpl,
-      timeoutMs,
-      sessionId,
-      protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
-      body: {
-        jsonrpc: "2.0",
-        id: 5,
-        method: "tools/call",
-        params: AGENT_CART_VALIDATION_TOOL_SMOKE,
+    const catalogSearchToolCall = await callAgentMcpTool(AGENT_CATALOG_SEARCH_TOOL_SMOKE);
+    const catalogSearchToolEvaluation = evaluateAgentCatalogToolSmokeResult(
+      catalogSearchToolCall.result,
+      {
+        toolName: AGENT_CATALOG_SEARCH_TOOL_SMOKE.name,
+        storefrontOrigin,
       },
-    });
-    const cartValidationToolCacheControl = requireNoStoreCacheControl(
-      cartValidationToolResponse,
-      `Agent MCP ${AGENT_CART_VALIDATION_TOOL_SMOKE.name}`,
     );
-    const cartValidationCallResult = requireMcpJsonRpcResult(
-      cartValidationToolResponse,
-      `Agent MCP ${AGENT_CART_VALIDATION_TOOL_SMOKE.name}`,
-      5,
+    if (!catalogSearchToolEvaluation.ok) {
+      throw new Error(
+        `Agent MCP ${AGENT_CATALOG_SEARCH_TOOL_SMOKE.name} failed: ` +
+        catalogSearchToolEvaluation.errors.join("; "),
+      );
+    }
+    const searchCandidateId = catalogSearchToolEvaluation.candidateId;
+    catalogSearchToolResult = {
+      name: AGENT_CATALOG_SEARCH_TOOL_SMOKE.name,
+      statusCode: catalogSearchToolCall.response.statusCode,
+      durationMs: catalogSearchToolCall.response.durationMs,
+      cacheControl: catalogSearchToolCall.cacheControl,
+      contentCount: catalogSearchToolEvaluation.contentCount,
+      productCount: catalogSearchToolEvaluation.productCount,
+      candidateId: searchCandidateId,
+    };
+
+    if (searchCandidateId) {
+      const lookupToolSmoke = {
+        name: "catalog_lookup",
+        arguments: { ids: [searchCandidateId] },
+      };
+      const catalogLookupToolCall = await callAgentMcpTool(lookupToolSmoke);
+      const catalogLookupToolEvaluation = evaluateAgentCatalogToolSmokeResult(
+        catalogLookupToolCall.result,
+        {
+          toolName: lookupToolSmoke.name,
+          storefrontOrigin,
+        },
+      );
+      if (!catalogLookupToolEvaluation.ok) {
+        throw new Error(
+          `Agent MCP ${lookupToolSmoke.name} failed: ` +
+          catalogLookupToolEvaluation.errors.join("; "),
+        );
+      }
+      catalogLookupToolResult = {
+        name: lookupToolSmoke.name,
+        statusCode: catalogLookupToolCall.response.statusCode,
+        durationMs: catalogLookupToolCall.response.durationMs,
+        cacheControl: catalogLookupToolCall.cacheControl,
+        contentCount: catalogLookupToolEvaluation.contentCount,
+        productCount: catalogLookupToolEvaluation.productCount,
+        inputId: searchCandidateId,
+      };
+
+      const productToolSmoke = {
+        name: "catalog_product",
+        arguments: { id: searchCandidateId },
+      };
+      const catalogProductToolCall = await callAgentMcpTool(productToolSmoke);
+      const catalogProductToolEvaluation = evaluateAgentCatalogToolSmokeResult(
+        catalogProductToolCall.result,
+        {
+          toolName: productToolSmoke.name,
+          storefrontOrigin,
+        },
+      );
+      if (!catalogProductToolEvaluation.ok) {
+        throw new Error(
+          `Agent MCP ${productToolSmoke.name} failed: ` +
+          catalogProductToolEvaluation.errors.join("; "),
+        );
+      }
+      catalogProductToolResult = {
+        name: productToolSmoke.name,
+        statusCode: catalogProductToolCall.response.statusCode,
+        durationMs: catalogProductToolCall.response.durationMs,
+        cacheControl: catalogProductToolCall.cacheControl,
+        contentCount: catalogProductToolEvaluation.contentCount,
+        productId: catalogProductToolEvaluation.productId,
+        variantCount: catalogProductToolEvaluation.variantCount,
+        inputId: searchCandidateId,
+      };
+    } else {
+      catalogLookupToolResult = {
+        name: "catalog_lookup",
+        skipped: "no_catalog_search_candidate",
+      };
+      catalogProductToolResult = {
+        name: "catalog_product",
+        skipped: "no_catalog_search_candidate",
+      };
+    }
+
+    const cartValidationToolCall = await callAgentMcpTool(AGENT_CART_VALIDATION_TOOL_SMOKE);
+    const cartValidationToolEvaluation = evaluateAgentCartValidationSmokeResult(
+      cartValidationToolCall.result,
+      {
+        toolName: AGENT_CART_VALIDATION_TOOL_SMOKE.name,
+      },
     );
-    const cartValidationToolEvaluation = evaluateAgentCartValidationSmokeResult(cartValidationCallResult, {
-      toolName: AGENT_CART_VALIDATION_TOOL_SMOKE.name,
-    });
     if (!cartValidationToolEvaluation.ok) {
       throw new Error(
         `Agent MCP ${AGENT_CART_VALIDATION_TOOL_SMOKE.name} failed: ` +
@@ -2277,9 +2566,9 @@ export async function smokeAgentWorker({
     }
     cartValidationToolResult = {
       name: AGENT_CART_VALIDATION_TOOL_SMOKE.name,
-      statusCode: cartValidationToolResponse.statusCode,
-      durationMs: cartValidationToolResponse.durationMs,
-      cacheControl: cartValidationToolCacheControl,
+      statusCode: cartValidationToolCall.response.statusCode,
+      durationMs: cartValidationToolCall.response.durationMs,
+      cacheControl: cartValidationToolCall.cacheControl,
       contentCount: cartValidationToolEvaluation.contentCount,
       issueCount: cartValidationToolEvaluation.issueCount,
       firstIssueCode: cartValidationToolEvaluation.firstIssueCode,
@@ -2292,11 +2581,24 @@ export async function smokeAgentWorker({
   const catalogCategoriesToolSummary = catalogCategoriesToolResult
     ? `, ${catalogCategoriesToolResult.name} call ok`
     : "";
+  const catalogSearchToolSummary = catalogSearchToolResult
+    ? `, ${catalogSearchToolResult.name} call ok`
+    : "";
+  const catalogLookupToolSummary = catalogLookupToolResult
+    ? (catalogLookupToolResult.skipped
+        ? `, ${catalogLookupToolResult.name} skipped: ${catalogLookupToolResult.skipped}`
+        : `, ${catalogLookupToolResult.name} call ok`)
+    : "";
+  const catalogProductToolSummary = catalogProductToolResult
+    ? (catalogProductToolResult.skipped
+        ? `, ${catalogProductToolResult.name} skipped: ${catalogProductToolResult.skipped}`
+        : `, ${catalogProductToolResult.name} call ok`)
+    : "";
   const cartValidationToolSummary = cartValidationToolResult
     ? `, ${cartValidationToolResult.name} call ok`
     : "";
   logger?.log(
-    `PASS agent MCP: /health ${healthResponse.statusCode}, tools ${toolEvaluation.toolNames.join(", ")}${catalogToolSummary}${catalogCategoriesToolSummary}${cartValidationToolSummary}.`,
+    `PASS agent MCP: /health ${healthResponse.statusCode}, tools ${toolEvaluation.toolNames.join(", ")}${catalogToolSummary}${catalogCategoriesToolSummary}${catalogSearchToolSummary}${catalogLookupToolSummary}${catalogProductToolSummary}${cartValidationToolSummary}.`,
   );
   return {
     agentUrl: redactUrl(normalizedAgentUrl),
@@ -2312,17 +2614,22 @@ export async function smokeAgentWorker({
       initialize: {
         statusCode: initializeResponse.statusCode,
         durationMs: initializeResponse.durationMs,
+        cacheControl: initializeCacheControl,
         protocolVersion: negotiatedProtocolVersion,
         session: sessionId ? "present" : "none",
       },
       tools: {
         statusCode: toolsResponse.statusCode,
         durationMs: toolsResponse.durationMs,
+        cacheControl: toolsCacheControl,
         toolNames: toolEvaluation.toolNames,
         readOnlyToolCount: toolEvaluation.readOnlyToolCount,
       },
       ...(catalogToolResult ? { catalogTool: catalogToolResult } : {}),
       ...(catalogCategoriesToolResult ? { catalogCategoriesTool: catalogCategoriesToolResult } : {}),
+      ...(catalogSearchToolResult ? { catalogSearchTool: catalogSearchToolResult } : {}),
+      ...(catalogLookupToolResult ? { catalogLookupTool: catalogLookupToolResult } : {}),
+      ...(catalogProductToolResult ? { catalogProductTool: catalogProductToolResult } : {}),
       ...(cartValidationToolResult ? { cartValidationTool: cartValidationToolResult } : {}),
     },
   };
@@ -2562,7 +2869,7 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
-  const categorySearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+  const settingsSummaryToolResponse = await fetchMcpJsonRpc(mcpUrl, {
     fetchImpl,
     timeoutMs,
     headers: authenticatedHeaders,
@@ -2571,6 +2878,39 @@ export async function smokeAdminMcpAuthenticated({
     body: {
       jsonrpc: "2.0",
       id: 5,
+      method: "tools/call",
+      params: ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE,
+    },
+  });
+  const settingsSummaryToolCacheControl = requireNoStoreCacheControl(
+    settingsSummaryToolResponse,
+    `Authenticated Admin MCP ${ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE.name}`,
+  );
+  const settingsSummaryToolResult = requireMcpJsonRpcResult(
+    settingsSummaryToolResponse,
+    `Authenticated Admin MCP ${ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE.name}`,
+    5,
+  );
+  const settingsSummaryToolEvaluation = evaluateAdminSettingsSummaryToolSmokeResult(
+    settingsSummaryToolResult,
+    { toolName: ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE.name },
+  );
+  if (!settingsSummaryToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE.name} failed: ` +
+      settingsSummaryToolEvaluation.errors.join("; "),
+    );
+  }
+
+  const categorySearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 6,
       method: "tools/call",
       params: ADMIN_CATEGORY_SEARCH_TOOL_SMOKE,
     },
@@ -2582,7 +2922,7 @@ export async function smokeAdminMcpAuthenticated({
   const categorySearchToolResult = requireMcpJsonRpcResult(
     categorySearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}`,
-    5,
+    6,
   );
   const categorySearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     categorySearchToolResult,
@@ -2603,7 +2943,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 6,
+      id: 7,
       method: "tools/call",
       params: ADMIN_COLLECTION_SEARCH_TOOL_SMOKE,
     },
@@ -2615,7 +2955,7 @@ export async function smokeAdminMcpAuthenticated({
   const collectionSearchToolResult = requireMcpJsonRpcResult(
     collectionSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_COLLECTION_SEARCH_TOOL_SMOKE.name}`,
-    6,
+    7,
   );
   const collectionSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     collectionSearchToolResult,
@@ -2636,7 +2976,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 7,
+      id: 8,
       method: "tools/call",
       params: ADMIN_PAGE_SEARCH_TOOL_SMOKE,
     },
@@ -2648,7 +2988,7 @@ export async function smokeAdminMcpAuthenticated({
   const pageSearchToolResult = requireMcpJsonRpcResult(
     pageSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_PAGE_SEARCH_TOOL_SMOKE.name}`,
-    7,
+    8,
   );
   const pageSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     pageSearchToolResult,
@@ -2669,7 +3009,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 8,
+      id: 9,
       method: "tools/call",
       params: ADMIN_MEDIA_SEARCH_TOOL_SMOKE,
     },
@@ -2681,7 +3021,7 @@ export async function smokeAdminMcpAuthenticated({
   const mediaSearchToolResult = requireMcpJsonRpcResult(
     mediaSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name}`,
-    8,
+    9,
   );
   const mediaSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     mediaSearchToolResult,
@@ -2702,7 +3042,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 9,
+      id: 10,
       method: "tools/call",
       params: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE,
     },
@@ -2714,7 +3054,7 @@ export async function smokeAdminMcpAuthenticated({
   const productSearchToolResult = requireMcpJsonRpcResult(
     productSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}`,
-    9,
+    10,
   );
   const productSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     productSearchToolResult,
@@ -2735,7 +3075,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 10,
+      id: 11,
       method: "tools/call",
       params: ADMIN_ORDER_SEARCH_TOOL_SMOKE,
     },
@@ -2747,7 +3087,7 @@ export async function smokeAdminMcpAuthenticated({
   const orderSearchToolResult = requireMcpJsonRpcResult(
     orderSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}`,
-    10,
+    11,
   );
   const orderSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     orderSearchToolResult,
@@ -2768,7 +3108,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 11,
+      id: 12,
       method: "tools/call",
       params: ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE,
     },
@@ -2780,7 +3120,7 @@ export async function smokeAdminMcpAuthenticated({
   const inventoryLookupToolResult = requireMcpJsonRpcResult(
     inventoryLookupToolResponse,
     `Authenticated Admin MCP ${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name}`,
-    11,
+    12,
   );
   const inventoryLookupToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     inventoryLookupToolResult,
@@ -2797,6 +3137,7 @@ export async function smokeAdminMcpAuthenticated({
     `PASS admin MCP authenticated: tools ${toolEvaluation.toolNames.join(", ")}, ` +
     `calls ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}, ` +
     `${ADMIN_DASHBOARD_SUMMARY_TOOL_SMOKE.name}, ` +
+    `${ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE.name}, ` +
     `${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_COLLECTION_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_PAGE_SEARCH_TOOL_SMOKE.name}, ` +
@@ -2840,6 +3181,13 @@ export async function smokeAdminMcpAuthenticated({
         cacheControl: dashboardSummaryToolCacheControl,
         contentCount: dashboardSummaryToolEvaluation.contentCount,
         numericStatKeys: dashboardSummaryToolEvaluation.numericStatKeys,
+      },
+      settingsSummaryTool: {
+        name: ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE.name,
+        statusCode: settingsSummaryToolResponse.statusCode,
+        durationMs: settingsSummaryToolResponse.durationMs,
+        cacheControl: settingsSummaryToolCacheControl,
+        contentCount: settingsSummaryToolEvaluation.contentCount,
       },
       categorySearchTool: {
         name: ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name,

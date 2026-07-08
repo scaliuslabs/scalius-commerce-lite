@@ -24,6 +24,7 @@ const SITEMAP_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=8640
 const FEED_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=43200";
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
+const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 
 function textResponse(body, status = 200, headers = {}) {
@@ -197,6 +198,76 @@ function agentCatalogCategoriesMcpResult() {
   };
 }
 
+function agentCatalogSearchMcpResult() {
+  const result = {
+    ucp: {
+      version: "2026-07",
+      status: "success",
+      capabilities: ["dev.ucp.shopping.catalog.search"],
+    },
+    products: [{
+      id: "gid://scalius/product/prod_release_check",
+      title: "Release Check Product",
+      url: "https://storefront.example.test/products/release-check-product",
+      variants: [{
+        id: "gid://scalius/product-variant/var_release_check",
+        sku: "REL-1",
+      }],
+    }],
+    pagination: { has_next_page: false, total_count: 1 },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
+function agentCatalogLookupMcpResult(inputId = "gid://scalius/product/prod_release_check") {
+  const result = {
+    ucp: {
+      version: "2026-07",
+      status: "success",
+      capabilities: ["dev.ucp.shopping.catalog.lookup"],
+    },
+    products: [{
+      id: "gid://scalius/product/prod_release_check",
+      variants: [{
+        id: "gid://scalius/product-variant/var_release_check",
+        inputs: [{ id: inputId, match: "exact" }],
+      }],
+    }],
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
+function agentCatalogProductMcpResult(inputId = "gid://scalius/product/prod_release_check") {
+  const result = {
+    ucp: {
+      version: "2026-07",
+      status: "success",
+      capabilities: ["dev.ucp.shopping.catalog.lookup"],
+    },
+    product: {
+      id: inputId,
+      title: "Release Check Product",
+      variants: [{
+        id: "gid://scalius/product-variant/var_release_check",
+        sku: "REL-1",
+      }],
+    },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
 function agentCartValidationMcpResult() {
   const result = {
     cartValidation: {
@@ -228,9 +299,19 @@ function agentMcpSmokeFetch({
   tools = agentMcpTools(),
   toolResult = agentCatalogProfileMcpResult(),
   catalogCategoriesToolResult = agentCatalogCategoriesMcpResult(),
+  catalogSearchToolResult = agentCatalogSearchMcpResult(),
+  catalogLookupToolResult = (body) =>
+    agentCatalogLookupMcpResult(body.params?.arguments?.ids?.[0]),
+  catalogProductToolResult = (body) =>
+    agentCatalogProductMcpResult(body.params?.arguments?.id),
   cartValidationToolResult = agentCartValidationMcpResult(),
+  initializeCacheControl = "no-store",
+  toolsCacheControl = "no-store",
   toolCacheControl = "no-store",
   catalogCategoriesToolCacheControl = toolCacheControl,
+  catalogSearchToolCacheControl = toolCacheControl,
+  catalogLookupToolCacheControl = toolCacheControl,
+  catalogProductToolCacheControl = toolCacheControl,
   cartValidationToolCacheControl = toolCacheControl,
   onToolCall,
 } = {}) {
@@ -258,7 +339,7 @@ function agentMcpSmokeFetch({
             capabilities: { tools: { listChanged: true } },
             serverInfo: { name: "scalius-agent", version: "0.1.0" },
           },
-        });
+        }, { "Cache-Control": initializeCacheControl });
       }
 
       if (body.method === "tools/list") {
@@ -266,7 +347,7 @@ function agentMcpSmokeFetch({
           jsonrpc: "2.0",
           id: body.id,
           result: { tools },
-        });
+        }, { "Cache-Control": toolsCacheControl });
       }
 
       if (body.method === "tools/call") {
@@ -276,6 +357,15 @@ function agentMcpSmokeFetch({
         if (body.params?.name === "catalog_categories") {
           result = catalogCategoriesToolResult;
           cacheControl = catalogCategoriesToolCacheControl;
+        } else if (body.params?.name === "catalog_search") {
+          result = catalogSearchToolResult;
+          cacheControl = catalogSearchToolCacheControl;
+        } else if (body.params?.name === "catalog_lookup") {
+          result = catalogLookupToolResult;
+          cacheControl = catalogLookupToolCacheControl;
+        } else if (body.params?.name === "catalog_product") {
+          result = catalogProductToolResult;
+          cacheControl = catalogProductToolCacheControl;
         } else if (body.params?.name === "cart_validate") {
           result = cartValidationToolResult;
           cacheControl = cartValidationToolCacheControl;
@@ -312,6 +402,7 @@ function adminMcpTools(overrides = {}) {
     adminMcpTool("admin_session_context", overrides.admin_session_context),
     adminMcpTool("admin_navigation_context", overrides.admin_navigation_context),
     adminMcpTool("admin_dashboard_summary", overrides.admin_dashboard_summary),
+    adminMcpTool("admin_settings_summary", overrides.admin_settings_summary),
     adminMcpTool("admin_category_search", overrides.admin_category_search),
     adminMcpTool("admin_collection_search", overrides.admin_collection_search),
     adminMcpTool("admin_inventory_lookup", overrides.admin_inventory_lookup),
@@ -396,6 +487,46 @@ function adminDashboardSummaryMcpResult(extra = {}) {
     ...extra,
   };
   const body = { adminDashboardSummary: summary };
+  return {
+    content: [{ type: "text", text: JSON.stringify(body) }],
+    structuredContent: body,
+  };
+}
+
+function adminSettingsSummaryMcpResult(extra = {}) {
+  const summary = {
+    source: {
+      path: ADMIN_SETTINGS_SUMMARY_PATH,
+      permission: "settings.general.view",
+    },
+    settings: {
+      general: {
+        storeNameConfigured: true,
+        currency: "BDT",
+        timezone: "Asia/Dhaka",
+      },
+      checkout: {
+        phoneCollectionRequired: true,
+        guestCheckoutEnabled: true,
+      },
+      discovery: {
+        sitemapEnabled: true,
+        productFeedEnabled: true,
+      },
+    },
+    limits: {
+      includesCredentials: false,
+      includesMaskedSecrets: false,
+      includesProviderIdentifiers: false,
+      includesBusinessContacts: false,
+      includesAnalyticsSnippets: false,
+      includesRawLogs: false,
+      includesRawCustomCode: false,
+      canMutate: false,
+    },
+    ...extra,
+  };
+  const body = { adminSettingsSummary: summary };
   return {
     content: [{ type: "text", text: JSON.stringify(body) }],
     structuredContent: body,
@@ -558,6 +689,7 @@ function authenticatedAdminMcpSmokeFetch({
   tools = adminMcpTools(),
   toolResult = adminNavigationContextMcpResult(),
   dashboardSummaryToolResult = adminDashboardSummaryMcpResult(),
+  settingsSummaryToolResult = adminSettingsSummaryMcpResult(),
   categorySearchToolResult = adminCategorySearchMcpResult(),
   collectionSearchToolResult = adminCollectionSearchMcpResult(),
   pageSearchToolResult = adminPageSearchMcpResult(),
@@ -567,6 +699,7 @@ function authenticatedAdminMcpSmokeFetch({
   inventoryLookupToolResult = adminInventoryLookupMcpResult(),
   toolCacheControl = "no-store",
   dashboardSummaryToolCacheControl = toolCacheControl,
+  settingsSummaryToolCacheControl = toolCacheControl,
   categorySearchToolCacheControl = toolCacheControl,
   collectionSearchToolCacheControl = toolCacheControl,
   pageSearchToolCacheControl = toolCacheControl,
@@ -650,6 +783,15 @@ function authenticatedAdminMcpSmokeFetch({
             ? dashboardSummaryToolResult(body)
             : dashboardSummaryToolResult;
           cacheControl = dashboardSummaryToolCacheControl;
+        } else if (body.params?.name === "admin_settings_summary") {
+          expect(body.params).toEqual({
+            name: "admin_settings_summary",
+            arguments: {},
+          });
+          result = typeof settingsSummaryToolResult === "function"
+            ? settingsSummaryToolResult(body)
+            : settingsSummaryToolResult;
+          cacheControl = settingsSummaryToolCacheControl;
         } else if (body.params?.name === "admin_category_search") {
           expect(body.params).toEqual({
             name: "admin_category_search",
@@ -1386,8 +1528,9 @@ describe("release-check local evaluators", () => {
         "admin_page_search",
         "admin_product_search",
         "admin_session_context",
+        "admin_settings_summary",
       ],
-      readOnlyToolCount: 10,
+      readOnlyToolCount: 11,
     });
   });
 
@@ -1400,6 +1543,7 @@ describe("release-check local evaluators", () => {
         "admin_session_context",
         "admin_navigation_context",
         "admin_dashboard_summary",
+        "admin_settings_summary",
         "admin_category_search",
         "admin_collection_search",
         "admin_inventory_lookup",
@@ -1420,7 +1564,7 @@ describe("release-check local evaluators", () => {
     });
   });
 
-  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, category, collection, page, media, product, order search, and inventory lookup smokes", async () => {
+  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, settings summary, category, collection, page, media, product, order search, and inventory lookup smokes", async () => {
     const mcpRequests = [];
     const fetchImpl = authenticatedAdminMcpSmokeFetch({
       onMcpRequest: (body) => {
@@ -1447,6 +1591,7 @@ describe("release-check local evaluators", () => {
       "tools/list",
       "tools/call:admin_navigation_context",
       "tools/call:admin_dashboard_summary",
+      "tools/call:admin_settings_summary",
       "tools/call:admin_category_search",
       "tools/call:admin_collection_search",
       "tools/call:admin_page_search",
@@ -1482,8 +1627,9 @@ describe("release-check local evaluators", () => {
           "admin_page_search",
           "admin_product_search",
           "admin_session_context",
+          "admin_settings_summary",
         ],
-        readOnlyToolCount: 10,
+        readOnlyToolCount: 11,
       },
       navigationTool: {
         name: "admin_navigation_context",
@@ -1513,6 +1659,12 @@ describe("release-check local evaluators", () => {
           "lastMonth.orders",
           "lastMonth.revenue",
         ],
+      },
+      settingsSummaryTool: {
+        name: "admin_settings_summary",
+        statusCode: 200,
+        cacheControl: "no-store",
+        contentCount: 1,
       },
       categorySearchTool: {
         name: "admin_category_search",
@@ -1558,7 +1710,7 @@ describe("release-check local evaluators", () => {
       },
     });
     expect(logger.log).toHaveBeenCalledWith(
-      "PASS admin MCP authenticated: tools admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_session_context, calls admin_navigation_context, admin_dashboard_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_order_search, admin_inventory_lookup ok.",
+      "PASS admin MCP authenticated: tools admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_session_context, admin_settings_summary, calls admin_navigation_context, admin_dashboard_summary, admin_settings_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_order_search, admin_inventory_lookup ok.",
     );
 
     const logged = JSON.stringify(logger.log.mock.calls);
@@ -1580,7 +1732,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search.*unexpected admin_write_context/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary.*unexpected admin_write_context/);
 
     await expect(smokeAdminMcpAuthenticated({
       dashboardUrl: "https://dashboard.example.test",
@@ -1591,7 +1743,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary/);
   });
 
   it("fails authenticated Admin MCP smoke when tool calls lack no-store or return an error", async () => {
@@ -1820,6 +1972,175 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow("summary must not leak recent orders, customer PII, order IDs");
+  });
+
+  it("fails authenticated Admin MCP smoke when settings summary lacks no-store, errors, empty content, malformed structure, unsafe limits, or leaks sensitive data", async () => {
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        settingsSummaryToolCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_settings_summary Cache-Control must include no-store");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        settingsSummaryToolResult: {
+          isError: true,
+          content: [{ type: "text", text: "denied" }],
+          structuredContent: {
+            error: {
+              code: "admin_settings_summary_failed",
+              status: 500,
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_settings_summary returned an MCP tool error");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        settingsSummaryToolResult: {
+          content: [],
+          structuredContent: {
+            adminSettingsSummary: {
+              source: {
+                path: ADMIN_SETTINGS_SUMMARY_PATH,
+                permission: "settings.general.view",
+              },
+              limits: {
+                includesCredentials: false,
+                includesMaskedSecrets: false,
+                includesProviderIdentifiers: false,
+                includesBusinessContacts: false,
+                includesAnalyticsSnippets: false,
+                includesRawLogs: false,
+                includesRawCustomCode: false,
+                canMutate: false,
+              },
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_settings_summary must return at least one content block");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        settingsSummaryToolResult: {
+          content: [{ type: "text", text: "{}" }],
+          structuredContent: {
+            settingsSummary: {},
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_settings_summary must return structured adminSettingsSummary content");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        settingsSummaryToolResult: adminSettingsSummaryMcpResult({
+          source: {
+            path: "/api/v1/admin/settings",
+            permission: "settings.general.view",
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_settings_summary source.path must be /api/v1/admin/settings/mcp-summary");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        settingsSummaryToolResult: adminSettingsSummaryMcpResult({
+          source: {
+            path: ADMIN_SETTINGS_SUMMARY_PATH,
+            permission: "settings.secrets.view",
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_settings_summary source.permission must be settings.general.view");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        settingsSummaryToolResult: adminSettingsSummaryMcpResult({
+          limits: {
+            includesCredentials: false,
+            includesMaskedSecrets: false,
+            includesProviderIdentifiers: false,
+            includesBusinessContacts: false,
+            includesAnalyticsSnippets: true,
+            includesRawLogs: false,
+            includesRawCustomCode: false,
+            canMutate: false,
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_settings_summary limits must explicitly disable includesAnalyticsSnippets");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        settingsSummaryToolResult: adminSettingsSummaryMcpResult({
+          settings: {
+            payment: {
+              apiKey: "sk_test_123",
+            },
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("summary must not leak credentials, tokens, API keys");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        settingsSummaryToolResult: adminSettingsSummaryMcpResult({
+          settings: {
+            analytics: {
+              enabled: true,
+              note: "analyticsSnippet is configured",
+            },
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("summary must not leak credentials, tokens, API keys");
   });
 
   it("fails authenticated Admin MCP smoke when category search lacks no-store, errors, or empty content", async () => {
@@ -2147,6 +2468,31 @@ describe("release-check local evaluators", () => {
             },
           });
         }
+        if (body.params?.name === "catalog_search") {
+          expect(body.params).toEqual({
+            name: "catalog_search",
+            arguments: {
+              query: "test",
+              limit: 1,
+            },
+          });
+        }
+        if (body.params?.name === "catalog_lookup") {
+          expect(body.params).toEqual({
+            name: "catalog_lookup",
+            arguments: {
+              ids: ["gid://scalius/product/prod_release_check"],
+            },
+          });
+        }
+        if (body.params?.name === "catalog_product") {
+          expect(body.params).toEqual({
+            name: "catalog_product",
+            arguments: {
+              id: "gid://scalius/product/prod_release_check",
+            },
+          });
+        }
         if (body.params?.name === "cart_validate") {
           expect(body.params).toEqual({
             name: "cart_validate",
@@ -2174,8 +2520,20 @@ describe("release-check local evaluators", () => {
     expect(mcpRequests).toEqual([
       "tools/call:catalog_profile",
       "tools/call:catalog_categories",
+      "tools/call:catalog_search",
+      "tools/call:catalog_lookup",
+      "tools/call:catalog_product",
       "tools/call:cart_validate",
     ]);
+    expect(result.mcp.initialize).toMatchObject({
+      statusCode: 200,
+      cacheControl: "no-store",
+    });
+    expect(result.mcp.tools).toMatchObject({
+      statusCode: 200,
+      cacheControl: "no-store",
+      readOnlyToolCount: 6,
+    });
     expect(result.mcp.catalogTool).toMatchObject({
       name: "catalog_profile",
       statusCode: 200,
@@ -2195,6 +2553,32 @@ describe("release-check local evaluators", () => {
       statusCode: 200,
       cacheControl: "no-store",
       contentCount: 1,
+      categoryCount: 1,
+    });
+    expect(result.mcp.catalogSearchTool).toMatchObject({
+      name: "catalog_search",
+      statusCode: 200,
+      cacheControl: "no-store",
+      contentCount: 1,
+      productCount: 1,
+      candidateId: "gid://scalius/product/prod_release_check",
+    });
+    expect(result.mcp.catalogLookupTool).toMatchObject({
+      name: "catalog_lookup",
+      statusCode: 200,
+      cacheControl: "no-store",
+      contentCount: 1,
+      productCount: 1,
+      inputId: "gid://scalius/product/prod_release_check",
+    });
+    expect(result.mcp.catalogProductTool).toMatchObject({
+      name: "catalog_product",
+      statusCode: 200,
+      cacheControl: "no-store",
+      contentCount: 1,
+      productId: "gid://scalius/product/prod_release_check",
+      variantCount: 1,
+      inputId: "gid://scalius/product/prod_release_check",
     });
     expect(result.mcp.cartValidationTool).toMatchObject({
       name: "cart_validate",
@@ -2226,6 +2610,30 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow(/catalog_profile failed: .*checkout\/cart\/order\/payment/);
+  });
+
+  it("fails the agent MCP smoke when initialize or tools/list are cacheable", async () => {
+    await expect(smokeAgentWorker({
+      agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
+      catalogToolSmoke: true,
+      fetchImpl: agentMcpSmokeFetch({
+        initializeCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("Agent MCP initialize Cache-Control must include no-store");
+
+    await expect(smokeAgentWorker({
+      agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
+      catalogToolSmoke: true,
+      fetchImpl: agentMcpSmokeFetch({
+        toolsCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("Agent MCP tools/list Cache-Control must include no-store");
   });
 
   it("fails the category MCP tool smoke when the call is cacheable, an error, or content-empty", async () => {
@@ -2276,6 +2684,22 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow("catalog_categories must return at least one content block");
+
+    await expect(smokeAgentWorker({
+      agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
+      catalogToolSmoke: true,
+      fetchImpl: agentMcpSmokeFetch({
+        catalogCategoriesToolResult: {
+          content: [{ type: "text", text: "{}" }],
+          structuredContent: {
+            catalogCategories: {},
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("catalog_categories must return catalogCategories.categories as an array");
   });
 
   it("accepts an unauthenticated admin MCP 401/403 with no-store-ish cache headers", async () => {
@@ -2812,6 +3236,31 @@ describe("runReleaseCheck", () => {
                 },
               });
             }
+            if (body.params?.name === "catalog_search") {
+              expect(body.params).toEqual({
+                name: "catalog_search",
+                arguments: {
+                  query: "test",
+                  limit: 1,
+                },
+              });
+            }
+            if (body.params?.name === "catalog_lookup") {
+              expect(body.params).toEqual({
+                name: "catalog_lookup",
+                arguments: {
+                  ids: ["gid://scalius/product/prod_release_check"],
+                },
+              });
+            }
+            if (body.params?.name === "catalog_product") {
+              expect(body.params).toEqual({
+                name: "catalog_product",
+                arguments: {
+                  id: "gid://scalius/product/prod_release_check",
+                },
+              });
+            }
             if (body.params?.name === "cart_validate") {
               expect(body.params).toEqual({
                 name: "cart_validate",
@@ -2831,7 +3280,13 @@ describe("runReleaseCheck", () => {
                 ? agentCartValidationMcpResult()
                 : body.params?.name === "catalog_categories"
                   ? agentCatalogCategoriesMcpResult()
-                  : agentCatalogProfileMcpResult(),
+                  : body.params?.name === "catalog_search"
+                    ? agentCatalogSearchMcpResult()
+                    : body.params?.name === "catalog_lookup"
+                      ? agentCatalogLookupMcpResult(body.params?.arguments?.ids?.[0])
+                      : body.params?.name === "catalog_product"
+                        ? agentCatalogProductMcpResult(body.params?.arguments?.id)
+                        : agentCatalogProfileMcpResult(),
             });
           }
         }
@@ -3021,6 +3476,9 @@ describe("runReleaseCheck", () => {
       "tools/list",
       "tools/call:catalog_profile",
       "tools/call:catalog_categories",
+      "tools/call:catalog_search",
+      "tools/call:catalog_lookup",
+      "tools/call:catalog_product",
       "tools/call:cart_validate",
     ]);
     expect(result.checks.agentMcp).toMatchObject({
@@ -3033,11 +3491,13 @@ describe("runReleaseCheck", () => {
       mcp: {
         initialize: {
           statusCode: 200,
+          cacheControl: "no-store",
           protocolVersion: "2025-06-18",
           session: "none",
         },
         tools: {
           statusCode: 200,
+          cacheControl: "no-store",
           toolNames: [
             "cart_validate",
             "catalog_categories",
@@ -3067,6 +3527,32 @@ describe("runReleaseCheck", () => {
           statusCode: 200,
           cacheControl: "no-store",
           contentCount: 1,
+          categoryCount: 1,
+        },
+        catalogSearchTool: {
+          name: "catalog_search",
+          statusCode: 200,
+          cacheControl: "no-store",
+          contentCount: 1,
+          productCount: 1,
+          candidateId: "gid://scalius/product/prod_release_check",
+        },
+        catalogLookupTool: {
+          name: "catalog_lookup",
+          statusCode: 200,
+          cacheControl: "no-store",
+          contentCount: 1,
+          productCount: 1,
+          inputId: "gid://scalius/product/prod_release_check",
+        },
+        catalogProductTool: {
+          name: "catalog_product",
+          statusCode: 200,
+          cacheControl: "no-store",
+          contentCount: 1,
+          productId: "gid://scalius/product/prod_release_check",
+          variantCount: 1,
+          inputId: "gid://scalius/product/prod_release_check",
         },
         cartValidationTool: {
           name: "cart_validate",
