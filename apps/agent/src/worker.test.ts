@@ -425,6 +425,14 @@ function adminDashboardSummaryContext(result: Record<string, unknown>): Record<s
   return structuredContent.adminDashboardSummary;
 }
 
+function adminSettingsSummaryContext(result: Record<string, unknown>): Record<string, unknown> {
+  const structuredContent = result.structuredContent;
+  if (!isRecord(structuredContent) || !isRecord(structuredContent.adminSettingsSummary)) {
+    throw new Error("Expected adminSettingsSummary structured content");
+  }
+  return structuredContent.adminSettingsSummary;
+}
+
 function catalogCategoriesContext(result: Record<string, unknown>): Record<string, unknown> {
   const structuredContent = result.structuredContent;
   if (!isRecord(structuredContent) || !isRecord(structuredContent.catalogCategories)) {
@@ -1244,6 +1252,7 @@ describe("admin MCP route", () => {
       "admin_media_search",
       "admin_inventory_lookup",
       "admin_dashboard_summary",
+      "admin_settings_summary",
     ]);
     for (const tool of tools) {
       expect(tool.annotations).toMatchObject({
@@ -1256,6 +1265,85 @@ describe("admin MCP route", () => {
     for (const unsafeTerm of ADMIN_MCP_FORBIDDEN_MUTATION_TERMS) {
       expect(serialized).not.toContain(unsafeTerm);
     }
+  });
+
+  it("calls admin_settings_summary through the route with no-store response and cookie-only API forwarding", async () => {
+    const settingsSummary = {
+      general: {
+        storeName: "Scalius Test Store",
+        currency: "BDT",
+      },
+      checkout: {
+        phoneRequired: true,
+        guestCheckoutEnabled: false,
+      },
+      providers: {
+        payment: { configuredCount: 1, activeCount: 1 },
+        notifications: { emailReady: true, smsReady: false, whatsappReady: false },
+      },
+    };
+    const apiFetch = vi.fn<FetchLike>().mockImplementation((input) => {
+      const url = requestUrl(input);
+      if (url === "http://api.internal/api/v1/admin/settings/mcp-summary") {
+        return Promise.resolve(json({
+          success: true,
+          data: settingsSummary,
+          ignoredRootSecret: `must-not-leak ${ADMIN_COOKIE}`,
+        }));
+      }
+      return Promise.resolve(json(adminPermissionsBody()));
+    });
+    const worker = createAgentWorker();
+    const env = createEnv(apiFetch);
+    const init = await initializeAdminMcp(worker, env, {
+      Cookie: ADMIN_COOKIE,
+      Authorization: "Bearer must-not-forward",
+      "User-Agent": "vitest-admin-client",
+    });
+    const headers: Record<string, string> = {
+      Cookie: ADMIN_COOKIE,
+      Authorization: "Bearer must-not-forward",
+      "User-Agent": "vitest-admin-client",
+    };
+    if (init.sessionId) headers["Mcp-Session-Id"] = init.sessionId;
+    if (init.protocolVersion) headers["MCP-Protocol-Version"] = init.protocolVersion;
+
+    const callsBeforeTool = apiFetch.mock.calls.length;
+    const message = await adminMcpRpc(worker, env, {
+      jsonrpc: "2.0",
+      id: 21,
+      method: "tools/call",
+      params: {
+        name: "admin_settings_summary",
+        arguments: {},
+      },
+    }, headers);
+    const result = requireMcpResult(message);
+
+    expect(apiFetch.mock.calls.length).toBe(callsBeforeTool + 2);
+    const [preflightInput, preflightInit] = fetchCall(apiFetch, callsBeforeTool);
+    expect(requestUrl(preflightInput)).toBe("http://api.internal/api/v1/admin/rbac/my-permissions");
+    expect(new Headers(preflightInit?.headers).get("Authorization")).toBeNull();
+
+    const [settingsInput, settingsInit] = fetchCall(apiFetch, callsBeforeTool + 1);
+    expect(requestUrl(settingsInput)).toBe("http://api.internal/api/v1/admin/settings/mcp-summary");
+    expect(settingsInit?.method).toBe("GET");
+    expect(settingsInit?.body).toBeUndefined();
+    const settingsHeaders = new Headers(settingsInit?.headers);
+    expect(settingsHeaders.get("Accept")).toBe("application/json");
+    expect(settingsHeaders.get("Cookie")).toBe(ADMIN_COOKIE);
+    expect(settingsHeaders.get("User-Agent")).toBe("vitest-admin-client");
+    expect(settingsHeaders.get("Authorization")).toBeNull();
+    expect([...settingsHeaders.keys()].sort()).toEqual(["accept", "cookie", "user-agent"]);
+    expect(result.isError).toBeUndefined();
+    expect(adminSettingsSummaryContext(result)).toEqual(settingsSummary);
+    expect(firstContentBlock(result)).toEqual({
+      type: "text",
+      text: "Admin settings summary is available.",
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("ignoredRootSecret");
+    expect(serialized).not.toContain("must-not-leak");
   });
 
   it("calls the RBAC endpoint for admin_session_context and returns compact structured content", async () => {
@@ -1717,6 +1805,177 @@ describe("admin MCP server", () => {
       expect(serialized).not.toContain("admin@example.test");
       expect(serialized).not.toContain("+8801712345678");
       expect(serialized).not.toContain("ord_secret");
+      expect(serialized).not.toContain("provider-secret");
+      expect(serialized).not.toContain("raw upstream leak");
+    }
+  });
+
+  it("calls admin_settings_summary through the API binding with exact redacted settings projection", async () => {
+    const longUserAgent = `vitest-admin-mcp-${"x".repeat(300)}`;
+    const settingsSummary = {
+      general: {
+        storeName: "Scalius Test Store",
+        storefrontUrlConfigured: true,
+        currency: "BDT",
+      },
+      checkout: {
+        phoneRequired: true,
+        guestCheckoutEnabled: false,
+        partialPaymentsEnabled: true,
+      },
+      discovery: {
+        productFeedEnabled: true,
+        sitemapEnabled: true,
+        ucpCatalogOnly: true,
+      },
+      providerReadiness: {
+        paymentGateways: { configuredCount: 2, activeCount: 1 },
+        notifications: { emailReady: true, smsReady: false, whatsappReady: true },
+      },
+    };
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: settingsSummary,
+      ignoredRootSecret: `must-not-leak ${ADMIN_COOKIE} provider-secret`,
+    });
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: ADMIN_COOKIE,
+      userAgent: longUserAgent,
+    });
+
+    const result = await client.callTool({
+      name: "admin_settings_summary",
+      arguments: {},
+    });
+
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [input, init] = fetchCall(apiFetch);
+    expect(requestUrl(input)).toBe("http://api.internal/api/v1/admin/settings/mcp-summary");
+    expect(init?.method).toBe("GET");
+    expect(init?.body).toBeUndefined();
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Cookie")).toBe(ADMIN_COOKIE);
+    expect(headers.get("User-Agent")).toBe(longUserAgent.slice(0, 256));
+    expect(headers.get("Authorization")).toBeNull();
+    expect([...headers.keys()].sort()).toEqual(["accept", "cookie", "user-agent"]);
+
+    expect(result.isError).toBeUndefined();
+    expect(adminSettingsSummaryContext(result as Record<string, unknown>)).toEqual(settingsSummary);
+    expect(firstContentBlock(result)).toEqual({
+      type: "text",
+      text: "Admin settings summary is available.",
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("ignoredRootSecret");
+    expect(serialized).not.toContain("must-not-leak");
+    expect(serialized).not.toContain("provider-secret");
+    expect(serialized).not.toContain(ADMIN_COOKIE);
+  });
+
+  it("returns a safe admin_settings_summary tool error when no cookie option is present", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: { general: { storeName: "Scalius Test Store" } },
+    });
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: null,
+      userAgent: "vitest-admin-mcp",
+    });
+
+    const result = await client.callTool({
+      name: "admin_settings_summary",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        code: "admin_session_required",
+        status: 401,
+      },
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects unexpected admin_settings_summary inputs before API fetches", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: { general: { storeName: "Scalius Test Store" } },
+    });
+    const { client } = await bootAdmin(apiFetch);
+
+    await expectValidationToolError(client.callTool({
+      name: "admin_settings_summary",
+      arguments: {
+        includeSecrets: true,
+        providerCredential: "provider-secret",
+        Authorization: "Bearer must-not-forward",
+      },
+    }));
+
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps admin_settings_summary upstream failures fail-closed without leaking upstream bodies", async () => {
+    const leak = `raw upstream leak ${ADMIN_COOKIE} admin@example.test +8801712345678 provider-secret`;
+    const cases: Array<{ makeResponse: () => Response; expectedStatus: number }> = [
+      {
+        makeResponse: () => json({ success: false, error: { code: "unauthorized", message: leak } }, 401),
+        expectedStatus: 401,
+      },
+      {
+        makeResponse: () => json({ success: false, error: { code: "forbidden", message: leak } }, 403),
+        expectedStatus: 403,
+      },
+      {
+        makeResponse: () => json({ success: false, error: { code: "server_error", message: leak } }, 500),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => new Response(`not json ${leak}`, {
+          status: 200,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        }),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => json({ success: false, error: { code: "invalid", message: leak } }),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => json({ success: true, data: [], message: leak }),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => json({ success: true, data: null, message: leak }),
+        expectedStatus: 503,
+      },
+    ];
+
+    for (const { makeResponse, expectedStatus } of cases) {
+      const apiFetch = vi.fn<FetchLike>().mockImplementation(() => Promise.resolve(makeResponse()));
+      const { client } = await bootAdmin(apiFetch);
+
+      const result = await client.callTool({
+        name: "admin_settings_summary",
+        arguments: {},
+      });
+
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        adminSettingsSummary: null,
+        error: {
+          code: "admin_settings_summary_unavailable",
+          status: expectedStatus,
+        },
+      });
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain(ADMIN_COOKIE);
+      expect(serialized).not.toContain("admin@example.test");
+      expect(serialized).not.toContain("+8801712345678");
       expect(serialized).not.toContain("provider-secret");
       expect(serialized).not.toContain("raw upstream leak");
     }
