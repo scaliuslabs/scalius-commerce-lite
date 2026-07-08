@@ -20,12 +20,13 @@ const defaultApiConfigPath = resolve(defaultRootDir, "apps/api/wrangler.jsonc");
 
 const DEFAULT_API_BASE_URL = "https://api.scalius.com";
 const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
-const DEFAULT_DASHBOARD_URL = "https://dashboard.scalius.com";
+export const DEFAULT_DASHBOARD_URL = "https://dashboard.scalius.com";
 export const DEFAULT_AGENT_URL = "https://scalius-agent.abnidaala.workers.dev";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const RELEASE_READYZ_SAMPLES = 4;
 const MAX_BODY_PREVIEW_LENGTH = 180;
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
+const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
 const MCP_PROTOCOL_VERSION = "2025-06-18";
@@ -43,6 +44,16 @@ const AGENT_EXPECTED_TOOL_NAMES = Object.freeze([
 const AGENT_CATALOG_TOOL_SMOKE = Object.freeze({
   name: "catalog_profile",
   arguments: Object.freeze({}),
+});
+const ADMIN_MCP_UNAUTHENTICATED_SMOKE_BODY = Object.freeze({
+  jsonrpc: "2.0",
+  id: 1,
+  method: "initialize",
+  params: Object.freeze({
+    protocolVersion: MCP_PROTOCOL_VERSION,
+    capabilities: Object.freeze({}),
+    clientInfo: MCP_CLIENT_INFO,
+  }),
 });
 const AGENT_FORBIDDEN_TOOL_TERM_PATTERN =
   /(?:^|[^a-z0-9])(?:checkout|carts?|orders?|payments?|customers?|recovery)(?:$|[^a-z0-9])/i;
@@ -1712,6 +1723,66 @@ export async function smokeAgentWorker({
   };
 }
 
+function hasNoStoreishFailureCache(cacheControl) {
+  return (
+    hasHeaderToken(cacheControl, "no-store") ||
+    (hasHeaderToken(cacheControl, "private") && hasHeaderToken(cacheControl, "no-cache"))
+  );
+}
+
+export async function smokeAdminMcpUnauthenticated({
+  dashboardUrl = DEFAULT_DASHBOARD_URL,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  fetchImpl = fetch,
+  logger = console,
+} = {}) {
+  const normalizedDashboardUrl = normalizeHttpBaseUrl(dashboardUrl, "Dashboard URL");
+  const mcpUrl = buildUrl(normalizedDashboardUrl, ADMIN_ASSISTANT_MCP_PATH);
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(mcpUrl, {
+      method: "POST",
+      headers: {
+        Accept: MCP_ACCEPT_HEADER,
+        "Cache-Control": "no-cache",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(ADMIN_MCP_UNAUTHENTICATED_SMOKE_BODY),
+      signal: controller.signal,
+    });
+    const body = await response.text();
+    const cacheControl = response.headers.get("cache-control") ?? "";
+
+    if (response.status !== 401 && response.status !== 403) {
+      throw new Error(
+        `Admin MCP unauthenticated smoke returned HTTP ${response.status}; ` +
+        `expected 401/403: ${responsePreview(body)}`,
+      );
+    }
+    if (!hasNoStoreishFailureCache(cacheControl)) {
+      throw new Error(
+        "Admin MCP unauthenticated smoke must return no-store-ish Cache-Control; " +
+        `got ${cacheControl || "missing Cache-Control"}.`,
+      );
+    }
+
+    logger?.log(
+      `PASS admin MCP auth: unauthenticated dashboard proxy returned ${response.status}.`,
+    );
+    return {
+      url: redactUrl(mcpUrl),
+      statusCode: response.status,
+      durationMs: Date.now() - startedAt,
+      cacheControl,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function collectUcpCapabilityNames(profile) {
   const capabilities = isRecord(profile?.ucp?.capabilities)
     ? profile.ucp.capabilities
@@ -2290,6 +2361,15 @@ async function checkAgentMcp(options, { fetchImpl, logger }) {
   });
 }
 
+async function checkAdminMcpAuth(options, { fetchImpl, logger }) {
+  return smokeAdminMcpUnauthenticated({
+    dashboardUrl: options.dashboardUrl,
+    timeoutMs: options.timeoutMs,
+    fetchImpl,
+    logger,
+  });
+}
+
 async function checkDiscovery(options, { fetchImpl, logger }) {
   const storefrontOrigin = new URL(options.storefrontUrl).origin;
   const responses = {};
@@ -2812,6 +2892,8 @@ export async function runReleaseCheck(options, {
   }
   await runStep(result, "adminInvalidCookieAuth", () =>
     checkInvalidAdminCookieAuth(options, { fetchImpl, logger }));
+  await runStep(result, "adminMcpAuth", () =>
+    checkAdminMcpAuth(options, { fetchImpl, logger }));
   await runStep(result, "dashboard", () =>
     checkDashboard(options, { fetchImpl, logger }));
   await runStep(result, "storefront", () =>

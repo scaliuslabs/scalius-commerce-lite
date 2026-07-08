@@ -14,12 +14,14 @@ import {
   normalizeHttpBaseUrl,
   parseReleaseCheckArgs,
   runReleaseCheck,
+  smokeAdminMcpUnauthenticated,
   smokeAgentWorker,
 } from "./release-check.mjs";
 
 const SITEMAP_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
 const FEED_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=43200";
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
+const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 
 function textResponse(body, status = 200, headers = {}) {
@@ -108,10 +110,10 @@ function decorateStorefrontCacheSmokeResponse(url, response) {
   return response;
 }
 
-function jsonResponse(payload, status = 200) {
+function jsonResponse(payload, status = 200, headers = {}) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8" },
+    headers: { "Content-Type": "application/json; charset=utf-8", ...headers },
   });
 }
 
@@ -236,9 +238,35 @@ function invalidAdminCookieResponse(url, init = {}) {
   return null;
 }
 
+function unauthenticatedAdminMcpResponse(url, init = {}) {
+  const parsed = new URL(url);
+  if (parsed.pathname !== ADMIN_ASSISTANT_MCP_PATH) return null;
+
+  expect(parsed.hostname).toBe("dashboard.example.test");
+  expect(init.method).toBe("POST");
+  const headers = new Headers(init.headers);
+  expect(headers.get("accept")).toBe("application/json, text/event-stream");
+  expect(headers.get("content-type")).toBe("application/json");
+  expect(headers.has("cookie")).toBe(false);
+  expect(headers.has("authorization")).toBe(false);
+  expect(JSON.parse(init.body)).toMatchObject({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+  });
+
+  return jsonResponse(
+    { success: false, error: { code: "UNAUTHORIZED" } },
+    401,
+    { "Cache-Control": "private, no-cache, no-store, must-revalidate" },
+  );
+}
+
 function releaseFetch(implementation) {
   return vi.fn(async (url, init = {}) => {
-    const response = invalidAdminCookieResponse(url, init);
+    const response =
+      invalidAdminCookieResponse(url, init) ||
+      unauthenticatedAdminMcpResponse(url, init);
     if (response) return response;
     try {
       return decorateStorefrontCacheSmokeResponse(url, await implementation(url, init));
@@ -852,6 +880,62 @@ describe("release-check local evaluators", () => {
       logger: null,
     })).rejects.toThrow(/catalog_profile failed: .*checkout\/cart\/order\/payment/);
   });
+
+  it("accepts an unauthenticated admin MCP 401/403 with no-store-ish cache headers", async () => {
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+      expect(parsed.href).toBe("https://dashboard.example.test/api/assistant/mcp");
+      expect(init.method).toBe("POST");
+      const headers = new Headers(init.headers);
+      expect(headers.get("accept")).toBe("application/json, text/event-stream");
+      expect(headers.get("content-type")).toBe("application/json");
+      expect(headers.has("cookie")).toBe(false);
+      expect(JSON.parse(init.body)).toMatchObject({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+      });
+
+      return jsonResponse(
+        { success: false, error: { code: "UNAUTHORIZED" } },
+        401,
+        { "Cache-Control": "private, no-cache, no-store, must-revalidate" },
+      );
+    });
+
+    await expect(smokeAdminMcpUnauthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      fetchImpl,
+      timeoutMs: 5_000,
+      logger: null,
+    })).resolves.toMatchObject({
+      url: "https://dashboard.example.test/api/assistant/mcp",
+      statusCode: 401,
+      cacheControl: "private, no-cache, no-store, must-revalidate",
+    });
+  });
+
+  it("rejects admin MCP unauthenticated smokes that succeed or lack no-store-ish cache headers", async () => {
+    await expect(smokeAdminMcpUnauthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      fetchImpl: vi.fn(async () => jsonResponse({ success: true }, 200, {
+        "Cache-Control": "no-store",
+      })),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("expected 401/403");
+
+    await expect(smokeAdminMcpUnauthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      fetchImpl: vi.fn(async () => jsonResponse(
+        { success: false },
+        401,
+        { "Cache-Control": "public, max-age=60" },
+      )),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("no-store-ish Cache-Control");
+  });
 });
 
 describe("release-check discovery evaluators", () => {
@@ -1451,6 +1535,11 @@ describe("runReleaseCheck", () => {
         statusCode: 403,
       },
     });
+    expect(result.checks.adminMcpAuth).toMatchObject({
+      url: "https://dashboard.example.test/api/assistant/mcp",
+      statusCode: 401,
+      cacheControl: "private, no-cache, no-store, must-revalidate",
+    });
     expect(result.checks.dashboard).toMatchObject({
       statusCode: 307,
       location: "/auth/login",
@@ -1751,6 +1840,85 @@ describe("runReleaseCheck", () => {
     expect(thrown).toBeInstanceOf(Error);
     expect(thrown.message).toContain(expectedMessage);
     expect(thrown.result.checks.adminInvalidCookieAuth).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining(expectedMessage),
+    });
+  });
+
+  it.each([
+    {
+      label: "admin MCP accepts unauthenticated access",
+      dashboardMcpResponse: () => jsonResponse({ success: true }, 200, {
+        "Cache-Control": "no-store",
+      }),
+      expectedMessage: "expected 401/403",
+    },
+    {
+      label: "admin MCP auth failure is cacheable",
+      dashboardMcpResponse: () => jsonResponse(
+        { success: false, error: { code: "UNAUTHORIZED" } },
+        401,
+        { "Cache-Control": "public, max-age=60" },
+      ),
+      expectedMessage: "no-store-ish Cache-Control",
+    },
+  ])("fails when $label", async ({ dashboardMcpResponse, expectedMessage }) => {
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+
+      if (parsed.hostname === "api.example.test") {
+        if (parsed.pathname === "/api/v1/health") return textResponse("ok");
+        if (parsed.pathname === "/api/v1/readyz") return readyResponse();
+        if (parsed.pathname === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
+        if (parsed.pathname === ADMIN_BUSINESS_SETTINGS_PATH) {
+          return jsonResponse({ success: false, error: { code: "UNAUTHORIZED" } }, 401);
+        }
+      }
+
+      if (
+        parsed.hostname === "dashboard.example.test" &&
+        parsed.pathname === ADMIN_BUSINESS_SETTINGS_PATH
+      ) {
+        return jsonResponse({ success: false, error: { code: "FORBIDDEN" } }, 403);
+      }
+
+      if (
+        parsed.hostname === "dashboard.example.test" &&
+        parsed.pathname === ADMIN_ASSISTANT_MCP_PATH
+      ) {
+        expect(init.method).toBe("POST");
+        const headers = new Headers(init.headers);
+        expect(headers.has("cookie")).toBe(false);
+        expect(headers.has("authorization")).toBe(false);
+        return dashboardMcpResponse();
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    let thrown;
+    try {
+      await runReleaseCheck(parseReleaseCheckArgs([
+        "--skip-wrangler",
+        "--api-base-url", "https://api.example.test",
+        "--storefront-url", "https://storefront.example.test",
+        "--dashboard-url", "https://dashboard.example.test",
+      ]), {
+        apiConfig: monitoringApiConfig(),
+        fetchImpl,
+        execFileImpl: vi.fn(),
+        rootDir: "/repo",
+        readFileImpl: () => verifiedTracker(),
+        fileExistsImpl: () => true,
+        logger: null,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message).toContain(expectedMessage);
+    expect(thrown.result.checks.adminMcpAuth).toMatchObject({
       status: "failed",
       error: expect.stringContaining(expectedMessage),
     });

@@ -4,6 +4,7 @@ import {
   getDeployCommandForTarget,
   parseOnlyTarget,
   sampleApiReadiness,
+  verifyAdminDeploy,
   verifyAgentDeploy,
 } from "./deploy.mjs";
 
@@ -41,6 +42,20 @@ function agentHealthResponse() {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
+    },
+  });
+}
+
+function adminMcpUnauthenticatedResponse(status = 401, headers = {}) {
+  return new Response(JSON.stringify({
+    success: false,
+    error: { code: status === 403 ? "FORBIDDEN" : "UNAUTHORIZED" },
+  }), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "private, no-cache, no-store, must-revalidate",
+      ...headers,
     },
   });
 }
@@ -173,6 +188,67 @@ describe("deploy API readiness sampling", () => {
       fetchImpl,
       sleepImpl: async () => undefined,
     })).rejects.toThrow("1/2 ready");
+  });
+});
+
+describe("deploy admin verification", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("passes when dashboard admin MCP rejects unauthenticated requests with no-store", async () => {
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+      expect(parsed.href).toBe("https://dashboard.example.test/api/assistant/mcp");
+      expect(init.method).toBe("POST");
+      const headers = new Headers(init.headers);
+      expect(headers.get("accept")).toBe("application/json, text/event-stream");
+      expect(headers.get("content-type")).toBe("application/json");
+      expect(headers.has("cookie")).toBe(false);
+      expect(headers.has("authorization")).toBe(false);
+      expect(JSON.parse(init.body)).toMatchObject({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+      });
+
+      return adminMcpUnauthenticatedResponse();
+    });
+
+    const result = await verifyAdminDeploy({
+      dashboardUrl: "https://dashboard.example.test",
+      fetchImpl,
+      timeoutMs: 5_000,
+    });
+
+    expect(result).toMatchObject({
+      url: "https://dashboard.example.test/api/assistant/mcp",
+      statusCode: 401,
+      cacheControl: "private, no-cache, no-store, must-revalidate",
+    });
+    expect(console.log).toHaveBeenCalledWith(
+      "✓ Admin MCP rejected unauthenticated request with 401; " +
+      "Cache-Control: private, no-cache, no-store, must-revalidate.",
+    );
+  });
+
+  it("fails when dashboard admin MCP does not fail closed", async () => {
+    await expect(verifyAdminDeploy({
+      dashboardUrl: "https://dashboard.example.test",
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      })),
+      timeoutMs: 5_000,
+    })).rejects.toThrow("expected 401/403");
   });
 });
 

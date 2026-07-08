@@ -208,8 +208,9 @@ interface Env {
   SHARED_AUTH_CACHE: KVNamespace;
   EMAIL?: CloudflareSendEmailBinding;
 
-  // Service binding to API worker
+  // Service bindings
   API: Fetcher;
+  AGENT: Fetcher;
 
   // Secrets (set via `wrangler secret put`)
   BETTER_AUTH_SECRET: string;

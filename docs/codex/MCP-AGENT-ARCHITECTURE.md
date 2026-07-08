@@ -24,6 +24,8 @@ Admin MCP is authenticated, admin-only, and starts small.
 
 - Use the active dashboard/admin session and API service binding. Do not add bearer/JWT fallback.
 - Enforce Better Auth session validity, onboarding gates, 2FA truth, and API RBAC through existing admin API middleware.
+- The first implemented admin slice is intentionally tiny: `apps/agent` exposes `/mcp/admin`, `apps/admin-v2` proxies it from `/api/assistant/mcp`, and the only tool is `admin_session_context`.
+- That first admin slice forwards only the dashboard cookie and MCP protocol headers, strips `Authorization`, checks `/api/v1/admin/rbac/my-permissions` through the API service binding, returns `Cache-Control: no-store`, and has no direct D1/KV/R2/queue/provider-secret bindings.
 - Use Cloudflare Code Mode only for the large admin OpenAPI/search surface, with an allowlisted execute path and host-owned auth callback.
 - Prefer typed high-value tools for risky or important workflows.
 - Expose read/search tools first: dashboard, products, categories, collections, CMS pages, orders, inventory lookup, media listing, and read-only settings.
@@ -52,6 +54,8 @@ For visible chat/task UI, adapt AI Elements-style composable components into the
 References reviewed:
 
 - [Cloudflare MCP overview](https://developers.cloudflare.com/agents/model-context-protocol/)
+- [Cloudflare Streamable HTTP MCP transport](https://developers.cloudflare.com/agents/model-context-protocol/protocol/transport/)
+- [Cloudflare `createMcpHandler` API](https://developers.cloudflare.com/agents/model-context-protocol/apis/handler-api/)
 - [Cloudflare Code Mode MCP pattern](https://developers.cloudflare.com/agents/model-context-protocol/codemode/)
 - [Flue Cloudflare deployment](https://flueframework.com/docs/ecosystem/deploy/cloudflare/)
 - [AI Elements](https://elements.ai-sdk.dev/)

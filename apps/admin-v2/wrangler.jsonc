@@ -53,6 +53,10 @@
     {
       "binding": "API",
       "service": "scalius-api"
+    },
+    {
+      "binding": "AGENT",
+      "service": "scalius-agent"
     }
   ],
   "vars": {
