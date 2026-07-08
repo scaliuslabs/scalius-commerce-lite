@@ -10,6 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
+import { useAdminAssistantDialogSurface } from "~/components/admin/assistant/dialog-surface";
 
 interface ProductDeleteDialogProps {
   showTrashed: boolean;
@@ -34,10 +35,33 @@ export function ProductDeleteDialog({
   onConfirmSingle,
   onConfirmBulk,
 }: ProductDeleteDialogProps) {
+  const isSingleDialogOpen = !!productToDelete && !isBulkDeleteOpen;
+  const singleDialogLabel = showTrashed
+    ? "Permanent product delete confirmation dialog"
+    : "Move product to trash confirmation dialog";
+  const bulkDialogLabel = showTrashed
+    ? `Permanent bulk product delete confirmation dialog (${selectedCount} selected)`
+    : `Bulk move products to trash confirmation dialog (${selectedCount} selected)`;
+
+  useAdminAssistantDialogSurface({
+    id: showTrashed
+      ? "product-permanent-delete-dialog"
+      : "product-delete-dialog",
+    label: singleDialogLabel,
+    open: isSingleDialogOpen,
+    submitting: isActionLoading,
+  });
+  useAdminAssistantDialogSurface({
+    id: "bulk-product-delete-dialog",
+    label: bulkDialogLabel,
+    open: isBulkDeleteOpen,
+    submitting: isActionLoading,
+  });
+
   return (
     <>
       <AlertDialog
-        open={!!productToDelete && !isBulkDeleteOpen}
+        open={isSingleDialogOpen}
         onOpenChange={(open) => {
           if (!open) onCloseSingle();
         }}
