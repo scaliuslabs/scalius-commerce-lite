@@ -9380,6 +9380,139 @@ export type PostApiV1AdminCustomersResponses = {
 
 export type PostApiV1AdminCustomersResponse = PostApiV1AdminCustomersResponses[keyof PostApiV1AdminCustomersResponses];
 
+export type PostApiV1AdminCustomersMcpSearchData = {
+    body?: {
+        query: string;
+        page?: number;
+        limit?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/customers/mcp-search';
+};
+
+export type PostApiV1AdminCustomersMcpSearchErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersMcpSearchError = PostApiV1AdminCustomersMcpSearchErrors[keyof PostApiV1AdminCustomersMcpSearchErrors];
+
+export type PostApiV1AdminCustomersMcpSearchResponses = {
+    /**
+     * Redacted customer search projection for Admin MCP
+     */
+    200: {
+        success: true;
+        data: {
+            source: {
+                path: '/api/v1/admin/customers/mcp-search';
+                permission: 'customers.view';
+            };
+            request: {
+                hasQuery: true;
+                page: number;
+                limit: number;
+                sort: 'updatedAt';
+                order: 'desc';
+            };
+            customers: Array<{
+                id: string;
+                totalOrders: number;
+                totalSpent: number;
+                lastOrderAt: string | number | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+            }>;
+            pagination: {
+                total: number;
+                page: number;
+                limit: number;
+                totalPages: number;
+            };
+            limits: {
+                maxCustomers: 10;
+                maxPage: 20;
+                includesRawQuery: false;
+                includesTrashed: false;
+                includesNames: false;
+                includesContacts: false;
+                includesAddresses: false;
+                includesLocation: false;
+                includesHistory: false;
+                includesOrders: false;
+                canMutate: false;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersMcpSearchResponse = PostApiV1AdminCustomersMcpSearchResponses[keyof PostApiV1AdminCustomersMcpSearchResponses];
+
 export type PostApiV1AdminCustomersBulkDeleteData = {
     body?: {
         customerIds: Array<string>;

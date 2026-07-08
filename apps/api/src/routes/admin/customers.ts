@@ -16,7 +16,7 @@ import {
 } from "@scalius/core/modules/customers";
 import { customers, customerHistory, orders, deliveryLocations } from "@scalius/database/schema";
 import { eq, sql, inArray, isNull, and } from "drizzle-orm";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
@@ -83,6 +83,74 @@ const customerHistoryPayloadSchema = z.object({
     orders: z.array(customerHistoryOrderSchema),
 });
 
+const MCP_SEARCH_SOURCE = {
+    path: "/api/v1/admin/customers/mcp-search",
+    permission: "customers.view",
+} as const;
+
+const MCP_SEARCH_LIMITS = {
+    maxCustomers: 10,
+    maxPage: 20,
+    includesRawQuery: false,
+    includesTrashed: false,
+    includesNames: false,
+    includesContacts: false,
+    includesAddresses: false,
+    includesLocation: false,
+    includesHistory: false,
+    includesOrders: false,
+    canMutate: false,
+} as const;
+
+const mcpCustomerSearchRequestSchema = z.object({
+    query: z.string().trim().min(1).max(120),
+    page: z.number().int().min(1).max(MCP_SEARCH_LIMITS.maxPage).default(1),
+    limit: z.number().int().min(1).max(MCP_SEARCH_LIMITS.maxCustomers).default(5),
+}).strict();
+
+const mcpCustomerSearchCustomerSchema = z.object({
+    id: z.string(),
+    totalOrders: z.number(),
+    totalSpent: z.number(),
+    lastOrderAt: nullableTimestampSchema,
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+});
+
+const mcpCustomerSearchResponseSchema = z.object({
+    source: z.object({
+        path: z.literal(MCP_SEARCH_SOURCE.path),
+        permission: z.literal(MCP_SEARCH_SOURCE.permission),
+    }),
+    request: z.object({
+        hasQuery: z.literal(true),
+        page: z.number(),
+        limit: z.number(),
+        sort: z.literal("updatedAt"),
+        order: z.literal("desc"),
+    }),
+    customers: z.array(mcpCustomerSearchCustomerSchema),
+    pagination: z.object({
+        total: z.number(),
+        page: z.number(),
+        limit: z.number(),
+        totalPages: z.number(),
+    }),
+    limits: z.object({
+        maxCustomers: z.literal(MCP_SEARCH_LIMITS.maxCustomers),
+        maxPage: z.literal(MCP_SEARCH_LIMITS.maxPage),
+        includesRawQuery: z.literal(false),
+        includesTrashed: z.literal(false),
+        includesNames: z.literal(false),
+        includesContacts: z.literal(false),
+        includesAddresses: z.literal(false),
+        includesLocation: z.literal(false),
+        includesHistory: z.literal(false),
+        includesOrders: z.literal(false),
+        canMutate: z.literal(false),
+    }),
+});
+
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const q = c.req.valid("query");
@@ -118,6 +186,79 @@ app.openapi(createCustomerRoute, async (c) => {
     const data = c.req.valid("json");
     const result = await createCustomer(db, data);
     return created(c, result);
+});
+
+// ── Redacted MCP Customer Search ──
+
+const mcpCustomerSearchRoute = createRoute({
+    method: "post",
+    path: "/mcp-search",
+    tags: ["Admin - Customers"],
+    summary: "Search customers for Admin MCP with redacted customer projection",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: mcpCustomerSearchRequestSchema,
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Redacted customer search projection for Admin MCP",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(mcpCustomerSearchResponseSchema),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(mcpCustomerSearchRoute, async (c) => {
+    const requestUrl = new URL(c.req.url);
+    if (requestUrl.search) {
+        throw new ValidationError("MCP customer search accepts body JSON only.");
+    }
+
+    const db = c.get("db");
+    const body = c.req.valid("json");
+    const result = await listCustomers(db, {
+        search: body.query,
+        page: body.page,
+        limit: body.limit,
+        showTrashed: false,
+        sort: "updatedAt",
+        order: "desc",
+    });
+
+    return ok(c, {
+        source: MCP_SEARCH_SOURCE,
+        request: {
+            hasQuery: true as const,
+            page: body.page,
+            limit: body.limit,
+            sort: "updatedAt" as const,
+            order: "desc" as const,
+        },
+        customers: result.customers.map((customer) => ({
+            id: customer.id,
+            totalOrders: customer.totalOrders,
+            totalSpent: customer.totalSpent,
+            lastOrderAt: customer.lastOrderAt,
+            createdAt: customer.createdAt,
+            updatedAt: customer.updatedAt,
+        })),
+        pagination: {
+            total: result.pagination.total,
+            page: result.pagination.page,
+            limit: result.pagination.limit,
+            totalPages: result.pagination.totalPages,
+        },
+        limits: MCP_SEARCH_LIMITS,
+    });
 });
 
 // ── Bulk Delete Customers ──

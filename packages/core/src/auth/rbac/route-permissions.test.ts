@@ -4,6 +4,11 @@ import { PERMISSIONS } from "./permissions";
 import { getRoutePermission } from "./route-permissions";
 
 describe("route permissions", () => {
+  it("gates redacted Admin MCP customer search behind customers.view", () => {
+    expect(getRoutePermission("/api/v1/admin/customers/mcp-search", "POST"))
+      .toEqual({ permission: PERMISSIONS.CUSTOMERS_VIEW });
+  });
+
   it("keeps hosted-payment recovery queue and export read-only", () => {
     expect(getRoutePermission("/api/v1/admin/orders/payment-recovery", "GET"))
       .toEqual({ permission: PERMISSIONS.ORDERS_VIEW });
