@@ -15,6 +15,7 @@ describe("storefront assistant page-context source boundaries", () => {
     );
 
     expect(source).toContain('from "@/store/cart"');
+    expect(source).not.toMatch(/\bhydrateCartFromStorage\b/);
     expect(source).not.toMatch(/\baddToCart\b/);
     expect(source).not.toMatch(/\bremoveFromCart\b/);
     expect(source).not.toMatch(/\bupdateQuantity\b/);

@@ -132,6 +132,8 @@ const ADMIN_MCP_FORBIDDEN_MUTATION_TERMS = [
 
 const MCP_ACCEPT_HEADER = "application/json, text/event-stream";
 const MCP_PROTOCOL_VERSION = "2025-06-18";
+const INTERNAL_ADMIN_MCP_URL = "http://agent.internal/mcp/admin";
+const PUBLIC_ADMIN_MCP_URL = "https://agent.example.test/mcp/admin";
 
 interface BootedClient {
   client: Client;
@@ -224,8 +226,9 @@ function parseRequestBody(init: RequestInit | undefined): Record<string, unknown
 function mcpRequest(
   body: Record<string, unknown>,
   headers: Record<string, string> = {},
+  url = INTERNAL_ADMIN_MCP_URL,
 ): Request {
-  return new Request("https://agent.example.test/mcp/admin", {
+  return new Request(url, {
     method: "POST",
     headers: {
       Accept: MCP_ACCEPT_HEADER,
@@ -516,16 +519,22 @@ describe("storefront catalog MCP server", () => {
     });
   });
 
-  it("reads the storefront UCP profile with GET", async () => {
-    const fetchImpl = vi.fn<FetchLike>().mockResolvedValue(json({
+  it("allows a safe catalog-only storefront UCP profile with GET", async () => {
+    const safeProfile = {
       ucp: {
         version: UCP_VERSION,
         capabilities: {
-          "dev.ucp.shopping.catalog.search": [],
-          "dev.ucp.shopping.catalog.lookup": [],
+          "dev.ucp.shopping.catalog.search": [{
+            version: UCP_VERSION,
+            description: "Catalog-only discovery with no checkout or payment support.",
+          }],
+          "dev.ucp.shopping.catalog.lookup": [{ version: UCP_VERSION }],
+          "dev.ucp.shopping.catalog.product": [{ version: UCP_VERSION }],
         },
       },
-    }));
+      signing_keys: [{ kid: "catalog-key", use: "sig" }],
+    };
+    const fetchImpl = vi.fn<FetchLike>().mockResolvedValue(json(safeProfile));
     const { client } = await boot(fetchImpl);
 
     const result = await client.callTool({
@@ -537,10 +546,92 @@ describe("storefront catalog MCP server", () => {
     expect(result.structuredContent).toMatchObject({
       ucp: { version: UCP_VERSION },
     });
+    expect(result.structuredContent).toEqual(safeProfile);
     const [input, init] = fetchCall(fetchImpl);
     expect(requestUrl(input)).toBe("https://storefront.example.test/.well-known/ucp");
     expect(init?.method).toBe("GET");
     expect(new Headers(init?.headers).get("UCP-Agent")).toBe(`profile="${DEFAULT_AGENT_PROFILE_URL}"`);
+  });
+
+  it("fails catalog_profile closed when the upstream UCP profile advertises transaction capabilities", async () => {
+    const unsafeProfiles = [
+      {
+        profile: {
+          ucp: {
+            version: UCP_VERSION,
+            capabilities: {
+              "dev.ucp.shopping.catalog.search": [{ version: UCP_VERSION }],
+              "dev.ucp.shopping.cart.mutation": [{ version: UCP_VERSION }],
+              "dev.ucp.shopping.checkout": [{ version: UCP_VERSION }],
+              "dev.ucp.shopping.order": [{ version: UCP_VERSION }],
+            },
+          },
+        },
+        leakedTerms: [
+          "dev.ucp.shopping.cart.mutation",
+          "dev.ucp.shopping.checkout",
+          "dev.ucp.shopping.order",
+        ],
+      },
+      {
+        profile: {
+          ucp: {
+            version: UCP_VERSION,
+            capabilities: {
+              "dev.ucp.shopping.catalog.search": [{ version: UCP_VERSION }],
+            },
+            payment_handlers: {
+              "com.example.unsafe": [{
+                id: "sslcommerz_payment_handler",
+                available_instruments: [{ type: "card" }],
+              }],
+            },
+          },
+        },
+        leakedTerms: [
+          "payment_handlers",
+          "sslcommerz_payment_handler",
+        ],
+      },
+    ];
+
+    for (const { profile, leakedTerms } of unsafeProfiles) {
+      const fetchImpl = vi.fn<FetchLike>().mockResolvedValue(json(profile));
+      const { client } = await boot(fetchImpl);
+
+      const result = await client.callTool({
+        name: "catalog_profile",
+        arguments: {},
+      });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toEqual({
+        ucp: { status: "error", version: UCP_VERSION },
+        messages: [{
+          type: "error",
+          code: "ucp_profile_not_catalog_only",
+          content: "Storefront catalog is temporarily unavailable.",
+          severity: "recoverable",
+        }],
+      });
+
+      const contentBlock = firstContentBlock(result);
+      expect(contentBlock).toMatchObject({
+        type: "text",
+        text: expect.stringContaining("ucp_profile_not_catalog_only"),
+      });
+      const text = isRecord(contentBlock) && typeof contentBlock.text === "string"
+        ? contentBlock.text
+        : "";
+      for (const leakedTerm of leakedTerms) {
+        expect(text).not.toContain(leakedTerm);
+      }
+
+      const [input, init] = fetchCall(fetchImpl);
+      expect(requestUrl(input)).toBe("https://storefront.example.test/.well-known/ucp");
+      expect(init?.method).toBe("GET");
+    }
   });
 
   it("validates a bounded cart snapshot through the storefront proxy", async () => {
@@ -733,6 +824,35 @@ describe("agent Worker routes", () => {
 });
 
 describe("admin MCP route", () => {
+  it("hides admin MCP on the public agent host before auth or API preflight", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody());
+    const worker = createAgentWorker();
+    const response = await worker.fetch(
+      mcpRequest({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: {},
+      }, {
+        Cookie: ADMIN_COOKIE,
+      }, PUBLIC_ADMIN_MCP_URL),
+      createEnv(apiFetch),
+      createExecutionContext(),
+    );
+
+    const body = await response.text();
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+    expect(JSON.parse(body)).toEqual({
+      success: false,
+      error: "not_found",
+    });
+    expect(body.toLowerCase()).not.toContain("admin");
+    expect(body.toLowerCase()).not.toContain("mcp");
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
   it("fails closed with no-store 401 before MCP handling when Cookie is missing", async () => {
     const apiFetch = mockJsonFetch(adminPermissionsBody());
     const worker = createAgentWorker();

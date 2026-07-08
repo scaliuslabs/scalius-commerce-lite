@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_WIDGET_AI_CONFIG,
   getAllowedWidgetAiModels,
+  getWidgetAiAdminSettings,
+  getWidgetAiProviderCredentialError,
+  getWidgetAiRuntimeSettings,
   maskWidgetAiAdminSettings,
   normalizeWidgetAiConfig,
   providerHasCredentials,
@@ -9,11 +12,35 @@ import {
   type WidgetAiRuntimeSettings,
 } from "./ai-settings.service";
 import { ValidationError } from "@scalius/core/errors";
+import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 import {
   resolveWidgetAiModelCapabilities,
   supportsWidgetAiVisionInput,
 } from "./ai-config";
 import { DEFAULT_AI_PROMPTS } from "./default-prompts";
+
+function credentialKey(byte: number) {
+  return Buffer.alloc(32, byte).toString("base64");
+}
+
+function createAiSettingsDb(rows: Array<{ key: string; value: string }>) {
+  return {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          all: async () => rows,
+        }),
+      }),
+    }),
+  };
+}
+
+function widgetAiConfigRow(value: unknown) {
+  return {
+    key: "widget_generation_config",
+    value: JSON.stringify(value),
+  };
+}
 
 describe("widget AI settings", () => {
   it("normalizes malformed config to safe defaults", () => {
@@ -76,10 +103,11 @@ describe("widget AI settings", () => {
     ).toThrow("Cloudflare account ID");
   });
 
-  it("treats Cloudflare binding as valid credentials", () => {
+  it("treats Cloudflare binding as valid credentials even when no REST key exists", () => {
     const runtime: WidgetAiRuntimeSettings = {
       ...DEFAULT_WIDGET_AI_CONFIG,
       apiKeys: {},
+      credentialErrors: {},
       hasCloudflareBinding: true,
     };
 
@@ -102,6 +130,7 @@ describe("widget AI settings", () => {
         },
       },
       apiKeys: {},
+      credentialErrors: {},
       hasCloudflareBinding: true,
     };
 
@@ -125,6 +154,7 @@ describe("widget AI settings", () => {
     const runtime: WidgetAiRuntimeSettings = {
       ...DEFAULT_WIDGET_AI_CONFIG,
       apiKeys: {},
+      credentialErrors: {},
       hasCloudflareBinding: true,
     };
 
@@ -179,6 +209,7 @@ describe("widget AI settings", () => {
         openai: "sk-prod-openai",
         cloudflare: "cf-prod-token",
       },
+      credentialErrors: {},
       hasCloudflareBinding: true,
     };
 
@@ -194,5 +225,91 @@ describe("widget AI settings", () => {
     expect(adminSettings.providers.openai.hasApiKey).toBe(true);
     expect(adminSettings.providers.cloudflare.hasApiKey).toBe(true);
     expect(adminSettings.providers.cloudflare.hasBinding).toBe(true);
+  });
+
+  it("surfaces encrypted credential readiness errors when the credential key is missing", async () => {
+    const key = credentialKey(12);
+    const encrypted = await encryptCredentials("sk-prod-openai", key);
+    const db = createAiSettingsDb([
+      widgetAiConfigRow({
+        activeProvider: "openai",
+        providers: {
+          openai: {
+            enabled: true,
+            defaultModel: "gpt-5.4",
+          },
+        },
+      }),
+      { key: "api_key_openai", value: encrypted },
+    ]);
+
+    const runtime = await getWidgetAiRuntimeSettings(db as never);
+    const expectedError =
+      "Widget AI OpenAI API key is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.";
+
+    expect(runtime.apiKeys.openai).toBeUndefined();
+    expect(runtime.credentialErrors?.openai).toBe(expectedError);
+    expect(getWidgetAiProviderCredentialError(runtime)).toBe(expectedError);
+    expect(providerHasCredentials(runtime, runtime.activeProvider)).toBe(false);
+
+    const adminSettings = await getWidgetAiAdminSettings(db as never);
+    const serialized = JSON.stringify(adminSettings);
+
+    expect(adminSettings.providers.openai.hasApiKey).toBe(false);
+    expect(adminSettings.providers.openai.credentialError).toBe(expectedError);
+    expect(adminSettings.credentialErrors.openai).toBe(expectedError);
+    expect(serialized).not.toContain("sk-prod-openai");
+    expect(serialized).not.toContain(encrypted);
+  });
+
+  it("surfaces encrypted credential decrypt failures without treating ciphertext as configured", async () => {
+    const key = credentialKey(13);
+    const wrongKey = credentialKey(14);
+    const db = createAiSettingsDb([
+      widgetAiConfigRow({
+        activeProvider: "openai",
+        providers: {
+          openai: {
+            enabled: true,
+            defaultModel: "gpt-5.4",
+          },
+        },
+      }),
+      { key: "api_key_openai", value: await encryptCredentials("sk-prod-openai", key) },
+    ]);
+
+    const runtime = await getWidgetAiRuntimeSettings(db as never, {}, wrongKey);
+
+    expect(runtime.apiKeys.openai).toBeUndefined();
+    expect(runtime.credentialErrors?.openai).toBe(
+      "Widget AI OpenAI API key could not be decrypted with the configured credential key.",
+    );
+    expect(providerHasCredentials(runtime, runtime.activeProvider)).toBe(false);
+  });
+
+  it("keeps legacy plaintext provider keys readable", async () => {
+    const db = createAiSettingsDb([
+      widgetAiConfigRow({
+        activeProvider: "openrouter",
+        providers: {
+          openrouter: {
+            enabled: true,
+            defaultModel: "openai/gpt-5.4",
+          },
+        },
+      }),
+      { key: "api_key_openrouter", value: "sk-legacy-openrouter" },
+    ]);
+
+    const runtime = await getWidgetAiRuntimeSettings(db as never);
+
+    expect(runtime.apiKeys.openrouter).toBe("sk-legacy-openrouter");
+    expect(runtime.credentialErrors?.openrouter).toBeUndefined();
+    expect(providerHasCredentials(runtime, runtime.activeProvider)).toBe(true);
+
+    const adminSettings = await getWidgetAiAdminSettings(db as never);
+    expect(adminSettings.providers.openrouter.hasApiKey).toBe(true);
+    expect(adminSettings.providers.openrouter.credentialError).toBeUndefined();
+    expect(JSON.stringify(adminSettings)).not.toContain("sk-legacy-openrouter");
   });
 });

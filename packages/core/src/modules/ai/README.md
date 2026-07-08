@@ -30,6 +30,8 @@ Canonical settings use:
 
 Secrets are encrypted with the same credential encryption key used by payment providers. Non-secret provider details such as base URL, attribution URL, account ID, default model, generation temperatures, max output tokens, and staged generation default are stored in `widget_generation_config`.
 
+Runtime and admin reads must use `readStoredCredentialStrict()` for saved provider keys. Legacy plaintext keys remain readable, but encrypted rows without the dedicated `CREDENTIAL_ENCRYPTION_KEY` or rows that fail decrypt must return no API key plus the safe per-provider `credentialErrors` message; do not catch decrypt failures and collapse them into a silent `hasApiKey: false`.
+
 ## Files
 
 - `ai-settings.service.ts` reads, normalizes, masks, encrypts, and updates dashboard-managed AI settings.
