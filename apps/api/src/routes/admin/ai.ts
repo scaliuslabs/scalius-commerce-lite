@@ -19,7 +19,7 @@ import {
   type WidgetAiRuntimeSettings,
 } from '@scalius/core/modules/ai';
 import { ok } from '../../utils/api-response';
-import { RateLimitError, ValidationError } from '../../utils/api-error';
+import { RateLimitError, ServiceUnavailableError, ValidationError } from '../../utils/api-error';
 import { errorResponses, successEnvelope } from '../../schemas/responses';
 import { getCredentialEncryptionKey } from '../../utils/encryption-key';
 import { listAllowedModelsForProvider } from './ai-models';
@@ -148,6 +148,10 @@ type AdminChatNavigateAction = {
   type: 'navigate';
   path: string;
   label: string;
+};
+type AdminChatGenerationResult = {
+  text: string;
+  usage: GenerationUsage;
 };
 
 export interface WidgetGenerationResult {
@@ -636,6 +640,158 @@ function promptToMessages(
       ],
     },
   ];
+}
+
+function isCloudflareGeminiModel(modelId: string): boolean {
+  return /^google\/gemini-/i.test(modelId.trim());
+}
+
+function modelMessageRoleLabel(role: ModelMessage['role']): string {
+  if (role === 'assistant') return 'Assistant';
+  if (role === 'system') return 'System';
+  return 'Merchant';
+}
+
+function modelMessageToGeminiText(message: ModelMessage): string {
+  const text = modelMessageContentText(message.content);
+  return text ? `${modelMessageRoleLabel(message.role)}:\n${text}` : '';
+}
+
+function buildCloudflareGeminiChatInput(
+  messages: ModelMessage[],
+  options: { temperature: number; maxOutputTokens: number },
+): Record<string, unknown> {
+  const systemInstruction = messages
+    .filter((message) => message.role === 'system')
+    .map((message) => modelMessageContentText(message.content))
+    .filter(Boolean)
+    .join('\n\n');
+
+  const conversationText = messages
+    .filter((message) => message.role !== 'system')
+    .map(modelMessageToGeminiText)
+    .filter(Boolean)
+    .join('\n\n');
+
+  return {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: conversationText || 'Continue the admin assistant conversation.' }],
+      },
+    ],
+    generationConfig: {
+      temperature: options.temperature,
+      maxOutputTokens: options.maxOutputTokens,
+    },
+    ...(systemInstruction
+      ? { systemInstruction: { parts: [{ text: systemInstruction }] } }
+      : {}),
+  };
+}
+
+function readCloudflareGeminiText(response: unknown): string {
+  if (!response || typeof response !== 'object') return '';
+  const candidates = (response as { candidates?: unknown }).candidates;
+  if (!Array.isArray(candidates)) return '';
+
+  return candidates
+    .flatMap((candidate) => {
+      const parts = (candidate as { content?: { parts?: unknown } })?.content?.parts;
+      if (!Array.isArray(parts)) return [];
+      return parts
+        .map((part) => (part && typeof part === 'object' ? (part as { text?: unknown }).text : undefined))
+        .filter((text): text is string => typeof text === 'string' && text.trim().length > 0);
+    })
+    .join('\n')
+    .trim();
+}
+
+function readCloudflareGeminiUsage(response: unknown): GenerationUsage {
+  const usage = response && typeof response === 'object'
+    ? (response as { usageMetadata?: Record<string, unknown> }).usageMetadata
+    : undefined;
+  return {
+    inputTokens: typeof usage?.promptTokenCount === 'number' ? usage.promptTokenCount : undefined,
+    outputTokens: typeof usage?.candidatesTokenCount === 'number' ? usage.candidatesTokenCount : undefined,
+    totalTokens: typeof usage?.totalTokenCount === 'number' ? usage.totalTokenCount : undefined,
+  };
+}
+
+function safeCloudflareAiErrorDetail(error: unknown): string | null {
+  const raw = error instanceof Error ? error.message : String(error ?? '');
+  const sanitized = raw
+    .replace(/\b(?:Bearer|token|secret|key)\s+[A-Za-z0-9._~+/-]+=*/gi, '[redacted-token]')
+    .replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[redacted-token]')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return sanitized ? sanitized.slice(0, 240) : null;
+}
+
+async function runCloudflareGeminiChat(
+  ai: Ai,
+  modelId: string,
+  messages: ModelMessage[],
+  options: { temperature: number; maxOutputTokens: number },
+): Promise<AdminChatGenerationResult> {
+  try {
+    const response = await ai.run(
+      modelId as never,
+      buildCloudflareGeminiChatInput(messages, options) as never,
+    );
+    const text = readCloudflareGeminiText(response);
+    if (!text) {
+      throw new ServiceUnavailableError(
+        `Cloudflare AI model "${modelId}" did not return a readable text response.`,
+      );
+    }
+    return {
+      text,
+      usage: readCloudflareGeminiUsage(response),
+    };
+  } catch (error) {
+    if (error instanceof ServiceUnavailableError) throw error;
+    const detail = safeCloudflareAiErrorDetail(error);
+    throw new ServiceUnavailableError(
+      `Cloudflare AI model "${modelId}" failed.${detail ? ` ${detail}` : ''}`,
+    );
+  }
+}
+
+async function generateAdminChatCompletion(options: {
+  provider: WidgetAiProvider;
+  modelId: string;
+  settings: WidgetAiRuntimeSettings;
+  env: Env;
+  messages: ModelMessage[];
+  temperature: number;
+  maxOutputTokens: number;
+  abortSignal: AbortSignal;
+}): Promise<AdminChatGenerationResult> {
+  if (options.provider === 'cloudflare' && options.env.AI && isCloudflareGeminiModel(options.modelId)) {
+    return runCloudflareGeminiChat(options.env.AI as Ai, options.modelId, options.messages, {
+      temperature: options.temperature,
+      maxOutputTokens: options.maxOutputTokens,
+    });
+  }
+
+  const model = await getLanguageModel(options.provider, options.modelId, options.settings, options.env);
+  const { generateText } = await import('ai');
+  const result = await generateText({
+    model,
+    messages: options.messages,
+    allowSystemInMessages: true,
+    temperature: options.temperature,
+    maxOutputTokens: options.maxOutputTokens,
+    timeout: { totalMs: getTimeout('planning') },
+    maxRetries: 1,
+    abortSignal: options.abortSignal,
+  });
+
+  return {
+    text: result.text.trim(),
+    usage: usageFromResult(result),
+  };
 }
 
 export function openAiCompatibleJson(
@@ -1518,7 +1674,6 @@ app.openapi(chatRoute, async (c) => {
 
   const settings = await runtimeSettings(c);
   const profile = resolveAiModelProfile(settings, 'adminChat');
-  const model = await getLanguageModel(profile.provider, profile.model, settings, c.env);
   const navigationEntries = await getAdminChatNavigationEntries(c);
   const navigationContext = formatAdminChatNavigationContext(navigationEntries);
   const navigationActions = createAdminChatNavigationActions(navigationEntries, payload.messages);
@@ -1527,16 +1682,14 @@ app.openapi(chatRoute, async (c) => {
     ...(navigationContext ? [{ role: 'system' as const, content: navigationContext }] : []),
     ...normalizeMessages(payload.messages),
   ];
-
-  const { generateText } = await import('ai');
-  const result = await generateText({
-    model,
+  const result = await generateAdminChatCompletion({
+    provider: profile.provider,
+    modelId: profile.model,
+    settings,
+    env: c.env,
     messages,
-    allowSystemInMessages: true,
     temperature: Math.min(settings.generation.planningTemperature, 0.3),
     maxOutputTokens: Math.min(settings.generation.maxOutputTokens, ADMIN_CHAT_MAX_OUTPUT_TOKENS),
-    timeout: { totalMs: getTimeout('planning') },
-    maxRetries: 1,
     abortSignal: c.req.raw.signal,
   });
 
@@ -1546,9 +1699,9 @@ app.openapi(chatRoute, async (c) => {
     model: profile.model,
     message: {
       role: 'assistant' as const,
-      content: result.text.trim(),
+      content: result.text,
     },
-    usage: usageFromResult(result),
+    usage: result.usage,
     ...(navigationActions.length > 0 ? { actions: navigationActions } : {}),
   });
 });
