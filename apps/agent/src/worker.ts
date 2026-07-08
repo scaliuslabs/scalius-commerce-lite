@@ -24,6 +24,12 @@ const READ_ONLY_TOOL_ANNOTATIONS = {
   openWorldHint: true,
 } as const;
 
+const PUBLIC_CATEGORIES_PATH = "/api/v1/categories";
+const CATALOG_CATEGORIES_DEFAULT_LIMIT = 25;
+const CATALOG_CATEGORIES_MAX_LIMIT = 50;
+const CATALOG_CATEGORY_DESCRIPTION_MAX_LENGTH = 240;
+const CATALOG_CATEGORY_TEXT_MAX_LENGTH = 160;
+
 const GENERIC_UPSTREAM_ERROR = {
   ucp: { status: "error", version: UCP_VERSION },
   messages: [
@@ -60,6 +66,21 @@ export interface StorefrontCatalogMcpOptions {
 }
 
 type JsonRecord = Record<string, unknown>;
+
+const catalogCategoriesInputSchema = z.object({
+  limit: z.number()
+    .int()
+    .min(1)
+    .max(CATALOG_CATEGORIES_MAX_LIMIT)
+    .default(CATALOG_CATEGORIES_DEFAULT_LIMIT)
+    .describe("Maximum categories to return."),
+  slug: z.string()
+    .trim()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe("Optional public category slug to read."),
+}).strict();
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -265,6 +286,153 @@ function validateCatalogProfileBody(body: JsonRecord): CallToolResult | null {
   return genericToolError("ucp_profile_not_catalog_only");
 }
 
+function compactString(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLength);
+}
+
+function compactPlainText(value: unknown, maxLength: number): string | null {
+  const text = compactString(value, 10_000);
+  if (!text) return null;
+
+  const plain = text
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return plain ? plain.slice(0, maxLength) : null;
+}
+
+function safeCategoryCanonicalPath(value: unknown): string | null {
+  const path = compactString(value, CATALOG_CATEGORY_TEXT_MAX_LENGTH);
+  if (!path) return null;
+  if (!/^\/categories\/[A-Za-z0-9][A-Za-z0-9_-]*$/.test(path)) return null;
+  return path;
+}
+
+function categoryPath(slug: string, canonicalPath: unknown): string {
+  return safeCategoryCanonicalPath(canonicalPath) ?? `/categories/${encodeURIComponent(slug)}`;
+}
+
+function categoryUrl(env: Env, path: string): string | null {
+  try {
+    return `${resolveStorefrontBaseUrl(env)}${path}`;
+  } catch {
+    return null;
+  }
+}
+
+function compactCategory(value: unknown, env: Env): JsonRecord | null {
+  if (!isRecord(value)) return null;
+
+  const id = compactString(value.id, CATALOG_CATEGORY_TEXT_MAX_LENGTH);
+  const name = compactString(value.name, CATALOG_CATEGORY_TEXT_MAX_LENGTH);
+  const slug = compactString(value.slug, 100);
+  if (!id || !name || !slug) return null;
+
+  const path = categoryPath(slug, value.canonicalPath);
+  const compact: JsonRecord = {
+    id,
+    name,
+    slug,
+    path,
+  };
+
+  const url = categoryUrl(env, path);
+  if (url) compact.url = url;
+
+  const description = compactPlainText(value.description, CATALOG_CATEGORY_DESCRIPTION_MAX_LENGTH);
+  if (description) compact.description = description;
+
+  const updatedAt = compactString(value.updatedAt, CATALOG_CATEGORY_TEXT_MAX_LENGTH);
+  if (updatedAt) compact.updatedAt = updatedAt;
+
+  const discovery: JsonRecord = {};
+  if (typeof value.noIndex === "boolean") discovery.noIndex = value.noIndex;
+  if (typeof value.excludeFromSitemap === "boolean") {
+    discovery.excludeFromSitemap = value.excludeFromSitemap;
+  }
+  if (Object.keys(discovery).length > 0) compact.discovery = discovery;
+
+  return compact;
+}
+
+function catalogCategoriesToolError(): CallToolResult {
+  return toolResult({
+    catalogCategories: {
+      categories: [],
+    },
+    error: {
+      code: "temporarily_unavailable",
+      message: "Storefront categories are temporarily unavailable.",
+    },
+  }, true);
+}
+
+async function callPublicCategoriesApi(
+  env: Env,
+  {
+    limit,
+    slug,
+    signal,
+  }: {
+    limit: number;
+    slug?: string;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return catalogCategoriesToolError();
+  }
+
+  const url = new URL(`http://api.internal${PUBLIC_CATEGORIES_PATH}`);
+  if (slug) {
+    url.pathname = `${PUBLIC_CATEGORIES_PATH}/${encodeURIComponent(slug)}`;
+  }
+
+  try {
+    const response = await env.API.fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+      signal,
+    });
+    const body = await parseJsonResponse(response);
+    if (!body || !response.ok || body.success !== true || !isRecord(body.data)) {
+      return catalogCategoriesToolError();
+    }
+
+    const rawCategories = slug
+      ? (isRecord(body.data.category) ? [body.data.category] : null)
+      : (Array.isArray(body.data.categories) ? body.data.categories : null);
+    if (!rawCategories) return catalogCategoriesToolError();
+
+    const categories = rawCategories
+      .map((category) => compactCategory(category, env))
+      .filter((category): category is JsonRecord => category !== null)
+      .slice(0, slug ? 1 : limit);
+
+    return toolResult({
+      catalogCategories: {
+        categories,
+      },
+    });
+  } catch {
+    return catalogCategoriesToolError();
+  }
+}
+
 function isInternalAdminMcpUrl(url: URL): boolean {
   return url.protocol === "http:" &&
     url.hostname === INTERNAL_ADMIN_MCP_HOSTNAME &&
@@ -358,6 +526,22 @@ export function createStorefrontCatalogMcpServer(
         },
         signal: extra.signal,
       }, fetchImpl),
+  );
+
+  server.registerTool(
+    "catalog_categories",
+    {
+      title: "Catalog Categories",
+      description: "Reads compact public storefront category discovery data.",
+      inputSchema: catalogCategoriesInputSchema,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async ({ limit, slug }, extra) =>
+      callPublicCategoriesApi(env, {
+        limit,
+        slug,
+        signal: extra.signal,
+      }),
   );
 
   server.registerTool(
