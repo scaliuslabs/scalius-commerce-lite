@@ -687,7 +687,7 @@ Expected result:
 - `scripts/dev.sh` preserves the failing child process exit code after cleanup.
 - `scripts/dev.sh` has a dry-run regression proving API-only startup and API-readiness ordering before admin/storefront startup.
 - `dev:doctor --profile api|admin|storefront|all` checks only the services expected for that local stack, so intentional partial stacks do not create false service warnings/failures.
-- `dev:admin:browser-smoke` refuses production/non-local targets, starts local API/admin workers against disposable Wrangler state when needed, creates/reuses inactive/noindex/feed-excluded category/product fixtures, opens `/admin/products/{id}/edit` as the authenticated local admin in Chrome/Chromium, types a unique marker into the rich-text editor, saves, and verifies the description persisted without browser page or console errors.
+- `dev:admin:browser-smoke` refuses production/non-local targets, refuses to silently reuse already-running local workers unless `--no-start` is explicit, starts local API/admin workers against disposable Wrangler state by default, creates/reuses inactive/noindex/feed-excluded category/product fixtures, opens `/admin/products/{id}/edit` as the authenticated local admin in Chrome/Chromium, types a unique marker into the rich-text editor, saves, and verifies the description persisted without browser page or console errors.
 
 Disposable reset smoke test:
 
@@ -737,7 +737,8 @@ pnpm dev:admin:browser-smoke --state /tmp/scalius-admin-browser-smoke-state --re
 Expected result:
 
 - The helper refuses production and non-local API/admin targets before touching auth, catalog, or browser state.
-- The API and admin workers share the same disposable `SCALIUS_WRANGLER_STATE`.
+- The helper refuses to silently reuse already-running local workers; use `--no-start` only when intentionally mutating an existing local stack.
+- The default API and admin workers share the same disposable `SCALIUS_WRANGLER_STATE`.
 - The browser opens `/admin/products/{id}/edit` with the local admin session, focuses the Tiptap rich-text editor, inserts a unique marker, saves, reports zero page/console errors, and confirms the marker persisted through `/api/v1/admin/products/{id}`.
 
 Local post-sale mutation smoke:

@@ -623,17 +623,24 @@ async function launchChrome(config) {
   child.stdout.on("data", (chunk) => process.stderr.write(`[chrome] ${chunk}`));
   child.stderr.on("data", (chunk) => process.stderr.write(`[chrome] ${chunk}`));
 
-  await waitForChrome(port, child);
+  try {
+    await waitForChrome(port, child);
+  } catch (error) {
+    await stopProcess(child);
+    if (!config.keepBrowserProfile) {
+      rmSync(userDataDir, { recursive: true, force: true });
+    } else {
+      log(`Keeping browser profile at ${userDataDir}`);
+    }
+    throw error;
+  }
 
   return {
     executable,
     port,
     userDataDir,
     async close() {
-      if (!child.killed) {
-        child.kill("SIGTERM");
-      }
-      await sleep(500);
+      await stopProcess(child);
       if (!config.keepBrowserProfile) {
         rmSync(userDataDir, { recursive: true, force: true });
       } else {
@@ -718,6 +725,23 @@ async function waitForChrome(port, child) {
     await sleep(250);
   }
   throw new Error("Timed out waiting for Chrome DevTools endpoint.");
+}
+
+async function stopProcess(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+
+  child.kill("SIGTERM");
+  const exited = await Promise.race([
+    new Promise((resolveExit) => child.once("exit", () => resolveExit(true))),
+    sleep(1000).then(() => false),
+  ]);
+  if (!exited && child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+    await Promise.race([
+      new Promise((resolveExit) => child.once("exit", () => resolveExit(true))),
+      sleep(500),
+    ]);
+  }
 }
 
 async function createChromeTarget(port) {
@@ -863,13 +887,13 @@ async function withLocalWorkers(config, work) {
   };
   const children = [];
 
-  if ((!apiWasRunning || !adminWasRunning) && config.noStart) {
-    const missing = [
-      !apiWasRunning ? `API at ${config.apiBaseUrl}` : null,
-      !adminWasRunning ? `admin at ${config.adminBaseUrl}` : null,
-    ].filter(Boolean).join(" and ");
-    throw new Error(`${missing} is not running. Start local dev workers with pnpm dev:admin.`);
-  }
+  assertBrowserSmokeWorkerStartupPolicy({
+    apiWasRunning,
+    adminWasRunning,
+    noStart: config.noStart,
+    apiBaseUrl: config.apiBaseUrl,
+    adminBaseUrl: config.adminBaseUrl,
+  });
 
   if (!apiWasRunning || !adminWasRunning) {
     ensureLocalMigrations(config);
@@ -904,6 +928,34 @@ async function withLocalWorkers(config, work) {
         child.kill("SIGTERM");
       }
     }
+  }
+}
+
+export function assertBrowserSmokeWorkerStartupPolicy({
+  apiWasRunning,
+  adminWasRunning,
+  noStart,
+  apiBaseUrl,
+  adminBaseUrl,
+}) {
+  if ((!apiWasRunning || !adminWasRunning) && noStart) {
+    const missing = [
+      !apiWasRunning ? `API at ${apiBaseUrl}` : null,
+      !adminWasRunning ? `admin at ${adminBaseUrl}` : null,
+    ].filter(Boolean).join(" and ");
+    throw new Error(`${missing} is not running. Start local dev workers with pnpm dev:admin.`);
+  }
+
+  if (!noStart && (apiWasRunning || adminWasRunning)) {
+    const running = [
+      apiWasRunning ? `API at ${apiBaseUrl}` : null,
+      adminWasRunning ? `admin at ${adminBaseUrl}` : null,
+    ].filter(Boolean).join(" and ");
+    throw new Error(
+      `Refusing to reuse already-running ${running}. ` +
+      "Stop the existing local workers for a fresh disposable smoke, or pass --no-start when you intentionally " +
+      "want to mutate the currently running local stack.",
+    );
   }
 }
 
@@ -942,13 +994,23 @@ async function isApiReady(config) {
   }
 }
 
-async function isAdminReady(config) {
+export async function isAdminReady(config) {
   try {
-    const response = await fetch(`${config.adminBaseUrl}/api/auth/get-session`, {
+    const sessionResponse = await fetch(`${config.adminBaseUrl}/api/auth/get-session`, {
       headers: { accept: "application/json" },
+      redirect: "manual",
       signal: AbortSignal.timeout(1200),
     });
-    return response.status < 500;
+    if (![200, 401].includes(sessionResponse.status)) return false;
+    const contentType = sessionResponse.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) return false;
+    try {
+      const text = await sessionResponse.text();
+      if (text) JSON.parse(text);
+    } catch {
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
@@ -1203,7 +1265,7 @@ Options:
   --product-slug <slug>   Disposable product fixture slug
   --reset-admin           Reset local auth tables through scripts/dev-admin.mjs first
   --skip-setup            Do not create the first local admin when none exists
-  --no-start              Require API and admin workers to already be running
+  --no-start              Intentionally reuse already-running local API/admin workers
   --skip-migrations       Do not apply local D1 migrations before starting workers
   --headed                Run Chrome with a visible window instead of headless mode
 
@@ -1211,7 +1273,9 @@ Safety:
   This smoke refuses known production and non-local API/admin targets before
   starting workers or mutating data. By default it uses disposable Wrangler
   state under /tmp, creates inactive/noindex/feed-excluded local fixtures, and
-  verifies only the product edit rich-text description save path.
+  verifies only the product edit rich-text description save path. If local
+  workers are already running, stop them first or pass --no-start to explicitly
+  mutate that existing local stack.
 `);
 }
 

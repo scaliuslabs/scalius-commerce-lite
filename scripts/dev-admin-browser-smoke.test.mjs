@@ -1,13 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  assertBrowserSmokeWorkerStartupPolicy,
   buildCategoryFixturePayload,
   buildProductFixturePayload,
   ensureCategoryFixture,
   ensureProductFixture,
   findItemBySlug,
   getAdminBrowserSmokeConfig,
+  isAdminReady,
   normalizeBrowserSmokeOrigin,
 } from "./dev-admin-browser-smoke.mjs";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("local admin product rich-text browser smoke CLI", () => {
   it("rejects production and non-local mutation targets", () => {
@@ -79,6 +86,77 @@ describe("local admin product rich-text browser smoke CLI", () => {
     expect(() => getAdminBrowserSmokeConfig(["--password", "short"], {})).toThrow(
       /at least 12 characters/,
     );
+  });
+
+  it("does not treat arbitrary services on the admin port as ready", async () => {
+    const fetchMock = vi.fn(async () => new Response("Not found", {
+      status: 404,
+      headers: { "content-type": "text/plain" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(isAdminReady({ adminBaseUrl: "http://localhost:4323" })).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts only JSON responses from the exact Better Auth session route", async () => {
+    const fetchMock = vi.fn(async () => new Response("null", {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(isAdminReady({ adminBaseUrl: "http://localhost:4323" })).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:4323/api/auth/get-session",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+  });
+
+  it("accepts an unauthenticated JSON session denial from the admin worker", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(isAdminReady({ adminBaseUrl: "http://localhost:4323" })).resolves.toBe(true);
+  });
+
+  it("rejects non-JSON session responses before sign-in", async () => {
+    const fetchMock = vi.fn(async () => new Response("<html></html>", {
+      status: 200,
+      headers: { "content-type": "text/html" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(isAdminReady({ adminBaseUrl: "http://localhost:4323" })).resolves.toBe(false);
+  });
+
+  it("refuses to reuse running local workers unless explicitly requested", () => {
+    const base = {
+      apiBaseUrl: "http://localhost:8787",
+      adminBaseUrl: "http://localhost:4323",
+    };
+
+    expect(() => assertBrowserSmokeWorkerStartupPolicy({
+      ...base,
+      apiWasRunning: true,
+      adminWasRunning: false,
+      noStart: false,
+    })).toThrow(/Refusing to reuse already-running API/);
+    expect(() => assertBrowserSmokeWorkerStartupPolicy({
+      ...base,
+      apiWasRunning: true,
+      adminWasRunning: true,
+      noStart: true,
+    })).not.toThrow();
+    expect(() => assertBrowserSmokeWorkerStartupPolicy({
+      ...base,
+      apiWasRunning: true,
+      adminWasRunning: false,
+      noStart: true,
+    })).toThrow(/admin at http:\/\/localhost:4323 is not running/);
   });
 
   it("builds non-discoverable disposable fixture payloads", () => {
