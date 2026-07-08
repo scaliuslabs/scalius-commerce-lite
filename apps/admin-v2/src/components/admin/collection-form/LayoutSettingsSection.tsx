@@ -25,10 +25,12 @@ import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
 import { Switch } from "../../ui/switch";
 import { X } from "lucide-react";
-import { ResourceDiscoveryReadiness } from "@/components/admin/shared/ResourceDiscoveryReadiness";
+import { ResourceDiscoveryReadiness } from "~/components/admin/shared/ResourceDiscoveryReadiness";
 import type { CollectionFormValues, Product } from "./types";
 import { collectionTypes } from "./types";
 import { ProductPickerPopover } from "./ProductPickerPopover";
+
+const PENDING_PRODUCT_LABEL = "Loading product label...";
 
 interface LayoutSettingsSectionProps {
   form: UseFormReturn<CollectionFormValues>;
@@ -272,7 +274,8 @@ export const LayoutSettingsSection = React.memo(
                         <ProductPickerPopover
                           triggerLabel={
                             field.value
-                              ? productsById.get(field.value)?.name || field.value
+                              ? productsById.get(field.value)?.name ||
+                                PENDING_PRODUCT_LABEL
                               : "Select a featured product"
                           }
                           selectedCategoryIds={selectedCategoryIds}

@@ -36,6 +36,7 @@ const DEFAULT_CONFIG = {
 } as const;
 
 const EMPTY_PRODUCTS: Product[] = [];
+const PENDING_PRODUCT_LABEL = "Loading product label...";
 
 export function CollectionForm({
   categories,
@@ -86,7 +87,9 @@ export function CollectionForm({
   );
 
   const selectedProducts = React.useMemo(() => {
-    return selectedProductIds.map((id) => productsById.get(id) ?? { id, name: id });
+    return selectedProductIds.map(
+      (id) => productsById.get(id) ?? { id, name: PENDING_PRODUCT_LABEL },
+    );
   }, [productsById, selectedProductIds]);
 
   const rememberProduct = React.useCallback((product: Product) => {
