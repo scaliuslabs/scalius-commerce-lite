@@ -7,6 +7,16 @@ const DEFAULT_ALERT_STREAK_THRESHOLD = 3;
 const DEFAULT_ALERT_COOLDOWN_MS = 300_000;
 const DEFAULT_STATE_TTL_SECONDS = 86_400;
 const STATE_KEY_PREFIX = "ops-monitor:v1";
+const ALERT_PROOF_MARKER_KEY = `${STATE_KEY_PREFIX}:control:routed-alert-proof`;
+const ALERT_PROOF_RESULT_KEY_PREFIX = `${ALERT_PROOF_MARKER_KEY}:result`;
+const ALERT_PROOF_DEFAULT_NONCE = "manual";
+const ALERT_PROOF_MONITOR_ID_PREFIX = "proof:routed-alert";
+const ALERT_PROOF_MAX_FUTURE_MS = 15 * 60 * 1_000;
+const ALERT_PROOF_CONSUMED_TTL_SECONDS = 60;
+const ALERT_PROOF_RESULT_TTL_SECONDS = 86_400;
+
+export const OPS_ALERT_PROOF_MARKER_KEY = ALERT_PROOF_MARKER_KEY;
+export const OPS_ALERT_PROOF_RESULT_KEY_PREFIX = ALERT_PROOF_RESULT_KEY_PREFIX;
 
 export type QueueKind = "normal" | "dlq";
 
@@ -23,6 +33,7 @@ export interface QueueMetricsBinding {
 export interface OpsMonitorStateNamespace {
   get(key: string): Promise<string | null>;
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  delete?(key: string): Promise<void>;
 }
 
 export interface OpsMonitorEmailMessage {
@@ -150,6 +161,14 @@ export interface AlertEmailConfig {
   from: string;
   to: string[];
   subjectPrefix: string;
+}
+
+export interface AlertProofMarkerResult {
+  issue: MonitorIssue | null;
+  consumed: boolean;
+  nonce?: string;
+  resultKey?: string;
+  ignoredReason?: "expired" | "invalid";
 }
 
 export const MONITORED_QUEUES: MonitoredQueue[] = [
@@ -535,6 +554,149 @@ function stateKey(monitorId: string): string {
   return `${STATE_KEY_PREFIX}:${monitorId}`;
 }
 
+function parseAlertProofNonce(value: unknown): string | null {
+  if (value === undefined) return ALERT_PROOF_DEFAULT_NONCE;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(trimmed)) return null;
+  return trimmed;
+}
+
+function alertProofMonitorId(nonce: string): string {
+  return `${ALERT_PROOF_MONITOR_ID_PREFIX}:${nonce}`;
+}
+
+function alertProofResultKey(nonce: string): string {
+  return `${ALERT_PROOF_RESULT_KEY_PREFIX}:${nonce}`;
+}
+
+function parseExpiresAtMillis(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || value.length > 80) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return numeric;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseAlertProofMarker(raw: string, now: number): AlertProofMarkerResult {
+  if (raw.length > 1_024) return { issue: null, consumed: true, ignoredReason: "invalid" };
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed)) return { issue: null, consumed: true, ignoredReason: "invalid" };
+    const expiresAt = parseExpiresAtMillis(parsed.expiresAt);
+    const nonce = parseAlertProofNonce(parsed.nonce);
+    if (expiresAt === null) return { issue: null, consumed: true, ignoredReason: "invalid" };
+    if (nonce === null) return { issue: null, consumed: true, ignoredReason: "invalid" };
+    if (expiresAt <= now) return { issue: null, consumed: true, ignoredReason: "expired" };
+    if (expiresAt - now > ALERT_PROOF_MAX_FUTURE_MS) {
+      return { issue: null, consumed: true, ignoredReason: "invalid" };
+    }
+
+    return {
+      consumed: true,
+      nonce,
+      resultKey: alertProofResultKey(nonce),
+      issue: {
+        id: alertProofMonitorId(nonce),
+        kind: "monitor",
+        name: "ops-monitor.routed-alert-proof",
+        status: "threshold",
+        durationMs: 0,
+        failedChecks: ["synthetic:scheduled-routed-alert-proof"],
+      },
+    };
+  } catch {
+    return { issue: null, consumed: true, ignoredReason: "invalid" };
+  }
+}
+
+async function consumeAlertProofMarker(
+  state: OpsMonitorStateNamespace,
+  now: number,
+): Promise<AlertProofMarkerResult> {
+  const raw = await state.get(ALERT_PROOF_MARKER_KEY);
+  if (raw === null) return { issue: null, consumed: false };
+
+  if (state.delete) {
+    await state.delete(ALERT_PROOF_MARKER_KEY);
+  } else {
+    await state.put(ALERT_PROOF_MARKER_KEY, JSON.stringify({ consumedAt: now }), {
+      expirationTtl: ALERT_PROOF_CONSUMED_TTL_SECONDS,
+    });
+  }
+
+  return parseAlertProofMarker(raw, now);
+}
+
+function alertProofStatus(result: AlertingResult): "sent" | "failed" | "log_only" {
+  if (result.routedAlertCount > 0) return "sent";
+  if (result.deliveryFailureCount > 0) return "failed";
+  return "log_only";
+}
+
+function safeAlertProofResultFailurePayload({
+  runId,
+  resultKey,
+  error,
+}: {
+  runId: string;
+  resultKey: string;
+  error: unknown;
+}): Record<string, unknown> {
+  const errorRecord = isRecord(error) ? error : {};
+  return {
+    event: "ops_monitor.routed_alert_proof_result_failed",
+    runId,
+    resultKey,
+    errorName: error instanceof Error ? error.name : typeof error,
+    errorCode: typeof errorRecord.code === "string" ? errorRecord.code.slice(0, 80) : undefined,
+  };
+}
+
+async function writeAlertProofResult({
+  state,
+  marker,
+  alerting,
+  runId,
+  now,
+  logger,
+}: {
+  state: OpsMonitorStateNamespace;
+  marker: AlertProofMarkerResult;
+  alerting: AlertingResult;
+  runId: string;
+  now: number;
+  logger: Pick<Console, "error">;
+}): Promise<string | undefined> {
+  if (!marker.issue || !marker.resultKey || !marker.nonce) return undefined;
+
+  try {
+    await state.put(marker.resultKey, JSON.stringify({
+      version: 1,
+      type: "routed-alert-proof-result",
+      nonce: marker.nonce,
+      status: alertProofStatus(alerting),
+      attemptedAt: new Date(now).toISOString(),
+      runId,
+      monitorId: marker.issue.id,
+      alertCount: alerting.alertCount,
+      routedAlertCount: alerting.routedAlertCount,
+      deliveryFailureCount: alerting.deliveryFailureCount,
+    }), {
+      expirationTtl: ALERT_PROOF_RESULT_TTL_SECONDS,
+    });
+    return marker.resultKey;
+  } catch (error) {
+    logger.error(
+      "[ops-monitor-alert-proof-result-failed]",
+      JSON.stringify(safeAlertProofResultFailurePayload({ runId, resultKey: marker.resultKey, error })),
+    );
+    return undefined;
+  }
+}
+
 function parseAlertState(raw: string | null): AlertState | null {
   if (!raw) return null;
   try {
@@ -790,16 +952,19 @@ export async function runScheduledMonitor(
   const startedAt = Date.now();
   const config = loadConfig(env);
   const emailConfig = loadAlertEmailConfig(env);
-  const [readiness, queueChecks] = await Promise.all([
+  const [readiness, queueChecks, alertProofMarker] = await Promise.all([
     checkReadiness({ readyzUrl: config.readyzUrl, fetchImpl, now, timeoutMs: config.readyzTimeoutMs }),
     collectQueueChecks(env, config, now),
+    consumeAlertProofMarker(env.OPS_MONITOR_STATE, now),
   ]);
   const queueIssues = queueChecks.issues;
-  const issues = readiness.issue ? [readiness.issue, ...queueIssues] : queueIssues;
+  const normalIssues = readiness.issue ? [readiness.issue, ...queueIssues] : queueIssues;
+  const proofIssues = alertProofMarker.issue ? [alertProofMarker.issue] : [];
+  const issues = [...normalIssues, ...proofIssues];
   const monitorIds = ["readyz", ...MONITORED_QUEUES.map((queue) => `queue:${queue.name}`)];
   const alerting = await applyAlerting({
     state: env.OPS_MONITOR_STATE,
-    issues,
+    issues: normalIssues,
     monitorIds,
     config,
     now,
@@ -808,6 +973,36 @@ export async function runScheduledMonitor(
     queueSummaries: queueChecks.summaries,
     logger,
   });
+  const proofAlerting = proofIssues.length === 0
+    ? { alertCount: 0, routedAlertCount: 0, deliveryFailureCount: 0 }
+    : await applyAlerting({
+      state: env.OPS_MONITOR_STATE,
+      issues: proofIssues,
+      monitorIds: proofIssues.map((issue) => issue.id),
+      config: {
+        ...config,
+        alertStreakThreshold: 1,
+        alertCooldownMs: 0,
+      },
+      now,
+      runId,
+      emailConfig,
+      queueSummaries: queueChecks.summaries,
+      logger,
+    });
+  const alertProofResultKey = await writeAlertProofResult({
+    state: env.OPS_MONITOR_STATE,
+    marker: alertProofMarker,
+    alerting: proofAlerting,
+    runId,
+    now,
+    logger,
+  });
+  const alertCounts = {
+    alertCount: alerting.alertCount + proofAlerting.alertCount,
+    routedAlertCount: alerting.routedAlertCount + proofAlerting.routedAlertCount,
+    deliveryFailureCount: alerting.deliveryFailureCount + proofAlerting.deliveryFailureCount,
+  };
 
   logger.log("[ops-monitor]", JSON.stringify({
     event: "ops_monitor.run_completed",
@@ -816,17 +1011,27 @@ export async function runScheduledMonitor(
     status: issues.length === 0 ? "ok" : "issues",
     durationMs: Date.now() - startedAt,
     issueCount: issues.length,
-    alertCount: alerting.alertCount,
-    routedAlertCount: alerting.routedAlertCount,
-    deliveryFailureCount: alerting.deliveryFailureCount,
+    alertCount: alertCounts.alertCount,
+    routedAlertCount: alertCounts.routedAlertCount,
+    deliveryFailureCount: alertCounts.deliveryFailureCount,
     requestId: readiness.requestId,
     readyz: readiness.summary,
     queues: queueChecks.summaries,
+    alertProofMarker: alertProofMarker.consumed
+      ? {
+        consumed: true,
+        accepted: alertProofMarker.issue !== null,
+        nonce: alertProofMarker.nonce,
+        resultKey: alertProofResultKey,
+        status: alertProofMarker.issue ? alertProofStatus(proofAlerting) : undefined,
+        ignoredReason: alertProofMarker.ignoredReason,
+      }
+      : undefined,
   }));
 }
 
 export default {
-  fetch() {
+  fetch(_request: Request) {
     return new Response("Not found", {
       status: 404,
       headers: { "Cache-Control": "no-store" },
