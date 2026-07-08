@@ -582,20 +582,32 @@ function getAgentDeployUrl() {
 
 export async function verifyAgentDeploy({
   agentUrl = getAgentDeployUrl(),
+  storefrontUrl,
   fetchImpl = fetch,
   timeoutMs = AGENT_DEPLOY_TIMEOUT_MS,
 } = {}) {
-  console.log("\n▶ Verify live Agent Worker /health and MCP tools");
+  console.log("\n▶ Verify live Agent Worker /health and MCP catalog tool");
   console.log(`  ${agentUrl}\n`);
   const result = await smokeAgentWorker({
     agentUrl,
+    storefrontUrl,
+    catalogToolSmoke: true,
     fetchImpl,
     timeoutMs,
     logger: null,
   });
+  const catalogTool = result.mcp.catalogTool;
+  const catalogProfile = catalogTool?.profile;
+  const profileSummary = catalogProfile?.endpoint
+    ? `; ${catalogTool.name} call ok (` +
+      `${catalogProfile.capabilities.length} catalog capabilities, ` +
+      `endpoint ${catalogProfile.endpoint})`
+    : catalogTool
+      ? `; ${catalogTool.name} call ok`
+      : "";
   console.log(
     `✓ Agent /health returned ${result.health.statusCode}; ` +
-    `MCP tools: ${result.mcp.tools.toolNames.join(", ")}.`,
+    `MCP tools: ${result.mcp.tools.toolNames.join(", ")}${profileSummary}.`,
   );
   return result;
 }
@@ -608,7 +620,7 @@ async function verifyPostDeployTarget(target, apiConfig) {
     await verifyStorefrontDeploy();
   }
   if (target === "agent") {
-    await verifyAgentDeploy();
+    await verifyAgentDeploy({ storefrontUrl: apiConfig.vars?.STOREFRONT_URL });
   }
 }
 

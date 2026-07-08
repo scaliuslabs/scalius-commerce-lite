@@ -68,6 +68,47 @@ function agentTools(overrides = {}) {
   ];
 }
 
+function ucpProfile(capabilities = {
+  "dev.ucp.shopping.catalog.search": [{
+    version: "2026-07",
+    spec: "https://ucp.dev/2026-07/specification/catalog/search",
+    schema: "https://ucp.dev/2026-07/schemas/shopping/catalog_search.json",
+  }],
+  "dev.ucp.shopping.catalog.lookup": [{
+    version: "2026-07",
+    spec: "https://ucp.dev/2026-07/specification/catalog/lookup",
+    schema: "https://ucp.dev/2026-07/schemas/shopping/catalog_lookup.json",
+  }],
+}) {
+  return {
+    ucp: {
+      version: "2026-07",
+      services: {
+        "dev.ucp.shopping": [
+          {
+            version: "2026-07",
+            transport: "rest",
+            endpoint: "https://storefront.example.test/ucp",
+            spec: "https://ucp.dev/2026-07/specification/overview",
+            schema: "https://ucp.dev/2026-07/services/shopping/rest.openapi.json",
+          },
+        ],
+      },
+      capabilities,
+      supported_versions: {
+        "2026-07": "https://storefront.example.test/.well-known/ucp",
+      },
+    },
+  };
+}
+
+function agentCatalogProfileMcpResult(profile = ucpProfile()) {
+  return {
+    content: [{ type: "text", text: JSON.stringify(profile) }],
+    structuredContent: profile,
+  };
+}
+
 function mcpSseResponse(message) {
   return new Response(`event: message\ndata: ${JSON.stringify(message)}\n\n`, {
     status: 200,
@@ -145,14 +186,14 @@ describe("deploy agent verification", () => {
     vi.restoreAllMocks();
   });
 
-  it("passes when health and MCP tools are catalog-only", async () => {
+  it("passes when health and MCP catalog_profile smoke are catalog-only", async () => {
     const requests = [];
     const fetchImpl = vi.fn(async (url, init = {}) => {
       const parsed = new URL(url);
-      requests.push(`${init.method ?? "GET"} ${parsed.pathname}`);
 
       if (parsed.pathname === "/health") {
         expect(init.method).toBe("GET");
+        requests.push(`${init.method} ${parsed.pathname}`);
         return agentHealthResponse();
       }
       if (parsed.pathname === "/mcp") {
@@ -161,6 +202,10 @@ describe("deploy agent verification", () => {
         expect(headers.get("accept")).toBe("application/json, text/event-stream");
         expect(headers.get("content-type")).toBe("application/json");
         const body = JSON.parse(init.body);
+        const requestLabel =
+          `${init.method} ${parsed.pathname} ${body.method}` +
+          `${body.params?.name ? `:${body.params.name}` : ""}`;
+        requests.push(requestLabel);
         if (body.method === "initialize") {
           return mcpSseResponse({
             jsonrpc: "2.0",
@@ -179,6 +224,17 @@ describe("deploy agent verification", () => {
             result: { tools: agentTools() },
           });
         }
+        if (body.method === "tools/call") {
+          expect(body.params).toEqual({
+            name: "catalog_profile",
+            arguments: {},
+          });
+          return mcpSseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: agentCatalogProfileMcpResult(),
+          });
+        }
       }
 
       throw new Error(`Unexpected URL ${url}`);
@@ -186,14 +242,16 @@ describe("deploy agent verification", () => {
 
     const result = await verifyAgentDeploy({
       agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
       fetchImpl,
       timeoutMs: 5_000,
     });
 
     expect(requests).toEqual([
       "GET /health",
-      "POST /mcp",
-      "POST /mcp",
+      "POST /mcp initialize",
+      "POST /mcp tools/list",
+      "POST /mcp tools/call:catalog_profile",
     ]);
     expect(result.mcp.tools.toolNames).toEqual([
       "catalog_lookup",
@@ -201,9 +259,68 @@ describe("deploy agent verification", () => {
       "catalog_profile",
       "catalog_search",
     ]);
+    expect(result.mcp.catalogTool).toMatchObject({
+      name: "catalog_profile",
+      contentCount: 1,
+      profile: {
+        endpoint: "https://storefront.example.test/ucp",
+        capabilities: [
+          "dev.ucp.shopping.catalog.search",
+          "dev.ucp.shopping.catalog.lookup",
+        ],
+      },
+    });
     expect(console.log).toHaveBeenCalledWith(
-      "✓ Agent /health returned 200; MCP tools: catalog_lookup, catalog_product, catalog_profile, catalog_search.",
+      "✓ Agent /health returned 200; MCP tools: catalog_lookup, catalog_product, " +
+      "catalog_profile, catalog_search; catalog_profile call ok (2 catalog capabilities, " +
+      "endpoint https://storefront.example.test/ucp).",
     );
+  });
+
+  it("fails when the catalog_profile tool returns unsafe UCP commerce capabilities", async () => {
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+      if (parsed.pathname === "/health") return agentHealthResponse();
+      if (parsed.pathname === "/mcp") {
+        const body = JSON.parse(init.body);
+        if (body.method === "initialize") {
+          return mcpSseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { protocolVersion: "2025-06-18", capabilities: {} },
+          });
+        }
+        if (body.method === "tools/list") {
+          return mcpSseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { tools: agentTools() },
+          });
+        }
+        if (body.method === "tools/call") {
+          return mcpSseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: agentCatalogProfileMcpResult(ucpProfile({
+              ...ucpProfile().ucp.capabilities,
+              "dev.ucp.shopping.checkout": [{
+                version: "2026-07",
+                spec: "https://ucp.dev/2026-07/specification/checkout",
+                schema: "https://ucp.dev/2026-07/schemas/shopping/checkout.json",
+              }],
+            })),
+          });
+        }
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    await expect(verifyAgentDeploy({
+      agentUrl: "https://agent.example.test",
+      storefrontUrl: "https://storefront.example.test",
+      fetchImpl,
+      timeoutMs: 5_000,
+    })).rejects.toThrow(/catalog_profile failed: .*checkout\/cart\/order\/payment/);
   });
 
   it("fails when MCP tools expose unsafe capabilities", async () => {
