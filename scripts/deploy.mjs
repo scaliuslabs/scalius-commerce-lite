@@ -621,7 +621,7 @@ export async function verifyAgentDeploy({
   fetchImpl = fetch,
   timeoutMs = AGENT_DEPLOY_TIMEOUT_MS,
 } = {}) {
-  console.log("\n▶ Verify live Agent Worker /health and MCP catalog tool");
+  console.log("\n▶ Verify live Agent Worker /health and MCP read tools");
   console.log(`  ${agentUrl}\n`);
   const result = await smokeAgentWorker({
     agentUrl,
@@ -633,6 +633,7 @@ export async function verifyAgentDeploy({
   });
   const catalogTool = result.mcp.catalogTool;
   const catalogProfile = catalogTool?.profile;
+  const cartValidationTool = result.mcp.cartValidationTool;
   const profileSummary = catalogProfile?.endpoint
     ? `; ${catalogTool.name} call ok (` +
       `${catalogProfile.capabilities.length} catalog capabilities, ` +
@@ -640,9 +641,12 @@ export async function verifyAgentDeploy({
     : catalogTool
       ? `; ${catalogTool.name} call ok`
       : "";
+  const cartValidationSummary = cartValidationTool
+    ? `; ${cartValidationTool.name} call ok`
+    : "";
   console.log(
     `✓ Agent /health returned ${result.health.statusCode}; ` +
-    `MCP tools: ${result.mcp.tools.toolNames.join(", ")}${profileSummary}.`,
+    `MCP tools: ${result.mcp.tools.toolNames.join(", ")}${profileSummary}${cartValidationSummary}.`,
   );
   return result;
 }

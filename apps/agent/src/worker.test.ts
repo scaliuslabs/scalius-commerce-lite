@@ -105,13 +105,29 @@ const ADMIN_COOKIE = "better-auth.session_token=signed-session";
 
 const UNSAFE_TERMS = [
   "checkout",
-  "cart",
   "order",
   "payment",
   "fulfillment",
   "customer",
   "recovery",
   "provider-secret",
+  "admin",
+  "mutation",
+];
+
+const ADMIN_MCP_FORBIDDEN_MUTATION_TERMS = [
+  "browser",
+  "click",
+  "submit",
+  "save",
+  "delete",
+  "refund",
+  "credential",
+  "secret",
+  "provider",
+  "mutation",
+  "mutate",
+  "write",
 ];
 
 const MCP_ACCEPT_HEADER = "application/json, text/event-stream";
@@ -330,6 +346,25 @@ function firstContentBlock(result: unknown): unknown {
   return result.content[0];
 }
 
+function adminNavigationContext(result: Record<string, unknown>): Record<string, unknown> {
+  const structuredContent = result.structuredContent;
+  if (!isRecord(structuredContent) || !isRecord(structuredContent.adminNavigationContext)) {
+    throw new Error("Expected adminNavigationContext structured content");
+  }
+  return structuredContent.adminNavigationContext;
+}
+
+function adminNavigationPaths(context: Record<string, unknown>): string[] {
+  const sections = Array.isArray(context.sections) ? context.sections : [];
+  return sections.flatMap((section) => {
+    if (!isRecord(section) || !Array.isArray(section.pages)) return [];
+    return section.pages.flatMap((page) => {
+      if (!isRecord(page) || typeof page.path !== "string") return [];
+      return [page.path];
+    });
+  });
+}
+
 async function expectValidationToolError(resultPromise: Promise<unknown>): Promise<void> {
   const result = await resultPromise;
   expect(isRecord(result) ? result.isError : undefined).toBe(true);
@@ -348,12 +383,13 @@ afterEach(async () => {
 });
 
 describe("storefront catalog MCP server", () => {
-  it("lists catalog-only read tools", async () => {
+  it("lists storefront catalog and read-only cart validation tools", async () => {
     const { client } = await boot();
 
     const result = await client.listTools();
     const names = result.tools.map((tool) => tool.name).sort();
     expect(names).toEqual([
+      "cart_validate",
       "catalog_lookup",
       "catalog_product",
       "catalog_profile",
@@ -374,7 +410,7 @@ describe("storefront catalog MCP server", () => {
     }
   });
 
-  it("rejects unbounded catalog inputs before storefront fetches", async () => {
+  it("rejects unbounded catalog and cart validation inputs before storefront fetches", async () => {
     const fetchImpl = vi.fn<FetchLike>().mockResolvedValue(json({ ucp: { status: "success" } }));
     const { client } = await boot(fetchImpl);
 
@@ -389,6 +425,28 @@ describe("storefront catalog MCP server", () => {
     await expectValidationToolError(client.callTool({
       name: "catalog_lookup",
       arguments: { ids: Array.from({ length: 11 }, (_, index) => `prod_${index}`) },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "cart_validate",
+      arguments: {
+        items: Array.from({ length: 11 }, (_, index) => ({
+          productId: `prod_${index}`,
+          quantity: 1,
+          unitPrice: 100,
+        })),
+      },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "cart_validate",
+      arguments: {
+        items: [{
+          productId: "prod_1",
+          quantity: 1,
+          unitPrice: 100,
+          customerPhone: "+8801700000000",
+          discountCode: "SAVE20",
+        }],
+      },
     }));
 
     expect(fetchImpl).not.toHaveBeenCalled();
@@ -483,6 +541,130 @@ describe("storefront catalog MCP server", () => {
     expect(requestUrl(input)).toBe("https://storefront.example.test/.well-known/ucp");
     expect(init?.method).toBe("GET");
     expect(new Headers(init?.headers).get("UCP-Agent")).toBe(`profile="${DEFAULT_AGENT_PROFILE_URL}"`);
+  });
+
+  it("validates a bounded cart snapshot through the storefront proxy", async () => {
+    const fetchImpl = vi.fn<FetchLike>().mockResolvedValue(json({
+      success: true,
+      data: {
+        valid: false,
+        issues: [{
+          index: 0,
+          productId: "prod_1",
+          variantId: "var_1",
+          code: "PRICE_CHANGED",
+          action: "refresh_item",
+          message: "The price changed before checkout.",
+          productName: "Khaki Shoes",
+          variantLabel: "Size: 42",
+          requestedQuantity: 2,
+          submittedPrice: 100,
+          currentPrice: 120,
+        }],
+        items: [],
+        subtotal: 0,
+        hasFreeDeliveryProduct: false,
+      },
+    }));
+    const { client } = await boot(fetchImpl);
+
+    const result = await client.callTool({
+      name: "cart_validate",
+      arguments: {
+        items: [{
+          productId: "prod_1",
+          variantId: "var_1",
+          slug: "khaki-shoes",
+          name: "Khaki Shoes",
+          quantity: 2,
+          unitPrice: 100,
+          options: [{ name: "Size", value: "42" }],
+        }],
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      cartValidation: {
+        valid: false,
+        issueCount: 1,
+        issues: [{
+          index: 0,
+          productId: "prod_1",
+          variantId: "var_1",
+          code: "PRICE_CHANGED",
+          action: "refresh_item",
+          message: "Unit price changed.",
+          productName: "Khaki Shoes",
+          variantLabel: "Size: 42",
+          requestedQuantity: 2,
+          submittedPrice: 100,
+          currentPrice: 120,
+        }],
+        items: [],
+        subtotal: 0,
+      },
+    });
+    expect(firstContentBlock(result)).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("PRICE_CHANGED"),
+    });
+    const serialized = JSON.stringify(result).toLowerCase();
+    for (const unsafeTerm of UNSAFE_TERMS) {
+      expect(serialized).not.toContain(unsafeTerm);
+    }
+
+    const [input, init] = fetchCall(fetchImpl);
+    expect(requestUrl(input)).toBe("https://storefront.example.test/api/checkout/validate-cart");
+    expect(init?.method).toBe("POST");
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect([...headers.keys()].sort()).toEqual(["accept", "content-type"]);
+    expect(parseRequestBody(init)).toEqual({
+      items: [{
+        productId: "prod_1",
+        variantId: "var_1",
+        quantity: 2,
+        price: 100,
+        productName: "Khaki Shoes",
+        variantLabel: "Size: 42",
+      }],
+    });
+  });
+
+  it("keeps storefront validation failures fail-closed and cheap", async () => {
+    const fetchImpl = vi.fn<FetchLike>().mockRejectedValue(
+      new Error("raw checkout order payment customer@example.test"),
+    );
+    const { client } = await boot(fetchImpl);
+
+    const result = await client.callTool({
+      name: "cart_validate",
+      arguments: {
+        items: [{ productId: "prod_1", quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toEqual({
+      cartValidation: {
+        valid: false,
+        issueCount: 0,
+        issues: [],
+      },
+      error: {
+        code: "temporarily_unavailable",
+        message: "Storefront cart validation is temporarily unavailable.",
+      },
+    });
+    const serialized = JSON.stringify(result).toLowerCase();
+    expect(serialized).not.toContain("raw checkout order payment customer@example.test");
+    for (const unsafeTerm of UNSAFE_TERMS) {
+      expect(serialized).not.toContain(unsafeTerm);
+    }
   });
 });
 
@@ -619,7 +801,7 @@ describe("admin MCP route", () => {
     expect([...headers.keys()].sort()).toEqual(["accept", "cookie", "user-agent"]);
   });
 
-  it("lists exactly the admin session context tool after cookie preflight", async () => {
+  it("lists exactly the read-only admin context tools after cookie preflight", async () => {
     const apiFetch = mockJsonFetch(adminPermissionsBody());
     const worker = createAgentWorker();
     const env = createEnv(apiFetch);
@@ -637,12 +819,21 @@ describe("admin MCP route", () => {
     const result = requireMcpResult(message);
     expect(Array.isArray(result.tools)).toBe(true);
     const tools = result.tools as Array<Record<string, unknown>>;
-    expect(tools.map((tool) => tool.name)).toEqual(["admin_session_context"]);
-    expect(tools[0]?.annotations).toMatchObject({
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-    });
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "admin_session_context",
+      "admin_navigation_context",
+    ]);
+    for (const tool of tools) {
+      expect(tool.annotations).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      });
+    }
+    const serialized = JSON.stringify(tools).toLowerCase();
+    for (const unsafeTerm of ADMIN_MCP_FORBIDDEN_MUTATION_TERMS) {
+      expect(serialized).not.toContain(unsafeTerm);
+    }
   });
 
   it("calls the RBAC endpoint for admin_session_context and returns compact structured content", async () => {
@@ -683,6 +874,113 @@ describe("admin MCP route", () => {
     expect(firstContentBlock(result)).toMatchObject({
       type: "text",
       text: expect.stringContaining("adminSessionContext"),
+    });
+  });
+
+  it("returns admin_navigation_context from effective RBAC permissions with bounded static pages", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody({
+      email: "admin@example.test",
+      phone: "+8801000000000",
+      permissions: [
+        "dashboard.view",
+        "products.view",
+        "orders.view",
+        "settings.general.view",
+      ],
+    }));
+    const worker = createAgentWorker();
+    const env = createEnv(apiFetch);
+    const init = await initializeAdminMcp(worker, env, { Cookie: ADMIN_COOKIE });
+    const headers: Record<string, string> = { Cookie: ADMIN_COOKIE };
+    if (init.sessionId) headers["Mcp-Session-Id"] = init.sessionId;
+    if (init.protocolVersion) headers["MCP-Protocol-Version"] = init.protocolVersion;
+
+    const callsBeforeTool = apiFetch.mock.calls.length;
+    const message = await adminMcpRpc(worker, env, {
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: {
+        name: "admin_navigation_context",
+        arguments: {},
+      },
+    }, headers);
+    const result = requireMcpResult(message);
+    const context = adminNavigationContext(result);
+
+    expect(apiFetch.mock.calls.length).toBe(callsBeforeTool + 1);
+    expect(result.isError).toBeUndefined();
+    expect(context).toMatchObject({
+      source: {
+        permissions: "/api/v1/admin/rbac/my-permissions",
+        catalog: "admin-navigation-context:v1",
+      },
+      session: {
+        userId: "admin_123",
+        isSuperAdmin: false,
+        roleCount: 1,
+        permissionCount: 4,
+        deniedPermissionCount: 1,
+      },
+      defaultPath: "/admin",
+      limits: {
+        maxPages: 24,
+        returnedPages: 9,
+        catalogPages: 24,
+        includesDynamicRoutes: false,
+      },
+    });
+    expect(adminNavigationPaths(context)).toEqual([
+      "/admin",
+      "/admin/products",
+      "/admin/inventory",
+      "/admin/orders",
+      "/admin/abandoned-checkouts",
+      "/admin/settings",
+      "/admin/settings/theme",
+      "/admin/settings/account",
+      "/admin/settings/checkout",
+    ]);
+    expect(firstContentBlock(result)).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("adminNavigationContext"),
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("admin@example.test");
+    expect(serialized).not.toContain("+8801000000000");
+  });
+
+  it("returns an empty admin navigation catalog for a non-superadmin with no effective permissions", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody({
+      permissions: [],
+      overrides: { grants: [], denials: [] },
+    }));
+    const worker = createAgentWorker();
+    const env = createEnv(apiFetch);
+    const init = await initializeAdminMcp(worker, env, { Cookie: ADMIN_COOKIE });
+    const headers: Record<string, string> = { Cookie: ADMIN_COOKIE };
+    if (init.sessionId) headers["Mcp-Session-Id"] = init.sessionId;
+    if (init.protocolVersion) headers["MCP-Protocol-Version"] = init.protocolVersion;
+
+    const message = await adminMcpRpc(worker, env, {
+      jsonrpc: "2.0",
+      id: 5,
+      method: "tools/call",
+      params: {
+        name: "admin_navigation_context",
+        arguments: {},
+      },
+    }, headers);
+    const result = requireMcpResult(message);
+    const context = adminNavigationContext(result);
+
+    expect(context).toMatchObject({
+      defaultPath: null,
+      limits: {
+        returnedPages: 0,
+        includesDynamicRoutes: false,
+      },
+      sections: [],
     });
   });
 
@@ -743,5 +1041,63 @@ describe("admin MCP server", () => {
     });
     expect(JSON.stringify(result)).not.toContain(ADMIN_COOKIE);
     expect(JSON.stringify(result)).not.toContain("raw upstream leak");
+  });
+
+  it("returns a safe admin_navigation_context tool error when no cookie option is present", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody());
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: null,
+      userAgent: "vitest-admin-mcp",
+    });
+
+    const result = await client.callTool({
+      name: "admin_navigation_context",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        code: "admin_session_required",
+        status: 401,
+      },
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("bounds admin_navigation_context output for superadmins and drops unknown upstream fields", async () => {
+    const apiFetch = mockJsonFetch(adminPermissionsBody());
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: ADMIN_COOKIE,
+      userAgent: "vitest-admin-mcp",
+      permissionsBody: adminPermissionsBody({
+        isSuperAdmin: true,
+        permissions: Array.from({ length: 200 }, (_, index) => `synthetic.${index}`),
+        email: "admin@example.test",
+        providerCredentials: "must-not-leak",
+      }),
+    });
+
+    const result = await client.callTool({
+      name: "admin_navigation_context",
+      arguments: {},
+    });
+    const context = adminNavigationContext(result as Record<string, unknown>);
+
+    expect(result.isError).toBeUndefined();
+    expect(adminNavigationPaths(context)).toHaveLength(24);
+    expect(context).toMatchObject({
+      defaultPath: "/admin",
+      limits: {
+        maxPages: 24,
+        returnedPages: 24,
+        catalogPages: 24,
+        includesDynamicRoutes: false,
+      },
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("admin@example.test");
+    expect(serialized).not.toContain("must-not-leak");
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 });

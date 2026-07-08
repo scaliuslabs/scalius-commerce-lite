@@ -36,6 +36,7 @@ const MCP_CLIENT_INFO = Object.freeze({
   version: "1.0.0",
 });
 const AGENT_EXPECTED_TOOL_NAMES = Object.freeze([
+  "cart_validate",
   "catalog_search",
   "catalog_lookup",
   "catalog_product",
@@ -44,6 +45,18 @@ const AGENT_EXPECTED_TOOL_NAMES = Object.freeze([
 const AGENT_CATALOG_TOOL_SMOKE = Object.freeze({
   name: "catalog_profile",
   arguments: Object.freeze({}),
+});
+const AGENT_CART_VALIDATION_TOOL_SMOKE = Object.freeze({
+  name: "cart_validate",
+  arguments: Object.freeze({
+    items: Object.freeze([
+      Object.freeze({
+        productId: "release-check-missing-product",
+        quantity: 1,
+        unitPrice: 1,
+      }),
+    ]),
+  }),
 });
 const ADMIN_MCP_UNAUTHENTICATED_SMOKE_BODY = Object.freeze({
   jsonrpc: "2.0",
@@ -56,7 +69,10 @@ const ADMIN_MCP_UNAUTHENTICATED_SMOKE_BODY = Object.freeze({
   }),
 });
 const AGENT_FORBIDDEN_TOOL_TERM_PATTERN =
-  /(?:^|[^a-z0-9])(?:checkout|carts?|orders?|payments?|customers?|recovery)(?:$|[^a-z0-9])/i;
+  /(?:^|[^a-z0-9])(?:checkout|orders?|payments?|customers?|recovery)(?:$|[^a-z0-9])/i;
+const AGENT_CART_TERM_PATTERN = /(?:^|[^a-z0-9])carts?(?:$|[^a-z0-9])/i;
+const AGENT_CART_MUTATION_TERM_PATTERN =
+  /(?:^|[^a-z0-9])(?:mutate|mutation|mutations|write|update|add|remove|clear|checkout|orders?|payments?|customers?|recovery)(?:$|[^a-z0-9])/i;
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
 const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
 const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
@@ -1436,6 +1452,16 @@ function listDiff(actual, expected) {
   return expected.filter((value) => !actualSet.has(value));
 }
 
+function serializableToolSafetyText(tool, name) {
+  return JSON.stringify({
+    name,
+    title: typeof tool.title === "string" ? tool.title : null,
+    description: typeof tool.description === "string" ? tool.description : null,
+    meta: isRecord(tool._meta) ? tool._meta : null,
+    annotations: isRecord(tool.annotations) ? tool.annotations : null,
+  }).toLowerCase();
+}
+
 export function evaluateAgentMcpTools(tools, {
   expectedToolNames = AGENT_EXPECTED_TOOL_NAMES,
 } = {}) {
@@ -1483,8 +1509,11 @@ export function evaluateAgentMcpTools(tools, {
       errors.push(`Agent MCP tool ${name || index + 1} must not be marked destructive.`);
     }
 
-    const serialized = JSON.stringify(tool).toLowerCase();
-    if (AGENT_FORBIDDEN_TOOL_TERM_PATTERN.test(serialized)) {
+    const serialized = serializableToolSafetyText(tool, name);
+    if (
+      AGENT_FORBIDDEN_TOOL_TERM_PATTERN.test(serialized) ||
+      (AGENT_CART_TERM_PATTERN.test(serialized) && AGENT_CART_MUTATION_TERM_PATTERN.test(serialized))
+    ) {
       unsafeTools.push(name || `tool ${index + 1}`);
     }
   });
@@ -1505,7 +1534,7 @@ export function evaluateAgentMcpTools(tools, {
 
   if (unsafeTools.length > 0) {
     errors.push(
-      "Agent MCP tools must not include checkout/cart/order/payment/customer/recovery terms: " +
+      "Agent MCP tools must not include checkout/order/payment/customer/recovery or cart mutation terms: " +
       unsafeTools.join(", "),
     );
   }
@@ -1562,6 +1591,49 @@ function evaluateAgentCatalogToolSmokeResult(result, {
           capabilities: profileEvaluation.capabilities,
         }
       : null,
+  };
+}
+
+function evaluateAgentCartValidationSmokeResult(result, {
+  toolName = AGENT_CART_VALIDATION_TOOL_SMOKE.name,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+  const cartValidation = isRecord(structuredContent?.cartValidation)
+    ? structuredContent.cartValidation
+    : null;
+  const issues = Array.isArray(cartValidation?.issues) ? cartValidation.issues : [];
+  const firstIssue = isRecord(issues[0]) ? issues[0] : null;
+
+  if (result?.isError === true) {
+    errors.push(`Agent MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Agent MCP ${toolName} must return at least one content block.`);
+  }
+  if (!cartValidation) {
+    errors.push(`Agent MCP ${toolName} must return structured cartValidation content.`);
+  } else {
+    if (cartValidation.valid !== false) {
+      errors.push(`Agent MCP ${toolName} missing-product smoke must fail closed as invalid.`);
+    }
+    if (!firstIssue || firstIssue.code !== "PRODUCT_UNAVAILABLE" || firstIssue.action !== "remove") {
+      errors.push(`Agent MCP ${toolName} missing-product smoke must return PRODUCT_UNAVAILABLE/remove.`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
+    issueCount: typeof cartValidation?.issueCount === "number"
+      ? cartValidation.issueCount
+      : issues.length,
+    firstIssueCode: typeof firstIssue?.code === "string" ? firstIssue.code : null,
   };
 }
 
@@ -1652,6 +1724,7 @@ export async function smokeAgentWorker({
   }
 
   let catalogToolResult = null;
+  let cartValidationToolResult = null;
   if (catalogToolSmoke) {
     const catalogToolResponse = await fetchMcpJsonRpc(mcpUrl, {
       fetchImpl,
@@ -1687,13 +1760,51 @@ export async function smokeAgentWorker({
       contentCount: catalogToolEvaluation.contentCount,
       profile: catalogToolEvaluation.profile,
     };
+
+    const cartValidationToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+      fetchImpl,
+      timeoutMs,
+      sessionId,
+      protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+      body: {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: AGENT_CART_VALIDATION_TOOL_SMOKE,
+      },
+    });
+    const cartValidationCallResult = requireMcpJsonRpcResult(
+      cartValidationToolResponse,
+      `Agent MCP ${AGENT_CART_VALIDATION_TOOL_SMOKE.name}`,
+      4,
+    );
+    const cartValidationToolEvaluation = evaluateAgentCartValidationSmokeResult(cartValidationCallResult, {
+      toolName: AGENT_CART_VALIDATION_TOOL_SMOKE.name,
+    });
+    if (!cartValidationToolEvaluation.ok) {
+      throw new Error(
+        `Agent MCP ${AGENT_CART_VALIDATION_TOOL_SMOKE.name} failed: ` +
+        cartValidationToolEvaluation.errors.join("; "),
+      );
+    }
+    cartValidationToolResult = {
+      name: AGENT_CART_VALIDATION_TOOL_SMOKE.name,
+      statusCode: cartValidationToolResponse.statusCode,
+      durationMs: cartValidationToolResponse.durationMs,
+      contentCount: cartValidationToolEvaluation.contentCount,
+      issueCount: cartValidationToolEvaluation.issueCount,
+      firstIssueCode: cartValidationToolEvaluation.firstIssueCode,
+    };
   }
 
   const catalogToolSummary = catalogToolResult
     ? `, ${catalogToolResult.name} call ok`
     : "";
+  const cartValidationToolSummary = cartValidationToolResult
+    ? `, ${cartValidationToolResult.name} call ok`
+    : "";
   logger?.log(
-    `PASS agent MCP: /health ${healthResponse.statusCode}, tools ${toolEvaluation.toolNames.join(", ")}${catalogToolSummary}.`,
+    `PASS agent MCP: /health ${healthResponse.statusCode}, tools ${toolEvaluation.toolNames.join(", ")}${catalogToolSummary}${cartValidationToolSummary}.`,
   );
   return {
     agentUrl: redactUrl(normalizedAgentUrl),
@@ -1719,6 +1830,7 @@ export async function smokeAgentWorker({
         readOnlyToolCount: toolEvaluation.readOnlyToolCount,
       },
       ...(catalogToolResult ? { catalogTool: catalogToolResult } : {}),
+      ...(cartValidationToolResult ? { cartValidationTool: cartValidationToolResult } : {}),
     },
   };
 }

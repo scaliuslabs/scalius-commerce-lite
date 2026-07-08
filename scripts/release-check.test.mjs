@@ -132,10 +132,13 @@ function agentHealthResponse(payload = {
 }
 
 function agentMcpTool(name, extra = {}) {
+  const description = name === "cart_validate"
+    ? "Checks a public storefront cart snapshot for current availability and price truth."
+    : `Reads public storefront catalog data for ${name}.`;
   return {
     name,
     title: name.replace(/_/g, " "),
-    description: `Reads public storefront catalog data for ${name}.`,
+    description,
     inputSchema: { type: "object", properties: {} },
     annotations: {
       readOnlyHint: true,
@@ -148,6 +151,7 @@ function agentMcpTool(name, extra = {}) {
 
 function agentMcpTools(overrides = {}) {
   return [
+    agentMcpTool("cart_validate", overrides.cart_validate),
     agentMcpTool("catalog_search", overrides.catalog_search),
     agentMcpTool("catalog_lookup", overrides.catalog_lookup),
     agentMcpTool("catalog_product", overrides.catalog_product),
@@ -169,9 +173,37 @@ function agentCatalogProfileMcpResult(profile = ucpProfile()) {
   };
 }
 
+function agentCartValidationMcpResult() {
+  const result = {
+    cartValidation: {
+      valid: false,
+      issueCount: 1,
+      issues: [{
+        index: 0,
+        productId: "release-check-missing-product",
+        variantId: null,
+        code: "PRODUCT_UNAVAILABLE",
+        action: "remove",
+        message: "This item is no longer available.",
+        productName: null,
+        variantLabel: null,
+        requestedQuantity: 1,
+      }],
+      items: [],
+      subtotal: 0,
+    },
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(result) }],
+    structuredContent: result,
+  };
+}
+
 function agentMcpSmokeFetch({
   tools = agentMcpTools(),
   toolResult = agentCatalogProfileMcpResult(),
+  cartValidationToolResult = agentCartValidationMcpResult(),
   onToolCall,
 } = {}) {
   return vi.fn(async (url, init = {}) => {
@@ -211,10 +243,13 @@ function agentMcpSmokeFetch({
 
       if (body.method === "tools/call") {
         onToolCall?.(body);
+        const result = body.params?.name === "cart_validate"
+          ? cartValidationToolResult
+          : toolResult;
         return mcpSseResponse({
           jsonrpc: "2.0",
           id: body.id,
-          result: typeof toolResult === "function" ? toolResult(body) : toolResult,
+          result: typeof result === "function" ? result(body) : result,
         });
       }
     }
@@ -780,17 +815,18 @@ describe("release-check local evaluators", () => {
     });
   });
 
-  it("accepts exactly the catalog-only read-only agent MCP tools", () => {
+  it("accepts exactly the catalog and read-only cart-validation agent MCP tools", () => {
     expect(evaluateAgentMcpTools(agentMcpTools())).toMatchObject({
       ok: true,
       errors: [],
       toolNames: [
+        "cart_validate",
         "catalog_lookup",
         "catalog_product",
         "catalog_profile",
         "catalog_search",
       ],
-      readOnlyToolCount: 4,
+      readOnlyToolCount: 5,
     });
   });
 
@@ -803,7 +839,21 @@ describe("release-check local evaluators", () => {
       ok: false,
       errors: expect.arrayContaining([
         expect.stringContaining("unexpected catalog_checkout"),
-        expect.stringContaining("checkout/cart/order/payment/customer/recovery terms"),
+        expect.stringContaining("checkout/order/payment/customer/recovery or cart mutation terms"),
+      ]),
+    });
+
+    const unsafeCartMutation = evaluateAgentMcpTools([
+      ...agentMcpTools(),
+      agentMcpTool("cart_update", {
+        description: "Updates cart line quantities.",
+      }),
+    ]);
+    expect(unsafeCartMutation).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        expect.stringContaining("unexpected cart_update"),
+        expect.stringContaining("checkout/order/payment/customer/recovery or cart mutation terms"),
       ]),
     });
 
@@ -817,20 +867,34 @@ describe("release-check local evaluators", () => {
     expect(unsafeCapability).toMatchObject({
       ok: false,
       errors: expect.arrayContaining([
-        expect.stringContaining("checkout/cart/order/payment/customer/recovery terms"),
+        expect.stringContaining("checkout/order/payment/customer/recovery or cart mutation terms"),
       ]),
     });
   });
 
-  it("calls a safe read-only catalog MCP tool when the agent smoke opts in", async () => {
+  it("calls safe read-only catalog and cart-validation MCP tools when the agent smoke opts in", async () => {
     const mcpRequests = [];
     const fetchImpl = agentMcpSmokeFetch({
       onToolCall: (body) => {
         mcpRequests.push(`${body.method}:${body.params?.name}`);
-        expect(body.params).toEqual({
-          name: "catalog_profile",
-          arguments: {},
-        });
+        if (body.params?.name === "catalog_profile") {
+          expect(body.params).toEqual({
+            name: "catalog_profile",
+            arguments: {},
+          });
+        }
+        if (body.params?.name === "cart_validate") {
+          expect(body.params).toEqual({
+            name: "cart_validate",
+            arguments: {
+              items: [{
+                productId: "release-check-missing-product",
+                quantity: 1,
+                unitPrice: 1,
+              }],
+            },
+          });
+        }
       },
     });
 
@@ -843,7 +907,10 @@ describe("release-check local evaluators", () => {
       logger: null,
     });
 
-    expect(mcpRequests).toEqual(["tools/call:catalog_profile"]);
+    expect(mcpRequests).toEqual([
+      "tools/call:catalog_profile",
+      "tools/call:cart_validate",
+    ]);
     expect(result.mcp.catalogTool).toMatchObject({
       name: "catalog_profile",
       statusCode: 200,
@@ -856,6 +923,13 @@ describe("release-check local evaluators", () => {
           "dev.ucp.shopping.catalog.lookup",
         ],
       },
+    });
+    expect(result.mcp.cartValidationTool).toMatchObject({
+      name: "cart_validate",
+      statusCode: 200,
+      contentCount: 1,
+      issueCount: 1,
+      firstIssueCode: "PRODUCT_UNAVAILABLE",
     });
   });
 
@@ -1386,14 +1460,30 @@ describe("runReleaseCheck", () => {
             });
           }
           if (body.method === "tools/call") {
-            expect(body.params).toEqual({
-              name: "catalog_profile",
-              arguments: {},
-            });
+            if (body.params?.name === "catalog_profile") {
+              expect(body.params).toEqual({
+                name: "catalog_profile",
+                arguments: {},
+              });
+            }
+            if (body.params?.name === "cart_validate") {
+              expect(body.params).toEqual({
+                name: "cart_validate",
+                arguments: {
+                  items: [{
+                    productId: "release-check-missing-product",
+                    quantity: 1,
+                    unitPrice: 1,
+                  }],
+                },
+              });
+            }
             return mcpSseResponse({
               jsonrpc: "2.0",
               id: body.id,
-              result: agentCatalogProfileMcpResult(),
+              result: body.params?.name === "cart_validate"
+                ? agentCartValidationMcpResult()
+                : agentCatalogProfileMcpResult(),
             });
           }
         }
@@ -1582,6 +1672,7 @@ describe("runReleaseCheck", () => {
       "initialize",
       "tools/list",
       "tools/call:catalog_profile",
+      "tools/call:cart_validate",
     ]);
     expect(result.checks.agentMcp).toMatchObject({
       agentUrl: "https://agent.example.test/",
@@ -1599,12 +1690,13 @@ describe("runReleaseCheck", () => {
         tools: {
           statusCode: 200,
           toolNames: [
+            "cart_validate",
             "catalog_lookup",
             "catalog_product",
             "catalog_profile",
             "catalog_search",
           ],
-          readOnlyToolCount: 4,
+          readOnlyToolCount: 5,
         },
         catalogTool: {
           name: "catalog_profile",
@@ -1618,6 +1710,13 @@ describe("runReleaseCheck", () => {
               "dev.ucp.shopping.catalog.lookup",
             ],
           },
+        },
+        cartValidationTool: {
+          name: "cart_validate",
+          statusCode: 200,
+          contentCount: 1,
+          issueCount: 1,
+          firstIssueCode: "PRODUCT_UNAVAILABLE",
         },
       },
     });
