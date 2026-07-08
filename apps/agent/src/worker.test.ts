@@ -444,6 +444,14 @@ function adminProductSearchContext(result: Record<string, unknown>): Record<stri
   return structuredContent.adminProductSearch;
 }
 
+function adminProductCopyContext(result: Record<string, unknown>): Record<string, unknown> {
+  const structuredContent = result.structuredContent;
+  if (!isRecord(structuredContent) || !isRecord(structuredContent.adminProductCopyContext)) {
+    throw new Error("Expected adminProductCopyContext structured content");
+  }
+  return structuredContent.adminProductCopyContext;
+}
+
 function adminCategorySearchContext(result: Record<string, unknown>): Record<string, unknown> {
   const structuredContent = result.structuredContent;
   if (!isRecord(structuredContent) || !isRecord(structuredContent.adminCategorySearch)) {
@@ -1540,6 +1548,7 @@ describe("admin MCP route", () => {
       "admin_session_context",
       "admin_navigation_context",
       "admin_product_search",
+      "admin_product_copy_context",
       "admin_category_search",
       "admin_collection_search",
       "admin_page_search",
@@ -1563,6 +1572,162 @@ describe("admin MCP route", () => {
     for (const unsafeTerm of ADMIN_MCP_FORBIDDEN_MUTATION_TERMS) {
       expect(serialized).not.toContain(unsafeTerm);
     }
+  });
+
+  it("calls admin_product_copy_context through the route with preflight and compact safe detail output", async () => {
+    const longUserAgent = `vitest-admin-client-${"x".repeat(300)}`;
+    const apiFetch = vi.fn<FetchLike>().mockImplementation((input) => {
+      const url = requestUrl(input);
+      if (url === "http://api.internal/api/v1/admin/products/prod_1") {
+        return Promise.resolve(json({
+          success: true,
+          data: {
+            id: "prod_1",
+            name: "Khaki Shoes",
+            title: "Ignored Title",
+            slug: "khaki-shoes",
+            isActive: false,
+            category: { name: "Shoes", description: "category-private" },
+            description: "<p>Soft &amp; light everyday shoe.</p><script>SKU-SECRET checkout payment</script>",
+            price: 1299,
+            discountAmount: 100,
+            discountPercentage: 5,
+            variants: [{
+              id: "var_1",
+              sku: "SKU-SECRET",
+              stock: 99,
+              barcode: "BARCODE-SECRET",
+              price: 1299,
+            }],
+            sku: "SKU-SECRET",
+            stock: 99,
+            barcode: "BARCODE-SECRET",
+            images: [{ url: "https://cdn.example.test/private.jpg" }],
+            primaryImage: "https://cdn.example.test/private.jpg",
+            metaTitle: "must-not-leak",
+            metaDescription: "must-not-leak",
+            canonicalPath: "/products/custom-canonical",
+            additionalInfo: [{ title: "Care", content: "must-not-leak" }],
+            attributes: [{ value: "must-not-leak" }],
+            deletedAt: "2026-07-08T00:00:00.000Z",
+            providerPayload: { raw: "provider-secret" },
+            mutationUrl: "https://api.example.test/admin/products/prod_1",
+            internalOnly: `must-not-leak ${ADMIN_COOKIE}`,
+          },
+          rawMessage: `must-not-leak ${ADMIN_COOKIE}`,
+        }));
+      }
+      return Promise.resolve(json(adminPermissionsBody()));
+    });
+    const worker = createAgentWorker();
+    const env = createEnv(apiFetch);
+    const init = await initializeAdminMcp(worker, env, {
+      Cookie: ADMIN_COOKIE,
+      Authorization: "Bearer must-not-forward",
+      "User-Agent": longUserAgent,
+    });
+    const headers: Record<string, string> = {
+      Cookie: ADMIN_COOKIE,
+      Authorization: "Bearer must-not-forward",
+      "User-Agent": longUserAgent,
+    };
+    if (init.sessionId) headers["Mcp-Session-Id"] = init.sessionId;
+    if (init.protocolVersion) headers["MCP-Protocol-Version"] = init.protocolVersion;
+
+    const callsBeforeTool = apiFetch.mock.calls.length;
+    const message = await adminMcpRpc(worker, env, {
+      jsonrpc: "2.0",
+      id: 23,
+      method: "tools/call",
+      params: {
+        name: "admin_product_copy_context",
+        arguments: { id: "prod_1" },
+      },
+    }, headers);
+    const result = requireMcpResult(message);
+
+    expect(apiFetch.mock.calls.length).toBe(callsBeforeTool + 2);
+    const [preflightInput, preflightInit] = fetchCall(apiFetch, callsBeforeTool);
+    expect(requestUrl(preflightInput)).toBe("http://api.internal/api/v1/admin/rbac/my-permissions");
+    expect(new Headers(preflightInit?.headers).get("Authorization")).toBeNull();
+
+    const [detailInput, detailInit] = fetchCall(apiFetch, callsBeforeTool + 1);
+    expect(requestUrl(detailInput)).toBe("http://api.internal/api/v1/admin/products/prod_1");
+    expect(detailInit?.method).toBe("GET");
+    expect(detailInit?.body).toBeUndefined();
+    expect(detailInit?.signal).toBeInstanceOf(AbortSignal);
+    const detailHeaders = new Headers(detailInit?.headers);
+    expect(detailHeaders.get("Accept")).toBe("application/json");
+    expect(detailHeaders.get("Cookie")).toBe(ADMIN_COOKIE);
+    expect(detailHeaders.get("User-Agent")).toBe(longUserAgent.slice(0, 256));
+    expect(detailHeaders.get("Authorization")).toBeNull();
+    expect([...detailHeaders.keys()].sort()).toEqual(["accept", "cookie", "user-agent"]);
+
+    expect(result.isError).toBeUndefined();
+    const context = adminProductCopyContext(result);
+    expect(context).toEqual({
+      source: {
+        path: "/api/v1/admin/products/{id}",
+        permission: "products.view",
+      },
+      request: { id: "prod_1" },
+      product: {
+        id: "prod_1",
+        name: "Khaki Shoes",
+        slug: "khaki-shoes",
+        isActive: false,
+        status: "draft",
+        route: "/products/custom-canonical",
+        categoryName: "Shoes",
+        description: {
+          content: "Soft & light everyday shoe.",
+          excerpt: "Soft & light everyday shoe.",
+        },
+      },
+      limits: {
+        maxDescriptionLength: 14000,
+        maxDescriptionExcerptLength: 600,
+        includesPrices: false,
+        includesVariants: false,
+        includesSku: false,
+        includesStock: false,
+        includesBarcodes: false,
+        includesImages: false,
+        includesDeletedFields: false,
+        includesProviderPayloads: false,
+        canMutate: false,
+      },
+    });
+    const product = context.product as Record<string, unknown>;
+    expect(Object.keys(product).sort()).toEqual([
+      "categoryName",
+      "description",
+      "id",
+      "isActive",
+      "name",
+      "route",
+      "slug",
+      "status",
+    ]);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("Ignored Title");
+    expect(serialized).not.toContain("category-private");
+    expect(serialized).not.toContain("SKU-SECRET");
+    expect(serialized).not.toContain("BARCODE-SECRET");
+    expect(serialized).not.toContain("checkout");
+    expect(serialized).not.toContain("payment");
+    expect(serialized).not.toContain("1299");
+    expect(serialized).not.toContain("https://cdn.example.test/private.jpg");
+    expect(serialized).not.toContain("metaTitle");
+    expect(serialized).not.toContain("metaDescription");
+    expect(serialized).not.toContain("canonicalPath");
+    expect(serialized).not.toContain("additionalInfo");
+    expect(serialized).not.toContain("attributes");
+    expect(serialized).not.toContain("deletedAt");
+    expect(serialized).not.toContain("provider-secret");
+    expect(serialized).not.toContain("mutationUrl");
+    expect(serialized).not.toContain("must-not-leak");
+    expect(serialized).not.toContain(ADMIN_COOKIE);
   });
 
   it("calls admin_settings_summary through the route with no-store response and cookie-only API forwarding", async () => {
@@ -5265,6 +5430,159 @@ describe("admin MCP server", () => {
         includeTrashed: true,
         Authorization: "Bearer must-not-forward",
         receiptToken: "chk_secret",
+      },
+    }));
+
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps admin_product_copy_context upstream failures fail-closed without leaking upstream bodies", async () => {
+    const leak = `raw upstream leak ${ADMIN_COOKIE} admin@example.test SKU-SECRET BARCODE-SECRET`;
+    const cases: Array<{ makeResponse: () => Response; expectedStatus: number }> = [
+      {
+        makeResponse: () => json({ success: false, error: { code: "forbidden", message: leak } }, 403),
+        expectedStatus: 403,
+      },
+      {
+        makeResponse: () => json({ success: false, error: { code: "server_error", message: leak } }, 500),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => new Response(`not json ${leak}`, {
+          status: 200,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        }),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => json({ success: false, error: { code: "invalid", message: leak } }),
+        expectedStatus: 503,
+      },
+      {
+        makeResponse: () => json({
+          success: true,
+          data: {
+            id: "prod_1",
+            name: "Khaki Shoes",
+            slug: "khaki-shoes",
+            price: 1200,
+            message: leak,
+          },
+        }),
+        expectedStatus: 503,
+      },
+    ];
+
+    for (const { makeResponse, expectedStatus } of cases) {
+      const apiFetch = vi.fn<FetchLike>().mockImplementation(() => Promise.resolve(makeResponse()));
+      const { client } = await bootAdmin(apiFetch);
+
+      const result = await client.callTool({
+        name: "admin_product_copy_context",
+        arguments: { id: "prod_1" },
+      });
+
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        adminProductCopyContext: {
+          source: {
+            path: "/api/v1/admin/products/{id}",
+            permission: "products.view",
+          },
+          request: { id: "prod_1" },
+          product: null,
+          limits: {
+            maxDescriptionLength: 14000,
+            maxDescriptionExcerptLength: 600,
+            includesPrices: false,
+            includesVariants: false,
+            includesSku: false,
+            includesStock: false,
+            includesBarcodes: false,
+            includesImages: false,
+            includesDeletedFields: false,
+            includesProviderPayloads: false,
+            canMutate: false,
+          },
+        },
+        error: {
+          code: "admin_product_copy_context_unavailable",
+          status: expectedStatus,
+        },
+      });
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain(ADMIN_COOKIE);
+      expect(serialized).not.toContain("admin@example.test");
+      expect(serialized).not.toContain("SKU-SECRET");
+      expect(serialized).not.toContain("BARCODE-SECRET");
+      expect(serialized).not.toContain("raw upstream leak");
+    }
+  });
+
+  it("returns a safe admin_product_copy_context tool error when no cookie option is present", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: {
+        id: "prod_1",
+        name: "Khaki Shoes",
+        slug: "khaki-shoes",
+        isActive: true,
+        description: null,
+      },
+    });
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: null,
+      userAgent: "vitest-admin-mcp",
+    });
+
+    const result = await client.callTool({
+      name: "admin_product_copy_context",
+      arguments: { id: "prod_1" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        code: "admin_session_required",
+        status: 401,
+      },
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects unbounded admin_product_copy_context inputs before API fetches", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: {
+        id: "prod_1",
+        name: "Khaki Shoes",
+        slug: "khaki-shoes",
+        isActive: true,
+        description: null,
+      },
+    });
+    const { client } = await bootAdmin(apiFetch);
+
+    await expectValidationToolError(client.callTool({
+      name: "admin_product_copy_context",
+      arguments: { id: "" },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_product_copy_context",
+      arguments: { id: "x".repeat(161) },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_product_copy_context",
+      arguments: {
+        id: "prod_1",
+        includeVariants: true,
+        includeSku: true,
+        includeStock: true,
+        includeImages: true,
+        includeDeleted: true,
+        price: 1200,
+        Authorization: "Bearer must-not-forward",
       },
     }));
 

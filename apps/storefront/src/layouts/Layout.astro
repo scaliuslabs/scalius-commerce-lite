@@ -3,6 +3,7 @@
 import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
+import StorefrontAssistantBubble from "../components/assistant/StorefrontAssistantBubble";
 import StorefrontAssistantPageContext from "../components/assistant/StorefrontAssistantPageContext.astro";
 import { Toaster } from "@/components/ui/sonner";
 import { getLayoutData, type LayoutData } from "@/lib/api";
@@ -451,6 +452,7 @@ const runtimeGlobalsScript = [
 
     <CommandPalette client:idle />
     <AuthModal client:idle />
+    <StorefrontAssistantBubble client:idle />
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
   </body>
