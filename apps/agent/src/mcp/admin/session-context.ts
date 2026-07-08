@@ -10,6 +10,7 @@ const ADMIN_COLLECTIONS_PATH = "/api/v1/admin/collections";
 const ADMIN_PAGES_PATH = "/api/v1/admin/pages";
 const ADMIN_ORDERS_PATH = "/api/v1/admin/orders";
 const ADMIN_MEDIA_PATH = "/api/v1/admin/media";
+const ADMIN_INVENTORY_PATH = "/api/v1/admin/inventory";
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
@@ -31,12 +32,14 @@ const ADMIN_COLLECTION_SEARCH_MAX_COLLECTIONS = 10;
 const ADMIN_PAGE_SEARCH_MAX_PAGES = 10;
 const ADMIN_ORDER_SEARCH_MAX_ORDERS = 10;
 const ADMIN_MEDIA_SEARCH_MAX_FILES = 10;
+const ADMIN_INVENTORY_LOOKUP_MAX_VARIANTS = 10;
 const ADMIN_PRODUCTS_MAX_STRING_LENGTH = 220;
 const ADMIN_CATEGORIES_MAX_STRING_LENGTH = 220;
 const ADMIN_COLLECTIONS_MAX_STRING_LENGTH = 220;
 const ADMIN_PAGES_MAX_STRING_LENGTH = 220;
 const ADMIN_ORDERS_MAX_STRING_LENGTH = 220;
 const ADMIN_MEDIA_MAX_STRING_LENGTH = 220;
+const ADMIN_INVENTORY_MAX_STRING_LENGTH = 220;
 
 const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
   "account",
@@ -109,6 +112,17 @@ const adminMediaSearchInputSchema = z.object({
 }).strict();
 
 type AdminMediaSearchInput = z.infer<typeof adminMediaSearchInputSchema>;
+
+const adminInventoryLookupInputSchema = z.object({
+  query: z.string().trim().max(120).optional(),
+  limit: z.number().int().min(1).max(ADMIN_INVENTORY_LOOKUP_MAX_VARIANTS).default(5),
+  page: z.number().int().min(1).max(20).default(1),
+  status: z.enum(["all", "low", "out", "reserved"]).default("all"),
+  sort: z.enum(["available", "sku", "productName"]).default("available"),
+  order: z.enum(["asc", "desc"]).default("asc"),
+}).strict();
+
+type AdminInventoryLookupInput = z.infer<typeof adminInventoryLookupInputSchema>;
 
 interface AdminPermissionContext {
   userId?: string;
@@ -639,6 +653,37 @@ function adminMediaToolError(
       code,
       status: failClosedStatus(status),
       message: "Admin media are temporarily unavailable.",
+    },
+  }, true);
+}
+
+function adminInventoryToolError(
+  code: string,
+  query?: JsonRecord,
+  status = 503,
+): CallToolResult {
+  return toolResult({
+    adminInventoryLookup: {
+      source: { path: ADMIN_INVENTORY_PATH },
+      ...(query ? { query } : {}),
+      variants: [],
+      pagination: null,
+      stats: null,
+      limits: {
+        maxVariants: ADMIN_INVENTORY_LOOKUP_MAX_VARIANTS,
+        section: "variants",
+        includesMovements: false,
+        includesAlerts: false,
+        includesBarcode: false,
+        includesPrices: false,
+        includesVersion: false,
+        canMutateStock: false,
+      },
+    },
+    error: {
+      code,
+      status: failClosedStatus(status),
+      message: "Admin inventory is temporarily unavailable.",
     },
   }, true);
 }
@@ -1393,6 +1438,46 @@ function compactAdminMediaFile(value: unknown): JsonRecord | null {
   return file;
 }
 
+function compactAdminInventoryVariant(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const id = compactString(value.id, ADMIN_INVENTORY_MAX_STRING_LENGTH);
+  if (!id) return null;
+
+  const variant: JsonRecord = { id };
+  setCompactString(variant, "productId", value.productId, ADMIN_INVENTORY_MAX_STRING_LENGTH);
+  setCompactString(variant, "productName", value.productName, ADMIN_INVENTORY_MAX_STRING_LENGTH);
+  setCompactString(variant, "sku", value.sku, ADMIN_INVENTORY_MAX_STRING_LENGTH);
+  setCompactString(variant, "size", value.size, ADMIN_INVENTORY_MAX_STRING_LENGTH);
+  setCompactString(variant, "color", value.color, ADMIN_INVENTORY_MAX_STRING_LENGTH);
+  setCompactNumber(variant, "stock", value.stock);
+  setCompactNumber(variant, "reservedStock", value.reservedStock);
+  setCompactNumber(variant, "available", value.available);
+  setCompactNumber(variant, "lowStockThreshold", value.lowStockThreshold);
+
+  return variant;
+}
+
+function compactAdminInventoryStats(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+
+  const stats: JsonRecord = {};
+  for (const key of [
+    "totalVariants",
+    "totalOnHand",
+    "totalReserved",
+    "totalAvailable",
+    "outOfStockCount",
+    "lowStockCount",
+  ] as const) {
+    if (!(key in value)) return null;
+    const compact = compactNumber(value[key]);
+    if (compact === null) return null;
+    stats[key] = compact;
+  }
+
+  return stats;
+}
+
 function buildAdminOrderSearchUrl(input: AdminOrderSearchInput): { url: URL; query: JsonRecord } {
   const url = new URL(`http://api.internal${ADMIN_ORDERS_PATH}`);
   const query: JsonRecord = {
@@ -1571,6 +1656,102 @@ async function fetchAdminMediaSearch(
     });
   } catch {
     return adminMediaToolError("admin_media_unavailable", query);
+  }
+}
+
+function buildAdminInventoryLookupUrl(input: AdminInventoryLookupInput): { url: URL; query: JsonRecord } {
+  const url = new URL(`http://api.internal${ADMIN_INVENTORY_PATH}`);
+  const query: JsonRecord = {
+    section: "variants",
+    page: input.page,
+    limit: input.limit,
+    status: input.status,
+    sort: input.sort,
+    order: input.order,
+  };
+
+  url.searchParams.set("section", "variants");
+
+  if (input.query) {
+    query.query = input.query;
+    url.searchParams.set("search", input.query);
+  }
+
+  url.searchParams.set("page", String(input.page));
+  url.searchParams.set("limit", String(input.limit));
+  url.searchParams.set("status", input.status);
+  url.searchParams.set("sort", input.sort);
+  url.searchParams.set("order", input.order);
+
+  return { url, query };
+}
+
+async function fetchAdminInventoryLookup(
+  env: Env,
+  input: AdminInventoryLookupInput,
+  {
+    cookie,
+    userAgent,
+    signal,
+  }: {
+    cookie: string;
+    userAgent?: string | null;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  const { url, query } = buildAdminInventoryLookupUrl(input);
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return adminInventoryToolError("admin_api_unavailable", query);
+  }
+
+  try {
+    const response = await env.API.fetch(url, {
+      method: "GET",
+      headers: adminApiHeaders(cookie, userAgent),
+      signal,
+    });
+    if (!response.ok) {
+      return adminInventoryToolError("admin_inventory_unavailable", query, response.status);
+    }
+
+    const body = await parseJsonResponse(response);
+    const data = body && isRecord(body.data) ? body.data : null;
+    if (!body || body.success !== true || !data || !Array.isArray(data.variants)) {
+      return adminInventoryToolError("admin_inventory_unavailable", query);
+    }
+
+    const pagination = compactAdminPagination(data.pagination);
+    const stats = compactAdminInventoryStats(data.stats);
+    if (!pagination || !stats) {
+      return adminInventoryToolError("admin_inventory_unavailable", query);
+    }
+
+    const variants = data.variants
+      .map(compactAdminInventoryVariant)
+      .filter((variant): variant is JsonRecord => variant !== null)
+      .slice(0, ADMIN_INVENTORY_LOOKUP_MAX_VARIANTS);
+
+    return toolResult({
+      adminInventoryLookup: {
+        source: { path: ADMIN_INVENTORY_PATH },
+        query,
+        variants,
+        pagination,
+        stats,
+        limits: {
+          maxVariants: ADMIN_INVENTORY_LOOKUP_MAX_VARIANTS,
+          section: "variants",
+          includesMovements: false,
+          includesAlerts: false,
+          includesBarcode: false,
+          includesPrices: false,
+          includesVersion: false,
+          canMutateStock: false,
+        },
+      },
+    });
+  } catch {
+    return adminInventoryToolError("admin_inventory_unavailable", query);
   }
 }
 
@@ -1804,6 +1985,32 @@ export function createAdminMcpServer(
       }
 
       return fetchAdminMediaSearch(env, input, {
+        cookie,
+        userAgent: options.userAgent,
+        signal: extra.signal,
+      });
+    },
+  );
+
+  server.registerTool(
+    "admin_inventory_lookup",
+    {
+      title: "Admin Inventory Lookup",
+      description: "Read-only inventory variant lookup through API-verified permissions.",
+      inputSchema: adminInventoryLookupInputSchema,
+      annotations: ADMIN_READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (input, extra) => {
+      const cookie = options.cookie?.trim() ? options.cookie : null;
+      if (!cookie) {
+        return adminToolError({
+          ok: false,
+          status: 401,
+          code: "admin_session_required",
+        });
+      }
+
+      return fetchAdminInventoryLookup(env, input, {
         cookie,
         userAgent: options.userAgent,
         signal: extra.signal,

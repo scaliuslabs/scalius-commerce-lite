@@ -46,6 +46,7 @@ const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_navigation_context",
   "admin_category_search",
   "admin_collection_search",
+  "admin_inventory_lookup",
   "admin_media_search",
   "admin_page_search",
   "admin_product_search",
@@ -81,6 +82,14 @@ const ADMIN_PAGE_SEARCH_TOOL_SMOKE = Object.freeze({
 });
 const ADMIN_MEDIA_SEARCH_TOOL_SMOKE = Object.freeze({
   name: "admin_media_search",
+  arguments: Object.freeze({
+    query: "test",
+    limit: 1,
+    page: 1,
+  }),
+});
+const ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE = Object.freeze({
+  name: "admin_inventory_lookup",
   arguments: Object.freeze({
     query: "test",
     limit: 1,
@@ -2575,6 +2584,39 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
+  const inventoryLookupToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 10,
+      method: "tools/call",
+      params: ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE,
+    },
+  });
+  const inventoryLookupToolCacheControl = requireNoStoreCacheControl(
+    inventoryLookupToolResponse,
+    `Authenticated Admin MCP ${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name}`,
+  );
+  const inventoryLookupToolResult = requireMcpJsonRpcResult(
+    inventoryLookupToolResponse,
+    `Authenticated Admin MCP ${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name}`,
+    10,
+  );
+  const inventoryLookupToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
+    inventoryLookupToolResult,
+    { toolName: ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name },
+  );
+  if (!inventoryLookupToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name} failed: ` +
+      inventoryLookupToolEvaluation.errors.join("; "),
+    );
+  }
+
   logger?.log(
     `PASS admin MCP authenticated: tools ${toolEvaluation.toolNames.join(", ")}, ` +
     `calls ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}, ` +
@@ -2582,7 +2624,8 @@ export async function smokeAdminMcpAuthenticated({
     `${ADMIN_COLLECTION_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_PAGE_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name}, ` +
-    `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}, ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name} ok.`,
+    `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}, ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}, ` +
+    `${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name} ok.`,
   );
   return {
     dashboardUrl: redactUrl(normalizedDashboardUrl),
@@ -2654,6 +2697,13 @@ export async function smokeAdminMcpAuthenticated({
         durationMs: orderSearchToolResponse.durationMs,
         cacheControl: orderSearchToolCacheControl,
         contentCount: orderSearchToolEvaluation.contentCount,
+      },
+      inventoryLookupTool: {
+        name: ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name,
+        statusCode: inventoryLookupToolResponse.statusCode,
+        durationMs: inventoryLookupToolResponse.durationMs,
+        cacheControl: inventoryLookupToolCacheControl,
+        contentCount: inventoryLookupToolEvaluation.contentCount,
       },
     },
   };
