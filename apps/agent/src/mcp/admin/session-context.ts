@@ -7,6 +7,7 @@ const ADMIN_API_TARGET = `http://api.internal${ADMIN_PERMISSIONS_PATH}`;
 const ADMIN_PRODUCTS_PATH = "/api/v1/admin/products";
 const ADMIN_CATEGORIES_PATH = "/api/v1/admin/categories";
 const ADMIN_COLLECTIONS_PATH = "/api/v1/admin/collections";
+const ADMIN_PAGES_PATH = "/api/v1/admin/pages";
 const ADMIN_ORDERS_PATH = "/api/v1/admin/orders";
 
 const NO_STORE_HEADERS = {
@@ -26,11 +27,33 @@ const ADMIN_NAVIGATION_CATALOG_VERSION = "admin-navigation-context:v1";
 const ADMIN_PRODUCT_SEARCH_MAX_PRODUCTS = 10;
 const ADMIN_CATEGORY_SEARCH_MAX_CATEGORIES = 10;
 const ADMIN_COLLECTION_SEARCH_MAX_COLLECTIONS = 10;
+const ADMIN_PAGE_SEARCH_MAX_PAGES = 10;
 const ADMIN_ORDER_SEARCH_MAX_ORDERS = 10;
 const ADMIN_PRODUCTS_MAX_STRING_LENGTH = 220;
 const ADMIN_CATEGORIES_MAX_STRING_LENGTH = 220;
 const ADMIN_COLLECTIONS_MAX_STRING_LENGTH = 220;
+const ADMIN_PAGES_MAX_STRING_LENGTH = 220;
 const ADMIN_ORDERS_MAX_STRING_LENGTH = 220;
+
+const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
+  "account",
+  "admin",
+  "api",
+  "buy",
+  "cart",
+  "categories",
+  "checkout",
+  "collections",
+  "health",
+  "404",
+  "500",
+  "order-success",
+  "payment-recovery",
+  "products",
+  "robots.txt",
+  "search",
+  "sitemap.xml",
+]);
 
 type JsonRecord = Record<string, unknown>;
 
@@ -57,6 +80,14 @@ const adminCollectionSearchInputSchema = z.object({
 }).strict();
 
 type AdminCollectionSearchInput = z.infer<typeof adminCollectionSearchInputSchema>;
+
+const adminPageSearchInputSchema = z.object({
+  query: z.string().trim().min(1).max(120),
+  limit: z.number().int().min(1).max(ADMIN_PAGE_SEARCH_MAX_PAGES).default(5),
+  page: z.number().int().min(1).max(20).default(1),
+}).strict();
+
+type AdminPageSearchInput = z.infer<typeof adminPageSearchInputSchema>;
 
 const adminOrderSearchInputSchema = z.object({
   query: z.string().trim().min(1).max(80),
@@ -516,6 +547,34 @@ function adminCollectionToolError(
   }, true);
 }
 
+function adminPageToolError(
+  code: string,
+  query?: JsonRecord,
+  status = 503,
+): CallToolResult {
+  return toolResult({
+    adminPageSearch: {
+      source: { path: ADMIN_PAGES_PATH },
+      ...(query ? { query } : {}),
+      pages: [],
+      pagination: null,
+      limits: {
+        maxPages: ADMIN_PAGE_SEARCH_MAX_PAGES,
+        includesTrashed: false,
+        includesContent: false,
+        includesMetaText: false,
+        includesRawImages: false,
+        includesDeletedFields: false,
+      },
+    },
+    error: {
+      code,
+      status: failClosedStatus(status),
+      message: "Admin pages are temporarily unavailable.",
+    },
+  }, true);
+}
+
 function adminOrderToolError(
   code: string,
   query?: JsonRecord,
@@ -832,6 +891,40 @@ function compactAdminCollection(value: unknown): JsonRecord | null {
   return collection;
 }
 
+function compactPageCanonicalPath(value: unknown): string | null {
+  const canonicalPath = compactString(value, 180);
+  if (!canonicalPath) return null;
+  if (!/^\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(canonicalPath)) return null;
+  const segment = canonicalPath.slice(1);
+  return RESERVED_PAGE_CANONICAL_SEGMENTS.has(segment) ? null : canonicalPath;
+}
+
+function compactAdminPage(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const id = compactString(value.id, ADMIN_PAGES_MAX_STRING_LENGTH);
+  if (!id) return null;
+
+  const slug = compactString(value.slug, ADMIN_PAGES_MAX_STRING_LENGTH);
+  const page: JsonRecord = { id };
+  setCompactString(page, "title", value.title, ADMIN_PAGES_MAX_STRING_LENGTH);
+  if (slug) page.slug = slug;
+
+  setCompactBoolean(page, "isPublished", value.isPublished);
+  setCompactBoolean(page, "noIndex", value.noIndex);
+  setCompactBoolean(page, "excludeFromSitemap", value.excludeFromSitemap);
+
+  const canonicalPath = compactPageCanonicalPath(value.canonicalPath);
+  if (canonicalPath) page.canonicalPath = canonicalPath;
+
+  setCompactBoolean(page, "hideHeader", value.hideHeader);
+  setCompactBoolean(page, "hideFooter", value.hideFooter);
+  setCompactBoolean(page, "hideTitle", value.hideTitle);
+  setCompactTimestamp(page, "publishedAt", value.publishedAt);
+  setCompactTimestamp(page, "updatedAt", value.updatedAt);
+
+  return page;
+}
+
 function compactAdminPagination(value: unknown): JsonRecord | null {
   if (!isRecord(value)) return null;
   const page = compactNumber(value.page);
@@ -1091,6 +1184,90 @@ async function fetchAdminCollectionSearch(
     });
   } catch {
     return adminCollectionToolError("admin_collection_unavailable", query);
+  }
+}
+
+function buildAdminPageSearchUrl(input: AdminPageSearchInput): { url: URL; query: JsonRecord } {
+  const url = new URL(`http://api.internal${ADMIN_PAGES_PATH}`);
+  const query: JsonRecord = {
+    query: input.query,
+    page: input.page,
+    limit: input.limit,
+    sort: "updatedAt",
+    order: "desc",
+  };
+
+  url.searchParams.set("search", input.query);
+  url.searchParams.set("page", String(input.page));
+  url.searchParams.set("limit", String(input.limit));
+  url.searchParams.set("sort", "updatedAt");
+  url.searchParams.set("order", "desc");
+
+  return { url, query };
+}
+
+async function fetchAdminPageSearch(
+  env: Env,
+  input: AdminPageSearchInput,
+  {
+    cookie,
+    userAgent,
+    signal,
+  }: {
+    cookie: string;
+    userAgent?: string | null;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  const { url, query } = buildAdminPageSearchUrl(input);
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return adminPageToolError("admin_api_unavailable", query);
+  }
+
+  try {
+    const response = await env.API.fetch(url, {
+      method: "GET",
+      headers: adminApiHeaders(cookie, userAgent),
+      signal,
+    });
+    if (!response.ok) {
+      return adminPageToolError("admin_page_unavailable", query, response.status);
+    }
+
+    const body = await parseJsonResponse(response);
+    const data = body && isRecord(body.data) ? body.data : null;
+    if (!body || body.success !== true || !data || !Array.isArray(data.pages)) {
+      return adminPageToolError("admin_page_unavailable", query);
+    }
+
+    const pagination = compactAdminPagination(data.pagination);
+    if (!pagination) {
+      return adminPageToolError("admin_page_unavailable", query);
+    }
+
+    const pages = data.pages
+      .map(compactAdminPage)
+      .filter((page): page is JsonRecord => page !== null)
+      .slice(0, ADMIN_PAGE_SEARCH_MAX_PAGES);
+
+    return toolResult({
+      adminPageSearch: {
+        source: { path: ADMIN_PAGES_PATH },
+        query,
+        pages,
+        pagination,
+        limits: {
+          maxPages: ADMIN_PAGE_SEARCH_MAX_PAGES,
+          includesTrashed: false,
+          includesContent: false,
+          includesMetaText: false,
+          includesRawImages: false,
+          includesDeletedFields: false,
+        },
+      },
+    });
+  } catch {
+    return adminPageToolError("admin_page_unavailable", query);
   }
 }
 
@@ -1365,6 +1542,32 @@ export function createAdminMcpServer(
       }
 
       return fetchAdminCollectionSearch(env, input, {
+        cookie,
+        userAgent: options.userAgent,
+        signal: extra.signal,
+      });
+    },
+  );
+
+  server.registerTool(
+    "admin_page_search",
+    {
+      title: "Admin Page Search",
+      description: "Searches the dashboard CMS page list through API-verified permissions and returns compact page identifiers.",
+      inputSchema: adminPageSearchInputSchema,
+      annotations: ADMIN_READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (input, extra) => {
+      const cookie = options.cookie?.trim() ? options.cookie : null;
+      if (!cookie) {
+        return adminToolError({
+          ok: false,
+          status: 401,
+          code: "admin_session_required",
+        });
+      }
+
+      return fetchAdminPageSearch(env, input, {
         cookie,
         userAgent: options.userAgent,
         signal: extra.signal,
