@@ -29,6 +29,8 @@ const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
 const ADMIN_DASHBOARD_SUMMARY_PATH = "/api/v1/admin/dashboard/metrics-summary";
 const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
+const ADMIN_ANALYTICS_HEALTH_PATH = "/api/v1/admin/analytics/health";
+const ADMIN_ANALYTICS_SUMMARY_VERSION = "admin-analytics-summary:v1";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
 const RELEASE_ADMIN_EMAIL_ENV = "SCALIUS_RELEASE_ADMIN_EMAIL";
@@ -48,6 +50,7 @@ const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_navigation_context",
   "admin_dashboard_summary",
   "admin_settings_summary",
+  "admin_analytics_summary",
   "admin_category_search",
   "admin_collection_search",
   "admin_inventory_lookup",
@@ -66,6 +69,10 @@ const ADMIN_DASHBOARD_SUMMARY_TOOL_SMOKE = Object.freeze({
 });
 const ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE = Object.freeze({
   name: "admin_settings_summary",
+  arguments: Object.freeze({}),
+});
+const ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE = Object.freeze({
+  name: "admin_analytics_summary",
   arguments: Object.freeze({}),
 });
 const ADMIN_CATEGORY_SEARCH_TOOL_SMOKE = Object.freeze({
@@ -186,6 +193,10 @@ const ADMIN_SETTINGS_SUMMARY_FORBIDDEN_KEY_PATTERN =
   /(?:credentials?|tokens?|apiKeys?|secrets?|passwords?|cookies?|sessions?|otps?|receiptProof|providerPayloads?|rawSnippet|analyticsSnippet|customerEmail|customerPhone)/i;
 const ADMIN_SETTINGS_SUMMARY_FORBIDDEN_VALUE_PATTERN =
   /\b(?:credentials?|tokens?|apiKeys?|secrets?|passwords?|cookies?|sessions?|otps?|receiptProof|providerPayloads?|rawSnippet|analyticsSnippet|customerEmail|customerPhone)\b/i;
+const ADMIN_ANALYTICS_SUMMARY_FORBIDDEN_KEY_PATTERN =
+  /^(?:config|rawConfig|scriptConfig|snippet|rawSnippet|analyticsSnippet|customCode|htmlContent|jsContent|credential|credentials|token|accessToken|apiKey|secret|password|cookie|session|message|messages|issues|providerPayload|pixelId|measurementId|gtmId|beaconToken)$/i;
+const ADMIN_ANALYTICS_SUMMARY_FORBIDDEN_VALUE_PATTERN =
+  /(?:\b(?:access[_ -]?token|api[_ -]?key|secret|password|cookie|session|raw[_ -]?snippet|analytics[_ -]?snippet|custom[_ -]?code|measurement[_ -]?id|pixel[_ -]?id)\b|<script|data-cf-beacon)/i;
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
 const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
 const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
@@ -2097,6 +2108,37 @@ function findForbiddenAdminSettingsSummaryPaths(value, path = "$", seen = new Se
   return leaks;
 }
 
+function findForbiddenAdminAnalyticsSummaryPaths(value, path = "$", seen = new Set()) {
+  const leaks = [];
+  if (!isRecord(value) && !Array.isArray(value)) {
+    if (typeof value === "string" && ADMIN_ANALYTICS_SUMMARY_FORBIDDEN_VALUE_PATTERN.test(value)) {
+      leaks.push(path);
+    }
+    return leaks;
+  }
+
+  if (seen.has(value)) return leaks;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      leaks.push(...findForbiddenAdminAnalyticsSummaryPaths(item, `${path}[${index}]`, seen));
+    });
+    return leaks;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = `${path}.${key}`;
+    if (path !== "$.limits" && ADMIN_ANALYTICS_SUMMARY_FORBIDDEN_KEY_PATTERN.test(key)) {
+      leaks.push(childPath);
+      continue;
+    }
+    leaks.push(...findForbiddenAdminAnalyticsSummaryPaths(child, childPath, seen));
+  }
+
+  return leaks;
+}
+
 function evaluateAdminDashboardSummaryToolSmokeResult(result, {
   toolName = ADMIN_DASHBOARD_SUMMARY_TOOL_SMOKE.name,
 } = {}) {
@@ -2267,6 +2309,128 @@ function evaluateAdminSettingsSummaryToolSmokeResult(result, {
     errors,
     toolName,
     contentCount,
+  };
+}
+
+function evaluateAdminAnalyticsSummaryToolSmokeResult(result, {
+  toolName = ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+  const summary = isRecord(structuredContent?.adminAnalyticsSummary)
+    ? structuredContent.adminAnalyticsSummary
+    : null;
+  const source = isRecord(summary?.source) ? summary.source : null;
+  const stats = isRecord(summary?.summary) ? summary.summary : null;
+  const providers = Array.isArray(summary?.providers) ? summary.providers : null;
+  const limits = isRecord(summary?.limits) ? summary.limits : null;
+  const requiredNumericStatPaths = [
+    "totalProviders",
+    "browserReadyProviders",
+    "draftProviders",
+    "blockedProviders",
+    "notConfiguredProviders",
+    "serverReadyProviders",
+  ];
+  const numericStatKeys = stats
+    ? requiredNumericStatPaths.filter((key) => {
+      const value = stats[key];
+      return typeof value === "number" && Number.isFinite(value);
+    })
+    : [];
+  const missingNumericStatPaths = stats
+    ? requiredNumericStatPaths.filter((key) => {
+      const value = stats[key];
+      return typeof value !== "number" || !Number.isFinite(value);
+    })
+    : requiredNumericStatPaths;
+  const leakPaths = summary ? findForbiddenAdminAnalyticsSummaryPaths(summary) : [];
+
+  if (result?.isError === true) {
+    errors.push(`Admin MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Admin MCP ${toolName} must return at least one content block.`);
+  }
+  if (!summary) {
+    errors.push(`Admin MCP ${toolName} must return structured adminAnalyticsSummary content.`);
+  } else {
+    if (source?.path !== ADMIN_ANALYTICS_HEALTH_PATH) {
+      errors.push(
+        `Admin MCP ${toolName} source.path must be ${ADMIN_ANALYTICS_HEALTH_PATH}.`,
+      );
+    }
+    if (source?.permission !== "analytics.view") {
+      errors.push(
+        "Admin MCP admin_analytics_summary source.permission must be analytics.view.",
+      );
+    }
+    if (source?.version !== ADMIN_ANALYTICS_SUMMARY_VERSION) {
+      errors.push(
+        `Admin MCP ${toolName} source.version must be ${ADMIN_ANALYTICS_SUMMARY_VERSION}.`,
+      );
+    }
+    if (!stats || missingNumericStatPaths.length > 0) {
+      errors.push(
+        `Admin MCP ${toolName} must return numeric summary stats for ` +
+        missingNumericStatPaths.join(", ") + ".",
+      );
+    }
+    if (!Array.isArray(providers)) {
+      errors.push(`Admin MCP ${toolName} must return providers as an array.`);
+    } else {
+      for (const [index, provider] of providers.entries()) {
+        if (!isRecord(provider)) {
+          errors.push(`Admin MCP ${toolName} provider ${index + 1} must be an object.`);
+          continue;
+        }
+        const browser = isRecord(provider.browser) ? provider.browser : null;
+        const serverSide = isRecord(provider.serverSide) ? provider.serverSide : null;
+        if (!browser || !serverSide) {
+          errors.push(`Admin MCP ${toolName} provider ${index + 1} must include browser and serverSide readiness.`);
+        }
+      }
+    }
+    if (!limits) {
+      errors.push(`Admin MCP ${toolName} must return limits metadata.`);
+    } else {
+      const expectedLimitFlags = [
+        "includesScriptConfig",
+        "includesAnalyticsSnippets",
+        "includesCustomCode",
+        "includesProviderIdentifiers",
+        "includesCredentials",
+        "includesRawIssues",
+        "includesProviderMessages",
+        "includesProviderPayloads",
+        "canMutate",
+      ];
+      const unsafeLimits = expectedLimitFlags.filter((key) => limits[key] !== false);
+      if (unsafeLimits.length > 0) {
+        errors.push(
+          `Admin MCP ${toolName} limits must explicitly disable ${unsafeLimits.join(", ")}.`,
+        );
+      }
+    }
+    if (leakPaths.length > 0) {
+      errors.push(
+        `Admin MCP ${toolName} summary must not leak analytics config, snippets, custom code, ` +
+        `credentials, provider account identifiers, raw issues, provider messages, or provider payloads ` +
+        `(${leakPaths.join(", ")}).`,
+      );
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
+    numericStatKeys,
+    providerCount: Array.isArray(providers) ? providers.length : null,
   };
 }
 
@@ -2902,7 +3066,7 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
-  const categorySearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+  const analyticsSummaryToolResponse = await fetchMcpJsonRpc(mcpUrl, {
     fetchImpl,
     timeoutMs,
     headers: authenticatedHeaders,
@@ -2911,6 +3075,39 @@ export async function smokeAdminMcpAuthenticated({
     body: {
       jsonrpc: "2.0",
       id: 6,
+      method: "tools/call",
+      params: ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE,
+    },
+  });
+  const analyticsSummaryToolCacheControl = requireNoStoreCacheControl(
+    analyticsSummaryToolResponse,
+    `Authenticated Admin MCP ${ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name}`,
+  );
+  const analyticsSummaryToolResult = requireMcpJsonRpcResult(
+    analyticsSummaryToolResponse,
+    `Authenticated Admin MCP ${ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name}`,
+    6,
+  );
+  const analyticsSummaryToolEvaluation = evaluateAdminAnalyticsSummaryToolSmokeResult(
+    analyticsSummaryToolResult,
+    { toolName: ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name },
+  );
+  if (!analyticsSummaryToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name} failed: ` +
+      analyticsSummaryToolEvaluation.errors.join("; "),
+    );
+  }
+
+  const categorySearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 7,
       method: "tools/call",
       params: ADMIN_CATEGORY_SEARCH_TOOL_SMOKE,
     },
@@ -2922,7 +3119,7 @@ export async function smokeAdminMcpAuthenticated({
   const categorySearchToolResult = requireMcpJsonRpcResult(
     categorySearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}`,
-    6,
+    7,
   );
   const categorySearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     categorySearchToolResult,
@@ -2943,7 +3140,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 7,
+      id: 8,
       method: "tools/call",
       params: ADMIN_COLLECTION_SEARCH_TOOL_SMOKE,
     },
@@ -2955,7 +3152,7 @@ export async function smokeAdminMcpAuthenticated({
   const collectionSearchToolResult = requireMcpJsonRpcResult(
     collectionSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_COLLECTION_SEARCH_TOOL_SMOKE.name}`,
-    7,
+    8,
   );
   const collectionSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     collectionSearchToolResult,
@@ -2976,7 +3173,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 8,
+      id: 9,
       method: "tools/call",
       params: ADMIN_PAGE_SEARCH_TOOL_SMOKE,
     },
@@ -2988,7 +3185,7 @@ export async function smokeAdminMcpAuthenticated({
   const pageSearchToolResult = requireMcpJsonRpcResult(
     pageSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_PAGE_SEARCH_TOOL_SMOKE.name}`,
-    8,
+    9,
   );
   const pageSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     pageSearchToolResult,
@@ -3009,7 +3206,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 9,
+      id: 10,
       method: "tools/call",
       params: ADMIN_MEDIA_SEARCH_TOOL_SMOKE,
     },
@@ -3021,7 +3218,7 @@ export async function smokeAdminMcpAuthenticated({
   const mediaSearchToolResult = requireMcpJsonRpcResult(
     mediaSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name}`,
-    9,
+    10,
   );
   const mediaSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     mediaSearchToolResult,
@@ -3042,7 +3239,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 10,
+      id: 11,
       method: "tools/call",
       params: ADMIN_PRODUCT_SEARCH_TOOL_SMOKE,
     },
@@ -3054,7 +3251,7 @@ export async function smokeAdminMcpAuthenticated({
   const productSearchToolResult = requireMcpJsonRpcResult(
     productSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}`,
-    10,
+    11,
   );
   const productSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     productSearchToolResult,
@@ -3075,7 +3272,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 11,
+      id: 12,
       method: "tools/call",
       params: ADMIN_ORDER_SEARCH_TOOL_SMOKE,
     },
@@ -3087,7 +3284,7 @@ export async function smokeAdminMcpAuthenticated({
   const orderSearchToolResult = requireMcpJsonRpcResult(
     orderSearchToolResponse,
     `Authenticated Admin MCP ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}`,
-    11,
+    12,
   );
   const orderSearchToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     orderSearchToolResult,
@@ -3108,7 +3305,7 @@ export async function smokeAdminMcpAuthenticated({
     protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
     body: {
       jsonrpc: "2.0",
-      id: 12,
+      id: 13,
       method: "tools/call",
       params: ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE,
     },
@@ -3120,7 +3317,7 @@ export async function smokeAdminMcpAuthenticated({
   const inventoryLookupToolResult = requireMcpJsonRpcResult(
     inventoryLookupToolResponse,
     `Authenticated Admin MCP ${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name}`,
-    12,
+    13,
   );
   const inventoryLookupToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     inventoryLookupToolResult,
@@ -3138,6 +3335,7 @@ export async function smokeAdminMcpAuthenticated({
     `calls ${ADMIN_NAVIGATION_CONTEXT_TOOL_SMOKE.name}, ` +
     `${ADMIN_DASHBOARD_SUMMARY_TOOL_SMOKE.name}, ` +
     `${ADMIN_SETTINGS_SUMMARY_TOOL_SMOKE.name}, ` +
+    `${ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name}, ` +
     `${ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_COLLECTION_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_PAGE_SEARCH_TOOL_SMOKE.name}, ` +
@@ -3188,6 +3386,15 @@ export async function smokeAdminMcpAuthenticated({
         durationMs: settingsSummaryToolResponse.durationMs,
         cacheControl: settingsSummaryToolCacheControl,
         contentCount: settingsSummaryToolEvaluation.contentCount,
+      },
+      analyticsSummaryTool: {
+        name: ADMIN_ANALYTICS_SUMMARY_TOOL_SMOKE.name,
+        statusCode: analyticsSummaryToolResponse.statusCode,
+        durationMs: analyticsSummaryToolResponse.durationMs,
+        cacheControl: analyticsSummaryToolCacheControl,
+        contentCount: analyticsSummaryToolEvaluation.contentCount,
+        numericStatKeys: analyticsSummaryToolEvaluation.numericStatKeys,
+        providerCount: analyticsSummaryToolEvaluation.providerCount,
       },
       categorySearchTool: {
         name: ADMIN_CATEGORY_SEARCH_TOOL_SMOKE.name,
