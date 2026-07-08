@@ -323,6 +323,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/customers/sync": {
     POST: { permission: PERMISSIONS.CUSTOMERS_SYNC },
   },
+  "/api/v1/admin/customers/mcp-search": {
+    POST: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
   "/api/v1/admin/customers/*": {
     GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
     PUT: { permission: PERMISSIONS.CUSTOMERS_EDIT },

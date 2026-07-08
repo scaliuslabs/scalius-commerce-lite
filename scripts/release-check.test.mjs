@@ -25,6 +25,7 @@ const FEED_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=43200";
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
 const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
+const ADMIN_CUSTOMERS_MCP_SEARCH_PATH = "/api/v1/admin/customers/mcp-search";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 
 function textResponse(body, status = 200, headers = {}) {
@@ -406,6 +407,7 @@ function adminMcpTools(overrides = {}) {
     adminMcpTool("admin_analytics_summary", overrides.admin_analytics_summary),
     adminMcpTool("admin_category_search", overrides.admin_category_search),
     adminMcpTool("admin_collection_search", overrides.admin_collection_search),
+    adminMcpTool("admin_customer_search", overrides.admin_customer_search),
     adminMcpTool("admin_inventory_lookup", overrides.admin_inventory_lookup),
     adminMcpTool("admin_media_search", overrides.admin_media_search),
     adminMcpTool("admin_page_search", overrides.admin_page_search),
@@ -741,6 +743,49 @@ function adminOrderSearchMcpResult(extra = {}) {
   };
 }
 
+function adminCustomerSearchMcpResult(extra = {}) {
+  const body = {
+    adminCustomerSearch: {
+      source: {
+        path: ADMIN_CUSTOMERS_MCP_SEARCH_PATH,
+        permission: "customers.view",
+      },
+      request: {
+        hasQuery: true,
+        page: 1,
+        limit: 1,
+        sort: "updatedAt",
+        order: "desc",
+      },
+      customers: [],
+      pagination: {
+        page: 1,
+        limit: 1,
+        total: 0,
+        totalPages: 0,
+      },
+      limits: {
+        maxCustomers: 10,
+        maxPage: 20,
+        includesRawQuery: false,
+        includesTrashed: false,
+        includesNames: false,
+        includesContacts: false,
+        includesAddresses: false,
+        includesLocation: false,
+        includesHistory: false,
+        includesOrders: false,
+        canMutate: false,
+      },
+      ...extra,
+    },
+  };
+  return {
+    content: [{ type: "text", text: JSON.stringify(body) }],
+    structuredContent: body,
+  };
+}
+
 function authenticatedAdminMcpSmokeFetch({
   tools = adminMcpTools(),
   toolResult = adminNavigationContextMcpResult(),
@@ -753,6 +798,7 @@ function authenticatedAdminMcpSmokeFetch({
   mediaSearchToolResult = adminMediaSearchMcpResult(),
   productSearchToolResult = adminProductSearchMcpResult(),
   orderSearchToolResult = adminOrderSearchMcpResult(),
+  customerSearchToolResult = adminCustomerSearchMcpResult(),
   inventoryLookupToolResult = adminInventoryLookupMcpResult(),
   toolCacheControl = "no-store",
   dashboardSummaryToolCacheControl = toolCacheControl,
@@ -764,6 +810,7 @@ function authenticatedAdminMcpSmokeFetch({
   mediaSearchToolCacheControl = toolCacheControl,
   productSearchToolCacheControl = toolCacheControl,
   orderSearchToolCacheControl = toolCacheControl,
+  customerSearchToolCacheControl = toolCacheControl,
   inventoryLookupToolCacheControl = toolCacheControl,
   onMcpRequest,
 } = {}) {
@@ -937,6 +984,19 @@ function authenticatedAdminMcpSmokeFetch({
             ? orderSearchToolResult(body)
             : orderSearchToolResult;
           cacheControl = orderSearchToolCacheControl;
+        } else if (body.params?.name === "admin_customer_search") {
+          expect(body.params).toEqual({
+            name: "admin_customer_search",
+            arguments: {
+              query: "release-check@example.test +8801712345678",
+              limit: 1,
+              page: 1,
+            },
+          });
+          result = typeof customerSearchToolResult === "function"
+            ? customerSearchToolResult(body)
+            : customerSearchToolResult;
+          cacheControl = customerSearchToolCacheControl;
         } else if (body.params?.name === "admin_inventory_lookup") {
           expect(body.params).toEqual({
             name: "admin_inventory_lookup",
@@ -1588,6 +1648,7 @@ describe("release-check local evaluators", () => {
         "admin_analytics_summary",
         "admin_category_search",
         "admin_collection_search",
+        "admin_customer_search",
         "admin_dashboard_summary",
         "admin_inventory_lookup",
         "admin_media_search",
@@ -1598,7 +1659,7 @@ describe("release-check local evaluators", () => {
         "admin_session_context",
         "admin_settings_summary",
       ],
-      readOnlyToolCount: 12,
+      readOnlyToolCount: 13,
     });
   });
 
@@ -1615,6 +1676,7 @@ describe("release-check local evaluators", () => {
         "admin_analytics_summary",
         "admin_category_search",
         "admin_collection_search",
+        "admin_customer_search",
         "admin_inventory_lookup",
         "admin_media_search",
         "admin_page_search",
@@ -1633,7 +1695,7 @@ describe("release-check local evaluators", () => {
     });
   });
 
-  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, settings summary, analytics summary, category, collection, page, media, product, order search, and inventory lookup smokes", async () => {
+  it("signs in and runs authenticated Admin MCP tools/list plus navigation, dashboard summary, settings summary, analytics summary, category, collection, page, media, product, order, customer search, and inventory lookup smokes", async () => {
     const mcpRequests = [];
     const fetchImpl = authenticatedAdminMcpSmokeFetch({
       onMcpRequest: (body) => {
@@ -1668,6 +1730,7 @@ describe("release-check local evaluators", () => {
       "tools/call:admin_media_search",
       "tools/call:admin_product_search",
       "tools/call:admin_order_search",
+      "tools/call:admin_customer_search",
       "tools/call:admin_inventory_lookup",
     ]);
     expect(result.signIn).toMatchObject({
@@ -1690,6 +1753,7 @@ describe("release-check local evaluators", () => {
           "admin_analytics_summary",
           "admin_category_search",
           "admin_collection_search",
+          "admin_customer_search",
           "admin_dashboard_summary",
           "admin_inventory_lookup",
           "admin_media_search",
@@ -1700,7 +1764,7 @@ describe("release-check local evaluators", () => {
           "admin_session_context",
           "admin_settings_summary",
         ],
-        readOnlyToolCount: 12,
+        readOnlyToolCount: 13,
       },
       navigationTool: {
         name: "admin_navigation_context",
@@ -1788,6 +1852,13 @@ describe("release-check local evaluators", () => {
         cacheControl: "no-store",
         contentCount: 1,
       },
+      customerSearchTool: {
+        name: "admin_customer_search",
+        statusCode: 200,
+        cacheControl: "no-store",
+        contentCount: 1,
+        customerCount: 0,
+      },
       inventoryLookupTool: {
         name: "admin_inventory_lookup",
         statusCode: 200,
@@ -1796,7 +1867,7 @@ describe("release-check local evaluators", () => {
       },
     });
     expect(logger.log).toHaveBeenCalledWith(
-      "PASS admin MCP authenticated: tools admin_analytics_summary, admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_session_context, admin_settings_summary, calls admin_navigation_context, admin_dashboard_summary, admin_settings_summary, admin_analytics_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_order_search, admin_inventory_lookup ok.",
+      "PASS admin MCP authenticated: tools admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_session_context, admin_settings_summary, calls admin_navigation_context, admin_dashboard_summary, admin_settings_summary, admin_analytics_summary, admin_category_search, admin_collection_search, admin_page_search, admin_media_search, admin_product_search, admin_order_search, admin_customer_search, admin_inventory_lookup ok.",
     );
 
     const logged = JSON.stringify(logger.log.mock.calls);
@@ -1818,7 +1889,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary.*unexpected admin_write_context/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary.*unexpected admin_write_context/);
 
     await expect(smokeAdminMcpAuthenticated({
       dashboardUrl: "https://dashboard.example.test",
@@ -1829,7 +1900,7 @@ describe("release-check local evaluators", () => {
       }),
       timeoutMs: 5_000,
       logger: null,
-    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary/);
+    })).rejects.toThrow(/Admin MCP tools\/list failed: .*missing admin_analytics_summary, admin_category_search, admin_collection_search, admin_customer_search, admin_dashboard_summary, admin_inventory_lookup, admin_media_search, admin_navigation_context, admin_order_search, admin_page_search, admin_product_search, admin_settings_summary/);
   });
 
   it("fails authenticated Admin MCP smoke when tool calls lack no-store or return an error", async () => {
@@ -2651,6 +2722,122 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow("admin_order_search must return at least one content block");
+  });
+
+  it("fails authenticated Admin MCP smoke when customer search lacks no-store, errors, malformed redaction, or leaks contact data", async () => {
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        customerSearchToolCacheControl: "public, max-age=60",
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_customer_search Cache-Control must include no-store");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        customerSearchToolResult: {
+          isError: true,
+          content: [{ type: "text", text: "denied" }],
+          structuredContent: {
+            error: {
+              code: "admin_customer_search_failed",
+              status: 500,
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_customer_search returned an MCP tool error");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        customerSearchToolResult: {
+          content: [],
+          structuredContent: {
+            adminCustomerSearch: {
+              customers: [],
+            },
+          },
+        },
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_customer_search must return at least one content block");
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        customerSearchToolResult: adminCustomerSearchMcpResult({
+          request: {
+            hasQuery: true,
+            query: "release-check@example.test +8801712345678",
+            page: 1,
+            limit: 1,
+            sort: "updatedAt",
+            order: "desc",
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow(/admin_customer_search.*(?:request must contain only|must not leak the raw query)/);
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        customerSearchToolResult: adminCustomerSearchMcpResult({
+          customers: [{
+            id: "cust_release",
+            name: "Release Check",
+            email: "release-check@example.test",
+            phone: "+8801712345678",
+            addressLine1: "Road 1",
+            location: { city: "Dhaka" },
+          }],
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow(/admin_customer_search.*(?:compact non-contact fields|must not leak the raw query)/);
+
+    await expect(smokeAdminMcpAuthenticated({
+      dashboardUrl: "https://dashboard.example.test",
+      email: "admin@example.test",
+      password: "correct-password",
+      fetchImpl: authenticatedAdminMcpSmokeFetch({
+        customerSearchToolResult: adminCustomerSearchMcpResult({
+          limits: {
+            maxCustomers: 10,
+            maxPage: 20,
+            includesRawQuery: false,
+            includesTrashed: false,
+            includesNames: false,
+            includesContacts: true,
+            includesAddresses: false,
+            includesLocation: false,
+            includesHistory: false,
+            includesOrders: false,
+            canMutate: false,
+          },
+        }),
+      }),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("admin_customer_search limits must explicitly disable includesContacts");
   });
 
   it("fails authenticated Admin MCP smoke when inventory lookup lacks no-store, errors, or empty content", async () => {

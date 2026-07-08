@@ -401,6 +401,14 @@ function adminOrderSearchContext(result: Record<string, unknown>): Record<string
   return structuredContent.adminOrderSearch;
 }
 
+function adminCustomerSearchContext(result: Record<string, unknown>): Record<string, unknown> {
+  const structuredContent = result.structuredContent;
+  if (!isRecord(structuredContent) || !isRecord(structuredContent.adminCustomerSearch)) {
+    throw new Error("Expected adminCustomerSearch structured content");
+  }
+  return structuredContent.adminCustomerSearch;
+}
+
 function adminMediaSearchContext(result: Record<string, unknown>): Record<string, unknown> {
   const structuredContent = result.structuredContent;
   if (!isRecord(structuredContent) || !isRecord(structuredContent.adminMediaSearch)) {
@@ -1257,6 +1265,7 @@ describe("admin MCP route", () => {
       "admin_collection_search",
       "admin_page_search",
       "admin_order_search",
+      "admin_customer_search",
       "admin_media_search",
       "admin_inventory_lookup",
       "admin_dashboard_summary",
@@ -3449,6 +3458,301 @@ describe("admin MCP server", () => {
         Authorization: "Bearer must-not-forward",
         receiptToken: "chk_secret",
         paymentRecoveryLink: "https://storefront.example.test/payment-recovery?token=secret",
+      },
+    }));
+
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("calls admin_customer_search through the API binding with POST body and compact redacted output", async () => {
+    const longUserAgent = `vitest-admin-mcp-${"x".repeat(300)}`;
+    const rawQuery = "Asha +8801712345678 asha@example.test";
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: {
+        customers: [{
+          id: "cust_1",
+          name: "Asha Rahman",
+          firstName: "Asha",
+          lastName: "Rahman",
+          email: "asha@example.test",
+          customerEmail: "asha@example.test",
+          phone: "+8801712345678",
+          customerPhone: "+8801712345678",
+          addressLine1: "Road 1",
+          city: "Dhaka",
+          zone: "Mirpur",
+          area: "Section 10",
+          location: { lat: 23.8, lng: 90.4 },
+          orders: [{ id: "order_secret" }],
+          orderIds: ["order_secret"],
+          history: [{ action: "signed-in" }],
+          totalOrders: 4,
+          totalSpent: 1250,
+          lastOrderAt: "2026-07-07T10:30:00.000Z",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: 1783516200,
+          unknownSecret: "must-not-leak",
+        }],
+        pagination: {
+          page: 2,
+          limit: 3,
+          total: 9,
+          totalPages: 3,
+          rawCursor: "must-not-leak",
+        },
+      },
+      rawMessage: `must-not-leak ${ADMIN_COOKIE}`,
+    });
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: ADMIN_COOKIE,
+      userAgent: longUserAgent,
+    });
+
+    const result = await client.callTool({
+      name: "admin_customer_search",
+      arguments: { query: `  ${rawQuery}  `, limit: 3, page: 2 },
+    });
+
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [input, init] = fetchCall(apiFetch);
+    const url = new URL(requestUrl(input));
+    expect(url.href).toBe("http://api.internal/api/v1/admin/customers/mcp-search");
+    expect(url.search).toBe("");
+    expect(requestUrl(input)).not.toContain("Asha");
+    expect(requestUrl(input)).not.toContain("8801712345678");
+    expect(requestUrl(input)).not.toContain("asha@example.test");
+    expect(init?.method).toBe("POST");
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    expect(parseRequestBody(init)).toEqual({
+      query: rawQuery,
+      page: 2,
+      limit: 3,
+    });
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(headers.get("Cookie")).toBe(ADMIN_COOKIE);
+    expect(headers.get("User-Agent")).toBe(longUserAgent.slice(0, 256));
+    expect(headers.get("Authorization")).toBeNull();
+    expect([...headers.keys()].sort()).toEqual(["accept", "content-type", "cookie", "user-agent"]);
+
+    expect(result.isError).toBeUndefined();
+    const context = adminCustomerSearchContext(result as Record<string, unknown>);
+    expect(context).toEqual({
+      source: {
+        path: "/api/v1/admin/customers/mcp-search",
+        permission: "customers.view",
+      },
+      request: {
+        hasQuery: true,
+        page: 2,
+        limit: 3,
+        sort: "updatedAt",
+        order: "desc",
+      },
+      customers: [{
+        id: "cust_1",
+        totalOrders: 4,
+        totalSpent: 1250,
+        lastOrderAt: "2026-07-07T10:30:00.000Z",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: 1783516200,
+      }],
+      pagination: {
+        page: 2,
+        limit: 3,
+        total: 9,
+        totalPages: 3,
+      },
+      limits: {
+        maxCustomers: 10,
+        maxPage: 20,
+        includesRawQuery: false,
+        includesTrashed: false,
+        includesNames: false,
+        includesContacts: false,
+        includesAddresses: false,
+        includesLocation: false,
+        includesHistory: false,
+        includesOrders: false,
+        canMutate: false,
+      },
+    });
+    expect(Object.keys(context.request as Record<string, unknown>).sort()).toEqual([
+      "hasQuery",
+      "limit",
+      "order",
+      "page",
+      "sort",
+    ]);
+    const customers = context.customers as Array<Record<string, unknown>>;
+    expect(customers).toHaveLength(1);
+    const customer = customers[0];
+    if (!customer) throw new Error("Expected compact admin customer");
+    expect(Object.keys(customer).sort()).toEqual([
+      "createdAt",
+      "id",
+      "lastOrderAt",
+      "totalOrders",
+      "totalSpent",
+      "updatedAt",
+    ]);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain(rawQuery);
+    expect(serialized).not.toContain("Asha Rahman");
+    expect(serialized).not.toContain("asha@example.test");
+    expect(serialized).not.toContain("+8801712345678");
+    expect(serialized).not.toContain("Road 1");
+    expect(serialized).not.toContain("Dhaka");
+    expect(serialized).not.toContain("Mirpur");
+    expect(serialized).not.toContain("Section 10");
+    expect(serialized).not.toContain("lat");
+    expect(serialized).not.toContain("order_secret");
+    expect(serialized).not.toContain("signed-in");
+    expect(serialized).not.toContain("must-not-leak");
+    expect(serialized).not.toContain(ADMIN_COOKIE);
+  });
+
+  it("keeps admin_customer_search upstream failures fail-closed without leaking upstream bodies", async () => {
+    const rawQuery = "Asha +8801712345678 asha@example.test";
+    const leak = `raw upstream leak ${rawQuery} ${ADMIN_COOKIE} Road 1 Dhaka`;
+    const cases: Array<() => Response> = [
+      () => json({ success: false, error: { code: "forbidden", message: leak } }, 403),
+      () => json({ success: false, error: { code: "server_error", message: leak } }, 500),
+      () => new Response(`not json ${leak}`, {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      }),
+      () => json({ success: false, error: { code: "invalid", message: leak } }),
+      () => json({ success: true, data: { customers: [], message: leak } }),
+    ];
+
+    for (const makeResponse of cases) {
+      const apiFetch = vi.fn<FetchLike>().mockImplementation(() => Promise.resolve(makeResponse()));
+      const { client } = await bootAdmin(apiFetch);
+
+      const result = await client.callTool({
+        name: "admin_customer_search",
+        arguments: { query: rawQuery },
+      });
+
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      const [input] = fetchCall(apiFetch);
+      const url = new URL(requestUrl(input));
+      expect(url.href).toBe("http://api.internal/api/v1/admin/customers/mcp-search");
+      expect(url.search).toBe("");
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        adminCustomerSearch: {
+          source: {
+            path: "/api/v1/admin/customers/mcp-search",
+            permission: "customers.view",
+          },
+          request: {
+            hasQuery: true,
+            page: 1,
+            limit: 5,
+            sort: "updatedAt",
+            order: "desc",
+          },
+          customers: [],
+          pagination: null,
+          limits: {
+            maxCustomers: 10,
+            maxPage: 20,
+            includesRawQuery: false,
+            includesTrashed: false,
+            includesNames: false,
+            includesContacts: false,
+            includesAddresses: false,
+            includesLocation: false,
+            includesHistory: false,
+            includesOrders: false,
+            canMutate: false,
+          },
+        },
+        error: {
+          code: "admin_customer_unavailable",
+        },
+      });
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain(rawQuery);
+      expect(serialized).not.toContain(ADMIN_COOKIE);
+      expect(serialized).not.toContain("asha@example.test");
+      expect(serialized).not.toContain("+8801712345678");
+      expect(serialized).not.toContain("Road 1");
+      expect(serialized).not.toContain("Dhaka");
+      expect(serialized).not.toContain("raw upstream leak");
+    }
+  });
+
+  it("returns a safe admin_customer_search tool error when no cookie option is present", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: { customers: [], pagination: { page: 1, limit: 5, total: 0, totalPages: 0 } },
+    });
+    const { client } = await bootAdmin(apiFetch, {
+      cookie: null,
+      userAgent: "vitest-admin-mcp",
+    });
+
+    const result = await client.callTool({
+      name: "admin_customer_search",
+      arguments: { query: "asha@example.test" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        code: "admin_session_required",
+        status: 401,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("asha@example.test");
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects unbounded admin_customer_search inputs before API fetches", async () => {
+    const apiFetch = mockJsonFetch({
+      success: true,
+      data: { customers: [], pagination: { page: 1, limit: 5, total: 0, totalPages: 0 } },
+    });
+    const { client } = await bootAdmin(apiFetch);
+
+    await expectValidationToolError(client.callTool({
+      name: "admin_customer_search",
+      arguments: { query: "", limit: 5 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_customer_search",
+      arguments: { query: "   ", limit: 5 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_customer_search",
+      arguments: { query: "x".repeat(121), limit: 5 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_customer_search",
+      arguments: { query: "asha@example.test", limit: 11 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_customer_search",
+      arguments: { query: "asha@example.test", page: 21 },
+    }));
+    await expectValidationToolError(client.callTool({
+      name: "admin_customer_search",
+      arguments: {
+        query: "asha@example.test",
+        search: "old-field",
+        email: "asha@example.test",
+        phone: "+8801712345678",
+        includeContacts: true,
+        includeAddresses: true,
+        includeLocation: true,
+        includeHistory: true,
+        includeOrders: true,
+        Authorization: "Bearer must-not-forward",
       },
     }));
 

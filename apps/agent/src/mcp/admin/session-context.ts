@@ -9,6 +9,8 @@ const ADMIN_CATEGORIES_PATH = "/api/v1/admin/categories";
 const ADMIN_COLLECTIONS_PATH = "/api/v1/admin/collections";
 const ADMIN_PAGES_PATH = "/api/v1/admin/pages";
 const ADMIN_ORDERS_PATH = "/api/v1/admin/orders";
+const ADMIN_CUSTOMERS_MCP_SEARCH_PATH = "/api/v1/admin/customers/mcp-search";
+const ADMIN_CUSTOMERS_MCP_SEARCH_TARGET = `http://api.internal${ADMIN_CUSTOMERS_MCP_SEARCH_PATH}`;
 const ADMIN_MEDIA_PATH = "/api/v1/admin/media";
 const ADMIN_INVENTORY_PATH = "/api/v1/admin/inventory";
 const ADMIN_DASHBOARD_SUMMARY_PATH = "/api/v1/admin/dashboard/metrics-summary";
@@ -38,6 +40,8 @@ const ADMIN_CATEGORY_SEARCH_MAX_CATEGORIES = 10;
 const ADMIN_COLLECTION_SEARCH_MAX_COLLECTIONS = 10;
 const ADMIN_PAGE_SEARCH_MAX_PAGES = 10;
 const ADMIN_ORDER_SEARCH_MAX_ORDERS = 10;
+const ADMIN_CUSTOMER_SEARCH_MAX_CUSTOMERS = 10;
+const ADMIN_CUSTOMER_SEARCH_MAX_PAGE = 20;
 const ADMIN_MEDIA_SEARCH_MAX_FILES = 10;
 const ADMIN_INVENTORY_LOOKUP_MAX_VARIANTS = 10;
 const ADMIN_ANALYTICS_SUMMARY_MAX_PROVIDERS = 12;
@@ -46,6 +50,7 @@ const ADMIN_CATEGORIES_MAX_STRING_LENGTH = 220;
 const ADMIN_COLLECTIONS_MAX_STRING_LENGTH = 220;
 const ADMIN_PAGES_MAX_STRING_LENGTH = 220;
 const ADMIN_ORDERS_MAX_STRING_LENGTH = 220;
+const ADMIN_CUSTOMERS_MAX_STRING_LENGTH = 220;
 const ADMIN_MEDIA_MAX_STRING_LENGTH = 220;
 const ADMIN_INVENTORY_MAX_STRING_LENGTH = 220;
 const ADMIN_ANALYTICS_MAX_STRING_LENGTH = 160;
@@ -124,6 +129,14 @@ const adminOrderSearchInputSchema = z.object({
 }).strict();
 
 type AdminOrderSearchInput = z.infer<typeof adminOrderSearchInputSchema>;
+
+const adminCustomerSearchInputSchema = z.object({
+  query: z.string().trim().min(1).max(120),
+  limit: z.number().int().min(1).max(ADMIN_CUSTOMER_SEARCH_MAX_CUSTOMERS).default(5),
+  page: z.number().int().min(1).max(ADMIN_CUSTOMER_SEARCH_MAX_PAGE).default(1),
+}).strict();
+
+type AdminCustomerSearchInput = z.infer<typeof adminCustomerSearchInputSchema>;
 
 const adminMediaSearchInputSchema = z.object({
   query: z.string().trim().max(120).optional(),
@@ -664,6 +677,46 @@ function adminOrderToolError(
   }, true);
 }
 
+function adminCustomerSearchLimits(): JsonRecord {
+  return {
+    maxCustomers: ADMIN_CUSTOMER_SEARCH_MAX_CUSTOMERS,
+    maxPage: ADMIN_CUSTOMER_SEARCH_MAX_PAGE,
+    includesRawQuery: false,
+    includesTrashed: false,
+    includesNames: false,
+    includesContacts: false,
+    includesAddresses: false,
+    includesLocation: false,
+    includesHistory: false,
+    includesOrders: false,
+    canMutate: false,
+  };
+}
+
+function adminCustomerToolError(
+  code: string,
+  request?: JsonRecord,
+  status = 503,
+): CallToolResult {
+  return toolResult({
+    adminCustomerSearch: {
+      source: {
+        path: ADMIN_CUSTOMERS_MCP_SEARCH_PATH,
+        permission: "customers.view",
+      },
+      ...(request ? { request } : {}),
+      customers: [],
+      pagination: null,
+      limits: adminCustomerSearchLimits(),
+    },
+    error: {
+      code,
+      status: failClosedStatus(status),
+      message: "Admin customers are temporarily unavailable.",
+    },
+  }, true);
+}
+
 function adminMediaToolError(
   code: string,
   query?: JsonRecord,
@@ -1113,6 +1166,21 @@ function compactAdminPagination(value: unknown): JsonRecord | null {
   }
 
   return { page, limit, total, totalPages };
+}
+
+function compactAdminCustomer(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+  const id = compactString(value.id, ADMIN_CUSTOMERS_MAX_STRING_LENGTH);
+  if (!id) return null;
+
+  const customer: JsonRecord = { id };
+  setCompactNumber(customer, "totalOrders", value.totalOrders);
+  setCompactNumber(customer, "totalSpent", value.totalSpent);
+  setCompactTimestamp(customer, "lastOrderAt", value.lastOrderAt);
+  setCompactTimestamp(customer, "createdAt", value.createdAt);
+  setCompactTimestamp(customer, "updatedAt", value.updatedAt);
+
+  return customer;
 }
 
 function buildAdminProductSearchUrl(input: AdminProductSearchInput): { url: URL; query: JsonRecord } {
@@ -1832,6 +1900,93 @@ async function fetchAdminOrderSearch(
   }
 }
 
+function buildAdminCustomerSearchRequest(input: AdminCustomerSearchInput): {
+  body: JsonRecord;
+  request: JsonRecord;
+} {
+  const request: JsonRecord = {
+    hasQuery: true,
+    page: input.page,
+    limit: input.limit,
+    sort: "updatedAt",
+    order: "desc",
+  };
+
+  return {
+    body: {
+      query: input.query,
+      page: input.page,
+      limit: input.limit,
+    },
+    request,
+  };
+}
+
+async function fetchAdminCustomerSearch(
+  env: Env,
+  input: AdminCustomerSearchInput,
+  {
+    cookie,
+    userAgent,
+    signal,
+  }: {
+    cookie: string;
+    userAgent?: string | null;
+    signal?: AbortSignal;
+  },
+): Promise<CallToolResult> {
+  const { body: requestBody, request } = buildAdminCustomerSearchRequest(input);
+  if (!env.API || typeof env.API.fetch !== "function") {
+    return adminCustomerToolError("admin_api_unavailable", request);
+  }
+
+  try {
+    const headers = adminApiHeaders(cookie, userAgent);
+    headers.set("Content-Type", "application/json");
+
+    const response = await env.API.fetch(ADMIN_CUSTOMERS_MCP_SEARCH_TARGET, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+      signal,
+    });
+    if (!response.ok) {
+      return adminCustomerToolError("admin_customer_unavailable", request, response.status);
+    }
+
+    const body = await parseJsonResponse(response);
+    const data = body && isRecord(body.data) ? body.data : null;
+    if (!body || body.success !== true || !data || !Array.isArray(data.customers)) {
+      return adminCustomerToolError("admin_customer_unavailable", request);
+    }
+
+    const pagination = compactAdminPagination(data.pagination);
+    if (!pagination) {
+      return adminCustomerToolError("admin_customer_unavailable", request);
+    }
+
+    const customers = data.customers
+      .map(compactAdminCustomer)
+      .filter((customer): customer is JsonRecord => customer !== null)
+      .slice(0, ADMIN_CUSTOMER_SEARCH_MAX_CUSTOMERS);
+
+    return toolResult({
+      adminCustomerSearch: {
+        source: {
+          path: ADMIN_CUSTOMERS_MCP_SEARCH_PATH,
+          permission: "customers.view",
+        },
+        request,
+        customers,
+        pagination,
+        limits: adminCustomerSearchLimits(),
+      },
+    });
+  } catch {
+    return adminCustomerToolError("admin_customer_unavailable", request);
+  }
+}
+
 function buildAdminMediaSearchUrl(input: AdminMediaSearchInput): { url: URL; query: JsonRecord } {
   const url = new URL(`http://api.internal${ADMIN_MEDIA_PATH}`);
   const query: JsonRecord = {
@@ -2399,6 +2554,32 @@ export function createAdminMcpServer(
       }
 
       return fetchAdminOrderSearch(env, input, {
+        cookie,
+        userAgent: options.userAgent,
+        signal: extra.signal,
+      });
+    },
+  );
+
+  server.registerTool(
+    "admin_customer_search",
+    {
+      title: "Admin Customer Search",
+      description: "Searches the dashboard customer list through API-verified permissions and returns compact customer metrics.",
+      inputSchema: adminCustomerSearchInputSchema,
+      annotations: ADMIN_READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async (input, extra) => {
+      const cookie = options.cookie?.trim() ? options.cookie : null;
+      if (!cookie) {
+        return adminToolError({
+          ok: false,
+          status: 401,
+          code: "admin_session_required",
+        });
+      }
+
+      return fetchAdminCustomerSearch(env, input, {
         cookie,
         userAgent: options.userAgent,
         signal: extra.signal,

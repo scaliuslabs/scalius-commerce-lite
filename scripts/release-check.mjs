@@ -30,6 +30,7 @@ const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
 const ADMIN_DASHBOARD_SUMMARY_PATH = "/api/v1/admin/dashboard/metrics-summary";
 const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
 const ADMIN_ANALYTICS_HEALTH_PATH = "/api/v1/admin/analytics/health";
+const ADMIN_CUSTOMERS_MCP_SEARCH_PATH = "/api/v1/admin/customers/mcp-search";
 const ADMIN_ANALYTICS_SUMMARY_VERSION = "admin-analytics-summary:v1";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
@@ -53,6 +54,7 @@ const ADMIN_MCP_EXPECTED_TOOL_NAMES = Object.freeze([
   "admin_analytics_summary",
   "admin_category_search",
   "admin_collection_search",
+  "admin_customer_search",
   "admin_inventory_lookup",
   "admin_media_search",
   "admin_page_search",
@@ -131,6 +133,14 @@ const ADMIN_ORDER_SEARCH_TOOL_SMOKE = Object.freeze({
     page: 1,
   }),
 });
+const ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE = Object.freeze({
+  name: "admin_customer_search",
+  arguments: Object.freeze({
+    query: "release-check@example.test +8801712345678",
+    limit: 1,
+    page: 1,
+  }),
+});
 const AGENT_EXPECTED_TOOL_NAMES = Object.freeze([
   "cart_validate",
   "catalog_categories",
@@ -197,6 +207,56 @@ const ADMIN_ANALYTICS_SUMMARY_FORBIDDEN_KEY_PATTERN =
   /^(?:config|rawConfig|scriptConfig|snippet|rawSnippet|analyticsSnippet|customCode|htmlContent|jsContent|credential|credentials|token|accessToken|apiKey|secret|password|cookie|session|message|messages|issues|providerPayload|pixelId|measurementId|gtmId|beaconToken)$/i;
 const ADMIN_ANALYTICS_SUMMARY_FORBIDDEN_VALUE_PATTERN =
   /(?:\b(?:access[_ -]?token|api[_ -]?key|secret|password|cookie|session|raw[_ -]?snippet|analytics[_ -]?snippet|custom[_ -]?code|measurement[_ -]?id|pixel[_ -]?id)\b|<script|data-cf-beacon)/i;
+const ADMIN_CUSTOMER_SEARCH_RAW_QUERY_TERMS = Object.freeze([
+  "release-check@example.test",
+  "+8801712345678",
+]);
+const ADMIN_CUSTOMER_SEARCH_EMAIL_VALUE_PATTERN =
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const ADMIN_CUSTOMER_SEARCH_PHONE_VALUE_PATTERN =
+  /(?:\+?880|0)1[3-9]\d{8}/;
+const ADMIN_CUSTOMER_SEARCH_ALLOWED_TOP_LEVEL_KEYS = new Set([
+  "source",
+  "request",
+  "customers",
+  "pagination",
+  "limits",
+]);
+const ADMIN_CUSTOMER_SEARCH_ALLOWED_SOURCE_KEYS = new Set(["path", "permission"]);
+const ADMIN_CUSTOMER_SEARCH_ALLOWED_REQUEST_KEYS = new Set([
+  "hasQuery",
+  "page",
+  "limit",
+  "sort",
+  "order",
+]);
+const ADMIN_CUSTOMER_SEARCH_ALLOWED_CUSTOMER_KEYS = new Set([
+  "id",
+  "totalOrders",
+  "totalSpent",
+  "lastOrderAt",
+  "createdAt",
+  "updatedAt",
+]);
+const ADMIN_CUSTOMER_SEARCH_ALLOWED_PAGINATION_KEYS = new Set([
+  "page",
+  "limit",
+  "total",
+  "totalPages",
+]);
+const ADMIN_CUSTOMER_SEARCH_ALLOWED_LIMIT_KEYS = new Set([
+  "maxCustomers",
+  "maxPage",
+  "includesRawQuery",
+  "includesTrashed",
+  "includesNames",
+  "includesContacts",
+  "includesAddresses",
+  "includesLocation",
+  "includesHistory",
+  "includesOrders",
+  "canMutate",
+]);
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
 const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
 const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
@@ -2434,6 +2494,209 @@ function evaluateAdminAnalyticsSummaryToolSmokeResult(result, {
   };
 }
 
+function unexpectedKeys(value, allowedKeys) {
+  return Object.keys(value).filter((key) => !allowedKeys.has(key));
+}
+
+function missingKeys(value, requiredKeys) {
+  return [...requiredKeys].filter((key) => !(key in value));
+}
+
+function findForbiddenAdminCustomerSearchValuePaths(value, path = "$", seen = new Set()) {
+  const leaks = [];
+  if (!isRecord(value) && !Array.isArray(value)) {
+    if (typeof value === "string") {
+      if (
+        ADMIN_CUSTOMER_SEARCH_RAW_QUERY_TERMS.some((term) => value.includes(term)) ||
+        ADMIN_CUSTOMER_SEARCH_EMAIL_VALUE_PATTERN.test(value) ||
+        ADMIN_CUSTOMER_SEARCH_PHONE_VALUE_PATTERN.test(value)
+      ) {
+        leaks.push(path);
+      }
+    }
+    return leaks;
+  }
+
+  if (seen.has(value)) return leaks;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      leaks.push(...findForbiddenAdminCustomerSearchValuePaths(item, `${path}[${index}]`, seen));
+    });
+    return leaks;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    leaks.push(...findForbiddenAdminCustomerSearchValuePaths(child, `${path}.${key}`, seen));
+  }
+
+  return leaks;
+}
+
+function evaluateAdminCustomerSearchToolSmokeResult(result, {
+  toolName = ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name,
+} = {}) {
+  const errors = [];
+  const contentCount = Array.isArray(result?.content) ? result.content.length : 0;
+  const structuredContent = isRecord(result?.structuredContent)
+    ? result.structuredContent
+    : null;
+  const summary = isRecord(structuredContent?.adminCustomerSearch)
+    ? structuredContent.adminCustomerSearch
+    : null;
+  const source = isRecord(summary?.source) ? summary.source : null;
+  const request = isRecord(summary?.request) ? summary.request : null;
+  const customers = Array.isArray(summary?.customers) ? summary.customers : null;
+  const pagination = isRecord(summary?.pagination) ? summary.pagination : null;
+  const limits = isRecord(summary?.limits) ? summary.limits : null;
+  const leakPaths = findForbiddenAdminCustomerSearchValuePaths(result);
+
+  if (result?.isError === true) {
+    errors.push(`Admin MCP ${toolName} returned an MCP tool error.`);
+  }
+  if (contentCount < 1) {
+    errors.push(`Admin MCP ${toolName} must return at least one content block.`);
+  }
+  if (!summary) {
+    errors.push(`Admin MCP ${toolName} must return structured adminCustomerSearch content.`);
+  } else {
+    const summaryExtraKeys = unexpectedKeys(summary, ADMIN_CUSTOMER_SEARCH_ALLOWED_TOP_LEVEL_KEYS);
+    if (summaryExtraKeys.length > 0) {
+      errors.push(
+        `Admin MCP ${toolName} adminCustomerSearch must not include extra keys: ${summaryExtraKeys.join(", ")}.`,
+      );
+    }
+
+    if (!source) {
+      errors.push(`Admin MCP ${toolName} must return source metadata.`);
+    } else {
+      const sourceMissingKeys = missingKeys(source, ADMIN_CUSTOMER_SEARCH_ALLOWED_SOURCE_KEYS);
+      const sourceExtraKeys = unexpectedKeys(source, ADMIN_CUSTOMER_SEARCH_ALLOWED_SOURCE_KEYS);
+      if (sourceMissingKeys.length > 0 || sourceExtraKeys.length > 0) {
+        errors.push(
+          `Admin MCP ${toolName} source must contain only path and permission.`,
+        );
+      }
+      if (source.path !== ADMIN_CUSTOMERS_MCP_SEARCH_PATH) {
+        errors.push(
+          `Admin MCP ${toolName} source.path must be ${ADMIN_CUSTOMERS_MCP_SEARCH_PATH}.`,
+        );
+      }
+      if (source.permission !== "customers.view") {
+        errors.push(
+          "Admin MCP admin_customer_search source.permission must be customers.view.",
+        );
+      }
+    }
+
+    if (!request) {
+      errors.push(`Admin MCP ${toolName} must return redacted request metadata.`);
+    } else {
+      const requestMissingKeys = missingKeys(request, ADMIN_CUSTOMER_SEARCH_ALLOWED_REQUEST_KEYS);
+      const requestExtraKeys = unexpectedKeys(request, ADMIN_CUSTOMER_SEARCH_ALLOWED_REQUEST_KEYS);
+      if (requestMissingKeys.length > 0 || requestExtraKeys.length > 0) {
+        errors.push(
+          `Admin MCP ${toolName} request must contain only hasQuery, page, limit, sort, and order.`,
+        );
+      }
+      if (request.hasQuery !== true) {
+        errors.push(`Admin MCP ${toolName} request.hasQuery must be true.`);
+      }
+      if (typeof request.page !== "number" || !Number.isFinite(request.page)) {
+        errors.push(`Admin MCP ${toolName} request.page must be numeric.`);
+      }
+      if (typeof request.limit !== "number" || !Number.isFinite(request.limit)) {
+        errors.push(`Admin MCP ${toolName} request.limit must be numeric.`);
+      }
+      if (typeof request.sort !== "string" || typeof request.order !== "string") {
+        errors.push(`Admin MCP ${toolName} request.sort and request.order must be strings.`);
+      }
+    }
+
+    if (!Array.isArray(customers)) {
+      errors.push(`Admin MCP ${toolName} must return customers as an array.`);
+    } else {
+      for (const [index, customer] of customers.entries()) {
+        if (!isRecord(customer)) {
+          errors.push(`Admin MCP ${toolName} customer ${index + 1} must be an object.`);
+          continue;
+        }
+        const customerExtraKeys = unexpectedKeys(customer, ADMIN_CUSTOMER_SEARCH_ALLOWED_CUSTOMER_KEYS);
+        if (customerExtraKeys.length > 0) {
+          errors.push(
+            `Admin MCP ${toolName} customer ${index + 1} must contain only compact non-contact fields; extra keys: ` +
+            customerExtraKeys.join(", ") + ".",
+          );
+        }
+        if (typeof customer.id !== "string" || !customer.id.trim()) {
+          errors.push(`Admin MCP ${toolName} customer ${index + 1} must include a non-empty id.`);
+        }
+      }
+    }
+
+    if (!pagination) {
+      errors.push(`Admin MCP ${toolName} must return pagination metadata.`);
+    } else {
+      const paginationMissingKeys = missingKeys(pagination, ADMIN_CUSTOMER_SEARCH_ALLOWED_PAGINATION_KEYS);
+      const paginationExtraKeys = unexpectedKeys(pagination, ADMIN_CUSTOMER_SEARCH_ALLOWED_PAGINATION_KEYS);
+      if (paginationMissingKeys.length > 0 || paginationExtraKeys.length > 0) {
+        errors.push(
+          `Admin MCP ${toolName} pagination must contain only page, limit, total, and totalPages.`,
+        );
+      }
+      for (const key of ADMIN_CUSTOMER_SEARCH_ALLOWED_PAGINATION_KEYS) {
+        if (typeof pagination[key] !== "number" || !Number.isFinite(pagination[key])) {
+          errors.push(`Admin MCP ${toolName} pagination.${key} must be numeric.`);
+        }
+      }
+    }
+
+    if (!limits) {
+      errors.push(`Admin MCP ${toolName} must return limits metadata.`);
+    } else {
+      const limitsExtraKeys = unexpectedKeys(limits, ADMIN_CUSTOMER_SEARCH_ALLOWED_LIMIT_KEYS);
+      if (limitsExtraKeys.length > 0) {
+        errors.push(
+          `Admin MCP ${toolName} limits must not include extra keys: ${limitsExtraKeys.join(", ")}.`,
+        );
+      }
+      const expectedLimitFlags = [
+        "includesRawQuery",
+        "includesTrashed",
+        "includesNames",
+        "includesContacts",
+        "includesAddresses",
+        "includesLocation",
+        "includesHistory",
+        "includesOrders",
+        "canMutate",
+      ];
+      const unsafeLimits = expectedLimitFlags.filter((key) => limits[key] !== false);
+      if (unsafeLimits.length > 0) {
+        errors.push(
+          `Admin MCP ${toolName} limits must explicitly disable ${unsafeLimits.join(", ")}.`,
+        );
+      }
+    }
+  }
+
+  if (leakPaths.length > 0) {
+    errors.push(
+      `Admin MCP ${toolName} must not leak the raw query, email, phone, or contact values ` +
+      `(${leakPaths.join(", ")}).`,
+    );
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    toolName,
+    contentCount,
+    customerCount: Array.isArray(customers) ? customers.length : null,
+  };
+}
+
 function evaluateAdminReadOnlyToolSmokeResult(result, {
   toolName = ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name,
 } = {}) {
@@ -3297,7 +3560,7 @@ export async function smokeAdminMcpAuthenticated({
     );
   }
 
-  const inventoryLookupToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+  const customerSearchToolResponse = await fetchMcpJsonRpc(mcpUrl, {
     fetchImpl,
     timeoutMs,
     headers: authenticatedHeaders,
@@ -3306,6 +3569,39 @@ export async function smokeAdminMcpAuthenticated({
     body: {
       jsonrpc: "2.0",
       id: 13,
+      method: "tools/call",
+      params: ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE,
+    },
+  });
+  const customerSearchToolCacheControl = requireNoStoreCacheControl(
+    customerSearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name}`,
+  );
+  const customerSearchToolResult = requireMcpJsonRpcResult(
+    customerSearchToolResponse,
+    `Authenticated Admin MCP ${ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name}`,
+    13,
+  );
+  const customerSearchToolEvaluation = evaluateAdminCustomerSearchToolSmokeResult(
+    customerSearchToolResult,
+    { toolName: ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name },
+  );
+  if (!customerSearchToolEvaluation.ok) {
+    throw new Error(
+      `Admin MCP ${ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name} failed: ` +
+      customerSearchToolEvaluation.errors.join("; "),
+    );
+  }
+
+  const inventoryLookupToolResponse = await fetchMcpJsonRpc(mcpUrl, {
+    fetchImpl,
+    timeoutMs,
+    headers: authenticatedHeaders,
+    sessionId,
+    protocolVersion: sessionId ? negotiatedProtocolVersion : undefined,
+    body: {
+      jsonrpc: "2.0",
+      id: 14,
       method: "tools/call",
       params: ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE,
     },
@@ -3317,7 +3613,7 @@ export async function smokeAdminMcpAuthenticated({
   const inventoryLookupToolResult = requireMcpJsonRpcResult(
     inventoryLookupToolResponse,
     `Authenticated Admin MCP ${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name}`,
-    13,
+    14,
   );
   const inventoryLookupToolEvaluation = evaluateAdminReadOnlyToolSmokeResult(
     inventoryLookupToolResult,
@@ -3341,6 +3637,7 @@ export async function smokeAdminMcpAuthenticated({
     `${ADMIN_PAGE_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_MEDIA_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_PRODUCT_SEARCH_TOOL_SMOKE.name}, ${ADMIN_ORDER_SEARCH_TOOL_SMOKE.name}, ` +
+    `${ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name}, ` +
     `${ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name} ok.`,
   );
   return {
@@ -3437,6 +3734,14 @@ export async function smokeAdminMcpAuthenticated({
         durationMs: orderSearchToolResponse.durationMs,
         cacheControl: orderSearchToolCacheControl,
         contentCount: orderSearchToolEvaluation.contentCount,
+      },
+      customerSearchTool: {
+        name: ADMIN_CUSTOMER_SEARCH_TOOL_SMOKE.name,
+        statusCode: customerSearchToolResponse.statusCode,
+        durationMs: customerSearchToolResponse.durationMs,
+        cacheControl: customerSearchToolCacheControl,
+        contentCount: customerSearchToolEvaluation.contentCount,
+        customerCount: customerSearchToolEvaluation.customerCount,
       },
       inventoryLookupTool: {
         name: ADMIN_INVENTORY_LOOKUP_TOOL_SMOKE.name,
