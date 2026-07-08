@@ -5,6 +5,10 @@ import { describe, expect, it } from "vitest";
 
 const ADMIN_SRC_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const ASSISTANT_ROOT = join(ADMIN_SRC_ROOT, "components", "admin", "assistant");
+const PAGE_STATE_FILES = [
+  "AdminAssistantPageStateBridge.tsx",
+  "page-state.ts",
+] as const;
 
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir)
@@ -17,10 +21,20 @@ function listSourceFiles(dir: string): string[] {
     .filter((path) => !/\.test\.(?:ts|tsx)$/.test(path));
 }
 
+function readFiles(files: readonly string[]): string {
+  return files
+    .map((file) => readFileSync(join(ASSISTANT_ROOT, file), "utf8"))
+    .join("\n");
+}
+
 function readAssistantSource(): string {
   return listSourceFiles(ASSISTANT_ROOT)
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
+}
+
+function readPageStateSource(): string {
+  return readFiles(PAGE_STATE_FILES);
 }
 
 describe("admin assistant page-state source boundary", () => {
@@ -41,8 +55,25 @@ describe("admin assistant page-state source boundary", () => {
     expect(adminRouteSource).not.toContain("routePath={location.search}");
   });
 
+  it("mounts the visible launcher after deferred header actions and before theme controls", () => {
+    const adminHeaderSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminHeader.tsx"),
+      "utf8",
+    );
+
+    expect(adminHeaderSource).toContain(
+      "@/components/admin/assistant/AdminAssistantLauncher",
+    );
+    expect(adminHeaderSource.indexOf("<DeferredAdminHeaderActions")).toBeLessThan(
+      adminHeaderSource.indexOf("<AdminAssistantLauncher"),
+    );
+    expect(adminHeaderSource.indexOf("<AdminAssistantLauncher")).toBeLessThan(
+      adminHeaderSource.indexOf("<DarkModeToggle"),
+    );
+  });
+
   it("keeps the bridge browser-only and away from admin API/domain authority", () => {
-    const source = readAssistantSource();
+    const source = readPageStateSource();
 
     expect(source).toContain("__SCALIUS_ADMIN_ASSISTANT_PAGE_STATE__");
     expect(source).toContain("scalius:admin-assistant-page-state");
@@ -57,7 +88,7 @@ describe("admin assistant page-state source boundary", () => {
   });
 
   it("does not query arbitrary form controls or read DOM field values", () => {
-    const source = readAssistantSource();
+    const source = readPageStateSource();
 
     expect(source).not.toMatch(
       /querySelector(?:All)?(?:<[^>]+>)?\(\s*["'`][^"'`]*(?:input|textarea|select|\[name=|form)/i,
@@ -71,5 +102,16 @@ describe("admin assistant page-state source boundary", () => {
     );
     expect(source).not.toContain("FormData");
     expect(source).not.toMatch(/\.(?:value|checked|selectedOptions|files)\b/);
+  });
+
+  it("keeps the visible chat UI off direct MCP, fetch, cookies, and storage", () => {
+    const source = readAssistantSource();
+
+    expect(source).not.toContain("/api/assistant/mcp");
+    expect(source).not.toContain("fetch(");
+    expect(source).not.toContain("document.cookie");
+    expect(source).not.toContain("localStorage");
+    expect(source).not.toContain("sessionStorage");
+    expect(source).not.toMatch(/window\.(?:localStorage|sessionStorage)/);
   });
 });

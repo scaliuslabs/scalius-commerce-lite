@@ -1071,6 +1071,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Widget AI Generation API
   // =============================================
+  "/api/v1/admin/ai/chat": {
+    POST: { permission: PERMISSIONS.DASHBOARD_VIEW },
+  },
   "/api/v1/admin/ai": {
     POST: { permission: PERMISSIONS.WIDGETS_EDIT },
   },

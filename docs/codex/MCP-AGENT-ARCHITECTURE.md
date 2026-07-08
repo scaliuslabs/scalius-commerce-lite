@@ -57,6 +57,8 @@ Use Flue for durable agent state and assistant workflows once the product needs 
 
 For visible chat/task UI, adapt AI Elements-style composable components into the existing admin/storefront design systems instead of inventing a full chat UI from scratch. `assistant-ui` remains a good fallback for polished primitives, but first release should avoid a large opinionated UI platform. AG-UI/CopilotKit is too broad for v1 unless future work needs deep bidirectional agent state beyond what the page-state bridges provide.
 
+The first visible Admin Assistant slice is intentionally smaller than MCP tool-use: the dashboard header opens a right-side chat sheet, sends bounded conversation history plus the existing sanitized page-state snapshot through an admin server function, and the API calls the configured `adminChat` model profile. It is stateless, no-store, read-only guidance only, and has no MCP tools, page tools, Code Mode, direct domain reads, or mutation authority. Future MCP-powered chat must add an API-owned `AGENT` service binding/tool-loop design and prove the same cookie/RBAC/no-secret limits before enabling live store reads.
+
 References reviewed:
 
 - [Cloudflare MCP overview](https://developers.cloudflare.com/agents/model-context-protocol/)
@@ -80,7 +82,7 @@ Add assistant model profiles under the AI settings domain when implementation st
 - `imageGeneration`
 - `voice`
 
-Only `widgetGeneration` should inherit the current widget provider's default model. Future assistant profiles (`adminChat`, `storefrontChat`, `imageGeneration`, and `voice`) default disabled with an empty model until a saved API profile explicitly configures them, so the dashboard does not imply unreleased assistants are active.
+Only `widgetGeneration` should inherit the current widget provider's default model. Assistant profiles such as `adminChat`, `storefrontChat`, `imageGeneration`, and `voice` default disabled with an empty model until a saved API profile explicitly configures them. `adminChat` has a visible stateless dashboard chat route, but it must still fail closed until the merchant enables that profile with a usable provider/model/credential.
 
 Environment variables may provide safe defaults; dashboard settings may override them. Secrets stay encrypted with `CREDENTIAL_ENCRYPTION_KEY`. Hot send paths must fail closed when credentials are missing, dummy, or undecryptable. Existing widget AI settings already strict-read encrypted provider keys through `readStoredCredentialStrict()` and surface safe `credentialErrors`; keep future assistant profiles on that same path instead of adding permissive fallback reads.
 

@@ -4,6 +4,12 @@ import { PERMISSIONS } from "./permissions";
 import { getRoutePermission } from "./route-permissions";
 
 describe("route permissions", () => {
+  it("gates read-only admin chat behind dashboard view instead of widget editing", () => {
+    expect(getRoutePermission("/api/v1/admin/ai/chat", "POST")).toEqual({
+      permission: PERMISSIONS.DASHBOARD_VIEW,
+    });
+  });
+
   it("gates redacted Admin MCP notification settings summary behind settings.general.view", () => {
     expect(
       getRoutePermission(

@@ -21,6 +21,14 @@ const NotificationDropdown = lazy(() =>
   })),
 );
 
+const AdminAssistantLauncher = lazy(() =>
+  import("@/components/admin/assistant/AdminAssistantLauncher").then(
+    (module) => ({
+      default: module.AdminAssistantLauncher,
+    }),
+  ),
+);
+
 const UserMenu = lazy(() =>
   import("@/components/auth/UserMenu").then((module) => ({
     default: module.UserMenu,
@@ -100,6 +108,15 @@ function HeaderActionsSkeleton({
       <div className="h-8 w-8 rounded-md bg-muted/60" />
       <div className="h-5 w-px bg-border" />
     </div>
+  );
+}
+
+function AssistantLauncherFallback() {
+  return (
+    <div
+      aria-hidden="true"
+      className="mx-1 h-9 w-9 rounded-md bg-muted/60"
+    />
   );
 }
 
@@ -192,6 +209,9 @@ export function AdminHeader({ user }: AdminHeaderProps) {
               canManageCache={canManageCache}
             />
           </div>
+          <Suspense fallback={<AssistantLauncherFallback />}>
+            <AdminAssistantLauncher />
+          </Suspense>
           <DarkModeToggle />
           <div className="h-5 w-px bg-border mx-2.5" />
           <DeferredUserMenu user={user} />
