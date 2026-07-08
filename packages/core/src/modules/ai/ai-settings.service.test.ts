@@ -137,7 +137,7 @@ describe("widget AI settings", () => {
     expect(config.profiles.voice.enabled).toBe(false);
   });
 
-  it("keeps future assistant profiles disabled by default", () => {
+  it("keeps assistant profiles disabled in static defaults", () => {
     const config = normalizeWidgetAiConfig({});
     const runtime: WidgetAiRuntimeSettings = {
       ...config,
@@ -166,6 +166,106 @@ describe("widget AI settings", () => {
         `AI model profile "${profileId}" is disabled.`,
       );
     }
+  });
+
+  it("enables the default adminChat runtime profile when the Cloudflare AI binding exists", async () => {
+    const runtime = await getWidgetAiRuntimeSettings(
+      createAiSettingsDb([]) as never,
+      { AI: { run: async () => ({}) } },
+    );
+
+    expect(runtime.profiles.adminChat).toEqual({
+      enabled: true,
+      provider: "cloudflare",
+      model: "@cf/moonshotai/kimi-k2.6",
+    });
+    expect(runtime.apiKeys).toEqual({});
+    expect(runtime.hasCloudflareBinding).toBe(true);
+    expect(resolveAiModelProfile(runtime, "adminChat")).toMatchObject({
+      id: "adminChat",
+      provider: "cloudflare",
+      model: "@cf/moonshotai/kimi-k2.6",
+    });
+  });
+
+  it("does not enable default adminChat without the Cloudflare AI binding", async () => {
+    const runtime = await getWidgetAiRuntimeSettings(
+      createAiSettingsDb([]) as never,
+      {},
+    );
+
+    expect(runtime.profiles.adminChat).toEqual({
+      enabled: false,
+      provider: "cloudflare",
+      model: "",
+    });
+    expect(() => resolveAiModelProfile(runtime, "adminChat")).toThrow(
+      'AI model profile "adminChat" is disabled.',
+    );
+  });
+
+  it("does not override an explicitly configured disabled adminChat profile", async () => {
+    const runtime = await getWidgetAiRuntimeSettings(
+      createAiSettingsDb([
+        widgetAiConfigRow({
+          profiles: {
+            adminChat: {
+              enabled: false,
+              provider: "cloudflare",
+              model: "@cf/openai/gpt-oss-120b",
+            },
+          },
+        }),
+      ]) as never,
+      { AI: { run: async () => ({}) } },
+    );
+
+    expect(runtime.profiles.adminChat).toEqual({
+      enabled: false,
+      provider: "cloudflare",
+      model: "@cf/openai/gpt-oss-120b",
+    });
+    expect(() => resolveAiModelProfile(runtime, "adminChat")).toThrow(
+      'AI model profile "adminChat" is disabled.',
+    );
+  });
+
+  it("falls back to the Cloudflare default when adminChat has an invalid Cloudflare model and the binding exists", async () => {
+    const runtime = await getWidgetAiRuntimeSettings(
+      createAiSettingsDb([
+        widgetAiConfigRow({
+          providers: {
+            cloudflare: {
+              enabled: true,
+              defaultModel: "@cf/openai/gpt-oss-120b",
+              allowedModels: [
+                "@cf/openai/gpt-oss-120b",
+                "@cf/moonshotai/kimi-k2.6",
+              ],
+            },
+          },
+          profiles: {
+            adminChat: {
+              enabled: true,
+              provider: "cloudflare",
+              model: "@google/gemini-3.5-flash",
+            },
+          },
+        }),
+      ]) as never,
+      { AI: { run: async () => ({}) } },
+    );
+
+    expect(runtime.profiles.adminChat).toEqual({
+      enabled: true,
+      provider: "cloudflare",
+      model: "@cf/openai/gpt-oss-120b",
+    });
+    expect(resolveAiModelProfile(runtime, "adminChat")).toMatchObject({
+      id: "adminChat",
+      provider: "cloudflare",
+      model: "@cf/openai/gpt-oss-120b",
+    });
   });
 
   it("normalizes unknown and malformed model profiles safely", () => {

@@ -49,24 +49,35 @@ describe("AdminAssistantLauncher", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders an accessible header trigger and right-sheet controls", async () => {
+  it("renders a movable bubble with floating and sidebar panel controls", async () => {
     renderLauncher();
 
     const trigger = queryButton("Open admin assistant");
     expect(trigger).toBeTruthy();
     expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger?.className).toContain("rounded-full");
 
     await click(trigger);
 
     expect(trigger?.getAttribute("aria-expanded")).toBe("true");
     expect(document.body.textContent).toContain("Admin assistant");
-    expect(queryButton("Close admin assistant")).toBeTruthy();
+    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe("floating");
+    expect(queryButton("Move assistant")).toBeTruthy();
+    expect(queryButton("Use sidebar mode")).toBeTruthy();
+    expect(queryButton("Minimize admin assistant")).toBeTruthy();
     expect(queryButton("Send assistant message")).toBeTruthy();
     expect(
       document.querySelector<HTMLTextAreaElement>(
         'textarea[aria-label="Message admin assistant"]',
       ),
     ).toBeTruthy();
+
+    await click(queryButton("Use sidebar mode"));
+    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe("sidebar");
+    expect(queryButton("Use floating mode")).toBeTruthy();
+
+    await click(queryButton("Minimize admin assistant"));
+    expect(getAssistantPanel()).toBeNull();
   });
 
   it("sends only the typed message and sanitized page-state context", async () => {
@@ -197,6 +208,12 @@ describe("AdminAssistantLauncher", () => {
 function queryButton(label: string): HTMLButtonElement | null {
   return document.querySelector<HTMLButtonElement>(
     `button[aria-label="${label}"]`,
+  );
+}
+
+function getAssistantPanel(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(
+    'section[aria-label="Admin assistant"]',
   );
 }
 

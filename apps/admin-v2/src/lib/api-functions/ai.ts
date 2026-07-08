@@ -233,7 +233,7 @@ export const sendAdminAssistantMessage = createServerFn({ method: "POST" })
           status: "disabled",
           reason: "unconfigured",
           message:
-            "Admin chat is not ready. Enable the adminChat model profile and save a valid provider key before using the assistant.",
+            "Admin chat is not ready. Enable Admin chat in General Settings > Widget AI and choose a model. Cloudflare Workers AI works through the binding; other providers need saved credentials.",
         };
       }
       return {

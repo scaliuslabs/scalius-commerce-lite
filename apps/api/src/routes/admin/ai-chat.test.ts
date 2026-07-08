@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getWidgetAiRuntimeSettings: vi.fn(),
   getCredentialEncryptionKey: vi.fn(),
   createOpenAI: vi.fn(),
+  createWorkersAI: vi.fn(),
   generateText: vi.fn(),
 }));
 
@@ -29,6 +30,10 @@ vi.mock("../../utils/encryption-key", () => ({
 
 vi.mock("@ai-sdk/openai", () => ({
   createOpenAI: mocks.createOpenAI,
+}));
+
+vi.mock("workers-ai-provider", () => ({
+  createWorkersAI: mocks.createWorkersAI,
 }));
 
 vi.mock("ai", () => ({
@@ -80,6 +85,31 @@ function runtimeSettings(
   };
 }
 
+function cloudflareRuntimeSettings(): WidgetAiRuntimeSettings {
+  return {
+    ...DEFAULT_WIDGET_AI_CONFIG,
+    providers: {
+      ...DEFAULT_WIDGET_AI_CONFIG.providers,
+      cloudflare: {
+        ...DEFAULT_WIDGET_AI_CONFIG.providers.cloudflare,
+        enabled: true,
+        defaultModel: "@cf/moonshotai/kimi-k2.6",
+      },
+    },
+    profiles: {
+      ...DEFAULT_WIDGET_AI_CONFIG.profiles,
+      adminChat: {
+        enabled: true,
+        provider: "cloudflare",
+        model: "@cf/moonshotai/kimi-k2.6",
+      },
+    },
+    apiKeys: {},
+    credentialErrors: {},
+    hasCloudflareBinding: true,
+  };
+}
+
 function createTestApp(envOverrides: Partial<Env> = {}) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = { id: "db" };
@@ -125,6 +155,7 @@ describe("admin AI chat route", () => {
     mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
     mocks.getWidgetAiRuntimeSettings.mockResolvedValue(runtimeSettings());
     mocks.createOpenAI.mockImplementation(() => vi.fn(() => ({ id: "language-model" } as unknown as LanguageModel)));
+    mocks.createWorkersAI.mockImplementation(() => vi.fn(() => ({ id: "workers-ai-model" } as unknown as LanguageModel)));
     mocks.generateText.mockResolvedValue({
       text: "Open Settings, review the saved configuration, and save when ready.",
       totalUsage: { inputTokens: 10, outputTokens: 12, totalTokens: 22 },
@@ -211,6 +242,42 @@ describe("admin AI chat route", () => {
       usage: { inputTokens: 10, outputTokens: 12, totalTokens: 22 },
     });
     expect(JSON.stringify(body)).not.toContain("sk-test-secret");
+  });
+
+  it("uses the Cloudflare Workers AI binding for the default adminChat profile without provider keys", async () => {
+    const languageModel = { id: "cloudflare-admin-chat-model" } as unknown as LanguageModel;
+    const workersAiModelFactory = vi.fn(() => languageModel);
+    const aiBinding = { run: vi.fn() };
+    mocks.getWidgetAiRuntimeSettings.mockResolvedValue(cloudflareRuntimeSettings());
+    mocks.createWorkersAI.mockReturnValue(workersAiModelFactory);
+    const { app, env } = createTestApp({ AI: aiBinding } as unknown as Partial<Env>);
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Can you help me find products?" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(mocks.createWorkersAI).toHaveBeenCalledWith({ binding: aiBinding });
+    expect(workersAiModelFactory).toHaveBeenCalledWith("@cf/moonshotai/kimi-k2.6");
+    expect(mocks.createOpenAI).not.toHaveBeenCalled();
+
+    const options = mocks.generateText.mock.calls[0]?.[0] as {
+      model: LanguageModel;
+    };
+    expect(options.model).toBe(languageModel);
+
+    const body = (await response.json()) as {
+      success: true;
+      data: {
+        provider: string;
+        model: string;
+        message: { role: string; content: string };
+      };
+    };
+    expect(body.data.provider).toBe("cloudflare");
+    expect(body.data.model).toBe("@cf/moonshotai/kimi-k2.6");
+    expect(JSON.stringify(body)).not.toMatch(/apiKey|secret|credential|sk-/i);
   });
 
   it("reads only admin_navigation_context through the Agent binding and returns catalog-derived actions", async () => {

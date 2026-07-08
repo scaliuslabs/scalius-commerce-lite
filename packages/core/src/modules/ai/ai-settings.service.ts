@@ -532,6 +532,51 @@ export function normalizeWidgetAiConfig(
   };
 }
 
+function applyCloudflareBindingProfileDefaults(
+  config: WidgetAiGenerationConfig,
+  hasCloudflareBinding: boolean,
+): WidgetAiGenerationConfig {
+  if (!hasCloudflareBinding) return config;
+
+  const cloudflare = config.providers.cloudflare;
+  const adminChat = config.profiles.adminChat;
+  const defaultModel = cloudflare.defaultModel.trim();
+  const allowedCloudflareModels = new Set(
+    [defaultModel, ...cloudflare.allowedModels]
+      .map((model) => model.trim())
+      .filter(Boolean),
+  );
+  const adminChatIsUnconfiguredDefault =
+    !adminChat.enabled &&
+    adminChat.provider === "cloudflare" &&
+    !adminChat.model.trim();
+  const adminChatUsesInvalidCloudflareModel =
+    adminChat.enabled &&
+    adminChat.provider === "cloudflare" &&
+    Boolean(adminChat.model.trim()) &&
+    !allowedCloudflareModels.has(adminChat.model.trim());
+
+  if (
+    !cloudflare.enabled ||
+    !defaultModel ||
+    (!adminChatIsUnconfiguredDefault && !adminChatUsesInvalidCloudflareModel)
+  ) {
+    return config;
+  }
+
+  return {
+    ...config,
+    profiles: {
+      ...config.profiles,
+      adminChat: {
+        enabled: true,
+        provider: "cloudflare",
+        model: defaultModel,
+      },
+    },
+  };
+}
+
 function mergeWidgetAiConfig(
   current: WidgetAiGenerationConfig,
   update: WidgetAiSettingsUpdate,
@@ -632,8 +677,10 @@ export async function getWidgetAiRuntimeSettings(
   encryptionKey?: string,
 ): Promise<WidgetAiRuntimeSettings> {
   const values = await readCategory(db);
-  const config = normalizeWidgetAiConfig(
-    parseJsonObject(values[WIDGET_AI_CONFIG_KEY]),
+  const hasCloudflareBinding = Boolean(env.AI);
+  const config = applyCloudflareBindingProfileDefaults(
+    normalizeWidgetAiConfig(parseJsonObject(values[WIDGET_AI_CONFIG_KEY])),
+    hasCloudflareBinding,
   );
   const { apiKeys, credentialErrors } = await readApiKeys(values, encryptionKey);
 
@@ -641,7 +688,7 @@ export async function getWidgetAiRuntimeSettings(
     ...config,
     apiKeys,
     credentialErrors,
-    hasCloudflareBinding: Boolean(env.AI),
+    hasCloudflareBinding,
   };
 }
 
