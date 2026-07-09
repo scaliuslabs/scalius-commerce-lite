@@ -1,97 +1,108 @@
 import {
-  Fragment,
+  Grip,
+} from "lucide-react";
+import {
+  useEffect,
   useMemo,
+  useRef,
   useState,
+  type CSSProperties,
   type FormEvent,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  AlertCircle,
-  ArrowRight,
-  Bot,
-  CheckCircle2,
-  GripHorizontal,
-  Loader2,
-  Minimize2,
-  PanelRightClose,
-  PanelRightOpen,
-  SendHorizontal,
-} from "lucide-react";
 
-import { executeAdminAssistantPageAction } from "./page-actions";
+import {
+  assistantMessagePartSchema,
+  type AssistantMessagePart,
+} from "@scalius/shared/assistant-contracts";
+import { cn } from "@scalius/shared/utils";
+
 import {
   sendAdminAssistantMessage,
-  type AdminAssistantChatResult,
   type AdminAssistantChatAction,
+  type AdminAssistantChatResult,
 } from "../../../lib/api-functions/ai";
-import { cn } from "@scalius/shared/utils";
-import { Button } from "../../ui/button";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../ui/tooltip";
-import { Textarea } from "../../ui/textarea";
+  clampAdminAssistantPosition,
+  getAdminAssistantViewport,
+  type AdminAssistantMode,
+  type AdminAssistantPosition,
+  type AdminAssistantSize,
+} from "./assistant-layout";
+import { getAdminAssistantPageActionStatus } from "./assistant-action-status";
+import {
+  safeAdminAssistantNavigationPath,
+  safeAdminAssistantPanelActions,
+} from "./assistant-navigation";
 import type {
-  AdminAssistantMode,
-  AdminAssistantPosition,
-} from "./AdminAssistantLauncher";
+  AdminAssistantActionExecutionState,
+  AdminAssistantMessage,
+  AdminAssistantMessageRole,
+  AdminAssistantStatus,
+} from "./assistant-panel-types";
+import { AdminAssistantComposer } from "./AdminAssistantComposer";
+import { AdminAssistantConversation } from "./AdminAssistantConversation";
+import { AdminAssistantPanelHeader } from "./AdminAssistantPanelHeader";
+import { AdminAssistantStatusBanner } from "./AdminAssistantStatusBanner";
+import {
+  executeAdminAssistantPageActionWithResult,
+} from "./page-actions";
 import { useAdminAssistantPageState } from "./useAdminAssistantPageState";
+import { usePointerGesture } from "./usePointerGesture";
 
 interface AdminAssistantPanelProps {
   mode: AdminAssistantMode;
   open: boolean;
   position: AdminAssistantPosition;
+  size: AdminAssistantSize;
   onModeChange: (mode: AdminAssistantMode) => void;
   onOpenChange: (open: boolean) => void;
   onPositionChange: (position: AdminAssistantPosition) => void;
+  onSizeChange: (size: AdminAssistantSize) => void;
 }
-
-type MessageRole = "assistant" | "user";
-
-interface AssistantMessage {
-  id: string;
-  role: MessageRole;
-  content: string;
-  actions?: AdminAssistantChatAction[];
-}
-
-type AssistantStatus =
-  | { kind: "idle"; message: string }
-  | { kind: "success"; message: string }
-  | { kind: "disabled"; message: string }
-  | { kind: "error"; message: string };
 
 const MAX_HISTORY_MESSAGES = 6;
-const EDGE_GAP = 16;
-const PANEL_WIDTH = 384;
-const PANEL_HEIGHT = 560;
+const MAX_CLAIMED_ACTION_KEYS = 200;
+const KEYBOARD_GEOMETRY_STEP = 12;
 
 export function AdminAssistantPanel({
   mode,
   open,
   position,
+  size,
   onModeChange,
   onOpenChange,
   onPositionChange,
+  onSizeChange,
 }: AdminAssistantPanelProps) {
   const navigate = useNavigate();
   const pageState = useAdminAssistantPageState();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const claimedActionKeysRef = useRef(new Set<string>());
+  const startPointerGesture = usePointerGesture();
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  const [status, setStatus] = useState<AssistantStatus>({
+  const [messages, setMessages] = useState<AdminAssistantMessage[]>([]);
+  const [status, setStatus] = useState<AdminAssistantStatus>({
     kind: "idle",
     message: "Ready on the current admin page.",
   });
   const [sending, setSending] = useState(false);
+  const [actionExecutionStates, setActionExecutionStates] = useState<
+    Record<string, AdminAssistantActionExecutionState>
+  >({});
 
   const contextLabel = useMemo(() => {
     if (!pageState) return "Current admin page";
     return pageState.pageHeading ?? pageState.pageTitle ?? pageState.routePath;
   }, [pageState]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const focusTimer = window.setTimeout(() => textareaRef.current?.focus(), 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [open]);
 
   if (!open) return null;
 
@@ -100,7 +111,7 @@ export function AdminAssistantPanel({
     const message = draft.trim();
     if (!message || sending) return;
 
-    const userMessage: AssistantMessage = {
+    const userMessage: AdminAssistantMessage = {
       id: createMessageId("user"),
       role: "user",
       content: message,
@@ -113,15 +124,11 @@ export function AdminAssistantPanel({
     setMessages((current) => [...current, userMessage]);
     setDraft("");
     setSending(true);
-    setStatus({ kind: "idle", message: "Checking assistant availability." });
+    setStatus({ kind: "idle", message: "Reviewing the current admin page." });
 
     try {
       const result = (await sendAdminAssistantMessage({
-        data: {
-          message,
-          pageContext: pageState,
-          history,
-        },
+        data: { message, pageContext: pageState, history },
       })) as AdminAssistantChatResult;
       applyAssistantResult(result);
     } catch {
@@ -142,7 +149,8 @@ export function AdminAssistantPanel({
           id: createMessageId("assistant"),
           role: "assistant",
           content: result.message.content,
-          actions: safePanelActions(result.actions),
+          parts: readAssistantParts(result),
+          actions: safeAdminAssistantPanelActions(result.actions),
         },
       ]);
       setStatus({ kind: "idle", message: "Ready on the current admin page." });
@@ -155,452 +163,276 @@ export function AdminAssistantPanel({
     });
   }
 
-  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
-      return;
-    }
-    event.preventDefault();
-    event.currentTarget.form?.requestSubmit();
-  }
-
-  function handlePanelDragStart(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (mode !== "floating" || event.button !== 0) return;
-
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startPosition = position;
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      onPositionChange(
-        clampViewportPosition(
-          {
-            x: startPosition.x + moveEvent.clientX - startX,
-            y: startPosition.y + moveEvent.clientY - startY,
-          },
-          PANEL_WIDTH,
-          PANEL_HEIGHT,
-        ),
-      );
-    };
-
-    const handlePointerUp = () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp, { once: true });
-  }
-
-  async function handleAssistantAction(action: AdminAssistantChatAction) {
-    if (action.type !== "navigate") {
-      const executed = await executeAdminAssistantPageAction(action);
+  async function navigateFromAssistant(pathValue: string) {
+    const path = safeAdminAssistantNavigationPath(pathValue);
+    if (!path) {
       setStatus({
-        kind: executed ? "success" : "error",
-        message: executed
-          ? "Page action applied. Review the visible page before saving."
-          : "That page action is no longer available here. Nothing was changed.",
+        kind: "error",
+        message: "That navigation action is no longer available.",
       });
       return;
     }
-
-    const path = safeAdminNavigationPath(action.path);
-    if (!path) return;
 
     try {
-      void Promise.resolve(navigate({ to: path as string })).catch(() => {
-        if (typeof window !== "undefined") window.location.assign(path);
-      });
+      await Promise.resolve(navigate({ to: path as string }));
     } catch {
       if (typeof window !== "undefined") window.location.assign(path);
     }
   }
 
-  const sidebar = mode === "sidebar";
+  async function handleAssistantAction(
+    action: AdminAssistantChatAction,
+    executionKey: string,
+  ) {
+    if (!claimActionKey(claimedActionKeysRef.current, executionKey)) return;
+    setActionExecutionStates((current) => ({
+      ...current,
+      [executionKey]: "running",
+    }));
+
+    try {
+      if (action.type === "navigate") {
+        await navigateFromAssistant(action.path);
+        return;
+      }
+
+      const result = await executeAdminAssistantPageActionWithResult(action, {
+        executionKey,
+      });
+      setStatus(getAdminAssistantPageActionStatus(action, result));
+    } finally {
+      setActionExecutionStates((current) => ({
+        ...current,
+        [executionKey]: "consumed",
+      }));
+    }
+  }
+
+  function handleMovePointerDown(
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
+    if (mode !== "floating") return;
+    const startPosition = position;
+    startPointerGesture(event, {
+      onMove: (deltaX, deltaY) => {
+        onPositionChange({
+          x: startPosition.x + deltaX,
+          y: startPosition.y + deltaY,
+        });
+      },
+    });
+  }
+
+  function handleMoveKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (mode !== "floating") return;
+    const delta = getMoveKeyDelta(event);
+    if (!delta) return;
+    event.preventDefault();
+    onPositionChange(
+      clampAdminAssistantPosition(
+        { x: position.x + delta.x, y: position.y + delta.y },
+        size,
+        getAdminAssistantViewport(),
+      ),
+    );
+  }
+
+  function handleResizePointerDown(
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
+    const startSize = size;
+    startPointerGesture(event, {
+      onMove: (deltaX, deltaY) => {
+        onSizeChange({
+          width:
+            mode === "dock-right"
+              ? startSize.width - deltaX
+              : startSize.width + deltaX,
+          height:
+            mode === "floating"
+              ? startSize.height + deltaY
+              : startSize.height,
+        });
+      },
+    });
+  }
+
+  function handleResizeKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const nextSize = getKeyboardResizeSize(event, mode, size);
+    if (!nextSize) return;
+    event.preventDefault();
+    onSizeChange(nextSize);
+  }
+
+  const panelStyle = getPanelStyle(mode, position, size);
 
   return (
     <section
+      id="admin-assistant-panel"
       aria-label="Admin assistant"
+      aria-describedby="admin-assistant-context"
       data-assistant-mode={mode}
       className={cn(
-        "fixed z-[80] flex flex-col overflow-hidden border border-border bg-background text-foreground shadow-2xl",
-        sidebar
-          ? "right-0 top-0 h-svh w-full border-y-0 border-r-0 sm:w-[28rem]"
-          : "h-[calc(100vh-2rem)] max-h-[35rem] w-[calc(100vw-2rem)] max-w-96 rounded-lg",
+        "fixed z-[80] flex flex-col overflow-hidden border border-border/90 bg-background text-foreground shadow-2xl shadow-black/15",
+        mode === "floating" && "rounded-2xl",
+        mode === "dock-left" && "left-0 top-0 border-y-0 border-l-0",
+        mode === "dock-right" && "right-0 top-0 border-y-0 border-r-0",
       )}
-      style={
-        sidebar
-          ? undefined
-          : {
-              left: `${position.x}px`,
-              top: `${position.y}px`,
-            }
-      }
+      style={panelStyle}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented) return;
+        event.preventDefault();
+        onOpenChange(false);
+      }}
     >
-      <header className="border-b border-border px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-base font-semibold">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <Bot className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span>Admin assistant</span>
-            </div>
-            <p className="mt-1 truncate text-sm text-muted-foreground">
-              {contextLabel}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {!sidebar ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 cursor-move"
-                    aria-label="Move assistant"
-                    onPointerDown={handlePanelDragStart}
-                  >
-                    <GripHorizontal className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Move assistant</TooltipContent>
-              </Tooltip>
-            ) : null}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  aria-label={sidebar ? "Use floating mode" : "Use sidebar mode"}
-                  onClick={() => onModeChange(sidebar ? "floating" : "sidebar")}
-                >
-                  {sidebar ? (
-                    <PanelRightClose className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {sidebar ? "Use floating mode" : "Use sidebar mode"}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  aria-label="Minimize admin assistant"
-                  onClick={() => onOpenChange(false)}
-                >
-                  <Minimize2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Minimize</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-      </header>
+      <AdminAssistantPanelHeader
+        contextLabel={contextLabel}
+        mode={mode}
+        onModeChange={onModeChange}
+        onMinimize={() => onOpenChange(false)}
+        onMoveKeyDown={handleMoveKeyDown}
+        onMovePointerDown={handleMovePointerDown}
+      />
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div
-          role="log"
-          aria-live="polite"
-          aria-label="Assistant conversation"
-          className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
-        >
-          {messages.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-              Start with a question about the page you are viewing.
-            </div>
-          ) : null}
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={cn(
-                "max-w-[88%] rounded-md px-3 py-2 text-sm leading-6",
-                message.role === "user"
-                  ? "ml-auto bg-primary text-primary-foreground"
-                  : "mr-auto border border-border bg-muted/60 text-foreground",
-              )}
-            >
-              <AssistantMessageContent content={message.content} />
-              {message.role === "assistant" && message.actions?.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {message.actions.map((action) => (
-                    <Button
-                      key={`${message.id}-${action.type}-${getActionKey(action)}`}
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="h-8 max-w-full gap-1.5 px-2 text-xs"
-                      aria-label={action.label}
-                      onClick={() => {
-                        void handleAssistantAction(action);
-                      }}
-                    >
-                      <span className="truncate">{action.label}</span>
-                      <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    </Button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ))}
-          {sending ? (
-            <div className="mr-auto inline-flex items-center gap-2 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              Thinking
-            </div>
-          ) : null}
-        </div>
+      <AdminAssistantConversation
+        actionExecutionStates={actionExecutionStates}
+        messages={messages}
+        sending={sending}
+        onAction={(action, executionKey) => {
+          void handleAssistantAction(action, executionKey);
+        }}
+        onNavigate={(path) => {
+          void navigateFromAssistant(path);
+        }}
+        onSuggestion={(suggestion) => {
+          setDraft(suggestion);
+          window.setTimeout(() => textareaRef.current?.focus(), 0);
+        }}
+      />
+      <AdminAssistantStatusBanner status={status} />
+      <AdminAssistantComposer
+        draft={draft}
+        sending={sending}
+        textareaRef={textareaRef}
+        onDraftChange={setDraft}
+        onSubmit={handleSubmit}
+      />
 
-        {status.kind !== "idle" ? (
-          <div
-            role={status.kind === "error" ? "alert" : "status"}
-            className={cn(
-              "mx-4 mb-3 flex items-start gap-2 rounded-md border px-3 py-2 text-sm",
-              status.kind === "disabled"
-                ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                : status.kind === "success"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                : "border-destructive/30 bg-destructive/10 text-destructive",
-            )}
-          >
-            {status.kind === "success" ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            ) : (
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            )}
-            <span>{status.message}</span>
-          </div>
-        ) : null}
-
-        <form
-          method="post"
-          noValidate
-          className="border-t border-border bg-background px-4 py-3"
-          onSubmit={handleSubmit}
-        >
-          <label htmlFor="admin-assistant-message" className="sr-only">
-            Message admin assistant
-          </label>
-          <div className="flex items-end gap-2">
-            <Textarea
-              id="admin-assistant-message"
-              aria-label="Message admin assistant"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={handleComposerKeyDown}
-              placeholder="Ask about this page..."
-              rows={2}
-              disabled={sending}
-              className="max-h-40 min-h-[44px] resize-none py-2 text-sm"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              className="h-11 w-11 shrink-0"
-              disabled={sending || draft.trim().length === 0}
-              aria-label="Send assistant message"
-            >
-              {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <SendHorizontal className="h-4 w-4" aria-hidden="true" />
-              )}
-            </Button>
-          </div>
-        </form>
-      </div>
+      <p id="admin-assistant-resize-help" className="sr-only">
+        Drag to resize, or use the arrow keys. Hold Shift for larger steps.
+      </p>
+      <button
+        type="button"
+        aria-label="Resize assistant"
+        aria-describedby="admin-assistant-resize-help"
+        className={cn(
+          "absolute z-10 touch-none text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary focus-visible:bg-primary/10 focus-visible:text-primary focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 max-sm:hidden",
+          mode === "floating" &&
+            "bottom-0 right-0 flex h-10 w-10 cursor-nwse-resize items-end justify-end rounded-br-2xl p-2",
+          mode === "dock-left" &&
+            "bottom-0 right-0 top-0 w-6 cursor-ew-resize border-l border-transparent",
+          mode === "dock-right" &&
+            "bottom-0 left-0 top-0 w-6 cursor-ew-resize border-r border-transparent",
+        )}
+        onKeyDown={handleResizeKeyDown}
+        onPointerDown={handleResizePointerDown}
+      >
+        {mode === "floating" ? (
+          <Grip className="h-3.5 w-3.5" aria-hidden="true" />
+        ) : (
+          <span className="mx-auto block h-12 w-0.5 rounded-full bg-current opacity-60" />
+        )}
+      </button>
     </section>
   );
 }
 
-function AssistantMessageContent({ content }: { content: string }) {
-  const blocks = useMemo(() => parseAssistantMessageBlocks(content), [content]);
+function readAssistantParts(
+  result: AdminAssistantChatResult,
+): AssistantMessagePart[] | undefined {
+  const rawMessage = (result as unknown as {
+    message?: { parts?: unknown };
+    parts?: unknown;
+  }).message;
+  const rawParts = rawMessage?.parts ?? (result as unknown as { parts?: unknown }).parts;
+  if (!Array.isArray(rawParts)) return undefined;
 
-  return (
-    <div className="space-y-2">
-      {blocks.map((block, index) => {
-        if (block.type === "ordered-list") {
-          return (
-            <ol key={index} className="list-decimal space-y-1 pl-5">
-              {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{renderInlineAssistantMarkdown(item)}</li>
-              ))}
-            </ol>
-          );
-        }
-        if (block.type === "unordered-list") {
-          return (
-            <ul key={index} className="list-disc space-y-1 pl-5">
-              {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{renderInlineAssistantMarkdown(item)}</li>
-              ))}
-            </ul>
-          );
-        }
-        return (
-          <p key={index} className="whitespace-pre-wrap">
-            {renderInlineAssistantMarkdown(block.text)}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
-type AssistantMessageBlock =
-  | { type: "paragraph"; text: string }
-  | { type: "ordered-list"; items: string[] }
-  | { type: "unordered-list"; items: string[] };
-
-function parseAssistantMessageBlocks(content: string): AssistantMessageBlock[] {
-  const blocks: AssistantMessageBlock[] = [];
-  const paragraphs = content
-    .replace(/\r\n?/g, "\n")
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-
-  for (const paragraph of paragraphs) {
-    const lines = paragraph
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const orderedItems = lines.map((line) => line.match(/^\d+[.)]\s+(.+)$/)?.[1] ?? null);
-    if (orderedItems.length > 0 && orderedItems.every(Boolean)) {
-      blocks.push({ type: "ordered-list", items: orderedItems as string[] });
-      continue;
-    }
-
-    const unorderedItems = lines.map((line) => line.match(/^[-*]\s+(.+)$/)?.[1] ?? null);
-    if (unorderedItems.length > 0 && unorderedItems.every(Boolean)) {
-      blocks.push({ type: "unordered-list", items: unorderedItems as string[] });
-      continue;
-    }
-
-    blocks.push({ type: "paragraph", text: paragraph });
+  const parts: AssistantMessagePart[] = [];
+  for (const candidate of rawParts.slice(0, 40)) {
+    const parsed = assistantMessagePartSchema.safeParse(candidate);
+    if (parsed.success) parts.push(parsed.data);
   }
-
-  return blocks.length > 0 ? blocks : [{ type: "paragraph", text: content }];
+  return parts.length > 0 ? parts : undefined;
 }
 
-function renderInlineAssistantMarkdown(text: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*)/g;
-  let lastIndex = 0;
-  let index = 0;
+function createMessageId(role: AdminAssistantMessageRole): string {
+  const random =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2, 10);
+  return `${role}-${Date.now()}-${random}`;
+}
 
-  for (const match of text.matchAll(pattern)) {
-    const marker = match[0];
-    const start = match.index ?? 0;
-    if (start > lastIndex) {
-      nodes.push(
-        <Fragment key={`text-${index}`}>{text.slice(lastIndex, start)}</Fragment>,
-      );
-      index += 1;
-    }
-
-    if (marker.startsWith("`")) {
-      nodes.push(
-        <code key={`code-${index}`} className="rounded bg-background/70 px-1 py-0.5 font-mono text-[0.92em]">
-          {marker.slice(1, -1)}
-        </code>,
-      );
-    } else {
-      nodes.push(
-        <strong key={`strong-${index}`} className="font-semibold">
-          {marker.slice(2, -2)}
-        </strong>,
-      );
-    }
-    index += 1;
-    lastIndex = start + marker.length;
+function claimActionKey(keys: Set<string>, executionKey: string): boolean {
+  if (keys.has(executionKey)) return false;
+  keys.add(executionKey);
+  while (keys.size > MAX_CLAIMED_ACTION_KEYS) {
+    const oldestKey = keys.values().next().value as string | undefined;
+    if (!oldestKey) break;
+    keys.delete(oldestKey);
   }
-
-  if (lastIndex < text.length) {
-    nodes.push(<Fragment key={`text-${index}`}>{text.slice(lastIndex)}</Fragment>);
-  }
-
-  return nodes.length > 0 ? nodes : [text];
+  return true;
 }
 
-function createMessageId(role: MessageRole): string {
-  return `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function safeAdminNavigationPath(value: string): string | null {
-  const path = value.trim();
-  if (!/^\/admin(?:\/[a-z0-9-]+)*$/.test(path)) return null;
-  const segments = path.split("/").filter(Boolean);
-  const resourceRoots = new Set([
-    "attributes",
-    "categories",
-    "collections",
-    "customers",
-    "discounts",
-    "inventory",
-    "media",
-    "orders",
-    "pages",
-    "products",
-    "widgets",
-  ]);
-  if (segments.slice(1).some((segment) => /^\d+$/.test(segment))) return null;
-  if (segments.length > 2 && resourceRoots.has(segments[1] ?? "")) return null;
-  return path;
-}
-
-function safePanelActions(
-  actions: AdminAssistantChatAction[] | undefined,
-): AdminAssistantChatAction[] | undefined {
-  if (!actions?.length) return undefined;
-  const safeActions = actions.filter((action) => {
-    if (action.type === "navigate") return Boolean(safeAdminNavigationPath(action.path));
-    return isSafePageAction(action);
-  });
-  return safeActions.length > 0 ? safeActions : undefined;
-}
-
-function isSafePageAction(action: AdminAssistantChatAction): boolean {
-  if (action.type === "navigate") return true;
-  if (!action.id || !action.targetId || !action.label) return false;
-  if (
-    action.type === "focus_surface" ||
-    action.type === "apply_field_draft" ||
-    action.type === "save_registered_form" ||
-    action.type === "select_visible_rows" ||
-    action.type === "clear_selection"
-  ) {
-    return true;
-  }
-  return false;
-}
-
-function getActionKey(action: AdminAssistantChatAction): string {
-  if (action.type === "navigate") return action.path;
-  return action.id;
-}
-
-function clampViewportPosition(
+function getPanelStyle(
+  mode: AdminAssistantMode,
   position: AdminAssistantPosition,
-  width: number,
-  height: number,
-): AdminAssistantPosition {
-  if (typeof window === "undefined") return position;
+  size: AdminAssistantSize,
+): CSSProperties {
+  if (mode === "floating") {
+    return {
+      left: position.x,
+      top: position.y,
+      width: size.width,
+      height: size.height,
+    };
+  }
 
-  const maxX = Math.max(EDGE_GAP, window.innerWidth - width - EDGE_GAP);
-  const maxY = Math.max(EDGE_GAP, window.innerHeight - height - EDGE_GAP);
+  const compact = getAdminAssistantViewport().width < 640;
   return {
-    x: Math.min(maxX, Math.max(EDGE_GAP, position.x)),
-    y: Math.min(maxY, Math.max(EDGE_GAP, position.y)),
+    width: compact ? "100vw" : size.width,
+    height: "100dvh",
   };
+}
+
+function getMoveKeyDelta(
+  event: KeyboardEvent<HTMLButtonElement>,
+): AdminAssistantPosition | null {
+  const step = KEYBOARD_GEOMETRY_STEP * (event.shiftKey ? 3 : 1);
+  if (event.key === "ArrowLeft") return { x: -step, y: 0 };
+  if (event.key === "ArrowRight") return { x: step, y: 0 };
+  if (event.key === "ArrowUp") return { x: 0, y: -step };
+  if (event.key === "ArrowDown") return { x: 0, y: step };
+  return null;
+}
+
+function getKeyboardResizeSize(
+  event: KeyboardEvent<HTMLButtonElement>,
+  mode: AdminAssistantMode,
+  size: AdminAssistantSize,
+): AdminAssistantSize | null {
+  const step = KEYBOARD_GEOMETRY_STEP * (event.shiftKey ? 3 : 1);
+  if (event.key === "ArrowRight") {
+    return { ...size, width: size.width + (mode === "dock-right" ? -step : step) };
+  }
+  if (event.key === "ArrowLeft") {
+    return { ...size, width: size.width + (mode === "dock-right" ? step : -step) };
+  }
+  if (mode === "floating" && event.key === "ArrowDown") {
+    return { ...size, height: size.height + step };
+  }
+  if (mode === "floating" && event.key === "ArrowUp") {
+    return { ...size, height: size.height - step };
+  }
+  return null;
 }

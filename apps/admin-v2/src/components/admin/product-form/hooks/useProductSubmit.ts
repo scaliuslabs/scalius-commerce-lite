@@ -7,7 +7,7 @@ import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission, type VariantImageAxis } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
 import { createProduct, updateProduct } from "~/lib/api-functions/products";
-import { getServerFnError } from "@/lib/api-helpers";
+import { getServerFnError } from "~/lib/api-helpers";
 
 interface UseProductSubmitOptions {
   isEdit: boolean;
@@ -23,7 +23,7 @@ interface UseProductSubmitReturn {
   showAlert: boolean;
   alertMessage: string;
   setShowAlert: (show: boolean) => void;
-  handleSubmit: (values: ProductFormValues) => Promise<void>;
+  handleSubmit: (values: ProductFormValues) => Promise<boolean>;
 }
 
 export function useProductSubmit({
@@ -105,7 +105,15 @@ export function useProductSubmit({
   });
 
   const handleSubmit = async (values: ProductFormValues) => {
-    mutation.mutate(values);
+    try {
+      await mutation.mutateAsync(values);
+      return true;
+    } catch {
+      // React Query has already run the mutation's onError handler. Returning a
+      // boolean lets registered assistant saves report the real outcome while
+      // ordinary form submission keeps using the existing toast/form errors.
+      return false;
+    }
   };
 
   return {

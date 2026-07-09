@@ -15,6 +15,10 @@ const PRODUCT_ASSISTANT_ACTION_NAMES = [
   "save_registered_form",
 ] as const;
 const MAX_PRODUCT_ASSISTANT_DRAFT_LENGTH = 20_000;
+const MAX_PRODUCT_ASSISTANT_RESOURCE_ID_LENGTH = 28;
+const MAX_PRODUCT_ASSISTANT_INSTANCE_ID_LENGTH = 10;
+
+let productAssistantSurfaceSequence = 0;
 
 export type ProductAssistantField =
   (typeof PRODUCT_ASSISTANT_SAFE_FIELDS)[number];
@@ -25,6 +29,12 @@ export interface ProductAssistantSurfaceDraft {
   mode: "create" | "edit";
   name?: unknown;
   description?: unknown;
+}
+
+export interface ProductAssistantSurfaceIdentity {
+  mode: "create" | "edit";
+  productId?: string | null;
+  instanceId: string;
 }
 
 export interface ProductAssistantActionResult {
@@ -75,6 +85,35 @@ export const PRODUCT_ASSISTANT_SURFACE_CAPABILITIES: ProductAssistantSurfaceCapa
     actions: [...PRODUCT_ASSISTANT_ACTION_NAMES],
     safeFields: [...PRODUCT_ASSISTANT_SAFE_FIELDS],
   };
+
+export function createProductAssistantSurfaceInstanceId(): string {
+  const randomId = globalThis.crypto?.randomUUID?.().replaceAll("-", "");
+  if (randomId) return randomId.slice(0, MAX_PRODUCT_ASSISTANT_INSTANCE_ID_LENGTH);
+
+  productAssistantSurfaceSequence += 1;
+  return `${Date.now().toString(36)}${productAssistantSurfaceSequence.toString(36)}`
+    .slice(-MAX_PRODUCT_ASSISTANT_INSTANCE_ID_LENGTH);
+}
+
+export function getProductAssistantSurfaceId({
+  mode,
+  productId,
+  instanceId,
+}: ProductAssistantSurfaceIdentity): string {
+  const resourceId = mode === "edit"
+    ? sanitizeAdminAssistantText(
+        productId,
+        MAX_PRODUCT_ASSISTANT_RESOURCE_ID_LENGTH,
+      ) ?? "unresolved"
+    : "new";
+  const safeInstanceId =
+    sanitizeAdminAssistantText(
+      instanceId,
+      MAX_PRODUCT_ASSISTANT_INSTANCE_ID_LENGTH,
+    ) ?? "instance";
+
+  return `product-${mode}:${resourceId}:${safeInstanceId}`;
+}
 
 export function createProductAssistantSurfaceActions(
   surfaceId: string,

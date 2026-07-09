@@ -6,6 +6,8 @@ const MAX_ACTION_FIELD_LENGTH = 80;
 const MAX_ACTION_VALUE_LENGTH = 12_000;
 const MAX_ACTION_ROW_IDS = 100;
 const MAX_ACTION_ROW_ID_LENGTH = 80;
+const MAX_ACTION_EXECUTION_KEY_LENGTH = 240;
+const MAX_CONSUMED_ACTION_EXECUTION_KEYS = 500;
 
 export type AdminAssistantPageActionType =
   | "focus_surface"
@@ -67,12 +69,34 @@ export type AdminAssistantPageActionHandler = (
   action: AdminAssistantPageAction,
 ) => boolean | Promise<boolean>;
 
+export type AdminAssistantPageActionExecutionReason =
+  | "executed"
+  | "invalid_action"
+  | "handler_unavailable"
+  | "already_consumed"
+  | "handler_rejected"
+  | "handler_failed";
+
+export interface AdminAssistantPageActionExecutionResult {
+  ok: boolean;
+  reason: AdminAssistantPageActionExecutionReason;
+}
+
+export interface AdminAssistantPageActionExecutionOptions {
+  /**
+   * Identifies one rendered action proposal. When present, execution is
+   * single-use even if two clicks arrive before the first handler settles.
+   */
+  executionKey?: string;
+}
+
 type ActionHandlerEntry = {
   token: symbol;
   handler: AdminAssistantPageActionHandler;
 };
 
 const pageActionHandlers = new Map<string, ActionHandlerEntry>();
+const consumedActionExecutionKeys = new Set<string>();
 
 export function registerAdminAssistantPageActionHandler(
   id: string,
@@ -98,22 +122,48 @@ export function registerAdminAssistantPageActionHandler(
 
 export async function executeAdminAssistantPageAction(
   action: unknown,
+  options: AdminAssistantPageActionExecutionOptions = {},
 ): Promise<boolean> {
+  return (await executeAdminAssistantPageActionWithResult(action, options)).ok;
+}
+
+export async function executeAdminAssistantPageActionWithResult(
+  action: unknown,
+  options: AdminAssistantPageActionExecutionOptions = {},
+): Promise<AdminAssistantPageActionExecutionResult> {
   const sanitizedAction = sanitizePageAction(action);
-  if (!sanitizedAction) return false;
+  if (!sanitizedAction) {
+    return { ok: false, reason: "invalid_action" };
+  }
 
   const entry = pageActionHandlers.get(sanitizedAction.id);
-  if (!entry) return false;
+  if (!entry) {
+    return { ok: false, reason: "handler_unavailable" };
+  }
+
+  const executionKey = sanitizeExecutionKey(options.executionKey);
+  if (executionKey && consumedActionExecutionKeys.has(executionKey)) {
+    return { ok: false, reason: "already_consumed" };
+  }
+
+  // Consume before awaiting the handler so concurrent duplicate clicks cannot
+  // race through the same visible proposal. A failed attempt stays consumed;
+  // the merchant can request a fresh action after correcting the visible page.
+  if (executionKey) consumeActionExecutionKey(executionKey);
 
   try {
-    return (await entry.handler(sanitizedAction)) === true;
+    const accepted = (await entry.handler(sanitizedAction)) === true;
+    return accepted
+      ? { ok: true, reason: "executed" }
+      : { ok: false, reason: "handler_rejected" };
   } catch {
-    return false;
+    return { ok: false, reason: "handler_failed" };
   }
 }
 
 export function resetAdminAssistantPageActionsForTest(): void {
   pageActionHandlers.clear();
+  consumedActionExecutionKeys.clear();
 }
 
 function sanitizePageAction(action: unknown): AdminAssistantPageAction | null {
@@ -185,6 +235,19 @@ function sanitizeActionId(value: unknown): string | null {
 
 function sanitizeTargetId(value: unknown): string | null {
   return sanitizeAdminAssistantText(value, MAX_ACTION_ID_LENGTH);
+}
+
+function sanitizeExecutionKey(value: unknown): string | null {
+  return sanitizeAdminAssistantText(value, MAX_ACTION_EXECUTION_KEY_LENGTH);
+}
+
+function consumeActionExecutionKey(executionKey: string): void {
+  consumedActionExecutionKeys.add(executionKey);
+  while (consumedActionExecutionKeys.size > MAX_CONSUMED_ACTION_EXECUTION_KEYS) {
+    const oldest = consumedActionExecutionKeys.values().next().value;
+    if (typeof oldest !== "string") break;
+    consumedActionExecutionKeys.delete(oldest);
+  }
 }
 
 function sanitizeFieldName(value: unknown): string | null {

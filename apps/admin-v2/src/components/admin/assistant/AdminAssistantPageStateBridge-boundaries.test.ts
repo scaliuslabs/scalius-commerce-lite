@@ -9,6 +9,10 @@ const PAGE_STATE_FILES = [
   "AdminAssistantPageStateBridge.tsx",
   "page-state.ts",
 ] as const;
+const LAYOUT_PREFERENCE_FILES = [
+  "assistant-layout.ts",
+  "useAdminAssistantLayout.ts",
+] as const;
 
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir)
@@ -27,8 +31,9 @@ function readFiles(files: readonly string[]): string {
     .join("\n");
 }
 
-function readAssistantSource(): string {
+function readAssistantSource(excludedFiles: readonly string[] = []): string {
   return listSourceFiles(ASSISTANT_ROOT)
+    .filter((path) => !excludedFiles.some((file) => path.endsWith(`/${file}`)))
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
 }
@@ -104,8 +109,9 @@ describe("admin assistant page-state source boundary", () => {
     expect(source).not.toMatch(/\.(?:value|checked|selectedOptions|files)\b/);
   });
 
-  it("keeps the visible chat UI off direct MCP, fetch, cookies, and storage", () => {
-    const source = readAssistantSource();
+  it("keeps the visible chat UI off direct MCP, fetch, cookies, and sensitive storage", () => {
+    const source = readAssistantSource(LAYOUT_PREFERENCE_FILES);
+    const layoutSource = readFiles(LAYOUT_PREFERENCE_FILES);
 
     expect(source).not.toContain("/api/assistant/mcp");
     expect(source).not.toContain("fetch(");
@@ -113,5 +119,12 @@ describe("admin assistant page-state source boundary", () => {
     expect(source).not.toContain("localStorage");
     expect(source).not.toContain("sessionStorage");
     expect(source).not.toMatch(/window\.(?:localStorage|sessionStorage)/);
+
+    expect(layoutSource).toContain("scalius:admin-assistant-layout:v1");
+    expect(layoutSource).toContain("window.localStorage");
+    expect(layoutSource).not.toContain("sessionStorage");
+    expect(layoutSource).not.toContain("document.cookie");
+    expect(layoutSource).not.toContain("fetch(");
+    expect(layoutSource).not.toMatch(/(?:messages|history|pageContext|credential|token)/);
   });
 });
