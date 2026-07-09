@@ -4,14 +4,20 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
+  type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type SyntheticEvent,
 } from "react";
 import {
-  BookOpenText,
+  AlertCircle,
   Grip,
+  Loader2,
+  Maximize2,
   MessageCircle,
-  Search,
-  ShieldCheck,
+  Minimize2,
+  SendHorizontal,
+  Sparkles,
   X,
 } from "lucide-react";
 
@@ -20,24 +26,39 @@ import {
   STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL,
   type StorefrontAssistantPageContextSnapshot,
 } from "@/lib/assistant-page-context";
+import { resolveStorefrontAssistantNavigationTarget } from "@/lib/assistant-page-context.client";
 import { cn } from "@scalius/shared/utils";
+
+import { AssistantLayoutControls } from "./AssistantLayoutControls";
+import { AssistantMessageParts } from "./AssistantMessageParts";
+import { StorefrontAssistantContext } from "./StorefrontAssistantContext";
+import {
+  ASSISTANT_LAUNCHER_SIZE,
+  type AssistantPanelMode,
+} from "./assistant-geometry";
+import {
+  MAX_HISTORY_MESSAGES,
+  MAX_MESSAGE_CHARS,
+  cleanAssistantDisplayText,
+  createTextMessage,
+  messageToHistoryContent,
+  sendStorefrontAssistantMessage,
+  type StorefrontAssistantUiMessage,
+} from "./storefront-assistant-chat";
+import { useAssistantGeometry } from "./useAssistantGeometry";
+import "./storefront-assistant.css";
 
 type StorefrontAssistantBridge = {
   getContext?: () => StorefrontAssistantPageContextSnapshot | null;
+  navigate?: (target: unknown) => boolean;
 };
 
-const LAUNCHER_SIZE = 56;
-const EDGE_GAP = 16;
-const DRAG_THRESHOLD = 6;
-const PANEL_ID = "storefront-assistant-panel";
-const SENSITIVE_PAGE_KINDS = new Set(["account", "checkout"]);
-
-type LauncherPosition = {
-  x: number;
-  y: number;
+type AssistantStatus = {
+  kind: "idle" | "working" | "success" | "disabled" | "error";
+  message: string;
 };
 
-type DragState = {
+type LauncherDragState = {
   pointerId: number;
   startX: number;
   startY: number;
@@ -46,110 +67,130 @@ type DragState = {
   moved: boolean;
 };
 
+type ResizeState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startHeight: number;
+};
+
+const PANEL_ID = "storefront-assistant-panel";
+const COMPOSER_ID = "storefront-assistant-message";
+const LAUNCHER_HELP_ID = "storefront-assistant-launcher-help";
+const DRAG_THRESHOLD = 6;
+const KEYBOARD_MOVE_STEP = 32;
+const KEYBOARD_RESIZE_STEP = 24;
+
+function getAssistantBridge(): StorefrontAssistantBridge | null {
+  if (typeof window === "undefined") return null;
+  return (
+    (
+      window as Window & {
+        __SCALIUS_STOREFRONT_ASSISTANT__?: StorefrontAssistantBridge;
+      }
+    ).__SCALIUS_STOREFRONT_ASSISTANT__ ?? null
+  );
+}
+
 function readPublishedContext(): StorefrontAssistantPageContextSnapshot | null {
   if (typeof window === "undefined") return null;
-
-  const assistantWindow = window as Window & {
-    __SCALIUS_STOREFRONT_ASSISTANT__?: StorefrontAssistantBridge;
-  };
-  const bridgeContext =
-    assistantWindow.__SCALIUS_STOREFRONT_ASSISTANT__?.getContext?.() ?? null;
-  if (bridgeContext) return bridgeContext;
-
-  return window[STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL] ?? null;
+  return (
+    getAssistantBridge()?.getContext?.() ??
+    window[STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL] ??
+    null
+  );
 }
 
-function clampLauncherPosition(position: LauncherPosition): LauncherPosition {
-  if (typeof window === "undefined") return position;
-
-  return {
-    x: Math.min(
-      Math.max(position.x, EDGE_GAP),
-      Math.max(EDGE_GAP, window.innerWidth - LAUNCHER_SIZE - EDGE_GAP),
-    ),
-    y: Math.min(
-      Math.max(position.y, EDGE_GAP),
-      Math.max(EDGE_GAP, window.innerHeight - LAUNCHER_SIZE - EDGE_GAP),
-    ),
-  };
-}
-
-function formatPageKind(
+function suggestedPrompts(
   context: StorefrontAssistantPageContextSnapshot | null,
-): string {
-  if (!context) return "Waiting for page context";
-  return `${context.page.kind.charAt(0).toUpperCase()}${context.page.kind.slice(
-    1,
-  )} page`;
-}
-
-function formatPublicPageLabel(
-  context: StorefrontAssistantPageContextSnapshot | null,
-): string {
-  if (!context) return "No public page snapshot is published yet.";
-  if (SENSITIVE_PAGE_KINDS.has(context.page.kind)) {
-    return "This is a sensitive storefront flow, so only the page type is shown here.";
-  }
-
-  const title = context.page.title || "Untitled page";
-  return `${title} (${context.page.path})`;
-}
-
-function formatCanonicalPath(
-  context: StorefrontAssistantPageContextSnapshot | null,
-): string | null {
-  const canonicalUrl = context?.page.canonicalUrl;
-  if (!canonicalUrl) return null;
-
-  try {
-    return new URL(canonicalUrl).pathname;
-  } catch {
-    return null;
+): string[] {
+  switch (context?.page.kind) {
+    case "product":
+      return [
+        "What am I looking at?",
+        "Compare similar products",
+        "Is this available?",
+      ];
+    case "category":
+    case "collection":
+    case "search":
+      return [
+        "Help me choose",
+        "Compare the best options",
+        "What is in stock?",
+      ];
+    case "cart":
+      return [
+        "Review my cart",
+        "Check item availability",
+        "Suggest an alternative",
+      ];
+    default:
+      return [
+        "What can I find here?",
+        "Help me choose a product",
+        "Show popular options",
+      ];
   }
 }
 
-function formatCartSummary(
-  context: StorefrontAssistantPageContextSnapshot | null,
-): string {
-  if (!context) return "Cart summary unavailable.";
+function launcherMovementMessage(deltaX: number, deltaY: number): string {
+  if (deltaX < 0) return "Assistant launcher moved left.";
+  if (deltaX > 0) return "Assistant launcher moved right.";
+  if (deltaY < 0) return "Assistant launcher moved up.";
+  return "Assistant launcher moved down.";
+}
 
-  const { totalItems, lineCount, truncated, hasDiscount } = context.cart;
-  const itemLabel = totalItems === 1 ? "item" : "items";
-  const lineLabel = lineCount === 1 ? "line" : "lines";
-  const discountLabel = hasDiscount ? "Discount present." : "No discount code visible.";
-  const truncatedLabel = truncated ? " Summary is bounded." : "";
-
-  return `${totalItems} ${itemLabel} across ${lineCount} ${lineLabel}. ${discountLabel}${truncatedLabel}`;
+function statusClasses(kind: AssistantStatus["kind"]): string {
+  if (kind === "success") {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200";
+  }
+  if (kind === "disabled") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100";
+  }
+  return "border-destructive/30 bg-destructive/10 text-destructive";
 }
 
 export default function StorefrontAssistantBubble() {
+  const layout = useAssistantGeometry();
   const [isOpen, setIsOpen] = useState(false);
+  const [mobileFullscreen, setMobileFullscreen] = useState(false);
   const [context, setContext] =
     useState<StorefrontAssistantPageContextSnapshot | null>(null);
-  const [position, setPosition] = useState<LauncherPosition | null>(null);
-  const [panelSide, setPanelSide] = useState<"left" | "right">("right");
-  const shellRef = useRef<HTMLDivElement>(null);
-  const dragStateRef = useRef<DragState | null>(null);
-  const suppressClickRef = useRef(false);
+  const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<StorefrontAssistantUiMessage[]>([]);
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<AssistantStatus>({
+    kind: "idle",
+    message: "Ready for public catalog questions.",
+  });
+  const [launcherAnnouncement, setLauncherAnnouncement] = useState("");
+  const launcherRef = useRef<HTMLButtonElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const conversationEndRef = useRef<HTMLDivElement>(null);
+  const launcherDragRef = useRef<LauncherDragState | null>(null);
+  const resizeRef = useRef<ResizeState | null>(null);
+  const suppressLauncherClickRef = useRef(false);
+  const wasOpenRef = useRef(false);
+  const requestAbortRef = useRef<AbortController | null>(null);
 
   const refreshContext = useCallback(() => {
-    setContext(readPublishedContext());
+    const nextContext = readPublishedContext();
+    setContext(nextContext);
+    return nextContext;
   }, []);
 
   useEffect(() => {
     refreshContext();
-
     const handleContextChange = (
       event: CustomEvent<StorefrontAssistantPageContextSnapshot>,
-    ) => {
-      setContext(event.detail);
-    };
+    ) => setContext(event.detail);
 
     window.addEventListener(
       STOREFRONT_ASSISTANT_PAGE_CONTEXT_EVENT,
       handleContextChange as EventListener,
     );
-
     return () => {
       window.removeEventListener(
         STOREFRONT_ASSISTANT_PAGE_CONTEXT_EVENT,
@@ -159,67 +200,168 @@ export default function StorefrontAssistantBubble() {
   }, [refreshContext]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    refreshContext();
+    if (isOpen) refreshContext();
   }, [isOpen, refreshContext]);
 
   useEffect(() => {
-    if (!position) return;
-
-    const handleResize = () => {
-      setPosition((current) =>
-        current ? clampLauncherPosition(current) : current,
-      );
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [position]);
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = isOpen;
+    if (isOpen && !wasOpen) {
+      window.requestAnimationFrame(() => composerRef.current?.focus());
+    } else if (!isOpen && wasOpen) {
+      window.requestAnimationFrame(() => launcherRef.current?.focus());
+    }
+  }, [isOpen]);
 
   useEffect(() => {
-    const rect = shellRef.current?.getBoundingClientRect();
-    if (!rect || typeof window === "undefined") return;
-    setPanelSide(rect.left < window.innerWidth / 2 ? "left" : "right");
-  }, [isOpen, position]);
+    conversationEndRef.current?.scrollIntoView({ block: "nearest" });
+  }, [messages, sending]);
 
-  const contextFacts = useMemo(() => {
-    const facts = [
-      {
-        icon: BookOpenText,
-        label: "Page",
-        value: formatPublicPageLabel(context),
-      },
-      {
-        icon: Search,
-        label: "Route",
-        value: formatPageKind(context),
-      },
-      {
-        icon: ShieldCheck,
-        label: "Cart",
-        value: formatCartSummary(context),
-      },
-    ];
+  useEffect(
+    () => () => {
+      requestAbortRef.current?.abort();
+    },
+    [],
+  );
 
-    const canonicalPath = formatCanonicalPath(context);
-    if (canonicalPath && !SENSITIVE_PAGE_KINDS.has(context?.page.kind ?? "")) {
-      facts.splice(2, 0, {
-        icon: Search,
-        label: "Canonical",
-        value: canonicalPath,
+  const prompts = useMemo(() => suggestedPrompts(context), [context]);
+  const panelStyle = {
+    "--assistant-panel-left": `${layout.panelRect.left}px`,
+    "--assistant-panel-top": `${layout.panelRect.top}px`,
+    "--assistant-panel-width": `${layout.panelRect.width}px`,
+    "--assistant-panel-height": `${layout.panelRect.height}px`,
+  } as CSSProperties;
+  const launcherStyle = layout.ready
+    ? ({
+        left: `${layout.geometry.launcherX}px`,
+        top: `${layout.geometry.launcherY}px`,
+      } satisfies CSSProperties)
+    : undefined;
+
+  const resolveNavigation = useCallback((path: string): string | null => {
+    if (typeof window === "undefined") return null;
+    return resolveStorefrontAssistantNavigationTarget(
+      path,
+      window.location.origin,
+    );
+  }, []);
+
+  const canNavigate = useCallback(
+    (path: string) => resolveNavigation(path) !== null,
+    [resolveNavigation],
+  );
+
+  const handleNavigate = useCallback(
+    (path: string, label: string) => {
+      const target = resolveNavigation(path);
+      if (!target) {
+        setStatus({
+          kind: "error",
+          message:
+            "That destination is not available from the assistant. Nothing changed.",
+        });
+        return;
+      }
+
+      const navigated = getAssistantBridge()?.navigate?.(target) === true;
+      setStatus({
+        kind: navigated ? "success" : "error",
+        message: navigated
+          ? `${label} requested. Review the destination before continuing.`
+          : "Navigation is unavailable. Use the store menu or search instead.",
       });
+    },
+    [resolveNavigation],
+  );
+
+  const closePanel = useCallback(() => {
+    setIsOpen(false);
+    setMobileFullscreen(false);
+  }, []);
+
+  async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const message = cleanAssistantDisplayText(draft, MAX_MESSAGE_CHARS);
+    if (!message || sending || typeof window === "undefined") return;
+
+    const currentContext = refreshContext();
+    const userMessage = createTextMessage("user", message);
+    const history = messages
+      .slice(-MAX_HISTORY_MESSAGES)
+      .map((entry) => ({
+        role: entry.role,
+        content: messageToHistoryContent(entry),
+      }))
+      .filter((entry) => entry.content.length > 0);
+
+    setMessages((current) => [...current, userMessage]);
+    setDraft("");
+    setSending(true);
+    setStatus({
+      kind: "working",
+      message: "Looking through the public catalog.",
+    });
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
+
+    try {
+      const result = await sendStorefrontAssistantMessage({
+        message,
+        pageContext: currentContext,
+        history,
+        origin: window.location.origin,
+        signal: controller.signal,
+      });
+      if (result.status === "ok") {
+        setMessages((current) => [...current, result.message]);
+        setStatus({
+          kind: "idle",
+          message: "Ready for public catalog questions.",
+        });
+      } else {
+        setStatus({ kind: result.status, message: result.message });
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setStatus({
+        kind: "error",
+        message:
+          "The assistant could not connect. Nothing changed; you can keep browsing and check out manually.",
+      });
+    } finally {
+      if (requestAbortRef.current === controller)
+        requestAbortRef.current = null;
+      setSending(false);
     }
+  }
 
-    return facts;
-  }, [context]);
-
-  const beginDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const rect = shellRef.current?.getBoundingClientRect();
-    if (!rect || (event.pointerType === "mouse" && event.button !== 0)) {
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing
+    ) {
       return;
     }
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
+  }
 
-    dragStateRef.current = {
+  function handlePanelKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    closePanel();
+  }
+
+  function choosePrompt(prompt: string) {
+    setDraft(prompt);
+    composerRef.current?.focus();
+  }
+
+  function beginLauncherDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    launcherDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
@@ -227,163 +369,396 @@ export default function StorefrontAssistantBubble() {
       offsetY: event.clientY - rect.top,
       moved: false,
     };
-    setPosition({ x: rect.left, y: rect.top });
-    shellRef.current?.setPointerCapture(event.pointerId);
-  };
+    layout.setLauncher(rect.left, rect.top);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
 
-  const continueDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const dragState = dragStateRef.current;
-    if (!dragState || dragState.pointerId !== event.pointerId) return;
-
+  function continueLauncherDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = launcherDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
     if (
-      Math.abs(event.clientX - dragState.startX) > DRAG_THRESHOLD ||
-      Math.abs(event.clientY - dragState.startY) > DRAG_THRESHOLD
+      Math.abs(event.clientX - drag.startX) > DRAG_THRESHOLD ||
+      Math.abs(event.clientY - drag.startY) > DRAG_THRESHOLD
     ) {
-      dragState.moved = true;
+      drag.moved = true;
     }
+    layout.setLauncher(
+      event.clientX - drag.offsetX,
+      event.clientY - drag.offsetY,
+    );
+  }
 
-    const next = clampLauncherPosition({
-      x: event.clientX - dragState.offsetX,
-      y: event.clientY - dragState.offsetY,
-    });
+  function endLauncherDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = launcherDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    suppressLauncherClickRef.current = drag.moved;
+    launcherDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (drag.moved)
+      setLauncherAnnouncement("Assistant launcher position saved.");
+  }
 
-    setPosition(next);
-  };
-
-  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const dragState = dragStateRef.current;
-    if (!dragState || dragState.pointerId !== event.pointerId) return;
-
-    suppressClickRef.current = dragState.moved;
-    dragStateRef.current = null;
-    shellRef.current?.releasePointerCapture(event.pointerId);
-  };
-
-  const togglePanel = () => {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false;
+  function handleLauncherClick() {
+    if (suppressLauncherClickRef.current) {
+      suppressLauncherClickRef.current = false;
       return;
     }
+    setIsOpen(true);
+  }
 
-    setIsOpen((value) => !value);
-  };
+  function handleLauncherKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const movement: Record<string, [number, number]> = {
+      ArrowLeft: [-KEYBOARD_MOVE_STEP, 0],
+      ArrowRight: [KEYBOARD_MOVE_STEP, 0],
+      ArrowUp: [0, -KEYBOARD_MOVE_STEP],
+      ArrowDown: [0, KEYBOARD_MOVE_STEP],
+    };
+    const delta = movement[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    layout.moveLauncher(delta[0], delta[1]);
+    setLauncherAnnouncement(launcherMovementMessage(delta[0], delta[1]));
+  }
+
+  function beginResize(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    resizeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: layout.geometry.panelWidth,
+      startHeight: layout.geometry.panelHeight,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function continueResize(event: ReactPointerEvent<HTMLButtonElement>) {
+    const resize = resizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    const direction = layout.geometry.mode === "dock-right" ? -1 : 1;
+    layout.setPanelSize(
+      resize.startWidth + (event.clientX - resize.startX) * direction,
+      resize.startHeight + (event.clientY - resize.startY),
+    );
+  }
+
+  function endResize(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (resizeRef.current?.pointerId !== event.pointerId) return;
+    resizeRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleResizeKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const resizeByKey: Record<string, [number, number]> = {
+      ArrowLeft: [-KEYBOARD_RESIZE_STEP, 0],
+      ArrowRight: [KEYBOARD_RESIZE_STEP, 0],
+      ArrowUp: [0, KEYBOARD_RESIZE_STEP],
+      ArrowDown: [0, -KEYBOARD_RESIZE_STEP],
+    };
+    const delta = resizeByKey[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    layout.resizePanel(delta[0], delta[1]);
+  }
+
+  function changeMode(mode: AssistantPanelMode) {
+    layout.setMode(mode);
+    setStatus({
+      kind: "success",
+      message:
+        mode === "floating"
+          ? "Assistant panel is floating."
+          : `Assistant panel docked ${mode === "dock-left" ? "left" : "right"}.`,
+    });
+  }
 
   return (
-    <div
-      ref={shellRef}
-      className={cn(
-        "fixed z-[80] flex touch-none select-none flex-col items-end gap-3",
-        position ? "" : "bottom-4 right-4 sm:bottom-6 sm:right-6",
-      )}
-      style={
-        position
-          ? {
-              left: `${position.x}px`,
-              top: `${position.y}px`,
-            }
-          : undefined
-      }
-      onPointerMove={continueDrag}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
-    >
-      {isOpen && (
-        <section
+    <>
+      {isOpen ? (
+        <aside
           id={PANEL_ID}
+          role="dialog"
+          aria-modal="false"
           aria-labelledby="storefront-assistant-title"
-          className={cn(
-            "absolute bottom-[calc(100%+0.75rem)] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-2xl shadow-foreground/15",
-            panelSide === "left" ? "left-0 items-start" : "right-0 items-end",
-          )}
+          data-mode={layout.geometry.mode}
+          data-mobile-fullscreen={mobileFullscreen ? "true" : "false"}
+          className="sf-assistant-panel fixed z-[90] flex flex-col overflow-hidden border border-border bg-popover text-popover-foreground shadow-2xl"
+          style={panelStyle}
+          onKeyDown={handlePanelKeyDown}
         >
-          <div className="border-b border-border bg-gradient-to-r from-primary/12 via-background to-background px-4 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase text-primary">
-                  Read-only shell
+          <header className="relative border-b border-border bg-background px-4 py-3">
+            <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent opacity-80" />
+            <div className="flex items-center gap-3">
+              <span className="relative flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                <Sparkles className="size-4" aria-hidden="true" />
+                <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-background bg-emerald-500" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                  Shopping assistant
                 </p>
                 <h2
                   id="storefront-assistant-title"
-                  className="mt-1 text-sm font-semibold text-foreground"
+                  className="truncate text-base font-semibold tracking-tight text-foreground"
                 >
-                  Catalog assistant is not ready
+                  Find what fits
                 </h2>
               </div>
+
+              <button
+                type="button"
+                aria-label={
+                  mobileFullscreen ? "Exit full screen" : "Open full screen"
+                }
+                title={mobileFullscreen ? "Exit full screen" : "Full screen"}
+                className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:hidden"
+                onClick={() => setMobileFullscreen((current) => !current)}
+              >
+                {mobileFullscreen ? (
+                  <Minimize2 className="size-4" aria-hidden="true" />
+                ) : (
+                  <Maximize2 className="size-4" aria-hidden="true" />
+                )}
+              </button>
+
+              <div className="max-sm:hidden">
+                <AssistantLayoutControls
+                  mode={layout.geometry.mode}
+                  onModeChange={changeMode}
+                  onResize={layout.resizePanel}
+                  onReset={layout.reset}
+                />
+              </div>
+
               <button
                 type="button"
                 aria-label="Close storefront assistant"
-                className="rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => setIsOpen(false)}
+                title="Close assistant"
+                className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={closePanel}
               >
-                <X className="h-4 w-4" aria-hidden="true" />
+                <X className="size-4" aria-hidden="true" />
               </button>
             </div>
-          </div>
+          </header>
 
-          <div className="space-y-3 px-4 py-4">
-            <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm leading-6 text-foreground">
-              Chat is not connected to a model or backend yet. This shell can
-              only summarize the public page context already published by the
-              storefront.
-            </div>
+          <StorefrontAssistantContext context={context} />
 
-            <div className="space-y-2">
-              {contextFacts.map(({ icon: Icon, label, value }) => (
+          <div
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+            aria-label="Storefront assistant conversation"
+            className="sf-assistant-conversation min-h-0 flex-1 overflow-y-auto bg-background px-4 py-4"
+          >
+            {messages.length === 0 ? (
+              <section className="mx-auto flex min-h-full max-w-lg flex-col justify-center py-4">
+                <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                  <p className="text-sm font-semibold text-foreground">
+                    A guide for this store, not an autopilot
+                  </p>
+                  <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+                    Ask for recommendations, comparisons, availability, or help
+                    understanding this page. The assistant cannot checkout or
+                    edit your cart yet; use the store controls to finish those
+                    steps manually.
+                  </p>
+                </div>
                 <div
-                  key={label}
-                  className="grid grid-cols-[1rem_minmax(0,1fr)] gap-2 rounded-md border border-border/70 bg-background/70 px-3 py-2"
+                  className="mt-3 flex flex-wrap gap-2"
+                  aria-label="Suggested questions"
                 >
-                  <Icon
-                    className="mt-0.5 h-4 w-4 text-primary"
+                  {prompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      className="min-h-9 rounded-full border border-border bg-background px-3 text-left text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => choosePrompt(prompt)}
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <ol className="grid gap-4">
+                {messages.map((message) => (
+                  <li
+                    key={message.id}
+                    className={cn(
+                      "min-w-0",
+                      message.role === "user"
+                        ? "ml-auto max-w-[85%]"
+                        : "mr-auto w-full",
+                    )}
+                  >
+                    {message.role === "user" ? (
+                      <div className="rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm leading-6 text-primary-foreground shadow-sm">
+                        <p className="whitespace-pre-wrap break-words">
+                          {messageToHistoryContent(message)}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-[1.75rem_minmax(0,1fr)] items-start gap-2.5">
+                        <span className="mt-0.5 flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+                          <Sparkles className="size-3.5" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0 rounded-2xl rounded-tl-md border border-border bg-popover p-3 shadow-sm">
+                          <AssistantMessageParts
+                            parts={message.parts}
+                            canNavigate={canNavigate}
+                            onNavigate={handleNavigate}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+
+            {sending ? (
+              <div className="mt-4 grid grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-2.5 text-sm text-muted-foreground">
+                <span className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+                  <Loader2
+                    className="size-3.5 animate-spin motion-reduce:animate-none"
                     aria-hidden="true"
                   />
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-medium uppercase text-muted-foreground">
-                      {label}
-                    </p>
-                    <p className="break-words text-sm leading-5 text-foreground">
-                      {value}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-xs leading-5 text-muted-foreground">
-              It cannot complete checkout, orders, account changes, payments,
-              recovery, support requests, or cart edits.
-            </p>
-
-            <div className="flex items-center justify-between gap-3 rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-              <span>No conversation is sent anywhere.</span>
-              <span aria-hidden="true">Catalog only</span>
-            </div>
+                </span>
+                <span>Looking through the catalog…</span>
+              </div>
+            ) : null}
+            <div ref={conversationEndRef} aria-hidden="true" />
           </div>
-        </section>
-      )}
 
-      <button
-        type="button"
-        aria-label={isOpen ? "Close storefront assistant" : "Open storefront assistant"}
-        aria-controls={PANEL_ID}
-        aria-expanded={isOpen}
-        className="group relative flex h-14 w-14 items-center justify-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-xl shadow-foreground/20 transition hover:-translate-y-0.5 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-0"
-        onPointerDown={beginDrag}
-        onClick={togglePanel}
-      >
-        <span className="absolute inset-1 rounded-full border border-primary-foreground/20" />
-        <Grip
-          className="absolute -left-1 -top-1 h-5 w-5 rounded-full bg-background p-1 text-muted-foreground opacity-85 shadow-sm"
-          aria-hidden="true"
-        />
-        <MessageCircle
+          {status.kind !== "idle" && status.kind !== "working" ? (
+            <div
+              role={status.kind === "error" ? "alert" : "status"}
+              className={cn(
+                "mx-4 mb-2 flex items-start gap-2 rounded-xl border px-3 py-2 text-xs leading-5",
+                statusClasses(status.kind),
+              )}
+            >
+              <AlertCircle
+                className="mt-0.5 size-3.5 shrink-0"
+                aria-hidden="true"
+              />
+              <span>{status.message}</span>
+            </div>
+          ) : null}
+          <p className="sr-only" role="status" aria-live="polite">
+            {status.message}
+          </p>
+
+          <form
+            method="post"
+            noValidate
+            className="border-t border-border bg-background px-4 py-3"
+            onSubmit={handleSubmit}
+          >
+            <label htmlFor={COMPOSER_ID} className="sr-only">
+              Message storefront assistant
+            </label>
+            <div className="flex items-end gap-2 rounded-2xl border border-input bg-muted/25 p-1.5 shadow-sm transition focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-ring/30">
+              <textarea
+                ref={composerRef}
+                id={COMPOSER_ID}
+                aria-label="Message storefront assistant"
+                value={draft}
+                maxLength={MAX_MESSAGE_CHARS}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleComposerKeyDown}
+                placeholder="Ask about products or this page…"
+                rows={2}
+                disabled={sending}
+                className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={sending || draft.trim().length === 0}
+                aria-label="Send storefront assistant message"
+              >
+                {sending ? (
+                  <Loader2
+                    className="size-4 animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <SendHorizontal className="size-4" aria-hidden="true" />
+                )}
+              </button>
+            </div>
+            <p className="mt-1.5 text-center text-[10px] leading-4 text-muted-foreground">
+              Don’t share passwords, one-time codes, payment details, or receipt
+              links.
+            </p>
+          </form>
+
+          <button
+            type="button"
+            aria-label="Resize assistant panel. Use arrow keys or the layout menu."
+            title="Drag to resize; arrow keys also resize"
+            className="sf-assistant-resize-handle absolute z-10 size-7 touch-none rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onPointerDown={beginResize}
+            onPointerMove={continueResize}
+            onPointerUp={endResize}
+            onPointerCancel={endResize}
+            onKeyDown={handleResizeKeyDown}
+          >
+            <span className="sr-only">Resize assistant panel</span>
+          </button>
+        </aside>
+      ) : (
+        <div
           className={cn(
-            "h-6 w-6 transition-transform duration-200",
-            isOpen ? "scale-90" : "group-hover:scale-105",
+            "sf-assistant-launcher-shell fixed z-[90]",
+            !layout.ready && "bottom-4 right-4 sm:bottom-6 sm:right-6",
           )}
-          aria-hidden="true"
-        />
-      </button>
-    </div>
+          style={launcherStyle}
+        >
+          <p id={LAUNCHER_HELP_ID} className="sr-only">
+            Drag to reposition. With the launcher focused, use arrow keys to
+            move it without dragging.
+          </p>
+          <button
+            ref={launcherRef}
+            type="button"
+            aria-label="Open storefront assistant"
+            aria-controls={PANEL_ID}
+            aria-expanded="false"
+            aria-describedby={LAUNCHER_HELP_ID}
+            className="group relative flex items-center justify-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-xl shadow-foreground/20 transition hover:-translate-y-0.5 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none"
+            style={{
+              width: ASSISTANT_LAUNCHER_SIZE,
+              height: ASSISTANT_LAUNCHER_SIZE,
+            }}
+            onPointerDown={beginLauncherDrag}
+            onPointerMove={continueLauncherDrag}
+            onPointerUp={endLauncherDrag}
+            onPointerCancel={endLauncherDrag}
+            onKeyDown={handleLauncherKeyDown}
+            onClick={handleLauncherClick}
+          >
+            <span className="absolute inset-1 rounded-full border border-primary-foreground/20" />
+            <Grip
+              className="absolute -left-1 -top-1 size-5 rounded-full bg-background p-1 text-muted-foreground shadow-sm"
+              aria-hidden="true"
+            />
+            <MessageCircle
+              className="size-6 transition-transform group-hover:scale-105 motion-reduce:transition-none"
+              aria-hidden="true"
+            />
+          </button>
+          <p className="sr-only" role="status" aria-live="polite">
+            {launcherAnnouncement}
+          </p>
+        </div>
+      )}
+    </>
   );
 }

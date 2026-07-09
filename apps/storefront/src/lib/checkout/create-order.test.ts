@@ -16,9 +16,9 @@ const checkoutData = {
   notes: "",
   shippingCharge: "60",
   cartItems: JSON.stringify({
-    "prod_1:default": {
+    "line:v2:prod_1:variant:var_1": {
       id: "prod_1",
-      variantId: "default",
+      variantId: "var_1",
       quantity: 2,
       price: 150,
       name: "Cotton Panjabi",
@@ -52,9 +52,9 @@ describe("createOrder", () => {
     expect(body).not.toHaveProperty("initialPaymentSession");
     expect(body.items).toEqual([
       expect.objectContaining({
-        cartKey: "prod_1:default",
+        cartKey: "line:v2:prod_1:variant:var_1",
         productId: "prod_1",
-        variantId: null,
+        variantId: "var_1",
         quantity: 2,
         price: 150,
         productName: "Cotton Panjabi",
@@ -62,6 +62,26 @@ describe("createOrder", () => {
       }),
     ]);
   });
+
+  it.each([undefined, "", "default"])(
+    "rejects a non-persisted checkout variant (%s) before the order proxy",
+    async (variantId) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const item: Record<string, unknown> = {
+        id: "prod_1",
+        quantity: 1,
+        price: 150,
+      };
+      if (variantId !== undefined) item.variantId = variantId;
+
+      await expect(createOrder({
+        ...checkoutData,
+        cartItems: JSON.stringify({ line_1: item }),
+      }, "cod")).rejects.toThrow("A checkout cart item is missing its saved product variant.");
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not request an initial payment session for online methods by default", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({

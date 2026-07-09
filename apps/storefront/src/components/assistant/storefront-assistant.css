@@ -1,0 +1,101 @@
+.sf-assistant-panel {
+  left: var(--assistant-panel-left);
+  top: var(--assistant-panel-top);
+  width: var(--assistant-panel-width);
+  height: var(--assistant-panel-height);
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  border-radius: 1rem;
+  isolation: isolate;
+  animation: sf-assistant-enter 160ms ease-out;
+}
+
+.sf-assistant-panel[data-mode="dock-left"] {
+  left: 1rem;
+  right: auto;
+}
+
+.sf-assistant-panel[data-mode="dock-right"] {
+  right: 1rem;
+  left: auto;
+}
+
+.sf-assistant-conversation {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.sf-assistant-resize-handle {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+  background: linear-gradient(
+    135deg,
+    transparent 0 48%,
+    color-mix(in oklab, var(--muted-foreground) 55%, transparent) 49% 55%,
+    transparent 56% 66%,
+    color-mix(in oklab, var(--muted-foreground) 55%, transparent) 67% 73%,
+    transparent 74%
+  );
+}
+
+.sf-assistant-panel[data-mode="dock-right"] .sf-assistant-resize-handle {
+  right: auto;
+  left: 0;
+  cursor: nesw-resize;
+  transform: scaleX(-1);
+}
+
+.sf-assistant-launcher-shell button {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@keyframes sf-assistant-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 639px) {
+  .sf-assistant-panel {
+    inset: auto 0 0 !important;
+    width: 100% !important;
+    height: min(82dvh, 46rem) !important;
+    max-width: none;
+    max-height: 100dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 1.25rem 1.25rem 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .sf-assistant-panel[data-mobile-fullscreen="true"] {
+    height: 100dvh !important;
+    border-radius: 0;
+  }
+
+  .sf-assistant-resize-handle {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-assistant-panel {
+    animation: none;
+  }
+}
+
+@media print {
+  .sf-assistant-panel,
+  .sf-assistant-launcher-shell {
+    display: none !important;
+  }
+}

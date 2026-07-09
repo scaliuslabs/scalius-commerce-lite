@@ -26,7 +26,7 @@ export type InitialPaymentSession =
 
 type CheckoutCartLine = {
   id: string;
-  variantId?: string;
+  variantId: string;
   quantity: number;
   price: number;
   name?: string;
@@ -79,6 +79,13 @@ function variantLabelForCartLine(item: CheckoutCartLine): string | null {
     .filter((part): part is string => typeof part === "string" && part.trim() !== "")
     .map((part) => part.trim());
   return parts.length > 0 ? parts.join(" / ") : null;
+}
+
+function readPersistedVariantId(value: unknown): string {
+  if (typeof value !== "string" || value.trim() === "" || value.trim() === "default") {
+    throw new Error("A checkout cart item is missing its saved product variant.");
+  }
+  return value.trim();
 }
 
 function extractCartIssues(payload: ErrorPayload): CartValidationIssue[] {
@@ -151,7 +158,7 @@ export async function createOrder(
   const items = Object.entries(cartItems).map(([cartKey, item]) => ({
     cartKey,
     productId: item.id,
-    variantId: item.variantId && item.variantId !== "default" ? item.variantId : null,
+    variantId: readPersistedVariantId(item.variantId),
     quantity: item.quantity,
     price: item.price,
     productName: typeof item.name === "string" ? item.name : null,

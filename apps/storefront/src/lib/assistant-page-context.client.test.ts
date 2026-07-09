@@ -21,6 +21,7 @@ import {
   STOREFRONT_ASSISTANT_BRIDGE_GLOBAL,
   installStorefrontAssistantPageContextBridge,
   publishStorefrontAssistantPageContext,
+  registerStorefrontAssistantSurface,
   resolveStorefrontAssistantNavigationTarget,
 } from "./assistant-page-context.client";
 
@@ -43,6 +44,8 @@ const emptyCart: CartStore = {
   totalItems: 0,
   totalAmount: 0,
   discount: null,
+  revision: 0,
+  appliedOperationIds: [],
 };
 
 const originalLocationAssign = window.location.assign;
@@ -115,6 +118,8 @@ describe("publishStorefrontAssistantPageContext", () => {
       totalItems: 2,
       totalAmount: 251,
       discount: null,
+      revision: 4,
+      appliedOperationIds: [],
     };
     cartStore.set(cartState);
     document.head.innerHTML =
@@ -182,6 +187,58 @@ describe("publishStorefrontAssistantPageContext", () => {
     expect(republished?.page.title).toBe("Widget [redacted-email]");
     expect(Object.isFrozen(republished)).toBe(true);
     expect(window[STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL]).toBe(republished);
+  });
+
+  it("publishes only explicitly registered product-controller surface state", async () => {
+    document.title = "Rice";
+    window.history.replaceState(null, "", "/products/rice");
+    installStorefrontAssistantPageContextBridge();
+
+    const registration = registerStorefrontAssistantSurface({
+      kind: "product",
+      productId: "prod_rice",
+      slug: "rice",
+      selectedOptions: [],
+      displayedPrice: 850,
+      availability: "selection_required",
+    });
+    expect(registration).not.toBeNull();
+    await Promise.resolve();
+
+    const bridge = window[STOREFRONT_ASSISTANT_BRIDGE_GLOBAL];
+    expect(bridge?.getContext()?.surface).toEqual({
+      kind: "product",
+      productId: "prod_rice",
+      slug: "rice",
+      selectedOptions: [],
+      displayedPrice: 850,
+      availability: "selection_required",
+    });
+
+    expect(
+      registration?.update({
+        kind: "product",
+        productId: "prod_rice",
+        slug: "rice",
+        selectedVariantId: "var_2kg",
+        selectedOptions: [{ name: "Weight", label: "2KG" }],
+        displayedPrice: 900,
+        availability: "in_stock",
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    const updated = bridge?.getContext();
+    expect(updated?.surface).toMatchObject({
+      kind: "product",
+      selectedVariantId: "var_2kg",
+      displayedPrice: 900,
+      availability: "in_stock",
+    });
+    expect(Object.isFrozen(updated?.surface)).toBe(true);
+
+    registration?.unregister();
+    await Promise.resolve();
+    expect(bridge?.getContext()?.surface).toBeNull();
   });
 
   it("allows only safe same-origin buyer navigation targets", () => {

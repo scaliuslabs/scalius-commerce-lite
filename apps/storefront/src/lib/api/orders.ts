@@ -43,7 +43,7 @@ export type CartValidationIssue = {
 export type CartValidationRequestItem = {
   cartKey?: string | null;
   productId: string;
-  variantId: string | null;
+  variantId: string;
   quantity: number;
   price: number;
   productName?: string | null;
@@ -57,7 +57,7 @@ export type CartValidationResult = {
     index: number;
     cartKey?: string | null;
     productId: string;
-    variantId: string | null;
+    variantId: string;
     quantity: number;
     unitPrice: number;
     productName: string;

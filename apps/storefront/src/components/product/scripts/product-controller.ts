@@ -2,6 +2,14 @@
 
 import { addToCart, type CartItemOption } from "@/store/cart";
 import {
+  registerStorefrontAssistantSurface,
+  type StorefrontAssistantSurfaceRegistration,
+} from "@/lib/assistant-page-context.client";
+import type {
+  StorefrontAssistantProductAvailability,
+  StorefrontAssistantProductSurface,
+} from "@/lib/assistant-page-context";
+import {
   calculateVariantPrice,
   formatPrice,
   formatDiscountBadge,
@@ -38,6 +46,7 @@ const state = {
   isVariantImagesEnabled: false,
   variantImageAxis: "option2" as "option1" | "option2",
   currentDisplayedImage: "",
+  assistantSurface: null as StorefrontAssistantSurfaceRegistration | null,
 };
 
 const cache = {
@@ -62,6 +71,8 @@ function parseDiscountType(value?: string): DiscountType {
 }
 
 function init() {
+  state.assistantSurface?.unregister();
+  state.assistantSurface = null;
   cache.container = document.getElementById("product-container");
   if (!cache.container) return;
 
@@ -367,6 +378,53 @@ function updatePriceDisplay() {
       cache.discountBadge.classList.add("hidden");
     }
   }
+
+  publishProductAssistantSurface(res.finalPrice);
+}
+
+function productAssistantAvailability(): StorefrontAssistantProductAvailability {
+  if (!state.selection || !state.variantIndex || state.variants.length === 0) {
+    return "unavailable";
+  }
+
+  const { options } = state.variantIndex;
+  const selectionComplete =
+    (!options.hasSize || Boolean(state.selection.selectedSize)) &&
+    (!options.hasColor || Boolean(state.selection.selectedColor));
+  if (!selectionComplete) return "selection_required";
+
+  const validation = validateSelection(state.selection, state.variantIndex);
+  if (validation.valid) return "in_stock";
+  return state.selection.selectedVariant ? "out_of_stock" : "unavailable";
+}
+
+function publishProductAssistantSurface(displayedPrice: number): void {
+  const container = cache.container;
+  if (!container || !state.selection || !state.variantIndex) return;
+
+  const { options } = state.variantIndex;
+  const selectionComplete =
+    (!options.hasSize || Boolean(state.selection.selectedSize)) &&
+    (!options.hasColor || Boolean(state.selection.selectedColor));
+  const surface: StorefrontAssistantProductSurface = {
+    kind: "product",
+    productId: container.dataset.productId || "",
+    ...(container.dataset.productSlug
+      ? { slug: container.dataset.productSlug }
+      : {}),
+    ...(selectionComplete && state.selection.selectedVariant?.id
+      ? { selectedVariantId: state.selection.selectedVariant.id }
+      : {}),
+    selectedOptions: buildSelectedCartOptions(),
+    displayedPrice,
+    availability: productAssistantAvailability(),
+  };
+
+  if (state.assistantSurface) {
+    state.assistantSurface.update(surface);
+    return;
+  }
+  state.assistantSurface = registerStorefrontAssistantSurface(surface);
 }
 
 function optionName(axis: "option1" | "option2"): string {
@@ -425,6 +483,10 @@ function handleAddToCart(redirect: boolean) {
     showToast(validation.error || "Please select options", "error");
     return;
   }
+  if (!validation.variant?.id || validation.variant.id === "default") {
+    showToast("This product option is no longer available.", "error");
+    return;
+  }
 
   const qtyInput = cache.quantityInput;
   const quantity = parseInt(qtyInput?.value || "1");
@@ -468,10 +530,15 @@ function handleAddToCart(redirect: boolean) {
     }
 
     const options = buildSelectedCartOptions();
-    addToCart({
+    const added = addToCart({
       ...cartData.data,
+      variantId: validation.variant.id,
       ...(options.length > 0 ? { options } : {}),
     });
+    if (!added) {
+      showToast("This product option could not be added. Please refresh and try again.", "error");
+      return;
+    }
 
     const pData = extractProductDataFromDOM(container);
     if (pData) {

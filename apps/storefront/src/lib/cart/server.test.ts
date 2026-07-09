@@ -189,74 +189,31 @@ describe("cart server order processing", () => {
     expect(waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
   });
 
-  it("resolves legacy simple-product cart lines through cart validation before COD order creation", async () => {
+  it.each([
+    ["missing", undefined],
+    ["synthetic default", "default"],
+  ])("rejects a %s variant before cart validation or order creation", async (_label, variantId) => {
     const formData = buildCodFormData();
+    const cartItem: Record<string, unknown> = {
+      id: "simple_product",
+      slug: "simple-product",
+      name: "Simple Product",
+      price: 150,
+      quantity: 2,
+    };
+    if (variantId !== undefined) cartItem.variantId = variantId;
     formData.set("cartItems", JSON.stringify({
-      line_1: {
-        id: "simple_product",
-        slug: "simple-product",
-        name: "Simple Product",
-        price: 150,
-        quantity: 2,
-        variantId: "default",
-      },
+      line_1: cartItem,
     }));
-    mocks.validateCartItems.mockResolvedValueOnce({
-      success: true,
-      data: {
-        valid: true,
-        issues: [],
-        items: [
-          {
-            index: 0,
-            cartKey: "line_1",
-            productId: "simple_product",
-            variantId: "var_default_simple",
-            quantity: 2,
-            unitPrice: 150,
-            productName: "Simple Product",
-            variantLabel: null,
-            freeDelivery: false,
-            availableQuantity: null,
-          },
-        ],
-        subtotal: 300,
-        hasFreeDeliveryProduct: false,
-        delivery: {
-          shippingCharge: 60,
-          cityName: "Dhaka",
-          zoneName: "Mirpur",
-          areaName: null,
-        },
-      },
-    });
 
     const result = await processOrder(formData);
 
-    expect(result).toMatchObject({ success: true, orderId: "order_1" });
-    expect(mocks.validateCartItems).toHaveBeenCalledWith(
-      [
-        expect.objectContaining({
-          productId: "simple_product",
-          variantId: null,
-          price: 150,
-        }),
-      ],
-      expect.any(Object),
-    );
-    expect(mocks.createOrder).toHaveBeenCalledWith(
-      expect.objectContaining({
-        items: [
-          expect.objectContaining({
-            productId: "simple_product",
-            variantId: "var_default_simple",
-            quantity: 2,
-            price: 150,
-          }),
-        ],
-      }),
-      { customerSessionToken: undefined },
-    );
+    expect(result).toEqual({
+      success: false,
+      error: { message: 'Cart item "Simple Product" has an invalid or missing saved variant.' },
+    });
+    expect(mocks.validateCartItems).not.toHaveBeenCalled();
+    expect(mocks.createOrder).not.toHaveBeenCalled();
   });
 
   it("validates discounts against the server-validated cart snapshot", async () => {

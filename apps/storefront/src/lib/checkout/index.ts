@@ -118,7 +118,7 @@ type CheckoutCartFreshnessResult = {
 
 type CheckoutCartLine = {
   id?: unknown;
-  variantId?: unknown;
+  variantId: unknown;
   quantity?: unknown;
   price?: unknown;
   name?: unknown;
@@ -151,23 +151,29 @@ export function checkoutCartValidationPayload(
   }
 
   return Object.entries(cartItems)
-    .map<CartValidationRequestItem | null>(([cartKey, item]) => {
-      if (typeof item.id !== "string" || item.id.trim() === "") return null;
+    .map<CartValidationRequestItem>(([cartKey, item]) => {
+      if (typeof item.id !== "string" || item.id.trim() === "") {
+        throw new Error("A checkout cart item is missing its product id.");
+      }
+      if (
+        typeof item.variantId !== "string" ||
+        item.variantId.trim() === "" ||
+        item.variantId.trim() === "default"
+      ) {
+        throw new Error("A checkout cart item is missing its saved product variant.");
+      }
       const quantity = Math.max(1, Math.floor(readNumber(item.quantity, 1)));
       const price = readNumber(item.price);
       return {
         cartKey,
-        productId: item.id,
-        variantId: typeof item.variantId === "string" && item.variantId !== "default"
-          ? item.variantId
-          : null,
+        productId: item.id.trim(),
+        variantId: item.variantId.trim(),
         quantity,
         price,
         productName: typeof item.name === "string" ? item.name : null,
         variantLabel: variantLabelForCheckoutLine(item),
       };
-    })
-    .filter((item): item is CartValidationRequestItem => item !== null);
+    });
 }
 
 function checkoutFreshnessMessage(
@@ -191,7 +197,16 @@ function checkoutFreshnessMessage(
 export async function validateCheckoutCartFreshness(
   data: Record<string, unknown>,
 ): Promise<CheckoutCartFreshnessResult> {
-  const items = checkoutCartValidationPayload(data);
+  let items: CartValidationRequestItem[];
+  try {
+    items = checkoutCartValidationPayload(data);
+  } catch {
+    return {
+      valid: false,
+      issues: [],
+      message: "Your cart contains an item without a saved product variant. Please return to your cart and add it again.",
+    };
+  }
   if (items.length === 0) {
     return {
       valid: false,
@@ -247,9 +262,14 @@ function readCheckoutAttemptId(data: Record<string, unknown>): string | undefine
 function trackAddPaymentInfoForSelection(methodId: string): void {
   if (!checkoutData) return;
 
-  const items = checkoutCartValidationPayload(checkoutData);
+  let items: CartValidationRequestItem[];
+  try {
+    items = checkoutCartValidationPayload(checkoutData);
+  } catch {
+    return;
+  }
   const contents = items.map((item) => ({
-    id: item.variantId ?? item.productId,
+    id: item.variantId,
     quantity: item.quantity,
     item_price: item.price,
   }));

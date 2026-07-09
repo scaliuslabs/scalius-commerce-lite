@@ -113,6 +113,14 @@ const collectionJsonLd =
       numberOfItems: products.length,
     })
   : null;
+const assistantSurface = {
+  kind: "collection" as const,
+  collectionId: collection.id,
+  page: 1,
+  totalResults: products.length,
+  visibleFilters: [],
+  visibleProductIds: products.map((product) => product.id),
+};
 ---
 
 <Layout
@@ -123,6 +131,8 @@ const collectionJsonLd =
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
   noindex={collection.noIndex === true}
+  assistantPageKind="collection"
+  assistantSurface={assistantSurface}
 >
   <Fragment slot="head">
     {collectionJsonLd && <script is:inline type="application/ld+json" set:html={collectionJsonLd} />}

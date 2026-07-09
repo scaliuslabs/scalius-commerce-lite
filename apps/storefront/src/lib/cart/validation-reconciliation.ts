@@ -1,4 +1,8 @@
-import { cartStore } from "../../store/cart";
+import {
+  cartStore,
+  updateCartItemsByKeyAtomically,
+  type CartLineItemUpdate,
+} from "../../store/cart";
 import type { CartValidationResult } from "../api/orders";
 import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 
@@ -7,41 +11,25 @@ export function reconcileValidatedCartSnapshot(
   onDiscountCleared?: (message: string) => void,
 ): boolean {
   const state = cartStore.get();
-  const nextItems = { ...state.items };
-  let changed = false;
+  const updates: CartLineItemUpdate[] = [];
 
   for (const validatedItem of validation.items) {
-    const key = resolveCartKeyForValidatedLine(validatedItem, nextItems);
+    const key = resolveCartKeyForValidatedLine(validatedItem, state.items);
     if (!key) continue;
 
-    const currentItem = nextItems[key];
+    const currentItem = state.items[key];
     if (!currentItem) continue;
 
     if (currentItem.freeDelivery !== validatedItem.freeDelivery) {
-      nextItems[key] = {
-        ...currentItem,
-        freeDelivery: validatedItem.freeDelivery,
-      };
-      changed = true;
+      updates.push({
+        lineKey: key,
+        updates: { freeDelivery: validatedItem.freeDelivery },
+      });
     }
   }
 
-  if (!changed) return false;
-
-  const itemList = Object.values(nextItems);
-  cartStore.set({
-    ...state,
-    items: nextItems,
-    totalItems: itemList.reduce((total, item) => total + item.quantity, 0),
-    totalAmount: itemList.reduce(
-      (total, item) => total + item.price * item.quantity,
-      0,
-    ),
-    discount: state.discount ? null : state.discount,
-  });
-
-  if (typeof document !== "undefined") {
-    document.dispatchEvent(new CustomEvent("cart-updated"));
+  if (updates.length === 0 || !updateCartItemsByKeyAtomically(updates)) {
+    return false;
   }
 
   if (state.discount) {

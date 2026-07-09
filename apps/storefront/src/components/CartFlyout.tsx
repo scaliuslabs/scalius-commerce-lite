@@ -8,8 +8,8 @@ import {
 import {
   cartStore,
   hydrateCartFromStorage,
-  updateQuantity,
-  removeFromCart,
+  updateCartItemByKey,
+  removeCartItemByKey,
   clearCart,
   addToCart,
 } from "@/store/cart";
@@ -124,7 +124,7 @@ export default function CartFlyout() {
 
     const handleAddToCartEvent = (event: CustomEvent<AddToCartEventDetail>) => {
       if (!event.detail) return;
-      addToCart(event.detail);
+      if (!addToCart(event.detail)) return;
       if (event.detail.redirectToCart) {
         window.location.href = "/cart";
       } else {
@@ -314,9 +314,9 @@ export default function CartFlyout() {
                               disableAutoClose();
                               const newQ = Math.max(0, item.quantity - 1);
                               if (newQ === 0)
-                                removeFromCart(item.id, item.variantId);
+                                removeCartItemByKey(key);
                               else
-                                updateQuantity(item.id, item.variantId, newQ);
+                                updateCartItemByKey(key, { quantity: newQ });
                             }}
                             className="w-6 sm:w-8 h-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background transition-colors active:bg-muted cursor-pointer"
                           >
@@ -328,11 +328,9 @@ export default function CartFlyout() {
                           <button
                             onClick={() => {
                               disableAutoClose();
-                              updateQuantity(
-                                item.id,
-                                item.variantId,
-                                item.quantity + 1,
-                              );
+                              updateCartItemByKey(key, {
+                                quantity: item.quantity + 1,
+                              });
                             }}
                             className="w-6 sm:w-8 h-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background transition-colors active:bg-muted cursor-pointer"
                           >
@@ -343,7 +341,7 @@ export default function CartFlyout() {
                         <button
                           onClick={() => {
                             disableAutoClose();
-                            removeFromCart(item.id, item.variantId);
+                            removeCartItemByKey(key);
                           }}
                           className="text-muted-foreground hover:text-destructive p-1 rounded-md hover:bg-destructive/10 transition-colors active:scale-90 cursor-pointer"
                         >

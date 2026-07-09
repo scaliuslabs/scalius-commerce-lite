@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { cartStore } from "../../store/cart";
+import { cartStore, createCartItemKey } from "../../store/cart";
 import type { CheckoutLanguageData } from "../api/types";
 import type { CartValidationIssue, CartValidationResult } from "../api/orders";
 import { applyCheckoutButtonState } from "./checkout-button-state";
@@ -154,6 +154,8 @@ describe("renderIssueAction", () => {
       totalItems: 1,
       totalAmount: 150,
       discount: null,
+      revision: 0,
+      appliedOperationIds: [],
     });
   });
 
@@ -272,6 +274,11 @@ describe("bulk cart repair actions", () => {
 });
 
 describe("reconcileValidatedCartSnapshot", () => {
+  const validatedLineKey = createCartItemKey({
+    id: "prod_1",
+    variantId: "variant_1",
+  });
+
   function validationResult(
     freeDelivery: boolean,
     overrides: Partial<CartValidationResult["items"][number]> = {},
@@ -284,7 +291,7 @@ describe("reconcileValidatedCartSnapshot", () => {
       items: [
         {
           index: 0,
-          cartKey: "line_1",
+          cartKey: validatedLineKey,
           productId: "prod_1",
           variantId: "variant_1",
           quantity: 2,
@@ -306,7 +313,7 @@ describe("reconcileValidatedCartSnapshot", () => {
   it("updates stale free-delivery eligibility from true to false and clears shipping-sensitive discounts", () => {
     cartStore.set({
       items: {
-        line_1: {
+        [validatedLineKey]: {
           id: "prod_1",
           name: "Cotton Panjabi",
           price: 150,
@@ -325,6 +332,8 @@ describe("reconcileValidatedCartSnapshot", () => {
         discountValue: 10,
         discountAmount: 30,
       },
+      revision: 0,
+      appliedOperationIds: [],
     });
 
     const messages: string[] = [];
@@ -335,7 +344,7 @@ describe("reconcileValidatedCartSnapshot", () => {
     })).toBe(true);
 
     const state = cartStore.get();
-    expect(state.items.line_1?.freeDelivery).toBe(false);
+    expect(state.items[validatedLineKey]?.freeDelivery).toBe(false);
     expect(state.totalItems).toBe(2);
     expect(state.totalAmount).toBe(300);
     expect(state.discount).toBeNull();
@@ -348,7 +357,7 @@ describe("reconcileValidatedCartSnapshot", () => {
   it("updates stale free-delivery eligibility from false to true before checkout totals are transferred", () => {
     cartStore.set({
       items: {
-        line_1: {
+        [validatedLineKey]: {
           id: "prod_1",
           name: "Cotton Panjabi",
           price: 150,
@@ -360,12 +369,14 @@ describe("reconcileValidatedCartSnapshot", () => {
       totalItems: 2,
       totalAmount: 300,
       discount: null,
+      revision: 0,
+      appliedOperationIds: [],
     });
 
     expect(reconcileValidatedCartSnapshot(validationResult(true))).toBe(true);
 
     const state = cartStore.get();
-    expect(state.items.line_1?.freeDelivery).toBe(true);
+    expect(state.items[validatedLineKey]?.freeDelivery).toBe(true);
     expect(state.totalItems).toBe(2);
     expect(state.totalAmount).toBe(300);
     expect(state.discount).toBeNull();
@@ -386,6 +397,8 @@ describe("reconcileValidatedCartSnapshot", () => {
       totalItems: 1,
       totalAmount: 150,
       discount: null,
+      revision: 0,
+      appliedOperationIds: [],
     });
 
     expect(reconcileValidatedCartSnapshot({
@@ -433,12 +446,12 @@ describe("resolveCartKeyForValidatedLine", () => {
     }, items)).toBeNull();
   });
 
-  it("keeps product and variant fallback for older validation payloads without cart keys", () => {
+  it("rejects older validation payloads that omit the exact cart key", () => {
     expect(resolveCartKeyForValidatedLine({
       index: 99,
       productId: "prod_current",
       variantId: "variant_current",
-    }, items)).toBe("current_line");
+    }, items)).toBeNull();
   });
 });
 
