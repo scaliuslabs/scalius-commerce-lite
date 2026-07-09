@@ -86,7 +86,7 @@ export function TaxPreviewPanel({
             <div className="space-y-2">
               <Label>Tax class</Label>
               <Select value={taxClassId} onValueChange={setTaxClassId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Preview tax class"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={DEFAULT_CLASS}>Store default</SelectItem>
                   {configuration.classes.map((taxClass) => <SelectItem key={taxClass.id} value={taxClass.id}>{taxClass.name}</SelectItem>)}
@@ -96,21 +96,21 @@ export function TaxPreviewPanel({
             <div className="space-y-2">
               <Label>City</Label>
               <Select value={city} onValueChange={(value) => { setCity(value); setZone(""); setArea(NO_AREA); }}>
-                <SelectTrigger><SelectValue placeholder="Choose city" /></SelectTrigger>
+                <SelectTrigger aria-label="Preview city"><SelectValue placeholder="Choose city" /></SelectTrigger>
                 <SelectContent>{cities.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>Zone</Label>
               <Select value={zone} disabled={!city} onValueChange={(value) => { setZone(value); setArea(NO_AREA); }}>
-                <SelectTrigger><SelectValue placeholder="Choose zone" /></SelectTrigger>
+                <SelectTrigger aria-label="Preview zone"><SelectValue placeholder="Choose zone" /></SelectTrigger>
                 <SelectContent>{zones.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>Area (optional)</Label>
               <Select value={area} disabled={!zone} onValueChange={setArea}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Preview area"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_AREA}>No area</SelectItem>
                   {areas.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}

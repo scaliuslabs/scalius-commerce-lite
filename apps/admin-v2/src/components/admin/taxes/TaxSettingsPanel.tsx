@@ -106,7 +106,7 @@ export function TaxSettingsPanel({
                   defaultTaxClassId: value === NO_CLASS ? null : value,
                 }))}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Default product tax class"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_CLASS}>Not configured</SelectItem>
                   {configuration.classes.map((taxClass) => (
@@ -127,7 +127,7 @@ export function TaxSettingsPanel({
                   shippingTaxClassId: value === NO_CLASS ? null : value,
                 }))}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Shipping tax class"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_CLASS}>Use default class</SelectItem>
                   {configuration.classes.map((taxClass) => (

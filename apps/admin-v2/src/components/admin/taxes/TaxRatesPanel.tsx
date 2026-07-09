@@ -179,7 +179,7 @@ export function TaxRatesPanel({
             <div className="space-y-2">
               <Label>Tax class</Label>
               <Select value={draft.taxClassId} disabled={!canManage} onValueChange={(taxClassId) => setDraft((current) => ({ ...current, taxClassId }))}>
-                <SelectTrigger><SelectValue placeholder="Choose a class" /></SelectTrigger>
+                <SelectTrigger aria-label="Tax class"><SelectValue placeholder="Choose a class" /></SelectTrigger>
                 <SelectContent>
                   {configuration.classes.map((taxClass) => (
                     <SelectItem key={taxClass.id} value={taxClass.id}>{taxClass.name}</SelectItem>
@@ -212,7 +212,7 @@ export function TaxRatesPanel({
                   jurisdictionId: "",
                 }))}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Jurisdiction type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All destinations</SelectItem>
                   <SelectItem value="city">City</SelectItem>
@@ -225,7 +225,7 @@ export function TaxRatesPanel({
               <div className="space-y-2">
                 <Label>Saved destination</Label>
                 <Select value={draft.jurisdictionId} disabled={!canManage} onValueChange={(jurisdictionId) => setDraft((current) => ({ ...current, jurisdictionId }))}>
-                  <SelectTrigger><SelectValue placeholder={`Choose ${draft.jurisdictionType}`} /></SelectTrigger>
+                  <SelectTrigger aria-label={`Saved ${draft.jurisdictionType}`}><SelectValue placeholder={`Choose ${draft.jurisdictionType}`} /></SelectTrigger>
                   <SelectContent>
                     {availableJurisdictions.map((option) => (
                       <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>
