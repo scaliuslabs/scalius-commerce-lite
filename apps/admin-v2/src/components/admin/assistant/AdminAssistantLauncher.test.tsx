@@ -44,6 +44,7 @@ import {
   type AdminAssistantPageStateSnapshot,
 } from "./page-state";
 import { ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY } from "./admin-assistant-transcript";
+import { ADMIN_NAVIGATION_CANCELLED_EVENT } from "../shared/admin-navigation-events";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -520,6 +521,16 @@ describe("AdminAssistantLauncher", () => {
       )?.disabled,
     ).toBe(false);
     expect(queryButton("Open Products")?.disabled).toBe(true);
+
+    window.dispatchEvent(new Event(ADMIN_NAVIGATION_CANCELLED_EVENT));
+    await flushReact();
+
+    expect(document.querySelector("[data-assistant-status]")).toBeNull();
+    expect(
+      document.querySelector<HTMLTextAreaElement>(
+        'textarea[aria-label="Message admin assistant"]',
+      )?.disabled,
+    ).toBe(false);
   });
 
   it("runs click-confirmed registered page actions through the browser executor", async () => {

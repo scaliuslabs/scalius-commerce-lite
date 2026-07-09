@@ -65,6 +65,7 @@ import { AdminAssistantTranscriptStatus } from "./AdminAssistantTranscriptStatus
 import {
   executeAdminAssistantPageActionWithResult,
 } from "./page-actions";
+import { ADMIN_NAVIGATION_CANCELLED_EVENT } from "../shared/admin-navigation-events";
 import { useAdminAssistantPageState } from "./useAdminAssistantPageState";
 import { useAdminAssistantTranscript } from "./useAdminAssistantTranscript";
 import { usePointerGesture } from "./usePointerGesture";
@@ -98,6 +99,8 @@ export function AdminAssistantPanel({
   const pageState = useAdminAssistantPageState();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const claimedActionKeysRef = useRef(new Set<string>());
+  const navigationAttemptRef = useRef(0);
+  const pendingNavigationAttemptRef = useRef<number | null>(null);
   const startPointerGesture = usePointerGesture();
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<AdminAssistantMessage[]>([]);
@@ -132,6 +135,28 @@ export function AdminAssistantPanel({
     const focusTimer = window.setTimeout(() => textareaRef.current?.focus(), 0);
     return () => window.clearTimeout(focusTimer);
   }, [open]);
+
+  useEffect(() => {
+    function handleNavigationCancelled() {
+      if (pendingNavigationAttemptRef.current === null) return;
+      pendingNavigationAttemptRef.current = null;
+      setStatus({
+        kind: "idle",
+        message: "Ready on the current admin page.",
+      });
+    }
+
+    window.addEventListener(
+      ADMIN_NAVIGATION_CANCELLED_EVENT,
+      handleNavigationCancelled,
+    );
+    return () => {
+      window.removeEventListener(
+        ADMIN_NAVIGATION_CANCELLED_EVENT,
+        handleNavigationCancelled,
+      );
+    };
+  }, []);
 
   if (!open) return null;
 
@@ -287,16 +312,36 @@ export function AdminAssistantPanel({
       return false;
     }
 
+    const navigationAttempt = navigationAttemptRef.current + 1;
+    navigationAttemptRef.current = navigationAttempt;
+    pendingNavigationAttemptRef.current = navigationAttempt;
+
     try {
       const navigation = navigate({ to: path as string });
-      void Promise.resolve(navigation).catch(() => {
-        setStatus({
-          kind: "error",
-          message: "Navigation did not complete. Your current page was preserved.",
-        });
-      });
+      void Promise.resolve(navigation).then(
+        () => {
+          if (pendingNavigationAttemptRef.current !== navigationAttempt) return;
+          pendingNavigationAttemptRef.current = null;
+          setStatus({
+            kind: "idle",
+            message: "Ready on the current admin page.",
+          });
+        },
+        () => {
+          if (pendingNavigationAttemptRef.current !== navigationAttempt) return;
+          pendingNavigationAttemptRef.current = null;
+          setStatus({
+            kind: "error",
+            message:
+              "Navigation did not complete. Your current page was preserved.",
+          });
+        },
+      );
       return true;
     } catch {
+      if (pendingNavigationAttemptRef.current === navigationAttempt) {
+        pendingNavigationAttemptRef.current = null;
+      }
       setStatus({
         kind: "error",
         message: "Navigation did not start. Your current page was preserved.",
