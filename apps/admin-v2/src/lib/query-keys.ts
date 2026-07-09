@@ -203,6 +203,11 @@ export const queryKeys = {
     email: () => ["settings", "email"] as const,
     firebase: () => ["settings", "firebase"] as const,
     business: () => ["settings", "business"] as const,
+    taxes: () => ["settings", "taxes"] as const,
+    taxClassifications: (params?: Record<string, unknown>) =>
+      params !== undefined
+        ? (["settings", "tax-classifications", params] as const)
+        : (["settings", "tax-classifications"] as const),
     theme: () => ["settings", "theme"] as const,
     media: () => ["settings", "media"] as const,
     widgetAi: () => ["settings", "widget-ai"] as const,

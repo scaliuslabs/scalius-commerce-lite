@@ -27,6 +27,7 @@ import {
   Palette,
   Package,
   PenTool,
+  ReceiptText,
 } from "lucide-react";
 import { ADMIN_PERMISSIONS } from "../../../lib/admin-permissions";
 
@@ -50,6 +51,7 @@ export const NAV_PERMISSIONS = {
     ADMIN_PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
   SETTINGS_FRAUD_CHECKER_VIEW: ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
   SETTINGS_CACHE_VIEW: ADMIN_PERMISSIONS.SETTINGS_CACHE_VIEW,
+  TAXES_VIEW: ADMIN_PERMISSIONS.TAXES_VIEW,
 } as const;
 
 export interface NavSubItem {
@@ -249,6 +251,12 @@ export const allNavSections: NavSection[] = [
             href: "/admin/settings/checkout",
             icon: CreditCard,
             requiredPermission: NAV_PERMISSIONS.SETTINGS_GENERAL_VIEW,
+          },
+          {
+            name: "Taxes",
+            href: "/admin/settings/taxes",
+            icon: ReceiptText,
+            requiredPermission: NAV_PERMISSIONS.TAXES_VIEW,
           },
           {
             name: "Delivery",

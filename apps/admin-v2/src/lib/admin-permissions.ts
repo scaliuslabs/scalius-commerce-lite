@@ -43,4 +43,6 @@ export const ADMIN_PERMISSIONS = {
   SETTINGS_FRAUD_CHECKER_VIEW: "settings.fraud_checker.view",
   SETTINGS_CACHE_VIEW: "settings.cache.view",
   SETTINGS_CACHE_MANAGE: "settings.cache.manage",
+  TAXES_VIEW: "taxes.view",
+  TAXES_MANAGE: "taxes.manage",
 } as const;
