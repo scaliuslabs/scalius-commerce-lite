@@ -979,6 +979,22 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     DELETE: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
   },
 
+  // Internal Admin assistant authority facade. These routes require any fully
+  // onboarded, 2FA-verified Admin session here, then enforce each capability's
+  // exact current permission again inside the authority facade.
+  "/api/v1/internal/admin-assistant/session/*": {
+    POST: { allowAnyAdmin: true },
+  },
+  "/api/v1/internal/admin-assistant/workflows/create": {
+    POST: { allowAnyAdmin: true },
+  },
+  "/api/v1/internal/admin-assistant/events/list": {
+    POST: { allowAnyAdmin: true },
+  },
+  "/api/v1/internal/admin-assistant/capabilities/*": {
+    POST: { allowAnyAdmin: true },
+  },
+
   // =============================================
   // Inventory API
   // =============================================

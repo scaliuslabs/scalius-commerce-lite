@@ -149,6 +149,15 @@ async function postChat(
   );
 }
 
+function mcpEventResponse(body: Record<string, unknown>, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  headers.set("Content-Type", "text/event-stream");
+  return new Response(`event: message\ndata: ${JSON.stringify(body)}\n\n`, {
+    ...init,
+    headers,
+  });
+}
+
 describe("admin AI chat route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -491,6 +500,10 @@ describe("admin AI chat route", () => {
   });
 
   it("reads only admin_navigation_context through the Agent binding and returns catalog-derived actions", async () => {
+    mocks.generateText.mockResolvedValueOnce({
+      text: "I can take you to the Products page. Click below to navigate:\n\n[Navigate to Products](/admin/products)",
+      totalUsage: { inputTokens: 10, outputTokens: 12, totalTokens: 22 },
+    });
     const agentCalls: Array<{
       input: string;
       method: string | undefined;
@@ -512,12 +525,12 @@ describe("admin AI chat route", () => {
         "method" in rpcBody &&
         rpcBody.method === "initialize"
       ) {
-        return Response.json(
+        return mcpEventResponse(
           {
             jsonrpc: "2.0",
             id: "admin-chat-navigation-initialize",
             result: {
-              protocolVersion: "2025-06-18",
+              protocolVersion: "2025-11-25",
               serverInfo: { name: "scalius-admin-agent", version: "0.1.0" },
             },
           },
@@ -525,7 +538,7 @@ describe("admin AI chat route", () => {
         );
       }
 
-      return Response.json({
+      return mcpEventResponse({
         jsonrpc: "2.0",
         id: "admin-chat-navigation-context",
         result: {
@@ -563,7 +576,7 @@ describe("admin AI chat route", () => {
         },
       });
     });
-    const { app, env } = createTestApp({ AGENT: { fetch: agentFetch } as Fetcher });
+    const { app, env } = createTestApp({ ADMIN_AGENT: { fetch: agentFetch } as Fetcher });
 
     const response = await postChat(
       app,
@@ -583,7 +596,7 @@ describe("admin AI chat route", () => {
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(agentFetch).toHaveBeenCalledTimes(2);
     for (const call of agentCalls) {
-      expect(call.input).toBe("http://agent.internal/mcp/admin");
+      expect(call.input).toBe("http://admin-agent.internal/mcp");
       expect(call.method).toBe("POST");
       expect(call.headers.get("cookie")).toBe(
         "better-auth.session_token=session.signature",
@@ -594,7 +607,7 @@ describe("admin AI chat route", () => {
     }
     expect(agentCalls[1]?.headers.get("mcp-session-id")).toBe("agent-session");
     expect(agentCalls[1]?.headers.get("mcp-protocol-version")).toBe(
-      "2025-06-18",
+      "2025-11-25",
     );
     expect(
       agentCalls.map(({ body }) =>
@@ -653,8 +666,12 @@ describe("admin AI chat route", () => {
       success: true;
       data: {
         actions?: Array<{ type: string; path: string; label: string }>;
+        message: { content: string };
       };
     };
+    expect(body.data.message.content).toBe(
+      "I prepared a safe dashboard action for this request. Use the visible action button to continue.",
+    );
     expect(body.data.actions).toEqual([
       { type: "navigate", path: "/admin/products", label: "Open Products" },
     ]);
@@ -688,7 +705,7 @@ describe("admin AI chat route", () => {
             jsonrpc: "2.0",
             id: "admin-chat-navigation-initialize",
             result: {
-              protocolVersion: "2025-06-18",
+              protocolVersion: "2025-11-25",
               serverInfo: { name: "scalius-admin-agent", version: "0.1.0" },
             },
           },
@@ -773,7 +790,7 @@ describe("admin AI chat route", () => {
 
       return Response.json({ jsonrpc: "2.0", id: "unknown", result: { isError: true } });
     });
-    const { app, env } = createTestApp({ AGENT: { fetch: agentFetch } as Fetcher });
+    const { app, env } = createTestApp({ ADMIN_AGENT: { fetch: agentFetch } as Fetcher });
     mocks.generateText.mockResolvedValueOnce({
       text: "<p>Flagship iPhone with a sharper camera story and clearer everyday benefits.</p>",
       totalUsage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
@@ -1094,7 +1111,7 @@ describe("admin AI chat route", () => {
             jsonrpc: "2.0",
             id: "admin-chat-navigation-initialize",
             result: {
-              protocolVersion: "2025-06-18",
+              protocolVersion: "2025-11-25",
               serverInfo: { name: "scalius-admin-agent", version: "0.1.0" },
             },
           },
@@ -1151,7 +1168,7 @@ describe("admin AI chat route", () => {
 
       throw new Error(`Unexpected tool ${toolName}`);
     });
-    const { app, env } = createTestApp({ AGENT: { fetch: agentFetch } as Fetcher });
+    const { app, env } = createTestApp({ ADMIN_AGENT: { fetch: agentFetch } as Fetcher });
 
     const response = await postChat(app, env, {
       messages: [

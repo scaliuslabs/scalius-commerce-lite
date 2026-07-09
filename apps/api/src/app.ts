@@ -41,6 +41,7 @@ import { shippingMethodRoutes } from "./routes/shipping-methods";
 import { seoRoutes } from "./routes/seo";
 import { metaConversionsRoutes } from "./routes/meta-conversions";
 import { storefrontRoutes } from "./routes/storefront";
+import { storefrontChatRoutes } from "./routes/storefront-chat";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { readinessRoutes } from "./routes/readiness";
@@ -85,6 +86,7 @@ import { adminWidgetGenerationRunRoutes } from "./routes/admin/widget-generation
 import { adminAttributesRoutes } from "./routes/admin/attributes";
 import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
+import { adminAssistantAuthorityRoutes } from "./routes/internal/admin-assistant";
 
 // Create typed OpenAPIHono app with Cloudflare Workers Env bindings
 // basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
@@ -223,6 +225,10 @@ app.route("/widgets", widgetRoutes);
 app.route("/analytics", analyticsRoutes);
 app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
+app.route("/storefront", storefrontChatRoutes);
+// Exact service-binding-only Admin assistant authority. The sub-router rejects
+// public hosts before cookie auth, request parsing, or authority work.
+app.route("/internal/admin-assistant", adminAssistantAuthorityRoutes);
 app.route("/checkout", checkoutRoutes);
 app.use("/customer-auth/*", cookieOriginGuardMiddleware);
 app.route("/customer-auth", customerAuthRoutes);

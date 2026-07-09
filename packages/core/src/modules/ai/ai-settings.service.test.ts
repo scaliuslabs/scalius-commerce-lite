@@ -168,7 +168,7 @@ describe("widget AI settings", () => {
     }
   });
 
-  it("enables the default adminChat runtime profile when the Cloudflare AI binding exists", async () => {
+  it("enables unconfigured chat runtime profiles with the same safe Cloudflare default", async () => {
     const runtime = await getWidgetAiRuntimeSettings(
       createAiSettingsDb([]) as never,
       { AI: { run: async () => ({}) } },
@@ -179,10 +179,20 @@ describe("widget AI settings", () => {
       provider: "cloudflare",
       model: "@cf/moonshotai/kimi-k2.6",
     });
+    expect(runtime.profiles.storefrontChat).toEqual({
+      enabled: true,
+      provider: "cloudflare",
+      model: "@cf/moonshotai/kimi-k2.6",
+    });
     expect(runtime.apiKeys).toEqual({});
     expect(runtime.hasCloudflareBinding).toBe(true);
     expect(resolveAiModelProfile(runtime, "adminChat")).toMatchObject({
       id: "adminChat",
+      provider: "cloudflare",
+      model: "@cf/moonshotai/kimi-k2.6",
+    });
+    expect(resolveAiModelProfile(runtime, "storefrontChat")).toMatchObject({
+      id: "storefrontChat",
       provider: "cloudflare",
       model: "@cf/moonshotai/kimi-k2.6",
     });
@@ -195,6 +205,11 @@ describe("widget AI settings", () => {
     );
 
     expect(runtime.profiles.adminChat).toEqual({
+      enabled: false,
+      provider: "cloudflare",
+      model: "",
+    });
+    expect(runtime.profiles.storefrontChat).toEqual({
       enabled: false,
       provider: "cloudflare",
       model: "",
@@ -227,6 +242,37 @@ describe("widget AI settings", () => {
     });
     expect(() => resolveAiModelProfile(runtime, "adminChat")).toThrow(
       'AI model profile "adminChat" is disabled.',
+    );
+  });
+
+  it("preserves an explicitly disabled storefrontChat profile, including an empty model", async () => {
+    const runtime = await getWidgetAiRuntimeSettings(
+      createAiSettingsDb([
+        widgetAiConfigRow({
+          profiles: {
+            storefrontChat: {
+              enabled: false,
+              provider: "cloudflare",
+              model: "",
+            },
+          },
+        }),
+      ]) as never,
+      { AI: { run: async () => ({}) } },
+    );
+
+    expect(runtime.profiles.adminChat).toEqual({
+      enabled: true,
+      provider: "cloudflare",
+      model: "@cf/moonshotai/kimi-k2.6",
+    });
+    expect(runtime.profiles.storefrontChat).toEqual({
+      enabled: false,
+      provider: "cloudflare",
+      model: "",
+    });
+    expect(() => resolveAiModelProfile(runtime, "storefrontChat")).toThrow(
+      'AI model profile "storefrontChat" is disabled.',
     );
   });
 

@@ -184,6 +184,21 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it("publishes the exact effective permission snapshot to downstream authority routes", async () => {
+    const effectivePermissions = new Set([PERMISSIONS.PRODUCTS_VIEW]);
+    mocks.getUserPermissions.mockResolvedValue(effectivePermissions);
+    const next = vi.fn().mockResolvedValue(undefined);
+    const context = createContext("/api/v1/admin/products");
+
+    await adminAuthMiddleware(context as never, next);
+
+    expect(context.set).toHaveBeenCalledWith(
+      "adminPermissions",
+      effectivePermissions,
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps ordinary admin session checks on the direct signed-cookie path", () => {
     const source = readFileSync(
       fileURLToPath(new URL("./admin-auth.ts", import.meta.url)),
