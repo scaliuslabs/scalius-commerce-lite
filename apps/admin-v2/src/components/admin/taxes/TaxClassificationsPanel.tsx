@@ -84,6 +84,7 @@ export function TaxClassificationsPanel({
             </TabsList>
           </Tabs>
           <form
+            method="get"
             className="flex w-full max-w-md gap-2"
             onSubmit={(event) => {
               event.preventDefault();
