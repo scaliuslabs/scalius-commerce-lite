@@ -44,6 +44,7 @@ import { Route as ApiAssistantMcpRouteImport } from './routes/api/assistant/mcp'
 import { Route as AdminWidgetsTrashRouteImport } from './routes/admin/widgets/trash'
 import { Route as AdminWidgetsWidgetIdRouteImport } from './routes/admin/widgets/$widgetId'
 import { Route as AdminSettingsThemeRouteImport } from './routes/admin/settings/theme'
+import { Route as AdminSettingsTaxesRouteImport } from './routes/admin/settings/taxes'
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
 import { Route as AdminSettingsMetaConversionRouteImport } from './routes/admin/settings/meta-conversion'
 import { Route as AdminSettingsHeroSlidersRouteImport } from './routes/admin/settings/hero-sliders'
@@ -65,6 +66,7 @@ import { Route as AdminAnalyticsNewRouteImport } from './routes/admin/analytics/
 import { Route as AdminProductsProductIdIndexRouteImport } from './routes/admin/products/$productId/index'
 import { Route as AdminOrdersOrderIdIndexRouteImport } from './routes/admin/orders/$orderId/index'
 import { Route as ApiV1AdminSplatRouteImport } from './routes/api/v1/admin/$'
+import { Route as ApiAssistantConversationsSplatRouteImport } from './routes/api/assistant/conversations/$'
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
 import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$pageId/edit'
 import { Route as AdminOrdersOrderIdEditRouteImport } from './routes/admin/orders/$orderId/edit'
@@ -251,6 +253,11 @@ const AdminSettingsThemeRoute = AdminSettingsThemeRouteImport.update({
   path: '/settings/theme',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSettingsTaxesRoute = AdminSettingsTaxesRouteImport.update({
+  id: '/settings/taxes',
+  path: '/settings/taxes',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSettingsNotificationsRoute =
   AdminSettingsNotificationsRouteImport.update({
     id: '/settings/notifications',
@@ -362,6 +369,12 @@ const ApiV1AdminSplatRoute = ApiV1AdminSplatRouteImport.update({
   path: '/api/v1/admin/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAssistantConversationsSplatRoute =
+  ApiAssistantConversationsSplatRouteImport.update({
+    id: '/api/assistant/conversations/$',
+    path: '/api/assistant/conversations/$',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminProductsProductIdEditRoute =
   AdminProductsProductIdEditRouteImport.update({
     id: '/products/$productId/edit',
@@ -454,6 +467,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/hero-sliders': typeof AdminSettingsHeroSlidersRoute
   '/admin/settings/meta-conversion': typeof AdminSettingsMetaConversionRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
+  '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
   '/admin/widgets/$widgetId': typeof AdminWidgetsWidgetIdRoute
   '/admin/widgets/trash': typeof AdminWidgetsTrashRoute
@@ -478,6 +492,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/api/assistant/conversations/$': typeof ApiAssistantConversationsSplatRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
@@ -520,6 +535,7 @@ export interface FileRoutesByTo {
   '/admin/settings/hero-sliders': typeof AdminSettingsHeroSlidersRoute
   '/admin/settings/meta-conversion': typeof AdminSettingsMetaConversionRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
+  '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
   '/admin/widgets/$widgetId': typeof AdminWidgetsWidgetIdRoute
   '/admin/widgets/trash': typeof AdminWidgetsTrashRoute
@@ -544,6 +560,7 @@ export interface FileRoutesByTo {
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/api/assistant/conversations/$': typeof ApiAssistantConversationsSplatRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId': typeof AdminProductsProductIdIndexRoute
@@ -588,6 +605,7 @@ export interface FileRoutesById {
   '/admin/settings/hero-sliders': typeof AdminSettingsHeroSlidersRoute
   '/admin/settings/meta-conversion': typeof AdminSettingsMetaConversionRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
+  '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
   '/admin/widgets/$widgetId': typeof AdminWidgetsWidgetIdRoute
   '/admin/widgets/trash': typeof AdminWidgetsTrashRoute
@@ -612,6 +630,7 @@ export interface FileRoutesById {
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/api/assistant/conversations/$': typeof ApiAssistantConversationsSplatRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
@@ -657,6 +676,7 @@ export interface FileRouteTypes {
     | '/admin/settings/hero-sliders'
     | '/admin/settings/meta-conversion'
     | '/admin/settings/notifications'
+    | '/admin/settings/taxes'
     | '/admin/settings/theme'
     | '/admin/widgets/$widgetId'
     | '/admin/widgets/trash'
@@ -681,6 +701,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/api/assistant/conversations/$'
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
@@ -723,6 +744,7 @@ export interface FileRouteTypes {
     | '/admin/settings/hero-sliders'
     | '/admin/settings/meta-conversion'
     | '/admin/settings/notifications'
+    | '/admin/settings/taxes'
     | '/admin/settings/theme'
     | '/admin/widgets/$widgetId'
     | '/admin/widgets/trash'
@@ -747,6 +769,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/api/assistant/conversations/$'
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId'
     | '/admin/products/$productId'
@@ -790,6 +813,7 @@ export interface FileRouteTypes {
     | '/admin/settings/hero-sliders'
     | '/admin/settings/meta-conversion'
     | '/admin/settings/notifications'
+    | '/admin/settings/taxes'
     | '/admin/settings/theme'
     | '/admin/widgets/$widgetId'
     | '/admin/widgets/trash'
@@ -814,6 +838,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/api/assistant/conversations/$'
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
@@ -830,6 +855,7 @@ export interface RootRouteChildren {
   InvoiceOrderIdRoute: typeof InvoiceOrderIdRoute
   ApiAssistantMcpRoute: typeof ApiAssistantMcpRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiAssistantConversationsSplatRoute: typeof ApiAssistantConversationsSplatRoute
   ApiV1AdminSplatRoute: typeof ApiV1AdminSplatRoute
 }
 
@@ -1080,6 +1106,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsThemeRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/settings/taxes': {
+      id: '/admin/settings/taxes'
+      path: '/settings/taxes'
+      fullPath: '/admin/settings/taxes'
+      preLoaderRoute: typeof AdminSettingsTaxesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings/notifications': {
       id: '/admin/settings/notifications'
       path: '/settings/notifications'
@@ -1227,6 +1260,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1AdminSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/assistant/conversations/$': {
+      id: '/api/assistant/conversations/$'
+      path: '/api/assistant/conversations/$'
+      fullPath: '/api/assistant/conversations/$'
+      preLoaderRoute: typeof ApiAssistantConversationsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/products/$productId/edit': {
       id: '/admin/products/$productId/edit'
       path: '/products/$productId/edit'
@@ -1318,6 +1358,7 @@ interface AdminRouteChildren {
   AdminSettingsHeroSlidersRoute: typeof AdminSettingsHeroSlidersRoute
   AdminSettingsMetaConversionRoute: typeof AdminSettingsMetaConversionRoute
   AdminSettingsNotificationsRoute: typeof AdminSettingsNotificationsRoute
+  AdminSettingsTaxesRoute: typeof AdminSettingsTaxesRoute
   AdminSettingsThemeRoute: typeof AdminSettingsThemeRoute
   AdminWidgetsWidgetIdRoute: typeof AdminWidgetsWidgetIdRoute
   AdminWidgetsTrashRoute: typeof AdminWidgetsTrashRoute
@@ -1369,6 +1410,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsHeroSlidersRoute: AdminSettingsHeroSlidersRoute,
   AdminSettingsMetaConversionRoute: AdminSettingsMetaConversionRoute,
   AdminSettingsNotificationsRoute: AdminSettingsNotificationsRoute,
+  AdminSettingsTaxesRoute: AdminSettingsTaxesRoute,
   AdminSettingsThemeRoute: AdminSettingsThemeRoute,
   AdminWidgetsWidgetIdRoute: AdminWidgetsWidgetIdRoute,
   AdminWidgetsTrashRoute: AdminWidgetsTrashRoute,
@@ -1428,6 +1470,7 @@ const rootRouteChildren: RootRouteChildren = {
   InvoiceOrderIdRoute: InvoiceOrderIdRoute,
   ApiAssistantMcpRoute: ApiAssistantMcpRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiAssistantConversationsSplatRoute: ApiAssistantConversationsSplatRoute,
   ApiV1AdminSplatRoute: ApiV1AdminSplatRoute,
 }
 export const routeTree = rootRouteImport
