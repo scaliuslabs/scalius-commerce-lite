@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ADMIN_ASSISTANT_BUBBLE_SIZE,
   ADMIN_ASSISTANT_LAYOUT_STORAGE_KEY,
+  ADMIN_ASSISTANT_DOCK_NAV_RESERVE,
+  ADMIN_ASSISTANT_MIN_MAIN_CONTENT_WIDTH,
   clampAdminAssistantLayout,
+  clampAdminAssistantSize,
   createDefaultAdminAssistantLayout,
   panelPositionFromBubble,
   readAdminAssistantLayoutPreferences,
@@ -82,5 +85,35 @@ describe("admin assistant layout preferences", () => {
       viewport,
     );
     expect(position).toEqual({ x: 736, y: 136 });
+  });
+
+  it("reserves usable navigation and main-content width for desktop docks", () => {
+    const compactDesktop = { width: 1_024, height: 768 };
+    const docked = clampAdminAssistantSize(
+      { width: 720, height: 620 },
+      compactDesktop,
+      "dock-right",
+    );
+    const floating = clampAdminAssistantSize(
+      { width: 720, height: 620 },
+      compactDesktop,
+      "floating",
+    );
+
+    expect(docked.width).toBe(320);
+    expect(
+      ADMIN_ASSISTANT_DOCK_NAV_RESERVE +
+        docked.width +
+        ADMIN_ASSISTANT_MIN_MAIN_CONTENT_WIDTH,
+    ).toBeLessThanOrEqual(compactDesktop.width);
+    expect(floating.width).toBe(720);
+
+    expect(
+      clampAdminAssistantSize(
+        { width: 720, height: 620 },
+        viewport,
+        "dock-left",
+      ).width,
+    ).toBe(560);
   });
 });

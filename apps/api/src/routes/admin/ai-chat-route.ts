@@ -32,8 +32,10 @@ import {
   formatAdminChatNavigationContext,
   formatAdminChatProductCopyContext,
   getAdminChatNavigationEntries,
+  getAdminChatDashboardSummary,
   getAdminChatProductCopyContext,
   initializeAdminAgentMcp,
+  isStandaloneProductCountQuestion,
 } from "./ai-chat-mcp";
 import { enforceAiRateLimit } from "./ai-rate-limit";
 import { validateMessagePayload } from "./ai-widget-contract";
@@ -113,10 +115,28 @@ app.openapi(chatRoute, async (c) => {
   const settings = await loadAiRuntimeSettings(c);
   const profile = resolveAiModelProfile(settings, "adminChat");
   const agentSession = await initializeAdminAgentMcp(c);
-  const navigationEntries = await getAdminChatNavigationEntries(
-    c,
-    agentSession,
-  );
+  const [navigationEntries, dashboardSummary, productCopy] = await Promise.all([
+    getAdminChatNavigationEntries(c, agentSession),
+    getAdminChatDashboardSummary(c, agentSession, payload.messages),
+    getAdminChatProductCopyContext(c, agentSession, payload.messages),
+  ]);
+  const latestUserMessage = [...payload.messages]
+    .reverse()
+    .find((message) => message.role === "user")?.content ?? "";
+  if (isStandaloneProductCountQuestion(latestUserMessage)) {
+    const noun = dashboardSummary?.totalProducts === 1 ? "product" : "products";
+    return ok(c, {
+      profile: "adminChat" as const,
+      provider: profile.provider,
+      model: profile.model,
+      message: {
+        role: "assistant" as const,
+        content: dashboardSummary
+          ? `You currently have **${dashboardSummary.totalProducts} ${noun}** in the catalog.`
+          : "I couldn't verify the catalog total from the authoritative dashboard source right now. Please retry; I won't infer it from visible or filtered table rows.",
+      },
+    });
+  }
   const navigationContext = formatAdminChatNavigationContext(navigationEntries);
   const navigationActions = createAdminChatNavigationActions(
     navigationEntries,
@@ -127,9 +147,7 @@ app.openapi(chatRoute, async (c) => {
   const pageActionContext = formatAdminChatPageActionContext(
     payload.pageContext,
   );
-  const productCopyContext = formatAdminChatProductCopyContext(
-    await getAdminChatProductCopyContext(c, agentSession, payload.messages),
-  );
+  const productCopyContext = formatAdminChatProductCopyContext(productCopy);
   const messages: ModelMessage[] = [
     { role: "system", content: ADMIN_CHAT_SYSTEM_PROMPT },
     ...(navigationContext

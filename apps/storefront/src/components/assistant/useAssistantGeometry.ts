@@ -124,6 +124,7 @@ export function useAssistantGeometry() {
   return {
     geometry,
     panelRect,
+    canDock: viewport.width >= 640,
     ready,
     setLauncher,
     moveLauncher,

@@ -458,7 +458,7 @@ const runtimeGlobalsScript = [
 
     <CommandPalette client:idle />
     <AuthModal client:idle />
-    <StorefrontAssistantBubble client:idle />
+    <StorefrontAssistantBubble client:load />
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
   </body>

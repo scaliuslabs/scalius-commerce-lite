@@ -11,13 +11,33 @@
 }
 
 .sf-assistant-panel[data-mode="dock-left"] {
-  left: 1rem;
+  left: 0;
   right: auto;
+  top: 0;
+  bottom: 0;
+  height: 100dvh;
+  max-height: none;
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: 0.25rem 0 0.75rem
+    color-mix(in oklab, var(--foreground) 8%, transparent);
 }
 
 .sf-assistant-panel[data-mode="dock-right"] {
-  right: 1rem;
+  right: 0;
   left: auto;
+  top: 0;
+  bottom: 0;
+  height: 100dvh;
+  max-height: none;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  box-shadow: -0.25rem 0 0.75rem
+    color-mix(in oklab, var(--foreground) 8%, transparent);
 }
 
 .sf-assistant-conversation {
@@ -42,8 +62,22 @@
 .sf-assistant-panel[data-mode="dock-right"] .sf-assistant-resize-handle {
   right: auto;
   left: 0;
-  cursor: nesw-resize;
-  transform: scaleX(-1);
+}
+
+.sf-assistant-panel[data-mode="dock-left"] .sf-assistant-resize-handle,
+.sf-assistant-panel[data-mode="dock-right"] .sf-assistant-resize-handle {
+  top: 0;
+  bottom: 0;
+  width: 0.75rem;
+  height: 100%;
+  border-radius: 0;
+  cursor: ew-resize;
+  background: linear-gradient(
+    90deg,
+    transparent 0 42%,
+    color-mix(in oklab, var(--border) 80%, transparent) 43% 57%,
+    transparent 58%
+  );
 }
 
 .sf-assistant-launcher-shell button {
@@ -77,6 +111,17 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
+  .sf-assistant-panel[data-mode="dock-left"],
+  .sf-assistant-panel[data-mode="dock-right"] {
+    border-top: 1px solid var(--border);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 1.25rem 1.25rem 0 0;
+    box-shadow: 0 -0.75rem 2rem
+      color-mix(in oklab, var(--foreground) 14%, transparent);
+  }
+
   .sf-assistant-panel[data-mobile-fullscreen="true"] {
     height: 100dvh !important;
     border-radius: 0;
@@ -87,9 +132,35 @@
   }
 }
 
+@media (min-width: 640px) {
+  body {
+    transition:
+      padding-left 180ms ease,
+      padding-right 180ms ease;
+  }
+
+  body[data-storefront-assistant-dock="left"] {
+    padding-left: calc(
+      var(--safe-area-inset-left) +
+        var(--storefront-assistant-dock-width, 424px)
+    );
+  }
+
+  body[data-storefront-assistant-dock="right"] {
+    padding-right: calc(
+      var(--safe-area-inset-right) +
+        var(--storefront-assistant-dock-width, 424px)
+    );
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sf-assistant-panel {
     animation: none;
+  }
+
+  body {
+    transition: none;
   }
 }
 

@@ -63,7 +63,24 @@ export function useAdminAssistantLayout(): AdminAssistantLayoutController {
   }, [mounted]);
 
   const setMode = useCallback((mode: AdminAssistantMode) => {
-    setLayout((current) => ({ ...current, mode }));
+    setLayout((current) => {
+      const viewport = getAdminAssistantViewport();
+      const panelSize = clampAdminAssistantSize(
+        current.panelSize,
+        viewport,
+        mode,
+      );
+      return {
+        ...current,
+        mode,
+        panelSize,
+        panelPosition: clampAdminAssistantPosition(
+          current.panelPosition,
+          panelSize,
+          viewport,
+        ),
+      };
+    });
   }, []);
 
   const setBubblePosition = useCallback((position: AdminAssistantPosition) => {
@@ -93,7 +110,11 @@ export function useAdminAssistantLayout(): AdminAssistantLayoutController {
 
   const setPanelSize = useCallback((size: AdminAssistantSize) => {
     setLayout((current) => {
-      const panelSize = clampAdminAssistantSize(size, getAdminAssistantViewport());
+      const panelSize = clampAdminAssistantSize(
+        size,
+        getAdminAssistantViewport(),
+        current.mode,
+      );
       return {
         ...current,
         panelSize,

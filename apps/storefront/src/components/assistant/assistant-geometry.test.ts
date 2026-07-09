@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ASSISTANT_DOCK_MIN_MAIN_WIDTH,
   ASSISTANT_GEOMETRY_STORAGE_KEY,
   calculateAssistantPanelRect,
   clampAssistantGeometry,
@@ -113,5 +114,32 @@ describe("storefront assistant geometry", () => {
         { width: 1_200, height: 800 },
       ),
     ).toEqual({ left: 784, top: 16, width: 400, height: 768 });
+  });
+
+  it("keeps a usable storefront column beside a docked panel", () => {
+    const viewport = { width: 768, height: 900 };
+    const docked = clampAssistantGeometry(
+      {
+        mode: "dock-right",
+        panelWidth: 720,
+        panelHeight: 640,
+        launcherX: 680,
+        launcherY: 800,
+      },
+      viewport,
+    );
+
+    expect(docked.panelWidth).toBe(
+      viewport.width - ASSISTANT_DOCK_MIN_MAIN_WIDTH,
+    );
+    expect(viewport.width - docked.panelWidth).toBeGreaterThanOrEqual(
+      ASSISTANT_DOCK_MIN_MAIN_WIDTH,
+    );
+
+    const floating = clampAssistantGeometry(
+      { ...docked, mode: "floating", panelWidth: 720 },
+      viewport,
+    );
+    expect(floating.panelWidth).toBe(720);
   });
 });

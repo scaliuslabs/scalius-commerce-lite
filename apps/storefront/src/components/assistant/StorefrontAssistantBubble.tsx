@@ -48,6 +48,10 @@ import {
 import { createStorefrontConversationRequestId } from
   "./storefront-assistant-conversation";
 import {
+  readStorefrontAssistantOpenState,
+  writeStorefrontAssistantOpenState,
+} from "./storefront-assistant-open-state";
+import {
   mergeStorefrontConversationEvents,
   reconcileStorefrontPersistedMessage,
   storefrontConversationContextMarker,
@@ -118,7 +122,7 @@ function suggestedPrompts(
     case "product":
       return [
         "What am I looking at?",
-        "Compare similar products",
+        "What are its key details?",
         "Is this available?",
       ];
     case "category":
@@ -133,13 +137,13 @@ function suggestedPrompts(
       return [
         "Review my cart",
         "Check item availability",
-        "Suggest an alternative",
+        "Explain any cart issues",
       ];
     default:
       return [
-        "What can I find here?",
-        "Help me choose a product",
-        "Show popular options",
+        "How can you help me shop?",
+        "How do I search the catalog?",
+        "What can I ask about a product?",
       ];
   }
 }
@@ -182,6 +186,7 @@ export default function StorefrontAssistantBubble() {
   const resizeRef = useRef<ResizeState | null>(null);
   const suppressLauncherClickRef = useRef(false);
   const wasOpenRef = useRef(false);
+  const focusComposerOnOpenRef = useRef(false);
   const requestAbortRef = useRef<AbortController | null>(null);
 
   const mergeTranscriptEvents = useCallback(
@@ -222,6 +227,10 @@ export default function StorefrontAssistantBubble() {
   }, [refreshContext]);
 
   useEffect(() => {
+    if (readStorefrontAssistantOpenState()) setIsOpen(true);
+  }, []);
+
+  useEffect(() => {
     if (isOpen) refreshContext();
   }, [isOpen, refreshContext]);
 
@@ -229,11 +238,50 @@ export default function StorefrontAssistantBubble() {
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = isOpen;
     if (isOpen && !wasOpen) {
-      window.requestAnimationFrame(() => composerRef.current?.focus());
+      const shouldFocusComposer = focusComposerOnOpenRef.current;
+      focusComposerOnOpenRef.current = false;
+      if (shouldFocusComposer) {
+        window.requestAnimationFrame(() => composerRef.current?.focus());
+      }
     } else if (!isOpen && wasOpen) {
       window.requestAnimationFrame(() => launcherRef.current?.focus());
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const body = document.body;
+    const mode = layout.geometry.mode;
+    const dockSide = isOpen && layout.ready && layout.canDock
+      ? mode === "dock-left"
+        ? "left"
+        : mode === "dock-right"
+          ? "right"
+          : null
+      : null;
+
+    if (!dockSide) {
+      delete body.dataset.storefrontAssistantDock;
+      body.style.removeProperty("--storefront-assistant-dock-width");
+      return undefined;
+    }
+
+    body.dataset.storefrontAssistantDock = dockSide;
+    body.style.setProperty(
+      "--storefront-assistant-dock-width",
+      `${layout.panelRect.width}px`,
+    );
+
+    return () => {
+      delete body.dataset.storefrontAssistantDock;
+      body.style.removeProperty("--storefront-assistant-dock-width");
+    };
+  }, [
+    isOpen,
+    layout.canDock,
+    layout.geometry.mode,
+    layout.panelRect.width,
+    layout.ready,
+  ]);
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ block: "nearest" });
@@ -297,6 +345,8 @@ export default function StorefrontAssistantBubble() {
   );
 
   const closePanel = useCallback(() => {
+    focusComposerOnOpenRef.current = false;
+    writeStorefrontAssistantOpenState(false);
     setIsOpen(false);
     setMobileFullscreen(false);
   }, []);
@@ -462,6 +512,8 @@ export default function StorefrontAssistantBubble() {
       suppressLauncherClickRef.current = false;
       return;
     }
+    writeStorefrontAssistantOpenState(true);
+    focusComposerOnOpenRef.current = true;
     setIsOpen(true);
   }
 
@@ -497,7 +549,9 @@ export default function StorefrontAssistantBubble() {
     const direction = layout.geometry.mode === "dock-right" ? -1 : 1;
     layout.setPanelSize(
       resize.startWidth + (event.clientX - resize.startX) * direction,
-      resize.startHeight + (event.clientY - resize.startY),
+      layout.geometry.mode === "floating"
+        ? resize.startHeight + (event.clientY - resize.startY)
+        : resize.startHeight,
     );
   }
 
@@ -510,11 +564,20 @@ export default function StorefrontAssistantBubble() {
   }
 
   function handleResizeKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (
+      layout.geometry.mode !== "floating" &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown")
+    ) {
+      return;
+    }
+    const horizontalDirection = layout.geometry.mode === "dock-right"
+      ? -1
+      : 1;
     const resizeByKey: Record<string, [number, number]> = {
-      ArrowLeft: [-KEYBOARD_RESIZE_STEP, 0],
-      ArrowRight: [KEYBOARD_RESIZE_STEP, 0],
-      ArrowUp: [0, KEYBOARD_RESIZE_STEP],
-      ArrowDown: [0, -KEYBOARD_RESIZE_STEP],
+      ArrowLeft: [-KEYBOARD_RESIZE_STEP * horizontalDirection, 0],
+      ArrowRight: [KEYBOARD_RESIZE_STEP * horizontalDirection, 0],
+      ArrowUp: [0, -KEYBOARD_RESIZE_STEP],
+      ArrowDown: [0, KEYBOARD_RESIZE_STEP],
     };
     const delta = resizeByKey[event.key];
     if (!delta) return;
@@ -533,13 +596,16 @@ export default function StorefrontAssistantBubble() {
     });
   }
 
+  const isDockedSidebar = layout.canDock &&
+    layout.geometry.mode !== "floating";
+
   return (
     <>
       {isOpen ? (
         <aside
           id={PANEL_ID}
-          role="dialog"
-          aria-modal="false"
+          role={isDockedSidebar ? "complementary" : "dialog"}
+          aria-modal={isDockedSidebar ? undefined : "false"}
           aria-labelledby="storefront-assistant-title"
           data-mode={layout.geometry.mode}
           data-mobile-fullscreen={mobileFullscreen ? "true" : "false"}
@@ -774,8 +840,12 @@ export default function StorefrontAssistantBubble() {
 
           <button
             type="button"
-            aria-label="Resize assistant panel. Use arrow keys or the layout menu."
-            title="Drag to resize; arrow keys also resize"
+            aria-label={isDockedSidebar
+              ? "Resize assistant sidebar width. Use left and right arrow keys or the layout menu."
+              : "Resize assistant panel. Use arrow keys or the layout menu."}
+            title={isDockedSidebar
+              ? "Drag the inner edge to resize width"
+              : "Drag to resize; arrow keys also resize"}
             className="sf-assistant-resize-handle absolute z-10 size-7 touch-none rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onPointerDown={beginResize}
             onPointerMove={continueResize}

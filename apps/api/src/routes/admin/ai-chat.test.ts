@@ -43,6 +43,10 @@ vi.mock("ai", () => ({
 }));
 
 import { adminAiRoutes } from "./ai";
+import {
+  hasProductCountIntent,
+  isStandaloneProductCountQuestion,
+} from "./ai-chat-mcp";
 
 function runtimeSettings(
   overrides: {
@@ -676,6 +680,135 @@ describe("admin AI chat route", () => {
       { type: "navigate", path: "/admin/products", label: "Open Products" },
     ]);
     expect(JSON.stringify(body)).not.toContain("raw mcp output");
+  });
+
+  it("uses the authoritative dashboard summary for total-product questions", async () => {
+    const agentCalls: Array<Record<string, unknown>> = [];
+    const agentFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const rpcBody = await new Response(init?.body).json() as Record<string, unknown>;
+      agentCalls.push(rpcBody);
+      if (rpcBody.method === "initialize") {
+        return Response.json(
+          {
+            jsonrpc: "2.0",
+            id: "admin-chat-navigation-initialize",
+            result: { protocolVersion: "2025-11-25" },
+          },
+          { headers: { "Mcp-Session-Id": "agent-session" } },
+        );
+      }
+
+      const params = rpcBody.params as { name?: string } | undefined;
+      if (params?.name === "admin_navigation_context") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "admin-chat-navigation-context",
+          result: {
+            structuredContent: {
+              adminNavigationContext: { sections: [] },
+            },
+          },
+        });
+      }
+      if (params?.name === "admin_dashboard_summary") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "admin-chat-dashboard-summary",
+          result: {
+            structuredContent: {
+              adminDashboardSummary: {
+                stats: {
+                  totalProducts: 27,
+                  totalCustomers: 999,
+                  currentMonth: { revenue: 123456 },
+                },
+              },
+            },
+            content: [{ type: "text", text: "raw dashboard output must not leak" }],
+          },
+        });
+      }
+      return Response.json({
+        jsonrpc: "2.0",
+        id: "unexpected",
+        result: { isError: true },
+      });
+    });
+    const { app, env } = createTestApp({
+      ADMIN_AGENT: { fetch: agentFetch } as Fetcher,
+    });
+
+    const response = await postChat(
+      app,
+      env,
+      {
+        pageContext: {
+          routePath: "/admin/products",
+          surfaces: [{ id: "products-table", kind: "table", rowCount: 10 }],
+        },
+        messages: [
+          { role: "user", content: "Can you tell me how many products do we have?" },
+        ],
+      },
+      { Cookie: "better-auth.session_token=session.signature" },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(
+      agentCalls
+        .map((call) => (call.params as { name?: string } | undefined)?.name)
+        .filter(Boolean),
+    ).toEqual(["admin_navigation_context", "admin_dashboard_summary"]);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        message: {
+          content: "You currently have **27 products** in the catalog.",
+        },
+      },
+    });
+  });
+
+  it("fails closed instead of guessing when the authoritative product total is unavailable", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await postChat(
+      app,
+      env,
+      {
+        pageContext: {
+          routePath: "/admin/products",
+          surfaces: [{ id: "products-table", kind: "table", rowCount: 10 }],
+        },
+        messages: [
+          { role: "user", content: "How many products do we have?" },
+        ],
+      },
+      { Cookie: "better-auth.session_token=session.signature" },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        message: {
+          content: expect.stringContaining(
+            "couldn't verify the catalog total from the authoritative dashboard source",
+          ),
+        },
+      },
+    });
+  });
+
+  it.each([
+    "How many draft products do we have?",
+    "How many inactive products are there?",
+    "How many products are sold out?",
+    "Show me low-stock products",
+  ])("does not treat qualified product subsets as the total catalog count: %s", (message) => {
+    expect(hasProductCountIntent(message)).toBe(false);
+    expect(isStandaloneProductCountQuestion(message)).toBe(false);
   });
 
   it("adds bounded read-only product copy context for product description requests", async () => {
