@@ -24,11 +24,17 @@ export interface AdminAssistantLayoutPreferences {
 
 export const ADMIN_ASSISTANT_LAYOUT_STORAGE_KEY =
   "scalius:admin-assistant-layout:v1";
+export const ADMIN_ASSISTANT_DOCK_LEFT_ID = "admin-assistant-dock-left";
+export const ADMIN_ASSISTANT_DOCK_RIGHT_ID = "admin-assistant-dock-right";
 export const ADMIN_ASSISTANT_BUBBLE_SIZE = 56;
 export const ADMIN_ASSISTANT_MIN_PANEL_WIDTH = 320;
 export const ADMIN_ASSISTANT_MIN_PANEL_HEIGHT = 360;
 export const ADMIN_ASSISTANT_MAX_PANEL_WIDTH = 720;
 export const ADMIN_ASSISTANT_MAX_PANEL_HEIGHT = 860;
+export const ADMIN_ASSISTANT_MAX_DOCK_WIDTH = 560;
+export const ADMIN_ASSISTANT_DOCK_NAV_RESERVE = 256;
+export const ADMIN_ASSISTANT_MIN_MAIN_CONTENT_WIDTH = 448;
+export const ADMIN_ASSISTANT_DOCK_REFLOW_MIN_VIEWPORT = 1024;
 
 const DEFAULT_PANEL_WIDTH = 420;
 const DEFAULT_PANEL_HEIGHT = 620;
@@ -86,9 +92,10 @@ export function clampAdminAssistantLayout(
   layout: AdminAssistantLayoutPreferences,
   viewport = getAdminAssistantViewport(),
 ): AdminAssistantLayoutPreferences {
-  const panelSize = clampAdminAssistantSize(layout.panelSize, viewport);
+  const mode = isAdminAssistantMode(layout.mode) ? layout.mode : "floating";
+  const panelSize = clampAdminAssistantSize(layout.panelSize, viewport, mode);
   return {
-    mode: isAdminAssistantMode(layout.mode) ? layout.mode : "floating",
+    mode,
     bubblePosition: clampAdminAssistantPosition(
       layout.bubblePosition,
       {
@@ -123,18 +130,32 @@ export function clampAdminAssistantPosition(
 export function clampAdminAssistantSize(
   size: AdminAssistantSize,
   viewport = getAdminAssistantViewport(),
+  mode: AdminAssistantMode = "floating",
 ): AdminAssistantSize {
   const gap = getAdminAssistantEdgeGap(viewport);
   const availableWidth = Math.max(1, viewport.width - gap * 2);
   const availableHeight = Math.max(1, viewport.height - gap * 2);
   const minWidth = Math.min(ADMIN_ASSISTANT_MIN_PANEL_WIDTH, availableWidth);
   const minHeight = Math.min(ADMIN_ASSISTANT_MIN_PANEL_HEIGHT, availableHeight);
+  const dockMaxWidth = Math.max(
+    minWidth,
+    Math.min(
+      ADMIN_ASSISTANT_MAX_DOCK_WIDTH,
+      viewport.width -
+        ADMIN_ASSISTANT_DOCK_NAV_RESERVE -
+        ADMIN_ASSISTANT_MIN_MAIN_CONTENT_WIDTH,
+    ),
+  );
+  const maxWidth = mode === "floating" ||
+      viewport.width < ADMIN_ASSISTANT_DOCK_REFLOW_MIN_VIEWPORT
+    ? Math.min(ADMIN_ASSISTANT_MAX_PANEL_WIDTH, availableWidth)
+    : Math.min(dockMaxWidth, availableWidth);
 
   return {
     width: clampFinite(
       size.width,
       minWidth,
-      Math.min(ADMIN_ASSISTANT_MAX_PANEL_WIDTH, availableWidth),
+      maxWidth,
     ),
     height: clampFinite(
       size.height,

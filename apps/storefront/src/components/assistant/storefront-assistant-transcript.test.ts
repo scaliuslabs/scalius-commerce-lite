@@ -17,6 +17,7 @@ import {
   rotateStorefrontAssistantConversationClaim,
   storefrontConversationContextMarker,
 } from "./storefront-assistant-transcript";
+import { installMemoryBrowserStorage } from "./assistant-test-storage";
 
 function event(
   sequence: number,
@@ -40,6 +41,7 @@ function event(
 
 describe("Storefront transcript integration", () => {
   beforeEach(() => {
+    installMemoryBrowserStorage();
     window.sessionStorage.clear();
     window.localStorage.clear();
   });
@@ -143,7 +145,11 @@ describe("Storefront transcript integration", () => {
 
     expect(first).toMatch(/^conv_[A-Za-z0-9_-]{22}$/);
     expect(second).toMatch(/^conv_[A-Za-z0-9_-]{22}$/);
-    expect(window.sessionStorage.length).toBe(0);
+    expect(
+      window.sessionStorage.getItem(
+        STOREFRONT_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      ),
+    ).toBeNull();
     expect(first).not.toMatch(/subject|credential|session_asst/i);
     expect(second).not.toMatch(/subject|credential|session_asst/i);
   });

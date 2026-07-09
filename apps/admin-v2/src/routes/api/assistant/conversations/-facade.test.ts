@@ -127,6 +127,35 @@ describe("admin conversation facade", () => {
     expect(agentFetch).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts platform hop-by-hop headers because the outbound facade allowlists headers", async () => {
+    const agentFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect([...headers.entries()]).toEqual([
+        ["accept", "application/json"],
+        ["cookie", COOKIE],
+      ]);
+      return Response.json({ success: true });
+    });
+    mocks.cfEnv.ADMIN_AGENT = { fetch: agentFetch };
+
+    const { proxyToAdminConversation } = await import("./$");
+    const response = await proxyToAdminConversation(
+      dashboardRequest(
+        `/api/assistant/conversations/${CONVERSATION_ID}/events`,
+        {
+          headers: {
+            Connection: "keep-alive",
+            Upgrade: "websocket",
+            "Upgrade-Insecure-Requests": "1",
+          },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(agentFetch).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     {
       label: "cancel",

@@ -39,6 +39,9 @@ import {
   type StorefrontAssistantPageContextSnapshot,
 } from "@/lib/assistant-page-context";
 import { ASSISTANT_GEOMETRY_STORAGE_KEY } from "./assistant-geometry";
+import { installMemoryBrowserStorage } from "./assistant-test-storage";
+import { STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY } from
+  "./storefront-assistant-open-state";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -48,35 +51,6 @@ type StorefrontAssistantBridge = {
   getContext: () => StorefrontAssistantPageContextSnapshot | null;
   navigate: (target: unknown) => boolean;
 };
-
-function installMemoryStorage(): Storage {
-  const values = new Map<string, string>();
-  const storage = {
-    get length() {
-      return values.size;
-    },
-    clear() {
-      values.clear();
-    },
-    getItem(key: string) {
-      return values.get(key) ?? null;
-    },
-    key(index: number) {
-      return Array.from(values.keys())[index] ?? null;
-    },
-    removeItem(key: string) {
-      values.delete(key);
-    },
-    setItem(key: string, value: string) {
-      values.set(key, value);
-    },
-  } satisfies Storage;
-  Object.defineProperty(window, "localStorage", {
-    configurable: true,
-    value: storage,
-  });
-  return storage;
-}
 
 describe("StorefrontAssistantBubble", () => {
   let root: Root;
@@ -88,8 +62,9 @@ describe("StorefrontAssistantBubble", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     document.title = "";
-    installMemoryStorage();
+    installMemoryBrowserStorage();
     window.localStorage.clear();
+    window.sessionStorage.clear();
     window.history.replaceState(null, "", "/products/rice");
     navigate = vi.fn<(target: unknown) => boolean>(() => true);
     fetchMock = vi.fn();
@@ -162,6 +137,7 @@ describe("StorefrontAssistantBubble", () => {
     delete window[STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL];
     delete window.__SCALIUS_STOREFRONT_ASSISTANT__;
     window.localStorage.clear();
+    window.sessionStorage.clear();
     vi.unstubAllGlobals();
   });
 
@@ -312,12 +288,55 @@ describe("StorefrontAssistantBubble", () => {
 
     await click(queryButton("Dock panel left"));
     expect(panel?.dataset.mode).toBe("dock-left");
+    expect(panel?.getAttribute("role")).toBe("complementary");
+    expect(panel?.hasAttribute("aria-modal")).toBe(false);
+    expect(document.body.dataset.storefrontAssistantDock).toBe("left");
+    expect(
+      document.body.style.getPropertyValue(
+        "--storefront-assistant-dock-width",
+      ),
+    ).toBe("424px");
     await click(queryButton("Make assistant wider"));
     const dockedGeometry = JSON.parse(
       window.localStorage.getItem(ASSISTANT_GEOMETRY_STORAGE_KEY) ?? "{}",
     ) as { mode: string; panelWidth: number };
     expect(dockedGeometry.mode).toBe("dock-left");
     expect(dockedGeometry.panelWidth).toBeGreaterThan(424);
+    expect(
+      document.body.style.getPropertyValue(
+        "--storefront-assistant-dock-width",
+      ),
+    ).toBe(`${dockedGeometry.panelWidth}px`);
+
+    await click(queryButton("Dock panel right"));
+    expect(document.body.dataset.storefrontAssistantDock).toBe("right");
+    const rightDockWidth = JSON.parse(
+      window.localStorage.getItem(ASSISTANT_GEOMETRY_STORAGE_KEY) ?? "{}",
+    ) as { panelWidth: number; panelHeight: number };
+    await keyDown(
+      queryButton(
+        "Resize assistant sidebar width. Use left and right arrow keys or the layout menu.",
+      ),
+      "ArrowLeft",
+    );
+    const widenedRightDock = JSON.parse(
+      window.localStorage.getItem(ASSISTANT_GEOMETRY_STORAGE_KEY) ?? "{}",
+    ) as { panelWidth: number; panelHeight: number };
+    expect(widenedRightDock.panelWidth).toBeGreaterThan(
+      rightDockWidth.panelWidth,
+    );
+    await keyDown(
+      queryButton(
+        "Resize assistant sidebar width. Use left and right arrow keys or the layout menu.",
+      ),
+      "ArrowUp",
+    );
+    const verticalDockKey = JSON.parse(
+      window.localStorage.getItem(ASSISTANT_GEOMETRY_STORAGE_KEY) ?? "{}",
+    ) as { panelHeight: number };
+    expect(verticalDockKey.panelHeight).toBe(
+      widenedRightDock.panelHeight,
+    );
 
     await click(queryButton("Open full screen"));
     expect(panel?.dataset.mobileFullscreen).toBe("true");
@@ -326,6 +345,49 @@ describe("StorefrontAssistantBubble", () => {
     const restoredLauncher = queryButton("Open storefront assistant");
     expect(restoredLauncher).toBeTruthy();
     expect(document.activeElement).toBe(restoredLauncher);
+    expect(document.body.dataset.storefrontAssistantDock).toBeUndefined();
+    expect(
+      document.body.style.getPropertyValue(
+        "--storefront-assistant-dock-width",
+      ),
+    ).toBe("");
+  });
+
+  it("restores an open panel across a same-tab document remount without persisting messages", async () => {
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await typeAssistantMessage("Unsaved buyer question");
+
+    expect(window.sessionStorage.getItem(
+      STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY,
+    )).toBe("open");
+
+    act(() => root.unmount());
+    host.remove();
+    host = document.createElement("div");
+    document.body.append(host);
+    const pageFocusTarget = document.createElement("button");
+    pageFocusTarget.textContent = "Current page action";
+    document.body.append(pageFocusTarget);
+    pageFocusTarget.focus();
+    root = createRoot(host);
+    renderBubble();
+    await flushReact();
+
+    expect(document.querySelector("#storefront-assistant-panel")).toBeTruthy();
+    expect(queryButton("Open storefront assistant")).toBeNull();
+    expect(document.activeElement).toBe(pageFocusTarget);
+    expect(document.body.textContent).not.toContain("Unsaved buyer question");
+    expect(
+      document.querySelector<HTMLTextAreaElement>(
+        'textarea[aria-label="Message storefront assistant"]',
+      )?.value,
+    ).toBe("");
+
+    await click(queryButton("Close storefront assistant"));
+    expect(window.sessionStorage.getItem(
+      STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY,
+    )).toBeNull();
   });
 
   it("renders supplied rich product and comparison parts with manual checkout fallback", async () => {

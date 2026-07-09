@@ -28,6 +28,7 @@ export const ASSISTANT_LAUNCHER_SIZE = 56;
 export const ASSISTANT_EDGE_GAP = 16;
 export const ASSISTANT_MIN_PANEL_WIDTH = 340;
 export const ASSISTANT_MAX_PANEL_WIDTH = 720;
+export const ASSISTANT_DOCK_MIN_MAIN_WIDTH = 320;
 export const ASSISTANT_MIN_PANEL_HEIGHT = 420;
 export const ASSISTANT_MAX_PANEL_HEIGHT = 840;
 
@@ -44,6 +45,10 @@ function clamp(value: number, minimum: number, maximum: number): number {
 
 function availablePanelWidth(viewport: AssistantViewport): number {
   return Math.max(240, viewport.width - ASSISTANT_EDGE_GAP * 2);
+}
+
+function availableDockWidth(viewport: AssistantViewport): number {
+  return Math.max(240, viewport.width - ASSISTANT_DOCK_MIN_MAIN_WIDTH);
 }
 
 function availablePanelHeight(viewport: AssistantViewport): number {
@@ -71,7 +76,9 @@ export function clampAssistantGeometry(
 ): AssistantGeometry {
   const maxPanelWidth = Math.min(
     ASSISTANT_MAX_PANEL_WIDTH,
-    availablePanelWidth(viewport),
+    geometry.mode === "floating"
+      ? availablePanelWidth(viewport)
+      : availableDockWidth(viewport),
   );
   const maxPanelHeight = Math.min(
     ASSISTANT_MAX_PANEL_HEIGHT,

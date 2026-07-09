@@ -136,13 +136,14 @@ export function rejectCrossOriginConversationRequest(
 export function hasForbiddenConversationClientHeader(
   headers: Headers,
 ): boolean {
+  // Cloudflare can surface hop-by-hop Connection/Upgrade headers on the
+  // inbound Request. They are safe here because the facade always constructs
+  // a fresh outbound header allowlist instead of forwarding browser headers.
   for (const [name] of headers) {
     const normalized = name.toLowerCase();
     if (
       normalized === "authorization" ||
       normalized === "proxy-authorization" ||
-      normalized === "connection" ||
-      normalized === "upgrade" ||
       normalized === "x-scalius-assistant-session-credential" ||
       normalized === "x-scalius-storefront-client-ip" ||
       normalized.startsWith("x-scalius-conversation-")

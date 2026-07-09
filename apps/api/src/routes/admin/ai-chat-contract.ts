@@ -24,6 +24,7 @@ export const ADMIN_CHAT_TOOL_GUIDANCE_FALLBACK =
   "I could not turn the model response into safe dashboard guidance. Please use the visible dashboard controls for this request.";
 export const ADMIN_AGENT_MCP_URL = "http://admin-agent.internal/mcp";
 export const ADMIN_NAVIGATION_CONTEXT_TOOL = "admin_navigation_context";
+export const ADMIN_DASHBOARD_SUMMARY_TOOL = "admin_dashboard_summary";
 export const ADMIN_PRODUCT_SEARCH_TOOL = "admin_product_search";
 export const ADMIN_PRODUCT_COPY_CONTEXT_TOOL = "admin_product_copy_context";
 export const ADMIN_AGENT_MCP_PROTOCOL_VERSION = "2025-11-25";
@@ -140,6 +141,9 @@ export type AdminChatProductCopyContext = {
   status?: string;
   categoryName?: string;
   descriptionText?: string;
+};
+export type AdminChatDashboardSummary = {
+  totalProducts: number;
 };
 export function validateAdminChatPayload(
   messages: Array<z.infer<typeof chatMessageSchema>>,

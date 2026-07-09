@@ -22,6 +22,10 @@ import {
   shouldAllowAdminPath,
 } from "~/lib/admin-access";
 import { useAdminNestedScrollRestoration } from "~/lib/admin-scroll-restoration";
+import {
+  ADMIN_ASSISTANT_DOCK_LEFT_ID,
+  ADMIN_ASSISTANT_DOCK_RIGHT_ID,
+} from "@/components/admin/assistant/assistant-layout";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
@@ -56,7 +60,8 @@ function AdminLayout() {
       <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset className="h-svh overflow-hidden">
+          <div id={ADMIN_ASSISTANT_DOCK_LEFT_ID} className="contents" />
+          <SidebarInset className="h-svh min-w-0 overflow-hidden">
             <AdminHeader user={user} />
             <div
               id="admin-main-scroll"
@@ -71,6 +76,7 @@ function AdminLayout() {
             {/* Portal target for form action bars — sits OUTSIDE the scroll area */}
             <div id="form-action-bar-slot" />
           </SidebarInset>
+          <div id={ADMIN_ASSISTANT_DOCK_RIGHT_ID} className="contents" />
         </SidebarProvider>
         <DeferredToaster />
       </PermissionProvider>

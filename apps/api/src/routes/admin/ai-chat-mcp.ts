@@ -6,6 +6,7 @@ import {
   ADMIN_CHAT_MAX_NAVIGATION_PAGES,
   ADMIN_CHAT_MAX_PRODUCT_COPY_CONTEXT_CHARS,
   ADMIN_CHAT_MAX_PRODUCT_DESCRIPTION_CHARS,
+  ADMIN_DASHBOARD_SUMMARY_TOOL,
   ADMIN_NAVIGATION_CONTEXT_TOOL,
   ADMIN_PRODUCT_COPY_CONTEXT_TOOL,
   ADMIN_PRODUCT_SEARCH_TOOL,
@@ -15,6 +16,7 @@ import {
   latestUserChatText,
   type AdminAgentMcpSession,
   type AdminChatNavigateAction,
+  type AdminChatDashboardSummary,
   type AdminChatNavigationEntry,
   type AdminChatProductCopyContext,
   type ApiContext,
@@ -259,6 +261,56 @@ export async function getAdminChatNavigationEntries(
     "admin-chat-navigation-context",
   );
   return compactAdminNavigationEntries(body);
+}
+
+export function hasProductCountIntent(text: string): boolean {
+  return isStandaloneProductCountQuestion(text);
+}
+
+export function isStandaloneProductCountQuestion(text: string): boolean {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[?!.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return /^(?:(?:can|could|would)\s+you\s+)?(?:(?:please\s+)?(?:tell|show)\s+me\s+)?(?:how\s+many\s+products?(?:\s+do\s+we\s+have|\s+are\s+there)?|what(?:'s|\s+is)\s+(?:the\s+)?(?:total\s+)?products?\s+count|(?:the\s+)?(?:total\s+)?products?\s+count|total\s+products?)$/i.test(
+    normalized,
+  );
+}
+
+export function compactAdminDashboardSummary(
+  body: unknown,
+): AdminChatDashboardSummary | null {
+  const structuredContent = readMcpStructuredContent(body);
+  const summary = isJsonRecord(structuredContent?.adminDashboardSummary)
+    ? structuredContent.adminDashboardSummary
+    : null;
+  const stats = isJsonRecord(summary?.stats) ? summary.stats : null;
+  const totalProducts = stats?.totalProducts;
+  if (
+    typeof totalProducts !== "number" ||
+    !Number.isFinite(totalProducts) ||
+    totalProducts < 0
+  ) {
+    return null;
+  }
+  return { totalProducts: Math.round(Math.min(totalProducts, 1_000_000_000)) };
+}
+
+export async function getAdminChatDashboardSummary(
+  c: ApiContext,
+  session: AdminAgentMcpSession | null,
+  messages: Array<z.infer<typeof chatMessageSchema>>,
+): Promise<AdminChatDashboardSummary | null> {
+  if (!hasProductCountIntent(latestUserChatText(messages))) return null;
+  const body = await callAdminAgentTool(
+    c,
+    session,
+    ADMIN_DASHBOARD_SUMMARY_TOOL,
+    {},
+    "admin-chat-dashboard-summary",
+  );
+  return compactAdminDashboardSummary(body);
 }
 
 export function hasProductCopyIntent(text: string): boolean {

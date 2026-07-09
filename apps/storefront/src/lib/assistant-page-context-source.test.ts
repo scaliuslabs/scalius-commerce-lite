@@ -113,6 +113,6 @@ describe("storefront assistant page-context source boundaries", () => {
     expect(bubbleSource).toMatch(/<form\s+method="post"/);
     expect(bubbleSource).toContain("<textarea");
     expect(bubbleSource).not.toMatch(/<textarea[^>]*\bname=/);
-    expect(layoutSource).toContain("<StorefrontAssistantBubble client:idle");
+    expect(layoutSource).toContain("<StorefrontAssistantBubble client:load");
   });
 });

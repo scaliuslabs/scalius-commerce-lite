@@ -474,7 +474,9 @@ function formatAdminAssistantPageContext(
         typeof surface.selectedCount === "number"
           ? `${surface.selectedCount} selected`
           : null,
-        typeof surface.rowCount === "number" ? `${surface.rowCount} rows` : null,
+        typeof surface.rowCount === "number"
+          ? `${surface.rowCount} total rows`
+          : null,
         typeof surface.validationErrorCount === "number"
           ? `${surface.validationErrorCount} validation errors`
           : null,

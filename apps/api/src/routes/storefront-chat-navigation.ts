@@ -21,6 +21,67 @@ import {
   type StorefrontNavigateAction,
 } from "./storefront-chat-contract";
 
+const BUYER_QUERY_STOP_WORDS = new Set([
+  "a",
+  "about",
+  "an",
+  "and",
+  "any",
+  "are",
+  "available",
+  "availability",
+  "browse",
+  "can",
+  "catalog",
+  "check",
+  "choose",
+  "compare",
+  "could",
+  "do",
+  "does",
+  "find",
+  "for",
+  "got",
+  "have",
+  "help",
+  "here",
+  "how",
+  "i",
+  "in",
+  "is",
+  "it",
+  "look",
+  "looking",
+  "me",
+  "my",
+  "need",
+  "of",
+  "please",
+  "product",
+  "products",
+  "recommend",
+  "search",
+  "sell",
+  "sells",
+  "show",
+  "shop",
+  "shopping",
+  "some",
+  "stock",
+  "tell",
+  "the",
+  "there",
+  "this",
+  "to",
+  "want",
+  "what",
+  "where",
+  "which",
+  "would",
+  "you",
+  "your",
+]);
+
 export function searchQueryFromMessages(
   messages: StorefrontChatMessage[],
 ): string | null {
@@ -33,7 +94,18 @@ export function searchQueryFromMessages(
   ) {
     return null;
   }
-  return latest;
+  const terms = Array.from(latest, (character) => {
+    const code = character.charCodeAt(0);
+    return code <= 31 || code === 127 ? " " : character;
+  })
+    .join("")
+    .replace(/[?!.;,()[\]{}:]+/g, " ")
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0)
+    .filter((term) => !BUYER_QUERY_STOP_WORDS.has(term.toLowerCase()))
+    .slice(0, 8);
+  return compactStorefrontChatText(terms.join(" "), 120);
 }
 
 export function hasCategoryIntent(

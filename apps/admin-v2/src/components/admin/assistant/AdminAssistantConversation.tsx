@@ -68,8 +68,9 @@ export function AdminAssistantConversation({
               Work from where you are
             </h3>
             <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-              Ask about the current page. Suggested navigation and page actions
-              wait for your click before anything happens.
+              Ask about the current page or directly open a named dashboard
+              page. Suggested destinations and page-changing actions wait for
+              your click.
             </p>
             <div className="mt-4 flex flex-wrap gap-1.5" aria-label="Suggested prompts">
               {EMPTY_SUGGESTIONS.map((suggestion) => (

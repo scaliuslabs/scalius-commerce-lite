@@ -13,6 +13,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { createPortal } from "react-dom";
 
 import {
   assistantMessagePartSchema,
@@ -38,12 +39,16 @@ import {
 import {
   clampAdminAssistantPosition,
   getAdminAssistantViewport,
+  ADMIN_ASSISTANT_DOCK_LEFT_ID,
+  ADMIN_ASSISTANT_DOCK_RIGHT_ID,
   type AdminAssistantMode,
   type AdminAssistantPosition,
   type AdminAssistantSize,
 } from "./assistant-layout";
 import { getAdminAssistantPageActionStatus } from "./assistant-action-status";
 import {
+  getDirectlyConfirmedAdminNavigationAction,
+  getAdminAssistantActionExecutionKey,
   safeAdminAssistantNavigationPath,
   safeAdminAssistantPanelActions,
 } from "./assistant-navigation";
@@ -176,6 +181,7 @@ export function AdminAssistantPanel({
         result,
         contextMarker,
         persistedUserEvent !== null,
+        message,
       );
     } catch {
       setStatus({
@@ -191,18 +197,28 @@ export function AdminAssistantPanel({
     result: AdminAssistantChatResult,
     contextMarker: AdminConversationContextMarker,
     persistTranscript: boolean,
+    userMessage: string,
   ) {
     if (result.status === "ok") {
       const assistantClientMessageId =
         createAdminConversationRequestId("message");
+      let assistantMessageIdForActions = assistantClientMessageId;
+      const safeActions = safeAdminAssistantPanelActions(result.actions);
+      const confirmedNavigation = getDirectlyConfirmedAdminNavigationAction(
+        userMessage,
+        safeActions,
+      );
+      const assistantContent = confirmedNavigation
+        ? `Opening ${navigationDestinationLabel(confirmedNavigation.label)}…`
+        : result.message.content;
       setMessages((current) => [
         ...current,
         {
           id: assistantClientMessageId,
           role: "assistant",
-          content: result.message.content,
-          parts: readAssistantParts(result),
-          actions: safeAdminAssistantPanelActions(result.actions),
+          content: assistantContent,
+          parts: confirmedNavigation ? undefined : readAssistantParts(result),
+          actions: safeActions,
         },
       ]);
       setStatus({ kind: "idle", message: "Ready on the current admin page." });
@@ -211,10 +227,11 @@ export function AdminAssistantPanel({
         const persistedAssistantEvent = await transcript.appendMessage({
           clientMessageId: assistantClientMessageId,
           role: "assistant",
-          content: result.message.content,
+          content: assistantContent,
           contextMarker,
         });
         if (persistedAssistantEvent) {
+          assistantMessageIdForActions = persistedAssistantEvent.message.id;
           setMessages((current) =>
             reconcileAdminAssistantPersistedMessage(
               current,
@@ -222,6 +239,33 @@ export function AdminAssistantPanel({
               assistantClientMessageId,
             ),
           );
+        }
+      }
+
+      if (confirmedNavigation) {
+        const executionKey = getAdminAssistantActionExecutionKey(
+          assistantMessageIdForActions,
+          confirmedNavigation,
+        );
+        if (claimActionKey(claimedActionKeysRef.current, executionKey)) {
+          setActionExecutionStates((current) => ({
+            ...current,
+            [executionKey]: "running",
+          }));
+          try {
+            const navigated = navigateFromAssistant(confirmedNavigation.path);
+            if (navigated) {
+              setStatus({
+                kind: "success",
+                message: `Opening ${navigationDestinationLabel(confirmedNavigation.label)}. Complete any unsaved-changes prompt to continue.`,
+              });
+            }
+          } finally {
+            setActionExecutionStates((current) => ({
+              ...current,
+              [executionKey]: "consumed",
+            }));
+          }
         }
       }
       return;
@@ -233,20 +277,31 @@ export function AdminAssistantPanel({
     });
   }
 
-  async function navigateFromAssistant(pathValue: string) {
+  function navigateFromAssistant(pathValue: string): boolean {
     const path = safeAdminAssistantNavigationPath(pathValue);
     if (!path) {
       setStatus({
         kind: "error",
         message: "That navigation action is no longer available.",
       });
-      return;
+      return false;
     }
 
     try {
-      await Promise.resolve(navigate({ to: path as string }));
+      const navigation = navigate({ to: path as string });
+      void Promise.resolve(navigation).catch(() => {
+        setStatus({
+          kind: "error",
+          message: "Navigation did not complete. Your current page was preserved.",
+        });
+      });
+      return true;
     } catch {
-      if (typeof window !== "undefined") window.location.assign(path);
+      setStatus({
+        kind: "error",
+        message: "Navigation did not start. Your current page was preserved.",
+      });
+      return false;
     }
   }
 
@@ -262,7 +317,7 @@ export function AdminAssistantPanel({
 
     try {
       if (action.type === "navigate") {
-        await navigateFromAssistant(action.path);
+        navigateFromAssistant(action.path);
         return;
       }
 
@@ -336,17 +391,20 @@ export function AdminAssistantPanel({
 
   const panelStyle = getPanelStyle(mode, position, size);
 
-  return (
-    <section
+  const panel = (
+    <aside
       id="admin-assistant-panel"
       aria-label="Admin assistant"
       aria-describedby="admin-assistant-context"
       data-assistant-mode={mode}
       className={cn(
-        "fixed z-[80] flex flex-col overflow-hidden border border-border/90 bg-background text-foreground shadow-2xl shadow-black/15",
-        mode === "floating" && "rounded-2xl",
-        mode === "dock-left" && "left-0 top-0 border-y-0 border-l-0",
-        mode === "dock-right" && "right-0 top-0 border-y-0 border-r-0",
+        "z-[80] flex flex-col overflow-hidden border border-border/90 bg-background text-foreground",
+        mode === "floating" &&
+          "fixed rounded-2xl shadow-2xl shadow-black/15",
+        mode !== "floating" &&
+          "fixed inset-y-0 h-dvh shadow-2xl shadow-black/15 lg:relative lg:inset-auto lg:z-20 lg:h-svh lg:shrink-0 lg:shadow-none",
+        mode === "dock-left" && "left-0 border-y-0 border-l-0",
+        mode === "dock-right" && "right-0 border-y-0 border-r-0",
       )}
       style={panelStyle}
       onKeyDown={(event) => {
@@ -376,7 +434,7 @@ export function AdminAssistantPanel({
           void handleAssistantAction(action, executionKey);
         }}
         onNavigate={(path) => {
-          void navigateFromAssistant(path);
+          navigateFromAssistant(path);
         }}
         onSuggestion={(suggestion) => {
           setDraft(suggestion);
@@ -417,8 +475,24 @@ export function AdminAssistantPanel({
           <span className="mx-auto block h-12 w-0.5 rounded-full bg-current opacity-60" />
         )}
       </button>
-    </section>
+    </aside>
   );
+
+  const dockTarget = getDockTarget(mode);
+  return dockTarget ? createPortal(panel, dockTarget) : panel;
+}
+
+function getDockTarget(mode: AdminAssistantMode): HTMLElement | null {
+  if (mode === "floating" || typeof document === "undefined") return null;
+  return document.getElementById(
+    mode === "dock-left"
+      ? ADMIN_ASSISTANT_DOCK_LEFT_ID
+      : ADMIN_ASSISTANT_DOCK_RIGHT_ID,
+  );
+}
+
+function navigationDestinationLabel(actionLabel: string): string {
+  return actionLabel.replace(/^Open\s+/i, "").trim() || "dashboard page";
 }
 
 function readAssistantParts(

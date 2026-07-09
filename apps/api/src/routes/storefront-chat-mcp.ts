@@ -26,11 +26,14 @@ import {
   searchQueryFromMessages,
 } from "./storefront-chat-navigation";
 
+const STOREFRONT_AGENT_MCP_MAX_RESPONSE_BYTES = 512 * 1024;
+type JsonRpcId = string | number;
+
 export function createStorefrontAgentMcpHeaders(
   session?: StorefrontAgentMcpSession | null,
 ): Headers {
   const headers = new Headers({
-    Accept: "application/json",
+    Accept: "application/json, text/event-stream",
     "Content-Type": "application/json",
   });
   if (session?.sessionId) headers.set("Mcp-Session-Id", session.sessionId);
@@ -53,7 +56,30 @@ export function parseJsonText(value: string): unknown | null {
   }
 }
 
-export function parseSseJsonResponse(value: string): unknown | null {
+function matchingJsonRpcResponse(
+  value: unknown,
+  expectedId: JsonRpcId,
+): JsonRecord | null {
+  const candidates = Array.isArray(value) ? value : [value];
+  for (const candidate of candidates) {
+    if (
+      isJsonRecord(candidate) &&
+      candidate.jsonrpc === "2.0" &&
+      candidate.id === expectedId &&
+      candidate.method === undefined &&
+      (Object.prototype.hasOwnProperty.call(candidate, "result") ||
+        Object.prototype.hasOwnProperty.call(candidate, "error"))
+    ) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+export function parseSseJsonResponse(
+  value: string,
+  expectedId: JsonRpcId,
+): JsonRecord | null {
   const chunks = value
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
@@ -70,19 +96,68 @@ export function parseSseJsonResponse(value: string): unknown | null {
       .trim();
     if (!data || data === "[DONE]") continue;
     const parsed = parseJsonText(data);
-    if (parsed !== null) return parsed;
+    const matched = matchingJsonRpcResponse(parsed, expectedId);
+    if (matched) return matched;
   }
   return null;
 }
 
+async function readBoundedResponseText(response: Response): Promise<
+  string | null
+> {
+  if (!response.body) return null;
+  const contentLength = response.headers.get("content-length");
+  if (
+    contentLength &&
+    /^\d+$/.test(contentLength) &&
+    Number(contentLength) > STOREFRONT_AGENT_MCP_MAX_RESPONSE_BYTES
+  ) {
+    await response.body.cancel().catch(() => undefined);
+    return null;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > STOREFRONT_AGENT_MCP_MAX_RESPONSE_BYTES) {
+        await reader.cancel("MCP response exceeded byte limit");
+        return null;
+      }
+      chunks.push(chunk.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 export async function parseJsonResponse(
   response: Response,
-): Promise<unknown | null> {
+  expectedId: JsonRpcId,
+): Promise<JsonRecord | null> {
   try {
-    const text = await response.text();
+    const text = await readBoundedResponseText(response);
+    if (text === null) return null;
     const direct = parseJsonText(text.trim());
-    if (direct !== null) return direct;
-    return parseSseJsonResponse(text);
+    const directMatch = matchingJsonRpcResponse(direct, expectedId);
+    if (directMatch) return directMatch;
+    return parseSseJsonResponse(text, expectedId);
   } catch {
     return null;
   }
@@ -114,20 +189,37 @@ export async function initializeStorefrontAgentMcp(
     });
     if (!response.ok) throw unavailableStorefrontToolsError();
 
-    const body = await parseJsonResponse(response);
+    const initializeId = "storefront-chat-initialize";
+    const body = await parseJsonResponse(response, initializeId);
     const result =
       isJsonRecord(body) && isJsonRecord(body.result) ? body.result : null;
     if (!result) throw unavailableStorefrontToolsError();
 
     const protocolVersion = compactMcpProtocolVersion(result.protocolVersion);
+    if (!protocolVersion) throw unavailableStorefrontToolsError();
     const sessionId = compactStorefrontChatText(
       response.headers.get("mcp-session-id"),
       160,
     );
-    return {
-      ...(protocolVersion ? { protocolVersion } : {}),
+    const session = {
+      protocolVersion,
       ...(sessionId ? { sessionId } : {}),
     };
+    const initialized = await agent.fetch(STOREFRONT_AGENT_MCP_URL, {
+      method: "POST",
+      headers: createStorefrontAgentMcpHeaders(session),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+      }),
+      signal: c.req.raw.signal,
+    });
+    if (initialized.status !== 202) {
+      await initialized.body?.cancel().catch(() => undefined);
+      throw unavailableStorefrontToolsError();
+    }
+    await initialized.body?.cancel().catch(() => undefined);
+    return session;
   } catch (error) {
     if (error instanceof ServiceUnavailableError) throw error;
     throw unavailableStorefrontToolsError();
@@ -167,7 +259,7 @@ export async function callStorefrontAgentTool(
       signal: c.req.raw.signal,
     });
     if (!response.ok) return null;
-    return parseJsonResponse(response);
+    return parseJsonResponse(response, id);
   } catch {
     return null;
   }
@@ -268,6 +360,18 @@ export function searchQueryFromPageSurface(
     : null;
 }
 
+export function visibleListingProductIds(
+  pageContext: StorefrontChatPageContext,
+): string[] {
+  const surface = pageContext?.surface;
+  return surface &&
+      (surface.kind === "category" ||
+        surface.kind === "collection" ||
+        surface.kind === "search")
+    ? surface.visibleProductIds.slice(0, 5)
+    : [];
+}
+
 export function cartValidationItems(
   pageContext: StorefrontChatPageContext,
 ): JsonRecord[] {
@@ -324,6 +428,15 @@ export async function collectStorefrontMcpContexts(
       "catalog_product",
       { id: productId },
       "storefront-chat-catalog-product",
+    );
+  }
+
+  const visibleProductIds = visibleListingProductIds(payload.pageContext);
+  if (visibleProductIds.length > 0) {
+    await addToolContext(
+      "catalog_lookup",
+      { ids: visibleProductIds },
+      "storefront-chat-visible-products",
     );
   }
 

@@ -59,8 +59,6 @@ function hasForbiddenClientHeader(headers: Headers): boolean {
     if (
       lowerName === "authorization" ||
       lowerName === "proxy-authorization" ||
-      lowerName === "upgrade" ||
-      lowerName === "connection" ||
       lowerName.startsWith("x-scalius-conversation-")
     ) {
       return true;

@@ -58,6 +58,8 @@ vi.mock("ai", () => ({
 }));
 
 import { storefrontChatRoutes } from "./storefront-chat";
+import { parseJsonResponse } from "./storefront-chat-mcp";
+import { searchQueryFromMessages } from "./storefront-chat-navigation";
 
 function runtimeSettings(
   overrides: {
@@ -176,6 +178,10 @@ function createAgentFetch() {
       );
     }
 
+    if (body.method === "notifications/initialized") {
+      return new Response(null, { status: 202 });
+    }
+
     const params = body.params as { name?: string } | undefined;
     if (params?.name === "storefront_discovery_policy") {
       return mcpEventResponse({
@@ -244,6 +250,32 @@ function createAgentFetch() {
       });
     }
 
+    if (params?.name === "catalog_lookup") {
+      return mcpEventResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          structuredContent: {
+            products: [
+              {
+                id: "prod_rice",
+                title: "Premium Rice",
+                path: "/products/rice",
+                availability: "in_stock",
+              },
+              {
+                id: "prod_rice_gift",
+                title: "Premium Rice Gift Box",
+                path: "/products/rice-gift",
+                availability: "in_stock",
+              },
+            ],
+          },
+          content: [{ type: "text", text: "raw lookup output must not leak" }],
+        },
+      });
+    }
+
     if (params?.name === "cart_validate") {
       return mcpEventResponse({
         jsonrpc: "2.0",
@@ -283,6 +315,98 @@ describe("storefront chat route", () => {
       text: "Khaki Shoes are a good match. Use /checkout?token=sk_secret or https://evil.example.test/admin to continue.",
       totalUsage: { inputTokens: 20, outputTokens: 16, totalTokens: 36 },
     });
+  });
+
+  it("selects the bounded SSE JSON-RPC response matching the request id", async () => {
+    const expected = {
+      jsonrpc: "2.0",
+      id: "catalog-search-request",
+      result: { structuredContent: { products: [{ id: "prod_rice" }] } },
+    };
+    const response = new Response(
+      [
+        "event: message",
+        'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed"}',
+        "",
+        "event: message",
+        'data: {"jsonrpc":"2.0","id":"catalog-search-request","method":"sampling/createMessage","params":{}}',
+        "",
+        "event: message",
+        'data: {"jsonrpc":"2.0","id":"another-request","result":{"ignored":true}}',
+        "",
+        "event: message",
+        `data: ${JSON.stringify(expected)}`,
+        "",
+      ].join("\n"),
+      { headers: { "Content-Type": "text/event-stream" } },
+    );
+
+    await expect(
+      parseJsonResponse(response, "catalog-search-request"),
+    ).resolves.toEqual(expected);
+  });
+
+  it("extracts a bounded catalog term from a natural buyer question", () => {
+    expect(searchQueryFromMessages([
+      { role: "user", content: "Do you sell any shoes?" },
+    ])).toBe("shoes");
+    expect(searchQueryFromMessages([
+      { role: "user", content: "Can you help me find khaki shoes?" },
+    ])).toBe("khaki shoes");
+    expect(searchQueryFromMessages([
+      { role: "user", content: "What can I find here?" },
+    ])).toBeNull();
+    expect(searchQueryFromMessages([
+      { role: "user", content: "How do I search the catalog?" },
+    ])).toBeNull();
+    expect(searchQueryFromMessages([
+      { role: "user", content: "How can you help me shop?" },
+    ])).toBeNull();
+  });
+
+  it("rejects an oversized MCP response before parsing", async () => {
+    const response = new Response(new Uint8Array(600_000), {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+
+    await expect(parseJsonResponse(response, "bounded-request")).resolves
+      .toBeNull();
+  });
+
+  it("requires the initialized notification acknowledgement before tool calls", async () => {
+    const methods: unknown[] = [];
+    const fetch = vi.fn(async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const body = await new Response(init?.body).json() as Record<
+        string,
+        unknown
+      >;
+      methods.push(body.method);
+      if (body.method === "initialize") {
+        return mcpEventResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { protocolVersion: "2025-11-25" },
+        });
+      }
+      if (body.method === "notifications/initialized") {
+        return new Response(null, { status: 200 });
+      }
+      throw new Error("Tool call must not run before MCP initialization");
+    });
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Find shoes" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(503);
+    expect(methods).toEqual(["initialize", "notifications/initialized"]);
+    expect(mocks.generateText).not.toHaveBeenCalled();
   });
 
   it("rejects direct public API requests before settings, Agent MCP, or model work", async () => {
@@ -479,28 +603,38 @@ describe("storefront chat route", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
-    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(fetch).toHaveBeenCalledTimes(5);
     for (const call of calls) {
       expect(call.input).toBe("http://storefront-agent.internal/mcp");
       expect(call.method).toBe("POST");
+      expect(call.headers.get("accept")).toBe(
+        "application/json, text/event-stream",
+      );
       expect(call.headers.get("cookie")).toBeNull();
       expect(call.headers.get("authorization")).toBeNull();
       expect(call.headers.get("x-extra-header")).toBeNull();
     }
-    expect(calls[1]?.headers.get("mcp-session-id")).toBe("agent-session");
-    expect(calls[1]?.headers.get("mcp-protocol-version")).toBe("2025-11-25");
+    for (const call of calls.slice(1)) {
+      expect(call.headers.get("mcp-session-id")).toBe("agent-session");
+      expect(call.headers.get("mcp-protocol-version")).toBe("2025-11-25");
+    }
     expect(calls.map((call) => call.body.method)).toEqual([
       "initialize",
+      "notifications/initialized",
       "tools/call",
       "tools/call",
       "tools/call",
     ]);
+    expect(calls[1]?.body).toEqual({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+    });
     expect(calls.map((call) => (call.body.params as { name?: string } | undefined)?.name).filter(Boolean)).toEqual([
       "storefront_discovery_policy",
       "catalog_search",
       "cart_validate",
     ]);
-    expect(calls[3]?.body).toMatchObject({
+    expect(calls[4]?.body).toMatchObject({
       params: {
         name: "cart_validate",
         arguments: {
@@ -715,12 +849,82 @@ describe("storefront chat route", () => {
         arguments: { query: "premium rice", limit: 5 },
       },
     });
+    const visibleLookupCall = calls.find(
+      (call) =>
+        (call.body.params as { name?: string } | undefined)?.name ===
+        "catalog_lookup",
+    );
+    expect(visibleLookupCall?.body).toMatchObject({
+      params: {
+        name: "catalog_lookup",
+        arguments: { ids: ["prod_rice", "prod_rice_gift"] },
+      },
+    });
     const prompt = JSON.stringify(
       (mocks.generateText.mock.calls[0]?.[0] as { messages?: unknown })?.messages,
     );
     expect(prompt).toContain("Search query: premium rice");
     expect(prompt).toContain("Visible filters: brand=Scalius");
     expect(prompt).toContain("Visible product IDs: prod_rice, prod_rice_gift");
+    expect(prompt).toContain("Premium Rice Gift Box");
+  });
+
+  it("bounds listing lookups to the first five buyer-visible product ids", async () => {
+    const { fetch, calls } = createAgentFetch();
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Help me choose" }],
+      pageContext: {
+        version: 1,
+        contextVersion: 2,
+        source: "storefront",
+        page: {
+          path: "/categories/food",
+          title: "Food",
+          kind: "category",
+        },
+        surface: {
+          kind: "category",
+          categoryId: "cat_food",
+          slug: "food",
+          visibleProductIds: [
+            "prod_1",
+            "prod_2",
+            "prod_3",
+            "prod_4",
+            "prod_5",
+            "prod_6",
+          ],
+          visibleFilters: [],
+          totalResults: 6,
+          page: 1,
+        },
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const visibleLookupCall = calls.find(
+      (call) =>
+        (call.body.params as { name?: string } | undefined)?.name ===
+        "catalog_lookup",
+    );
+    expect(visibleLookupCall?.body).toMatchObject({
+      params: {
+        name: "catalog_lookup",
+        arguments: {
+          ids: ["prod_1", "prod_2", "prod_3", "prod_4", "prod_5"],
+        },
+      },
+    });
+    expect(JSON.stringify(visibleLookupCall?.body)).not.toContain("prod_6");
+    expect(calls.some(
+      (call) =>
+        (call.body.params as { name?: string } | undefined)?.name ===
+        "catalog_search",
+    )).toBe(false);
   });
 
   it("drops PII-shaped product surface fields again at the API boundary", async () => {
@@ -878,6 +1082,9 @@ describe("storefront chat route", () => {
           id: body.id,
           result: { protocolVersion: "2025-11-25" },
         });
+      }
+      if (body.method === "notifications/initialized") {
+        return new Response(null, { status: 202 });
       }
       const params = body.params as { name?: string } | undefined;
       if (params?.name === "storefront_discovery_policy") {

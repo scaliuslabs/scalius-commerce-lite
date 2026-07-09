@@ -54,6 +54,11 @@ describe("AdminAssistantLauncher", () => {
 
   beforeEach(() => {
     document.body.innerHTML = "";
+    const leftDock = document.createElement("div");
+    leftDock.id = "admin-assistant-dock-left";
+    const rightDock = document.createElement("div");
+    rightDock.id = "admin-assistant-dock-right";
+    document.body.append(leftDock, rightDock);
     window.sessionStorage.clear();
     delete window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL];
     resetAdminAssistantPageActionsForTest();
@@ -133,6 +138,7 @@ describe("AdminAssistantLauncher", () => {
 
     expect(trigger?.getAttribute("aria-expanded")).toBe("true");
     expect(document.body.textContent).toContain("Admin assistant");
+    expect(getAssistantPanel()?.tagName).toBe("ASIDE");
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe("floating");
     expect(queryButton("Move assistant")).toBeTruthy();
     expect(queryButton("Resize assistant")).toBeTruthy();
@@ -153,6 +159,9 @@ describe("AdminAssistantLauncher", () => {
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
       "dock-left",
     );
+    expect(getAssistantPanel()?.parentElement?.id).toBe(
+      "admin-assistant-dock-left",
+    );
     expect(queryButton("Dock assistant left")?.getAttribute("aria-pressed")).toBe(
       "true",
     );
@@ -160,6 +169,9 @@ describe("AdminAssistantLauncher", () => {
     await click(queryButton("Dock assistant right"));
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
       "dock-right",
+    );
+    expect(getAssistantPanel()?.parentElement?.id).toBe(
+      "admin-assistant-dock-right",
     );
 
     await click(queryButton("Use floating assistant"));
@@ -367,7 +379,7 @@ describe("AdminAssistantLauncher", () => {
 
     renderLauncher();
     await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Open products");
+    await typeAssistantMessage("Where do I manage products?");
     await click(queryButton("Send assistant message"));
     await flushReact();
 
@@ -394,7 +406,7 @@ describe("AdminAssistantLauncher", () => {
         conversationMessageEvent(
           1,
           "user",
-          "Open products",
+          "Where do I manage products?",
           "admin:page",
         ),
         conversationMessageEvent(
@@ -435,10 +447,60 @@ describe("AdminAssistantLauncher", () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it("renders navigation actions only after the assistant returns them and navigates on click", async () => {
+  it("keeps advisory navigation click-confirmed", async () => {
     mocks.sendAdminAssistantMessage.mockResolvedValue({
       status: "ok",
       message: { role: "assistant", content: "Use Products to manage catalog items." },
+      usage: null,
+      actions: [
+        { type: "navigate", path: "/admin/products", label: "Open Products" },
+      ],
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Where do I manage products?");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    const action = queryButton("Open Products");
+    expect(action).toBeTruthy();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+
+    await click(action);
+    expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products" });
+  });
+
+  it("navigates immediately for an unambiguous user-confirmed destination", async () => {
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: {
+        role: "assistant",
+        content: "Use the visible Products action to continue.",
+      },
+      usage: null,
+      actions: [
+        { type: "navigate", path: "/admin/products", label: "Open Products" },
+      ],
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Can you take me to products page?");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    expect(mocks.navigate).toHaveBeenCalledTimes(1);
+    expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products" });
+    expect(document.body.textContent).toContain("Opening Products");
+    expect(queryButton("Open Products")?.disabled).toBe(true);
+  });
+
+  it("does not keep the composer busy while a dirty-form blocker holds navigation", async () => {
+    mocks.navigate.mockReturnValue(new Promise<void>(() => {}));
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: { role: "assistant", content: "Opening Products." },
       usage: null,
       actions: [
         { type: "navigate", path: "/admin/products", label: "Open Products" },
@@ -451,12 +513,13 @@ describe("AdminAssistantLauncher", () => {
     await click(queryButton("Send assistant message"));
     await flushReact();
 
-    const action = queryButton("Open Products");
-    expect(action).toBeTruthy();
-    expect(mocks.navigate).not.toHaveBeenCalled();
-
-    await click(action);
     expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products" });
+    expect(
+      document.querySelector<HTMLTextAreaElement>(
+        'textarea[aria-label="Message admin assistant"]',
+      )?.disabled,
+    ).toBe(false);
+    expect(queryButton("Open Products")?.disabled).toBe(true);
   });
 
   it("runs click-confirmed registered page actions through the browser executor", async () => {
@@ -648,7 +711,7 @@ function queryButton(label: string): HTMLButtonElement | null {
 
 function getAssistantPanel(): HTMLElement | null {
   return document.querySelector<HTMLElement>(
-    'section[aria-label="Admin assistant"]',
+    'aside[aria-label="Admin assistant"]',
   );
 }
 

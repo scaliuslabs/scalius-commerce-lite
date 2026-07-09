@@ -334,6 +334,43 @@ describe("Storefront anonymous conversation facade", () => {
     expect(agentFetch).not.toHaveBeenCalled();
   });
 
+  it("accepts Cloudflare transport headers without forwarding them to authority or Agent", async () => {
+    const backendFetch = vi.fn(async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.get("Connection")).toBeNull();
+      expect(headers.get("Upgrade")).toBeNull();
+      return new Response(JSON.stringify(identityEnvelope()), {
+        status: 200,
+        headers: { "Set-Cookie": SET_COOKIE },
+      });
+    });
+    const agentFetch = vi.fn(async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.get("Connection")).toBeNull();
+      expect(headers.get("Upgrade")).toBeNull();
+      return Response.json(agentMutationEnvelope());
+    });
+    mocks.cfEnv.BACKEND_API = { fetch: backendFetch };
+    mocks.cfEnv.STOREFRONT_AGENT = { fetch: agentFetch };
+
+    const response = await proxyToStorefrontConversation(
+      appendRequest(CONVERSATION_ID, {
+        Connection: "keep-alive",
+        Upgrade: "websocket",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(backendFetch).toHaveBeenCalledTimes(1);
+    expect(agentFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects non-canonical browser JSON before creating authority", async () => {
     const backendFetch = vi.fn();
     const agentFetch = vi.fn();

@@ -139,7 +139,7 @@ export function useAdminAssistantTableSurface<TData>(options: {
       label: options.label,
       visibleRowIds,
       selectedRowIds,
-      rowCount: visibleRowIds.length,
+      rowCount: options.table.getRowCount(),
       selectedCount: selectedRowIds.length,
       onSelectVisibleRows: (rowIds) =>
         selectTanStackVisibleRows(options.table, rowIds),

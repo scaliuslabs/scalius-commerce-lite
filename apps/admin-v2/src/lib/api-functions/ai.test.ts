@@ -68,6 +68,7 @@ describe("admin assistant API adapter", () => {
     expect(serialized).toContain("Current safe dashboard context");
     expect(serialized).toContain("Route: /admin/orders");
     expect(serialized).toContain("2 selected");
+    expect(serialized).toContain("12 total rows");
     expect(serialized).not.toContain("buyer@example.com");
     expect(serialized).not.toContain("01775528888");
     expect(serialized).not.toContain("chk_secretToken123456");
