@@ -4,12 +4,35 @@ import { Package, ArrowRight } from "lucide-react";
 import type { Order, OrderItem } from "./types";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatOrderAmount } from "./formatters";
+import {
+  formatSavedMinorAmount,
+  resolveSavedOrderLineMoney,
+  resolveSavedOrderMoneySummary,
+  type SavedOrderMoneySummary,
+} from "@/lib/order-tax-presentation";
 
 interface OrderItemsCardProps {
   order: Order;
 }
 
-const OrderItemRow = ({ item, symbol }: { item: OrderItem; symbol: string }) => (
+const OrderItemRow = ({
+  item,
+  symbol,
+  savedSummary,
+}: {
+  item: OrderItem;
+  symbol: string;
+  savedSummary: SavedOrderMoneySummary | null;
+}) => {
+  const savedLine = resolveSavedOrderLineMoney(item, savedSummary);
+  const unitPrice = savedLine && savedSummary
+    ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedSummary)
+    : `${symbol}${formatOrderAmount(item.price)}`;
+  const lineTotal = savedLine && savedSummary
+    ? formatSavedMinorAmount(savedLine.totalMinor, savedSummary)
+    : `${symbol}${formatOrderAmount(item.price * item.quantity)}`;
+
+  return (
   <div
     key={item.id}
     className="flex items-center gap-4 p-4 transition-colors hover:bg-muted/5"
@@ -47,19 +70,31 @@ const OrderItemRow = ({ item, symbol }: { item: OrderItem; symbol: string }) => 
             View Product
             <ArrowRight className="h-3 w-3" />
           </Link>
+          {savedLine && savedSummary && savedLine.discountMinor > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Item discount: −{formatSavedMinorAmount(savedLine.discountMinor, savedSummary)}
+            </p>
+          )}
+          {savedLine && savedSummary && savedLine.taxMinor > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {savedSummary.taxLabel}{savedSummary.pricesIncludeTax ? " included" : " added"}: {formatSavedMinorAmount(savedLine.taxMinor, savedSummary)}
+            </p>
+          )}
         </div>
         <div className="shrink-0 text-right">
+          {savedLine && <p className="text-xs text-muted-foreground">Line total</p>}
           <p className="font-medium text-foreground">
-            {symbol}{formatOrderAmount(item.price * item.quantity)}
+            {lineTotal}
           </p>
           <p className="text-xs text-muted-foreground">
-            {symbol}{formatOrderAmount(item.price)} × {item.quantity}
+            {unitPrice} × {item.quantity}
           </p>
         </div>
       </div>
     </div>
   </div>
-);
+  );
+};
 
 const SummaryRow = ({
   label,
@@ -82,6 +117,7 @@ const SummaryRow = ({
 
 export function OrderItemsCard({ order }: OrderItemsCardProps) {
   const { symbol } = useCurrency();
+  const savedSummary = resolveSavedOrderMoneySummary(order);
   // totalAmount is the GRAND TOTAL (items + shipping - discount), computed server-side.
   // Reverse-engineer subtotal for display: subtotal = totalAmount - shipping + discount
   const subtotal = order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0);
@@ -97,36 +133,64 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
       <CardContent className="p-0">
         <div className="divide-y divide-border">
           {order.items.map((item) => (
-            <OrderItemRow key={item.id} item={item} symbol={symbol} />
+            <OrderItemRow key={item.id} item={item} symbol={symbol} savedSummary={savedSummary} />
           ))}
         </div>
 
         {/* Order Summary */}
         <div className="border-t border-border bg-muted/5 p-4">
-          <div className="ml-auto w-full space-y-1.5 sm:w-72">
-            <SummaryRow
-              label="Subtotal"
-              value={`${symbol}${formatOrderAmount(subtotal)}`}
-            />
-            {order.shippingCharge > 0 && (
+          <div className="ml-auto w-full space-y-1.5 sm:w-80">
+            {savedSummary ? (
+              <>
+                <SummaryRow label="Subtotal" value={formatSavedMinorAmount(savedSummary.subtotalMinor, savedSummary)} />
+                <SummaryRow label="Shipping" value={formatSavedMinorAmount(savedSummary.shippingMinor, savedSummary)} />
+                <SummaryRow
+                  label="Discount"
+                  value={`${savedSummary.discountMinor > 0 ? "−" : ""}${formatSavedMinorAmount(savedSummary.discountMinor, savedSummary)}`}
+                  isDestructive
+                />
+                <SummaryRow
+                  label={`${savedSummary.taxLabel}${savedSummary.pricesIncludeTax ? " (included)" : ""}`}
+                  value={formatSavedMinorAmount(savedSummary.taxMinor, savedSummary)}
+                />
+                <div className="flex justify-between border-t border-border pt-1.5">
+                  <span className="font-medium text-foreground">Total</span>
+                  <span className="font-medium text-foreground">
+                    {formatSavedMinorAmount(savedSummary.totalMinor, savedSummary)}
+                  </span>
+                </div>
+                <p className="pt-1 text-xs leading-relaxed text-muted-foreground">
+                  Amounts saved in {savedSummary.currencyCode} when this order was placed.
+                  {savedSummary.pricesIncludeTax && ` ${savedSummary.taxLabel} is already included in the prices above.`}
+                </p>
+              </>
+            ) : (
+              <>
+                <SummaryRow
+                  label="Subtotal"
+                  value={`${symbol}${formatOrderAmount(subtotal)}`}
+                />
+                {order.shippingCharge > 0 && (
               <SummaryRow
                 label="Shipping"
                 value={`${symbol}${formatOrderAmount(order.shippingCharge)}`}
               />
-            )}
-            {(order.discountAmount ?? 0) > 0 && (
+                )}
+                {(order.discountAmount ?? 0) > 0 && (
               <SummaryRow
                 label="Discount"
                 value={`-${symbol}${formatOrderAmount(order.discountAmount)}`}
                 isDestructive
               />
+                )}
+                <div className="flex justify-between border-t border-border pt-1.5">
+                  <span className="font-medium text-foreground">Total</span>
+                  <span className="font-medium text-foreground">
+                    {symbol}{formatOrderAmount(order.totalAmount)}
+                  </span>
+                </div>
+              </>
             )}
-            <div className="flex justify-between border-t border-border pt-1.5">
-              <span className="font-medium text-foreground">Total</span>
-              <span className="font-medium text-foreground">
-                {symbol}{formatOrderAmount(order.totalAmount)}
-              </span>
-            </div>
           </div>
         </div>
       </CardContent>

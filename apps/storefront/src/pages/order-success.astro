@@ -15,6 +15,11 @@ import {
   resolveOrderSuccessRetryPaymentType,
 } from "@/lib/order-success-payment-retry";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import {
+  formatSavedMinorAmount,
+  resolveSavedOrderLineMoney,
+  resolveSavedOrderMoneySummary,
+} from "@/lib/order-tax-presentation";
 
 
 const legacyProofParams = ["token", "receipt_token", "receiptToken"];
@@ -113,6 +118,10 @@ const purchaseTrackingPayload =
     : null;
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+const savedMoneySummary = order ? resolveSavedOrderMoneySummary(order) : null;
+const legacySubtotal = order
+  ? order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)
+  : 0;
 ---
 
 <Layout title={orderSuccessView?.title ?? "Order Recovery"} layoutData={layoutData}>
@@ -210,30 +219,61 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
               >{orderSuccessView.paymentStatusLabel}</span
             >
           </div>
-          <div class="flex justify-between">
-            <span class="text-gray-600">Total Amount:</span>
-            <span class="font-medium">{currencySymbol}{order.totalAmount.toFixed(2)}</span>
-          </div>
-          {
-            order.shippingCharge > 0 && (
+          {savedMoneySummary ? (
+            <div class="space-y-3 border-t border-gray-200 pt-4">
+              <div class="flex justify-between gap-4">
+                <span class="text-gray-600">Subtotal:</span>
+                <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.subtotalMinor, savedMoneySummary)}</span>
+              </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Shipping Charge:</span>
-                <span class="font-medium">
-                  {currencySymbol}{order.shippingCharge.toFixed(2)}
-                </span>
+                <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.shippingMinor, savedMoneySummary)}</span>
               </div>
-            )
-          }
-          {
-            (order.discountAmount ?? 0) > 0 && (
-              <div class="flex justify-between">
+              <div class="flex justify-between gap-4">
                 <span class="text-gray-600">Discount:</span>
                 <span class="font-medium text-primary">
-                  -{currencySymbol}{(order.discountAmount ?? 0).toFixed(2)}
+                  {savedMoneySummary.discountMinor > 0 ? "−" : ""}{formatSavedMinorAmount(savedMoneySummary.discountMinor, savedMoneySummary)}
                 </span>
               </div>
-            )
-          }
+              <div class="flex justify-between gap-4">
+                <span class="text-gray-600">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? " (included)" : ""}:</span>
+                <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.taxMinor, savedMoneySummary)}</span>
+              </div>
+              <div class="flex justify-between gap-4 border-t border-gray-200 pt-3">
+                <span class="font-semibold text-gray-900">Total Amount:</span>
+                <span class="font-semibold text-gray-900">{formatSavedMinorAmount(savedMoneySummary.totalMinor, savedMoneySummary)}</span>
+              </div>
+              <p class="text-left text-xs text-gray-500">
+                Amounts saved in {savedMoneySummary.currencyCode} when this order was placed.
+                {savedMoneySummary.pricesIncludeTax && ` ${savedMoneySummary.taxLabel} is already included in the prices above.`}
+              </p>
+            </div>
+          ) : (
+            <div class="space-y-3 border-t border-gray-200 pt-4">
+              <div class="flex justify-between gap-4">
+                <span class="text-gray-600">Subtotal:</span>
+                <span class="font-medium">{currencySymbol}{legacySubtotal.toFixed(2)}</span>
+              </div>
+              {order.shippingCharge > 0 && (
+                <div class="flex justify-between gap-4">
+                  <span class="text-gray-600">Shipping Charge:</span>
+                  <span class="font-medium">{currencySymbol}{order.shippingCharge.toFixed(2)}</span>
+                </div>
+              )}
+              {(order.discountAmount ?? 0) > 0 && (
+                <div class="flex justify-between">
+                  <span class="text-gray-600">Discount:</span>
+                  <span class="font-medium text-primary">
+                    -{currencySymbol}{(order.discountAmount ?? 0).toFixed(2)}
+                  </span>
+                </div>
+              )}
+              <div class="flex justify-between gap-4 border-t border-gray-200 pt-3">
+                <span class="font-semibold text-gray-900">Total Amount:</span>
+                <span class="font-semibold text-gray-900">{currencySymbol}{order.totalAmount.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
           {
             order.paidAmount > 0 && (
               <div class="flex justify-between">
@@ -334,6 +374,7 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
         <div class="space-y-4">
           {
             orderItemsFromApi.map((item) => {
+              const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
               return (
                 <div class="flex justify-between items-center border-b border-gray-100 pb-3 last:border-0 last:pb-0">
                   <div>
@@ -354,12 +395,29 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
                       </p>
                     )}
                     <p class="text-sm text-gray-600 mt-1">
-                      Quantity: {item.quantity} × {currencySymbol}{item.price.toFixed(2)}
+                      Quantity: {item.quantity} × {savedLine && savedMoneySummary
+                        ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedMoneySummary)
+                        : `${currencySymbol}${item.price.toFixed(2)}`}
+                    </p>
+                    {savedLine && savedMoneySummary && savedLine.discountMinor > 0 && (
+                      <p class="mt-1 text-xs text-gray-500">
+                        Item discount: −{formatSavedMinorAmount(savedLine.discountMinor, savedMoneySummary)}
+                      </p>
+                    )}
+                    {savedLine && savedMoneySummary && savedLine.taxMinor > 0 && (
+                      <p class="mt-1 text-xs text-gray-500">
+                        {savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? " included" : " added"}: {formatSavedMinorAmount(savedLine.taxMinor, savedMoneySummary)}
+                      </p>
+                    )}
+                  </div>
+                  <div class="shrink-0 text-right">
+                    {savedLine && savedMoneySummary && <p class="text-xs text-gray-500">Line total</p>}
+                    <p class="font-medium">
+                      {savedLine && savedMoneySummary
+                        ? formatSavedMinorAmount(savedLine.totalMinor, savedMoneySummary)
+                        : `${currencySymbol}${(item.quantity * item.price).toFixed(2)}`}
                     </p>
                   </div>
-                  <p class="font-medium">
-                    {currencySymbol}{(item.quantity * item.price).toFixed(2)}
-                  </p>
                 </div>
               );
             })

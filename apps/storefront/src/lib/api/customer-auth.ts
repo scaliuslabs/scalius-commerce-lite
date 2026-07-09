@@ -329,6 +329,11 @@ export interface CustomerOrderItem {
   productImage: string | null;
   variantSize: string | null;
   variantColor: string | null;
+  unitPriceMinor?: number | null;
+  lineSubtotalMinor?: number | null;
+  discountAmountMinor?: number | null;
+  taxableAmountMinor?: number | null;
+  taxAmountMinor?: number;
 }
 
 export interface CustomerOrderShipment {
@@ -536,6 +541,15 @@ export interface CustomerOrderDetailOrder {
   balanceDue: number;
   shippingCharge: number;
   discountAmount: number | null;
+  currencyCode?: string | null;
+  currencyDecimalPlaces?: number | null;
+  subtotalAmountMinor?: number | null;
+  shippingAmountMinor?: number | null;
+  discountAmountMinor?: number | null;
+  taxAmountMinor?: number;
+  totalAmountMinor?: number | null;
+  taxLabel?: string | null;
+  pricesIncludeTax?: boolean;
   paymentStatus: string;
   paymentMethod: string;
   fulfillmentStatus: string;
