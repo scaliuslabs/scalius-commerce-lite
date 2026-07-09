@@ -21,6 +21,7 @@ import {
 } from "./index";
 import { resolveCheckoutPaymentRequest } from "./payment-mode";
 import type { CheckoutConfig } from "./types";
+import type { CheckoutTaxQuote } from "./tax-quote-contract";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "../cart/repair-state";
 
 const baseConfig: CheckoutConfig = {
@@ -32,19 +33,67 @@ const baseConfig: CheckoutConfig = {
   partialPaymentAmount: 0,
 };
 
+function taxQuote(
+  overrides: Partial<CheckoutTaxQuote> = {},
+): CheckoutTaxQuote {
+  return {
+    valid: true,
+    quoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
+    displayLabel: "VAT",
+    pricesIncludeTax: false,
+    shippingTaxed: false,
+    currencyCode: "BDT",
+    decimalPlaces: 2,
+    settingsVersion: 1,
+    subtotalMinor: 10_000,
+    subtotalAmount: 100,
+    shippingMinor: 0,
+    shippingAmount: 0,
+    discountMinor: 0,
+    discountAmount: 0,
+    taxMinor: 0,
+    taxAmount: 0,
+    totalMinor: 10_000,
+    totalAmount: 100,
+    items: [{
+      cartKey: "line_1",
+      productId: "prod_1",
+      variantId: "var_1",
+      quantity: 1,
+      unitPrice: 100,
+      productName: "Product",
+      variantLabel: null,
+    }],
+    ...overrides,
+  };
+}
+
+function successfulCheckoutFetch(quote = taxQuote()): typeof fetch {
+  return vi.fn(async (input) => {
+    const url = String(input);
+    if (url === "/api/checkout/tax-quote") {
+      return new Response(JSON.stringify({ success: true, data: quote }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({
+      success: true,
+      data: {
+        valid: true,
+        issues: [],
+        items: [],
+        subtotal: 100,
+        hasFreeDeliveryProduct: false,
+      },
+    }));
+  }) as typeof fetch;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.__CURRENCY_CODE__ = "BDT";
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
-    success: true,
-    data: {
-      valid: true,
-      issues: [],
-      items: [],
-      subtotal: 100,
-      hasFreeDeliveryProduct: false,
-    },
-  }))));
+  vi.stubGlobal("fetch", successfulCheckoutFetch());
 });
 
 afterEach(() => {
@@ -71,12 +120,20 @@ describe("renderOrderSummaryDetails", () => {
         shippingAddress: "<script>window.__pwned=true</script>",
       },
       baseConfig,
+      taxQuote({
+        pricesIncludeTax: true,
+        taxMinor: 1_500,
+        taxAmount: 15,
+      }),
     );
 
     expect(details.querySelector("img")).toBeNull();
     expect(details.querySelector("script")).toBeNull();
     expect(details.textContent).toContain('<img src=x onerror="window.__pwned=true">');
     expect(details.textContent).toContain("<script>window.__pwned=true</script>");
+    expect(details.textContent).toContain("Subtotal৳100.00");
+    expect(details.textContent).not.toContain("৳200.00");
+    expect(details.textContent).toContain("VAT (included)");
   });
 
   it("does not show an advance payment row when the deposit would cover the full order", () => {
@@ -98,6 +155,12 @@ describe("renderOrderSummaryDetails", () => {
         partialPaymentEnabled: true,
         partialPaymentAmount: 500,
       },
+      taxQuote({
+        subtotalMinor: 20_000,
+        subtotalAmount: 200,
+        totalMinor: 20_000,
+        totalAmount: 200,
+      }),
     );
 
     expect(details.textContent).not.toContain("Advance Payment Required");
@@ -332,6 +395,9 @@ describe("initCheckoutPage", () => {
       discountAmount: "0",
       customerName: "Buyer",
       shippingAddress: "Dhaka",
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
     }));
     (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
       ...baseConfig,
@@ -348,6 +414,38 @@ describe("initCheckoutPage", () => {
   });
 
   it("emits safe AddPaymentInfo analytics only when the buyer confirms the selected method", async () => {
+    vi.stubGlobal("fetch", successfulCheckoutFetch(taxQuote({
+      subtotalMinor: 50_000,
+      subtotalAmount: 500,
+      shippingMinor: 6_000,
+      shippingAmount: 60,
+      discountMinor: 2_500,
+      discountAmount: 25,
+      taxMinor: 8_000,
+      taxAmount: 80,
+      totalMinor: 61_500,
+      totalAmount: 615,
+      items: [
+        {
+          cartKey: "line_1",
+          productId: "prod_1",
+          variantId: "var_1",
+          quantity: 2,
+          unitPrice: 150,
+          productName: "Product One",
+          variantLabel: null,
+        },
+        {
+          cartKey: "line_2",
+          productId: "prod_2",
+          variantId: "var_2",
+          quantity: 1,
+          unitPrice: 200,
+          productName: "Product Two",
+          variantLabel: null,
+        },
+      ],
+    })));
     document.body.innerHTML = `
       <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
       <div id="errorMsg" class="hidden"></div>
@@ -378,6 +476,9 @@ describe("initCheckoutPage", () => {
       customerName: "Buyer Name",
       customerPhone: "+8801700000000",
       shippingAddress: "Buyer Address",
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
     }));
     (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
       ...baseConfig,
@@ -404,7 +505,7 @@ describe("initCheckoutPage", () => {
         { id: "var_2", quantity: 1, item_price: 200 },
       ],
       currency: "BDT",
-      value: 535,
+      value: 615,
     });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -423,7 +524,7 @@ describe("initCheckoutPage", () => {
         { id: "var_2", quantity: 1, item_price: 200 },
       ],
       currency: "BDT",
-      value: 535,
+      value: 615,
     });
 
     const analyticsCalls = JSON.stringify(
@@ -432,6 +533,48 @@ describe("initCheckoutPage", () => {
     expect(analyticsCalls).not.toContain("Buyer Name");
     expect(analyticsCalls).not.toContain("+8801700000000");
     expect(analyticsCalls).not.toContain("Buyer Address");
+  });
+
+  it("fails closed without rendering gateways when the authoritative quote is unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input) => {
+      if (String(input) === "/api/checkout/tax-quote") {
+        return new Response(JSON.stringify({ success: false }), { status: 503 });
+      }
+      return new Response(JSON.stringify({
+        success: true,
+        data: { valid: true, issues: [] },
+      }));
+    }));
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      cartItems: JSON.stringify({
+        line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 },
+      }),
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
+      customerPhone: "+8801700000000",
+    }));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: "cod",
+      gateways: [{ id: "cod", name: "Cash on Delivery" }],
+    };
+
+    await initCheckoutPage();
+
+    expect(document.querySelector('[data-method="cod"]')).toBeNull();
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(true);
+    expect(document.getElementById("payButtonText")?.textContent).toBe("Total unavailable");
+    expect(document.getElementById("errorMsg")?.textContent).toContain(
+      "could not verify the current taxes and order total",
+    );
+    expect(document.getElementById("errorMsg")?.textContent).not.toContain("+880");
   });
 
   it("sends stale checkout snapshots back to cart with a one-shot repair payload", async () => {
