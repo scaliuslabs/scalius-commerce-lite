@@ -73,12 +73,42 @@ const journal = JSON.parse(
 
 const sqlById = new Map(sqlFiles.map((file) => [file.slice(0, 4), file]));
 const snapshotIds = new Set(snapshots.map((file) => file.slice(0, 4)));
+const snapshotMetadata = snapshots.map((file) => ({
+  file,
+  value: JSON.parse(readFileSync(join(metaDir, file), "utf8")),
+}));
 const journalEntries = Array.isArray(journal.entries) ? journal.entries : [];
 const journalById = new Map(
   journalEntries.map((entry) => [String(entry.tag).slice(0, 4), entry]),
 );
 
 const errors = [];
+
+const snapshotFileByIdentity = new Map();
+for (const { file, value } of snapshotMetadata) {
+  const identity = typeof value.id === "string" ? value.id : "";
+  if (!identity) {
+    errors.push(`${file} has no snapshot id`);
+    continue;
+  }
+  const existingFile = snapshotFileByIdentity.get(identity);
+  if (existingFile) {
+    errors.push(`${file} duplicates snapshot id ${identity} from ${existingFile}`);
+  } else {
+    snapshotFileByIdentity.set(identity, file);
+  }
+}
+
+for (let index = 1; index < snapshotMetadata.length; index += 1) {
+  const previous = snapshotMetadata[index - 1];
+  const current = snapshotMetadata[index];
+  if (current.value.prevId !== previous.value.id) {
+    errors.push(
+      `${current.file} parent ${String(current.value.prevId)} does not match ` +
+        `${previous.file} id ${String(previous.value.id)}`,
+    );
+  }
+}
 
 for (const [id, file] of sqlById) {
   const entry = journalById.get(id);
