@@ -7,6 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   sendAdminAssistantMessage: vi.fn(),
   navigate: vi.fn(),
+  appendConversationMessage: vi.fn(),
+  createConversationId: vi.fn(),
+  createConversationRequestId: vi.fn(),
+  isConversationId: vi.fn(),
+  pollConversationEvents: vi.fn(),
+  readConversationEvents: vi.fn(),
+  requestSequence: 0,
+  eventSequence: 0,
 }));
 
 vi.mock("../../../lib/api-functions/ai", () => ({
@@ -15,6 +23,15 @@ vi.mock("../../../lib/api-functions/ai", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => mocks.navigate,
+}));
+
+vi.mock("../../../lib/admin-assistant-conversation", () => ({
+  appendAdminConversationMessage: mocks.appendConversationMessage,
+  createAdminConversationId: mocks.createConversationId,
+  createAdminConversationRequestId: mocks.createConversationRequestId,
+  isAdminConversationId: mocks.isConversationId,
+  pollAdminConversationEvents: mocks.pollConversationEvents,
+  readAdminConversationEvents: mocks.readConversationEvents,
 }));
 
 import { AdminAssistantLauncher } from "./AdminAssistantLauncher";
@@ -26,6 +43,7 @@ import {
   ADMIN_ASSISTANT_PAGE_STATE_GLOBAL,
   type AdminAssistantPageStateSnapshot,
 } from "./page-state";
+import { ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY } from "./admin-assistant-transcript";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -36,10 +54,58 @@ describe("AdminAssistantLauncher", () => {
 
   beforeEach(() => {
     document.body.innerHTML = "";
+    window.sessionStorage.clear();
     delete window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL];
     resetAdminAssistantPageActionsForTest();
     mocks.sendAdminAssistantMessage.mockReset();
     mocks.navigate.mockReset();
+    mocks.appendConversationMessage.mockReset();
+    mocks.createConversationId.mockReset();
+    mocks.createConversationRequestId.mockReset();
+    mocks.isConversationId.mockReset();
+    mocks.pollConversationEvents.mockReset();
+    mocks.readConversationEvents.mockReset();
+    mocks.requestSequence = 0;
+    mocks.eventSequence = 0;
+    mocks.createConversationId.mockReturnValue(
+      "conv_abcdefghijklmnopqrstuv",
+    );
+    mocks.createConversationRequestId.mockImplementation(
+      (purpose = "message") => {
+        mocks.requestSequence += 1;
+        return `${purpose}_${String(mocks.requestSequence).padStart(22, "a")}`;
+      },
+    );
+    mocks.isConversationId.mockImplementation(
+      (value: string) => /^conv_[A-Za-z0-9_-]{22,64}$/.test(value),
+    );
+    mocks.readConversationEvents.mockResolvedValue(emptyReplay());
+    mocks.appendConversationMessage.mockImplementation(
+      async (_conversationId: string, input: ConversationAppendInput) => {
+        mocks.eventSequence += 1;
+        const event = conversationMessageEvent(
+          mocks.eventSequence,
+          input.role,
+          input.content,
+          input.contextMarker,
+        );
+        return {
+          replayed: false,
+          event,
+          expiresAt: 1_725_604_800_000,
+        };
+      },
+    );
+    mocks.pollConversationEvents.mockImplementation(
+      ({ after = 0, signal }: { after?: number; signal: AbortSignal }) =>
+        new Promise<number>((resolve) => {
+          if (signal.aborted) {
+            resolve(after);
+            return;
+          }
+          signal.addEventListener("abort", () => resolve(after), { once: true });
+        }),
+    );
 
     host = document.createElement("div");
     document.body.append(host);
@@ -177,7 +243,178 @@ describe("AdminAssistantLauncher", () => {
     expect(JSON.stringify(mocks.sendAdminAssistantMessage.mock.calls[0])).not.toContain(
       "SuperSecret123",
     );
+    expect(mocks.appendConversationMessage).toHaveBeenCalledTimes(2);
+    expect(mocks.appendConversationMessage).toHaveBeenNthCalledWith(
+      1,
+      "conv_abcdefghijklmnopqrstuv",
+      {
+        clientMessageId: expect.stringMatching(/^message_[A-Za-z0-9_-]{22}$/),
+        role: "user",
+        content: "What should I check here?",
+        contextMarker: "admin:sensitive",
+      },
+    );
+    expect(mocks.appendConversationMessage).toHaveBeenNthCalledWith(
+      2,
+      "conv_abcdefghijklmnopqrstuv",
+      {
+        clientMessageId: expect.stringMatching(/^message_[A-Za-z0-9_-]{22}$/),
+        role: "assistant",
+        content: "Use the status filter first.",
+        contextMarker: "admin:sensitive",
+      },
+    );
+    expect(
+      mocks.appendConversationMessage.mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.sendAdminAssistantMessage.mock.invocationCallOrder[0]);
+    expect(
+      mocks.sendAdminAssistantMessage.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      mocks.appendConversationMessage.mock.invocationCallOrder[1],
+    );
     expect(document.body.textContent).toContain("Use the status filter first.");
+  });
+
+  it("hydrates ordered messages once, reconciles replay duplicates, and polls from the cursor", async () => {
+    mocks.readConversationEvents.mockResolvedValue({
+      ...emptyReplay(),
+      events: [
+        conversationMessageEvent(2, "assistant", "Second", "admin:page"),
+        conversationMessageEvent(1, "user", "First", "admin:page"),
+        conversationMessageEvent(2, "assistant", "Second", "admin:page"),
+      ],
+      cursor: 2,
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await flushReact();
+
+    const messages = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-assistant-message-role]"),
+    );
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.textContent)).toEqual([
+      "First",
+      "Second",
+    ]);
+    expect(mocks.readConversationEvents).toHaveBeenCalledWith(
+      "conv_abcdefghijklmnopqrstuv",
+      expect.objectContaining({ after: 0, limit: 100 }),
+    );
+    expect(mocks.pollConversationEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: "conv_abcdefghijklmnopqrstuv",
+        after: 2,
+        limit: 100,
+      }),
+    );
+    expect(
+      window.sessionStorage.getItem(
+        ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      ),
+    ).toBe("conv_abcdefghijklmnopqrstuv");
+    expect(window.sessionStorage.length).toBe(1);
+    expect(
+      document.querySelector('[data-assistant-transcript-state="connected"]'),
+    ).toBeTruthy();
+  });
+
+  it("continues one-shot chat when transcript append fails and offers an accessible retry", async () => {
+    mocks.appendConversationMessage.mockRejectedValueOnce(
+      new Error("transcript unavailable"),
+    );
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: { role: "assistant", content: "You can still use this response." },
+      usage: null,
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Help me anyway");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    expect(mocks.sendAdminAssistantMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.appendConversationMessage).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain("You can still use this response.");
+    expect(
+      document.querySelector('[data-assistant-transcript-state="disconnected"]'),
+    ).toBeTruthy();
+    expect(queryButton("Retry transcript connection")).toBeTruthy();
+
+    await click(queryButton("Retry transcript connection"));
+    expect(mocks.readConversationEvents).toHaveBeenCalledTimes(2);
+    expect(
+      document.querySelector('[data-assistant-transcript-state="connected"]'),
+    ).toBeTruthy();
+  });
+
+  it("persists assistant text only and truthfully loses live actions after reload", async () => {
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: {
+        role: "assistant",
+        content: "Use Products to manage catalog items.",
+        parts: [{ type: "text", text: "Use Products to manage catalog items." }],
+      },
+      usage: null,
+      actions: [
+        { type: "navigate", path: "/admin/products", label: "Open Products" },
+      ],
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Open products");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    expect(queryButton("Open Products")).toBeTruthy();
+    const persistedAssistantInput =
+      mocks.appendConversationMessage.mock.calls[1]?.[1];
+    expect(persistedAssistantInput).toEqual({
+      clientMessageId: expect.stringMatching(/^message_[A-Za-z0-9_-]{22}$/),
+      role: "assistant",
+      content: "Use Products to manage catalog items.",
+      contextMarker: "admin:page",
+    });
+    expect(persistedAssistantInput).not.toHaveProperty("parts");
+    expect(persistedAssistantInput).not.toHaveProperty("actions");
+
+    act(() => root.unmount());
+    host.remove();
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    mocks.readConversationEvents.mockResolvedValue({
+      ...emptyReplay(),
+      events: [
+        conversationMessageEvent(
+          1,
+          "user",
+          "Open products",
+          "admin:page",
+        ),
+        conversationMessageEvent(
+          2,
+          "assistant",
+          "Use Products to manage catalog items.",
+          "admin:page",
+        ),
+      ],
+      cursor: 2,
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await flushReact();
+
+    expect(document.body.textContent).toContain(
+      "Use Products to manage catalog items.",
+    );
+    expect(queryButton("Open Products")).toBeNull();
   });
 
   it("renders the disabled adminChat state without throwing in the console", async () => {
@@ -470,4 +707,43 @@ async function flushReact() {
       await Promise.resolve();
     });
   }
+}
+
+interface ConversationAppendInput {
+  clientMessageId: string;
+  role: "user" | "assistant";
+  content: string;
+  contextMarker: "admin:page" | "admin:sensitive";
+}
+
+function conversationMessageEvent(
+  sequence: number,
+  role: "user" | "assistant",
+  content: string,
+  contextMarker: "admin:page" | "admin:sensitive",
+) {
+  return {
+    eventId: `event_${sequence}`,
+    sequence,
+    type: "message.appended" as const,
+    occurredAt: 1_725_000_000_000 + sequence,
+    message: {
+      id: `message_${sequence}`,
+      role,
+      content,
+      contextMarker,
+      createdAt: 1_725_000_000_000 + sequence,
+    },
+  };
+}
+
+function emptyReplay() {
+  return {
+    events: [],
+    cursor: 0,
+    earliestCursor: 0,
+    hasMore: false,
+    expiresAt: 1_725_604_800_000,
+    cancellation: null,
+  };
 }
