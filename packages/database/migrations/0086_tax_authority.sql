@@ -1,3 +1,16 @@
+-- Some early production databases contain the pre-authority tax_classes table
+-- even though it was never represented in the Drizzle journal. Materialize an
+-- empty copy on clean databases, then use one deterministic bridge for both
+-- shapes so legacy class IDs/names and the saved default survive the upgrade.
+CREATE TABLE IF NOT EXISTS `tax_classes` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`description` text,
+	`is_default` integer DEFAULT false
+);
+--> statement-breakpoint
+ALTER TABLE `tax_classes` RENAME TO `tax_classes_legacy_0086`;
+--> statement-breakpoint
 CREATE TABLE `order_item_tax_snapshots` (
 	`order_item_id` text PRIMARY KEY NOT NULL,
 	`order_id` text NOT NULL,
@@ -73,6 +86,9 @@ CREATE TABLE `tax_classes` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `tax_classes_active_name_ci_unique` ON `tax_classes` (lower("name")) WHERE "tax_classes"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE INDEX `tax_classes_deleted_name_idx` ON `tax_classes` (`deleted_at`,`name`);--> statement-breakpoint
+INSERT INTO `tax_classes` (`id`, `name`, `description`, `is_exempt`, `version`)
+SELECT `id`, `name`, `description`, false, 1
+FROM `tax_classes_legacy_0086`;--> statement-breakpoint
 CREATE TABLE `tax_rates` (
 	`id` text PRIMARY KEY NOT NULL,
 	`tax_class_id` text NOT NULL,
@@ -121,9 +137,21 @@ CREATE TABLE `tax_settings` (
 	CONSTRAINT "tax_settings_display_label_length" CHECK(length("tax_settings"."display_label") BETWEEN 1 AND 80)
 );
 --> statement-breakpoint
-ALTER TABLE `product_variants` ADD `tax_class_id` text REFERENCES tax_classes(id);--> statement-breakpoint
+INSERT INTO `tax_settings` (`id`, `default_tax_class_id`)
+SELECT
+	'default',
+	(
+		SELECT `id`
+		FROM `tax_classes_legacy_0086`
+		WHERE `is_default` = true
+		ORDER BY `id`
+		LIMIT 1
+	)
+WHERE EXISTS (SELECT 1 FROM `tax_classes_legacy_0086`);--> statement-breakpoint
+DROP TABLE `tax_classes_legacy_0086`;--> statement-breakpoint
+ALTER TABLE `product_variants` ADD `tax_class_id` text REFERENCES tax_classes(id) ON DELETE set null;--> statement-breakpoint
 ALTER TABLE `product_variants` ADD `tax_classification_version` integer DEFAULT 1 NOT NULL;--> statement-breakpoint
-ALTER TABLE `products` ADD `tax_class_id` text REFERENCES tax_classes(id);--> statement-breakpoint
+ALTER TABLE `products` ADD `tax_class_id` text REFERENCES tax_classes(id) ON DELETE set null;--> statement-breakpoint
 ALTER TABLE `products` ADD `tax_classification_version` integer DEFAULT 1 NOT NULL;--> statement-breakpoint
 ALTER TABLE `order_items` ADD `unit_price_minor` integer;--> statement-breakpoint
 ALTER TABLE `order_items` ADD `line_subtotal_minor` integer;--> statement-breakpoint
