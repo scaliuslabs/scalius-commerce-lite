@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 
-const AGENT_ADMIN_MCP_URL = "http://agent.internal/mcp/admin";
+const ADMIN_AGENT_MCP_URL = "http://admin-agent.internal/mcp";
 
 const noStoreHeaders = {
   "Cache-Control": "no-store",
@@ -33,13 +33,6 @@ function createAgentMcpHeaders(headers: Headers): Headers {
   return forwarded;
 }
 
-function buildAgentMcpUrl(request: Request): string {
-  const sourceUrl = new URL(request.url);
-  const targetUrl = new URL(AGENT_ADMIN_MCP_URL);
-  targetUrl.search = sourceUrl.search;
-  return targetUrl.toString();
-}
-
 function withNoStore(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
@@ -60,7 +53,7 @@ export async function proxyToAgentAdminMcp(request: Request): Promise<Response> 
   }
 
   const { env } = await import("cloudflare:workers");
-  const agent = env.AGENT;
+  const agent = env.ADMIN_AGENT;
   if (!agent) {
     return jsonError(
       503,
@@ -81,7 +74,7 @@ export async function proxyToAgentAdminMcp(request: Request): Promise<Response> 
   }
 
   try {
-    return withNoStore(await agent.fetch(buildAgentMcpUrl(request), init));
+    return withNoStore(await agent.fetch(ADMIN_AGENT_MCP_URL, init));
   } catch {
     return jsonError(
       502,

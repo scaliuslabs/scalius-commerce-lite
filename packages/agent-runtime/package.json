@@ -1,0 +1,30 @@
+{
+  "name": "@scalius/agent-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./admin": "./src/admin-runtime.ts",
+    "./conversation": "./src/conversation/index.ts",
+    "./storefront": "./src/storefront-runtime.ts",
+    "./http": "./src/http.ts"
+  },
+  "scripts": {
+    "build": "../../node_modules/typescript7/bin/tsc --noEmit",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@scalius/shared": "workspace:*",
+    "agents": "^0.16.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "@scalius/tsconfig": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

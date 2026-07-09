@@ -55,8 +55,8 @@
       "service": "scalius-api"
     },
     {
-      "binding": "AGENT",
-      "service": "scalius-agent"
+      "binding": "ADMIN_AGENT",
+      "service": "scalius-admin-agent"
     }
   ],
   "vars": {

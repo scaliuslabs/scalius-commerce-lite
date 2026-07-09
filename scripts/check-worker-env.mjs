@@ -16,6 +16,7 @@ const apps = [
       "JWT_SECRET",
       "FIREBASE_SERVICE_ACCOUNT_CRED_JSON",
       "CREDENTIAL_ENCRYPTION_KEY",
+      "ASSISTANT_RATE_LIMIT_HMAC_KEY",
       "CUSTOMER_AUTH_COOKIE_DOMAIN",
       "PURGE_TOKEN",
       "PROJECT_CACHE_PREFIX",
@@ -49,9 +50,15 @@ const apps = [
     extraEnv: [],
   },
   {
-    name: "agent",
-    configs: ["apps/agent/wrangler.jsonc"],
-    envFiles: ["apps/agent/src/env.d.ts"],
+    name: "admin-agent",
+    configs: ["apps/admin-agent/wrangler.jsonc"],
+    envFiles: ["apps/admin-agent/src/env.d.ts"],
+    extraEnv: [],
+  },
+  {
+    name: "storefront-agent",
+    configs: ["apps/storefront-agent/wrangler.jsonc"],
+    envFiles: ["apps/storefront-agent/src/env.d.ts"],
     extraEnv: [],
   },
 ];
@@ -201,7 +208,14 @@ function extractBalancedBlock(source, startIndex) {
 
 function extractEnvBlocks(source) {
   const blocks = [];
-  const patterns = [/interface\s+Env\s*{/g, /type\s+Env\s*=\s*{/g];
+  const patterns = [
+    /interface\s+Env\s*{/g,
+    /type\s+Env\s*=\s*{/g,
+    // Wrangler 4 emits bindings into a generated base interface and has the
+    // public Env interface extend it. Read that generated source of truth
+    // instead of forcing deployable Workers back to hand-written Env blocks.
+    /interface\s+__BaseEnv_[A-Za-z_$][A-Za-z0-9_$]*\s*{/g,
+  ];
 
   for (const pattern of patterns) {
     for (const match of source.matchAll(pattern)) {

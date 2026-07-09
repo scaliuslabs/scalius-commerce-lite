@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  cfEnv: {} as { AGENT?: Fetcher },
+  cfEnv: {} as { ADMIN_AGENT?: Fetcher },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -13,12 +13,12 @@ vi.mock("cloudflare:workers", () => ({ env: mocks.cfEnv }));
 describe("assistant admin MCP proxy", () => {
   beforeEach(() => {
     vi.resetModules();
-    delete mocks.cfEnv.AGENT;
+    delete mocks.cfEnv.ADMIN_AGENT;
   });
 
   it("proxies streamable MCP POST requests to the agent admin path without Authorization", async () => {
     const agentFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(String(input)).toBe("http://agent.internal/mcp/admin?transport=stream");
+      expect(String(input)).toBe("http://admin-agent.internal/mcp");
       expect(init?.method).toBe("POST");
 
       const headers = new Headers(init?.headers);
@@ -26,7 +26,7 @@ describe("assistant admin MCP proxy", () => {
       expect(headers.get("content-type")).toBe("application/json");
       expect(headers.get("cookie")).toBe("better-auth.session_token=session.signature");
       expect(headers.get("mcp-session-id")).toBe("client-session");
-      expect(headers.get("mcp-protocol-version")).toBe("2025-06-18");
+      expect(headers.get("mcp-protocol-version")).toBe("2025-11-25");
       expect(headers.has("authorization")).toBe(false);
       expect(headers.has("x-extra-header")).toBe(false);
 
@@ -46,7 +46,7 @@ describe("assistant admin MCP proxy", () => {
         },
       );
     });
-    mocks.cfEnv.AGENT = { fetch: agentFetch };
+    mocks.cfEnv.ADMIN_AGENT = { fetch: agentFetch };
 
     const { proxyToAgentAdminMcp } = await import("./mcp");
     const response = await proxyToAgentAdminMcp(
@@ -57,7 +57,7 @@ describe("assistant admin MCP proxy", () => {
           Authorization: "Bearer should-not-forward",
           "Content-Type": "application/json",
           Cookie: "better-auth.session_token=session.signature",
-          "Mcp-Protocol-Version": "2025-06-18",
+          "Mcp-Protocol-Version": "2025-11-25",
           "Mcp-Session-Id": "client-session",
           "X-Extra-Header": "drop-me",
         },
@@ -74,7 +74,7 @@ describe("assistant admin MCP proxy", () => {
 
   it("proxies GET requests for MCP streams without a request body", async () => {
     const agentFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(String(input)).toBe("http://agent.internal/mcp/admin?session=abc");
+      expect(String(input)).toBe("http://admin-agent.internal/mcp");
       expect(init?.method).toBe("GET");
       expect(init?.body).toBeUndefined();
 
@@ -85,7 +85,7 @@ describe("assistant admin MCP proxy", () => {
 
       return new Response("ok", { status: 200 });
     });
-    mocks.cfEnv.AGENT = { fetch: agentFetch };
+    mocks.cfEnv.ADMIN_AGENT = { fetch: agentFetch };
 
     const { proxyToAgentAdminMcp } = await import("./mcp");
     const response = await proxyToAgentAdminMcp(
@@ -106,7 +106,7 @@ describe("assistant admin MCP proxy", () => {
 
   it("rejects cross-origin cookie writes before calling the agent", async () => {
     const agentFetch = vi.fn();
-    mocks.cfEnv.AGENT = { fetch: agentFetch };
+    mocks.cfEnv.ADMIN_AGENT = { fetch: agentFetch };
 
     const { proxyToAgentAdminMcp } = await import("./mcp");
     const response = await proxyToAgentAdminMcp(
@@ -151,7 +151,7 @@ describe("assistant admin MCP proxy", () => {
   });
 
   it("fails closed with no-store JSON when the agent fetch throws", async () => {
-    mocks.cfEnv.AGENT = {
+    mocks.cfEnv.ADMIN_AGENT = {
       fetch: vi.fn(async () => {
         throw new Error("agent down");
       }),

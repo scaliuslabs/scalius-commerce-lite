@@ -7,7 +7,7 @@ const CREDENTIAL_PREFIX_PATTERN =
 const JWT_PATTERN = /\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?\b/g;
 const LONG_TOKEN_PATTERN = /\b[A-Za-z0-9_-]{32,}\b/g;
 const PERSISTED_STRUCTURED_VALUE_PATTERN =
-  /((?:["']?(?:address(?:line[12])?|shipping[_ -]?address|billing[_ -]?address|first[_ -]?name|last[_ -]?name|full[_ -]?name|customer[_ -]?name|email|phone|mobile|password|passcode|otp|receipt(?:[_ -]?(?:proof|token))?|recovery(?:[_ -]?(?:proof|token))?|credential|secret|api[_ -]?key|token)["']?)\s*(?::|=|\bis\b)\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\n;]{1,500})/gi;
+  /((?:["']?(?:address(?:line[12])?|shipping[_ -]?address|billing[_ -]?address|name|first[_ -]?name|last[_ -]?name|full[_ -]?name|customer[_ -]?name|email|phone|mobile|password|passcode|otp|receipt(?:[_ -]?(?:proof|token))?|recovery(?:[_ -]?(?:proof|token))?|credential|secret|api[_ -]?key|token)["']?)\s*(?::|=|\bis\b)\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\n;]{1,500})/gi;
 
 const EMAIL_TEST_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const BANGLADESH_PHONE_TEST_PATTERN = /(?:^|[^\d])(?:\+?88)?01[3-9]\d{8}(?!\d)/;
