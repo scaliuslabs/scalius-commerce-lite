@@ -10,6 +10,7 @@ export interface AdminAssistantMessage {
   content: string;
   parts?: AssistantMessagePart[];
   actions?: AdminAssistantChatAction[];
+  transcriptSequence?: number;
 }
 
 export type AdminAssistantStatus =

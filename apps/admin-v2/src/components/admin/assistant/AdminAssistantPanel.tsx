@@ -2,6 +2,7 @@ import {
   Grip,
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -20,10 +21,20 @@ import {
 import { cn } from "@scalius/shared/utils";
 
 import {
+  createAdminConversationRequestId,
+  type AdminConversationEvent,
+  type AdminConversationContextMarker,
+} from "../../../lib/admin-assistant-conversation";
+import {
   sendAdminAssistantMessage,
   type AdminAssistantChatAction,
   type AdminAssistantChatResult,
 } from "../../../lib/api-functions/ai";
+import {
+  getAdminAssistantConversationContextMarker,
+  mergeAdminAssistantConversationEvents,
+  reconcileAdminAssistantPersistedMessage,
+} from "./admin-assistant-transcript";
 import {
   clampAdminAssistantPosition,
   getAdminAssistantViewport,
@@ -39,17 +50,18 @@ import {
 import type {
   AdminAssistantActionExecutionState,
   AdminAssistantMessage,
-  AdminAssistantMessageRole,
   AdminAssistantStatus,
 } from "./assistant-panel-types";
 import { AdminAssistantComposer } from "./AdminAssistantComposer";
 import { AdminAssistantConversation } from "./AdminAssistantConversation";
 import { AdminAssistantPanelHeader } from "./AdminAssistantPanelHeader";
 import { AdminAssistantStatusBanner } from "./AdminAssistantStatusBanner";
+import { AdminAssistantTranscriptStatus } from "./AdminAssistantTranscriptStatus";
 import {
   executeAdminAssistantPageActionWithResult,
 } from "./page-actions";
 import { useAdminAssistantPageState } from "./useAdminAssistantPageState";
+import { useAdminAssistantTranscript } from "./useAdminAssistantTranscript";
 import { usePointerGesture } from "./usePointerGesture";
 
 interface AdminAssistantPanelProps {
@@ -92,6 +104,18 @@ export function AdminAssistantPanel({
   const [actionExecutionStates, setActionExecutionStates] = useState<
     Record<string, AdminAssistantActionExecutionState>
   >({});
+  const mergeTranscriptEvents = useCallback(
+    (events: readonly AdminConversationEvent[]) => {
+      setMessages((current) =>
+        mergeAdminAssistantConversationEvents(current, events),
+      );
+    },
+    [],
+  );
+  const transcript = useAdminAssistantTranscript({
+    open,
+    onEvents: mergeTranscriptEvents,
+  });
 
   const contextLabel = useMemo(() => {
     if (!pageState) return "Current admin page";
@@ -111,8 +135,10 @@ export function AdminAssistantPanel({
     const message = draft.trim();
     if (!message || sending) return;
 
+    const contextMarker = getAdminAssistantConversationContextMarker(pageState);
+    const userClientMessageId = createAdminConversationRequestId("message");
     const userMessage: AdminAssistantMessage = {
-      id: createMessageId("user"),
+      id: userClientMessageId,
       role: "user",
       content: message,
     };
@@ -127,10 +153,30 @@ export function AdminAssistantPanel({
     setStatus({ kind: "idle", message: "Reviewing the current admin page." });
 
     try {
+      const persistedUserEvent = await transcript.appendMessage({
+        clientMessageId: userClientMessageId,
+        role: "user",
+        content: message,
+        contextMarker,
+      });
+      if (persistedUserEvent) {
+        setMessages((current) =>
+          reconcileAdminAssistantPersistedMessage(
+            current,
+            persistedUserEvent,
+            userClientMessageId,
+          ),
+        );
+      }
+
       const result = (await sendAdminAssistantMessage({
         data: { message, pageContext: pageState, history },
       })) as AdminAssistantChatResult;
-      applyAssistantResult(result);
+      await applyAssistantResult(
+        result,
+        contextMarker,
+        persistedUserEvent !== null,
+      );
     } catch {
       setStatus({
         kind: "error",
@@ -141,12 +187,18 @@ export function AdminAssistantPanel({
     }
   }
 
-  function applyAssistantResult(result: AdminAssistantChatResult) {
+  async function applyAssistantResult(
+    result: AdminAssistantChatResult,
+    contextMarker: AdminConversationContextMarker,
+    persistTranscript: boolean,
+  ) {
     if (result.status === "ok") {
+      const assistantClientMessageId =
+        createAdminConversationRequestId("message");
       setMessages((current) => [
         ...current,
         {
-          id: createMessageId("assistant"),
+          id: assistantClientMessageId,
           role: "assistant",
           content: result.message.content,
           parts: readAssistantParts(result),
@@ -154,6 +206,24 @@ export function AdminAssistantPanel({
         },
       ]);
       setStatus({ kind: "idle", message: "Ready on the current admin page." });
+
+      if (persistTranscript) {
+        const persistedAssistantEvent = await transcript.appendMessage({
+          clientMessageId: assistantClientMessageId,
+          role: "assistant",
+          content: result.message.content,
+          contextMarker,
+        });
+        if (persistedAssistantEvent) {
+          setMessages((current) =>
+            reconcileAdminAssistantPersistedMessage(
+              current,
+              persistedAssistantEvent,
+              assistantClientMessageId,
+            ),
+          );
+        }
+      }
       return;
     }
 
@@ -293,6 +363,10 @@ export function AdminAssistantPanel({
         onMoveKeyDown={handleMoveKeyDown}
         onMovePointerDown={handleMovePointerDown}
       />
+      <AdminAssistantTranscriptStatus
+        state={transcript.state}
+        onRetry={transcript.retry}
+      />
 
       <AdminAssistantConversation
         actionExecutionStates={actionExecutionStates}
@@ -363,14 +437,6 @@ function readAssistantParts(
     if (parsed.success) parts.push(parsed.data);
   }
   return parts.length > 0 ? parts : undefined;
-}
-
-function createMessageId(role: AdminAssistantMessageRole): string {
-  const random =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2, 10);
-  return `${role}-${Date.now()}-${random}`;
 }
 
 function claimActionKey(keys: Set<string>, executionKey: string): boolean {

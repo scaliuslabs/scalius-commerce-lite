@@ -13,6 +13,7 @@ const LAYOUT_PREFERENCE_FILES = [
   "assistant-layout.ts",
   "useAdminAssistantLayout.ts",
 ] as const;
+const TRANSCRIPT_SESSION_FILES = ["admin-assistant-transcript.ts"] as const;
 
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir)
@@ -110,8 +111,12 @@ describe("admin assistant page-state source boundary", () => {
   });
 
   it("keeps the visible chat UI off direct MCP, fetch, cookies, and sensitive storage", () => {
-    const source = readAssistantSource(LAYOUT_PREFERENCE_FILES);
+    const source = readAssistantSource([
+      ...LAYOUT_PREFERENCE_FILES,
+      ...TRANSCRIPT_SESSION_FILES,
+    ]);
     const layoutSource = readFiles(LAYOUT_PREFERENCE_FILES);
+    const transcriptSessionSource = readFiles(TRANSCRIPT_SESSION_FILES);
 
     expect(source).not.toContain("/api/assistant/mcp");
     expect(source).not.toContain("fetch(");
@@ -126,5 +131,18 @@ describe("admin assistant page-state source boundary", () => {
     expect(layoutSource).not.toContain("document.cookie");
     expect(layoutSource).not.toContain("fetch(");
     expect(layoutSource).not.toMatch(/(?:messages|history|pageContext|credential|token)/);
+
+    expect(transcriptSessionSource).toContain("window.sessionStorage");
+    expect(transcriptSessionSource).toContain(
+      "scalius.admin-assistant.conversation-id.v1",
+    );
+    expect(transcriptSessionSource).toMatch(
+      /storage\.setItem\(ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY, conversationId\)/,
+    );
+    expect(transcriptSessionSource.match(/\.setItem\(/g)).toHaveLength(1);
+    expect(transcriptSessionSource).not.toContain("localStorage");
+    expect(transcriptSessionSource).not.toContain("document.cookie");
+    expect(transcriptSessionSource).not.toContain("fetch(");
+    expect(transcriptSessionSource).not.toContain("JSON.stringify");
   });
 });
