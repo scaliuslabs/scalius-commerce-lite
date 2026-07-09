@@ -130,6 +130,46 @@ describe("assistant authority sessions and workflows", () => {
     })).rejects.toBeInstanceOf(ConflictError);
   });
 
+  it("coarsely touches public sessions instead of writing on every replay", async () => {
+    const fake = createFakeAssistantAuthorityDb();
+    const credential = createAssistantSessionCredential();
+    await createAssistantSession(fake.db, {
+      surface: "storefront",
+      actorType: "guest",
+      actorId: `storefront_subject_${"s".repeat(43)}`,
+      conversationKey: "conv_abcdefghijklmnopqrstuv",
+      credential,
+      permissionSnapshotHash: null,
+      now: NOW,
+    });
+
+    for (const seconds of [1, 2, 299]) {
+      await resumeAssistantSession(fake.db, {
+        credential,
+        expectedSurface: "storefront",
+        touchAfterSeconds: 300,
+        now: new Date(NOW.getTime() + seconds * 1_000),
+      });
+    }
+    expect(fake.state.sessionTouchUpdates).toBe(0);
+
+    await resumeAssistantSession(fake.db, {
+      credential,
+      expectedSurface: "storefront",
+      touchAfterSeconds: 300,
+      now: new Date(NOW.getTime() + 301_000),
+    });
+    expect(fake.state.sessionTouchUpdates).toBe(1);
+
+    await resumeAssistantSession(fake.db, {
+      credential,
+      expectedSurface: "storefront",
+      touchAfterSeconds: 300,
+      now: new Date(NOW.getTime() + 302_000),
+    });
+    expect(fake.state.sessionTouchUpdates).toBe(1);
+  });
+
   it("lists bounded monotonic events only after credential-bound session checks", async () => {
     const fake = createFakeAssistantAuthorityDb();
     const credential = createAssistantSessionCredential();

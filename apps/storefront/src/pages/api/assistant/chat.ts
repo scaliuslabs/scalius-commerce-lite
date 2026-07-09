@@ -517,7 +517,9 @@ function disabledForStatus(status: number, body: unknown): StorefrontAssistantCh
   return null;
 }
 
-export const POST: APIRoute = async ({ request }) => {
+export async function handleStorefrontAssistantChat(
+  request: Request,
+): Promise<Response> {
   if (shouldRejectCrossOriginCookieRequest(request)) {
     return jsonResponse(
       { status: "error", message: "Cross-origin cookie request denied" },
@@ -585,4 +587,7 @@ export const POST: APIRoute = async ({ request }) => {
       502,
     );
   }
-};
+}
+
+export const POST: APIRoute = async ({ request }) =>
+  handleStorefrontAssistantChat(request);

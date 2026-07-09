@@ -36,6 +36,7 @@ export interface FakeAssistantAuthorityState {
   rateLimitCeiling: number;
   batches: number[];
   failNextBatchAt: number | null;
+  sessionTouchUpdates: number;
 }
 
 export function createFakeAssistantAuthorityDb(
@@ -51,6 +52,7 @@ export function createFakeAssistantAuthorityDb(
     rateLimitCeiling: options.rateLimitCeiling ?? 2,
     batches: [],
     failNextBatchAt: null,
+    sessionTouchUpdates: 0,
   };
   let batchTail: Promise<void> = Promise.resolve();
 
@@ -221,6 +223,10 @@ function updateRow(
 ): Record<string, unknown>[] {
   const row = firstRow(state, table);
   if (!row || !canApplyUpdate(state, table, row, values)) return [];
+
+  if (table === assistantSessions && values.lastSeenAt instanceof Date) {
+    state.sessionTouchUpdates += 1;
+  }
 
   for (const [key, value] of Object.entries(values)) {
     if (

@@ -5,6 +5,12 @@ import {
 
 import { resolveStorefrontAssistantNavigationTarget } from "@/lib/assistant-page-context.client";
 import type { StorefrontAssistantPageContextSnapshot } from "@/lib/assistant-page-context";
+import {
+  createStorefrontConversationRequestId,
+  isStorefrontConversationId,
+  parseStorefrontConversationMessageEvent,
+  type StorefrontConversationMessageEvent,
+} from "./storefront-assistant-conversation";
 
 export type StorefrontAssistantMessageRole = "assistant" | "user";
 
@@ -12,12 +18,15 @@ export type StorefrontAssistantUiMessage = {
   id: string;
   role: StorefrontAssistantMessageRole;
   parts: AssistantMessagePart[];
+  transcriptSequence?: number;
 };
 
 export type StorefrontAssistantChatResult =
   | {
       status: "ok";
       message: StorefrontAssistantUiMessage;
+      transcriptPersisted: boolean;
+      transcriptEvent?: StorefrontConversationMessageEvent;
     }
   | {
       status: "disabled" | "error";
@@ -188,6 +197,9 @@ export function normalizeStorefrontAssistantChatResult(
 
   const messageRecord = isRecord(value.message) ? value.message : null;
   const serverId = cleanAssistantDisplayText(messageRecord?.id, 160);
+  const transcriptEvent = parseStorefrontConversationMessageEvent(
+    value.transcriptEvent,
+  );
   return {
     status: "ok",
     message: {
@@ -195,6 +207,11 @@ export function normalizeStorefrontAssistantChatResult(
       role: "assistant",
       parts,
     },
+    transcriptPersisted:
+      value.transcriptPersisted === true && transcriptEvent?.message.role === "assistant",
+    ...(transcriptEvent?.message.role === "assistant"
+      ? { transcriptEvent }
+      : {}),
   };
 }
 
@@ -229,25 +246,68 @@ export async function sendStorefrontAssistantMessage(input: {
   pageContext: StorefrontAssistantPageContextSnapshot | null;
   history: StorefrontAssistantHistoryEntry[];
   origin: string;
+  conversationId?: string;
   signal?: AbortSignal;
 }): Promise<StorefrontAssistantChatResult> {
-  const response = await fetch(CHAT_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      message: input.message,
-      pageContext: input.pageContext,
-      history: input.history,
-    }),
-    cache: "no-store",
-    credentials: "omit",
-    signal: input.signal,
+  const clientRequestId = createStorefrontConversationRequestId("chat");
+  const body = JSON.stringify({
+    clientRequestId,
+    message: input.message,
+    pageContext: input.pageContext,
+    history: input.history,
   });
-  const json = await response.json().catch(() => null);
-  const result = normalizeStorefrontAssistantChatResult(json, input.origin);
+  const conversationEndpoint = input.conversationId &&
+      isStorefrontConversationId(input.conversationId)
+    ? `/api/assistant/conversations/${input.conversationId}/chat`
+    : null;
+
+  async function request(
+    endpoint: string,
+    credentials: RequestCredentials,
+  ): Promise<{ response: Response; result: StorefrontAssistantChatResult }> {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body,
+      cache: "no-store",
+      credentials,
+      mode: "same-origin",
+      signal: input.signal,
+    });
+    const json = await response.json().catch(() => null);
+    return {
+      response,
+      result: normalizeStorefrontAssistantChatResult(json, input.origin),
+    };
+  }
+
+  let attempt: { response: Response; result: StorefrontAssistantChatResult };
+  try {
+    attempt = conversationEndpoint
+      ? await request(conversationEndpoint, "same-origin")
+      : await request(CHAT_ENDPOINT, "omit");
+  } catch (error) {
+    if (
+      !conversationEndpoint ||
+      (error instanceof DOMException && error.name === "AbortError")
+    ) {
+      throw error;
+    }
+    attempt = await request(CHAT_ENDPOINT, "omit");
+  }
+
+  if (
+    conversationEndpoint &&
+    !attempt.response.ok &&
+    attempt.result.status === "error"
+  ) {
+    attempt = await request(CHAT_ENDPOINT, "omit");
+  }
+
+  const { response, result } = attempt;
 
   if (!response.ok && result.status === "ok") {
     return {

@@ -1,12 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createTextMessage,
   messageToHistoryContent,
   normalizeStorefrontAssistantChatResult,
+  sendStorefrontAssistantMessage,
 } from "./storefront-assistant-chat";
 
 const origin = "https://shop.example.test";
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("storefront assistant chat normalization", () => {
   it("validates rich parts and keeps only safe legacy navigation", () => {
@@ -88,5 +91,48 @@ describe("storefront assistant chat normalization", () => {
   it("derives bounded plain-text history without serializing rich objects", () => {
     const message = createTextMessage("user", "Help me choose.");
     expect(messageToHistoryContent(message)).toBe("Help me choose.");
+  });
+
+  it("falls back to the read-only one-shot proxy when transcript authority is unavailable", async () => {
+    const fetchMock = vi.fn(async (
+      input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => {
+      if (String(input).includes("/conversations/")) {
+        return Response.json({
+          success: false,
+          error: {
+            code: "CONVERSATION_SESSION_UNAVAILABLE",
+            message: "Assistant session is temporarily unavailable",
+          },
+        }, { status: 503 });
+      }
+      return Response.json({
+        status: "ok",
+        message: { role: "assistant", content: "One-shot answer." },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(sendStorefrontAssistantMessage({
+      message: "Help me choose",
+      pageContext: null,
+      history: [],
+      origin,
+      conversationId: "conv_abcdefghijklmnopqrstuv",
+    })).resolves.toMatchObject({
+      status: "ok",
+      transcriptPersisted: false,
+      message: { parts: [{ type: "text", text: "One-shot answer." }] },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/assistant/conversations/conv_abcdefghijklmnopqrstuv/chat",
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      credentials: "same-origin",
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/assistant/chat");
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ credentials: "omit" });
   });
 });

@@ -148,6 +148,7 @@ export async function resumeAssistantSession(
     expectedConversationKey?: string;
     expectedPermissionSnapshotHash?: string | null;
     expectedSafeMetadata?: unknown | null;
+    touchAfterSeconds?: number;
     now?: Date;
   },
 ): Promise<AssistantSessionView> {
@@ -206,11 +207,49 @@ export async function resumeAssistantSession(
       : eq(assistantSessions.safeMetadata, expectedMetadata));
   }
 
-  const resumed = await db.update(assistantSessions).set({
-    lastSeenAt: now,
-    updatedAt: now,
-  }).where(and(...conditions)).returning();
-  if (resumed[0]) return mapSession(resumed[0]);
+  const touchAfterSeconds = input.touchAfterSeconds ?? 0;
+  if (
+    !Number.isSafeInteger(touchAfterSeconds) ||
+    touchAfterSeconds < 0 ||
+    touchAfterSeconds > 24 * 60 * 60
+  ) {
+    throw new ValidationError(
+      "Assistant session touch interval must be between 0 and 86400 seconds.",
+    );
+  }
+
+  if (touchAfterSeconds > 0) {
+    const active = await db.select().from(assistantSessions)
+      .where(and(...conditions)).limit(1);
+    const row = active[0];
+    if (
+      row &&
+      row.lastSeenAt.getTime() > now.getTime() - touchAfterSeconds * 1_000
+    ) {
+      return mapSession(row);
+    }
+    const touchThreshold = new Date(
+      now.getTime() - touchAfterSeconds * 1_000,
+    );
+    const touched = await db.update(assistantSessions).set({
+      lastSeenAt: now,
+      updatedAt: now,
+    }).where(and(
+      ...conditions,
+      lte(assistantSessions.lastSeenAt, touchThreshold),
+    )).returning();
+    if (touched[0]) return mapSession(touched[0]);
+
+    const raced = await db.select().from(assistantSessions)
+      .where(and(...conditions)).limit(1);
+    if (raced[0]) return mapSession(raced[0]);
+  } else {
+    const resumed = await db.update(assistantSessions).set({
+      lastSeenAt: now,
+      updatedAt: now,
+    }).where(and(...conditions)).returning();
+    if (resumed[0]) return mapSession(resumed[0]);
+  }
 
   await db.update(assistantSessions).set({
     status: "expired",
