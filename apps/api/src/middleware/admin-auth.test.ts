@@ -10,7 +10,12 @@ import {
 } from "@scalius/shared/scanner-auth";
 
 const mocks = vi.hoisted(() => ({
+  autoSeedRbacIfNeeded: vi.fn(),
   getUserPermissions: vi.fn(),
+}));
+
+vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
+  autoSeedRbacIfNeeded: mocks.autoSeedRbacIfNeeded,
 }));
 
 vi.mock("@scalius/core/auth/rbac/helpers", () => ({
@@ -117,6 +122,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.autoSeedRbacIfNeeded.mockResolvedValue(undefined);
     mockBetterAuthSession();
   });
 
@@ -181,6 +187,31 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       "admin_1",
       cache,
     );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("synchronizes the RBAC catalog before reading effective permissions", async () => {
+    const callOrder: string[] = [];
+    mocks.autoSeedRbacIfNeeded.mockImplementation(async () => {
+      callOrder.push("seed");
+    });
+    mocks.getUserPermissions.mockImplementation(async () => {
+      callOrder.push("permissions");
+      return new Set([PERMISSIONS.PRODUCTS_VIEW]);
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
+    const context = createContext("/api/v1/admin/products", "GET", {
+      env: { CACHE: cache },
+    });
+
+    await adminAuthMiddleware(context as never, next);
+
+    expect(mocks.autoSeedRbacIfNeeded).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      cache,
+    );
+    expect(callOrder).toEqual(["seed", "permissions"]);
     expect(next).toHaveBeenCalledTimes(1);
   });
 

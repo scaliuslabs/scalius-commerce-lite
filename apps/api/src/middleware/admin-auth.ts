@@ -1,6 +1,7 @@
 // src/server/middleware/admin-auth.ts
 import type { MiddlewareHandler } from "hono";
 import { and, eq, sql } from "drizzle-orm";
+import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
@@ -366,6 +367,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // getUserPermissions already checks isSuperAdmin internally and returns ALL
     // permissions for super admins — no need for a separate isSuperAdmin() query.
     const db = c.get("db");
+    await retryTransientD1(() => autoSeedRbacIfNeeded(db, c.env.CACHE));
     const userPerms = await getUserPermissions(db, user.id, c.env.CACHE);
 
     // Gate: must have at least one RBAC permission (super admins get all).

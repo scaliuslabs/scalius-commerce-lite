@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERMISSIONS } from "./permissions";
 import {
   clearAllPermissionCache,
+  clearPermissionCache,
   getUserPermissions,
 } from "./helpers";
+import { getRbacSeedCacheKey } from "./auto-seed";
 
 function createSelectChain() {
   const chain = {
@@ -41,15 +43,32 @@ describe("RBAC permission cache", () => {
 
     const cached = await getUserPermissions(db as never, "user_1", kv as never);
     expect(cached).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    expect(kv.get).toHaveBeenNthCalledWith(
+      1,
+      `rbac:perms:user_1:${getRbacSeedCacheKey()}`,
+      "json",
+    );
     expect(db.batch).not.toHaveBeenCalled();
 
     const refreshed = await getUserPermissions(db as never, "user_1", kv as never);
     expect(refreshed).toEqual(new Set([PERMISSIONS.ORDERS_VIEW]));
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect(kv.put).toHaveBeenCalledWith(
-      "rbac:perms:user_1",
+      `rbac:perms:user_1:${getRbacSeedCacheKey()}`,
       JSON.stringify([PERMISSIONS.ORDERS_VIEW]),
       { expirationTtl: 300 },
+    );
+  });
+
+  it("clears the current catalog-versioned permission entry", async () => {
+    const kv = {
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await clearPermissionCache("user_1", kv as never);
+
+    expect(kv.delete).toHaveBeenCalledWith(
+      `rbac:perms:user_1:${getRbacSeedCacheKey()}`,
     );
   });
 });
