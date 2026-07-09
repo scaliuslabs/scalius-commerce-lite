@@ -135,7 +135,7 @@ export function TaxClassificationsPanel({
                           taxClassId: value === INHERIT ? null : value,
                         })}
                       >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={`Tax class for ${item.label}`}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value={INHERIT}>{kind === "variant" ? "Inherit product/default" : "Inherit store default"}</SelectItem>
                           {configuration.classes.map((taxClass) => (
