@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildProductAssistantSurfaceLabel,
+  createProductAssistantSurfaceInstanceId,
   createProductAssistantActionHandlers,
   createProductAssistantSurfaceActions,
   countProductAssistantValidationErrors,
   getProductAssistantActionId,
+  getProductAssistantSurfaceId,
   PRODUCT_ASSISTANT_SAFE_FIELDS,
   PRODUCT_ASSISTANT_SURFACE_CAPABILITIES,
   type ProductAssistantSurfaceDraft,
@@ -128,6 +130,37 @@ describe("product assistant surface context", () => {
         label: "Save product form",
       },
     ]);
+  });
+
+  it("scopes product form surfaces to the resource and mounted instance", () => {
+    const productOne = getProductAssistantSurfaceId({
+      mode: "edit",
+      productId: "prod_one",
+      instanceId: "instance-a",
+    });
+    const productTwo = getProductAssistantSurfaceId({
+      mode: "edit",
+      productId: "prod_two",
+      instanceId: "instance-a",
+    });
+    const remountedProductOne = getProductAssistantSurfaceId({
+      mode: "edit",
+      productId: "prod_one",
+      instanceId: "instance-b",
+    });
+    const createSurface = getProductAssistantSurfaceId({
+      mode: "create",
+      instanceId: "instance-a",
+    });
+
+    expect(productOne).toBe("product-edit:prod_one:instance-a");
+    expect(productTwo).not.toBe(productOne);
+    expect(remountedProductOne).not.toBe(productOne);
+    expect(createSurface).toBe("product-create:new:instance-a");
+    expect(createProductAssistantSurfaceInstanceId()).toMatch(/^[a-z0-9-]{1,10}$/i);
+    expect(
+      getProductAssistantActionId(productOne, "save_registered_form").length,
+    ).toBeLessThanOrEqual(80);
   });
 
   it("focuses and drafts only allowlisted fields", async () => {

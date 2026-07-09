@@ -55,7 +55,7 @@ describe("AdminAssistantLauncher", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders a movable bubble with floating and sidebar panel controls", async () => {
+  it("renders a movable bubble with floating, left-docked, and right-docked controls", async () => {
     renderLauncher();
 
     const trigger = queryButton("Open admin assistant");
@@ -69,7 +69,12 @@ describe("AdminAssistantLauncher", () => {
     expect(document.body.textContent).toContain("Admin assistant");
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe("floating");
     expect(queryButton("Move assistant")).toBeTruthy();
-    expect(queryButton("Use sidebar mode")).toBeTruthy();
+    expect(queryButton("Resize assistant")).toBeTruthy();
+    expect(queryButton("Dock assistant left")).toBeTruthy();
+    expect(queryButton("Dock assistant right")).toBeTruthy();
+    expect(queryButton("Use floating assistant")?.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
     expect(queryButton("Minimize admin assistant")).toBeTruthy();
     expect(queryButton("Send assistant message")).toBeTruthy();
     expect(
@@ -78,12 +83,47 @@ describe("AdminAssistantLauncher", () => {
       ),
     ).toBeTruthy();
 
-    await click(queryButton("Use sidebar mode"));
-    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe("sidebar");
-    expect(queryButton("Use floating mode")).toBeTruthy();
+    await click(queryButton("Dock assistant left"));
+    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
+      "dock-left",
+    );
+    expect(queryButton("Dock assistant left")?.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+
+    await click(queryButton("Dock assistant right"));
+    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
+      "dock-right",
+    );
+
+    await click(queryButton("Use floating assistant"));
+    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
+      "floating",
+    );
 
     await click(queryButton("Minimize admin assistant"));
     expect(getAssistantPanel()).toBeNull();
+  });
+
+  it("supports keyboard movement, resizing, shortcut toggle, and Escape collapse", async () => {
+    renderLauncher();
+
+    const trigger = queryButton("Open admin assistant");
+    const initialLeft = Number.parseInt(trigger?.style.left ?? "0", 10);
+    await keyDown(trigger, "ArrowLeft");
+    expect(Number.parseInt(trigger?.style.left ?? "0", 10)).toBeLessThan(initialLeft);
+
+    await keyDown(window, "a", { altKey: true, shiftKey: true });
+    expect(getAssistantPanel()).toBeTruthy();
+
+    const panel = getAssistantPanel();
+    const initialWidth = Number.parseInt(panel?.style.width ?? "0", 10);
+    await keyDown(queryButton("Resize assistant"), "ArrowLeft");
+    expect(Number.parseInt(panel?.style.width ?? "0", 10)).toBeLessThan(initialWidth);
+
+    await keyDown(panel, "Escape");
+    expect(getAssistantPanel()).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("sends only the typed message and sanitized page-state context", async () => {
@@ -224,6 +264,88 @@ describe("AdminAssistantLauncher", () => {
         value: "<p>Here is the replacement description.</p>",
       }),
     );
+    expect(action?.disabled).toBe(true);
+    expect(document.body.textContent).toContain(
+      "Draft applied to the visible form. Review it before saving.",
+    );
+
+    await click(action);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a registered form save only after the handler confirms success", async () => {
+    const handler = vi.fn(async () => true);
+    registerAdminAssistantPageActionHandler(
+      "product-edit:prod_one:instance-a:save_registered_form",
+      handler,
+    );
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: { role: "assistant", content: "The form is ready to save." },
+      usage: null,
+      actions: [
+        {
+          type: "save_registered_form",
+          id: "product-edit:prod_one:instance-a:save_registered_form",
+          targetId: "product-edit:prod_one:instance-a",
+          label: "Save visible form",
+        },
+      ],
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Save this product");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    const action = queryButton("Save visible form");
+    await click(action);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(action?.disabled).toBe(true);
+    expect(document.body.textContent).toContain(
+      "Visible form saved successfully.",
+    );
+  });
+
+  it("reports a failed registered save without claiming the form changed", async () => {
+    const handler = vi.fn(async () => false);
+    registerAdminAssistantPageActionHandler(
+      "product-edit:prod_one:instance-a:save_registered_form",
+      handler,
+    );
+    mocks.sendAdminAssistantMessage.mockResolvedValue({
+      status: "ok",
+      message: { role: "assistant", content: "The form is ready to save." },
+      usage: null,
+      actions: [
+        {
+          type: "save_registered_form",
+          id: "product-edit:prod_one:instance-a:save_registered_form",
+          targetId: "product-edit:prod_one:instance-a",
+          label: "Save visible form",
+        },
+      ],
+    });
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Save this product");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    const action = queryButton("Save visible form");
+    await click(action);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(action?.disabled).toBe(true);
+    expect(document.body.textContent).toContain(
+      "The visible form was not saved. Review the page error, then request a new save action.",
+    );
+    expect(document.body.textContent).not.toContain(
+      "Visible form saved successfully.",
+    );
   });
 
   it("renders assistant markdown as chat typography instead of raw syntax", async () => {
@@ -298,6 +420,25 @@ async function click(element: HTMLElement | null) {
   await act(async () => {
     element?.dispatchEvent(
       new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+  });
+  await flushReact();
+}
+
+async function keyDown(
+  element: EventTarget | null,
+  key: string,
+  options: KeyboardEventInit = {},
+) {
+  expect(element).toBeTruthy();
+  await act(async () => {
+    element?.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        cancelable: true,
+        ...options,
+      }),
     );
   });
   await flushReact();

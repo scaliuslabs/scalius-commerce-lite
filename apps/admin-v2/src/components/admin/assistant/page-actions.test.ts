@@ -9,6 +9,7 @@ import {
 } from "./page-state";
 import {
   executeAdminAssistantPageAction,
+  executeAdminAssistantPageActionWithResult,
   registerAdminAssistantPageActionHandler,
   resetAdminAssistantPageActionsForTest,
   type AdminAssistantPageAction,
@@ -105,6 +106,70 @@ describe("admin assistant page actions", () => {
     ).resolves.toBe(false);
 
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale product action after a different product surface registers", async () => {
+    const oldHandler = vi.fn(() => true);
+    const currentHandler = vi.fn(() => true);
+    const oldActionId = "product-edit:prod_one:instance-a:apply_field_draft";
+    const oldHandle = registerAdminAssistantPageActionHandler(
+      oldActionId,
+      oldHandler,
+    );
+
+    oldHandle.unregister();
+    registerAdminAssistantPageActionHandler(
+      "product-edit:prod_two:instance-b:apply_field_draft",
+      currentHandler,
+    );
+
+    await expect(
+      executeAdminAssistantPageActionWithResult(
+        {
+          id: oldActionId,
+          type: "apply_field_draft",
+          targetId: "product-edit:prod_one:instance-a",
+          fieldName: "description",
+          value: "Product one copy",
+        },
+        { executionKey: "assistant-message-one:apply-product-one-copy" },
+      ),
+    ).resolves.toEqual({ ok: false, reason: "handler_unavailable" });
+
+    expect(oldHandler).not.toHaveBeenCalled();
+    expect(currentHandler).not.toHaveBeenCalled();
+  });
+
+  it("consumes one rendered action before awaiting its handler", async () => {
+    let resolveHandler: ((accepted: boolean) => void) | undefined;
+    const handler = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveHandler = resolve;
+        }),
+    );
+    registerAdminAssistantPageActionHandler("product-form-save", handler);
+    const action = {
+      id: "product-form-save",
+      type: "save_registered_form",
+      targetId: "product-form",
+    };
+    const options = { executionKey: "assistant-message-one:save-product" };
+
+    const firstExecution = executeAdminAssistantPageActionWithResult(
+      action,
+      options,
+    );
+    await expect(
+      executeAdminAssistantPageActionWithResult(action, options),
+    ).resolves.toEqual({ ok: false, reason: "already_consumed" });
+
+    resolveHandler?.(true);
+    await expect(firstExecution).resolves.toEqual({
+      ok: true,
+      reason: "executed",
+    });
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed for unsupported or unsafe actions", async () => {

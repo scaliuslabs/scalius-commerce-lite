@@ -46,11 +46,13 @@ import {
 } from "./product-form";
 import {
   buildProductAssistantSurfaceLabel,
+  createProductAssistantSurfaceInstanceId,
   createProductAssistantActionHandlers,
   createProductAssistantSurfaceActions,
   countProductAssistantValidationErrors,
   focusProductAssistantFieldInForm,
   getProductAssistantActionId,
+  getProductAssistantSurfaceId,
   PRODUCT_ASSISTANT_SURFACE_CAPABILITIES,
   type ProductAssistantField,
   type ProductAssistantSurfaceRegistration,
@@ -175,9 +177,16 @@ export function ProductForm({
   const assistantIsSubmittingRef = React.useRef(isSubmitting);
   const assistantValidationErrorCountRef = React.useRef(0);
   const assistantSubmitHandlerRef = React.useRef(handleSubmit);
-  const assistantSurfaceId = isEdit
-    ? "product-edit-form"
-    : "product-create-form";
+  const assistantSurfaceInstanceIdRef = React.useRef<string | null>(null);
+  if (!assistantSurfaceInstanceIdRef.current) {
+    assistantSurfaceInstanceIdRef.current =
+      createProductAssistantSurfaceInstanceId();
+  }
+  const assistantSurfaceId = getProductAssistantSurfaceId({
+    mode: isEdit ? "edit" : "create",
+    productId: defaultValues?.id,
+    instanceId: assistantSurfaceInstanceIdRef.current,
+  });
   const assistantName = form.watch("name");
   const assistantDescription = form.watch("description");
   const assistantValidationErrorCount = countProductAssistantValidationErrors(
@@ -230,10 +239,11 @@ export function ProductForm({
     const isValid = await form.trigger();
     if (!isValid) return false;
 
-    await form.handleSubmit((values) =>
-      assistantSubmitHandlerRef.current(values),
-    )();
-    return true;
+    let saved = false;
+    await form.handleSubmit(async (values) => {
+      saved = await assistantSubmitHandlerRef.current(values);
+    })();
+    return saved;
   }, [form]);
   const assistantPageActions = React.useMemo(
     () =>

@@ -1,3 +1,5 @@
+import { redactAssistantSensitiveText } from "@scalius/shared/assistant-redaction";
+
 export const ADMIN_ASSISTANT_PAGE_STATE_EVENT =
   "scalius:admin-assistant-page-state";
 export const ADMIN_ASSISTANT_PAGE_STATE_GLOBAL =
@@ -11,13 +13,6 @@ const MAX_SURFACE_COUNT = 20;
 const MAX_COUNT = 10_000;
 const MAX_SCROLL_METRIC = 1_000_000;
 const MAX_ACTION_ROW_IDS = 100;
-
-const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
-const BANGLADESH_PHONE_PATTERN = /(^|[^\d])(?:\+?88)?01[3-9]\d{8}(?!\d)/g;
-const BROAD_PHONE_PATTERN = /(^|[^\d])\+?\d[\d\s().-]{6,}\d(?!\d)/g;
-const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi;
-const TOKEN_PREFIX_PATTERN = /\b(?:chk|cst|otp|tok|token|session|secret|sk|pk)_[A-Za-z0-9_-]{6,}\b/gi;
-const LONG_TOKEN_PATTERN = /\b[A-Za-z0-9_-]{32,}\b/g;
 
 export type AdminAssistantSurfaceKind =
   | "dialog"
@@ -131,13 +126,7 @@ export function sanitizeAdminAssistantText(
   const collapsed = value.replace(/\s+/g, " ").trim();
   if (!collapsed) return null;
 
-  const redacted = collapsed
-    .replace(BEARER_PATTERN, "Bearer [redacted-token]")
-    .replace(EMAIL_PATTERN, "[redacted-email]")
-    .replace(BANGLADESH_PHONE_PATTERN, "$1[redacted-phone]")
-    .replace(BROAD_PHONE_PATTERN, "$1[redacted-number]")
-    .replace(TOKEN_PREFIX_PATTERN, "[redacted-token]")
-    .replace(LONG_TOKEN_PATTERN, "[redacted-token]");
+  const redacted = redactAssistantSensitiveText(collapsed);
 
   return boundText(redacted, maxLength);
 }
