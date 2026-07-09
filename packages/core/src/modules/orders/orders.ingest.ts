@@ -7,7 +7,9 @@ import {
     discounts,
     discountUsage,
     orderItems,
+    orderItemTaxSnapshots,
     orderNotificationOutbox,
+    orderTaxSnapshots,
     orders,
 } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -278,6 +280,15 @@ function buildOrderWriteBatch(
             totalAmount: od.totalAmount,
             shippingCharge: od.shippingCharge,
             discountAmount: od.discountAmount,
+            currencyCode: od.currencyCode,
+            currencyDecimalPlaces: od.currencyDecimalPlaces,
+            subtotalAmountMinor: od.subtotalAmountMinor,
+            shippingAmountMinor: od.shippingAmountMinor,
+            discountAmountMinor: od.discountAmountMinor,
+            taxAmountMinor: od.taxAmountMinor,
+            totalAmountMinor: od.totalAmountMinor,
+            taxLabel: od.taxLabel,
+            pricesIncludeTax: od.pricesIncludeTax,
             status: od.status,
             paymentMethod: od.paymentMethod,
             paymentStatus: od.paymentStatus,
@@ -296,7 +307,7 @@ function buildOrderWriteBatch(
         writes.push(
             db.insert(orderItems).values(
                 payload.items.map((item) => ({
-                    id: "item_" + nanoid(),
+                    id: item.id,
                     orderId: od.id,
                     productId: item.productId,
                     variantId: item.variantId,
@@ -305,12 +316,73 @@ function buildOrderWriteBatch(
                     productName: item.productName,
                     variantLabel: item.variantLabel,
                     inventoryTracked: item.variantId !== null && item.inventoryTracked !== false,
+                    unitPriceMinor: item.unitPriceMinor,
+                    lineSubtotalMinor: item.lineSubtotalMinor,
+                    discountAmountMinor: item.discountAmountMinor,
+                    taxableAmountMinor: item.taxableAmountMinor,
+                    taxAmountMinor: item.taxAmountMinor,
                     fulfillmentStatus: "pending" as const,
                     createdAt: sql`unixepoch()`,
                 })),
             ),
         );
+
+        writes.push(
+            db.insert(orderItemTaxSnapshots).values(
+                payload.items.map((item) => {
+                    const line = payload.taxQuote.lines.find(
+                        (candidate) => candidate.lineId === item.taxAllocationLineId,
+                    );
+                    if (!line) {
+                        throw new ValidationError("Committed tax allocation is missing an order line.");
+                    }
+                    return {
+                        orderItemId: item.id,
+                        orderId: od.id,
+                        taxClassId: line.taxClassId,
+                        taxClassName: line.taxClassName,
+                        unitPriceMinor: line.unitPriceMinor,
+                        quantity: line.quantity,
+                        grossAmountMinor: line.grossAmountMinor,
+                        discountMinor: line.discountMinor,
+                        taxableAmountMinor: line.taxableAmountMinor,
+                        taxMinor: line.taxMinor,
+                        pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
+                        rateSnapshot: JSON.stringify(line.components),
+                        createdAt: sql`unixepoch()`,
+                    };
+                }),
+            ),
+        );
     }
+
+    writes.push(db.insert(orderTaxSnapshots).values({
+        orderId: od.id,
+        currencyCode: payload.taxQuote.currencyCode,
+        decimalPlaces: payload.taxQuote.decimalPlaces,
+        displayLabel: payload.taxQuote.displayLabel,
+        pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
+        shippingTaxed: payload.taxQuote.shippingTaxed,
+        subtotalMinor: payload.taxQuote.subtotalMinor,
+        shippingMinor: payload.taxQuote.shippingMinor,
+        discountMinor: payload.taxQuote.discountMinor,
+        taxableMinor: payload.taxQuote.taxableMinor,
+        taxMinor: payload.taxQuote.taxMinor,
+        totalMinor: payload.taxQuote.totalMinor,
+        settingsVersion: payload.taxQuote.settingsVersion,
+        calculationVersion: payload.taxQuote.calculationVersion,
+        destinationSnapshot: JSON.stringify(payload.taxQuote.destination),
+        rateSnapshot: JSON.stringify({
+            lines: payload.taxQuote.lines.map((line) => ({
+                lineId: line.lineId,
+                taxClassId: line.taxClassId,
+                taxClassName: line.taxClassName,
+                components: line.components,
+            })),
+            shipping: payload.taxQuote.shipping,
+        }),
+        createdAt: sql`unixepoch()`,
+    }));
 
     if (shouldCreateOrderCreatedNotification(od)) {
         writes.push(

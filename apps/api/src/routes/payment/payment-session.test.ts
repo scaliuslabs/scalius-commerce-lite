@@ -81,6 +81,9 @@ import {
 const orderRow = {
   id: "order_1",
   totalAmount: 125,
+  totalAmountMinor: null as number | null,
+  currencyCode: null as string | null,
+  currencyDecimalPlaces: null as number | null,
   customerId: "customer_1" as string | null,
   customerName: "Payment Customer",
   customerPhone: "+8801712345678",
@@ -920,6 +923,69 @@ describe("payment session receipt-token proof", () => {
       paymentType: "full",
     }));
     expect(db.__insertedValues).toHaveLength(0);
+  });
+
+  it("uses the committed minor-unit order total for full payment sessions", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      order: {
+        totalAmount: 40.01,
+        totalAmountMinor: 4_002,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
+        balanceDue: 40.02,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      amount: 40.02,
+      requestContext: expect.objectContaining({ amountInSmallestUnit: 4_002 }),
+    }));
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
+      amount: 4_002,
+    }));
+  });
+
+  it("fails closed before provider work when the current currency differs from the order snapshot", async () => {
+    mocks.getCurrencyConfig.mockResolvedValueOnce({ code: "USD", usdExchangeRate: 1 });
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      order: {
+        totalAmount: 40.02,
+        totalAmountMinor: 4_002,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
+        balanceDue: 40.02,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining("Store currency changed") },
+    });
+    expect(mocks.buildPaymentSessionAttemptIdentity).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
   });
 
   it("fails before provider calls when a pending deposit payment plan cannot be persisted", async () => {

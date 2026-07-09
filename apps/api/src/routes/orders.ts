@@ -16,7 +16,7 @@ import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/
 import { getSSLCommerzBdtAmountLimitIssue } from "@scalius/core/modules/payments/sslcommerz";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { addPrices, roundPrice, subtractPrice } from "@scalius/shared/price-utils";
+import { addPrices, roundPrice } from "@scalius/shared/price-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
 import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@scalius/core/modules/payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
@@ -42,6 +42,13 @@ import {
   verifyOrderPaymentRecoveryOtp,
   type ClaimedCheckoutAttempt,
 } from "@scalius/core/modules/orders";
+import {
+  buildStorefrontTaxAllocationLineId,
+  calculateStorefrontTaxQuote,
+  fromMinorUnits,
+  type StorefrontDiscountType,
+  type TaxQuote,
+} from "@scalius/core/modules/tax";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import {
   getOptionalExecutionContext,
@@ -556,6 +563,15 @@ const orderReceiptSchema = z.object({
   totalAmount: z.number(),
   shippingCharge: z.number(),
   discountAmount: z.number().nullable(),
+  currencyCode: z.string().nullable(),
+  currencyDecimalPlaces: z.number().int().nullable(),
+  subtotalAmountMinor: z.number().int().nullable(),
+  shippingAmountMinor: z.number().int().nullable(),
+  discountAmountMinor: z.number().int().nullable(),
+  taxAmountMinor: z.number().int(),
+  totalAmountMinor: z.number().int().nullable(),
+  taxLabel: z.string().nullable(),
+  pricesIncludeTax: z.boolean(),
   city: z.string(),
   zone: z.string(),
   area: z.string().nullable(),
@@ -579,6 +595,11 @@ const orderReceiptSchema = z.object({
     productImage: z.string().nullable(),
     variantSize: z.string().nullable(),
     variantColor: z.string().nullable(),
+    unitPriceMinor: z.number().int().nullable(),
+    lineSubtotalMinor: z.number().int().nullable(),
+    discountAmountMinor: z.number().int().nullable(),
+    taxableAmountMinor: z.number().int().nullable(),
+    taxAmountMinor: z.number().int(),
   })),
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
@@ -781,6 +802,15 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       totalAmount: orders.totalAmount,
       shippingCharge: orders.shippingCharge,
       discountAmount: orders.discountAmount,
+      currencyCode: orders.currencyCode,
+      currencyDecimalPlaces: orders.currencyDecimalPlaces,
+      subtotalAmountMinor: orders.subtotalAmountMinor,
+      shippingAmountMinor: orders.shippingAmountMinor,
+      discountAmountMinor: orders.discountAmountMinor,
+      taxAmountMinor: orders.taxAmountMinor,
+      totalAmountMinor: orders.totalAmountMinor,
+      taxLabel: orders.taxLabel,
+      pricesIncludeTax: orders.pricesIncludeTax,
       city: orders.city,
       zone: orders.zone,
       area: orders.area,
@@ -821,7 +851,12 @@ app.openapi(getOrderReceiptRoute, async (c) => {
           LIMIT 1
         )`.as("productImage"),
         variantSize: productVariants.size,
-        variantColor: productVariants.color
+        variantColor: productVariants.color,
+        unitPriceMinor: orderItems.unitPriceMinor,
+        lineSubtotalMinor: orderItems.lineSubtotalMinor,
+        discountAmountMinor: orderItems.discountAmountMinor,
+        taxableAmountMinor: orderItems.taxableAmountMinor,
+        taxAmountMinor: orderItems.taxAmountMinor,
       })
       .from(orderItems)
       .leftJoin(products, eq(products.id, orderItems.productId))
@@ -838,6 +873,15 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       totalAmount: order.totalAmount,
       shippingCharge: order.shippingCharge,
       discountAmount: order.discountAmount,
+      currencyCode: order.currencyCode,
+      currencyDecimalPlaces: order.currencyDecimalPlaces,
+      subtotalAmountMinor: order.subtotalAmountMinor,
+      shippingAmountMinor: order.shippingAmountMinor,
+      discountAmountMinor: order.discountAmountMinor,
+      taxAmountMinor: order.taxAmountMinor,
+      totalAmountMinor: order.totalAmountMinor,
+      taxLabel: order.taxLabel,
+      pricesIncludeTax: order.pricesIncludeTax,
       city: order.city,
       zone: order.zone,
       area: order.area,
@@ -954,14 +998,98 @@ const cartIssueSchema = z.object({
   currentPrice: z.number().optional(),
 });
 
+const persistedStorefrontVariantIdSchema = z
+  .string()
+  .trim()
+  .min(1, "A saved product variant is required")
+  .max(180, "Product variant id is too long")
+  .regex(/^(?!default$).+$/, "A saved product variant is required");
+
 const cartValidationItemSchema = z.object({
   cartKey: z.string().min(1).max(256).optional().nullable(),
   productId: z.string().min(1, "Product is required"),
-  variantId: z.string().nullable(),
+  variantId: persistedStorefrontVariantIdSchema,
   quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(99, "Quantity must be at most 99"),
   price: z.number().min(0, "Price must be greater than or equal to 0"),
   productName: z.string().optional().nullable(),
   variantLabel: z.string().optional().nullable(),
+});
+
+const taxQuoteItemSchema = z.object({
+  cartKey: z.string().min(1).max(256).optional().nullable(),
+  productId: z.string().min(1, "Product is required").max(180),
+  variantId: persistedStorefrontVariantIdSchema,
+  quantity: z.number().int().min(1).max(99),
+  productName: z.string().max(200).optional().nullable(),
+  variantLabel: z.string().max(200).optional().nullable(),
+});
+
+const taxQuoteResponseSchema = z.object({
+  valid: z.literal(true),
+  quoteFingerprint: z.string(),
+  displayLabel: z.string(),
+  pricesIncludeTax: z.boolean(),
+  shippingTaxed: z.boolean(),
+  currencyCode: z.string(),
+  decimalPlaces: z.number().int(),
+  settingsVersion: z.number().int(),
+  subtotalMinor: z.number().int(),
+  subtotalAmount: z.number(),
+  shippingMinor: z.number().int(),
+  shippingAmount: z.number(),
+  discountMinor: z.number().int(),
+  discountAmount: z.number(),
+  taxMinor: z.number().int(),
+  taxAmount: z.number(),
+  totalMinor: z.number().int(),
+  totalAmount: z.number(),
+  items: z.array(z.object({
+    cartKey: z.string().nullable().optional(),
+    productId: z.string(),
+    variantId: z.string(),
+    quantity: z.number().int(),
+    unitPrice: z.number(),
+    productName: z.string(),
+    variantLabel: z.string().nullable(),
+  })),
+});
+
+const taxQuoteRoute = createRoute({
+  method: "post",
+  path: "/tax-quote",
+  tags: ["Orders"],
+  summary: "Calculate an authoritative storefront tax quote",
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            items: z.array(taxQuoteItemSchema).min(1).max(99),
+            inventoryPool: z.enum([
+              InventoryPool.REGULAR,
+              InventoryPool.PREORDER,
+              InventoryPool.BACKORDER,
+            ]).default(InventoryPool.REGULAR),
+            city: z.string().min(1).max(180),
+            zone: z.string().min(1).max(180),
+            area: z.string().max(180).optional().nullable(),
+            shippingMethodId: z.string().min(1).max(180),
+            discountCode: z.string().trim().max(100).optional().nullable(),
+            customerPhone: phoneNumberSchema.optional().nullable(),
+          }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Authoritative tax quote",
+      content: { "application/json": { schema: successEnvelope(taxQuoteResponseSchema) } },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
 });
 
 const cartValidationRoute = createRoute({
@@ -999,7 +1127,7 @@ const cartValidationRoute = createRoute({
               index: z.number(),
               cartKey: z.string().nullable().optional(),
               productId: z.string(),
-              variantId: z.string().nullable(),
+              variantId: persistedStorefrontVariantIdSchema,
               quantity: z.number(),
               unitPrice: z.number(),
               productName: z.string(),
@@ -1047,6 +1175,175 @@ app.openapi(cartValidationRoute, async (c) => {
   return ok(c, { ...result, delivery });
 });
 
+type TaxQuoteCartValidationResult = Awaited<ReturnType<typeof validateStorefrontCartItems>>;
+type TaxQuoteDeliveryResult = Awaited<ReturnType<typeof validateStorefrontDeliveryPreflight>>;
+
+async function resolveAuthoritativeTaxQuote(
+  db: Database,
+  input: {
+    discountCode?: string | null;
+    customerPhone?: string | null;
+  },
+  cartValidation: TaxQuoteCartValidationResult,
+  delivery: TaxQuoteDeliveryResult,
+  destination: { city: string; zone: string; area?: string | null },
+): Promise<TaxQuote> {
+  const totalBeforeDiscount = addPrices(cartValidation.subtotal, delivery.shippingCharge);
+  const normalizedDiscountCode = input.discountCode?.trim().toUpperCase();
+  let discountAmount = 0;
+  let discountType: StorefrontDiscountType | null = null;
+  let applicableProductIds: string[] | undefined;
+  if (normalizedDiscountCode) {
+    if (!input.customerPhone) {
+      throw new ValidationError("A customer phone number is required to quote this discount.");
+    }
+    const discountItems = cartValidation.items.map((item) => ({
+      id: item.productId,
+      price: item.unitPrice,
+      quantity: item.quantity,
+      variantId: item.variantId,
+      freeDelivery: item.freeDelivery,
+    }));
+    const validation = await isDiscountValid(
+      db,
+      normalizedDiscountCode,
+      totalBeforeDiscount,
+      discountItems,
+      input.customerPhone,
+    ) as {
+      valid?: unknown;
+      discount?: {
+        id: string;
+        type: StorefrontDiscountType;
+        valueType: string;
+        discountValue: number;
+      };
+      applicableProductIds?: Set<string>;
+    } | null;
+    if (!validation?.valid || !validation.discount) {
+      throw new ValidationError(`Discount code ${normalizedDiscountCode} is invalid or expired.`);
+    }
+    discountType = validation.discount.type;
+    if (discountType === "amount_off_products") {
+      if (!(validation.applicableProductIds instanceof Set)) {
+        throw new ValidationError("The product discount scope could not be verified.");
+      }
+      applicableProductIds = [...validation.applicableProductIds];
+    }
+    discountAmount = await calculateDiscountAmount(
+      db,
+      validation.discount,
+      totalBeforeDiscount,
+      discountItems,
+      delivery.shippingCharge,
+      validation.applicableProductIds,
+    );
+  }
+
+  return calculateStorefrontTaxQuote(db, {
+    destination: {
+      city: destination.city,
+      zone: destination.zone,
+      area: destination.area ?? null,
+      cityName: delivery.cityName,
+      zoneName: delivery.zoneName,
+      areaName: delivery.areaName,
+    },
+    lines: cartValidation.items.map((item) => ({
+      lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+      productId: item.productId,
+      variantId: item.variantId,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      taxClassId: item.taxClassId,
+    })),
+    shippingAmount: delivery.shippingCharge,
+    discountAmount: roundPrice(Number(discountAmount)),
+    discountType,
+    applicableProductIds,
+  });
+}
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function taxQuoteFingerprint(quote: TaxQuote): Promise<string> {
+  const safeIdentity = JSON.stringify({
+    calculationVersion: quote.calculationVersion,
+    settingsVersion: quote.settingsVersion,
+    currencyCode: quote.currencyCode,
+    decimalPlaces: quote.decimalPlaces,
+    destination: quote.destination,
+    subtotalMinor: quote.subtotalMinor,
+    shippingMinor: quote.shippingMinor,
+    discountMinor: quote.discountMinor,
+    taxMinor: quote.taxMinor,
+    totalMinor: quote.totalMinor,
+    lines: quote.lines.map((line) => [line.productId, line.variantId, line.quantity, line.unitPriceMinor]),
+  });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(safeIdentity));
+  return `taxq_${encodeBase64Url(new Uint8Array(digest)).slice(0, 22)}`;
+}
+
+app.openapi(taxQuoteRoute, async (c) => {
+  const db = c.get("db");
+  const data = c.req.valid("json");
+  const cartValidation = await validateStorefrontCartItems(db, data.items, {
+    inventoryPool: data.inventoryPool,
+  });
+  if (!cartValidation.valid) {
+    throw new ValidationError("Some items in your cart need attention.", {
+      itemIssues: cartValidation.issues,
+    });
+  }
+  const delivery = await validateStorefrontDeliveryPreflight(db, {
+    city: data.city,
+    zone: data.zone,
+    area: data.area,
+    shippingMethodId: data.shippingMethodId,
+  }, cartValidation);
+  const quote = await resolveAuthoritativeTaxQuote(
+    db,
+    { discountCode: data.discountCode, customerPhone: data.customerPhone },
+    cartValidation,
+    delivery,
+    data,
+  );
+  const toAmount = (minor: number) => fromMinorUnits(minor, quote.decimalPlaces);
+  return ok(c, {
+    valid: true as const,
+    quoteFingerprint: await taxQuoteFingerprint(quote),
+    displayLabel: quote.displayLabel,
+    pricesIncludeTax: quote.pricesIncludeTax,
+    shippingTaxed: quote.shippingTaxed,
+    currencyCode: quote.currencyCode,
+    decimalPlaces: quote.decimalPlaces,
+    settingsVersion: quote.settingsVersion,
+    subtotalMinor: quote.subtotalMinor,
+    subtotalAmount: toAmount(quote.subtotalMinor),
+    shippingMinor: quote.shippingMinor,
+    shippingAmount: toAmount(quote.shippingMinor),
+    discountMinor: quote.discountMinor,
+    discountAmount: toAmount(quote.discountMinor),
+    taxMinor: quote.taxMinor,
+    taxAmount: toAmount(quote.taxMinor),
+    totalMinor: quote.totalMinor,
+    totalAmount: toAmount(quote.totalMinor),
+    items: cartValidation.items.map((item) => ({
+      cartKey: item.cartKey ?? null,
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      productName: item.productName,
+      variantLabel: item.variantLabel,
+    })),
+  });
+});
+
 const createOrderSchema = z.object({
   checkoutRequestId: z
     .string()
@@ -1078,7 +1375,7 @@ const createOrderSchema = z.object({
     z.object({
       cartKey: z.string().min(1).max(256).optional().nullable(),
       productId: z.string().min(1, "Product is required"),
-      variantId: z.string().nullable(),
+      variantId: persistedStorefrontVariantIdSchema,
       quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(99, "Quantity must be at most 99"),
       price: z.number().min(0, "Price must be greater than or equal to 0"),
       productName: z.string().optional().nullable(),
@@ -1105,44 +1402,20 @@ const createOrderSchema = z.object({
 type CreateOrderInput = z.infer<typeof createOrderSchema>;
 type CheckoutCartValidationResult = Awaited<ReturnType<typeof validateStorefrontCartItems>>;
 type CheckoutDeliveryPreflightResult = Awaited<ReturnType<typeof validateStorefrontDeliveryPreflight>>;
-type DiscountValidationResult = {
-  valid?: unknown;
-  discount?: unknown;
-};
-type CartItemForDiscount = { id: string; price: number; quantity: number; variantId?: string };
-
 async function resolveCheckoutTotalForPrecommit(
   db: Database,
   data: CreateOrderInput,
   cartValidation: CheckoutCartValidationResult,
   deliveryPreflight: CheckoutDeliveryPreflightResult,
 ): Promise<number> {
-  const subtotal = roundPrice(Number(cartValidation.subtotal));
-  const shippingCharge = roundPrice(Number(deliveryPreflight.shippingCharge));
-  const totalBeforeDiscount = addPrices(subtotal, shippingCharge);
-  const normalizedDiscountCode = data.discountCode?.trim().toUpperCase();
-  if (!normalizedDiscountCode) return totalBeforeDiscount;
-
-  const validationResponse = await isDiscountValid(
+  const quote = await resolveAuthoritativeTaxQuote(
     db,
-    normalizedDiscountCode,
-    totalBeforeDiscount,
-    data.items as unknown as CartItemForDiscount[],
-    data.customerPhone,
+    { discountCode: data.discountCode, customerPhone: data.customerPhone },
+    cartValidation,
+    deliveryPreflight,
+    data,
   );
-  const validResult = validationResponse as DiscountValidationResult | null;
-  if (!validResult?.valid || !validResult.discount) {
-    throw new ValidationError(`Discount code ${normalizedDiscountCode} is invalid or expired.`);
-  }
-
-  const discountAmount = await calculateDiscountAmount(
-    db,
-    validResult.discount as { id: string; type: string; valueType: string; discountValue: number },
-    totalBeforeDiscount,
-    data.items as unknown as CartItemForDiscount[],
-    shippingCharge,
-  );
-  return subtractPrice(totalBeforeDiscount, roundPrice(Number(discountAmount)));
+  return fromMinorUnits(quote.totalMinor, quote.decimalPlaces);
 }
 
 function resolveSSLCommerzPrecommitChargeAmount(
@@ -1211,6 +1484,13 @@ const createOrderRoute = createRoute({
           orderId: z.string(),
           paymentMethod: z.string(),
           totalAmount: z.number(),
+          totalAmountMinor: z.number().int(),
+          taxAmount: z.number(),
+          taxAmountMinor: z.number().int(),
+          taxLabel: z.string(),
+          pricesIncludeTax: z.boolean(),
+          currencyCode: z.string(),
+          decimalPlaces: z.number().int(),
           message: z.string(),
         }),
       }) } },
@@ -1252,6 +1532,13 @@ app.openapi(createOrderRoute, async (c) => {
       orderId: string;
       paymentMethod: string;
       totalAmount: number;
+      totalAmountMinor: number;
+      taxAmount: number;
+      taxAmountMinor: number;
+      taxLabel: string;
+      pricesIncludeTax: boolean;
+      currencyCode: string;
+      decimalPlaces: number;
       message: string;
     }>(db, attemptIdentity);
 
@@ -1338,6 +1625,13 @@ app.openapi(createOrderRoute, async (c) => {
       orderId: string;
       paymentMethod: string;
       totalAmount: number;
+      totalAmountMinor: number;
+      taxAmount: number;
+      taxAmountMinor: number;
+      taxLabel: string;
+      pricesIncludeTax: boolean;
+      currencyCode: string;
+      decimalPlaces: number;
       message: string;
     }>(db, attemptIdentity);
 
@@ -1359,18 +1653,19 @@ app.openapi(createOrderRoute, async (c) => {
 
     checkoutAttempt = attemptClaim.attempt;
 
-    type CartItem = { id: string; price: number; quantity: number; variantId?: string };
+    type CartItem = { id: string; price: number; quantity: number; variantId: string };
     const result = await createStorefrontOrder(
       db,
       data,
       requestUrl,
       (db, code, total, items, customerPhone) => isDiscountValid(db, code, total, items as CartItem[], customerPhone),
-      (db, discount, total, items, shippingCost) => calculateDiscountAmount(
+      (db, discount, total, items, shippingCost, applicableProductIds) => calculateDiscountAmount(
         db,
         discount as { id: string; type: string; valueType: string; discountValue: number },
         total,
         items as CartItem[],
         shippingCost,
+        applicableProductIds,
       ),
       {
         orderId: checkoutAttempt.orderId,
@@ -1406,6 +1701,13 @@ app.openapi(createOrderRoute, async (c) => {
       orderId: result.orderId,
       paymentMethod: result.paymentMethod,
       totalAmount: result.totalAmount,
+      totalAmountMinor: result.taxQuote.totalMinor,
+      taxAmount: fromMinorUnits(result.taxQuote.taxMinor, result.taxQuote.decimalPlaces),
+      taxAmountMinor: result.taxQuote.taxMinor,
+      taxLabel: result.taxQuote.displayLabel,
+      pricesIncludeTax: result.taxQuote.pricesIncludeTax,
+      currencyCode: result.taxQuote.currencyCode,
+      decimalPlaces: result.taxQuote.decimalPlaces,
       message: "Order created",
     };
 

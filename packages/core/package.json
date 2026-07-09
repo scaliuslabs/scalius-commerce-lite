@@ -25,6 +25,7 @@
     "./modules/products": "./src/modules/products/index.ts",
     "./modules/settings": "./src/modules/settings/index.ts",
     "./modules/storefront": "./src/modules/storefront/index.ts",
+    "./modules/tax": "./src/modules/tax/index.ts",
     "./modules/widgets": "./src/modules/widgets/index.ts",
     "./modules/*/*": "./src/modules/*/*.ts",
     "./modules/*": "./src/modules/*.ts",

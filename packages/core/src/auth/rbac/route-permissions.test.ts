@@ -91,4 +91,21 @@ describe("route permissions", () => {
       ),
     ).toEqual({ permission: PERMISSIONS.ORDERS_EDIT });
   });
+
+  it("separates tax reads and previews from tax mutations", () => {
+    expect(getRoutePermission("/api/v1/admin/taxes", "GET"))
+      .toEqual({ permission: PERMISSIONS.TAXES_VIEW });
+    expect(getRoutePermission("/api/v1/admin/taxes/preview", "POST"))
+      .toEqual({ permission: PERMISSIONS.TAXES_VIEW });
+    expect(getRoutePermission("/api/v1/admin/taxes/settings", "PUT"))
+      .toEqual({ permission: PERMISSIONS.TAXES_MANAGE });
+    expect(getRoutePermission("/api/v1/admin/taxes/classes/taxc_1", "DELETE"))
+      .toEqual({ permission: PERMISSIONS.TAXES_MANAGE });
+    expect(getRoutePermission("/api/v1/admin/taxes/rates/taxr_1", "PUT"))
+      .toEqual({ permission: PERMISSIONS.TAXES_MANAGE });
+    expect(getRoutePermission(
+      "/api/v1/admin/taxes/classifications/variant/sku_1",
+      "PUT",
+    )).toEqual({ permission: PERMISSIONS.TAXES_MANAGE });
+  });
 });

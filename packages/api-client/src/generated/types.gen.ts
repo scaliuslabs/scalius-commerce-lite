@@ -3208,6 +3208,15 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 balanceDue: number;
                 shippingCharge: number;
                 discountAmount: number | null;
+                currencyCode: string | null;
+                currencyDecimalPlaces: number | null;
+                subtotalAmountMinor: number | null;
+                shippingAmountMinor: number | null;
+                discountAmountMinor: number | null;
+                taxAmountMinor: number;
+                totalAmountMinor: number | null;
+                taxLabel: string | null;
+                pricesIncludeTax: boolean;
                 paymentStatus: string;
                 paymentMethod: string;
                 fulfillmentStatus: string;
@@ -3237,6 +3246,11 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 variantColor: string | null;
                 unitPrice: number;
                 lineTotal: number;
+                unitPriceMinor: number | null;
+                lineSubtotalMinor: number | null;
+                discountAmountMinor: number | null;
+                taxableAmountMinor: number | null;
+                taxAmountMinor: number;
                 fulfillmentStatus: string;
                 createdAt: string | number | null;
                 [key: string]: unknown;
@@ -6212,6 +6226,15 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 totalAmount: number;
                 shippingCharge: number;
                 discountAmount: number | null;
+                currencyCode: string | null;
+                currencyDecimalPlaces: number | null;
+                subtotalAmountMinor: number | null;
+                shippingAmountMinor: number | null;
+                discountAmountMinor: number | null;
+                taxAmountMinor: number;
+                totalAmountMinor: number | null;
+                taxLabel: string | null;
+                pricesIncludeTax: boolean;
                 city: string;
                 zone: string;
                 area: string | null;
@@ -6235,6 +6258,11 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     productImage: string | null;
                     variantSize: string | null;
                     variantColor: string | null;
+                    unitPriceMinor: number | null;
+                    lineSubtotalMinor: number | null;
+                    discountAmountMinor: number | null;
+                    taxableAmountMinor: number | null;
+                    taxAmountMinor: number;
                 }>;
                 supportRequests: Array<{
                     id: string;
@@ -6422,7 +6450,7 @@ export type PostApiV1OrdersCartValidationData = {
         items: Array<{
             cartKey?: string | null;
             productId: string;
-            variantId: string | null;
+            variantId: string;
             quantity: number;
             price: number;
             productName?: string | null;
@@ -6493,7 +6521,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                 index: number;
                 cartKey?: string | null;
                 productId: string;
-                variantId: string | null;
+                variantId: string;
                 quantity: number;
                 unitPrice: number;
                 productName: string;
@@ -6515,6 +6543,96 @@ export type PostApiV1OrdersCartValidationResponses = {
 
 export type PostApiV1OrdersCartValidationResponse = PostApiV1OrdersCartValidationResponses[keyof PostApiV1OrdersCartValidationResponses];
 
+export type PostApiV1OrdersTaxQuoteData = {
+    body: {
+        items: Array<{
+            cartKey?: string | null;
+            productId: string;
+            variantId: string;
+            quantity: number;
+            productName?: string | null;
+            variantLabel?: string | null;
+        }>;
+        inventoryPool?: 'regular' | 'preorder' | 'backorder';
+        city: string;
+        zone: string;
+        area?: string | null;
+        shippingMethodId: string;
+        discountCode?: string | null;
+        customerPhone?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/tax-quote';
+};
+
+export type PostApiV1OrdersTaxQuoteErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersTaxQuoteError = PostApiV1OrdersTaxQuoteErrors[keyof PostApiV1OrdersTaxQuoteErrors];
+
+export type PostApiV1OrdersTaxQuoteResponses = {
+    /**
+     * Authoritative tax quote
+     */
+    200: {
+        success: true;
+        data: {
+            valid: true;
+            quoteFingerprint: string;
+            displayLabel: string;
+            pricesIncludeTax: boolean;
+            shippingTaxed: boolean;
+            currencyCode: string;
+            decimalPlaces: number;
+            settingsVersion: number;
+            subtotalMinor: number;
+            subtotalAmount: number;
+            shippingMinor: number;
+            shippingAmount: number;
+            discountMinor: number;
+            discountAmount: number;
+            taxMinor: number;
+            taxAmount: number;
+            totalMinor: number;
+            totalAmount: number;
+            items: Array<{
+                cartKey?: string | null;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                productName: string;
+                variantLabel: string | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1OrdersTaxQuoteResponse = PostApiV1OrdersTaxQuoteResponses[keyof PostApiV1OrdersTaxQuoteResponses];
+
 export type PostApiV1OrdersData = {
     body?: {
         checkoutRequestId: string;
@@ -6532,7 +6650,7 @@ export type PostApiV1OrdersData = {
         items: Array<{
             cartKey?: string | null;
             productId: string;
-            variantId: string | null;
+            variantId: string;
             quantity: number;
             price: number;
             productName?: string | null;
@@ -6634,6 +6752,13 @@ export type PostApiV1OrdersResponses = {
             orderId: string;
             paymentMethod: string;
             totalAmount: number;
+            totalAmountMinor: number;
+            taxAmount: number;
+            taxAmountMinor: number;
+            taxLabel: string;
+            pricesIncludeTax: boolean;
+            currencyCode: string;
+            decimalPlaces: number;
             message: string;
         };
     };
@@ -29346,6 +29471,15 @@ export type GetApiV1AdminOrdersByIdResponses = {
             totalAmount: number;
             shippingCharge: number;
             discountAmount: number;
+            currencyCode: string | null;
+            currencyDecimalPlaces: number | null;
+            subtotalAmountMinor: number | null;
+            shippingAmountMinor: number | null;
+            discountAmountMinor: number | null;
+            taxAmountMinor: number;
+            totalAmountMinor: number | null;
+            taxLabel: string | null;
+            pricesIncludeTax: boolean;
             status: string;
             paymentStatus: string | null;
             paymentMethod: string | null;
@@ -29375,6 +29509,11 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 variantSize: string | null;
                 variantColor: string | null;
                 fulfillmentStatus: string;
+                unitPriceMinor: number | null;
+                lineSubtotalMinor: number | null;
+                discountAmountMinor: number | null;
+                taxableAmountMinor: number | null;
+                taxAmountMinor: number;
             }>;
             latestShipment: {
                 id: string;
@@ -29773,6 +29912,11 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
             variantSize: string | null;
             variantColor: string | null;
             fulfillmentStatus: string;
+            unitPriceMinor: number | null;
+            lineSubtotalMinor: number | null;
+            discountAmountMinor: number | null;
+            taxableAmountMinor: number | null;
+            taxAmountMinor: number;
         }>;
     };
 };
@@ -35524,6 +35668,1056 @@ export type PutApiV1AdminAttributesByIdValuesResponses = {
 };
 
 export type PutApiV1AdminAttributesByIdValuesResponse = PutApiV1AdminAttributesByIdValuesResponses[keyof PutApiV1AdminAttributesByIdValuesResponses];
+
+export type GetApiV1AdminTaxesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/taxes';
+};
+
+export type GetApiV1AdminTaxesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesError = GetApiV1AdminTaxesErrors[keyof GetApiV1AdminTaxesErrors];
+
+export type GetApiV1AdminTaxesResponses = {
+    /**
+     * Tax configuration
+     */
+    200: {
+        success: true;
+        data: {
+            settings: {
+                id: 'default';
+                enabled: boolean;
+                pricesIncludeTax: boolean;
+                taxShipping: boolean;
+                defaultTaxClassId: string | null;
+                shippingTaxClassId: string | null;
+                displayLabel: string;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+            };
+            classes: Array<{
+                id: string;
+                name: string;
+                description: string | null;
+                isExempt: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            }>;
+            rates: Array<{
+                id: string;
+                taxClassId: string;
+                name: string;
+                rateBps: number;
+                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
+                jurisdictionId: string | null;
+                jurisdictionLabel: string | null;
+                priority: number;
+                isCompound: boolean;
+                isActive: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            }>;
+            jurisdictions: Array<{
+                id: string;
+                name: string;
+                type: 'city' | 'zone' | 'area';
+                parentId: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesResponse = GetApiV1AdminTaxesResponses[keyof GetApiV1AdminTaxesResponses];
+
+export type PutApiV1AdminTaxesSettingsData = {
+    body: {
+        expectedVersion: number;
+        enabled: boolean;
+        pricesIncludeTax: boolean;
+        taxShipping: boolean;
+        defaultTaxClassId: string | null;
+        shippingTaxClassId: string | null;
+        displayLabel: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/taxes/settings';
+};
+
+export type PutApiV1AdminTaxesSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminTaxesSettingsError = PutApiV1AdminTaxesSettingsErrors[keyof PutApiV1AdminTaxesSettingsErrors];
+
+export type PutApiV1AdminTaxesSettingsResponses = {
+    /**
+     * Tax settings updated
+     */
+    200: {
+        success: true;
+        data: {
+            settings: {
+                id: 'default';
+                enabled: boolean;
+                pricesIncludeTax: boolean;
+                taxShipping: boolean;
+                defaultTaxClassId: string | null;
+                shippingTaxClassId: string | null;
+                displayLabel: string;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminTaxesSettingsResponse = PutApiV1AdminTaxesSettingsResponses[keyof PutApiV1AdminTaxesSettingsResponses];
+
+export type PostApiV1AdminTaxesClassesData = {
+    body: {
+        name: string;
+        description?: string | null;
+        isExempt?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/taxes/classes';
+};
+
+export type PostApiV1AdminTaxesClassesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminTaxesClassesError = PostApiV1AdminTaxesClassesErrors[keyof PostApiV1AdminTaxesClassesErrors];
+
+export type PostApiV1AdminTaxesClassesResponses = {
+    /**
+     * Tax class created
+     */
+    201: {
+        success: true;
+        data: {
+            taxClass: {
+                id: string;
+                name: string;
+                description: string | null;
+                isExempt: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminTaxesClassesResponse = PostApiV1AdminTaxesClassesResponses[keyof PostApiV1AdminTaxesClassesResponses];
+
+export type DeleteApiV1AdminTaxesClassesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        expectedVersion: number;
+    };
+    url: '/api/v1/admin/taxes/classes/{id}';
+};
+
+export type DeleteApiV1AdminTaxesClassesByIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminTaxesClassesByIdError = DeleteApiV1AdminTaxesClassesByIdErrors[keyof DeleteApiV1AdminTaxesClassesByIdErrors];
+
+export type DeleteApiV1AdminTaxesClassesByIdResponses = {
+    /**
+     * Tax class deleted
+     */
+    200: {
+        success: true;
+        data: {
+            taxClass: {
+                id: string;
+                name: string;
+                description: string | null;
+                isExempt: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type DeleteApiV1AdminTaxesClassesByIdResponse = DeleteApiV1AdminTaxesClassesByIdResponses[keyof DeleteApiV1AdminTaxesClassesByIdResponses];
+
+export type PutApiV1AdminTaxesClassesByIdData = {
+    body: {
+        expectedVersion: number;
+        name: string;
+        description?: string | null;
+        isExempt?: boolean;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/taxes/classes/{id}';
+};
+
+export type PutApiV1AdminTaxesClassesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminTaxesClassesByIdError = PutApiV1AdminTaxesClassesByIdErrors[keyof PutApiV1AdminTaxesClassesByIdErrors];
+
+export type PutApiV1AdminTaxesClassesByIdResponses = {
+    /**
+     * Tax class updated
+     */
+    200: {
+        success: true;
+        data: {
+            taxClass: {
+                id: string;
+                name: string;
+                description: string | null;
+                isExempt: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminTaxesClassesByIdResponse = PutApiV1AdminTaxesClassesByIdResponses[keyof PutApiV1AdminTaxesClassesByIdResponses];
+
+export type PostApiV1AdminTaxesRatesData = {
+    body: {
+        taxClassId: string;
+        name: string;
+        rateBps: number;
+        jurisdictionType: 'all' | 'city' | 'zone' | 'area';
+        jurisdictionId?: string | null;
+        jurisdictionLabel?: string | null;
+        priority?: number;
+        isCompound?: boolean;
+        isActive?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/taxes/rates';
+};
+
+export type PostApiV1AdminTaxesRatesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminTaxesRatesError = PostApiV1AdminTaxesRatesErrors[keyof PostApiV1AdminTaxesRatesErrors];
+
+export type PostApiV1AdminTaxesRatesResponses = {
+    /**
+     * Tax rate created
+     */
+    201: {
+        success: true;
+        data: {
+            taxRate: {
+                id: string;
+                taxClassId: string;
+                name: string;
+                rateBps: number;
+                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
+                jurisdictionId: string | null;
+                jurisdictionLabel: string | null;
+                priority: number;
+                isCompound: boolean;
+                isActive: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminTaxesRatesResponse = PostApiV1AdminTaxesRatesResponses[keyof PostApiV1AdminTaxesRatesResponses];
+
+export type DeleteApiV1AdminTaxesRatesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        expectedVersion: number;
+    };
+    url: '/api/v1/admin/taxes/rates/{id}';
+};
+
+export type DeleteApiV1AdminTaxesRatesByIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminTaxesRatesByIdError = DeleteApiV1AdminTaxesRatesByIdErrors[keyof DeleteApiV1AdminTaxesRatesByIdErrors];
+
+export type DeleteApiV1AdminTaxesRatesByIdResponses = {
+    /**
+     * Tax rate deleted
+     */
+    200: {
+        success: true;
+        data: {
+            taxRate: {
+                id: string;
+                taxClassId: string;
+                name: string;
+                rateBps: number;
+                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
+                jurisdictionId: string | null;
+                jurisdictionLabel: string | null;
+                priority: number;
+                isCompound: boolean;
+                isActive: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type DeleteApiV1AdminTaxesRatesByIdResponse = DeleteApiV1AdminTaxesRatesByIdResponses[keyof DeleteApiV1AdminTaxesRatesByIdResponses];
+
+export type PutApiV1AdminTaxesRatesByIdData = {
+    body: {
+        expectedVersion: number;
+        taxClassId?: string;
+        name?: string;
+        rateBps?: number;
+        jurisdictionType?: 'all' | 'city' | 'zone' | 'area';
+        jurisdictionId?: string | null;
+        jurisdictionLabel?: string | null;
+        priority?: number;
+        isCompound?: boolean;
+        isActive?: boolean;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/taxes/rates/{id}';
+};
+
+export type PutApiV1AdminTaxesRatesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminTaxesRatesByIdError = PutApiV1AdminTaxesRatesByIdErrors[keyof PutApiV1AdminTaxesRatesByIdErrors];
+
+export type PutApiV1AdminTaxesRatesByIdResponses = {
+    /**
+     * Tax rate updated
+     */
+    200: {
+        success: true;
+        data: {
+            taxRate: {
+                id: string;
+                taxClassId: string;
+                name: string;
+                rateBps: number;
+                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
+                jurisdictionId: string | null;
+                jurisdictionLabel: string | null;
+                priority: number;
+                isCompound: boolean;
+                isActive: boolean;
+                version: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminTaxesRatesByIdResponse = PutApiV1AdminTaxesRatesByIdResponses[keyof PutApiV1AdminTaxesRatesByIdResponses];
+
+export type GetApiV1AdminTaxesClassificationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        kind?: 'product' | 'variant';
+        page?: number;
+        limit?: number;
+        search?: string;
+    };
+    url: '/api/v1/admin/taxes/classifications';
+};
+
+export type GetApiV1AdminTaxesClassificationsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesClassificationsError = GetApiV1AdminTaxesClassificationsErrors[keyof GetApiV1AdminTaxesClassificationsErrors];
+
+export type GetApiV1AdminTaxesClassificationsResponses = {
+    /**
+     * Tax classifications
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                kind: 'product' | 'variant';
+                id: string;
+                productId: string;
+                productName: string;
+                label: string;
+                sku: string | null;
+                taxClassId: string | null;
+                taxClassName: string | null;
+                version: number;
+            }>;
+            total: number;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesClassificationsResponse = GetApiV1AdminTaxesClassificationsResponses[keyof GetApiV1AdminTaxesClassificationsResponses];
+
+export type PutApiV1AdminTaxesClassificationsByKindByIdData = {
+    body: {
+        taxClassId: string | null;
+        expectedVersion: number;
+    };
+    path: {
+        kind: 'product' | 'variant';
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/taxes/classifications/{kind}/{id}';
+};
+
+export type PutApiV1AdminTaxesClassificationsByKindByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminTaxesClassificationsByKindByIdError = PutApiV1AdminTaxesClassificationsByKindByIdErrors[keyof PutApiV1AdminTaxesClassificationsByKindByIdErrors];
+
+export type PutApiV1AdminTaxesClassificationsByKindByIdResponses = {
+    /**
+     * Tax classification updated
+     */
+    200: {
+        success: true;
+        data: {
+            classification: {
+                kind: 'product' | 'variant';
+                id: string;
+                taxClassId: string | null;
+                version: number;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminTaxesClassificationsByKindByIdResponse = PutApiV1AdminTaxesClassificationsByKindByIdResponses[keyof PutApiV1AdminTaxesClassificationsByKindByIdResponses];
+
+export type PostApiV1AdminTaxesPreviewData = {
+    body: {
+        amount: number;
+        quantity?: number;
+        taxClassId?: string | null;
+        shippingAmount?: number;
+        discountAmount?: number;
+        city: string;
+        zone: string;
+        area?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/taxes/preview';
+};
+
+export type PostApiV1AdminTaxesPreviewErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminTaxesPreviewError = PostApiV1AdminTaxesPreviewErrors[keyof PostApiV1AdminTaxesPreviewErrors];
+
+export type PostApiV1AdminTaxesPreviewResponses = {
+    /**
+     * Tax preview
+     */
+    200: {
+        success: true;
+        data: {
+            displayLabel: string;
+            pricesIncludeTax: boolean;
+            currencyCode: string;
+            decimalPlaces: number;
+            taxAmount: number;
+            taxMinor: number;
+            totalAmount: number;
+            totalMinor: number;
+            components: Array<{
+                name: string;
+                rateBps: number;
+                amountMinor: number;
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminTaxesPreviewResponse = PostApiV1AdminTaxesPreviewResponses[keyof PostApiV1AdminTaxesPreviewResponses];
 
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
     body?: {

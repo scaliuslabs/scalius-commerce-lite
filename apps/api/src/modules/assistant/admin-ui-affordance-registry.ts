@@ -118,6 +118,13 @@ const SETTINGS_PAGE_SOURCES: readonly SettingsPageSource[] = [
     settingGroups: ["notification-channels"],
   },
   {
+    path: "/admin/settings/taxes",
+    fileStem: "taxes",
+    implementation: "typed-command",
+    settingGroups: [],
+    extraOperationPrefixes: ["/api/v1/admin/taxes"],
+  },
+  {
     path: "/admin/settings/theme",
     fileStem: "theme",
     implementation: "typed-command",

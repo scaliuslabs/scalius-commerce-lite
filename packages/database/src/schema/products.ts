@@ -6,6 +6,7 @@ import { sqliteTable, text, integer, real, unique, index, uniqueIndex, type AnyS
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
+import { taxClasses } from "./tax";
 
 export const products = sqliteTable(
     "products",
@@ -40,6 +41,9 @@ export const products = sqliteTable(
         discountType: text("discount_type", { enum: ["percentage", "flat"] }).default("percentage"),
         discountAmount: real("discount_amount").default(0),
         freeDelivery: integer("free_delivery", { mode: "boolean" }).notNull().default(false),
+        taxClassId: text("tax_class_id")
+            .references(() => taxClasses.id, { onDelete: "set null" }),
+        taxClassificationVersion: integer("tax_classification_version").notNull().default(1),
     },
     (table) => [
         uniqueIndex("products_slug_idx").on(table.slug),
@@ -97,6 +101,9 @@ export const productVariants = sqliteTable("product_variants", {
     preorderMessage: text("preorder_message"),
     allowBackorder: integer("allow_backorder", { mode: "boolean" }).notNull().default(false),
     backorderLimit: integer("backorder_limit").notNull().default(0),
+    taxClassId: text("tax_class_id")
+        .references(() => taxClasses.id, { onDelete: "set null" }),
+    taxClassificationVersion: integer("tax_classification_version").notNull().default(1),
     discountPercentage: real("discount_percentage").default(0),
     discountType: text("discount_type", { enum: ["percentage", "flat"] }).default("percentage"),
     discountAmount: real("discount_amount").default(0),

@@ -156,6 +156,12 @@ export const PERMISSIONS = {
   SETTINGS_CACHE_MANAGE: "settings.cache.manage",
 
   // =============================================
+  // Taxes (2 permissions) - SENSITIVE
+  // =============================================
+  TAXES_VIEW: "taxes.view",
+  TAXES_MANAGE: "taxes.manage",
+
+  // =============================================
   // Team Management (3 permissions) - SUPER ADMIN DEFAULT
   // =============================================
   TEAM_VIEW: "team.view",
@@ -894,6 +900,26 @@ export const PERMISSION_METADATA: Record<
     action: "cache.manage",
     category: "Settings",
     isSensitive: false,
+  },
+
+  // Taxes
+  [PERMISSIONS.TAXES_VIEW]: {
+    name: PERMISSIONS.TAXES_VIEW,
+    displayName: "View Taxes",
+    description: "View tax settings, rates, jurisdictions, and catalog classifications",
+    resource: "taxes",
+    action: "view",
+    category: "Settings",
+    isSensitive: false,
+  },
+  [PERMISSIONS.TAXES_MANAGE]: {
+    name: PERMISSIONS.TAXES_MANAGE,
+    displayName: "Manage Taxes",
+    description: "Configure tax calculation and catalog classifications",
+    resource: "taxes",
+    action: "manage",
+    category: "Settings",
+    isSensitive: true,
   },
 
   // Team Management

@@ -132,6 +132,9 @@ export function isPaymentSessionProcessingResult(
 type PaymentSessionOrderRow = {
   id: string;
   totalAmount: number;
+  totalAmountMinor: number | null;
+  currencyCode: string | null;
+  currencyDecimalPlaces: number | null;
   customerId: string | null;
   customerName: string;
   customerPhone: string;
@@ -148,6 +151,52 @@ type PaymentSessionOrderRow = {
   shipmentClaimId: string | null;
   shipmentClaimExpiresAt: Date | null;
 };
+
+function resolveAuthoritativeOrderCurrency(
+  order: PaymentSessionOrderRow,
+  current: { code: string; decimalPlaces?: number },
+): { code: string; decimalPlaces: number; legacy: boolean } {
+  const currentCode = current.code.trim().toUpperCase();
+  const currentDecimalPlaces = current.decimalPlaces ?? getDecimalPlaces(currentCode);
+  const storedFields = [order.currencyCode, order.currencyDecimalPlaces, order.totalAmountMinor];
+  const isLegacy = storedFields.every((value) => value === null);
+  if (isLegacy) {
+    return { code: currentCode, decimalPlaces: currentDecimalPlaces, legacy: true };
+  }
+  if (
+    !order.currencyCode ||
+    !Number.isInteger(order.currencyDecimalPlaces) ||
+    order.currencyDecimalPlaces! < 0 ||
+    order.currencyDecimalPlaces! > 3 ||
+    !Number.isSafeInteger(order.totalAmountMinor)
+  ) {
+    throw new ValidationError("Order currency snapshot is incomplete. Payment cannot be started safely.");
+  }
+  const storedCode = order.currencyCode.trim().toUpperCase();
+  if (storedCode !== currentCode || order.currencyDecimalPlaces !== currentDecimalPlaces) {
+    throw new ValidationError(
+      "Store currency changed after this order was created. Review the order before starting payment.",
+    );
+  }
+  return { code: storedCode, decimalPlaces: order.currencyDecimalPlaces, legacy: false };
+}
+
+function resolveAuthoritativeProviderMinorAmount(
+  policy: PaymentSessionPolicy,
+  currency: { decimalPlaces: number; legacy: boolean },
+): number {
+  if (Number.isSafeInteger(policy.chargeAmountMinor) && policy.chargeAmountMinor! > 0) {
+    return policy.chargeAmountMinor!;
+  }
+  if (!currency.legacy) {
+    throw new ValidationError("Order payment amount snapshot is incomplete. Payment cannot be started safely.");
+  }
+  const amountMinor = Math.round(policy.chargeAmount * 10 ** currency.decimalPlaces);
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+    throw new ValidationError("Payment amount must be greater than zero");
+  }
+  return amountMinor;
+}
 
 type GatewayPayableOrder = Pick<
   PaymentSessionOrderRow,
@@ -223,10 +272,9 @@ async function createStripePaymentSessionForOrder(
   order = await ensureOrderCanUseGateway(db, order, PaymentMethod.STRIPE, "Stripe");
   await ensurePendingPaymentPlanForSession(db, order, policy);
   const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const currency = currencyConfig.code.toLowerCase();
-
-  const decimals = getDecimalPlaces(currency);
-  const amountInSmallestUnit = Math.round(policy.chargeAmount * Math.pow(10, decimals));
+  const orderCurrency = resolveAuthoritativeOrderCurrency(order, currencyConfig);
+  const currency = orderCurrency.code.toLowerCase();
+  const amountInSmallestUnit = resolveAuthoritativeProviderMinorAmount(policy, orderCurrency);
   const attemptIdentity = await buildPaymentSessionAttemptIdentity({
     orderId: input.orderId,
     gateway: "stripe",
@@ -414,7 +462,8 @@ async function createSSLCommerzPaymentSessionForOrder(
   order = await ensureOrderCanUseGateway(db, order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
   await ensurePendingPaymentPlanForSession(db, order, policy);
   const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const currency = currencyConfig.code;
+  const orderCurrency = resolveAuthoritativeOrderCurrency(order, currencyConfig);
+  const currency = orderCurrency.code;
 
   const origin = getTrustedApiOrigin(c.env, c.req.url);
   const apiBase = `${origin}/api/v1`;
@@ -554,7 +603,6 @@ async function createPolarPaymentSessionForOrder(
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
   }, checkoutFlowSettings);
-
   const polarSettings = await loadCheckoutGatewaySettings(
     db,
     kv,
@@ -564,7 +612,8 @@ async function createPolarPaymentSessionForOrder(
   order = await ensureOrderCanUseGateway(db, order, PaymentMethod.POLAR, "Polar");
   await ensurePendingPaymentPlanForSession(db, order, policy);
   const currencyConfig = await getCurrencyConfig(db, kv);
-  let currency = currencyConfig.code.toLowerCase();
+  const orderCurrency = resolveAuthoritativeOrderCurrency(order, currencyConfig);
+  let currency = orderCurrency.code.toLowerCase();
   let paymentAmount = policy.chargeAmount;
   const originalLocalAmount = paymentAmount;
   const originalCurrency = currency;
@@ -585,7 +634,11 @@ async function createPolarPaymentSessionForOrder(
   }
 
   const decimals = getDecimalPlaces(currency);
-  const amountInCents = Math.round(paymentAmount * Math.pow(10, decimals));
+  const amountInCents =
+    currency === originalCurrency &&
+    decimals === orderCurrency.decimalPlaces
+      ? resolveAuthoritativeProviderMinorAmount(policy, orderCurrency)
+      : Math.round(paymentAmount * Math.pow(10, decimals));
   const baseUrl = getTrustedApiOrigin(c.env, c.req.url);
   const callbackParams = {
     order_id: input.orderId,
@@ -772,6 +825,9 @@ async function loadPaymentSessionOrder(
     .select({
       id: orders.id,
       totalAmount: orders.totalAmount,
+      totalAmountMinor: orders.totalAmountMinor,
+      currencyCode: orders.currencyCode,
+      currencyDecimalPlaces: orders.currencyDecimalPlaces,
       customerId: orders.customerId,
       customerName: orders.customerName,
       customerPhone: orders.customerPhone,

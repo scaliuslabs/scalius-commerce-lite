@@ -1,7 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { products, productVariants } from "@scalius/database/schema";
 import { roundPrice } from "@scalius/shared/price-utils";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 export type StorefrontCartIssueCode =
     | "PRODUCT_UNAVAILABLE"
@@ -20,9 +20,9 @@ export type StorefrontCartIssueAction =
 export interface StorefrontCartValidationItem {
     cartKey?: string | null;
     productId: string;
-    variantId: string | null;
+    variantId: string;
     quantity: number;
-    price: number;
+    price?: number;
     productName?: string | null;
     variantLabel?: string | null;
 }
@@ -47,7 +47,7 @@ export interface StorefrontCartValidatedItem {
     index: number;
     cartKey?: string | null;
     productId: string;
-    variantId: string | null;
+    variantId: string;
     quantity: number;
     unitPrice: number;
     productName: string;
@@ -55,6 +55,7 @@ export interface StorefrontCartValidatedItem {
     freeDelivery: boolean;
     inventoryTracked: boolean;
     availableQuantity: number | null;
+    taxClassId: string | null;
 }
 
 export interface StorefrontCartValidationResult {
@@ -66,7 +67,6 @@ export interface StorefrontCartValidationResult {
 }
 
 const STOREFRONT_CART_VALIDATION_RESULT_PROOF = Symbol("scalius.storefrontCartValidationResult");
-const LEGACY_DEFAULT_VARIANT_ID = "default";
 
 function markTrustedStorefrontCartValidationResult(
     result: StorefrontCartValidationResult,
@@ -95,6 +95,7 @@ interface ProductRow {
     discountType: string | null;
     discountAmount: number | null;
     freeDelivery: boolean;
+    taxClassId: string | null;
 }
 
 interface VariantRow {
@@ -114,6 +115,7 @@ interface VariantRow {
     discountPercentage: number | null;
     discountType: string | null;
     discountAmount: number | null;
+    taxClassId: string | null;
 }
 
 function variantLabel(variant: Pick<VariantRow, "size" | "color"> | undefined): string | null {
@@ -128,6 +130,10 @@ function hasCustomerOption(variant: Pick<VariantRow, "size" | "color">): boolean
 
 function isSimpleDefaultSku(variant: Pick<VariantRow, "isDefault" | "size" | "color">): boolean {
     return variant.isDefault === true && !hasCustomerOption(variant);
+}
+
+function isPersistedVariantId(value: unknown): value is string {
+    return typeof value === "string" && value.trim() !== "" && value.trim() !== "default";
 }
 
 function displayProductName(item: StorefrontCartValidationItem, product?: ProductRow): string | null {
@@ -191,7 +197,7 @@ function addIssue(
         index,
         cartKey: item.cartKey ?? null,
         productId: item.productId,
-        variantId: item.variantId ?? null,
+        variantId: isPersistedVariantId(item.variantId) ? item.variantId : null,
         requestedQuantity: item.quantity,
         ...issue,
     });
@@ -212,7 +218,30 @@ export async function validateStorefrontCartItems(
         });
     }
 
+    const malformedVariantIssues: StorefrontCartItemIssue[] = [];
+    items.forEach((item, index) => {
+        if (isPersistedVariantId(item.variantId)) return;
+        const productName = displayProductName(item);
+        addIssue(malformedVariantIssues, item, index, {
+            code: "VARIANT_REQUIRED",
+            action: "select_variant",
+            message: `${productName ?? "This item"} needs a saved option selection before checkout.`,
+            productName,
+            variantLabel: displayVariantLabel(item),
+        });
+    });
+    if (malformedVariantIssues.length > 0) {
+        return markTrustedStorefrontCartValidationResult({
+            valid: false,
+            issues: malformedVariantIssues,
+            items: [],
+            subtotal: 0,
+            hasFreeDeliveryProduct: false,
+        });
+    }
+
     const productIds = [...new Set(items.map((item) => item.productId))];
+    const variantIds = [...new Set(items.map((item) => item.variantId))];
     const pool = options.inventoryPool === "preorder" || options.inventoryPool === "backorder"
         ? options.inventoryPool
         : "regular";
@@ -228,6 +257,7 @@ export async function validateStorefrontCartItems(
                 discountType: products.discountType,
                 discountAmount: products.discountAmount,
                 freeDelivery: products.freeDelivery,
+                taxClassId: products.taxClassId,
             })
             .from(products)
             .where(
@@ -255,12 +285,15 @@ export async function validateStorefrontCartItems(
                 discountPercentage: productVariants.discountPercentage,
                 discountType: productVariants.discountType,
                 discountAmount: productVariants.discountAmount,
+                taxClassId: productVariants.taxClassId,
             })
             .from(productVariants)
             .where(and(
-                inArray(productVariants.productId, productIds),
+                or(
+                    inArray(productVariants.productId, productIds),
+                    inArray(productVariants.id, variantIds),
+                ),
                 isNull(productVariants.deletedAt),
-                ne(productVariants.id, LEGACY_DEFAULT_VARIANT_ID),
             )),
     ]);
 
@@ -268,7 +301,7 @@ export async function validateStorefrontCartItems(
     const variantsByProduct = new Map<string, VariantRow[]>();
     const variantMap = new Map<string, VariantRow>();
     const persistedVariantRows = (variantRows as VariantRow[])
-        .filter((variant) => variant.id !== LEGACY_DEFAULT_VARIANT_ID);
+        .filter((variant) => isPersistedVariantId(variant.id));
     for (const variant of persistedVariantRows) {
         variantMap.set(variant.id, variant);
         const productVariantsForProduct = variantsByProduct.get(variant.productId) ?? [];
@@ -300,75 +333,43 @@ export async function validateStorefrontCartItems(
         const hasCustomerOptions = productVariantsForProduct.some((variant) =>
             !variant.isDefault && hasCustomerOption(variant)
         );
-        let requestedVariant = item.variantId ? variantMap.get(item.variantId) : null;
-        const requestedVariantLabel = displayVariantLabel(item, requestedVariant ?? undefined);
+        const requestedVariant = variantMap.get(item.variantId);
+        const requestedVariantLabel = displayVariantLabel(item, requestedVariant);
 
-        if (item.variantId) {
-            if (!requestedVariant) {
-                addIssue(issues, item, index, {
-                    code: "VARIANT_UNAVAILABLE",
-                    action: "remove",
-                    message: `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} is no longer available.`,
-                    productName: product.name,
-                    variantLabel: requestedVariantLabel,
-                });
-                return;
-            }
-
-            if (requestedVariant.productId !== product.id) {
-                addIssue(issues, item, index, {
-                    code: "VARIANT_MISMATCH",
-                    action: "remove",
-                    message: `${product.name} has changed. Please remove it and add the option again.`,
-                    productName: product.name,
-                    variantLabel: requestedVariantLabel,
-                });
-                return;
-            }
-            if (
-                (hasCustomerOptions && (requestedVariant.isDefault || !hasCustomerOption(requestedVariant))) ||
-                (!hasCustomerOptions && !isSimpleDefaultSku(requestedVariant))
-            ) {
-                addIssue(issues, item, index, {
-                    code: hasCustomerOptions ? "VARIANT_REQUIRED" : "PRODUCT_UNAVAILABLE",
-                    action: hasCustomerOptions ? "select_variant" : "remove",
-                    message: hasCustomerOptions
-                        ? `${product.name} needs an option selection before checkout.`
-                        : `${product.name} is not available for checkout right now.`,
-                    productName: product.name,
-                    variantLabel: null,
-                });
-                return;
-            }
-        } else if (productVariantsForProduct.length > 0) {
-            if (hasCustomerOptions) {
-                addIssue(issues, item, index, {
-                    code: "VARIANT_REQUIRED",
-                    action: "select_variant",
-                    message: `${product.name} needs an option selection before checkout.`,
-                    productName: product.name,
-                    variantLabel: null,
-                });
-                return;
-            }
-
-            if (productVariantsForProduct.length === 1 && isSimpleDefaultSku(productVariantsForProduct[0]!)) {
-                requestedVariant = productVariantsForProduct[0]!;
-            } else {
-                addIssue(issues, item, index, {
-                    code: "PRODUCT_UNAVAILABLE",
-                    action: "remove",
-                    message: `${product.name} is not available for checkout right now.`,
-                    productName: product.name,
-                    variantLabel: null,
-                });
-                return;
-            }
-        } else {
+        if (!requestedVariant) {
             addIssue(issues, item, index, {
-                code: "PRODUCT_UNAVAILABLE",
+                code: "VARIANT_UNAVAILABLE",
                 action: "remove",
-                message: `${product.name} is not available for checkout right now.`,
+                message: `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} is no longer available.`,
+                productName: product.name,
+                variantLabel: requestedVariantLabel,
+            });
+            return;
+        }
+
+        if (requestedVariant.productId !== product.id) {
+            addIssue(issues, item, index, {
+                code: "VARIANT_MISMATCH",
+                action: "remove",
+                message: `${product.name} has changed. Please remove it and add the option again.`,
+                productName: product.name,
+                variantLabel: requestedVariantLabel,
+            });
+            return;
+        }
+
+        const buyerResolvableVariants = hasCustomerOptions
+            ? productVariantsForProduct.filter((variant) => !variant.isDefault && hasCustomerOption(variant))
+            : productVariantsForProduct.length === 1 && isSimpleDefaultSku(productVariantsForProduct[0]!)
+                ? productVariantsForProduct
+                : [];
+        if (!buyerResolvableVariants.some((variant) => variant.id === requestedVariant.id)) {
+            addIssue(issues, item, index, {
+                code: hasCustomerOptions ? "VARIANT_REQUIRED" : "PRODUCT_UNAVAILABLE",
+                action: hasCustomerOptions ? "select_variant" : "remove",
+                message: hasCustomerOptions
+                    ? `${product.name} needs an option selection before checkout.`
+                    : `${product.name} is not available for checkout right now.`,
                 productName: product.name,
                 variantLabel: null,
             });
@@ -376,7 +377,7 @@ export async function validateStorefrontCartItems(
         }
 
         const variant = requestedVariant;
-        const availableQuantity = variant ? availableForVariant(variant, pool) : 0;
+        const availableQuantity = availableForVariant(variant, pool);
         if (availableQuantity < item.quantity) {
             addIssue(issues, item, index, {
                 code: "QUANTITY_UNAVAILABLE",
@@ -392,8 +393,8 @@ export async function validateStorefrontCartItems(
         }
 
         const unitPrice = calculateUnitPrice(product, variant);
-        const submittedPrice = roundPrice(item.price);
-        if (submittedPrice !== unitPrice) {
+        const submittedPrice = typeof item.price === "number" ? roundPrice(item.price) : undefined;
+        if (submittedPrice !== undefined && submittedPrice !== unitPrice) {
             addIssue(issues, item, index, {
                 code: "PRICE_CHANGED",
                 action: "refresh_item",
@@ -412,14 +413,15 @@ export async function validateStorefrontCartItems(
             index,
             cartKey: item.cartKey ?? null,
             productId: product.id,
-            variantId: variant?.id ?? null,
+            variantId: variant.id,
             quantity: item.quantity,
             unitPrice,
             productName: product.name,
             variantLabel: requestedVariantLabel,
             freeDelivery: product.freeDelivery,
-            inventoryTracked: variant?.trackInventory ?? false,
+            inventoryTracked: variant.trackInventory,
             availableQuantity: Number.isFinite(availableQuantity) ? availableQuantity : null,
+            taxClassId: variant.taxClassId ?? product.taxClassId,
         });
     });
 

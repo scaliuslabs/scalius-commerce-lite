@@ -4,8 +4,9 @@
 // codTracking, webhookEvents, orderNotificationOutbox,
 // orderNotificationDeliveryReceipts, abandonedCheckouts.
 
-import { sqliteTable, text, integer, real, unique, uniqueIndex, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, uniqueIndex, index, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { customers } from "./customers";
 import { products, productVariants } from "./products";
 import { UNIX_NOW } from "./shared";
@@ -36,6 +37,15 @@ export const orders = sqliteTable("orders", {
     totalAmount: real("total_amount").notNull(),
     shippingCharge: real("shipping_charge").notNull(),
     discountAmount: real("discount_amount").default(0),
+    currencyCode: text("currency_code"),
+    currencyDecimalPlaces: integer("currency_decimal_places"),
+    subtotalAmountMinor: integer("subtotal_amount_minor"),
+    shippingAmountMinor: integer("shipping_amount_minor"),
+    discountAmountMinor: integer("discount_amount_minor"),
+    taxAmountMinor: integer("tax_amount_minor").notNull().default(0),
+    totalAmountMinor: integer("total_amount_minor"),
+    taxLabel: text("tax_label"),
+    pricesIncludeTax: integer("prices_include_tax", { mode: "boolean" }).notNull().default(false),
     /** Valid: pending | processing | confirmed | shipped | delivered | completed | cancelled | refunded | returned | partially_refunded | incomplete (see OrderStatus enum) */
     status: text("status").notNull().default(OrderStatus.PENDING),
     notes: text("notes"),
@@ -181,6 +191,11 @@ export const orderItems = sqliteTable("order_items", {
     productName: text("product_name"),
     variantLabel: text("variant_label"),
     inventoryTracked: integer("inventory_tracked", { mode: "boolean" }).notNull().default(true),
+    unitPriceMinor: integer("unit_price_minor"),
+    lineSubtotalMinor: integer("line_subtotal_minor"),
+    discountAmountMinor: integer("discount_amount_minor"),
+    taxableAmountMinor: integer("taxable_amount_minor"),
+    taxAmountMinor: integer("tax_amount_minor").notNull().default(0),
     fulfillmentStatus: text("fulfillment_status").notNull().default(ItemFulfillmentStatus.PENDING),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
@@ -189,6 +204,73 @@ export const orderItems = sqliteTable("order_items", {
     index("order_items_order_id_idx").on(table.orderId),
     index("order_items_product_id_idx").on(table.productId),
     index("order_items_variant_id_idx").on(table.variantId),
+]);
+
+/** Immutable calculation context captured when an order is committed. */
+export const orderTaxSnapshots = sqliteTable("order_tax_snapshots", {
+    orderId: text("order_id")
+        .primaryKey()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    currencyCode: text("currency_code").notNull(),
+    decimalPlaces: integer("decimal_places").notNull(),
+    displayLabel: text("display_label").notNull(),
+    pricesIncludeTax: integer("prices_include_tax", { mode: "boolean" }).notNull(),
+    shippingTaxed: integer("shipping_taxed", { mode: "boolean" }).notNull(),
+    subtotalMinor: integer("subtotal_minor").notNull(),
+    shippingMinor: integer("shipping_minor").notNull(),
+    discountMinor: integer("discount_minor").notNull(),
+    taxableMinor: integer("taxable_minor").notNull(),
+    taxMinor: integer("tax_minor").notNull(),
+    totalMinor: integer("total_minor").notNull(),
+    settingsVersion: integer("settings_version").notNull(),
+    calculationVersion: text("calculation_version").notNull(),
+    destinationSnapshot: text("destination_snapshot").notNull(),
+    rateSnapshot: text("rate_snapshot").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    index("order_tax_snapshots_created_idx").on(table.createdAt),
+    check("order_tax_snapshots_decimal_places_range", sql`${table.decimalPlaces} BETWEEN 0 AND 3`),
+    check("order_tax_snapshots_display_label_length", sql`length(${table.displayLabel}) BETWEEN 1 AND 80`),
+    check("order_tax_snapshots_settings_version_nonnegative", sql`${table.settingsVersion} >= 0`),
+    check("order_tax_snapshots_minor_amounts_nonnegative", sql`(
+        ${table.subtotalMinor} >= 0
+        AND ${table.shippingMinor} >= 0
+        AND ${table.discountMinor} >= 0
+        AND ${table.taxableMinor} >= 0
+        AND ${table.taxMinor} >= 0
+        AND ${table.totalMinor} >= 0
+    )`),
+]);
+
+/** Immutable per-line allocation and rate snapshot captured with the order. */
+export const orderItemTaxSnapshots = sqliteTable("order_item_tax_snapshots", {
+    orderItemId: text("order_item_id")
+        .primaryKey()
+        .references(() => orderItems.id, { onDelete: "cascade" }),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    taxClassId: text("tax_class_id"),
+    taxClassName: text("tax_class_name"),
+    unitPriceMinor: integer("unit_price_minor").notNull(),
+    quantity: integer("quantity").notNull(),
+    grossAmountMinor: integer("gross_amount_minor").notNull(),
+    discountMinor: integer("discount_minor").notNull(),
+    taxableAmountMinor: integer("taxable_amount_minor").notNull(),
+    taxMinor: integer("tax_minor").notNull(),
+    pricesIncludeTax: integer("prices_include_tax", { mode: "boolean" }).notNull(),
+    rateSnapshot: text("rate_snapshot").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    index("order_item_tax_snapshots_order_idx").on(table.orderId),
+    check("order_item_tax_snapshots_quantity_positive", sql`${table.quantity} > 0`),
+    check("order_item_tax_snapshots_minor_amounts_nonnegative", sql`(
+        ${table.unitPriceMinor} >= 0
+        AND ${table.grossAmountMinor} >= 0
+        AND ${table.discountMinor} >= 0
+        AND ${table.taxableAmountMinor} >= 0
+        AND ${table.taxMinor} >= 0
+    )`),
 ]);
 
 export const orderPayments = sqliteTable("order_payments", {
@@ -530,6 +612,8 @@ export const abandonedCheckouts = sqliteTable(
 export type Order = InferSelectModel<typeof orders>;
 export type CheckoutAttempt = InferSelectModel<typeof checkoutAttempts>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
+export type OrderTaxSnapshot = InferSelectModel<typeof orderTaxSnapshots>;
+export type OrderItemTaxSnapshot = InferSelectModel<typeof orderItemTaxSnapshots>;
 export type OrderPayment = InferSelectModel<typeof orderPayments>;
 export type RefundAttempt = InferSelectModel<typeof refundAttempts>;
 export type OrderSupportRequest = InferSelectModel<typeof orderSupportRequests>;

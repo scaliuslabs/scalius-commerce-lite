@@ -18,12 +18,12 @@ function operation(key: string): AdminCommandDescriptor {
 
 describe("Admin command registry", () => {
   it("classifies every frozen operation once with bounded policy metadata", () => {
-    expect(ADMIN_COMMAND_REGISTRY).toHaveLength(306);
-    expect(new Set(ADMIN_COMMAND_REGISTRY.map((descriptor) => descriptor.id)).size).toBe(306);
-    expect(new Set(ADMIN_COMMAND_REGISTRY.map((descriptor) => descriptor.operationKey)).size).toBe(306);
+    expect(ADMIN_COMMAND_REGISTRY).toHaveLength(317);
+    expect(new Set(ADMIN_COMMAND_REGISTRY.map((descriptor) => descriptor.id)).size).toBe(317);
+    expect(new Set(ADMIN_COMMAND_REGISTRY.map((descriptor) => descriptor.operationKey)).size).toBe(317);
     expect(ADMIN_COMMAND_REGISTRY.every((descriptor) => descriptor.execution.enabled === false)).toBe(true);
     expect(auditAdminCommandRegistry()).toEqual([]);
-    expect(ADMIN_COMMAND_POLICY_DIGEST).toBe("admin-command-v1-306-5195e4af");
+    expect(ADMIN_COMMAND_POLICY_DIGEST).toBe("admin-command-v1-317-7c2f4ee1");
   });
 
   it("keeps reads eligible but execution-disabled in this policy-only slice", () => {
@@ -178,6 +178,21 @@ describe("Admin command registry", () => {
         execution: { enabled: false, readiness: "read-only-eligible" },
       });
     }
+  });
+
+  it("keeps tax preview read-only and tax changes under financial controls", () => {
+    expect(operation("POST /api/v1/admin/taxes/preview")).toMatchObject({
+      authorization: { kind: "permission", permission: "taxes.view" },
+      flags: { readOnly: true, financial: false, freshAuth: false },
+      risk: "R0",
+    });
+    expect(operation("PUT /api/v1/admin/taxes/settings")).toMatchObject({
+      authorization: { kind: "permission", permission: "taxes.manage" },
+      flags: { readOnly: false, financial: true, freshAuth: true },
+      risk: "R3",
+      confirmation: "signed-explicit-fresh-auth",
+      concurrency: "serial-and-reconcile",
+    });
   });
 
   it("refuses to inflate idempotency metadata into executable mutation proof", () => {

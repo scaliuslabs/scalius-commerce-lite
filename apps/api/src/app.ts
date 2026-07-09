@@ -86,6 +86,7 @@ import { adminWidgetGenerationRunRoutes } from "./routes/admin/widget-generation
 import { adminAttributesRoutes } from "./routes/admin/attributes";
 import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
+import { adminTaxRoutes } from "./routes/admin/taxes";
 import { adminAssistantAuthorityRoutes } from "./routes/internal/admin-assistant";
 
 // Create typed OpenAPIHono app with Cloudflare Workers Env bindings
@@ -332,6 +333,7 @@ app.route("/admin/ai-prompts", adminAiPromptsRoutes);
 app.route("/admin/ai", adminAiRoutes);
 app.route("/admin/widget-generation-runs", adminWidgetGenerationRunRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);
+app.route("/admin/taxes", adminTaxRoutes);
 app.route("/admin", adminSystemUtilsRoutes);
 app.route("/admin/settings/delivery-locations", adminLocationRoutes);
 app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);

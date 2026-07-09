@@ -574,6 +574,35 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  "/api/v1/admin/taxes": {
+    GET: { permission: PERMISSIONS.TAXES_VIEW },
+  },
+  "/api/v1/admin/taxes/settings": {
+    PUT: { permission: PERMISSIONS.TAXES_MANAGE },
+  },
+  "/api/v1/admin/taxes/classes": {
+    POST: { permission: PERMISSIONS.TAXES_MANAGE },
+  },
+  "/api/v1/admin/taxes/classes/*": {
+    PUT: { permission: PERMISSIONS.TAXES_MANAGE },
+    DELETE: { permission: PERMISSIONS.TAXES_MANAGE },
+  },
+  "/api/v1/admin/taxes/rates": {
+    POST: { permission: PERMISSIONS.TAXES_MANAGE },
+  },
+  "/api/v1/admin/taxes/rates/*": {
+    PUT: { permission: PERMISSIONS.TAXES_MANAGE },
+    DELETE: { permission: PERMISSIONS.TAXES_MANAGE },
+  },
+  "/api/v1/admin/taxes/classifications": {
+    GET: { permission: PERMISSIONS.TAXES_VIEW },
+  },
+  "/api/v1/admin/taxes/classifications/*/*": {
+    PUT: { permission: PERMISSIONS.TAXES_MANAGE },
+  },
+  "/api/v1/admin/taxes/preview": {
+    POST: { permission: PERMISSIONS.TAXES_VIEW },
+  },
   "/api/v1/admin/settings/general": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },

@@ -86,6 +86,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/settings/fraud-checker": { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
   "/admin/settings/meta-conversion": { permission: PERMISSIONS.ANALYTICS_VIEW },
   "/admin/settings/cache": { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
+  "/admin/settings/taxes": { permission: PERMISSIONS.TAXES_VIEW },
 };
 
 // Dynamic route patterns for pages with parameters (e.g., /admin/products/[id]/edit)
