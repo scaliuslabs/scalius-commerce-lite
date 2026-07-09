@@ -2,6 +2,11 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { InvoiceActions } from "~/components/admin/InvoiceActions";
 import type { InvoiceData, OrderItem } from "~/types/api-responses";
+import {
+  formatSavedMinorAmount,
+  resolveSavedOrderLineMoney,
+  resolveSavedOrderMoneySummary,
+} from "~/lib/order-tax-presentation";
 
 const getOrderInvoiceData = createServerFn({ method: "GET" })
   .validator((data: { id: string }) => data)
@@ -66,6 +71,7 @@ function InvoicePage() {
   const discount = order.discountAmount ?? 0;
   const subtotal = order.totalAmount - order.shippingCharge + discount;
   const grandTotal = order.totalAmount;
+  const savedSummary = resolveSavedOrderMoneySummary(order);
 
   const invoiceDate = order.createdAt instanceof Date
     ? order.createdAt
@@ -147,17 +153,31 @@ function InvoicePage() {
             <tbody>
               {(order.items || []).map((item: OrderItem, index: number) => {
                 const variant = [item.variantSize, item.variantColor].filter(Boolean).join(" / ");
-                const lineTotal = item.price * item.quantity;
+                const savedLine = resolveSavedOrderLineMoney(item, savedSummary);
+                const unitPrice = savedLine && savedSummary
+                  ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedSummary)
+                  : item.price.toLocaleString();
+                const lineTotal = savedLine && savedSummary
+                  ? formatSavedMinorAmount(savedLine.totalMinor, savedSummary)
+                  : (item.price * item.quantity).toLocaleString();
                 return (
                   <tr key={item.id || `item-${index}`}>
                     <td>{index + 1}</td>
                     <td>
                       {item.productName || "Unknown Product"}
                       {variant && <div className="variant">{variant}</div>}
+                      {savedLine && savedSummary && savedLine.discountMinor > 0 && (
+                        <div className="line-money-note">Item discount: −{formatSavedMinorAmount(savedLine.discountMinor, savedSummary)}</div>
+                      )}
+                      {savedLine && savedSummary && savedLine.taxMinor > 0 && (
+                        <div className="line-money-note">
+                          {savedSummary.taxLabel}{savedSummary.pricesIncludeTax ? " included" : " added"}: {formatSavedMinorAmount(savedLine.taxMinor, savedSummary)}
+                        </div>
+                      )}
                     </td>
                     <td>{item.quantity}</td>
-                    <td>{item.price.toLocaleString()}</td>
-                    <td>{lineTotal.toLocaleString()}</td>
+                    <td>{unitPrice}</td>
+                    <td>{lineTotal}</td>
                   </tr>
                 );
               })}
@@ -167,12 +187,28 @@ function InvoicePage() {
           {/* Totals */}
           <div className="invoice-totals">
             <div className="totals-table">
-              <div className="row"><span>Subtotal</span><span>{subtotal.toLocaleString()}</span></div>
-              <div className="row"><span>Shipping</span><span>{order.shippingCharge.toLocaleString()}</span></div>
-              {discount > 0 && (
-                <div className="row discount"><span>Discount</span><span>-{discount.toLocaleString()}</span></div>
+              {savedSummary ? (
+                <>
+                  <div className="row"><span>Subtotal</span><span>{formatSavedMinorAmount(savedSummary.subtotalMinor, savedSummary)}</span></div>
+                  <div className="row"><span>Shipping</span><span>{formatSavedMinorAmount(savedSummary.shippingMinor, savedSummary)}</span></div>
+                  <div className="row discount"><span>Discount</span><span>{savedSummary.discountMinor > 0 ? "−" : ""}{formatSavedMinorAmount(savedSummary.discountMinor, savedSummary)}</span></div>
+                  <div className="row"><span>{savedSummary.taxLabel}{savedSummary.pricesIncludeTax ? " (included)" : ""}</span><span>{formatSavedMinorAmount(savedSummary.taxMinor, savedSummary)}</span></div>
+                  <div className="row grand-total"><span>Grand Total</span><span>{formatSavedMinorAmount(savedSummary.totalMinor, savedSummary)}</span></div>
+                  <p className="saved-money-note">
+                    Amounts saved in {savedSummary.currencyCode} when this order was placed.
+                    {savedSummary.pricesIncludeTax && ` ${savedSummary.taxLabel} is already included in the prices above.`}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="row"><span>Subtotal</span><span>{subtotal.toLocaleString()}</span></div>
+                  <div className="row"><span>Shipping</span><span>{order.shippingCharge.toLocaleString()}</span></div>
+                  {discount > 0 && (
+                    <div className="row discount"><span>Discount</span><span>-{discount.toLocaleString()}</span></div>
+                  )}
+                  <div className="row grand-total"><span>Grand Total</span><span>{grandTotal.toLocaleString()}</span></div>
+                </>
               )}
-              <div className="row grand-total"><span>Grand Total</span><span>{grandTotal.toLocaleString()}</span></div>
             </div>
           </div>
 
@@ -207,11 +243,13 @@ const invoiceStyles = `
 .items-table th:nth-child(4), .items-table td:nth-child(4) { text-align: right; }
 .items-table td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid #f3f4f6; vertical-align: top; color: #374151; }
 .items-table .variant { font-size: 12px; color: #6b7280; }
+.items-table .line-money-note { margin-top: 2px; font-size: 11px; color: #6b7280; }
 .invoice-totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
 .totals-table { width: 280px; }
 .totals-table .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #374151; }
 .totals-table .row.discount { color: #059669; }
 .totals-table .row.grand-total { border-top: 2px solid #1f2937; margin-top: 8px; padding-top: 12px; font-size: 16px; font-weight: 700; color: #111827; }
+.saved-money-note { margin-top: 8px; font-size: 11px; line-height: 1.45; color: #6b7280; }
 .invoice-footer { border-top: 1px solid #e5e7eb; padding-top: 16px; text-align: center; font-size: 12px; color: #9ca3af; line-height: 1.6; }
 @media print { .print-hidden, .print\\:hidden { display: none !important; } body { background: white !important; } .invoice-wrapper { margin: 0; padding: 0; max-width: 100%; } .invoice-document { box-shadow: none; border-radius: 0; padding: 10mm 12mm; } @page { size: A4; margin: 10mm 12mm; } }
 `;

@@ -14,6 +14,11 @@ export interface OrderItem {
   variantSize: string | null;
   variantColor: string | null;
   fulfillmentStatus?: string | null;
+  unitPriceMinor?: number | null;
+  lineSubtotalMinor?: number | null;
+  discountAmountMinor?: number | null;
+  taxableAmountMinor?: number | null;
+  taxAmountMinor?: number | null;
 }
 
 export interface OrderRefundAttempt {
@@ -132,6 +137,15 @@ export interface Order {
   updatedAt: OrderTimestamp;
   items: OrderItem[];
   totalAmount: number;
+  currencyCode?: string | null;
+  currencyDecimalPlaces?: number | null;
+  subtotalAmountMinor?: number | null;
+  shippingAmountMinor?: number | null;
+  discountAmountMinor?: number | null;
+  taxAmountMinor?: number | null;
+  totalAmountMinor?: number | null;
+  taxLabel?: string | null;
+  pricesIncludeTax?: boolean | null;
   customerId: string | null;
   cityName?: string;
   zoneName?: string;

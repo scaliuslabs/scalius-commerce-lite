@@ -301,6 +301,15 @@ export interface Order {
   totalAmount: number;
   shippingCharge: number;
   discountAmount: number | null;
+  currencyCode?: string | null;
+  currencyDecimalPlaces?: number | null;
+  subtotalAmountMinor?: number | null;
+  shippingAmountMinor?: number | null;
+  discountAmountMinor?: number | null;
+  taxAmountMinor?: number | null;
+  totalAmountMinor?: number | null;
+  taxLabel?: string | null;
+  pricesIncludeTax?: boolean | null;
   status: string;
   notes: string | null;
   paymentMethod: string;
@@ -331,6 +340,11 @@ export interface OrderItem {
   productImage: string | null;
   variantSize: string | null;
   variantColor: string | null;
+  unitPriceMinor?: number | null;
+  lineSubtotalMinor?: number | null;
+  discountAmountMinor?: number | null;
+  taxableAmountMinor?: number | null;
+  taxAmountMinor?: number | null;
 }
 
 export interface OrderDetail extends Order {
