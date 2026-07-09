@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getBuildCommandForTarget,
   getDeployCommandForTarget,
+  getTypecheckCommandForTarget,
   parseOnlyTarget,
   sampleApiReadiness,
   verifyAdminDeploy,
-  verifyAgentDeploy,
+  verifyStorefrontAgentDeploy,
 } from "./deploy.mjs";
 
 function readyResponse() {
@@ -36,7 +37,7 @@ function agentHealthResponse() {
   return new Response(JSON.stringify({
     success: true,
     status: "ok",
-    service: "scalius-agent",
+    service: "scalius-storefront-agent",
   }), {
     status: 200,
     headers: {
@@ -286,7 +287,7 @@ function agentCartValidationMcpResult() {
       issues: [{
         index: 0,
         productId: "release-check-missing-product",
-        variantId: null,
+        variantId: "release-check-missing-variant",
         code: "PRODUCT_UNAVAILABLE",
         action: "remove",
         message: "This item is no longer available.",
@@ -436,7 +437,7 @@ describe("deploy admin verification", () => {
   });
 });
 
-describe("deploy agent verification", () => {
+describe("Storefront Agent deploy verification", () => {
   beforeEach(() => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -456,6 +457,20 @@ describe("deploy agent verification", () => {
         requests.push(`${init.method} ${parsed.pathname}`);
         return agentHealthResponse();
       }
+      if (parsed.pathname.startsWith("/internal/conversations/")) {
+        expect(init.method).toBe("GET");
+        requests.push(`${init.method} ${parsed.pathname}`);
+        return new Response(JSON.stringify({
+          success: false,
+          error: "not_found",
+        }), {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+          },
+        });
+      }
       if (parsed.pathname === "/mcp") {
         expect(init.method).toBe("POST");
         const headers = new Headers(init.headers);
@@ -471,9 +486,12 @@ describe("deploy agent verification", () => {
             jsonrpc: "2.0",
             id: body.id,
             result: {
-              protocolVersion: "2025-06-18",
+              protocolVersion: "2025-11-25",
               capabilities: { tools: { listChanged: true } },
-              serverInfo: { name: "scalius-agent", version: "0.1.0" },
+              serverInfo: {
+                name: "scalius-storefront-catalog-agent",
+                version: "0.1.0",
+              },
             },
           });
         }
@@ -536,6 +554,7 @@ describe("deploy agent verification", () => {
               arguments: {
                 items: [{
                   productId: "release-check-missing-product",
+                  variantId: "release-check-missing-variant",
                   quantity: 1,
                   unitPrice: 1,
                 }],
@@ -565,7 +584,7 @@ describe("deploy agent verification", () => {
       throw new Error(`Unexpected URL ${url}`);
     });
 
-    const result = await verifyAgentDeploy({
+    const result = await verifyStorefrontAgentDeploy({
       agentUrl: "https://agent.example.test",
       storefrontUrl: "https://storefront.example.test",
       fetchImpl,
@@ -583,6 +602,7 @@ describe("deploy agent verification", () => {
       "POST /mcp tools/call:catalog_lookup",
       "POST /mcp tools/call:catalog_product",
       "POST /mcp tools/call:cart_validate",
+      "GET /internal/conversations/conv_abcdefghijklmnopqrstuv/events",
     ]);
     expect(result.mcp.tools.toolNames).toEqual([
       "cart_validate",
@@ -611,10 +631,11 @@ describe("deploy agent verification", () => {
       firstIssueCode: "PRODUCT_UNAVAILABLE",
     });
     expect(console.log).toHaveBeenCalledWith(
-      "✓ Agent /health returned 200; MCP tools: cart_validate, catalog_categories, " +
+      "✓ Storefront Agent /health returned 200; MCP tools: cart_validate, catalog_categories, " +
       "catalog_lookup, catalog_product, catalog_profile, catalog_search, " +
       "storefront_discovery_policy; catalog_profile call ok (2 catalog capabilities, " +
-      "endpoint https://storefront.example.test/ucp); cart_validate call ok.",
+      "endpoint https://storefront.example.test/ucp); cart_validate call ok; " +
+      "public conversation transcripts hidden.",
     );
   });
 
@@ -628,7 +649,7 @@ describe("deploy agent verification", () => {
           return mcpSseResponse({
             jsonrpc: "2.0",
             id: body.id,
-            result: { protocolVersion: "2025-06-18", capabilities: {} },
+            result: { protocolVersion: "2025-11-25", capabilities: {} },
           });
         }
         if (body.method === "tools/list") {
@@ -656,7 +677,7 @@ describe("deploy agent verification", () => {
       throw new Error(`Unexpected URL ${url}`);
     });
 
-    await expect(verifyAgentDeploy({
+    await expect(verifyStorefrontAgentDeploy({
       agentUrl: "https://agent.example.test",
       storefrontUrl: "https://storefront.example.test",
       fetchImpl,
@@ -674,7 +695,7 @@ describe("deploy agent verification", () => {
           return mcpSseResponse({
             jsonrpc: "2.0",
             id: body.id,
-            result: { protocolVersion: "2025-06-18", capabilities: {} },
+            result: { protocolVersion: "2025-11-25", capabilities: {} },
           });
         }
         if (body.method === "tools/list") {
@@ -694,7 +715,7 @@ describe("deploy agent verification", () => {
       throw new Error(`Unexpected URL ${url}`);
     });
 
-    await expect(verifyAgentDeploy({
+    await expect(verifyStorefrontAgentDeploy({
       agentUrl: "https://agent.example.test",
       fetchImpl,
       timeoutMs: 5_000,
@@ -708,14 +729,20 @@ describe("deploy target wiring", () => {
       ok: true,
       target: "ops-monitor",
     });
-    expect(parseOnlyTarget(["--only", "agent"])).toEqual({
+    expect(parseOnlyTarget(["--only", "admin-agent"])).toEqual({
       ok: true,
-      target: "agent",
+      target: "admin-agent",
+    });
+    expect(parseOnlyTarget(["--only", "storefront-agent"])).toEqual({
+      ok: true,
+      target: "storefront-agent",
     });
 
     expect(parseOnlyTarget(["--only", "unknown"])).toMatchObject({
       ok: false,
-      message: expect.stringContaining("api, admin, storefront, ops-monitor, agent"),
+      message: expect.stringContaining(
+        "admin-agent, storefront-agent, api, admin, storefront, ops-monitor",
+      ),
     });
   });
 
@@ -730,14 +757,28 @@ describe("deploy target wiring", () => {
     expect(command.cwd).toMatch(/apps\/ops-monitor$/);
   });
 
-  it("builds and deploys agent from its app workspace", () => {
-    expect(getBuildCommandForTarget("agent")).toContain(
-      "--filter @scalius/agent build",
+  it("builds and deploys each Agent from its own app workspace", () => {
+    expect(getTypecheckCommandForTarget("admin-agent")).toContain(
+      "--filter @scalius/agent-runtime --filter @scalius/admin-agent typecheck",
+    );
+    expect(getTypecheckCommandForTarget("storefront-agent")).toContain(
+      "--filter @scalius/agent-runtime --filter @scalius/storefront-agent typecheck",
+    );
+    expect(getBuildCommandForTarget("admin-agent")).toContain(
+      "--filter @scalius/admin-agent build",
+    );
+    expect(getBuildCommandForTarget("storefront-agent")).toContain(
+      "--filter @scalius/storefront-agent build",
     );
 
-    const command = getDeployCommandForTarget("agent");
-    expect(command.cmd).toContain("exec wrangler deploy");
-    expect(command.label).toBe("Deploy Agent Worker");
-    expect(command.cwd).toMatch(/apps\/agent$/);
+    const adminCommand = getDeployCommandForTarget("admin-agent");
+    expect(adminCommand.cmd).toContain("exec wrangler deploy");
+    expect(adminCommand.label).toBe("Deploy Admin Agent Worker");
+    expect(adminCommand.cwd).toMatch(/apps\/admin-agent$/);
+
+    const storefrontCommand = getDeployCommandForTarget("storefront-agent");
+    expect(storefrontCommand.cmd).toContain("exec wrangler deploy");
+    expect(storefrontCommand.label).toBe("Deploy Storefront Agent Worker");
+    expect(storefrontCommand.cwd).toMatch(/apps\/storefront-agent$/);
   });
 });

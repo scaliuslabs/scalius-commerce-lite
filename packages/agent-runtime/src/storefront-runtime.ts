@@ -1,22 +1,34 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod/v4";
-import { createAdminMcpServer, resolveAdminMcpRequestAuth } from "./mcp/admin/session-context";
 import { registerStorefrontCartValidationTool, type FetchLike } from "./mcp/storefront/cart-validation";
 import { registerStorefrontDiscoveryPolicyTool } from "./mcp/storefront/discovery-policy";
+import { blandNotFoundResponse, jsonResponse, withNoStore } from "./http";
+import type { StorefrontAgentRuntimeEnv } from "./runtime-env";
+import {
+  storefrontAgentPlatformProfileResponse,
+  UCP_VERSION,
+} from "./ucp/platform-profile";
+import {
+  STOREFRONT_CONVERSATION_AUDIENCE,
+  STOREFRONT_CONVERSATION_AUDIENCE_HEADER,
+  STOREFRONT_CONVERSATION_POLICY,
+  STOREFRONT_CONVERSATION_SUBJECT_HEADER,
+  isStorefrontConversationSubject,
+} from "./conversation/contracts";
+import {
+  matchInternalConversationRoute,
+  proxyInternalConversationRequest,
+} from "./conversation/router";
+
+export type { StorefrontAgentRuntimeEnv } from "./runtime-env";
 
 export type { FetchLike } from "./mcp/storefront/cart-validation";
 
 export const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
 export const DEFAULT_AGENT_PROFILE_URL = "https://agent.scalius.com/.well-known/ucp";
-export const UCP_VERSION = "2026-04-08";
-
-const INTERNAL_ADMIN_MCP_HOSTNAME = "agent.internal";
-
-const NO_STORE_HEADERS = {
-  "Cache-Control": "no-store",
-  "Content-Type": "application/json; charset=utf-8",
-} as const;
+export const STOREFRONT_AGENT_INTERNAL_ORIGIN = "http://storefront-agent.internal";
+export { UCP_VERSION } from "./ucp/platform-profile";
 
 const READ_ONLY_TOOL_ANNOTATIONS = {
   readOnlyHint: true,
@@ -82,23 +94,6 @@ const catalogCategoriesInputSchema = z.object({
     .optional()
     .describe("Optional public category slug to read."),
 }).strict();
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: NO_STORE_HEADERS,
-  });
-}
-
-function withNoStore(response: Response): Response {
-  const headers = new Headers(response.headers);
-  headers.set("Cache-Control", "no-store");
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -186,7 +181,9 @@ function hasForbiddenUcpProfileAdvertisement(body: JsonRecord): boolean {
   ].some((branch) => hasAdvertisedPaymentHandlers(branch));
 }
 
-export function resolveStorefrontBaseUrl(env: Pick<Env, "STOREFRONT_URL">): string {
+export function resolveStorefrontBaseUrl(
+  env: Pick<StorefrontAgentRuntimeEnv, "STOREFRONT_URL">,
+): string {
   const configured = env.STOREFRONT_URL?.trim() || DEFAULT_STOREFRONT_URL;
   const parsed = new URL(configured);
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
@@ -199,7 +196,9 @@ export function resolveStorefrontBaseUrl(env: Pick<Env, "STOREFRONT_URL">): stri
   return parsed.toString().replace(/\/$/, "");
 }
 
-export function resolveAgentProfileUrl(env: Pick<Env, "AGENT_PROFILE_URL">): string {
+export function resolveAgentProfileUrl(
+  env: Pick<StorefrontAgentRuntimeEnv, "AGENT_PROFILE_URL">,
+): string {
   const configured = env.AGENT_PROFILE_URL?.trim();
   if (!configured) return DEFAULT_AGENT_PROFILE_URL;
 
@@ -215,7 +214,9 @@ export function resolveAgentProfileUrl(env: Pick<Env, "AGENT_PROFILE_URL">): str
   return DEFAULT_AGENT_PROFILE_URL;
 }
 
-function ucpAgentHeader(env: Pick<Env, "AGENT_PROFILE_URL">): string {
+function ucpAgentHeader(
+  env: Pick<StorefrontAgentRuntimeEnv, "AGENT_PROFILE_URL">,
+): string {
   return `profile="${resolveAgentProfileUrl(env)}"`;
 }
 
@@ -234,7 +235,7 @@ async function parseJsonResponse(response: Response): Promise<JsonRecord | null>
 }
 
 async function callStorefrontUcp(
-  env: Env,
+  env: StorefrontAgentRuntimeEnv,
   path: string,
   init: {
     method: "GET" | "POST";
@@ -325,7 +326,7 @@ function categoryPath(slug: string, canonicalPath: unknown): string {
   return safeCategoryCanonicalPath(canonicalPath) ?? `/categories/${encodeURIComponent(slug)}`;
 }
 
-function categoryUrl(env: Env, path: string): string | null {
+function categoryUrl(env: StorefrontAgentRuntimeEnv, path: string): string | null {
   try {
     return `${resolveStorefrontBaseUrl(env)}${path}`;
   } catch {
@@ -333,7 +334,10 @@ function categoryUrl(env: Env, path: string): string | null {
   }
 }
 
-function compactCategory(value: unknown, env: Env): JsonRecord | null {
+function compactCategory(
+  value: unknown,
+  env: StorefrontAgentRuntimeEnv,
+): JsonRecord | null {
   if (!isRecord(value)) return null;
 
   const id = compactString(value.id, CATALOG_CATEGORY_TEXT_MAX_LENGTH);
@@ -381,7 +385,7 @@ function catalogCategoriesToolError(): CallToolResult {
 }
 
 async function callPublicCategoriesApi(
-  env: Env,
+  env: StorefrontAgentRuntimeEnv,
   {
     limit,
     slug,
@@ -434,14 +438,8 @@ async function callPublicCategoriesApi(
   }
 }
 
-function isInternalAdminMcpUrl(url: URL): boolean {
-  return url.protocol === "http:" &&
-    url.hostname === INTERNAL_ADMIN_MCP_HOSTNAME &&
-    url.pathname === "/mcp/admin";
-}
-
 export function createStorefrontCatalogMcpServer(
-  env: Env,
+  env: StorefrontAgentRuntimeEnv,
   options: StorefrontCatalogMcpOptions = {},
 ): McpServer {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -571,38 +569,69 @@ export function createStorefrontCatalogMcpServer(
   return server;
 }
 
-export function createAgentWorker(options: StorefrontCatalogMcpOptions = {}) {
+export function createStorefrontAgentWorker(
+  options: StorefrontCatalogMcpOptions = {},
+) {
   return {
-    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    async fetch(
+      request: Request,
+      env: StorefrontAgentRuntimeEnv,
+      ctx: ExecutionContext,
+    ): Promise<Response> {
       const url = new URL(request.url);
+
+      const conversationRoute = matchInternalConversationRoute(
+        request,
+        STOREFRONT_AGENT_INTERNAL_ORIGIN,
+      );
+      if (conversationRoute) {
+        if (request.headers.has("Cookie") || request.headers.has("Authorization")) {
+          return jsonResponse({
+            success: false,
+            error: {
+              code: "storefront_conversation_credentials_forbidden",
+              message: "Storefront conversation facades must exchange browser credentials before forwarding.",
+            },
+          }, 400);
+        }
+        const audience = request.headers.get(STOREFRONT_CONVERSATION_AUDIENCE_HEADER);
+        const subject = request.headers.get(STOREFRONT_CONVERSATION_SUBJECT_HEADER)?.trim() ?? "";
+        if (
+          audience !== STOREFRONT_CONVERSATION_AUDIENCE ||
+          !isStorefrontConversationSubject(subject)
+        ) {
+          return jsonResponse({
+            success: false,
+            error: {
+              code: "storefront_conversation_subject_required",
+              message: "Storefront conversation access requires an API-verified opaque subject.",
+            },
+          }, 401);
+        }
+        return proxyInternalConversationRequest({
+          request,
+          route: conversationRoute,
+          namespace: env.STOREFRONT_CONVERSATIONS,
+          policy: STOREFRONT_CONVERSATION_POLICY,
+          subject,
+        });
+      }
 
       if (request.method === "GET" && url.pathname === "/health") {
         return jsonResponse({
           success: true,
           status: "ok",
-          service: "scalius-agent",
+          service: "scalius-storefront-agent",
         });
       }
 
-      if (url.pathname === "/mcp/admin") {
-        if (!isInternalAdminMcpUrl(url)) {
-          return jsonResponse({
-            success: false,
-            error: "not_found",
-          }, 404);
-        }
-
-        const auth = await resolveAdminMcpRequestAuth(request, env);
-        if (auth instanceof Response) return auth;
-
-        const { createMcpHandler } = await import("agents/mcp");
-        const server = createAdminMcpServer(env, {
-          cookie: auth.cookie,
-          userAgent: auth.userAgent,
-          permissionsBody: auth.permissionsBody,
-        });
-        const response = await createMcpHandler(server, { route: "/mcp/admin" })(request, env, ctx);
-        return withNoStore(response);
+      if (
+        (request.method === "GET" || request.method === "HEAD") &&
+        url.pathname === "/.well-known/ucp" &&
+        url.search === "" &&
+        url.hash === ""
+      ) {
+        return storefrontAgentPlatformProfileResponse(request.method);
       }
 
       if (url.pathname === "/mcp") {
@@ -612,12 +641,7 @@ export function createAgentWorker(options: StorefrontCatalogMcpOptions = {}) {
         return withNoStore(response);
       }
 
-      return jsonResponse({
-        success: false,
-        error: "not_found",
-      }, 404);
+      return blandNotFoundResponse();
     },
-  } satisfies ExportedHandler<Env>;
+  } satisfies ExportedHandler<StorefrontAgentRuntimeEnv>;
 }
-
-export default createAgentWorker();

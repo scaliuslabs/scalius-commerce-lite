@@ -210,7 +210,7 @@ interface Env {
 
   // Service bindings
   API: Fetcher;
-  AGENT: Fetcher;
+  ADMIN_AGENT: Fetcher;
 
   // Secrets (set via `wrangler secret put`)
   BETTER_AUTH_SECRET: string;

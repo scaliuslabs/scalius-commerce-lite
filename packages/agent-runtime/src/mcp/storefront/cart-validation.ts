@@ -2,7 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod/v4";
 
-export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+export type FetchLike = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -51,7 +54,8 @@ const cartOptionSchema = z.object({
 const cartValidationInputSchema = z.object({
   items: z.array(z.object({
     productId: z.string().trim().min(1).max(CART_ID_MAX_LENGTH),
-    variantId: z.string().trim().min(1).max(CART_ID_MAX_LENGTH).nullable().optional(),
+    variantId: z.string().trim().min(1).max(CART_ID_MAX_LENGTH)
+      .refine((value) => value !== "default", "A persisted variant is required"),
     slug: z.string().trim().min(1).max(CART_DISPLAY_MAX_LENGTH).optional(),
     name: z.string().trim().min(1).max(CART_DISPLAY_MAX_LENGTH).optional(),
     quantity: z.number().int().min(1).max(99),
@@ -224,11 +228,6 @@ function compactCartValidationData(data: JsonRecord): JsonRecord {
   };
 }
 
-function normalizeVariantId(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed && trimmed !== "default" ? trimmed : null;
-}
-
 function compactOptionLabel(options: CartValidationInput["items"][number]["options"]): string | null {
   if (!options || options.length === 0) return null;
   return options
@@ -241,7 +240,7 @@ function buildValidationRequestBody(items: CartValidationInput["items"]): JsonRe
   return {
     items: items.map((item) => ({
       productId: item.productId,
-      variantId: normalizeVariantId(item.variantId),
+      variantId: item.variantId,
       quantity: item.quantity,
       price: item.unitPrice,
       productName: item.name ?? item.slug ?? null,
@@ -294,7 +293,7 @@ export function registerStorefrontCartValidationTool(
     "cart_validate",
     {
       title: "Cart Validate",
-      description: "Validates a public storefront cart snapshot against current product availability and prices.",
+      description: "Validates persisted product-variant cart lines against current availability and prices.",
       inputSchema: cartValidationInputSchema,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },

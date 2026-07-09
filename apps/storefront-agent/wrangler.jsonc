@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "scalius-storefront-agent",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-07-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "agent.scalius.com",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "services": [
+    {
+      "binding": "API",
+      "service": "scalius-api"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "STOREFRONT_CONVERSATIONS",
+        "class_name": "StorefrontConversationDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["StorefrontConversationDurableObject"]
+    }
+  ],
+  "vars": {
+    "STOREFRONT_URL": "https://storefront.scalius.com",
+    "AGENT_PROFILE_URL": "https://agent.scalius.com/.well-known/ucp",
+    "AGENT_NAME": "scalius-storefront-catalog-agent",
+    "AGENT_VERSION": "0.1.0"
+  }
+}

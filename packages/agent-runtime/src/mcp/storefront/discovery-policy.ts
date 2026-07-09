@@ -2,6 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod/v4";
 
+import type { StorefrontAgentRuntimeEnv } from "../../runtime-env";
+
+type Env = Readonly<StorefrontAgentRuntimeEnv>;
+
 type JsonRecord = Record<string, unknown>;
 
 const PUBLIC_SEO_PATH = "/api/v1/seo";

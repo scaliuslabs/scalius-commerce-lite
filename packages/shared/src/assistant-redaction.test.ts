@@ -28,7 +28,7 @@ describe("assistant sensitive-text redaction", () => {
 
   it("removes structured identity, address, credential, and recovery values before persistence", () => {
     const input = [
-      'customer_name: "Private Buyer"',
+      'name: "Private Buyer"',
       'address: "12 Private Road, Dhaka"',
       "password = hunter2",
       "otp is 654321",

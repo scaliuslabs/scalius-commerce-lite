@@ -21,12 +21,13 @@ const defaultApiConfigPath = resolve(defaultRootDir, "apps/api/wrangler.jsonc");
 const DEFAULT_API_BASE_URL = "https://api.scalius.com";
 const DEFAULT_STOREFRONT_URL = "https://storefront.scalius.com";
 export const DEFAULT_DASHBOARD_URL = "https://dashboard.scalius.com";
-export const DEFAULT_AGENT_URL = "https://scalius-agent.abnidaala.workers.dev";
+export const DEFAULT_AGENT_URL = "https://scalius-storefront-agent.abnidaala.workers.dev";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const RELEASE_READYZ_SAMPLES = 4;
 const MAX_BODY_PREVIEW_LENGTH = 180;
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
+const STOREFRONT_ASSISTANT_CHAT_PATH = "/api/assistant/chat";
 const ADMIN_DASHBOARD_SUMMARY_PATH = "/api/v1/admin/dashboard/metrics-summary";
 const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
 const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH =
@@ -41,7 +42,7 @@ const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-in
 const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
 const RELEASE_ADMIN_EMAIL_ENV = "SCALIUS_RELEASE_ADMIN_EMAIL";
 const RELEASE_ADMIN_PASSWORD_ENV = "SCALIUS_RELEASE_ADMIN_PASSWORD";
-const MCP_PROTOCOL_VERSION = "2025-06-18";
+const MCP_PROTOCOL_VERSION = "2025-11-25";
 const MCP_ACCEPT_HEADER = "application/json, text/event-stream";
 const MCP_CLIENT_INFO = Object.freeze({
   name: "scalius-release-check",
@@ -189,10 +190,38 @@ const AGENT_CART_VALIDATION_TOOL_SMOKE = Object.freeze({
     items: Object.freeze([
       Object.freeze({
         productId: "release-check-missing-product",
+        variantId: "release-check-missing-variant",
         quantity: 1,
         unitPrice: 1,
       }),
     ]),
+  }),
+});
+const STOREFRONT_CHAT_SMOKE_BODY = Object.freeze({
+  messages: Object.freeze([
+    Object.freeze({
+      role: "user",
+      content: "Can you suggest one safe public catalog page to browse?",
+    }),
+  ]),
+  pageContext: Object.freeze({
+    version: 1,
+    source: "storefront",
+    page: Object.freeze({
+      path: "/",
+      route: "/",
+      canonicalUrl: null,
+      title: "Release check",
+      kind: "home",
+    }),
+    cart: Object.freeze({
+      totalItems: 0,
+      subtotalAmount: 0,
+      lineCount: 0,
+      lines: Object.freeze([]),
+      hasDiscount: false,
+      truncated: false,
+    }),
   }),
 });
 const ADMIN_MCP_UNAUTHENTICATED_SMOKE_BODY = Object.freeze({
@@ -210,6 +239,56 @@ const AGENT_FORBIDDEN_TOOL_TERM_PATTERN =
 const AGENT_CART_TERM_PATTERN = /(?:^|[^a-z0-9])carts?(?:$|[^a-z0-9])/i;
 const AGENT_CART_MUTATION_TERM_PATTERN =
   /(?:^|[^a-z0-9])(?:mutate|mutation|mutations|write|update|add|remove|clear|checkout|orders?|payments?|customers?|recovery)(?:$|[^a-z0-9])/i;
+const STOREFRONT_CHAT_FAIL_CLOSED_PATTERN =
+  /(?:disabled|unconfigured|not configured|missing (?:ai )?(?:model|provider|credentials?)|credentials? (?:missing|unavailable|not configured)|profile .*not ready|storefrontchat.*(?:not ready|unavailable))/i;
+const STOREFRONT_CHAT_SAFE_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._~-]*$/;
+const STOREFRONT_CHAT_SAFE_QUERY_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*$/;
+const STOREFRONT_CHAT_EMAIL_QUERY_VALUE_PATTERN =
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const STOREFRONT_CHAT_BANGLADESH_PHONE_QUERY_VALUE_PATTERN =
+  /(^|[^\d])(?:\+?88)?01[3-9]\d{8}(?!\d)/;
+const STOREFRONT_CHAT_BROAD_PHONE_QUERY_VALUE_PATTERN =
+  /(^|[^\d])\+?\d[\d\s().-]{6,}\d(?!\d)/;
+const STOREFRONT_CHAT_SENSITIVE_QUERY_NAME_PATTERN =
+  /(?:auth|bearer|code|credential|customer|email|jwt|key|mobile|otp|pass|password|phone|proof|receipt|secret|session|sig|signature|token)/i;
+const STOREFRONT_CHAT_TOKEN_LIKE_QUERY_VALUE_PATTERN =
+  /(?:\bBearer\s+|(?:chk|cst|otp|tok|token|session|secret|sk|pk)_[A-Za-z0-9_-]{6,}|[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?|[A-Fa-f0-9]{32,})/i;
+const STOREFRONT_CHAT_RAW_PATH_TRAVERSAL_PATTERN = /(^|\/)\.{1,2}(?:\/|$|[?#])/;
+const STOREFRONT_CHAT_ENCODED_UNSAFE_PATH_PATTERN = /%(?:2e|2f|5c)/i;
+const STOREFRONT_CHAT_NAVIGATION_TARGET_KEYS = Object.freeze([
+  "path",
+  "target",
+  "url",
+  "href",
+]);
+const STOREFRONT_CHAT_UNSAFE_ACTION_KEY_PATTERN =
+  /^(?:autoExecute|autoNavigate|body|endpoint|execute|formData|handler|headers|method|mutation|payload|request)$/i;
+const STOREFRONT_CHAT_BLOCKED_BUYER_PATH_SEGMENTS = new Set([
+  "account",
+  "admin",
+  "api",
+  "auth",
+  "buy",
+  "checkout",
+  "order",
+  "order-success",
+  "orders",
+  "payment",
+  "payment-recovery",
+  "private",
+  "receipt",
+  "receipts",
+  "recovery",
+  "status",
+]);
+const STOREFRONT_CHAT_RESERVED_CMS_PAGE_SLUGS = new Set([
+  ...STOREFRONT_CHAT_BLOCKED_BUYER_PATH_SEGMENTS,
+  "cart",
+  "categories",
+  "collections",
+  "products",
+  "search",
+]);
 const ADMIN_MCP_MUTATION_TOOL_TERM_PATTERN =
   /(?:^|[^a-z0-9])(?:add|archive|approve|cancel|capture|charge|clear|complete|create|delete|disable|enable|fulfill|import|invite|mark|mutate|mutation|mutations|publish|purge|reconcile|refund|remove|repair|restore|retry|set|ship|submit|sync|update|upsert|void|write)(?:$|[^a-z0-9])/i;
 const ADMIN_DASHBOARD_SUMMARY_FORBIDDEN_KEY_PATTERN =
@@ -4285,6 +4364,379 @@ function hasNoStoreishFailureCache(cacheControl) {
   );
 }
 
+function hasControlCharacter(value) {
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+}
+
+function isSafeStorefrontChatPathSegment(segment) {
+  if (
+    !segment ||
+    segment.length > 160 ||
+    !STOREFRONT_CHAT_SAFE_PATH_SEGMENT_PATTERN.test(segment)
+  ) {
+    return false;
+  }
+
+  try {
+    const decoded = decodeURIComponent(segment);
+    return decoded === segment && decoded !== "." && decoded !== ".." && !hasControlCharacter(decoded);
+  } catch {
+    return false;
+  }
+}
+
+function storefrontChatPathSegments(pathname) {
+  if (
+    !pathname.startsWith("/") ||
+    pathname.includes("\\") ||
+    STOREFRONT_CHAT_ENCODED_UNSAFE_PATH_PATTERN.test(pathname)
+  ) {
+    return null;
+  }
+
+  const segments = pathname.split("/").slice(1);
+  if (segments.length === 0 || segments.some((segment) => !segment)) return null;
+  return segments.every(isSafeStorefrontChatPathSegment) ? segments : null;
+}
+
+function storefrontChatPathHasBlockedSegment(segments) {
+  return segments.some((segment) =>
+    STOREFRONT_CHAT_BLOCKED_BUYER_PATH_SEGMENTS.has(segment.toLowerCase())
+  );
+}
+
+function isSafeStorefrontChatCatalogPath(pathname, prefix) {
+  if (!pathname.startsWith(`/${prefix}/`)) return false;
+  const segments = storefrontChatPathSegments(pathname);
+  if (!segments || segments[0] !== prefix) return false;
+  const rest = segments.slice(1);
+  return rest.length > 0 && !storefrontChatPathHasBlockedSegment(rest);
+}
+
+function isSafeStorefrontChatCmsPagePath(pathname) {
+  const segments = storefrontChatPathSegments(pathname);
+  if (!segments || segments.length !== 1) return false;
+  return !STOREFRONT_CHAT_RESERVED_CMS_PAGE_SLUGS.has(segments[0].toLowerCase());
+}
+
+function hasSensitiveStorefrontChatQueryValue(value) {
+  return (
+    STOREFRONT_CHAT_TOKEN_LIKE_QUERY_VALUE_PATTERN.test(value) ||
+    STOREFRONT_CHAT_EMAIL_QUERY_VALUE_PATTERN.test(value) ||
+    STOREFRONT_CHAT_BANGLADESH_PHONE_QUERY_VALUE_PATTERN.test(value) ||
+    STOREFRONT_CHAT_BROAD_PHONE_QUERY_VALUE_PATTERN.test(value)
+  );
+}
+
+function isSafeStorefrontChatSearchQuery(search, params) {
+  if (search.length > 512) return false;
+  const entries = Array.from(params.entries());
+  if (entries.length > 20) return false;
+
+  return entries.every(([key, value]) => {
+    return (
+      key &&
+      key.length <= 64 &&
+      value.length <= 180 &&
+      STOREFRONT_CHAT_SAFE_QUERY_KEY_PATTERN.test(key) &&
+      !hasControlCharacter(key) &&
+      !hasControlCharacter(value) &&
+      !STOREFRONT_CHAT_SENSITIVE_QUERY_NAME_PATTERN.test(key) &&
+      !hasSensitiveStorefrontChatQueryValue(value)
+    );
+  });
+}
+
+function isAllowedStorefrontChatNavigationUrl(url) {
+  if (url.hash || url.username || url.password) return false;
+  if (url.pathname === "/cart") return url.search === "";
+  if (url.pathname === "/search") {
+    return isSafeStorefrontChatSearchQuery(url.search, url.searchParams);
+  }
+  if (url.search) return false;
+  return (
+    isSafeStorefrontChatCatalogPath(url.pathname, "products") ||
+    isSafeStorefrontChatCatalogPath(url.pathname, "categories") ||
+    isSafeStorefrontChatCatalogPath(url.pathname, "collections") ||
+    isSafeStorefrontChatCmsPagePath(url.pathname)
+  );
+}
+
+function normalizeStorefrontChatNavigationTarget(target, storefrontOrigin) {
+  if (typeof target !== "string") return null;
+  if (
+    target !== target.trim() ||
+    target.length > 2048 ||
+    hasControlCharacter(target) ||
+    target.startsWith("//") ||
+    target.includes("\\") ||
+    STOREFRONT_CHAT_RAW_PATH_TRAVERSAL_PATTERN.test(target) ||
+    STOREFRONT_CHAT_ENCODED_UNSAFE_PATH_PATTERN.test(target)
+  ) {
+    return null;
+  }
+
+  const isAbsoluteHttpUrl = /^https?:\/\//i.test(target);
+  if (!target.startsWith("/") && !isAbsoluteHttpUrl) return null;
+
+  let url;
+  try {
+    url = new URL(target, storefrontOrigin);
+  } catch {
+    return null;
+  }
+
+  if (
+    url.origin !== storefrontOrigin ||
+    !["http:", "https:"].includes(url.protocol) ||
+    !isAllowedStorefrontChatNavigationUrl(url)
+  ) {
+    return null;
+  }
+
+  return `${url.pathname}${url.search}`;
+}
+
+function readStorefrontChatActionTarget(action) {
+  for (const key of STOREFRONT_CHAT_NAVIGATION_TARGET_KEYS) {
+    const value = action[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return null;
+}
+
+function collectStorefrontChatActionArrays(value, path = "$", seen = new Set()) {
+  const arrays = [];
+  if (!isRecord(value) && !Array.isArray(value)) return arrays;
+  if (seen.has(value)) return arrays;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      arrays.push(...collectStorefrontChatActionArrays(item, `${path}[${index}]`, seen));
+    });
+    return arrays;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = `${path}.${key}`;
+    if (Array.isArray(child) && /(?:^|_)(?:actions?|navigationActions?)$/i.test(key)) {
+      arrays.push({ path: childPath, actions: child });
+    } else if (isRecord(child) && /(?:^|_)(?:action|navigationAction)$/i.test(key)) {
+      arrays.push({ path: childPath, actions: [child] });
+    }
+    arrays.push(...collectStorefrontChatActionArrays(child, childPath, seen));
+  }
+
+  return arrays;
+}
+
+function evaluateStorefrontChatActionSafety(payload, { storefrontOrigin } = {}) {
+  const errors = [];
+  const targets = [];
+  let actionCount = 0;
+
+  for (const { path, actions } of collectStorefrontChatActionArrays(payload)) {
+    if (actions.length > 5) {
+      errors.push(`Storefront chat ${path} must return at most 5 click-confirmed actions.`);
+    }
+
+    actions.forEach((action, index) => {
+      const label = `${path}[${index}]`;
+      actionCount += 1;
+      if (!isRecord(action)) {
+        errors.push(`Storefront chat ${label} action must be an object.`);
+        return;
+      }
+
+      if (action.type !== "navigate") {
+        errors.push(`Storefront chat ${label} must be a click-confirmed navigate action.`);
+      }
+
+      for (const key of Object.keys(action)) {
+        if (STOREFRONT_CHAT_UNSAFE_ACTION_KEY_PATTERN.test(key)) {
+          errors.push(`Storefront chat ${label} must not include unsafe action field ${key}.`);
+        }
+      }
+
+      const rawTarget = readStorefrontChatActionTarget(action);
+      const target = normalizeStorefrontChatNavigationTarget(rawTarget, storefrontOrigin);
+      if (!target) {
+        errors.push(
+          `Storefront chat ${label} target is not a safe same-origin public buyer path: ` +
+          String(rawTarget ?? "missing"),
+        );
+      } else {
+        targets.push(target);
+      }
+    });
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    actionCount,
+    targets,
+  };
+}
+
+function isExpectedStorefrontChatFailClosedPayload(payload) {
+  if (payload?.status === "disabled") {
+    const text = [
+      typeof payload.reason === "string" ? payload.reason : "",
+      typeof payload.message === "string" ? payload.message : "",
+    ].join(" ");
+    return STOREFRONT_CHAT_FAIL_CLOSED_PATTERN.test(text);
+  }
+
+  const error = isRecord(payload?.error) ? payload.error : null;
+  const text = [
+    typeof error?.code === "string" ? error.code : "",
+    typeof error?.message === "string" ? error.message : "",
+  ].join(" ");
+
+  return payload?.success === false && STOREFRONT_CHAT_FAIL_CLOSED_PATTERN.test(text);
+}
+
+function readStorefrontChatSuccessData(payload) {
+  if (payload?.success === true && isRecord(payload?.data)) return payload.data;
+  if (payload?.status === "ok" && isRecord(payload)) return payload;
+  return null;
+}
+
+function evaluateStorefrontChatSuccessPayload(payload, { storefrontOrigin }) {
+  const errors = [];
+  const data = readStorefrontChatSuccessData(payload);
+  const message = isRecord(data?.message) ? data.message : null;
+  const actionSafety = evaluateStorefrontChatActionSafety(payload, { storefrontOrigin });
+
+  if (payload?.success !== true && payload?.status !== "ok") {
+    errors.push('Storefront chat success response must set success=true or status="ok".');
+  }
+  if (!data) {
+    errors.push("Storefront chat success response must include a data object.");
+  } else {
+    if (data.profile !== undefined && data.profile !== "storefrontChat") {
+      errors.push('Storefront chat success response must use profile "storefrontChat".');
+    }
+    if (!message) {
+      errors.push("Storefront chat success response must include an assistant message.");
+    } else {
+      if (message.role !== "assistant") {
+        errors.push("Storefront chat message role must be assistant.");
+      }
+      if (typeof message.content !== "string" || !message.content.trim()) {
+        errors.push("Storefront chat message content must be a non-empty string.");
+      } else if (message.content.length > 8_000) {
+        errors.push("Storefront chat message content must be bounded.");
+      }
+    }
+  }
+
+  errors.push(...actionSafety.errors);
+  return {
+    ok: errors.length === 0,
+    errors,
+    actionCount: actionSafety.actionCount,
+    actionTargets: actionSafety.targets,
+    profile: typeof data?.profile === "string" ? data.profile : null,
+    model: typeof data?.model === "string" ? data.model : null,
+  };
+}
+
+export async function smokeStorefrontChat({
+  storefrontUrl = DEFAULT_STOREFRONT_URL,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  fetchImpl = fetch,
+  logger = console,
+} = {}) {
+  const normalizedStorefrontUrl = normalizeHttpBaseUrl(storefrontUrl, "Storefront URL");
+  const storefrontOrigin = new URL(normalizedStorefrontUrl).origin;
+  const chatUrl = buildUrl(normalizedStorefrontUrl, STOREFRONT_ASSISTANT_CHAT_PATH);
+  const response = await fetchJson(chatUrl, {
+    fetchImpl,
+    timeoutMs,
+    method: "POST",
+    headers: {
+      Origin: storefrontOrigin,
+    },
+    body: STOREFRONT_CHAT_SMOKE_BODY,
+  });
+
+  if (response.statusCode === 404) {
+    const reason = "Storefront chat endpoint is not deployed yet.";
+    logger?.warn(`WARN storefront chat skipped (${reason})`);
+    return {
+      status: "skipped",
+      reason,
+      url: redactUrl(chatUrl),
+      statusCode: response.statusCode,
+      durationMs: response.durationMs,
+      cacheControl: response.headers.get("cache-control") ?? "",
+    };
+  }
+
+  const cacheControl = requireNoStoreCacheControl(response, "Storefront chat smoke");
+  const payload = requireJsonResponse(response, "Storefront chat smoke");
+
+  if (response.statusCode >= 200 && response.statusCode < 300) {
+    const evaluation = evaluateStorefrontChatSuccessPayload(payload, { storefrontOrigin });
+    if (!evaluation.ok) {
+      throw new Error(`Storefront chat smoke failed: ${evaluation.errors.join("; ")}`);
+    }
+
+    logger?.log(
+      `PASS storefront chat: configured public chat returned ${response.statusCode} no-store with ` +
+      `${evaluation.actionCount} safe actions.`,
+    );
+    return {
+      url: redactUrl(chatUrl),
+      statusCode: response.statusCode,
+      durationMs: response.durationMs,
+      cacheControl,
+      mode: "configured",
+      profile: evaluation.profile,
+      model: evaluation.model,
+      actionCount: evaluation.actionCount,
+      actionTargets: evaluation.actionTargets,
+    };
+  }
+
+  const actionSafety = evaluateStorefrontChatActionSafety(payload, { storefrontOrigin });
+  if (!isExpectedStorefrontChatFailClosedPayload(payload)) {
+    throw new Error(
+      `Storefront chat smoke returned HTTP ${response.statusCode} without a disabled/unconfigured fail-closed error: ` +
+      responsePreview(response.body),
+    );
+  }
+  if (!actionSafety.ok || actionSafety.actionCount > 0) {
+    throw new Error(
+      "Storefront chat fail-closed response must not include unsafe or executable actions: " +
+      [
+        ...actionSafety.errors,
+        actionSafety.actionCount > 0 ? "fail-closed response included actions" : "",
+      ].filter(Boolean).join("; "),
+    );
+  }
+
+  const error = isRecord(payload.error) ? payload.error : {};
+  logger?.log(
+    `PASS storefront chat: fail-closed ${response.statusCode} no-store while storefrontChat is disabled/unconfigured.`,
+  );
+  return {
+    url: redactUrl(chatUrl),
+    statusCode: response.statusCode,
+    durationMs: response.durationMs,
+    cacheControl,
+    mode: "fail_closed",
+    errorCode: typeof error.code === "string" ? error.code : null,
+  };
+}
+
 export async function smokeAdminMcpUnauthenticated({
   dashboardUrl = DEFAULT_DASHBOARD_URL,
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -4896,6 +5348,15 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
   };
 }
 
+async function checkStorefrontChat(options, { fetchImpl, logger }) {
+  return smokeStorefrontChat({
+    storefrontUrl: options.storefrontUrl,
+    timeoutMs: options.timeoutMs,
+    fetchImpl,
+    logger,
+  });
+}
+
 async function checkAgentMcp(options, { fetchImpl, logger }) {
   if (options.skipWrangler) {
     logger?.warn("WARN agent MCP skipped (--skip-wrangler).");
@@ -5488,6 +5949,8 @@ export async function runReleaseCheck(options, {
     checkStorefrontPages(options, { fetchImpl, logger }));
   await runStep(result, "storefrontCacheHeaders", () =>
     checkStorefrontCacheHeaders(options, { fetchImpl, logger }));
+  await runStep(result, "storefrontChat", () =>
+    checkStorefrontChat(options, { fetchImpl, logger }));
   await runStep(result, "agentMcp", () =>
     checkAgentMcp(options, { fetchImpl, logger }));
   const discovery = await runStep(result, "discovery", () =>
@@ -5565,7 +6028,7 @@ export async function main(rawArgs = process.argv.slice(2), {
       defaultApiBaseUrl: apiConfig.vars?.PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL,
       defaultStorefrontUrl: apiConfig.vars?.STOREFRONT_URL ?? DEFAULT_STOREFRONT_URL,
       defaultDashboardUrl: DEFAULT_DASHBOARD_URL,
-      defaultAgentUrl: env.SCALIUS_AGENT_URL ?? DEFAULT_AGENT_URL,
+      defaultAgentUrl: env.SCALIUS_STOREFRONT_AGENT_URL ?? DEFAULT_AGENT_URL,
     });
 
     const result = await runReleaseCheck(options, {

@@ -1,5 +1,5 @@
 {
-  "name": "@scalius/agent",
+  "name": "@scalius/storefront-agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,12 +7,12 @@
     "build": "wrangler deploy --dry-run --outdir dist",
     "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "types": "wrangler types ./src/env.d.ts --include-runtime false",
+    "types:check": "wrangler types ./src/env.d.ts --include-runtime false --check"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "agents": "^0.16.0",
-    "zod": "^4.4.3"
+    "@scalius/agent-runtime": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",

@@ -18,12 +18,14 @@ import {
   smokeAdminMcpAuthenticated,
   smokeAdminMcpUnauthenticated,
   smokeAgentWorker,
+  smokeStorefrontChat,
 } from "./release-check.mjs";
 
 const SITEMAP_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
 const FEED_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=43200";
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const ADMIN_ASSISTANT_MCP_PATH = "/api/assistant/mcp";
+const STOREFRONT_ASSISTANT_CHAT_PATH = "/api/assistant/chat";
 const ADMIN_SETTINGS_SUMMARY_PATH = "/api/v1/admin/settings/mcp-summary";
 const ADMIN_NOTIFICATION_SETTINGS_SUMMARY_PATH =
   "/api/v1/admin/settings/notification-channels/mcp-summary";
@@ -116,6 +118,98 @@ function decorateStorefrontCacheSmokeResponse(url, response) {
     });
   }
   return response;
+}
+
+function storefrontChatAbsentResponse(url, init = {}) {
+  const parsed = new URL(url);
+  if (
+    parsed.hostname !== "storefront.example.test" ||
+    parsed.pathname !== STOREFRONT_ASSISTANT_CHAT_PATH
+  ) {
+    return null;
+  }
+
+  expect(init.method).toBe("POST");
+  const headers = new Headers(init.headers);
+  expect(headers.get("origin")).toBe("https://storefront.example.test");
+  expect(headers.has("cookie")).toBe(false);
+  expect(headers.has("authorization")).toBe(false);
+  expect(JSON.parse(init.body)).toMatchObject({
+    messages: [{ role: "user" }],
+    pageContext: {
+      source: "storefront",
+      page: { path: "/", kind: "home" },
+      cart: { lineCount: 0, lines: [] },
+    },
+  });
+
+  return jsonResponse(
+    { success: false, error: { code: "NOT_FOUND", message: "Not Found" } },
+    404,
+    { "Cache-Control": "no-store" },
+  );
+}
+
+function storefrontChatSuccessResponse({ actions = [] } = {}, headers = {}) {
+  return jsonResponse({
+    success: true,
+    data: {
+      profile: "storefrontChat",
+      provider: "cloudflare",
+      model: "@cf/moonshotai/kimi-k2.6",
+      message: {
+        role: "assistant",
+        content: "Here is a safe public catalog page you can browse.",
+      },
+      ...(actions.length > 0 ? { actions } : {}),
+    },
+  }, 200, {
+    "Cache-Control": "no-store",
+    ...headers,
+  });
+}
+
+function storefrontChatFailClosedResponse(overrides = {}, headers = {}) {
+  return jsonResponse({
+    success: false,
+    error: {
+      code: "AI_PROFILE_DISABLED",
+      message: 'AI model profile "storefrontChat" is disabled.',
+      ...overrides,
+    },
+  }, 400, {
+    "Cache-Control": "no-store",
+    ...headers,
+  });
+}
+
+function storefrontChatProxyFailClosedResponse(overrides = {}, headers = {}) {
+  return jsonResponse({
+    status: "disabled",
+    reason: "profile-disabled",
+    message: "Storefront chat is disabled. Enable the storefrontChat AI profile before using the assistant.",
+    ...overrides,
+  }, 503, {
+    "Cache-Control": "no-store",
+    ...headers,
+  });
+}
+
+function storefrontChatProxySuccessResponse({ actions = [] } = {}, headers = {}) {
+  return jsonResponse({
+    status: "ok",
+    profile: "storefrontChat",
+    provider: "cloudflare",
+    model: "@cf/moonshotai/kimi-k2.6",
+    message: {
+      role: "assistant",
+      content: "Here is a safe public catalog page you can browse.",
+    },
+    ...(actions.length > 0 ? { actions } : {}),
+  }, 200, {
+    "Cache-Control": "no-store",
+    ...headers,
+  });
 }
 
 function jsonResponse(payload, status = 200, headers = {}) {
@@ -282,7 +376,7 @@ function agentCartValidationMcpResult() {
       issues: [{
         index: 0,
         productId: "release-check-missing-product",
-        variantId: null,
+        variantId: "release-check-missing-variant",
         code: "PRODUCT_UNAVAILABLE",
         action: "remove",
         message: "This item is no longer available.",
@@ -401,7 +495,7 @@ function agentMcpSmokeFetch({
           jsonrpc: "2.0",
           id: body.id,
           result: {
-            protocolVersion: "2025-06-18",
+            protocolVersion: "2025-11-25",
             capabilities: { tools: { listChanged: true } },
             serverInfo: { name: "scalius-agent", version: "0.1.0" },
           },
@@ -1059,7 +1153,7 @@ function authenticatedAdminMcpSmokeFetch({
           jsonrpc: "2.0",
           id: body.id,
           result: {
-            protocolVersion: "2025-06-18",
+            protocolVersion: "2025-11-25",
             capabilities: { tools: { listChanged: true } },
             serverInfo: { name: "scalius-admin-agent", version: "0.1.0" },
           },
@@ -1292,7 +1386,8 @@ function releaseFetch(implementation) {
   return vi.fn(async (url, init = {}) => {
     const response =
       invalidAdminCookieResponse(url, init) ||
-      unauthenticatedAdminMcpResponse(url, init);
+      unauthenticatedAdminMcpResponse(url, init) ||
+      storefrontChatAbsentResponse(url, init);
     if (response) return response;
     try {
       return decorateStorefrontCacheSmokeResponse(url, await implementation(url, init));
@@ -1974,7 +2069,7 @@ describe("release-check local evaluators", () => {
       initialize: {
         statusCode: 200,
         cacheControl: "no-store",
-        protocolVersion: "2025-06-18",
+        protocolVersion: "2025-11-25",
         session: "none",
       },
       tools: {
@@ -3378,6 +3473,7 @@ describe("release-check local evaluators", () => {
             arguments: {
               items: [{
                 productId: "release-check-missing-product",
+                variantId: "release-check-missing-variant",
                 quantity: 1,
                 unitPrice: 1,
               }],
@@ -3645,6 +3741,168 @@ describe("release-check local evaluators", () => {
       timeoutMs: 5_000,
       logger: null,
     })).rejects.toThrow("no-store-ish Cache-Control");
+  });
+
+  it("skips storefront chat smoke while the endpoint is not deployed", async () => {
+    const fetchImpl = vi.fn(async (url, init = {}) => {
+      const parsed = new URL(url);
+      expect(parsed.href).toBe("https://storefront.example.test/api/assistant/chat");
+      expect(init.method).toBe("POST");
+      const headers = new Headers(init.headers);
+      expect(headers.get("origin")).toBe("https://storefront.example.test");
+      expect(headers.has("cookie")).toBe(false);
+      expect(headers.has("authorization")).toBe(false);
+      expect(JSON.parse(init.body)).toMatchObject({
+        messages: [{ role: "user" }],
+        pageContext: { source: "storefront" },
+      });
+      return textResponse("Not Found", 404);
+    });
+    const logger = { log: vi.fn(), warn: vi.fn() };
+
+    await expect(smokeStorefrontChat({
+      storefrontUrl: "https://storefront.example.test",
+      fetchImpl,
+      timeoutMs: 5_000,
+      logger,
+    })).resolves.toMatchObject({
+      status: "skipped",
+      reason: "Storefront chat endpoint is not deployed yet.",
+      statusCode: 404,
+      url: "https://storefront.example.test/api/assistant/chat",
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "WARN storefront chat skipped (Storefront chat endpoint is not deployed yet.)",
+    );
+  });
+
+  it("accepts storefront chat fail-closed disabled/unconfigured errors only when they are no-store", async () => {
+    await expect(smokeStorefrontChat({
+      storefrontUrl: "https://storefront.example.test",
+      fetchImpl: vi.fn(async () => storefrontChatFailClosedResponse()),
+      timeoutMs: 5_000,
+      logger: null,
+    })).resolves.toMatchObject({
+      mode: "fail_closed",
+      statusCode: 400,
+      cacheControl: "no-store",
+      errorCode: "AI_PROFILE_DISABLED",
+    });
+
+    await expect(smokeStorefrontChat({
+      storefrontUrl: "https://storefront.example.test",
+      fetchImpl: vi.fn(async () => storefrontChatProxyFailClosedResponse()),
+      timeoutMs: 5_000,
+      logger: null,
+    })).resolves.toMatchObject({
+      mode: "fail_closed",
+      statusCode: 503,
+      cacheControl: "no-store",
+    });
+
+    await expect(smokeStorefrontChat({
+      storefrontUrl: "https://storefront.example.test",
+      fetchImpl: vi.fn(async () => storefrontChatFailClosedResponse({}, {
+        "Cache-Control": "public, max-age=60",
+      })),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("Storefront chat smoke Cache-Control must include no-store");
+
+    await expect(smokeStorefrontChat({
+      storefrontUrl: "https://storefront.example.test",
+      fetchImpl: vi.fn(async () => jsonResponse({
+        success: false,
+        error: { code: "INTERNAL_ERROR", message: "Provider request failed." },
+      }, 500, { "Cache-Control": "no-store" })),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow("without a disabled/unconfigured fail-closed error");
+  });
+
+  it("accepts configured storefront chat responses with safe same-origin public navigation actions", async () => {
+    const result = await smokeStorefrontChat({
+      storefrontUrl: "https://storefront.example.test",
+      fetchImpl: vi.fn(async () => storefrontChatSuccessResponse({
+        actions: [
+          { type: "navigate", path: "/products/demo-product", label: "View product" },
+          {
+            type: "navigate",
+            url: "https://storefront.example.test/search?q=demo",
+            label: "Search catalog",
+          },
+        ],
+      })),
+      timeoutMs: 5_000,
+      logger: null,
+    });
+
+    expect(result).toMatchObject({
+      mode: "configured",
+      profile: "storefrontChat",
+      model: "@cf/moonshotai/kimi-k2.6",
+      actionCount: 2,
+      actionTargets: [
+        "/products/demo-product",
+        "/search?q=demo",
+      ],
+      cacheControl: "no-store",
+    });
+  });
+
+  it("accepts the normalized storefront proxy success shape", async () => {
+    const result = await smokeStorefrontChat({
+      storefrontUrl: "https://storefront.example.test",
+      fetchImpl: vi.fn(async () => storefrontChatProxySuccessResponse({
+        actions: [{ type: "navigate", path: "/products/demo-product", label: "View product" }],
+      })),
+      timeoutMs: 5_000,
+      logger: null,
+    });
+
+    expect(result).toMatchObject({
+      mode: "configured",
+      profile: "storefrontChat",
+      model: "@cf/moonshotai/kimi-k2.6",
+      actionCount: 1,
+      actionTargets: ["/products/demo-product"],
+      cacheControl: "no-store",
+    });
+  });
+
+  it.each([
+    {
+      label: "checkout target",
+      action: { type: "navigate", path: "/checkout", label: "Checkout" },
+      expected: "not a safe same-origin public buyer path",
+    },
+    {
+      label: "off-origin target",
+      action: { type: "navigate", url: "https://evil.example.test/products/demo", label: "Bad" },
+      expected: "not a safe same-origin public buyer path",
+    },
+    {
+      label: "token query target",
+      action: { type: "navigate", path: "/search?token=secret_123456", label: "Bad" },
+      expected: "not a safe same-origin public buyer path",
+    },
+    {
+      label: "non-navigation action",
+      action: { type: "add_to_cart", path: "/products/demo-product", label: "Add" },
+      expected: "must be a click-confirmed navigate action",
+    },
+    {
+      label: "executable action field",
+      action: { type: "navigate", path: "/products/demo-product", method: "POST" },
+      expected: "must not include unsafe action field method",
+    },
+  ])("rejects storefront chat responses with unsafe $label", async ({ action, expected }) => {
+    await expect(smokeStorefrontChat({
+      storefrontUrl: "https://storefront.example.test",
+      fetchImpl: vi.fn(async () => storefrontChatSuccessResponse({ actions: [action] })),
+      timeoutMs: 5_000,
+      logger: null,
+    })).rejects.toThrow(expected);
   });
 });
 
@@ -4097,7 +4355,7 @@ describe("runReleaseCheck", () => {
               jsonrpc: "2.0",
               id: body.id,
               result: {
-                protocolVersion: "2025-06-18",
+                protocolVersion: "2025-11-25",
                 capabilities: { tools: { listChanged: true } },
                 serverInfo: { name: "scalius-agent", version: "0.1.0" },
               },
@@ -4162,6 +4420,7 @@ describe("runReleaseCheck", () => {
                 arguments: {
                   items: [{
                     productId: "release-check-missing-product",
+                    variantId: "release-check-missing-variant",
                     quantity: 1,
                     unitPrice: 1,
                   }],
@@ -4368,6 +4627,11 @@ describe("runReleaseCheck", () => {
         cacheControl: "no-store",
       },
     });
+    expect(result.checks.storefrontChat).toMatchObject({
+      status: "skipped",
+      reason: "Storefront chat endpoint is not deployed yet.",
+      statusCode: 404,
+    });
     expect(agentMcpRequests).toEqual([
       "initialize",
       "tools/list",
@@ -4390,7 +4654,7 @@ describe("runReleaseCheck", () => {
         initialize: {
           statusCode: 200,
           cacheControl: "no-store",
-          protocolVersion: "2025-06-18",
+          protocolVersion: "2025-11-25",
           session: "none",
         },
         tools: {
