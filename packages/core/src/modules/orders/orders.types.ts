@@ -7,6 +7,7 @@ import type {
     OrderRefundAttemptView,
 } from "../payments/refund-attempt-visibility";
 import type { OrderSupportRequestView } from "./order-support-requests";
+import type { TaxQuote } from "../tax";
 
 // ─────────────────────────────────────────
 // Admin types
@@ -117,6 +118,15 @@ export interface OrderDetails extends OrderListItem {
     paidAmount: number | null;
     balanceDue: number | null;
     deletedAt: Date | null;
+    currencyCode: string | null;
+    currencyDecimalPlaces: number | null;
+    subtotalAmountMinor: number | null;
+    shippingAmountMinor: number | null;
+    discountAmountMinor: number | null;
+    taxAmountMinor: number;
+    totalAmountMinor: number | null;
+    taxLabel: string | null;
+    pricesIncludeTax: boolean;
     items: {
         id: string;
         productId: string;
@@ -128,6 +138,11 @@ export interface OrderDetails extends OrderListItem {
         variantSize: string | null;
         variantColor: string | null;
         fulfillmentStatus: string;
+        unitPriceMinor: number | null;
+        lineSubtotalMinor: number | null;
+        discountAmountMinor: number | null;
+        taxableAmountMinor: number | null;
+        taxAmountMinor: number;
     }[];
     refundAttempts: OrderRefundAttemptView[];
     activeRefundOperation: ActiveRefundOperationView | null;
@@ -141,7 +156,7 @@ export interface OrderDetails extends OrderListItem {
 export interface StorefrontOrderItem {
     cartKey?: string | null;
     productId: string;
-    variantId: string | null;
+    variantId: string;
     quantity: number;
     price: number;
     productName?: string | null;
@@ -185,6 +200,7 @@ export interface CreateStorefrontOrderResult {
     orderId: string;
     paymentMethod: string;
     totalAmount: number;
+    taxQuote: TaxQuote;
     commitPayload: StorefrontOrderCommitPayload;
 }
 
@@ -208,6 +224,15 @@ export interface StorefrontOrderCommitPayload {
         totalAmount: number;
         shippingCharge: number;
         discountAmount: number;
+        currencyCode: string;
+        currencyDecimalPlaces: number;
+        subtotalAmountMinor: number;
+        shippingAmountMinor: number;
+        discountAmountMinor: number;
+        taxAmountMinor: number;
+        totalAmountMinor: number;
+        taxLabel: string;
+        pricesIncludeTax: boolean;
         status: string;
         paymentMethod: string;
         paymentStatus: string;
@@ -218,17 +243,25 @@ export interface StorefrontOrderCommitPayload {
         inventoryAction: string;
     };
     items: {
+        id: string;
+        taxAllocationLineId: string;
         cartKey?: string | null;
         productId: string;
-        variantId: string | null;
+        variantId: string;
         quantity: number;
         price: number;
         productName: string | null;
         variantLabel: string | null;
         inventoryTracked?: boolean;
+        unitPriceMinor: number;
+        lineSubtotalMinor: number;
+        discountAmountMinor: number;
+        taxableAmountMinor: number;
+        taxAmountMinor: number;
     }[];
     discountUsage: { discountId: string; amountDiscounted: number } | null;
     requestUrl: string;
+    taxQuote: TaxQuote;
 }
 
 // ─────────────────────────────────────────

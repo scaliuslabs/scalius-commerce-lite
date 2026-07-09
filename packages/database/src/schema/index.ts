@@ -17,4 +17,5 @@ export * from "./delivery";
 export * from "./marketing";
 export * from "./content";
 export * from "./system";
+export * from "./tax";
 export * from "./assistant";

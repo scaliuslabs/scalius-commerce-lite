@@ -124,6 +124,7 @@ const READ_ONLY_POST_OPERATIONS = new Set([
   "POST /api/v1/admin/fraud-checker/{id}/test",
   "POST /api/v1/admin/settings/delivery-providers/create-test",
   "POST /api/v1/admin/settings/delivery-providers/{id}",
+  "POST /api/v1/admin/taxes/preview",
 ]);
 
 const CREDENTIAL_SETTING_SEGMENTS = new Set([
@@ -144,6 +145,8 @@ const SOFT_DELETE_RESOURCE = /^\/api\/v1\/admin\/(?:attributes|categories|collec
 const SOFT_DELETE_SETTING_RESOURCE = /^\/api\/v1\/admin\/settings\/(?:delivery-locations|hero-sliders|shipping-methods)\/\{[^}]+\}$/;
 const SOFT_DELETE_OPERATIONS = new Set([
   "DELETE /api/v1/admin/settings/delivery-locations",
+  "DELETE /api/v1/admin/taxes/classes/{id}",
+  "DELETE /api/v1/admin/taxes/rates/{id}",
   "PATCH /api/v1/admin/settings/checkout-languages/{id}",
 ]);
 const IMPLICIT_BULK_OPERATIONS = new Set([
@@ -267,6 +270,7 @@ function deriveFlags(method: AdminHttpMethod, pathTemplate: string) {
   );
   const financial = !readOnly && (
     pathTemplate === "/api/v1/admin/orders" ||
+    pathTemplate.startsWith("/api/v1/admin/taxes") ||
     /\/orders\/[^/]+\/(?:cod|payment-recovery-link|refund|return|status)$/.test(samplePath(pathTemplate)) ||
     /^\/api\/v1\/admin\/settings\/(?:payment-methods|polar|sslcommerz|stripe)(?:\/|$)/.test(pathTemplate)
   );

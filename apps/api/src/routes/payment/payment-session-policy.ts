@@ -11,6 +11,8 @@ export type PaymentSessionType = "full" | "deposit" | "balance";
 export interface PaymentSessionOrder {
   id: string;
   totalAmount: number;
+  totalAmountMinor?: number | null;
+  currencyDecimalPlaces?: number | null;
   status: string;
   paymentStatus: string;
   paidAmount?: number | null;
@@ -27,17 +29,20 @@ export type PaymentSessionPolicy =
   | {
       paymentType: "deposit";
       chargeAmount: number;
+      chargeAmountMinor?: number;
       depositAmount: number;
       balanceDue: number;
     }
   | {
       paymentType: "balance";
       chargeAmount: number;
+      chargeAmountMinor?: number;
       balanceDue: number;
     }
   | {
       paymentType: "full";
       chargeAmount: number;
+      chargeAmountMinor?: number;
     };
 
 function assertPositiveAmount(value: number, label: string): number {
@@ -46,6 +51,35 @@ function assertPositiveAmount(value: number, label: string): number {
     throw new ValidationError(`${label} must be greater than zero`);
   }
   return amount;
+}
+
+function resolveOrderMoney(order: PaymentSessionOrder): {
+  amount: number;
+  amountMinor?: number;
+  decimalPlaces?: number;
+} {
+  const decimalPlaces = order.currencyDecimalPlaces;
+  const amountMinor = order.totalAmountMinor;
+  if (
+    Number.isInteger(decimalPlaces) &&
+    decimalPlaces! >= 0 &&
+    decimalPlaces! <= 3 &&
+    Number.isSafeInteger(amountMinor) &&
+    amountMinor! > 0
+  ) {
+    return {
+      amount: amountMinor! / 10 ** decimalPlaces!,
+      amountMinor: amountMinor!,
+      decimalPlaces: decimalPlaces!,
+    };
+  }
+  return { amount: assertPositiveAmount(order.totalAmount, "Order total") };
+}
+
+function optionalMinorAmount(amount: number, decimalPlaces: number | undefined): number | undefined {
+  if (decimalPlaces === undefined) return undefined;
+  const minor = Math.round(amount * 10 ** decimalPlaces);
+  return Number.isSafeInteger(minor) && minor > 0 ? minor : undefined;
 }
 
 type PartialPaymentSettings = Pick<CheckoutFlowSettings, "partialPaymentEnabled" | "partialPaymentAmount">;
@@ -85,7 +119,8 @@ export async function resolvePaymentSessionPolicy(
   requested: RequestedPaymentSession,
   checkoutFlowSettings?: PartialPaymentSettings | null,
 ): Promise<PaymentSessionPolicy> {
-  const orderTotal = assertPositiveAmount(order.totalAmount, "Order total");
+  const orderMoney = resolveOrderMoney(order);
+  const orderTotal = assertPositiveAmount(orderMoney.amount, "Order total");
   let cachedPaymentSettings: PartialPaymentSettings | null | undefined = checkoutFlowSettings;
   const getPaymentSettings = async () => {
     if (cachedPaymentSettings !== undefined) return cachedPaymentSettings;
@@ -151,6 +186,7 @@ export async function resolvePaymentSessionPolicy(
     return {
       paymentType: "deposit",
       chargeAmount: configuredDeposit,
+      chargeAmountMinor: optionalMinorAmount(configuredDeposit, orderMoney.decimalPlaces),
       depositAmount: configuredDeposit,
       balanceDue,
     };
@@ -187,6 +223,9 @@ export async function resolvePaymentSessionPolicy(
     return {
       paymentType: "balance",
       chargeAmount: balanceDue,
+      chargeAmountMinor: orderMoney.amountMinor !== undefined
+        ? orderMoney.amountMinor - (optionalMinorAmount(paidAmount, orderMoney.decimalPlaces) ?? 0)
+        : optionalMinorAmount(balanceDue, orderMoney.decimalPlaces),
       balanceDue,
     };
   }
@@ -208,5 +247,6 @@ export async function resolvePaymentSessionPolicy(
   return {
     paymentType: "full",
     chargeAmount: orderTotal,
+    chargeAmountMinor: orderMoney.amountMinor,
   };
 }

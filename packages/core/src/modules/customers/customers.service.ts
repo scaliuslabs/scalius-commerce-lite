@@ -724,6 +724,15 @@ export async function getCustomerOrders(
             balanceDue: orders.balanceDue,
             shippingCharge: orders.shippingCharge,
             discountAmount: orders.discountAmount,
+            currencyCode: orders.currencyCode,
+            currencyDecimalPlaces: orders.currencyDecimalPlaces,
+            subtotalAmountMinor: orders.subtotalAmountMinor,
+            shippingAmountMinor: orders.shippingAmountMinor,
+            discountAmountMinor: orders.discountAmountMinor,
+            taxAmountMinor: orders.taxAmountMinor,
+            totalAmountMinor: orders.totalAmountMinor,
+            taxLabel: orders.taxLabel,
+            pricesIncludeTax: orders.pricesIncludeTax,
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
             fulfillmentStatus: orders.fulfillmentStatus,
@@ -915,6 +924,15 @@ export async function getCustomerOwnedOrderForDetail(
             balanceDue: orders.balanceDue,
             shippingCharge: orders.shippingCharge,
             discountAmount: orders.discountAmount,
+            currencyCode: orders.currencyCode,
+            currencyDecimalPlaces: orders.currencyDecimalPlaces,
+            subtotalAmountMinor: orders.subtotalAmountMinor,
+            shippingAmountMinor: orders.shippingAmountMinor,
+            discountAmountMinor: orders.discountAmountMinor,
+            taxAmountMinor: orders.taxAmountMinor,
+            totalAmountMinor: orders.totalAmountMinor,
+            taxLabel: orders.taxLabel,
+            pricesIncludeTax: orders.pricesIncludeTax,
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
             deletedAt: orders.deletedAt,
@@ -954,6 +972,9 @@ export function getCustomerPaymentSessionOrderForDetail(order: CustomerOwnedOrde
     return {
         id: order.id,
         totalAmount: order.totalAmount,
+        totalAmountMinor: order.totalAmountMinor,
+        currencyCode: order.currencyCode,
+        currencyDecimalPlaces: order.currencyDecimalPlaces,
         status: order.status,
         paymentStatus: order.paymentStatus,
         paidAmount: order.paidAmount,
@@ -1003,6 +1024,11 @@ export async function getCustomerOrderDetailForOrder(
                 unitPrice: orderItems.price,
                 lineTotal: sql<number>`${orderItems.quantity} * ${orderItems.price}`.as("lineTotal"),
                 fulfillmentStatus: orderItems.fulfillmentStatus,
+                unitPriceMinor: orderItems.unitPriceMinor,
+                lineSubtotalMinor: orderItems.lineSubtotalMinor,
+                discountAmountMinor: orderItems.discountAmountMinor,
+                taxableAmountMinor: orderItems.taxableAmountMinor,
+                taxAmountMinor: orderItems.taxAmountMinor,
                 createdAt: sql<number>`CAST(${orderItems.createdAt} AS INTEGER)`,
             })
             .from(orderItems)
@@ -1115,6 +1141,11 @@ export async function getCustomerOrderDetailForOrder(
             unitPrice: number;
             lineTotal: number;
             fulfillmentStatus: string;
+            unitPriceMinor: number | null;
+            lineSubtotalMinor: number | null;
+            discountAmountMinor: number | null;
+            taxableAmountMinor: number | null;
+            taxAmountMinor: number;
             createdAt: number | null;
         }>,
         Array<{
@@ -1278,6 +1309,15 @@ export async function getCustomerOrderDetailForOrder(
             balanceDue: getCustomerVisibleBalanceDue(order),
             shippingCharge: order.shippingCharge,
             discountAmount: order.discountAmount,
+            currencyCode: order.currencyCode,
+            currencyDecimalPlaces: order.currencyDecimalPlaces,
+            subtotalAmountMinor: order.subtotalAmountMinor,
+            shippingAmountMinor: order.shippingAmountMinor,
+            discountAmountMinor: order.discountAmountMinor,
+            taxAmountMinor: order.taxAmountMinor,
+            totalAmountMinor: order.totalAmountMinor,
+            taxLabel: order.taxLabel,
+            pricesIncludeTax: order.pricesIncludeTax,
             paymentStatus: order.paymentStatus,
             paymentMethod: order.paymentMethod,
             fulfillmentStatus: order.fulfillmentStatus,

@@ -33,6 +33,9 @@ const mocks = vi.hoisted(() => ({
   getClientIp: vi.fn(() => "127.0.0.1"),
   getCustomerBySession: vi.fn(),
   getActivePaymentMethods: vi.fn(),
+  calculateStorefrontTaxQuote: vi.fn(),
+  isDiscountValid: vi.fn(),
+  calculateDiscountAmount: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
@@ -85,7 +88,54 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
   getActivePaymentMethods: mocks.getActivePaymentMethods,
 }));
 
+vi.mock("@scalius/core/modules/tax", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@scalius/core/modules/tax")>();
+  return {
+    ...actual,
+    calculateStorefrontTaxQuote: mocks.calculateStorefrontTaxQuote,
+  };
+});
+
+vi.mock("@scalius/core/modules/discounts/discounts.eligibility", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@scalius/core/modules/discounts/discounts.eligibility")>();
+  return {
+    ...actual,
+    isDiscountValid: mocks.isDiscountValid,
+    calculateDiscountAmount: mocks.calculateDiscountAmount,
+  };
+});
+
 import { orderRoutes } from "./orders";
+
+const DEFAULT_TAX_QUOTE = {
+  schemaVersion: 1 as const,
+  calculationVersion: "tax-v1" as const,
+  enabled: false,
+  currencyCode: "BDT",
+  decimalPlaces: 2,
+  displayLabel: "Tax",
+  pricesIncludeTax: false,
+  shippingTaxed: false,
+  settingsVersion: 0,
+  subtotalMinor: 10_000,
+  shippingMinor: 0,
+  discountMinor: 0,
+  taxableMinor: 0,
+  taxMinor: 0,
+  totalMinor: 10_000,
+  destination: { city: "city_1", zone: "zone_1", area: null },
+  lines: [],
+  shipping: {
+    taxClassId: null,
+    taxClassName: null,
+    grossAmountMinor: 0,
+    discountMinor: 0,
+    taxableAmountMinor: 0,
+    taxMinor: 0,
+    totalMinor: 0,
+    components: [],
+  },
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -96,6 +146,9 @@ beforeEach(() => {
     enabledMethods: ["cod"],
     defaultMethod: "cod",
   });
+  mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
+  mocks.isDiscountValid.mockResolvedValue({ valid: false });
+  mocks.calculateDiscountAmount.mockResolvedValue(0);
   mocks.buildCheckoutAttemptIdentity.mockResolvedValue({
     requestKey: "checkout_submit:v1:test",
     requestHash: "request_hash_1",
@@ -280,6 +333,34 @@ function createWaitUntilContext() {
 }
 
 describe("cart validation preflight", () => {
+  it.each([
+    ["missing", undefined],
+    ["null", null],
+    ["synthetic default", "default"],
+  ])("rejects a %s variant at the cart-validation schema boundary", async (_label, variantId) => {
+    const { app, kv } = createTestApp();
+    const item: Record<string, unknown> = {
+      productId: "product_1",
+      quantity: 1,
+      price: 100,
+    };
+    if (variantId !== undefined) item.variantId = variantId;
+
+    const response = await app.request(
+      "/api/v1/orders/cart-validation",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [item] }),
+      },
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.validateStorefrontCartItems).not.toHaveBeenCalled();
+    expect(mocks.validateStorefrontDeliveryPreflight).not.toHaveBeenCalled();
+  });
+
   it("returns every cart item issue without creating checkout side effects", async () => {
     mocks.validateStorefrontCartItems.mockResolvedValue({
       valid: false,
@@ -441,6 +522,193 @@ describe("cart validation preflight", () => {
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
+  });
+});
+
+describe("authoritative tax quote", () => {
+  it("ignores submitted price data and quotes the validated SKU in minor units", async () => {
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: true,
+      issues: [],
+      items: [{
+        index: 0,
+        cartKey: "line_1",
+        productId: "product_1",
+        variantId: "variant_1",
+        quantity: 1,
+        unitPrice: 100,
+        productName: "Authoritative product",
+        variantLabel: "Large",
+        freeDelivery: false,
+        availableQuantity: 4,
+        taxClassId: "taxc_standard",
+      }],
+      subtotal: 100,
+      hasFreeDeliveryProduct: false,
+    });
+    mocks.calculateStorefrontTaxQuote.mockResolvedValue({
+      ...DEFAULT_TAX_QUOTE,
+      enabled: true,
+      settingsVersion: 2,
+      subtotalMinor: 10_000,
+      shippingMinor: 6_000,
+      taxableMinor: 16_000,
+      taxMinor: 800,
+      totalMinor: 16_800,
+      lines: [{
+        lineId: "line_1",
+        productId: "product_1",
+        variantId: "variant_1",
+        taxClassId: "taxc_standard",
+        taxClassName: "Standard",
+        unitPriceMinor: 10_000,
+        quantity: 1,
+        grossAmountMinor: 10_000,
+        discountMinor: 0,
+        taxableAmountMinor: 10_000,
+        taxMinor: 500,
+        totalMinor: 10_500,
+        components: [],
+      }],
+      shipping: {
+        ...DEFAULT_TAX_QUOTE.shipping,
+        taxClassId: "taxc_standard",
+        taxClassName: "Standard",
+        grossAmountMinor: 6_000,
+        taxableAmountMinor: 6_000,
+        taxMinor: 300,
+        totalMinor: 6_300,
+      },
+    });
+    const { app, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders/tax-quote",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [{
+            cartKey: "line_1",
+            productId: "product_1",
+            variantId: "variant_1",
+            quantity: 1,
+            price: 1,
+          }],
+          city: "city_1",
+          zone: "zone_1",
+          shippingMethodId: "shipping_1",
+        }),
+      },
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json() as {
+      data: Record<string, unknown> & { quoteFingerprint: string; items: Array<Record<string, unknown>> };
+    };
+    expect(payload.data).toMatchObject({
+      valid: true,
+      displayLabel: "Tax",
+      settingsVersion: 2,
+      subtotalMinor: 10_000,
+      subtotalAmount: 100,
+      shippingMinor: 6_000,
+      shippingAmount: 60,
+      taxMinor: 800,
+      taxAmount: 8,
+      totalMinor: 16_800,
+      totalAmount: 168,
+      items: [{
+        unitPrice: 100,
+        productName: "Authoritative product",
+        variantLabel: "Large",
+      }],
+    });
+    expect(payload.data.quoteFingerprint).toMatch(/^taxq_[A-Za-z0-9_-]{22}$/);
+    const validatedRequestItem = mocks.validateStorefrontCartItems.mock.calls[0]?.[1]?.[0];
+    expect(validatedRequestItem).not.toHaveProperty("price");
+    expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        lines: [expect.objectContaining({
+          unitPrice: 100,
+          taxClassId: "taxc_standard",
+        })],
+        shippingAmount: 60,
+      }),
+    );
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+  });
+
+  it("passes validated product discount scope to the shared quote service", async () => {
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: true,
+      issues: [],
+      items: [{
+        index: 0,
+        cartKey: "line_1",
+        productId: "product_1",
+        variantId: "variant_1",
+        quantity: 1,
+        unitPrice: 100,
+        productName: "Product",
+        variantLabel: null,
+        freeDelivery: false,
+        inventoryTracked: true,
+        availableQuantity: 2,
+        taxClassId: "taxc_1",
+      }],
+      subtotal: 100,
+      hasFreeDeliveryProduct: false,
+    });
+    mocks.isDiscountValid.mockResolvedValue({
+      valid: true,
+      discount: {
+        id: "discount_1",
+        type: "amount_off_products",
+        valueType: "fixed_amount",
+        discountValue: 50,
+      },
+      applicableProductIds: new Set(["product_1"]),
+    });
+    mocks.calculateDiscountAmount.mockResolvedValue(50);
+    const { app, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders/tax-quote",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [{ productId: "product_1", variantId: "variant_1", quantity: 1 }],
+          city: "city_1",
+          zone: "zone_1",
+          shippingMethodId: "shipping_1",
+          discountCode: "PRODUCT50",
+          customerPhone: "+8801712345678",
+        }),
+      },
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        discountAmount: 50,
+        discountType: "amount_off_products",
+        applicableProductIds: ["product_1"],
+      }),
+    );
+    expect(mocks.calculateDiscountAmount).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.any(Number),
+      expect.any(Array),
+      60,
+      new Set(["product_1"]),
+    );
   });
 });
 
@@ -695,6 +963,7 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_1",
       paymentMethod: "cod",
       totalAmount: 100,
+      taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_1" } },
     });
     const { app, kv, calls } = createTestApp();
@@ -1152,6 +1421,7 @@ describe("create order commit/KV ordering", () => {
         orderId: "order_cache_failure",
         paymentMethod: "cod",
         totalAmount: 100,
+        taxQuote: DEFAULT_TAX_QUOTE,
         commitPayload: { orderData: { id: "order_cache_failure" } },
       });
       mocks.invalidateProductAvailabilityCaches.mockRejectedValue(new Error("cache unavailable"));
@@ -1191,6 +1461,7 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_2",
       paymentMethod: "cod",
       totalAmount: 100,
+      taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_2" } },
     });
     const { app, kv, calls } = createTestApp();
@@ -1241,6 +1512,7 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_discount_limit",
       paymentMethod: "cod",
       totalAmount: 100,
+      taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_discount_limit" } },
     });
     const { app, kv } = createTestApp();
@@ -1388,6 +1660,7 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_3",
       paymentMethod: "cod",
       totalAmount: 100,
+      taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_3" } },
     });
     const { app, db, kv } = createTestApp({ guestCheckoutEnabled: false });
@@ -1499,6 +1772,7 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_session_owner",
       paymentMethod: "cod",
       totalAmount: 100,
+      taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_session_owner" } },
     });
     const { app, db, kv } = createTestApp({ guestCheckoutEnabled: true });
@@ -1722,6 +1996,11 @@ describe("create order commit/KV ordering", () => {
       zoneName: "Mirpur",
       areaName: null,
     });
+    mocks.calculateStorefrontTaxQuote.mockResolvedValue({
+      ...DEFAULT_TAX_QUOTE,
+      subtotalMinor: Math.round(subtotal * 100),
+      totalMinor: Math.round(subtotal * 100),
+    });
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -1768,6 +2047,7 @@ describe("create order commit/KV ordering", () => {
       zoneName: "Mirpur",
       areaName: null,
     });
+    mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
     const { app, kv } = createTestApp({
       partialPaymentEnabled: true,
       partialPaymentAmount: 9.99,
@@ -1797,6 +2077,57 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.markCheckoutAttemptCommitted).not.toHaveBeenCalled();
     expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("uses the recomputed committed quote after SSLCommerz precommit validation", async () => {
+    mocks.getActivePaymentMethods.mockResolvedValue({
+      enabledMethods: ["sslcommerz"],
+      defaultMethod: "sslcommerz",
+    });
+    mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
+    const committedQuote = {
+      ...DEFAULT_TAX_QUOTE,
+      taxMinor: 2_000,
+      totalMinor: 12_000,
+    };
+    mocks.createStorefrontOrder.mockResolvedValue({
+      checkoutToken: "chk_ssl_recomputed",
+      orderId: "order_ssl_recomputed",
+      paymentMethod: "sslcommerz",
+      totalAmount: 120,
+      taxQuote: committedQuote,
+      commitPayload: { orderData: { id: "order_ssl_recomputed", totalAmountMinor: 12_000 } },
+    });
+    const { app, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+      },
+      { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        totalAmount: 120,
+        totalAmountMinor: 12_000,
+        taxAmountMinor: 2_000,
+      },
+    });
+    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orderData: expect.objectContaining({ totalAmountMinor: 12_000 }) }),
+    );
+    expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ totalAmount: 120 }),
+    );
   });
 
   it("rate limits a new checkout before claim creation or order writes", async () => {
@@ -1884,6 +2215,36 @@ describe("create order commit/KV ordering", () => {
     expect(fractionalQuantity.status).toBe(400);
     expect(excessiveQuantity.status).toBe(400);
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["null", null],
+    ["synthetic default", "default"],
+  ])("rejects a %s variant before checkout identity or D1 work", async (_label, variantId) => {
+    const { app, kv } = createTestApp();
+    const item = { ...validOrderBody.items[0] } as Record<string, unknown>;
+    if (variantId === undefined) {
+      delete item.variantId;
+    } else {
+      item.variantId = variantId;
+    }
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validOrderBody, items: [item] }),
+      },
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.buildCheckoutAttemptIdentity).not.toHaveBeenCalled();
+    expect(mocks.resolveExistingCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.validateStorefrontCartItems).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });
 

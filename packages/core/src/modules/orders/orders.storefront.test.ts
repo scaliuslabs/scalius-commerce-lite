@@ -4,7 +4,71 @@ import { InventoryPool, PaymentMethod } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
 import { createStorefrontOrder, validateStorefrontDeliveryPreflight } from "./orders.storefront";
 import { validateStorefrontCartItems } from "./cart-validation";
+import { calculateStorefrontTaxQuote } from "../tax";
 import type { CreateStorefrontOrderCustomerIdentity, CreateStorefrontOrderInput } from "./orders.types";
+
+vi.mock("../tax", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../tax")>();
+  return {
+    ...actual,
+    calculateStorefrontTaxQuote: vi.fn(async (
+      _db: Database,
+      input: import("../tax").StorefrontTaxQuoteInput,
+    ) => {
+      const lines = input.lines.map((line) => {
+        const unitPriceMinor = Math.round(line.unitPrice * 100);
+        const grossAmountMinor = unitPriceMinor * line.quantity;
+        return {
+          lineId: line.lineId,
+          productId: line.productId,
+          variantId: line.variantId,
+          taxClassId: null,
+          taxClassName: null,
+          unitPriceMinor,
+          quantity: line.quantity,
+          grossAmountMinor,
+          discountMinor: 0,
+          taxableAmountMinor: 0,
+          taxMinor: 0,
+          totalMinor: grossAmountMinor,
+          components: [],
+        };
+      });
+      const subtotalMinor = lines.reduce((sum: number, line) => sum + line.grossAmountMinor, 0);
+      const shippingMinor = Math.round(input.shippingAmount * 100);
+      const discountMinor = Math.round(input.discountAmount * 100);
+      return {
+        schemaVersion: 1 as const,
+        calculationVersion: "tax-v1" as const,
+        enabled: false,
+        currencyCode: "BDT",
+        decimalPlaces: 2,
+        displayLabel: "Tax",
+        pricesIncludeTax: false,
+        shippingTaxed: false,
+        settingsVersion: 0,
+        subtotalMinor,
+        shippingMinor,
+        discountMinor,
+        taxableMinor: 0,
+        taxMinor: 0,
+        totalMinor: subtotalMinor + shippingMinor - discountMinor,
+        destination: input.destination,
+        lines,
+        shipping: {
+          taxClassId: null,
+          taxClassName: null,
+          grossAmountMinor: shippingMinor,
+          discountMinor: 0,
+          taxableAmountMinor: 0,
+          taxMinor: 0,
+          totalMinor: shippingMinor,
+          components: [],
+        },
+      };
+    }),
+  };
+});
 
 interface ProductRow {
   id: string;
@@ -15,6 +79,7 @@ interface ProductRow {
   discountType: string | null;
   discountAmount: number | null;
   freeDelivery: boolean;
+  taxClassId: string | null;
 }
 
 interface VariantRow {
@@ -34,6 +99,7 @@ interface VariantRow {
   discountPercentage: number | null;
   discountType: string | null;
   discountAmount: number | null;
+  taxClassId: string | null;
 }
 
 interface ShippingMethodRow {
@@ -62,6 +128,7 @@ function createProduct(overrides: Partial<ProductRow> = {}): ProductRow {
     discountType: null,
     discountAmount: null,
     freeDelivery: false,
+    taxClassId: null,
     ...overrides,
   };
 }
@@ -84,6 +151,7 @@ function createVariant(overrides: Partial<VariantRow> = {}): VariantRow {
     discountPercentage: null,
     discountType: null,
     discountAmount: null,
+    taxClassId: null,
     ...overrides,
   };
 }
@@ -167,6 +235,8 @@ async function placeOrder({
     createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
   ],
   shippingMethods = [createShippingMethod()],
+  discountValidation = null,
+  calculatedDiscountAmount = 0,
 }: {
   inputOverrides?: Partial<CreateStorefrontOrderInput>;
   customerIdentity?: CreateStorefrontOrderCustomerIdentity;
@@ -174,6 +244,8 @@ async function placeOrder({
   variants?: VariantRow[];
   locations?: LocationRow[];
   shippingMethods?: ShippingMethodRow[];
+  discountValidation?: unknown;
+  calculatedDiscountAmount?: number;
 } = {}) {
   const validationProducts = products.filter((product) => product.isActive === true);
   const db = createDbMock(
@@ -189,14 +261,72 @@ async function placeOrder({
     db,
     createOrderInput(inputOverrides),
     "http://localhost:8787/api/v1/orders",
-    vi.fn(async () => null),
-    vi.fn(() => 0),
+    vi.fn(async () => discountValidation),
+    vi.fn(() => calculatedDiscountAmount),
     undefined,
     undefined,
     undefined,
     customerIdentity,
   );
 }
+
+describe("createStorefrontOrder tax discount parity", () => {
+  it("keeps random order-item keys separate from the stable quote allocation identity", async () => {
+    vi.mocked(calculateStorefrontTaxQuote).mockClear();
+    const result = await placeOrder();
+    const taxInput = vi.mocked(calculateStorefrontTaxQuote).mock.calls[0]?.[1];
+
+    expect(taxInput?.lines[0]?.lineId).toBe("cart:0:var_standard");
+    expect(result.commitPayload.items[0]).toMatchObject({
+      taxAllocationLineId: "cart:0:var_standard",
+    });
+    expect(result.commitPayload.items[0]?.id).toMatch(/^item_/);
+    expect(result.commitPayload.items[0]?.id).not.toBe("cart:0:var_standard");
+  });
+
+  it("passes validated product scope into the same authoritative tax quote service", async () => {
+    vi.mocked(calculateStorefrontTaxQuote).mockClear();
+    await placeOrder({
+      inputOverrides: { discountCode: "PRODUCT50" },
+      discountValidation: {
+        valid: true,
+        discount: {
+          id: "discount_1",
+          type: "amount_off_products",
+          valueType: "fixed_amount",
+          discountValue: 50,
+        },
+        applicableProductIds: new Set(["prod_standard"]),
+      },
+      calculatedDiscountAmount: 50,
+    });
+
+    expect(calculateStorefrontTaxQuote).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        discountAmount: 50,
+        discountType: "amount_off_products",
+        applicableProductIds: ["prod_standard"],
+      }),
+    );
+  });
+
+  it("fails closed when validated product-discount scope is missing", async () => {
+    await expect(placeOrder({
+      inputOverrides: { discountCode: "PRODUCT50" },
+      discountValidation: {
+        valid: true,
+        discount: {
+          id: "discount_1",
+          type: "amount_off_products",
+          valueType: "fixed_amount",
+          discountValue: 50,
+        },
+      },
+      calculatedDiscountAmount: 50,
+    })).rejects.toThrow("product discount scope could not be verified");
+  });
+});
 
 describe("createStorefrontOrder product availability verification", () => {
   it("keeps true guest checkout orders detached from customer accounts", async () => {
@@ -282,38 +412,37 @@ describe("createStorefrontOrder product availability verification", () => {
     });
   });
 
-  it("rejects variantless checkout lines for stock-managed products", async () => {
-    await expect(
-      placeOrder({
-        inputOverrides: {
-          items: [
-            {
-              cartKey: "line_variant_required",
-              productId: "prod_standard",
-              variantId: null,
-              quantity: 1,
-              price: 100,
-              productName: "Standard Product",
-              variantLabel: null,
-            },
-          ],
-        },
-        variants: [createVariant({ size: "M", isDefault: false })],
-      }),
-    ).rejects.toMatchObject({
-      message: "Some items in your cart need attention.",
-      details: {
-        itemIssues: [
-          expect.objectContaining({
-            cartKey: "line_variant_required",
-            code: "VARIANT_REQUIRED",
-            action: "select_variant",
-            message: "Standard Product needs an option selection before checkout.",
-          }),
-        ],
-      },
-    });
-  });
+  it.each([undefined, null, "", "default"])(
+    "rejects a non-persisted variant id (%s) before querying D1",
+    async (variantId) => {
+      const select = vi.fn();
+      const result = await validateStorefrontCartItems(
+        { select } as unknown as Database,
+        [{
+          cartKey: "line_variant_required",
+          productId: "prod_standard",
+          variantId,
+          quantity: 1,
+          price: 100,
+          productName: "Standard Product",
+          variantLabel: null,
+        }] as unknown as Parameters<typeof validateStorefrontCartItems>[1],
+      );
+
+      expect(select).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        valid: false,
+        items: [],
+        issues: [expect.objectContaining({
+          cartKey: "line_variant_required",
+          variantId: null,
+          code: "VARIANT_REQUIRED",
+          action: "select_variant",
+          message: "Standard Product needs a saved option selection before checkout.",
+        })],
+      });
+    },
+  );
 
   it("rejects products without persisted variants as unavailable until product-level inventory exists", async () => {
     await expect(
@@ -324,7 +453,7 @@ describe("createStorefrontOrder product availability verification", () => {
             {
               cartKey: "line_no_inventory",
               productId: "prod_standard",
-              variantId: null,
+              variantId: "var_missing",
               quantity: 1,
               price: 100,
               productName: "Standard Product",
@@ -339,49 +468,42 @@ describe("createStorefrontOrder product availability verification", () => {
         itemIssues: [
           expect.objectContaining({
             cartKey: "line_no_inventory",
-            code: "PRODUCT_UNAVAILABLE",
+            code: "VARIANT_UNAVAILABLE",
             action: "remove",
-            message: "Standard Product is not available for checkout right now.",
+            message: "Standard Product is no longer available.",
           }),
         ],
       },
     });
   });
 
-  it("rejects the literal legacy default variant id as a sellable simple SKU", async () => {
-    await expect(
-      placeOrder({
-        variants: [createVariant({ id: "default", isDefault: true, trackInventory: false })],
-        inputOverrides: {
-          items: [
-            {
-              cartKey: "line_legacy_default",
-              productId: "prod_standard",
-              variantId: null,
-              quantity: 1,
-              price: 125,
-              productName: "Standard Product",
-              variantLabel: null,
-            },
-          ],
-        },
-      }),
-    ).rejects.toMatchObject({
-      message: "Some items in your cart need attention.",
+  it("rejects a deleted submitted SKU even when the product still has a valid simple SKU", async () => {
+    await expect(placeOrder({
+      variants: [createVariant({ id: "var_current" })],
+      inputOverrides: {
+        items: [{
+          cartKey: "line_deleted_sku",
+          productId: "prod_standard",
+          variantId: "var_deleted",
+          quantity: 1,
+          price: 125,
+          productName: "Standard Product",
+          variantLabel: null,
+        }],
+      },
+    })).rejects.toMatchObject({
       details: {
-        itemIssues: [
-          expect.objectContaining({
-            cartKey: "line_legacy_default",
-            code: "PRODUCT_UNAVAILABLE",
-            action: "remove",
-            message: "Standard Product is not available for checkout right now.",
-          }),
-        ],
+        itemIssues: [expect.objectContaining({
+          cartKey: "line_deleted_sku",
+          variantId: "var_deleted",
+          code: "VARIANT_UNAVAILABLE",
+          action: "remove",
+        })],
       },
     });
   });
 
-  it("accepts variantless simple products by resolving their hidden default SKU", async () => {
+  it("accepts a simple product only when its persisted hidden default SKU is submitted", async () => {
     const result = await placeOrder({
       variants: [createVariant({ isDefault: true, trackInventory: false })],
       inputOverrides: {
@@ -389,7 +511,7 @@ describe("createStorefrontOrder product availability verification", () => {
           {
             cartKey: "line_simple",
             productId: "prod_standard",
-            variantId: null,
+            variantId: "var_standard",
             quantity: 1,
             price: 125,
             productName: "Standard Product",
@@ -408,6 +530,32 @@ describe("createStorefrontOrder product availability verification", () => {
     );
   });
 
+  it("accepts an explicitly submitted buyer option SKU", async () => {
+    const result = await placeOrder({
+      variants: [
+        createVariant({ id: "var_default", isDefault: true, trackInventory: false }),
+        createVariant({ id: "var_option_m", size: "M", isDefault: false }),
+      ],
+      inputOverrides: {
+        items: [{
+          cartKey: "line_option_m",
+          productId: "prod_standard",
+          variantId: "var_option_m",
+          quantity: 1,
+          price: 125,
+          productName: "Standard Product",
+          variantLabel: "M",
+        }],
+      },
+    });
+
+    expect(result.commitPayload.items[0]).toEqual(expect.objectContaining({
+      variantId: "var_option_m",
+      variantLabel: "M",
+      inventoryTracked: true,
+    }));
+  });
+
   it("rejects a sole no-option SKU when it is not the protected default SKU", async () => {
     await expect(
       placeOrder({
@@ -417,7 +565,7 @@ describe("createStorefrontOrder product availability verification", () => {
             {
               cartKey: "line_bad_no_option",
               productId: "prod_standard",
-              variantId: null,
+              variantId: "var_bad_no_option",
               quantity: 1,
               price: 125,
               productName: "Standard Product",
@@ -489,7 +637,7 @@ describe("createStorefrontOrder product availability verification", () => {
             {
               cartKey: "line_ambiguous",
               productId: "prod_standard",
-              variantId: null,
+              variantId: "var_default",
               quantity: 1,
               price: 125,
               productName: "Standard Product",
@@ -801,6 +949,7 @@ describe("createStorefrontOrder prevalidated input trust", () => {
               freeDelivery: true,
               inventoryTracked: false,
               availableQuantity: null,
+              taxClassId: null,
             },
           ],
           subtotal: 1,

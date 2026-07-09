@@ -255,6 +255,11 @@ export const orderItemSchema = z
     variantSize: z.string().nullable(),
     variantColor: z.string().nullable(),
     fulfillmentStatus: z.string(),
+    unitPriceMinor: z.number().int().nullable(),
+    lineSubtotalMinor: z.number().int().nullable(),
+    discountAmountMinor: z.number().int().nullable(),
+    taxableAmountMinor: z.number().int().nullable(),
+    taxAmountMinor: z.number().int(),
   })
 
 export const orderRefundAttemptSchema = z.object({
@@ -338,6 +343,15 @@ export const orderDetailSchema = z
     totalAmount: z.number(),
     shippingCharge: z.number(),
     discountAmount: z.number(),
+    currencyCode: z.string().nullable(),
+    currencyDecimalPlaces: z.number().int().nullable(),
+    subtotalAmountMinor: z.number().int().nullable(),
+    shippingAmountMinor: z.number().int().nullable(),
+    discountAmountMinor: z.number().int().nullable(),
+    taxAmountMinor: z.number().int(),
+    totalAmountMinor: z.number().int().nullable(),
+    taxLabel: z.string().nullable(),
+    pricesIncludeTax: z.boolean(),
     status: z.string(),
     paymentStatus: z.string().nullable(),
     paymentMethod: z.string().nullable(),

@@ -916,6 +916,11 @@ app.openapi(getItemsRoute, async (c) => {
             quantity: orderItems.quantity,
             price: orderItems.price,
             fulfillmentStatus: orderItems.fulfillmentStatus,
+            unitPriceMinor: orderItems.unitPriceMinor,
+            lineSubtotalMinor: orderItems.lineSubtotalMinor,
+            discountAmountMinor: orderItems.discountAmountMinor,
+            taxableAmountMinor: orderItems.taxableAmountMinor,
+            taxAmountMinor: orderItems.taxAmountMinor,
         })
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId))

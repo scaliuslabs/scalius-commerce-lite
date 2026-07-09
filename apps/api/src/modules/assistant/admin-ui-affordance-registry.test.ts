@@ -45,7 +45,7 @@ describe("Admin settings and UI affordance registry", () => {
       .map((fileName) => fileName.slice(0, -4))
       .sort();
 
-    expect(ADMIN_SETTINGS_PAGE_REGISTRY).toHaveLength(10);
+    expect(ADMIN_SETTINGS_PAGE_REGISTRY).toHaveLength(11);
     expect(ADMIN_SETTINGS_PAGE_REGISTRY.map((page) => page.fileStem).sort())
       .toEqual(actualFileStems);
     expect(ADMIN_SETTINGS_PAGE_REGISTRY.every((page) =>
@@ -74,6 +74,11 @@ describe("Admin settings and UI affordance registry", () => {
     expect(ADMIN_SETTINGS_PAGE_REGISTRY.find((page) => page.path === "/admin/settings/theme"))
       .toMatchObject({
         authorization: { kind: "permission", permission: "settings.general.view" },
+        implementation: "typed-command",
+      });
+    expect(ADMIN_SETTINGS_PAGE_REGISTRY.find((page) => page.path === "/admin/settings/taxes"))
+      .toMatchObject({
+        authorization: { kind: "permission", permission: "taxes.view" },
         implementation: "typed-command",
       });
   });

@@ -200,6 +200,15 @@ export const ADMIN_OPENAPI_PATH_INVENTORY = [
   ["/api/v1/admin/settings/widget-ai", ["GET", "POST"]],
   ["/api/v1/admin/shipments/{id}", ["GET", "DELETE"]],
   ["/api/v1/admin/shipments/{id}/check-status", ["POST"]],
+  ["/api/v1/admin/taxes", ["GET"]],
+  ["/api/v1/admin/taxes/classes", ["POST"]],
+  ["/api/v1/admin/taxes/classes/{id}", ["PUT", "DELETE"]],
+  ["/api/v1/admin/taxes/classifications", ["GET"]],
+  ["/api/v1/admin/taxes/classifications/{kind}/{id}", ["PUT"]],
+  ["/api/v1/admin/taxes/preview", ["POST"]],
+  ["/api/v1/admin/taxes/rates", ["POST"]],
+  ["/api/v1/admin/taxes/rates/{id}", ["PUT", "DELETE"]],
+  ["/api/v1/admin/taxes/settings", ["PUT"]],
   ["/api/v1/admin/widgets", ["GET", "POST"]],
   ["/api/v1/admin/widgets/{id}", ["GET", "PUT", "DELETE"]],
   ["/api/v1/admin/widgets/{id}/history", ["GET", "POST"]],
@@ -215,5 +224,5 @@ export const ADMIN_OPENAPI_PATH_INVENTORY = [
   ["/api/v1/admin/widgets/placement-targets", ["GET"]],
 ] as const satisfies readonly (readonly [string, readonly AdminHttpMethod[]])[];
 
-export const ADMIN_OPENAPI_PATH_COUNT = 209;
-export const ADMIN_OPENAPI_OPERATION_COUNT = 306;
+export const ADMIN_OPENAPI_PATH_COUNT = 218;
+export const ADMIN_OPENAPI_OPERATION_COUNT = 317;

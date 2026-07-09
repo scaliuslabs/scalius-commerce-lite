@@ -364,7 +364,7 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
     notes: input.notes ?? null,
     items: input.items.map((item) => ({
       productId: item.productId,
-      variantId: item.variantId ?? null,
+      variantId: item.variantId,
       quantity: item.quantity,
       price: normalizeAmount(item.price),
       productName: item.productName ?? null,
