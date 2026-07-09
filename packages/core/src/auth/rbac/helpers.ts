@@ -2,6 +2,7 @@
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
+import { getRbacSeedCacheKey } from "./auto-seed";
 import {
   user,
   permissions,
@@ -19,12 +20,13 @@ const permissionCache = new Map<
   { permissions: Set<string>; timestamp: number }
 >();
 const CACHE_TTL = 300; // 5 minutes in KV
+const PERMISSION_CACHE_VERSION = getRbacSeedCacheKey();
 
 /**
  * Get the cache key for a user's permissions
  */
 function getPermCacheKey(userId: string): string {
-  return `rbac:perms:${userId}`;
+  return `rbac:perms:${userId}:${PERMISSION_CACHE_VERSION}`;
 }
 
 /**
