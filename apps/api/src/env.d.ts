@@ -154,7 +154,8 @@ interface Env {
   BUCKET: R2Bucket;
   SHARED_AUTH_CACHE: KVNamespace;
   AI?: Ai;
-  AGENT?: Fetcher;
+  ADMIN_AGENT?: Fetcher;
+  STOREFRONT_AGENT?: Fetcher;
   WidgetDesignAgent: DurableObjectNamespace;
   EMAIL?: CloudflareSendEmailBinding;
 
@@ -170,6 +171,7 @@ interface Env {
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
   CREDENTIAL_ENCRYPTION_KEY?: string;
+  ASSISTANT_RATE_LIMIT_HMAC_KEY: string;
 
   // Note: Stripe and SSLCommerz credentials are stored in the DB settings table
   // and managed via the admin dashboard — NOT as environment variables.

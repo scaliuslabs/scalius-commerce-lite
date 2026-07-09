@@ -376,6 +376,8 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         throw new ForbiddenError("Admin access required");
     }
 
+    c.set("adminPermissions", userPerms);
+
     // 4. Fine-grained Route Permissions mapped from Astro routes configuration
     // getRoutePermission expects paths like "/api/v1/admin/categories"
     const routePermission = getRoutePermission(pathname, method);

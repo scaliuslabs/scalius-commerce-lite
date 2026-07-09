@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_WIDGET_AI_CONFIG, type WidgetAiRuntimeSettings } from "@scalius/core/modules/ai";
+import {
+  DEFAULT_WIDGET_AI_CONFIG,
+  type WidgetAiRuntimeSettings,
+} from "@scalius/core/modules/ai";
 import type { LanguageModel } from "ai";
 
-function settingsWithProvider(provider: WidgetAiRuntimeSettings["activeProvider"]): WidgetAiRuntimeSettings {
+function settingsWithProvider(
+  provider: WidgetAiRuntimeSettings["activeProvider"],
+): WidgetAiRuntimeSettings {
   return {
     ...DEFAULT_WIDGET_AI_CONFIG,
     activeProvider: provider,
@@ -112,14 +117,20 @@ describe("admin AI startup boundaries", () => {
       messages: [{ role: "user" as const, content: "Create a compact promo." }],
     } satisfies Parameters<typeof streamWidgetContent>[0];
 
-    const stream = await streamWidgetContent(options, { supportsStructuredOutput: false }, "widget");
+    const stream = await streamWidgetContent(
+      options,
+      { supportsStructuredOutput: false },
+      "widget",
+    );
     expect(aiLoaded).toBe(true);
 
     let rawText = "";
     for await (const delta of stream.textStream) rawText += delta;
 
     const result = await stream.finalize(rawText);
-    expect(result.text).toContain('<section class="promo"><h2>Deal</h2></section>');
+    expect(result.text).toContain(
+      '<section class="promo"><h2>Deal</h2></section>',
+    );
     expect(result.usage).toEqual({
       inputTokens: 1,
       outputTokens: 2,
@@ -153,7 +164,8 @@ describe("admin AI startup boundaries", () => {
       return { createWorkersAI: vi.fn() };
     });
 
-    const { getLanguageModel } = await import("./ai");
+    const { createAiLanguageModel } =
+      await import("../../modules/ai/model-runtime");
     expect(loaded).toEqual({
       openai: false,
       google: false,
@@ -162,7 +174,12 @@ describe("admin AI startup boundaries", () => {
     });
 
     await expect(
-      getLanguageModel("openai", "openai-model", settingsWithProvider("openai"), {} as Env),
+      createAiLanguageModel(
+        "openai",
+        "openai-model",
+        settingsWithProvider("openai"),
+        {} as Env,
+      ),
     ).resolves.toBe(openaiModel);
 
     expect(loaded).toEqual({

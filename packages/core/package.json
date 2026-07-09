@@ -7,6 +7,7 @@
     "./errors": "./src/errors/index.ts",
     "./modules/ai": "./src/modules/ai/index.ts",
     "./modules/analytics": "./src/modules/analytics/index.ts",
+    "./modules/assistant": "./src/modules/assistant/index.ts",
     "./modules/attributes": "./src/modules/attributes/index.ts",
     "./modules/categories": "./src/modules/categories/index.ts",
     "./modules/collections": "./src/modules/collections/index.ts",

@@ -49,8 +49,12 @@
   ],
   "services": [
     {
-      "binding": "AGENT",
-      "service": "scalius-agent"
+      "binding": "ADMIN_AGENT",
+      "service": "scalius-admin-agent"
+    },
+    {
+      "binding": "STOREFRONT_AGENT",
+      "service": "scalius-storefront-agent"
     }
   ],
   "durable_objects": {

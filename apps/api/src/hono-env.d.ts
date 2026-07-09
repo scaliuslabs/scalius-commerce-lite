@@ -22,6 +22,7 @@ declare module "hono" {
       twoFactorVerified?: boolean | null;
       [key: string]: unknown;
     };
+    adminPermissions: Set<string>;
     env: Env;
   }
 }
@@ -47,7 +48,8 @@ declare global {
     BUCKET: R2Bucket;
     SHARED_AUTH_CACHE: KVNamespace;
     AI?: Ai;
-    AGENT?: Fetcher;
+    ADMIN_AGENT?: Fetcher;
+    STOREFRONT_AGENT?: Fetcher;
     WidgetDesignAgent: DurableObjectNamespace;
     EMAIL?: CloudflareSendEmailBinding;
 
@@ -63,6 +65,7 @@ declare global {
     JWT_SECRET?: string;
     FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
     CREDENTIAL_ENCRYPTION_KEY?: string;
+    ASSISTANT_RATE_LIMIT_HMAC_KEY: string;
 
     // Variables (set in wrangler.jsonc [vars] or dashboard)
     BETTER_AUTH_URL?: string;

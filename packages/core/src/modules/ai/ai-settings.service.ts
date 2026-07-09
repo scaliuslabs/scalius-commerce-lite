@@ -555,35 +555,46 @@ export function normalizeWidgetAiConfig(
 function applyCloudflareBindingProfileDefaults(
   config: WidgetAiGenerationConfig,
   hasCloudflareBinding: boolean,
+  storedConfig: Record<string, unknown>,
 ): WidgetAiGenerationConfig {
   if (!hasCloudflareBinding) return config;
 
   const cloudflare = config.providers.cloudflare;
-  const adminChat = config.profiles.adminChat;
   const defaultModel = cloudflare.defaultModel.trim();
-  const adminChatIsUnconfiguredDefault =
-    !adminChat.enabled &&
-    adminChat.provider === "cloudflare" &&
-    !adminChat.model.trim();
-
-  if (
-    !cloudflare.enabled ||
-    !defaultModel ||
-    !adminChatIsUnconfiguredDefault
-  ) {
+  if (!cloudflare.enabled || !defaultModel) {
     return config;
   }
 
-  return {
-    ...config,
-    profiles: {
-      ...config.profiles,
-      adminChat: {
+  const storedProfiles =
+    storedConfig.profiles &&
+    typeof storedConfig.profiles === "object" &&
+    !Array.isArray(storedConfig.profiles)
+      ? (storedConfig.profiles as Record<string, unknown>)
+      : {};
+  const profiles = { ...config.profiles };
+  let changed = false;
+
+  for (const profileId of ["adminChat", "storefrontChat"] as const) {
+    const profile = profiles[profileId];
+    const isEntirelyUnconfigured = !hasOwn(storedProfiles, profileId);
+    const isCloudflareDefault =
+      !profile.enabled &&
+      profile.provider === "cloudflare" &&
+      !profile.model.trim();
+    if (isEntirelyUnconfigured && isCloudflareDefault) {
+      profiles[profileId] = {
         enabled: true,
         provider: "cloudflare",
         model: defaultModel,
-      },
-    },
+      };
+      changed = true;
+    }
+  }
+
+  if (!changed) return config;
+  return {
+    ...config,
+    profiles,
   };
 }
 
@@ -688,9 +699,11 @@ export async function getWidgetAiRuntimeSettings(
 ): Promise<WidgetAiRuntimeSettings> {
   const values = await readCategory(db);
   const hasCloudflareBinding = Boolean(env.AI);
+  const storedConfig = parseJsonObject(values[WIDGET_AI_CONFIG_KEY]);
   const config = applyCloudflareBindingProfileDefaults(
-    normalizeWidgetAiConfig(parseJsonObject(values[WIDGET_AI_CONFIG_KEY])),
+    normalizeWidgetAiConfig(storedConfig),
     hasCloudflareBinding,
+    storedConfig,
   );
   const { apiKeys, credentialErrors } = await readApiKeys(values, encryptionKey);
 

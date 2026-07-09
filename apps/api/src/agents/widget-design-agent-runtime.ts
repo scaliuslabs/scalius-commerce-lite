@@ -16,11 +16,11 @@ import {
 import { getDb } from "@scalius/database/client";
 import {
   getCreateOutputBudget,
-  getLanguageModel,
-  streamWidgetContent,
   withDestinationRuntimeContract,
   type WidgetGenerationResult,
-} from "../routes/admin/ai";
+} from "../routes/admin/ai-widget-contract";
+import { streamWidgetContent } from "../routes/admin/ai-widget-runtime";
+import { createAiLanguageModel } from "../modules/ai/model-runtime";
 import { normalizeWidgetGenerationText } from "../routes/admin/ai-response-validation";
 import { normalizeMessages } from "../routes/admin/ai-message-normalization";
 import { parseTagBasedResponse } from "@scalius/shared/tag-parser";
@@ -1100,7 +1100,7 @@ export async function streamWidgetDesignAgentRun(
           settings.providers[provider].capabilities,
         );
         host.updateRunState({ phase: "hydrating", provider, model: modelId });
-        const model = await getLanguageModel(
+        const model = await createAiLanguageModel(
           provider,
           modelId,
           settings,

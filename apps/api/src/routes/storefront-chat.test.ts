@@ -1,0 +1,943 @@
+import { OpenAPIHono } from "@hono/zod-openapi";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  DEFAULT_WIDGET_AI_CONFIG,
+  type WidgetAiRuntimeSettings,
+} from "@scalius/core/modules/ai";
+import { RateLimitError } from "@scalius/core/errors";
+import {
+  STOREFRONT_CHAT_ANONYMOUS_RATE_LIMIT_BUCKET,
+  STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER,
+} from "@scalius/shared/storefront-chat-boundary";
+import type { LanguageModel } from "ai";
+
+import { errorResponseFromError } from "../utils/api-response";
+
+const mocks = vi.hoisted(() => ({
+  getWidgetAiRuntimeSettings: vi.fn(),
+  getCredentialEncryptionKey: vi.fn(),
+  createOpenAI: vi.fn(),
+  generateText: vi.fn(),
+  consumeAssistantRateLimit: vi.fn(),
+}));
+
+vi.mock("@scalius/core/modules/ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@scalius/core/modules/ai")>();
+  return {
+    ...actual,
+    getWidgetAiRuntimeSettings: mocks.getWidgetAiRuntimeSettings,
+  };
+});
+
+vi.mock("../utils/encryption-key", () => ({
+  getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
+}));
+
+vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@scalius/core/modules/assistant")
+  >();
+  return {
+    ...actual,
+    consumeAssistantRateLimit: mocks.consumeAssistantRateLimit,
+  };
+});
+
+vi.mock("@ai-sdk/openai", () => ({
+  createOpenAI: mocks.createOpenAI,
+}));
+
+vi.mock("workers-ai-provider", () => ({
+  createWorkersAI: vi.fn(),
+}));
+
+vi.mock("ai", () => ({
+  generateText: mocks.generateText,
+  streamText: vi.fn(),
+  Output: { object: vi.fn() },
+}));
+
+import { storefrontChatRoutes } from "./storefront-chat";
+
+function runtimeSettings(
+  overrides: {
+    storefrontChatEnabled?: boolean;
+    providerEnabled?: boolean;
+    model?: string;
+  } = {},
+): WidgetAiRuntimeSettings {
+  const model = overrides.model ?? "gpt-4.1-mini";
+  return {
+    ...DEFAULT_WIDGET_AI_CONFIG,
+    activeProvider: "openai",
+    providers: {
+      ...DEFAULT_WIDGET_AI_CONFIG.providers,
+      openai: {
+        ...DEFAULT_WIDGET_AI_CONFIG.providers.openai,
+        enabled: overrides.providerEnabled ?? true,
+        defaultModel: model,
+        allowedModels: [model],
+      },
+    },
+    profiles: {
+      ...DEFAULT_WIDGET_AI_CONFIG.profiles,
+      storefrontChat: {
+        enabled: overrides.storefrontChatEnabled ?? true,
+        provider: "openai",
+        model,
+      },
+    },
+    generation: {
+      ...DEFAULT_WIDGET_AI_CONFIG.generation,
+      planningTemperature: 0.7,
+      maxOutputTokens: 2_000,
+    },
+    apiKeys: { openai: "sk-test-secret" },
+    credentialErrors: {},
+    hasCloudflareBinding: false,
+  };
+}
+
+function createTestApp(envOverrides: Partial<Env> = {}) {
+  const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
+  const db = { id: "db" };
+  const env = {
+    CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+    ASSISTANT_RATE_LIMIT_HMAC_KEY:
+      "assistant-rate-limit-test-key-0123456789abcdef",
+    STOREFRONT_URL: "https://storefront.example.test",
+    ...envOverrides,
+  } as unknown as Env;
+
+  app.onError((error, c) => {
+    const { body, status } = errorResponseFromError(error);
+    return c.json(body, status);
+  });
+  app.use("*", async (c, next) => {
+    c.set("db", db as never);
+    await next();
+  });
+  app.route("/storefront", storefrontChatRoutes);
+
+  return { app, db, env };
+}
+
+async function postChat(
+  app: OpenAPIHono<{ Bindings: Env }>,
+  env: Env,
+  body: unknown,
+  headers: Record<string, string> = {},
+  url = "http://api.internal/api/v1/storefront/chat",
+) {
+  return app.request(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    },
+    env,
+  );
+}
+
+function mcpEventResponse(body: Record<string, unknown>, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  headers.set("Content-Type", "text/event-stream");
+  return new Response(`event: message\ndata: ${JSON.stringify(body)}\n\n`, {
+    ...init,
+    headers,
+  });
+}
+
+function createAgentFetch() {
+  const calls: Array<{
+    input: string;
+    method: string | undefined;
+    headers: Headers;
+    body: Record<string, unknown>;
+  }> = [];
+
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    const body = await new Response(init?.body).json() as Record<string, unknown>;
+    calls.push({ input: String(input), method: init?.method, headers, body });
+
+    if (body.method === "initialize") {
+      return mcpEventResponse(
+        {
+          jsonrpc: "2.0",
+          id: "storefront-chat-initialize",
+          result: {
+            protocolVersion: "2025-11-25",
+            serverInfo: { name: "scalius-storefront-agent", version: "0.1.0" },
+          },
+        },
+        { headers: { "Mcp-Session-Id": "agent-session" } },
+      );
+    }
+
+    const params = body.params as { name?: string } | undefined;
+    if (params?.name === "storefront_discovery_policy") {
+      return mcpEventResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          structuredContent: {
+            storefrontDiscoveryPolicy: {
+              discovery: {
+                sitemap: { enabled: true },
+                feeds: { productCatalogEnabled: true },
+              },
+              returnPolicy: { enabled: true, country: "BD", returnWindowDays: 7 },
+              limits: {
+                readOnly: true,
+                canMutate: false,
+                includesCustomerData: false,
+                includesPaymentData: false,
+                includesCheckoutData: false,
+              },
+              checkout: "must-not-leak",
+              customerEmail: "buyer@example.test",
+            },
+          },
+          content: [{ type: "text", text: "raw discovery output must not leak" }],
+        },
+      });
+    }
+
+    if (params?.name === "catalog_search") {
+      return mcpEventResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          structuredContent: {
+            products: [
+              {
+                id: "prod_khaki",
+                title: "Khaki Shoes",
+                path: "/products/khaki-shoes",
+                url: "https://storefront.example.test/products/khaki-shoes",
+                checkoutUrl: "https://evil.example.test/checkout?token=sk_secret",
+              },
+            ],
+          },
+          content: [{ type: "text", text: "raw catalog output must not leak" }],
+        },
+      });
+    }
+
+    if (params?.name === "catalog_product") {
+      return mcpEventResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          structuredContent: {
+            product: {
+              id: "prod_rice",
+              title: "Premium Rice",
+              path: "/products/rice",
+              availability: "in_stock",
+            },
+          },
+          content: [{ type: "text", text: "raw product output must not leak" }],
+        },
+      });
+    }
+
+    if (params?.name === "cart_validate") {
+      return mcpEventResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          structuredContent: {
+            cartValidation: {
+              valid: false,
+              issueCount: 1,
+              issues: [{ code: "PRICE_CHANGED", message: "Unit price changed." }],
+            },
+          },
+          content: [{ type: "text", text: "raw cart output must not leak" }],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected storefront tool ${params?.name ?? "unknown"}`);
+  });
+
+  return { fetch, calls };
+}
+
+describe("storefront chat route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
+    mocks.getWidgetAiRuntimeSettings.mockResolvedValue(runtimeSettings());
+    mocks.consumeAssistantRateLimit.mockResolvedValue({
+      allowed: true,
+      count: 1,
+      remaining: 19,
+      resetAt: Date.now() + 60_000,
+    });
+    mocks.createOpenAI.mockImplementation(() => vi.fn(() => ({ id: "language-model" } as unknown as LanguageModel)));
+    mocks.generateText.mockResolvedValue({
+      text: "Khaki Shoes are a good match. Use /checkout?token=sk_secret or https://evil.example.test/admin to continue.",
+      totalUsage: { inputTokens: 20, outputTokens: 16, totalTokens: 36 },
+    });
+  });
+
+  it("rejects direct public API requests before settings, Agent MCP, or model work", async () => {
+    const { fetch } = createAgentFetch();
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+      ASSISTANT_RATE_LIMIT_HMAC_KEY: undefined as never,
+    });
+
+    const response = await postChat(
+      app,
+      env,
+      {
+        messages: [{ role: "user", content: "Find rice for buyer@example.test" }],
+      },
+      {
+        [STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER]: "203.0.113.99",
+      },
+      "https://api.example.test/api/v1/storefront/chat",
+    );
+
+    expect(response.status, await response.clone().text()).toBe(404);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(await response.json()).toEqual({ success: false, error: "not_found" });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.consumeAssistantRateLimit).not.toHaveBeenCalled();
+    expect(mocks.getWidgetAiRuntimeSettings).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("requires only the dedicated rate-limit HMAC secret before D1, MCP, or model work", async () => {
+    const { fetch } = createAgentFetch();
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+      ASSISTANT_RATE_LIMIT_HMAC_KEY: undefined as never,
+      JWT_SECRET: "jwt-fallback-that-must-never-be-used-0123456789",
+      CREDENTIAL_ENCRYPTION_KEY:
+        "credential-fallback-that-must-never-be-used-0123456789",
+    });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Can you help me find shoes?" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(503);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message:
+          "ASSISTANT_RATE_LIMIT_HMAC_KEY must contain at least 32 bytes.",
+      },
+    });
+    expect(mocks.consumeAssistantRateLimit).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.getWidgetAiRuntimeSettings).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("uses the D1 authority without reading or writing KV and hashes only a validated client bucket", async () => {
+    const { fetch } = createAgentFetch();
+    const kvGet = vi.fn();
+    const kvPut = vi.fn();
+    const { app, db, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+      CACHE: { get: kvGet, put: kvPut } as unknown as KVNamespace,
+    });
+
+    const response = await postChat(
+      app,
+      env,
+      { messages: [{ role: "user", content: "Can you help?" }] },
+      { [STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER]: "203.0.113.40" },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.consumeAssistantRateLimit).toHaveBeenCalledWith(db, {
+      scope: "storefront.chat",
+      bucket: "ipv4:203.0.113.40",
+      hashKey: "assistant-rate-limit-test-key-0123456789abcdef",
+      limit: 20,
+      windowSeconds: 60,
+    });
+    expect(kvGet).not.toHaveBeenCalled();
+    expect(kvPut).not.toHaveBeenCalled();
+  });
+
+  it("maps malformed or PII-shaped internal identity headers to the conservative anonymous bucket", async () => {
+    const { fetch } = createAgentFetch();
+    const { app, db, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+
+    const response = await postChat(
+      app,
+      env,
+      { messages: [{ role: "user", content: "Can you help?" }] },
+      { [STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER]: "buyer@example.test" },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.consumeAssistantRateLimit).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        bucket: STOREFRONT_CHAT_ANONYMOUS_RATE_LIMIT_BUCKET,
+      }),
+    );
+  });
+
+  it("returns the atomic limit before settings, MCP, payload, or model work", async () => {
+    mocks.consumeAssistantRateLimit.mockRejectedValueOnce(
+      new RateLimitError("Assistant request limit reached.", 60),
+    );
+    const { fetch } = createAgentFetch();
+    const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "buyer@example.test" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(429);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.getWidgetAiRuntimeSettings).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("fails closed with no-store when the storefrontChat profile is disabled", async () => {
+    mocks.getWidgetAiRuntimeSettings.mockResolvedValue(runtimeSettings({ storefrontChatEnabled: false }));
+    const { app, env } = createTestApp();
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Can you help me find shoes?" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    const body = await response.json() as { success: false; error: { message: string } };
+    expect(body.error.message).toBe('AI model profile "storefrontChat" is disabled.');
+    expect(mocks.createOpenAI).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("calls only public Agent MCP tools without cookies/auth and returns safe click-confirmed navigation", async () => {
+    const { fetch, calls } = createAgentFetch();
+    const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
+
+    const response = await postChat(
+      app,
+      env,
+      {
+        messages: [{ role: "user", content: "Can you check my cart availability and find khaki shoes?" }],
+        pageContext: {
+          version: 1,
+          contextVersion: 2,
+          source: "storefront",
+          page: { path: "/cart", title: "Cart", kind: "cart" },
+          cart: {
+            totalItems: 2,
+            lineCount: 1,
+            subtotalAmount: 200,
+            lines: [
+              {
+                lineKey: "line:v2:prod_khaki:variant:var_42",
+                productId: "prod_khaki",
+                variantId: "var_42",
+                slug: "khaki-shoes",
+                name: "Khaki Shoes",
+                quantity: 2,
+                unitPrice: 100,
+                lineTotal: 200,
+                options: [{ name: "Size", label: "42" }],
+              },
+            ],
+            hasDiscount: true,
+            truncated: false,
+          },
+          surface: {
+            kind: "cart",
+            revision: 7,
+            fingerprint: "cart_v1_deadbeef",
+            exactLineKeys: ["line:v2:prod_khaki:variant:var_42"],
+            totalItems: 2,
+            lineCount: 1,
+          },
+        },
+      },
+      {
+        Authorization: "Bearer should-not-forward",
+        Cookie: "cs_tok=customer-session; better-auth.session_token=admin-session",
+        "X-Extra-Header": "drop-me",
+      },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(fetch).toHaveBeenCalledTimes(4);
+    for (const call of calls) {
+      expect(call.input).toBe("http://storefront-agent.internal/mcp");
+      expect(call.method).toBe("POST");
+      expect(call.headers.get("cookie")).toBeNull();
+      expect(call.headers.get("authorization")).toBeNull();
+      expect(call.headers.get("x-extra-header")).toBeNull();
+    }
+    expect(calls[1]?.headers.get("mcp-session-id")).toBe("agent-session");
+    expect(calls[1]?.headers.get("mcp-protocol-version")).toBe("2025-11-25");
+    expect(calls.map((call) => call.body.method)).toEqual([
+      "initialize",
+      "tools/call",
+      "tools/call",
+      "tools/call",
+    ]);
+    expect(calls.map((call) => (call.body.params as { name?: string } | undefined)?.name).filter(Boolean)).toEqual([
+      "storefront_discovery_policy",
+      "catalog_search",
+      "cart_validate",
+    ]);
+    expect(calls[3]?.body).toMatchObject({
+      params: {
+        name: "cart_validate",
+        arguments: {
+          items: [
+            {
+              productId: "prod_khaki",
+              variantId: "var_42",
+              slug: "khaki-shoes",
+              name: "Khaki Shoes",
+              quantity: 2,
+              unitPrice: 100,
+              options: [{ name: "Size", value: "42" }],
+            },
+          ],
+        },
+      },
+    });
+
+    const options = mocks.generateText.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+      tools?: unknown;
+      maxOutputTokens?: number;
+      temperature?: number;
+    };
+    expect(options.tools).toBeUndefined();
+    expect(options.maxOutputTokens).toBe(1_200);
+    expect(options.temperature).toBe(0.3);
+    const serializedPrompt = JSON.stringify(options.messages);
+    expect(serializedPrompt).toContain("storefront catalog assistant");
+    expect(serializedPrompt).toContain("storefront_discovery_policy");
+    expect(serializedPrompt).toContain("catalog_search");
+    expect(serializedPrompt).toContain("cart_validate");
+    expect(serializedPrompt).toContain("Cart revision: 7");
+    expect(serializedPrompt).toContain("Cart fingerprint: cart_v1_deadbeef");
+    expect(serializedPrompt).toContain("line:v2:prod_khaki:variant:var_42");
+    expect(serializedPrompt).toContain("PRICE_CHANGED");
+    expect(serializedPrompt).not.toContain("raw catalog output");
+    expect(serializedPrompt).not.toContain("raw discovery output");
+    expect(serializedPrompt).not.toContain("must-not-leak");
+    expect(serializedPrompt).not.toContain("buyer@example.test");
+    expect(serializedPrompt).not.toContain("sk-test-secret");
+
+    const body = await response.json() as {
+      success: true;
+      data: {
+        profile: string;
+        provider: string;
+        model: string;
+        message: { role: string; content: string };
+        usage: { totalTokens?: number };
+        actions?: Array<{ type: string; path: string; label: string }>;
+      };
+    };
+    expect(body.data).toMatchObject({
+      profile: "storefrontChat",
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      usage: { inputTokens: 20, outputTokens: 16, totalTokens: 36 },
+      actions: [{ type: "navigate", path: "/products/khaki-shoes", label: "View product" }],
+    });
+    expect(body.data.message.content).toContain("Khaki Shoes are a good match");
+    expect(body.data.message.content).toContain("[unsupported navigation target]");
+    expect(JSON.stringify(body)).not.toContain("/checkout");
+    expect(JSON.stringify(body)).not.toContain("evil.example.test");
+    expect(JSON.stringify(body)).not.toContain("sk_secret");
+  });
+
+  it("re-sanitizes messages and cart display context before Agent MCP or model orchestration", async () => {
+    const { fetch, calls } = createAgentFetch();
+    const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
+    mocks.generateText.mockResolvedValue({
+      text: "The cart needs a safe availability review.",
+      totalUsage: {},
+    });
+
+    const response = await postChat(app, env, {
+      messages: [
+        {
+          role: "user",
+          content: "Check my cart for buyer@example.test 01711111111 chk_private_receipt",
+        },
+      ],
+      pageContext: {
+        version: 1,
+        source: "storefront",
+        page: {
+          path: "/cart",
+          route: "/cart",
+          canonicalUrl: "https://storefront.example.test/cart?token=chk_private_receipt",
+          title: "Cart for buyer@example.test",
+          kind: "cart",
+        },
+        cart: {
+          totalItems: 1,
+          lineCount: 1,
+          subtotalAmount: 100,
+          lines: [
+            {
+              productId: "prod_rice",
+              variantId: "var_pack",
+              slug: "rice",
+              name: "Rice for 01711111111",
+              quantity: 1,
+              unitPrice: 100,
+              options: [{ name: "Recipient", label: "Bearer private-session-token" }],
+            },
+          ],
+          hasDiscount: false,
+          truncated: false,
+        },
+        surface: {
+          kind: "product",
+          productId: "prod_private_surface",
+          selectedOptions: [],
+          displayedPrice: 100,
+          availability: "in_stock",
+        },
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const downstream = JSON.stringify({
+      agentCalls: calls.map((call) => call.body),
+      modelMessages: (mocks.generateText.mock.calls[0]?.[0] as {
+        messages?: unknown;
+      })?.messages,
+    });
+    expect(downstream).toContain("[redacted-email]");
+    expect(downstream).toContain("[redacted-phone]");
+    expect(downstream).toContain("[redacted-token]");
+    expect(downstream).not.toContain("buyer@example.test");
+    expect(downstream).not.toContain("01711111111");
+    expect(downstream).not.toContain("chk_private_receipt");
+    expect(downstream).not.toContain("private-session-token");
+    expect(downstream).not.toContain("prod_private_surface");
+  });
+
+  it("uses registered product surface identity for MCP lookup and model context", async () => {
+    const { fetch, calls } = createAgentFetch();
+    const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Tell me about this product" }],
+      pageContext: {
+        version: 1,
+        contextVersion: 2,
+        source: "storefront",
+        page: { path: "/products/rice", title: "Rice", kind: "product" },
+        surface: {
+          kind: "product",
+          productId: "prod_rice",
+          slug: "rice",
+          selectedVariantId: "var_2kg",
+          selectedOptions: [{ name: "Weight", label: "2KG" }],
+          displayedPrice: 850,
+          availability: "in_stock",
+        },
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const productCall = calls.find(
+      (call) =>
+        (call.body.params as { name?: string } | undefined)?.name ===
+        "catalog_product",
+    );
+    expect(productCall?.body).toMatchObject({
+      params: { name: "catalog_product", arguments: { id: "prod_rice" } },
+    });
+    const prompt = JSON.stringify(
+      (mocks.generateText.mock.calls[0]?.[0] as { messages?: unknown })?.messages,
+    );
+    expect(prompt).toContain("Product ID: prod_rice");
+    expect(prompt).toContain("Selected variant ID: var_2kg");
+    expect(prompt).toContain("Selected options: Weight: 2KG");
+    expect(prompt).toContain("Displayed price: 850");
+    expect(prompt).toContain("Buyer-safe availability: in_stock");
+  });
+
+  it("uses bounded search surface query and listing facts for MCP and model context", async () => {
+    const { fetch, calls } = createAgentFetch();
+    const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "What about these?" }],
+      pageContext: {
+        version: 1,
+        contextVersion: 2,
+        source: "storefront",
+        page: { path: "/search", title: "Search", kind: "search" },
+        surface: {
+          kind: "search",
+          query: "premium rice",
+          visibleProductIds: ["prod_rice", "prod_rice_gift"],
+          visibleFilters: [{ key: "brand", value: "Scalius" }],
+          totalResults: 2,
+          page: 1,
+          sortBy: "price-asc",
+        },
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const searchCall = calls.find(
+      (call) =>
+        (call.body.params as { name?: string } | undefined)?.name ===
+        "catalog_search",
+    );
+    expect(searchCall?.body).toMatchObject({
+      params: {
+        name: "catalog_search",
+        arguments: { query: "premium rice", limit: 5 },
+      },
+    });
+    const prompt = JSON.stringify(
+      (mocks.generateText.mock.calls[0]?.[0] as { messages?: unknown })?.messages,
+    );
+    expect(prompt).toContain("Search query: premium rice");
+    expect(prompt).toContain("Visible filters: brand=Scalius");
+    expect(prompt).toContain("Visible product IDs: prod_rice, prod_rice_gift");
+  });
+
+  it("drops PII-shaped product surface fields again at the API boundary", async () => {
+    const { fetch, calls } = createAgentFetch();
+    const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Tell me about this product" }],
+      pageContext: {
+        version: 1,
+        contextVersion: 2,
+        source: "storefront",
+        page: { path: "/products/rice", title: "Rice", kind: "product" },
+        surface: {
+          kind: "product",
+          productId: "prod_rice",
+          slug: "rice",
+          selectedVariantId: "buyer@example.test",
+          selectedOptions: [
+            { name: "Recipient", label: "01711111111" },
+            { name: "Weight", label: "2KG" },
+          ],
+          displayedPrice: 850,
+          availability: "in_stock",
+          customerEmail: "buyer@example.test",
+        },
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const downstream = JSON.stringify({
+      calls: calls.map((call) => call.body),
+      prompt: (mocks.generateText.mock.calls[0]?.[0] as { messages?: unknown })
+        ?.messages,
+    });
+    expect(downstream).toContain("Product ID: prod_rice");
+    expect(downstream).toContain("Weight: 2KG");
+    expect(downstream).not.toContain("buyer@example.test");
+    expect(downstream).not.toContain("01711111111");
+    expect(downstream).not.toContain("Recipient");
+  });
+
+  it("rejects oversized v2 surface fields before MCP or model work", async () => {
+    const { fetch } = createAgentFetch();
+    const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Tell me about this product" }],
+      pageContext: {
+        version: 1,
+        contextVersion: 2,
+        source: "storefront",
+        page: { path: "/products/rice", kind: "product" },
+        surface: {
+          kind: "product",
+          productId: `prod_${"x".repeat(130)}`,
+          selectedOptions: [],
+          displayedPrice: 850,
+          availability: "in_stock",
+        },
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("reduces sensitive-page context and conversation to a fixed generic-help marker", async () => {
+    const { fetch, calls } = createAgentFetch();
+    const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
+    mocks.generateText.mockResolvedValue({ text: "Use the visible account controls.", totalUsage: {} });
+
+    const response = await postChat(app, env, {
+      messages: [
+        {
+          role: "assistant",
+          content: "Earlier details mentioned Ayesha Rahman near Dhanmondi Lake.",
+        },
+        {
+          role: "user",
+          content: "My name is Ayesha Rahman. I live at 17 Lake View Road in Dhanmondi, Dhaka. Leave it beside the blue gate.",
+        },
+      ],
+      pageContext: {
+        version: 1,
+        source: "storefront",
+        page: {
+          path: "/account/orders/private-order-id",
+          route: "/account/orders/[id]",
+          canonicalUrl: "https://storefront.example.test/account/orders/private-order-id",
+          title: "Private account order",
+          kind: "product",
+        },
+        cart: {
+          totalItems: 1,
+          lineCount: 1,
+          subtotalAmount: 100,
+          lines: [
+            {
+              productId: "prod_private",
+              name: "Private cart item",
+              quantity: 1,
+              unitPrice: 100,
+            },
+          ],
+          hasDiscount: true,
+          truncated: false,
+        },
+        surface: {
+          kind: "product",
+          productId: "prod_private_surface",
+          selectedOptions: [],
+          displayedPrice: 100,
+          availability: "in_stock",
+        },
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const modelMessages = JSON.stringify(
+      (mocks.generateText.mock.calls[0]?.[0] as { messages?: unknown })?.messages,
+    );
+    expect(modelMessages).toContain("Page kind: account");
+    expect(modelMessages).toContain("requested general help while viewing a sensitive account page");
+    expect(modelMessages).not.toContain("Ayesha Rahman");
+    expect(modelMessages).not.toContain("17 Lake View Road");
+    expect(modelMessages).not.toContain("Dhanmondi");
+    expect(modelMessages).not.toContain("Dhaka");
+    expect(modelMessages).not.toContain("blue gate");
+    expect(modelMessages).not.toContain("private-order-id");
+    expect(modelMessages).not.toContain("Private account order");
+    expect(modelMessages).not.toContain("Private cart item");
+    expect(modelMessages).not.toContain("Cart summary:");
+    expect(modelMessages).not.toContain("prod_private_surface");
+    expect(calls.map((call) => (call.body.params as { name?: string } | undefined)?.name).filter(Boolean)).toEqual([
+      "storefront_discovery_policy",
+    ]);
+    const agentPayloads = JSON.stringify(calls.map((call) => call.body));
+    expect(agentPayloads).not.toContain("Ayesha Rahman");
+    expect(agentPayloads).not.toContain("17 Lake View Road");
+    expect(agentPayloads).not.toContain("Dhanmondi");
+    expect(agentPayloads).not.toContain("blue gate");
+  });
+
+  it("strips unsafe navigation candidates instead of returning actions", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = await new Response(init?.body).json() as Record<string, unknown>;
+      calls.push(body);
+      if (body.method === "initialize") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { protocolVersion: "2025-11-25" },
+        });
+      }
+      const params = body.params as { name?: string } | undefined;
+      if (params?.name === "storefront_discovery_policy") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { structuredContent: { storefrontDiscoveryPolicy: { limits: { readOnly: true } } } },
+        });
+      }
+      if (params?.name === "catalog_search") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            structuredContent: {
+              products: [
+                { title: "Unsafe", path: "/checkout?token=sk_live_secret" },
+                { title: "External", url: "https://evil.example.test/products/unsafe" },
+                { title: "Traversal", path: "/products/../admin" },
+                { title: "Token Path", path: "/products/sk_live_secret" },
+              ],
+            },
+          },
+        });
+      }
+      throw new Error(`Unexpected tool ${params?.name ?? "unknown"}`);
+    });
+    mocks.generateText.mockResolvedValue({
+      text: "I can help with public product browsing.",
+      totalUsage: {},
+    });
+    const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Tell me about shoes" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(calls.map((body) => (body.params as { name?: string } | undefined)?.name).filter(Boolean)).toEqual([
+      "storefront_discovery_policy",
+      "catalog_search",
+    ]);
+    const body = await response.json() as { success: true; data: { actions?: unknown } };
+    expect(body.data.actions).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("/checkout");
+    expect(JSON.stringify(body)).not.toContain("evil.example.test");
+    expect(JSON.stringify(body)).not.toContain("sk_live_secret");
+  });
+
+  it("fails closed when the Agent service binding is unavailable", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Find khaki shoes" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(503);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    const body = await response.json() as { success: false; error: { message: string } };
+    expect(body.error.message).toBe("Storefront assistant catalog tools are temporarily unavailable.");
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+});
