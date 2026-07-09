@@ -12,11 +12,16 @@ import {
   clearCheckoutTransferSession,
   writeHostedPaymentRecoverySession,
 } from "./session-state";
-import { isDepositPaymentRequired } from "./payment-mode";
+import {
+  isDepositPaymentRequired,
+  resolveCheckoutPaymentRequest,
+} from "./payment-mode";
 import type { CartValidationIssue, CartValidationRequestItem } from "../api/orders";
 import { trackStorefrontAddPaymentInfoOnce } from "../analytics";
 import { writeCartRepairState } from "../cart/repair-state";
 import { getCheckoutStatusErrorMessage } from "./error-messages";
+import { fetchAuthoritativeTaxQuote } from "./tax-quote-client";
+import type { CheckoutTaxQuote } from "./tax-quote-contract";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -30,6 +35,7 @@ let selectedMethod: string | null = null;
 let checkoutData: Record<string, unknown> | null = null;
 let checkoutConfig: CheckoutConfig | null = null;
 let gateways: Array<{ id: string; [key: string]: unknown }> = [];
+let authoritativeTaxQuote: CheckoutTaxQuote | null = null;
 let isProcessing = false;
 let selectionVersion = 0;
 
@@ -80,8 +86,16 @@ function applySelectedMethodStyles(methodId: string | null): void {
   });
 }
 
-function currencyFmt(amount: number | string): string {
-  return formatPrice(amount);
+function currencyFmt(amount: number | string, quote: CheckoutTaxQuote): string {
+  const currentCode = window.__CURRENCY_CODE__;
+  const symbol = currentCode === quote.currencyCode
+    ? window.__CURRENCY_SYMBOL__
+    : `${quote.currencyCode} `;
+  return formatPrice(amount, {
+    code: quote.currencyCode,
+    precision: quote.decimalPlaces,
+    ...(symbol ? { symbol } : {}),
+  });
 }
 
 function appendTextElement(
@@ -260,29 +274,22 @@ function readCheckoutAttemptId(data: Record<string, unknown>): string | undefine
 }
 
 function trackAddPaymentInfoForSelection(methodId: string): void {
-  if (!checkoutData) return;
+  if (!checkoutData || !authoritativeTaxQuote) return;
 
-  let items: CartValidationRequestItem[];
-  try {
-    items = checkoutCartValidationPayload(checkoutData);
-  } catch {
-    return;
-  }
-  const contents = items.map((item) => ({
+  const contents = authoritativeTaxQuote.items.map((item) => ({
     id: item.variantId,
     quantity: item.quantity,
-    item_price: item.price,
+    item_price: item.unitPrice,
   }));
   const contentIds = contents.map((item) => item.id).filter(Boolean);
-  const { total } = getCheckoutTotals(checkoutData);
 
   trackStorefrontAddPaymentInfoOnce({
     checkoutId: readCheckoutAttemptId(checkoutData),
     paymentMethod: methodId,
     content_ids: contentIds,
     contents,
-    currency: window.__CURRENCY_CODE__ || "BDT",
-    value: total,
+    currency: authoritativeTaxQuote.currencyCode,
+    value: authoritativeTaxQuote.totalAmount,
   });
 }
 
@@ -343,45 +350,46 @@ export function renderOrderSummaryDetails(
   details: HTMLElement,
   data: Record<string, unknown>,
   config: CheckoutConfig,
+  quote: CheckoutTaxQuote,
 ): void {
-  let cartItems: Record<string, { price: number; quantity: number }> = {};
-  try {
-    cartItems = JSON.parse(String(data.cartItems || "{}"));
-  } catch {
-    // ignore
-  }
-  const { items, subtotal, shipping, discount, total } = getCheckoutTotals(data, cartItems);
   details.replaceChildren();
-  appendSummaryRow(details, `${items.length} item(s)`, currencyFmt(subtotal));
-  appendSummaryRow(details, "Shipping", currencyFmt(shipping));
-  if (discount > 0) {
-    appendSummaryRow(
-      details,
-      "Discount",
-      `-${currencyFmt(discount)}`,
-      "flex justify-between text-primary",
-    );
-  }
+  appendSummaryRow(details, "Subtotal", currencyFmt(quote.subtotalAmount, quote));
+  appendSummaryRow(details, "Shipping", currencyFmt(quote.shippingAmount, quote));
+  appendSummaryRow(
+    details,
+    "Discount",
+    quote.discountAmount > 0
+      ? `-${currencyFmt(quote.discountAmount, quote)}`
+      : currencyFmt(0, quote),
+    quote.discountAmount > 0
+      ? "flex justify-between text-primary"
+      : "flex justify-between",
+  );
+  appendSummaryRow(
+    details,
+    `${quote.displayLabel}${quote.pricesIncludeTax ? " (included)" : ""}`,
+    currencyFmt(quote.taxAmount, quote),
+  );
   appendSummaryRow(
     details,
     "Total",
-    currencyFmt(total),
+    currencyFmt(quote.totalAmount, quote),
     "flex justify-between font-bold text-foreground pt-2 border-t border-border mt-2 mb-2",
   );
 
-  if (isDepositPaymentRequired(config, total)) {
+  if (isDepositPaymentRequired(config, quote.totalAmount)) {
     const advance = config.partialPaymentAmount;
-    const balance = total - advance;
+    const balance = quote.totalAmount - advance;
     appendSummaryRow(
       details,
       "Advance Payment Required",
-      currencyFmt(advance),
+      currencyFmt(advance, quote),
       "flex justify-between font-bold text-primary bg-primary/10 p-2 rounded-lg mb-1 border border-primary/20",
     );
     appendSummaryRow(
       details,
       "Balance Due on Delivery",
-      currencyFmt(balance),
+      currencyFmt(balance, quote),
       "flex justify-between text-gray-600 text-xs px-2 mb-2",
     );
   }
@@ -394,41 +402,18 @@ export function renderOrderSummaryDetails(
   );
 }
 
-function getCheckoutTotals(
-  data: Record<string, unknown>,
-  parsedCartItems?: Record<string, { price: number; quantity: number }>,
-): {
-  items: Array<{ price: number; quantity: number }>;
-  subtotal: number;
-  shipping: number;
-  discount: number;
-  total: number;
-} {
-  let cartItems = parsedCartItems;
-  if (!cartItems) {
-    try {
-      cartItems = JSON.parse(String(data.cartItems || "{}"));
-    } catch {
-      cartItems = {};
-    }
-  }
-  const resolvedCartItems = cartItems ?? {};
-  const items = Object.values(resolvedCartItems);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = parseFloat(String(data.shippingCharge || "0"));
-  const discount = parseFloat(String(data.discountAmount || "0"));
-  const total = subtotal + shipping - discount;
-
-  return { items, subtotal, shipping, discount, total };
-}
-
 function renderSummary(): void {
-  if (!checkoutData || !checkoutConfig) return;
+  if (!checkoutData || !checkoutConfig || !authoritativeTaxQuote) return;
   const section = document.getElementById("orderSummary");
   const details = document.getElementById("summaryDetails");
   if (!section || !details) return;
 
-  renderOrderSummaryDetails(details, checkoutData, checkoutConfig);
+  renderOrderSummaryDetails(
+    details,
+    checkoutData,
+    checkoutConfig,
+    authoritativeTaxQuote,
+  );
 
   section.classList.remove("hidden");
 }
@@ -436,7 +421,7 @@ function renderSummary(): void {
 // ── Render payment method cards ───────────────────────────────────────────────
 
 function renderGateways(): void {
-  if (!checkoutConfig || !checkoutData) return;
+  if (!checkoutConfig || !checkoutData || !authoritativeTaxQuote) return;
   const container = document.getElementById("paymentMethods");
   if (!container) return;
   container.innerHTML = "";
@@ -450,8 +435,10 @@ function renderGateways(): void {
     return;
   }
 
-  const { total } = getCheckoutTotals(checkoutData);
-  const depositRequired = isDepositPaymentRequired(checkoutConfig, total);
+  const depositRequired = isDepositPaymentRequired(
+    checkoutConfig,
+    authoritativeTaxQuote.totalAmount,
+  );
   const renderedMethodIds = new Set<string>();
   let renderedCount = 0;
 
@@ -571,7 +558,13 @@ export function shouldClearCheckoutSessionBeforeRedirect(result: PaymentResult):
 }
 
 async function processPayment(): Promise<void> {
-  if (!selectedMethod || isProcessing || !checkoutData || !checkoutConfig) return;
+  if (
+    !selectedMethod ||
+    isProcessing ||
+    !checkoutData ||
+    !checkoutConfig ||
+    !authoritativeTaxQuote
+  ) return;
   isProcessing = true;
   hideError();
   setPayButton("Processing...", true);
@@ -613,10 +606,13 @@ async function processPayment(): Promise<void> {
   }
 
   try {
-    // Compute totals for context
-    const { total: totalAmount } = getCheckoutTotals(checkoutData);
-    const advanceAmount = checkoutConfig.partialPaymentEnabled
-      ? Math.min(checkoutConfig.partialPaymentAmount, totalAmount)
+    const totalAmount = authoritativeTaxQuote.totalAmount;
+    const paymentRequest = resolveCheckoutPaymentRequest(
+      checkoutConfig,
+      totalAmount,
+    );
+    const advanceAmount = paymentRequest.paymentType === "deposit"
+      ? paymentRequest.depositAmount
       : totalAmount;
 
     const ctx: PaymentContext = {
@@ -675,6 +671,12 @@ async function processPayment(): Promise<void> {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 export async function initCheckoutPage(): Promise<void> {
+  selectedMethod = null;
+  checkoutData = null;
+  gateways = [];
+  authoritativeTaxQuote = null;
+  isProcessing = false;
+  selectionVersion += 1;
   checkoutConfig = (window as unknown as Record<string, CheckoutConfig>).__CHECKOUT_CONFIG__;
   if (!checkoutConfig) return;
 
@@ -683,6 +685,18 @@ export async function initCheckoutPage(): Promise<void> {
   const freshness = await validateCheckoutCartFreshness(checkoutData!);
   if (!freshness.valid) {
     redirectToCartForRepair(freshness);
+    return;
+  }
+
+  try {
+    authoritativeTaxQuote = await fetchAuthoritativeTaxQuote(checkoutData!);
+  } catch (error) {
+    showError(
+      error instanceof Error
+        ? error.message
+        : "We could not verify the current taxes and order total. Please return to your cart and try again.",
+    );
+    setPayButton("Total unavailable", true);
     return;
   }
 
