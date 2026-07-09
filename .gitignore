@@ -52,6 +52,7 @@ skills-lock.json
 !/docs/codex/
 /docs/codex/*
 !/docs/codex/MCP-AGENT-ARCHITECTURE.md
+!/docs/codex/AGENT-PLATFORM-ARCHITECTURE.md
 CLAUDE.md
 mcp.md
 independent-audit.md
