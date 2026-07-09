@@ -191,11 +191,10 @@ interface Window {
   hasCartValidationIssues?: () => boolean;
   getCartBlockedMessage?: () => string;
   updateCartQuantity?: (
-    id: string,
-    variantId: string,
+    cartKey: string,
     quantity: number,
   ) => void;
-  removeFromCart?: (id: string, variantId: string) => void;
+  removeFromCart?: (cartKey: string) => void;
   removeCartIssueItem?: (cartKey: string) => void;
   reduceCartIssueItem?: (cartKey: string) => void;
   refreshCartIssueItem?: (cartKey: string) => void;

@@ -147,14 +147,17 @@ export default function ProductShortcode({
       price: finalPrice,
       image: currentImage || PRODUCT_IMAGE_FALLBACK,
       quantity,
-      variantId: matchingVariant?.id,
+      variantId: matchingVariant.id,
       size: selectedSize,
       color: selectedColor,
       ...(options.length > 0 ? { options } : {}),
       freeDelivery: product.freeDelivery,
     };
 
-    addToCart(itemToAdd);
+    if (!addToCart(itemToAdd)) {
+      showToast("This product option could not be added. Please refresh and try again.", "error");
+      return;
+    }
     trackFbAddToCart({
       content_ids: [matchingVariant?.id || product.id],
       content_name: product.name,

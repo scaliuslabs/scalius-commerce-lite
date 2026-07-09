@@ -4,7 +4,12 @@ import { existsSync, readFileSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { cartStore, type CartStore, type Discount } from "../../store/cart";
+import {
+  cartStore,
+  createCartItemKey,
+  type CartStore,
+  type Discount,
+} from "../../store/cart";
 import type { CartValidationIssue } from "../api/orders";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "./repair-state";
 import { initCartFunctionality } from "./client";
@@ -26,19 +31,24 @@ vi.mock("@/lib/analytics", () => ({
   trackFbInitiateCheckout: vi.fn(),
 }));
 
+const CART_ITEM = {
+  id: "prod_1",
+  name: "Rice",
+  price: 100,
+  quantity: 1,
+  variantId: "var_1",
+};
+const CART_LINE_KEY = createCartItemKey(CART_ITEM);
+
 const cartState: CartStore = {
   items: {
-    "prod_1-var_1": {
-      id: "prod_1",
-      name: "Rice",
-      price: 100,
-      quantity: 1,
-      variantId: "var_1",
-    },
+    [CART_LINE_KEY]: CART_ITEM,
   },
   totalItems: 1,
   totalAmount: 100,
   discount: null,
+  revision: 0,
+  appliedOperationIds: [],
 };
 
 function createMemoryStorage(): Storage {
@@ -128,7 +138,7 @@ describe("initCartFunctionality", () => {
               items: [
                 {
                   index: 0,
-                  cartKey: "prod_1-var_1",
+                  cartKey: CART_LINE_KEY,
                   productId: "prod_1",
                   variantId: "var_1",
                   quantity: 1,
@@ -225,7 +235,7 @@ describe("initCartFunctionality", () => {
     const failedCheckoutId = "chk_session_failed_claim";
     const issue: CartValidationIssue = {
       index: 0,
-      cartKey: "prod_1-var_1",
+      cartKey: CART_LINE_KEY,
       productId: "prod_1",
       variantId: "var_1",
       code: "QUANTITY_UNAVAILABLE",
@@ -239,8 +249,8 @@ describe("initCartFunctionality", () => {
     const staleCart: CartStore = {
       ...cartState,
       items: {
-        "prod_1-var_1": {
-          ...cartState.items["prod_1-var_1"]!,
+        [CART_LINE_KEY]: {
+          ...cartState.items[CART_LINE_KEY]!,
           quantity: 3,
         },
       },
@@ -284,12 +294,12 @@ describe("initCartFunctionality", () => {
     expect(repairStateCheckoutId).not.toBe(failedCheckoutId);
     expect(checkoutIdInput.value).toBe(repairStateCheckoutId);
 
-    window.reduceCartIssueItem?.("prod_1-var_1");
+    window.reduceCartIssueItem?.(CART_LINE_KEY);
     await Promise.resolve();
 
     const resubmitCheckoutId = sessionStorage.getItem("checkoutId");
     const form = document.getElementById("checkoutForm") as HTMLFormElement;
-    expect(cartStore.get().items["prod_1-var_1"]?.quantity).toBe(1);
+    expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(1);
     expect(resubmitCheckoutId).toMatch(/^chk_session_/);
     expect(resubmitCheckoutId).not.toBe(failedCheckoutId);
     expect(resubmitCheckoutId).not.toBe(repairStateCheckoutId);

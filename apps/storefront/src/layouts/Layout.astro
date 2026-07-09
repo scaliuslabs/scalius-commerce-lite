@@ -8,7 +8,10 @@ import StorefrontAssistantPageContext from "../components/assistant/StorefrontAs
 import { Toaster } from "@/components/ui/sonner";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import type { AnalyticsConfig } from "@/lib/api";
-import type { StorefrontAssistantPageKind } from "@/lib/assistant-page-context";
+import type {
+  StorefrontAssistantPageKind,
+  StorefrontAssistantSurfaceContext,
+} from "@/lib/assistant-page-context";
 import CommandPalette from "@/components/search/CommandPalette";
 import AuthModal from "@/components/AuthModal";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
@@ -43,6 +46,7 @@ interface Props {
   ogCurrency?: string;
   noindex?: boolean;
   assistantPageKind?: StorefrontAssistantPageKind;
+  assistantSurface?: StorefrontAssistantSurfaceContext;
 }
 
 const {
@@ -58,6 +62,7 @@ const {
   ogCurrency,
   noindex,
   assistantPageKind,
+  assistantSurface,
 } = Astro.props;
 
 // Use provided layout data when pages load it in parallel; otherwise fetch here.
@@ -354,6 +359,7 @@ const runtimeGlobalsScript = [
       title={title}
       canonicalUrl={canonicalUrl}
       pageKind={assistantPageKind}
+      surface={assistantSurface}
     />
 
     {/* Global JSON-LD: Organization + WebSite — per SEO-05, SEO-06 */}

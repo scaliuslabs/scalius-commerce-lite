@@ -171,6 +171,18 @@ const analyticsProductData = products.map((p) => ({
   name: p.name,
   price: p.discountedPrice,
 }));
+const assistantSurface = {
+  kind: "search" as const,
+  query,
+  sortBy,
+  page: pagination.page,
+  totalResults: pagination.total,
+  visibleFilters: Object.entries(currentFilters).map(([key, value]) => ({
+    key,
+    value,
+  })),
+  visibleProductIds: products.map((product) => product.id),
+};
 ---
 
 <Layout
@@ -178,6 +190,8 @@ const analyticsProductData = products.map((p) => ({
   description={pageDescription}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
+  assistantPageKind="search"
+  assistantSurface={assistantSurface}
 >
   {shouldNoindexSearchPage && <meta slot="head" name="robots" content="noindex,follow" />}
   <div

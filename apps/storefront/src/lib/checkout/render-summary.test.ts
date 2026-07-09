@@ -186,9 +186,9 @@ describe("checkout cart freshness", () => {
   it("builds a cart-validation payload with cart keys and customer-facing line labels", () => {
     const items = checkoutCartValidationPayload({
       cartItems: JSON.stringify({
-        "prod_1:default": {
+        "line:v2:prod_1:variant:var_1": {
           id: "prod_1",
-          variantId: "default",
+          variantId: "var_1",
           quantity: 2,
           price: 150,
           name: "Cotton Panjabi",
@@ -200,15 +200,31 @@ describe("checkout cart freshness", () => {
 
     expect(items).toEqual([
       {
-        cartKey: "prod_1:default",
+        cartKey: "line:v2:prod_1:variant:var_1",
         productId: "prod_1",
-        variantId: null,
+        variantId: "var_1",
         quantity: 2,
         price: 150,
         productName: "Cotton Panjabi",
         variantLabel: "M / Blue",
       },
     ]);
+  });
+
+  it("fails closed before fetch when a checkout snapshot has no persisted variant", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const result = await validateCheckoutCartFreshness({
+      cartItems: JSON.stringify({
+        line_1: { id: "prod_1", variantId: "default", quantity: 1, price: 150 },
+      }),
+    });
+
+    expect(result).toEqual({
+      valid: false,
+      issues: [],
+      message: "Your cart contains an item without a saved product variant. Please return to your cart and add it again.",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns structured item issues when checkout validation fails", async () => {
@@ -351,7 +367,7 @@ describe("initCheckoutPage", () => {
         },
         line_2: {
           id: "prod_2",
-          variantId: "default",
+          variantId: "var_2",
           price: 200,
           quantity: 1,
           name: "Product Two",
@@ -382,10 +398,10 @@ describe("initCheckoutPage", () => {
     expect(analyticsMocks.trackStorefrontAddPaymentInfoOnce).toHaveBeenCalledWith({
       checkoutId: "chk_analytics_checkout_1",
       paymentMethod: "cod",
-      content_ids: ["var_1", "prod_2"],
+      content_ids: ["var_1", "var_2"],
       contents: [
         { id: "var_1", quantity: 2, item_price: 150 },
-        { id: "prod_2", quantity: 1, item_price: 200 },
+        { id: "var_2", quantity: 1, item_price: 200 },
       ],
       currency: "BDT",
       value: 535,
@@ -401,10 +417,10 @@ describe("initCheckoutPage", () => {
     expect(analyticsMocks.trackStorefrontAddPaymentInfoOnce).toHaveBeenLastCalledWith({
       checkoutId: "chk_analytics_checkout_1",
       paymentMethod: "sslcommerz",
-      content_ids: ["var_1", "prod_2"],
+      content_ids: ["var_1", "var_2"],
       contents: [
         { id: "var_1", quantity: 2, item_price: 150 },
-        { id: "prod_2", quantity: 1, item_price: 200 },
+        { id: "var_2", quantity: 1, item_price: 200 },
       ],
       currency: "BDT",
       value: 535,

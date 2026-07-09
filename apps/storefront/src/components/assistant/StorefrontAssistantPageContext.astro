@@ -3,6 +3,7 @@ import {
   STOREFRONT_ASSISTANT_PAGE_CONTEXT_EVENT,
   buildStorefrontAssistantPageContext,
   type StorefrontAssistantPageKind,
+  type StorefrontAssistantSurfaceContext,
 } from "@/lib/assistant-page-context";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
@@ -10,9 +11,15 @@ interface Props {
   title: string;
   canonicalUrl?: string | null;
   pageKind?: StorefrontAssistantPageKind | null;
+  surface?: StorefrontAssistantSurfaceContext | null;
 }
 
-const { title, canonicalUrl = null, pageKind = null } = Astro.props as Props;
+const {
+  title,
+  canonicalUrl = null,
+  pageKind = null,
+  surface = null,
+} = Astro.props as Props;
 const astroContext = Astro as unknown as {
   url: URL;
   routePattern?: string;
@@ -24,6 +31,7 @@ const seed = buildStorefrontAssistantPageContext({
   canonicalUrl,
   title,
   pageKind,
+  surface,
 });
 const seedJson = serializeJsonForInlineScript(seed);
 const inlineScript = [

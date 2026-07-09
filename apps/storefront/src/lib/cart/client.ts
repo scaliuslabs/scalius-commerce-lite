@@ -3,13 +3,12 @@ import {
   cartStore,
   hydrateCartFromStorage,
   addToCart,
-  updateQuantity,
-  removeFromCart,
   removeCartItemByKey,
   updateCartItemByKey,
   applyDiscount,
   removeDiscount,
   type CartItem,
+  type VariantCartItem,
 } from "@/store/cart";
 import type { CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
 import {
@@ -255,7 +254,7 @@ function processQuickBuy() {
 
       if (data.cartItem) {
         // 1. Add item to cart store
-        addToCart(data.cartItem);
+        if (!addToCart(data.cartItem)) return;
 
         // 2. Fire analytics events (override currency with dynamic value)
         const dynamicCurrency = window.__CURRENCY_CODE__ || "BDT";
@@ -345,11 +344,11 @@ function cartItemVariantLabel(item: CartItem): string | null {
   return parts.length > 0 ? parts.join(" / ") : null;
 }
 
-function cartValidationPayload(items: Record<string, CartItem>) {
+function cartValidationPayload(items: Record<string, VariantCartItem>) {
   return Object.entries(items).map(([cartKey, item]) => ({
     cartKey,
     productId: item.id,
-    variantId: item.variantId && item.variantId !== "default" ? item.variantId : null,
+    variantId: item.variantId,
     quantity: item.quantity,
     price: item.price,
     productName: item.name,
@@ -671,8 +670,7 @@ export async function renderCartItems() {
           fit: "cover",
         }),
       );
-      const jsId = inlineJsString(item.id || "");
-      const jsVariantId = inlineJsString(item.variantId || "");
+      const jsCartKey = inlineJsString(cartKey);
       const safeSize = item.size ? escapeHtml(item.size) : "";
       const safeColor = item.color ? escapeHtml(item.color) : "";
       const issueBlock = renderCartItemIssues(cartKey);
@@ -688,13 +686,13 @@ export async function renderCartItems() {
           <div class="flex-1 min-w-0">
             <div class="flex justify-between">
               <div class="min-w-0"><h3 class="font-medium truncate text-sm sm:text-base text-foreground">${safeName}</h3><div class="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">${variantInfo}</div></div>
-              <button class="text-muted-foreground hover:text-destructive transition-colors ml-1.5 sm:ml-2 p-0.5" onclick="window.removeFromCart(${jsId}, ${jsVariantId})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button class="text-muted-foreground hover:text-destructive transition-colors ml-1.5 sm:ml-2 p-0.5" onclick="window.removeFromCart(${jsCartKey})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="flex items-center justify-between mt-1.5 sm:mt-2">
               <div class="flex items-center gap-1.5 sm:gap-2">
-                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsId}, ${jsVariantId}, ${Math.max(0, item.quantity - 1)})">-</button>
+                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">-</button>
                 <span class="w-5 sm:w-6 text-center text-xs sm:text-sm text-foreground">${item.quantity}</span>
-                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsId}, ${jsVariantId}, ${item.quantity + 1})">+</button>
+                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
               <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${csym}${(item.price * item.quantity).toLocaleString()}</div><div class="text-xs text-muted-foreground">${csym}${item.price.toLocaleString()} each</div></div>
             </div>
@@ -864,7 +862,7 @@ export async function initCartFunctionality() {
 
   // Clear any stale discount on page load — customers must re-apply at checkout
   if (cartStore.get().discount) {
-    cartStore.setKey("discount", null);
+    removeDiscount();
   }
 
   // --- MODIFIED: Call the new quick buy processor first ---
@@ -878,15 +876,16 @@ export async function initCartFunctionality() {
   window.hasCartValidationIssues = () => hasBlockingCartIssues();
   window.getCartBlockedMessage = () => cartBlockedMessage();
 
-  window.updateCartQuantity = (id, variantId, qty) => {
+  window.updateCartQuantity = (cartKey, qty) => {
     rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
-    updateQuantity(id, variantId || undefined, qty);
+    if (qty <= 0) removeCartItemByKey(cartKey);
+    else updateCartItemByKey(cartKey, { quantity: qty });
   };
-  window.removeFromCart = (id, variantId) => {
+  window.removeFromCart = (cartKey) => {
     rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
-    removeFromCart(id, variantId || undefined);
+    removeCartItemByKey(cartKey);
   };
   window.removeCartIssueItem = (cartKey) => {
     rotateCheckoutIdIfCartBlocked();

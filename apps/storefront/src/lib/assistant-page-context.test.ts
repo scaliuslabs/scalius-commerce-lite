@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_ASSISTANT_CART_LINES,
+  MAX_ASSISTANT_VISIBLE_FILTERS,
+  MAX_ASSISTANT_VISIBLE_PRODUCT_IDS,
   buildStorefrontAssistantPageContext,
   inferStorefrontAssistantPageKind,
 } from "./assistant-page-context";
@@ -75,6 +77,7 @@ describe("buildStorefrontAssistantPageContext", () => {
     expect(snapshot.cart.truncated).toBe(true);
     expect(snapshot.cart.hasDiscount).toBe(true);
     expect(snapshot.cart.lines[0]).toEqual({
+      lineKey: "line:v2:prod_0:variant:variant_0",
       productId: "prod_0",
       variantId: "variant_0",
       slug: "product-0",
@@ -137,7 +140,7 @@ describe("buildStorefrontAssistantPageContext", () => {
     );
   });
 
-  it("normalizes legacy size/color cart options through the same safe array shape", () => {
+  it("normalizes saved size/color fallback through the same safe array shape", () => {
     const snapshot = buildStorefrontAssistantPageContext({
       path: "/cart",
       title: "Cart",
@@ -145,7 +148,8 @@ describe("buildStorefrontAssistantPageContext", () => {
         items: {
           "prod_1-legacy": {
             id: "prod_1",
-            name: "Legacy Product",
+            variantId: "var_legacy",
+            name: "Saved Product",
             price: 10,
             quantity: 1,
             size: "Bearer abc.def.ghi",
@@ -175,6 +179,7 @@ describe("buildStorefrontAssistantPageContext", () => {
         items: {
           line_1: {
             id: "prod_1",
+            variantId: "var_1",
             name: `Premium SuperComfortableTravelBackpack ${"x".repeat(120)} buyer@example.test`,
             price: 10,
             quantity: 1,
@@ -205,6 +210,120 @@ describe("buildStorefrontAssistantPageContext", () => {
     expect(serialized).not.toContain("01711111111");
     expect(serialized).not.toContain("chk_private_receipt");
     expect(serialized).not.toContain("abc.def.ghi");
+  });
+
+  it("publishes a bounded discriminated product surface with rendered selection state", () => {
+    const snapshot = buildStorefrontAssistantPageContext({
+      path: "/products/rice",
+      pageKind: "product",
+      surface: {
+        kind: "product",
+        productId: "prod_rice",
+        slug: "rice",
+        selectedVariantId: "var_2kg",
+        selectedOptions: [
+          { name: "Weight", label: "2KG" },
+          { name: "Style", label: "Gift Box" },
+        ],
+        displayedPrice: 850,
+        availability: "in_stock",
+      },
+    });
+
+    expect(snapshot).toMatchObject({
+      version: 1,
+      contextVersion: 2,
+      surface: {
+        kind: "product",
+        productId: "prod_rice",
+        selectedVariantId: "var_2kg",
+        displayedPrice: 850,
+        availability: "in_stock",
+      },
+    });
+    expect(snapshot.surface && "selectedOptions" in snapshot.surface
+      ? snapshot.surface.selectedOptions
+      : []).toEqual([
+      { name: "Weight", label: "2KG" },
+      { name: "Style", label: "Gift Box" },
+    ]);
+  });
+
+  it("bounds listing result IDs and filters while rejecting a mismatched surface kind", () => {
+    const visibleProductIds = Array.from(
+      { length: MAX_ASSISTANT_VISIBLE_PRODUCT_IDS + 10 },
+      (_, index) => `prod_${index}`,
+    );
+    const visibleFilters = Array.from(
+      { length: MAX_ASSISTANT_VISIBLE_FILTERS + 10 },
+      (_, index) => ({ key: `filter_${index}`, value: `value_${index}` }),
+    );
+    const snapshot = buildStorefrontAssistantPageContext({
+      path: "/categories/rice",
+      pageKind: "category",
+      surface: {
+        kind: "category",
+        categoryId: "cat_rice",
+        slug: "rice",
+        visibleProductIds,
+        visibleFilters,
+        totalResults: 500,
+        page: 3,
+        sortBy: "price-asc",
+      },
+    });
+
+    expect(snapshot.surface?.kind).toBe("category");
+    if (snapshot.surface?.kind !== "category") throw new Error("missing category");
+    expect(snapshot.surface.visibleProductIds).toHaveLength(
+      MAX_ASSISTANT_VISIBLE_PRODUCT_IDS,
+    );
+    expect(snapshot.surface.visibleFilters).toHaveLength(
+      MAX_ASSISTANT_VISIBLE_FILTERS,
+    );
+
+    const mismatched = buildStorefrontAssistantPageContext({
+      path: "/search",
+      pageKind: "search",
+      surface: snapshot.surface,
+    });
+    expect(mismatched.surface).toBeNull();
+  });
+
+  it("derives cart surface revision, fingerprint, and exact line keys from the live snapshot", () => {
+    const snapshot = buildStorefrontAssistantPageContext({
+      path: "/cart",
+      pageKind: "cart",
+      cart: {
+        items: {
+          "line:v2:prod_1:variant:var_1": {
+            id: "prod_1",
+            variantId: "var_1",
+            name: "Rice",
+            price: 100,
+            quantity: 2,
+          },
+        },
+        totalItems: 2,
+        totalAmount: 200,
+        discount: null,
+        revision: 12,
+        appliedOperationIds: [],
+      },
+    });
+
+    expect(snapshot.cart).toMatchObject({
+      revision: 12,
+      fingerprint: expect.stringMatching(/^cart_v1_[a-f0-9]{8}$/),
+    });
+    expect(snapshot.surface).toEqual({
+      kind: "cart",
+      revision: 12,
+      fingerprint: snapshot.cart.fingerprint,
+      exactLineKeys: ["line:v2:prod_1:variant:var_1"],
+      totalItems: 2,
+      lineCount: 1,
+    });
   });
 });
 

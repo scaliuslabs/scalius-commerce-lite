@@ -225,6 +225,19 @@ const analyticsProductData = products.map((p) => ({
   name: p.name,
   price: p.discountedPrice,
 }));
+const assistantSurface = {
+  kind: "category" as const,
+  categoryId: category.id,
+  slug: category.slug,
+  sortBy,
+  page: pagination.page,
+  totalResults: pagination.total,
+  visibleFilters: Object.entries(currentFilters).map(([key, value]) => ({
+    key,
+    value,
+  })),
+  visibleProductIds: products.map((product) => product.id),
+};
 
 // --- SEO: per SEO-03, SEO-04, OG-02 ---
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
@@ -309,6 +322,8 @@ const collectionJsonLd =
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
   noindex={category?.noIndex === true}
+  assistantPageKind="category"
+  assistantSurface={assistantSurface}
 >
   <Fragment slot="head">
     {

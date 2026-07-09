@@ -177,9 +177,9 @@ export const GET: APIRoute = async ({ params, url }) => {
     }
 
     const validation = await validateCartItems([{
-      cartKey: `quick_buy:${product.id}:${itemToAdd?.id ?? "base"}`,
+      cartKey: `quick_buy:${product.id}:${itemToAdd.id}`,
       productId: product.id,
-      variantId: itemToAdd?.id ?? null,
+      variantId: itemToAdd.id,
       quantity,
       price: finalPrice,
       productName: product.name,
@@ -197,6 +197,10 @@ export const GET: APIRoute = async ({ params, url }) => {
       return productRedirect(slug, "validation_unavailable");
     }
     finalPrice = validatedItem.unitPrice;
+    const persistedVariantId = validatedItem.variantId;
+    if (!persistedVariantId || persistedVariantId === "default") {
+      return productRedirect(slug, "variant_not_found");
+    }
 
     const primaryImageUrl =
       images.find((img) => img.isPrimary && hasProductImage(img.url))?.url ||
@@ -218,7 +222,7 @@ export const GET: APIRoute = async ({ params, url }) => {
       price: finalPrice,
       image: cartImageUrl,
       quantity,
-      variantId: validatedItem.variantId ?? itemToAdd?.id,
+      variantId: persistedVariantId,
       size: itemToAdd?.size || undefined,
       color: itemToAdd?.color || undefined,
       ...(options.length > 0 ? { options } : {}),

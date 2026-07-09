@@ -39,7 +39,7 @@ interface ValidatedCartItem {
   price: number;
   quantity: number;
   image?: string;
-  variantId?: string;
+  variantId: string;
   size?: string;
   color?: string;
   freeDelivery?: boolean;
@@ -68,6 +68,13 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
     }
     if (typeof item.name !== "string" || item.name.length === 0) {
       throw new Error(`Cart item at index ${idx} has an invalid or missing name.`);
+    }
+    if (
+      typeof item.variantId !== "string" ||
+      item.variantId.trim() === "" ||
+      item.variantId.trim() === "default"
+    ) {
+      throw new Error(`Cart item "${item.name}" has an invalid or missing saved variant.`);
     }
 
     // Required numeric fields
@@ -102,7 +109,7 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
       price: item.price as number,
       quantity: item.quantity as number,
       image: optionalStr("image"),
-      variantId: optionalStr("variantId"),
+      variantId: item.variantId.trim(),
       size: optionalStr("size"),
       color: optionalStr("color"),
       freeDelivery: typeof item.freeDelivery === "boolean" ? item.freeDelivery : undefined,
@@ -198,7 +205,7 @@ export async function processOrder(
       cartItemsArray.map((item) => ({
         cartKey: item.cartKey,
         productId: item.id,
-        variantId: item.variantId && item.variantId !== "default" ? item.variantId : null,
+        variantId: item.variantId,
         quantity: item.quantity,
         price: item.price,
         productName: item.name,
@@ -248,7 +255,7 @@ export async function processOrder(
       name: item.productName,
       price: item.unitPrice,
       quantity: item.quantity,
-      ...(item.variantId ? { variantId: item.variantId } : {}),
+      variantId: item.variantId,
       freeDelivery: item.freeDelivery,
     }));
 

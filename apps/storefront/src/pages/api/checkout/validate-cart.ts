@@ -13,15 +13,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function normalizeItem(value: unknown): CartValidationRequestItem | null {
   if (!isRecord(value)) return null;
   if (typeof value.productId !== "string" || value.productId.trim() === "") return null;
+  if (
+    typeof value.variantId !== "string" ||
+    value.variantId.trim() === "" ||
+    value.variantId.trim() === "default"
+  ) return null;
   if (typeof value.quantity !== "number" || !Number.isInteger(value.quantity)) return null;
   if (typeof value.price !== "number" || !Number.isFinite(value.price)) return null;
 
   return {
     cartKey: typeof value.cartKey === "string" ? value.cartKey : null,
     productId: value.productId,
-    variantId: typeof value.variantId === "string" && value.variantId !== "default"
-      ? value.variantId
-      : null,
+    variantId: value.variantId.trim(),
     quantity: value.quantity,
     price: value.price,
     productName: typeof value.productName === "string" ? value.productName : null,
@@ -59,17 +62,20 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const payload = await request.json().catch(() => null);
     const rawItems = isRecord(payload) && Array.isArray(payload.items) ? payload.items : [];
-    const items = rawItems.map(normalizeItem).filter((item): item is CartValidationRequestItem => item !== null);
+    const normalizedItems = rawItems.map(normalizeItem);
 
-    if (items.length === 0) {
+    if (normalizedItems.length === 0 || normalizedItems.some((item) => item === null)) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Your cart is empty. Please add items before checkout.",
+          error: normalizedItems.length === 0
+            ? "Your cart is empty. Please add items before checkout."
+            : "Every cart item must include a saved product variant.",
         }),
         { status: 400, headers: { "Content-Type": "application/json" } },
       );
     }
+    const items = normalizedItems as CartValidationRequestItem[];
 
     const result = await validateCartItems(items, normalizeOptions(payload));
     if (!result.success) {

@@ -4,7 +4,10 @@ import {
   STOREFRONT_ASSISTANT_PAGE_CONTEXT_EVENT,
   STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL,
   buildStorefrontAssistantPageContext,
+  inferStorefrontAssistantPageKind,
+  normalizeStorefrontAssistantSurfaceContext,
   type StorefrontAssistantPageContextSnapshot,
+  type StorefrontAssistantSurfaceContext,
 } from "./assistant-page-context";
 
 export const STOREFRONT_ASSISTANT_BRIDGE_GLOBAL =
@@ -28,6 +31,19 @@ declare global {
 
 let installed = false;
 let publishQueued = false;
+let pageSeed: StorefrontAssistantPageContextSnapshot | null = null;
+let registeredSurface:
+  | {
+      token: symbol;
+      path: string;
+      surface: StorefrontAssistantSurfaceContext;
+    }
+  | null = null;
+
+export type StorefrontAssistantSurfaceRegistration = {
+  update: (surface: StorefrontAssistantSurfaceContext) => boolean;
+  unregister: () => void;
+};
 
 const MAX_ASSISTANT_NAVIGATION_TARGET_LENGTH = 2048;
 const MAX_ASSISTANT_NAVIGATION_QUERY_LENGTH = 512;
@@ -96,16 +112,26 @@ function readCanonicalFromDocument(): string | null {
   return canonical?.href || canonical?.getAttribute("href") || null;
 }
 
-function readMatchingSeed():
-  | StorefrontAssistantPageContextSnapshot["page"]
-  | null {
-  const seed = window.__SCALIUS_STOREFRONT_PAGE_CONTEXT__?.page;
-  if (!seed) return null;
+function readMatchingSeed(): StorefrontAssistantPageContextSnapshot | null {
+  const candidate = window.__SCALIUS_STOREFRONT_PAGE_CONTEXT__;
+  if (candidate && !Object.isFrozen(candidate)) pageSeed = candidate;
+  const seed = pageSeed?.page;
+  if (!seed || !pageSeed) return null;
 
   const current = buildStorefrontAssistantPageContext({
     path: window.location.pathname,
   });
-  return seed.path === current.page.path ? seed : null;
+  return seed.path === current.page.path ? pageSeed : null;
+}
+
+function readRegisteredSurface(): StorefrontAssistantSurfaceContext | null {
+  if (!registeredSurface) return null;
+  const currentPath = buildStorefrontAssistantPageContext({
+    path: window.location.pathname,
+  }).page.path;
+  return registeredSurface.path === currentPath
+    ? registeredSurface.surface
+    : null;
 }
 
 function readBrowserSnapshot(): StorefrontAssistantPageContextSnapshot {
@@ -113,11 +139,12 @@ function readBrowserSnapshot(): StorefrontAssistantPageContextSnapshot {
 
   return buildStorefrontAssistantPageContext({
     path: window.location.pathname,
-    route: seed?.route,
-    canonicalUrl: readCanonicalFromDocument() ?? seed?.canonicalUrl,
-    title: document.title || seed?.title,
-    pageKind: seed?.kind,
+    route: seed?.page.route,
+    canonicalUrl: readCanonicalFromDocument() ?? seed?.page.canonicalUrl,
+    title: document.title || seed?.page.title,
+    pageKind: seed?.page.kind,
     cart: cartStore.get(),
+    surface: readRegisteredSurface() ?? seed?.surface,
   });
 }
 
@@ -129,9 +156,71 @@ function freezeSnapshot(
     Object.freeze(line);
   });
   Object.freeze(snapshot.page);
+  if (snapshot.surface) {
+    if ("selectedOptions" in snapshot.surface) {
+      snapshot.surface.selectedOptions.forEach(Object.freeze);
+      Object.freeze(snapshot.surface.selectedOptions);
+    }
+    if ("visibleProductIds" in snapshot.surface) {
+      snapshot.surface.visibleFilters.forEach(Object.freeze);
+      Object.freeze(snapshot.surface.visibleFilters);
+      Object.freeze(snapshot.surface.visibleProductIds);
+    }
+    if ("exactLineKeys" in snapshot.surface) {
+      Object.freeze(snapshot.surface.exactLineKeys);
+    }
+    Object.freeze(snapshot.surface);
+  }
   Object.freeze(snapshot.cart.lines);
   Object.freeze(snapshot.cart);
   return Object.freeze(snapshot);
+}
+
+/**
+ * Registers buyer-visible state owned by the rendering/controller layer. The
+ * bridge never scrapes DOM controls to infer this state.
+ */
+export function registerStorefrontAssistantSurface(
+  initialSurface: StorefrontAssistantSurfaceContext,
+): StorefrontAssistantSurfaceRegistration | null {
+  if (typeof window === "undefined") return null;
+
+  const path = buildStorefrontAssistantPageContext({
+    path: window.location.pathname,
+  }).page.path;
+  const expectedKind = inferStorefrontAssistantPageKind(path);
+  const token = Symbol("storefront-assistant-surface");
+  let active = true;
+  const normalizedInitial = normalizeStorefrontAssistantSurfaceContext(
+    initialSurface,
+    expectedKind,
+  );
+  if (!normalizedInitial) return null;
+  registeredSurface = { token, path, surface: normalizedInitial };
+  schedulePublish();
+
+  const update = (surface: StorefrontAssistantSurfaceContext): boolean => {
+    if (!active) return false;
+    if (registeredSurface && registeredSurface.token !== token) return false;
+    const normalized = normalizeStorefrontAssistantSurfaceContext(
+      surface,
+      expectedKind,
+    );
+    if (!normalized) return false;
+    registeredSurface = { token, path, surface: normalized };
+    schedulePublish();
+    return true;
+  };
+
+  return Object.freeze({
+    update,
+    unregister: () => {
+      active = false;
+      if (registeredSurface?.token !== token) return;
+      registeredSurface = null;
+      schedulePublish();
+    },
+  });
 }
 
 export function publishStorefrontAssistantPageContext(
