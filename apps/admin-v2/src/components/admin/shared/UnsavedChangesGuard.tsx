@@ -8,7 +8,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "../../ui/alert-dialog";
+import { dispatchAdminNavigationCancelled } from "./admin-navigation-events";
 
 interface UnsavedChangesGuardProps {
   isDirty: boolean;
@@ -37,6 +38,11 @@ export function UnsavedChangesGuard({
     enableBeforeUnload: isDirty && !isSubmitting,
   });
 
+  function keepEditing() {
+    reset?.();
+    dispatchAdminNavigationCancelled();
+  }
+
   return (
     <AlertDialog
       open={status === "blocked"}
@@ -53,7 +59,7 @@ export function UnsavedChangesGuard({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={reset}>Keep Editing</AlertDialogCancel>
+          <AlertDialogCancel onClick={keepEditing}>Keep Editing</AlertDialogCancel>
           <AlertDialogAction
             onClick={proceed}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
