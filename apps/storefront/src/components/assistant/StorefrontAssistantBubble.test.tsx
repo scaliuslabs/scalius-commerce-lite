@@ -12,6 +12,26 @@ import {
   type Mock,
 } from "vitest";
 
+const transcriptMocks = vi.hoisted(() => ({
+  appendMessage: vi.fn(),
+  retry: vi.fn(),
+  getConversationId: vi.fn(() =>
+    Promise.resolve("conv_abcdefghijklmnopqrstuv")
+  ),
+}));
+
+vi.mock("./useStorefrontAssistantTranscript", () => ({
+  useStorefrontAssistantTranscript: () => ({
+    state: {
+      kind: "connected",
+      message: "This tab's private transcript is connected.",
+    },
+    appendMessage: transcriptMocks.appendMessage,
+    retry: transcriptMocks.retry,
+    getConversationId: transcriptMocks.getConversationId,
+  }),
+}));
+
 import StorefrontAssistantBubble from "./StorefrontAssistantBubble";
 import {
   STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL,
@@ -74,6 +94,25 @@ describe("StorefrontAssistantBubble", () => {
     navigate = vi.fn<(target: unknown) => boolean>(() => true);
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
+    transcriptMocks.appendMessage.mockReset();
+    transcriptMocks.appendMessage.mockImplementation(async (input: {
+      content: string;
+      contextMarker: string;
+    }) => ({
+      eventId: "event_user_1",
+      sequence: 1,
+      type: "message.appended",
+      occurredAt: 1,
+      message: {
+        id: "durable_user_1",
+        role: "user",
+        content: input.content,
+        contextMarker: input.contextMarker,
+        createdAt: 1,
+      },
+    }));
+    transcriptMocks.retry.mockReset();
+    transcriptMocks.getConversationId.mockClear();
 
     currentContext = buildStorefrontAssistantPageContext({
       path: "/products/rice?receiptToken=chk_private_receipt",
@@ -126,7 +165,7 @@ describe("StorefrontAssistantBubble", () => {
     vi.unstubAllGlobals();
   });
 
-  it("posts bounded sanitized context to the same-origin proxy without credentials", async () => {
+  it("posts bounded sanitized context to the per-tab same-origin proxy without exposing credentials", async () => {
     const hiddenInput = document.createElement("input");
     hiddenInput.value = "HiddenCustomerSecret";
     document.body.append(hiddenInput);
@@ -148,11 +187,14 @@ describe("StorefrontAssistantBubble", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/assistant/chat");
+    expect(url).toBe(
+      "/api/assistant/conversations/conv_abcdefghijklmnopqrstuv/chat",
+    );
     expect(init).toMatchObject({
       method: "POST",
       cache: "no-store",
-      credentials: "omit",
+      credentials: "same-origin",
+      mode: "same-origin",
     });
     const headers = new Headers(init.headers);
     expect(headers.get("content-type")).toBe("application/json");
@@ -160,12 +202,14 @@ describe("StorefrontAssistantBubble", () => {
     expect(headers.has("authorization")).toBe(false);
 
     const body = JSON.parse(String(init.body)) as {
+      clientRequestId: string;
       message: string;
       history: unknown[];
       pageContext: StorefrontAssistantPageContextSnapshot;
     };
     const serialized = JSON.stringify(body);
     expect(body.message).toBe("Do you have rice?");
+    expect(body.clientRequestId).toMatch(/^chat_[A-Za-z0-9_-]{22}$/);
     expect(body.history).toEqual([]);
     expect(body.pageContext.page.path).toBe("/products/rice");
     expect(body.pageContext.cart.lines[0]?.name).toBe(
@@ -338,6 +382,95 @@ describe("StorefrontAssistantBubble", () => {
     expect(navigate).not.toHaveBeenCalled();
     await click(queryButton("View Premium Rice"));
     expect(navigate).toHaveBeenCalledWith("/products/rice");
+  });
+
+  it("persists ordered plain text around one-shot chat and marks sensitive pages", async () => {
+    currentContext = buildStorefrontAssistantPageContext({
+      path: "/payment-recovery",
+      route: "/payment-recovery",
+      canonicalUrl: "https://shop.example.test/payment-recovery",
+      title: "Payment recovery",
+      pageKind: "page",
+    });
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "ok",
+          message: {
+            id: "live_assistant_message",
+            parts: [
+              { type: "text", text: "Use the secure recovery form." },
+              {
+                type: "navigation",
+                path: "/products/rice",
+                label: "Browse rice",
+                requiresConfirmation: true,
+              },
+            ],
+          },
+          transcriptPersisted: true,
+          transcriptEvent: {
+            eventId: "event_assistant_2",
+            sequence: 2,
+            type: "message.appended",
+            occurredAt: 2,
+            message: {
+              id: "durable_assistant_2",
+              role: "assistant",
+              content: "Sensitive page conversation was intentionally omitted.",
+              contextMarker: "storefront:sensitive",
+              createdAt: 2,
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await typeAssistantMessage("Help with my payment");
+    await click(queryButton("Send storefront assistant message"));
+    await flushReact();
+
+    expect(transcriptMocks.appendMessage).toHaveBeenCalledTimes(1);
+    expect(transcriptMocks.appendMessage).toHaveBeenNthCalledWith(1, {
+      clientMessageId: expect.stringMatching(/^message_[A-Za-z0-9_-]{22}$/),
+      role: "user",
+      content: "Help with my payment",
+      contextMarker: "storefront:sensitive",
+    });
+    expect(
+      transcriptMocks.appendMessage.mock.invocationCallOrder[0],
+    ).toBeLessThan(fetchMock.mock.invocationCallOrder[0]!);
+    expect(document.body.textContent).toContain("Use the secure recovery form.");
+    expect(queryButton("Browse rice")).toBeTruthy();
+    expect(document.querySelector(
+      '[data-assistant-transcript-state="connected"]',
+    )).toBeTruthy();
+  });
+
+  it("never persists an assistant-only turn when the user transcript append fails", async () => {
+    transcriptMocks.appendMessage.mockResolvedValueOnce(null);
+    fetchMock.mockResolvedValue(Response.json({
+      status: "ok",
+      message: { role: "assistant", content: "Live-only answer." },
+    }));
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await typeAssistantMessage("Continue after expiry");
+    await click(queryButton("Send storefront assistant message"));
+    await flushReact();
+
+    expect(transcriptMocks.appendMessage).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/assistant/chat");
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      credentials: "omit",
+    });
+    expect(document.body.textContent).toContain("Live-only answer.");
+    expect(document.body.textContent).toContain("This reply is live-only");
   });
 
   function renderBubble() {

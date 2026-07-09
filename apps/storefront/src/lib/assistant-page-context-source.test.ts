@@ -79,8 +79,13 @@ describe("storefront assistant page-context source boundaries", () => {
     expect(bubbleSource).toContain("STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL");
     expect(bubbleSource).toContain("__SCALIUS_STOREFRONT_ASSISTANT__");
     expect(chatSource).toContain('CHAT_ENDPOINT = "/api/assistant/chat"');
-    expect(chatSource).toContain("fetch(CHAT_ENDPOINT");
-    expect(chatSource).toContain('credentials: "omit"');
+    expect(chatSource).toContain(
+      "/api/assistant/conversations/${input.conversationId}/chat",
+    );
+    expect(chatSource).toContain(
+      'request(conversationEndpoint, "same-origin")',
+    );
+    expect(chatSource).toContain('request(CHAT_ENDPOINT, "omit")');
     expect(bubbleSource).toContain("navigate?.(target)");
     expect(bubbleSource).toContain(
       "resolveStorefrontAssistantNavigationTarget",

@@ -88,6 +88,7 @@ import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 import { adminTaxRoutes } from "./routes/admin/taxes";
 import { adminAssistantAuthorityRoutes } from "./routes/internal/admin-assistant";
+import { storefrontAssistantAuthorityRoutes } from "./routes/internal/storefront-assistant";
 
 // Create typed OpenAPIHono app with Cloudflare Workers Env bindings
 // basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
@@ -230,6 +231,10 @@ app.route("/storefront", storefrontChatRoutes);
 // Exact service-binding-only Admin assistant authority. The sub-router rejects
 // public hosts before cookie auth, request parsing, or authority work.
 app.route("/internal/admin-assistant", adminAssistantAuthorityRoutes);
+// Exact service-binding-only anonymous Storefront session authority. The
+// Storefront facade supplies the bounded client identity and per-tab
+// conversation key; public API hosts fail closed inside the sub-router.
+app.route("/internal/storefront-assistant", storefrontAssistantAuthorityRoutes);
 app.route("/checkout", checkoutRoutes);
 app.use("/customer-auth/*", cookieOriginGuardMiddleware);
 app.route("/customer-auth", customerAuthRoutes);

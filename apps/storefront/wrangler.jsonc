@@ -40,6 +40,10 @@
 		{
 			"binding": "BACKEND_API",
 			"service": "scalius-api"
+		},
+		{
+			"binding": "STOREFRONT_AGENT",
+			"service": "scalius-storefront-agent"
 		}
 	],
 	"vars": {

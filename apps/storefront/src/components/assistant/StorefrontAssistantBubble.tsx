@@ -45,6 +45,15 @@ import {
   sendStorefrontAssistantMessage,
   type StorefrontAssistantUiMessage,
 } from "./storefront-assistant-chat";
+import { createStorefrontConversationRequestId } from
+  "./storefront-assistant-conversation";
+import {
+  mergeStorefrontConversationEvents,
+  reconcileStorefrontPersistedMessage,
+  storefrontConversationContextMarker,
+} from "./storefront-assistant-transcript";
+import { useStorefrontAssistantTranscript } from
+  "./useStorefrontAssistantTranscript";
 import { useAssistantGeometry } from "./useAssistantGeometry";
 import "./storefront-assistant.css";
 
@@ -175,6 +184,19 @@ export default function StorefrontAssistantBubble() {
   const wasOpenRef = useRef(false);
   const requestAbortRef = useRef<AbortController | null>(null);
 
+  const mergeTranscriptEvents = useCallback(
+    (events: Parameters<typeof mergeStorefrontConversationEvents>[1]) => {
+      setMessages((current) =>
+        mergeStorefrontConversationEvents(current, events)
+      );
+    },
+    [],
+  );
+  const transcript = useStorefrontAssistantTranscript({
+    open: isOpen,
+    onEvents: mergeTranscriptEvents,
+  });
+
   const refreshContext = useCallback(() => {
     const nextContext = readPublishedContext();
     setContext(nextContext);
@@ -285,6 +307,7 @@ export default function StorefrontAssistantBubble() {
     if (!message || sending || typeof window === "undefined") return;
 
     const currentContext = refreshContext();
+    const contextMarker = storefrontConversationContextMarker(currentContext);
     const userMessage = createTextMessage("user", message);
     const history = messages
       .slice(-MAX_HISTORY_MESSAGES)
@@ -305,19 +328,53 @@ export default function StorefrontAssistantBubble() {
     requestAbortRef.current = controller;
 
     try {
+      const persistedUser = await transcript.appendMessage({
+        clientMessageId: createStorefrontConversationRequestId(),
+        role: "user",
+        content: message,
+        contextMarker,
+      });
+      if (persistedUser) {
+        setMessages((current) =>
+          reconcileStorefrontPersistedMessage(
+            current,
+            persistedUser,
+            userMessage.id,
+          )
+        );
+      }
+
       const result = await sendStorefrontAssistantMessage({
         message,
         pageContext: currentContext,
         history,
         origin: window.location.origin,
+        ...(persistedUser
+          ? { conversationId: await transcript.getConversationId() }
+          : {}),
         signal: controller.signal,
       });
       if (result.status === "ok") {
         setMessages((current) => [...current, result.message]);
-        setStatus({
-          kind: "idle",
-          message: "Ready for public catalog questions.",
-        });
+        if (result.transcriptEvent) {
+          setMessages((current) =>
+            reconcileStorefrontPersistedMessage(
+              current,
+              result.transcriptEvent!,
+              result.message.id,
+            )
+          );
+        }
+        setStatus(result.transcriptPersisted
+          ? {
+              kind: "idle",
+              message: "Ready for public catalog questions.",
+            }
+          : {
+              kind: "success",
+              message:
+                "Answer ready. This reply is live-only because the private transcript was unavailable.",
+            });
       } else {
         setStatus({ kind: result.status, message: result.message });
       }
@@ -547,6 +604,22 @@ export default function StorefrontAssistantBubble() {
           </header>
 
           <StorefrontAssistantContext context={context} />
+
+          <div
+            data-assistant-transcript-state={transcript.state.kind}
+            className="flex min-h-8 items-center justify-between gap-3 border-b border-border bg-muted/20 px-4 py-1.5 text-[11px] text-muted-foreground"
+          >
+            <span>{transcript.state.message}</span>
+            {transcript.state.kind === "disconnected" ? (
+              <button
+                type="button"
+                className="shrink-0 font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={transcript.retry}
+              >
+                Retry transcript
+              </button>
+            ) : null}
+          </div>
 
           <div
             role="log"
