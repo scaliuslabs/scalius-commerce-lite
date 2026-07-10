@@ -57,6 +57,19 @@ describe("admin shell access", () => {
     ).toBe(true);
   });
 
+  it("keeps the Taxes page aligned to the dedicated read permission", () => {
+    const context = {
+      isSuperAdmin: false,
+      hasAdminAccess: true,
+      permissions: new Set([PERMISSIONS.TAXES_VIEW]),
+    };
+    expect(canAccessAdminPath("/admin/settings/taxes", context)).toBe(true);
+    expect(canAccessAdminPath("/admin/settings/taxes", {
+      ...context,
+      permissions: new Set([PERMISSIONS.SETTINGS_GENERAL_VIEW]),
+    })).toBe(false);
+  });
+
   it("redirects /admin to the first allowed section when dashboard is unavailable", () => {
     const productViewer = {
       isSuperAdmin: false,
@@ -106,6 +119,7 @@ describe("admin shell access", () => {
       "/admin/widgets/widget-123",
       "/admin/settings/account",
       "/admin/settings/cache",
+      "/admin/settings/taxes",
       "/admin/experimental",
     ];
 

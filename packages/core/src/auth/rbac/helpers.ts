@@ -12,6 +12,7 @@ import {
   userPermissions,
 } from "@scalius/database/schema";
 import type { PermissionName, UserPermissionContext, PermissionCheckResult } from "./types";
+import { getAllPermissionNames } from "./permissions";
 
 // Simple in-memory cache for user permissions
 // In production, consider using Redis or a more robust caching solution
@@ -76,8 +77,16 @@ export async function clearPermissionCacheForRole(
 export async function getUserPermissions(
   db: Database,
   userId: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  knownIsSuperAdmin = false,
 ): Promise<Set<string>> {
+  // Route middleware already loaded this flag from authoritative D1 session
+  // state. Do not let a lagging seeded permission row or cached role snapshot
+  // make the API disagree with the Admin shell about super-admin authority.
+  if (knownIsSuperAdmin) {
+    return new Set(getAllPermissionNames());
+  }
+
   // KV is the cross-isolate source of truth. If a mutation deletes the KV
   // entry, this isolate must not keep serving its stale local memory value.
   if (kv) {
@@ -123,8 +132,7 @@ export async function getUserPermissions(
 
   // Super admin has all permissions
   if (userData.isSuperAdmin) {
-    const allPerms = await db.select({ name: permissions.name }).from(permissions);
-    const permSet = new Set(allPerms.map((p) => p.name));
+    const permSet = new Set(getAllPermissionNames());
 
     permissionCache.set(userId, { permissions: permSet, timestamp: Date.now() });
     if (kv) {
