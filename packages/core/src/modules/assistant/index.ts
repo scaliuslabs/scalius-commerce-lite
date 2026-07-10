@@ -14,8 +14,10 @@ export {
   listAssistantEvents,
 } from "./assistant-events";
 export {
+  bindAssistantAgentInstance,
   createAssistantSession,
   createAssistantWorkflow,
+  resolveAssistantSessionByAgentInstance,
   resumeAssistantSession,
   revokeAssistantSession,
 } from "./assistant-sessions";

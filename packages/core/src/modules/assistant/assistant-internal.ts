@@ -270,6 +270,15 @@ export async function selectSessionByConversationKey(
     .get();
 }
 
+export async function selectSessionByAgentInstanceId(
+  db: Database,
+  agentInstanceId: string,
+): Promise<SessionRow | undefined> {
+  return db.select().from(assistantSessions)
+    .where(eq(assistantSessions.agentInstanceId, agentInstanceId))
+    .get();
+}
+
 export async function selectSessionByCredentialHash(
   db: Database,
   credentialHash: string,
