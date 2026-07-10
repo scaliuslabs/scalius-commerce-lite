@@ -198,7 +198,7 @@ describe("Admin same-origin Flue agent facade", () => {
       init?: RequestInit,
     ) => {
       expect(String(input)).toBe(
-        `${PRIVATE_PATH}?view=updates&offset=0007_0008&live=long-poll&cursor=123`,
+        `${PRIVATE_PATH}?view=updates&offset=opaque-v2%3A0007_0008&live=long-poll&cursor=cursor-v2%3Aabc`,
       );
       expect(new Headers(init?.headers).get("accept")).toBe("application/json");
       return new Response('[{"type":"message-completed"}]', {
@@ -212,7 +212,7 @@ describe("Admin same-origin Flue agent facade", () => {
 
     const response = await proxyAdminFlueAgentFacade(
       browserRequest(
-        `${PUBLIC_PATH}?cursor=123&live=long-poll&offset=0007_0008&view=updates`,
+        `${PUBLIC_PATH}?cursor=cursor-v2%3Aabc&live=long-poll&offset=opaque-v2%3A0007_0008&view=updates`,
       ),
       dependencies(agentFetch),
     );
@@ -284,11 +284,10 @@ describe("Admin same-origin Flue agent facade", () => {
   it.each([
     `${PUBLIC_PATH}`,
     `${PUBLIC_PATH}?view=updates`,
-    `${PUBLIC_PATH}?view=updates&offset=-2`,
     `${PUBLIC_PATH}?view=updates&offset=1_2&tail=10`,
     `${PUBLIC_PATH}?view=updates&offset=1_2&offset=3_4`,
     `${PUBLIC_PATH}?view=updates&offset=1_2&live=forever`,
-    `${PUBLIC_PATH}?view=updates&offset=1_2&cursor=opaque`,
+    `${PUBLIC_PATH}?view=updates&offset=1_2&cursor=has%20space`,
     `${PUBLIC_PATH}?view=history&offset=-1`,
     `${PUBLIC_PATH}?view=history&view=history`,
     `${PUBLIC_PATH}?view=unknown`,

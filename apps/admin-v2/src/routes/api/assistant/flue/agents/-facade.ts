@@ -21,8 +21,6 @@ const PUBLIC_AGENT_PATH_PATTERN =
   /^\/api\/assistant\/flue\/agents\/admin-copilot\/(conv_[A-Za-z0-9_-]{22,64})(\/abort)?$/u;
 const INSTANCE_ID_PATTERN = /^v1\.[A-Za-z0-9_-]{43}$/u;
 const IDENTITY_PATTERN = /^(?:tenant|principal)_[A-Za-z0-9_-]{43}$/u;
-const OFFSET_PATTERN = /^(?:-1|[0-9]{1,20}_[0-9]{1,20})$/u;
-const CURSOR_PATTERN = /^[0-9]{1,20}$/u;
 const SUBMISSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
 const FORWARDED_RESPONSE_HEADERS = [
@@ -276,7 +274,7 @@ function parseReadEndpoint(threadId: string, url: URL): AgentEndpoint | null {
   const cursorValues = url.searchParams.getAll("cursor");
   if (
     offsets.length !== 1 ||
-    !OFFSET_PATTERN.test(offsets[0] ?? "") ||
+    !isOpaqueStreamToken(offsets[0] ?? "") ||
     liveValues.length > 1 ||
     cursorValues.length > 1
   ) {
@@ -285,7 +283,7 @@ function parseReadEndpoint(threadId: string, url: URL): AgentEndpoint | null {
   const live = liveValues[0];
   if (live !== undefined && live !== "long-poll" && live !== "sse") return null;
   const cursor = cursorValues[0];
-  if (cursor !== undefined && !CURSOR_PATTERN.test(cursor)) return null;
+  if (cursor !== undefined && !isOpaqueStreamToken(cursor)) return null;
 
   const normalized = new URLSearchParams({
     view: "updates",
@@ -408,7 +406,7 @@ function parseSendAdmission(value: unknown): AgentSendAdmission | null {
     typeof value.streamUrl !== "string" ||
     value.streamUrl.length > 2_048 ||
     typeof value.offset !== "string" ||
-    !OFFSET_PATTERN.test(value.offset) ||
+    !isOpaqueStreamToken(value.offset) ||
     typeof value.submissionId !== "string" ||
     !SUBMISSION_ID_PATTERN.test(value.submissionId)
   ) {
@@ -638,4 +636,22 @@ function jsonError(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Durable Streams offsets/cursors are opaque. Bound transport characters and
+ * length, but never parse or reconstruct their internal format. */
+function isOpaqueStreamToken(value: string): boolean {
+  if (value.length === 0 || value.length > 256) return false;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (
+      codePoint < 0x21 ||
+      codePoint > 0x7e ||
+      character === "\\" ||
+      character === "&" ||
+      character === "#" ||
+      character === "?"
+    ) return false;
+  }
+  return true;
 }
