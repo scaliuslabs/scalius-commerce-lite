@@ -2,7 +2,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createAdminAssistantComputerRuntime } from "./runtime";
+import {
+  createAdminAssistantComputerRuntime,
+  isAllowedAdminComputerRoute,
+} from "./runtime";
 
 describe("Admin assistant computer runtime", () => {
   beforeEach(() => {
@@ -99,6 +102,33 @@ describe("Admin assistant computer runtime", () => {
       program: "refresh",
     })).resolves.toMatchObject({ ok: true, code: "REFRESHED" });
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    "/admin/products/new",
+    "/admin/categories/new",
+    "/admin/collections/new",
+    "/admin/orders/new",
+    "/admin/customers/new",
+    "/admin/discounts/new",
+  ])("keeps the browser route catalog aligned for create tasks: %s", async (route) => {
+    const navigate = vi.fn();
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: "admin-thread-create",
+      tabId: "admin-tab-create",
+      navigate,
+    });
+
+    await expect(runtime.execute({
+      binding: runtime.binding,
+      program: `goto "${route}"`,
+      authorizedNavigationRoutes: [route],
+    })).resolves.toMatchObject({ ok: true, code: "NAVIGATED" });
+    expect(navigate).toHaveBeenCalledWith(route);
+  });
+
+  it("fails closed for malformed encoded paths instead of throwing", () => {
+    expect(isAllowedAdminComputerRoute("/admin/products/%E0%A4%A")).toBe(false);
   });
 
   it("fails closed when the bound tab is not active", async () => {
