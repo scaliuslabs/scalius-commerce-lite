@@ -1,0 +1,34 @@
+diff --git a/dist/conversation-stream-store-Bitz7UoW.mjs b/dist/conversation-stream-store-Bitz7UoW.mjs
+index 94032552cc83d3596ae6e53bd46ec6c9c9749b01..7c2f9bb15763e95bcfaff64e958ccceb4b6cd4f2 100644
+--- a/dist/conversation-stream-store-Bitz7UoW.mjs
++++ b/dist/conversation-stream-store-Bitz7UoW.mjs
+@@ -1841,8 +1841,9 @@ var Session = class {
+ 		const skillNames = Object.keys(this.config.skills);
+ 		const activateSkillTool = skillNames.length > 0 ? createActivateSkillTool(skillNames, (name) => this.activateSkillForTool(name)) : void 0;
+ 		const packagedRead = Object.values(packagedSkills).some((skill) => Object.keys(skill.files).some((path) => path !== "SKILL.md")) ? createPackagedSkillReadTool(packagedSkills) : void 0;
+-		const frameworkTools = (taskTool) => [
+-			taskTool,
++		const taskTool = Object.keys(this.config.subagents ?? {}).length > 0 ? createTaskTool(runTask, this.config.subagents ?? {}) : void 0;
++		const frameworkTools = [
++			...taskTool ? [taskTool] : [],
+ 			...activateSkillTool ? [activateSkillTool] : [],
+ 			...packagedRead ? [packagedRead] : []
+ 		];
+@@ -1863,7 +1864,7 @@ var Session = class {
+ 				tools: adapterTools
+ 			}, {
+ 				source: "framework",
+-				tools: frameworkTools(createTaskTool(runTask, this.config.subagents ?? {}))
++				tools: frameworkTools
+ 			}];
+ 		}
+ 		return [{
+@@ -1874,7 +1875,7 @@ var Session = class {
+ 			})
+ 		}, {
+ 			source: "framework",
+-			tools: frameworkTools(createTaskTool(runTask, this.config.subagents ?? {}))
++			tools: frameworkTools
+ 		}];
+ 	}
+ 	async withCallOverrides(options, fn) {
