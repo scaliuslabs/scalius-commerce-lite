@@ -1,10 +1,13 @@
 import {
   Bot,
+  Check,
   GripHorizontal,
+  History,
   Minimize2,
   PanelLeft,
   PanelRight,
   PanelsTopLeft,
+  Plus,
 } from "lucide-react";
 import type {
   KeyboardEvent,
@@ -15,6 +18,13 @@ import { cn } from "@scalius/shared/utils";
 
 import { Button } from "../../ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "../../ui/dropdown-menu";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -22,12 +32,17 @@ import {
 import type { AdminAssistantMode } from "./assistant-layout";
 
 interface AdminAssistantPanelHeaderProps {
+  canStartNewConversation: boolean;
+  conversationHistoryIds: string[];
   contextLabel: string;
   mode: AdminAssistantMode;
+  threadId: string;
+  onConversationChange: (threadId: string) => void;
   onModeChange: (mode: AdminAssistantMode) => void;
   onMinimize: () => void;
   onMoveKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
   onMovePointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onNewConversation: () => void;
 }
 
 const MODE_CONTROLS = [
@@ -37,12 +52,17 @@ const MODE_CONTROLS = [
 ] as const;
 
 export function AdminAssistantPanelHeader({
+  canStartNewConversation,
+  conversationHistoryIds,
   contextLabel,
   mode,
+  threadId,
+  onConversationChange,
   onModeChange,
   onMinimize,
   onMoveKeyDown,
   onMovePointerDown,
+  onNewConversation,
 }: AdminAssistantPanelHeaderProps) {
   return (
     <header className="relative border-b border-border/80 bg-background/95 px-3 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
@@ -68,6 +88,67 @@ export function AdminAssistantPanelHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-0.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Open assistant conversation history"
+                disabled={conversationHistoryIds.length < 2}
+              >
+                <History className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Durable conversations</DropdownMenuLabel>
+              {[...conversationHistoryIds]
+                .reverse()
+                .slice(0, 8)
+                .map((conversationId, index) => {
+                  const current = conversationId === threadId;
+                  return (
+                    <DropdownMenuItem
+                      key={conversationId}
+                      disabled={current || !canStartNewConversation}
+                      onSelect={() => onConversationChange(conversationId)}
+                    >
+                      {current ? (
+                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      ) : (
+                        <History
+                          className="h-3.5 w-3.5"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">
+                        {current
+                          ? "Current conversation"
+                          : `Earlier conversation ${index}`}
+                      </span>
+                      <span className="font-mono text-[9px] text-muted-foreground">
+                        …{conversationId.slice(-6)}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1 px-2 text-[11px]"
+            aria-label="New assistant conversation"
+            disabled={!canStartNewConversation}
+            onClick={onNewConversation}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            New
+          </Button>
+
           {mode === "floating" ? (
             <Tooltip>
               <TooltipTrigger asChild>

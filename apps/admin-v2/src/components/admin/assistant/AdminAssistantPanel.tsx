@@ -1,6 +1,5 @@
 import { Grip } from "lucide-react";
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -12,26 +11,10 @@ import {
 } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
-import {
-  assistantMessagePartSchema,
-  type AssistantMessagePart,
-} from "@scalius/shared/assistant-contracts";
 import { cn } from "@scalius/shared/utils";
 
 import {
-  createAdminConversationRequestId,
-  type AdminConversationEvent,
-  type AdminConversationContextMarker,
-} from "../../../lib/admin-assistant-conversation";
-import {
-  sendAdminAssistantMessage,
-  type AdminAssistantChatAction,
-  type AdminAssistantChatResult,
-} from "../../../lib/api-functions/ai";
-import {
-  getAdminAssistantConversationContextMarker,
-  mergeAdminAssistantConversationEvents,
-  reconcileAdminAssistantPersistedMessage,
+  getOrCreateAdminAssistantTabId,
 } from "./admin-assistant-transcript";
 import {
   clampAdminAssistantPosition,
@@ -40,25 +23,14 @@ import {
   type AdminAssistantPosition,
   type AdminAssistantSize,
 } from "./assistant-layout";
-import { getAdminAssistantPageActionStatus } from "./assistant-action-status";
-import {
-  getDirectlyConfirmedAdminNavigationAction,
-  getAdminAssistantActionExecutionKey,
-  safeAdminAssistantNavigationPath,
-  safeAdminAssistantPanelActions,
-} from "./assistant-navigation";
-import type {
-  AdminAssistantActionExecutionState,
-  AdminAssistantMessage,
-  AdminAssistantStatus,
-} from "./assistant-panel-types";
+import type { AdminAssistantStatus } from "./assistant-panel-types";
 import { AdminAssistantComposer } from "./AdminAssistantComposer";
 import { AdminAssistantConversation } from "./AdminAssistantConversation";
 import { AdminAssistantPanelHeader } from "./AdminAssistantPanelHeader";
 import { AdminAssistantStatusBanner } from "./AdminAssistantStatusBanner";
 import { AdminAssistantTranscriptStatus } from "./AdminAssistantTranscriptStatus";
-import { executeAdminAssistantPageActionWithResult } from "./page-actions";
-import { ADMIN_NAVIGATION_CANCELLED_EVENT } from "../shared/admin-navigation-events";
+import { AdminFlueComputerCoordinator } from "./computer/flue-bridge";
+import { createAdminAssistantComputerRuntime } from "./computer/runtime";
 import { useAdminAssistantPageState } from "./useAdminAssistantPageState";
 import { useAdminAssistantTranscript } from "./useAdminAssistantTranscript";
 import { usePointerGesture } from "./usePointerGesture";
@@ -74,10 +46,9 @@ interface AdminAssistantPanelProps {
   onSizeChange: (size: AdminAssistantSize) => void;
 }
 
-const MAX_HISTORY_MESSAGES = 6;
-const MAX_CLAIMED_ACTION_KEYS = 200;
 const KEYBOARD_GEOMETRY_STEP = 12;
 const ADMIN_ASSISTANT_MOBILE_BREAKPOINT = 768;
+const MAX_QUEUED_COMPUTER_TOOL_CALLS = 256;
 
 export function AdminAssistantPanel({
   mode,
@@ -92,32 +63,38 @@ export function AdminAssistantPanel({
   const navigate = useNavigate();
   const pageState = useAdminAssistantPageState();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const claimedActionKeysRef = useRef(new Set<string>());
-  const navigationAttemptRef = useRef(0);
-  const pendingNavigationAttemptRef = useRef<number | null>(null);
+  const openRef = useRef(open);
+  const queuedComputerToolCallsRef = useRef(new Set<string>());
+  const computerQueueRef = useRef(Promise.resolve());
   const startPointerGesture = usePointerGesture();
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<AdminAssistantMessage[]>([]);
   const [status, setStatus] = useState<AdminAssistantStatus>({
     kind: "idle",
     message: "Ready on the current admin page.",
   });
-  const [sending, setSending] = useState(false);
-  const [actionExecutionStates, setActionExecutionStates] = useState<
-    Record<string, AdminAssistantActionExecutionState>
-  >({});
-  const mergeTranscriptEvents = useCallback(
-    (events: readonly AdminConversationEvent[]) => {
-      setMessages((current) =>
-        mergeAdminAssistantConversationEvents(current, events),
-      );
-    },
-    [],
+  const transcript = useAdminAssistantTranscript();
+  openRef.current = open;
+
+  const tabId = useMemo(getOrCreateAdminAssistantTabId, []);
+  const computerRuntime = useMemo(() => {
+    if (!transcript.threadId) return null;
+    return createAdminAssistantComputerRuntime({
+      threadId: transcript.threadId,
+      tabId,
+      navigate: async (route) => {
+        await navigate({ to: route as string });
+      },
+      isActive: () =>
+        openRef.current && document.visibilityState !== "hidden",
+    });
+  }, [navigate, tabId, transcript.threadId]);
+  const computerCoordinator = useMemo(
+    () =>
+      computerRuntime
+        ? new AdminFlueComputerCoordinator({ runtime: computerRuntime })
+        : null,
+    [computerRuntime],
   );
-  const transcript = useAdminAssistantTranscript({
-    open,
-    onEvents: mergeTranscriptEvents,
-  });
 
   const contextLabel = useMemo(() => {
     if (!pageState) return "Current admin page";
@@ -131,245 +108,102 @@ export function AdminAssistantPanel({
   }, [open]);
 
   useEffect(() => {
-    function handleNavigationCancelled() {
-      if (pendingNavigationAttemptRef.current === null) return;
-      pendingNavigationAttemptRef.current = null;
-      setStatus({
-        kind: "idle",
-        message: "Ready on the current admin page.",
-      });
-    }
+    queuedComputerToolCallsRef.current.clear();
+    computerQueueRef.current = Promise.resolve();
+  }, [transcript.threadId]);
 
-    window.addEventListener(
-      ADMIN_NAVIGATION_CANCELLED_EVENT,
-      handleNavigationCancelled,
-    );
-    return () => {
-      window.removeEventListener(
-        ADMIN_NAVIGATION_CANCELLED_EVENT,
-        handleNavigationCancelled,
-      );
-    };
-  }, []);
+  useEffect(() => {
+    if (!open || !computerCoordinator || !transcript.threadId) return;
+
+    for (const message of transcript.messages) {
+      for (const part of message.parts) {
+        if (
+          part.type !== "dynamic-tool" ||
+          part.toolName !== "computer" ||
+          part.state !== "output-available" ||
+          queuedComputerToolCallsRef.current.has(part.toolCallId)
+        ) {
+          continue;
+        }
+        claimBoundedToolCall(
+          queuedComputerToolCallsRef.current,
+          part.toolCallId,
+        );
+        computerQueueRef.current = computerQueueRef.current
+          .catch(() => undefined)
+          .then(async () => {
+            const outcome = await computerCoordinator.consume({
+              threadId: transcript.threadId,
+              tabId,
+              part,
+            });
+            if (outcome.status === "rejected") {
+              setStatus({
+                kind: "error",
+                message:
+                  "A page command was rejected safely. Nothing was run for that command.",
+              });
+            } else if (outcome.status === "continuation_failed") {
+              setStatus({
+                kind: "error",
+                message:
+                  "The page command finished, but its result could not return to the assistant. Ask it to observe before trying again.",
+              });
+            }
+          });
+      }
+    }
+  }, [
+    computerCoordinator,
+    open,
+    tabId,
+    transcript.messages,
+    transcript.threadId,
+  ]);
 
   if (!open) return null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = draft.trim();
-    if (!message || sending) return;
+    if (!message || transcript.sending) return;
 
-    const contextMarker = getAdminAssistantConversationContextMarker(pageState);
-    const userClientMessageId = createAdminConversationRequestId("message");
-    const userMessage: AdminAssistantMessage = {
-      id: userClientMessageId,
-      role: "user",
-      content: message,
-    };
-    const history = messages.slice(-MAX_HISTORY_MESSAGES).map((entry) => ({
-      role: entry.role,
-      content: entry.content,
-    }));
-
-    setMessages((current) => [...current, userMessage]);
     setDraft("");
-    setSending(true);
-    setStatus({ kind: "idle", message: "Reviewing the current admin page." });
-
-    try {
-      const persistedUserEvent = await transcript.appendMessage({
-        clientMessageId: userClientMessageId,
-        role: "user",
-        content: message,
-        contextMarker,
-      });
-      if (persistedUserEvent) {
-        setMessages((current) =>
-          reconcileAdminAssistantPersistedMessage(
-            current,
-            persistedUserEvent,
-            userClientMessageId,
-          ),
-        );
-      }
-
-      const result = (await sendAdminAssistantMessage({
-        data: { message, pageContext: pageState, history },
-      })) as AdminAssistantChatResult;
-      await applyAssistantResult(
-        result,
-        contextMarker,
-        persistedUserEvent !== null,
-        message,
-      );
-    } catch {
+    transcript.clearOperationError();
+    setStatus({ kind: "idle", message: "Ready on the current admin page." });
+    const admitted = await transcript.sendMessage(message);
+    if (!admitted && !transcript.operationError) {
       setStatus({
         kind: "error",
-        message: "Assistant request failed. Nothing was changed.",
+        message: "Assistant request was not admitted. Nothing was changed.",
       });
-    } finally {
-      setSending(false);
     }
   }
 
-  async function applyAssistantResult(
-    result: AdminAssistantChatResult,
-    contextMarker: AdminConversationContextMarker,
-    persistTranscript: boolean,
-    userMessage: string,
-  ) {
-    if (result.status === "ok") {
-      const assistantClientMessageId =
-        createAdminConversationRequestId("message");
-      let assistantMessageIdForActions = assistantClientMessageId;
-      const safeActions = safeAdminAssistantPanelActions(result.actions);
-      const confirmedNavigation = getDirectlyConfirmedAdminNavigationAction(
-        userMessage,
-        safeActions,
-      );
-      const assistantContent = confirmedNavigation
-        ? `Opening ${navigationDestinationLabel(confirmedNavigation.label)}…`
-        : result.message.content;
-      setMessages((current) => [
-        ...current,
-        {
-          id: assistantClientMessageId,
-          role: "assistant",
-          content: assistantContent,
-          parts: confirmedNavigation ? undefined : readAssistantParts(result),
-          actions: safeActions,
-        },
-      ]);
-      setStatus({ kind: "idle", message: "Ready on the current admin page." });
-
-      if (persistTranscript) {
-        const persistedAssistantEvent = await transcript.appendMessage({
-          clientMessageId: assistantClientMessageId,
-          role: "assistant",
-          content: assistantContent,
-          contextMarker,
-        });
-        if (persistedAssistantEvent) {
-          assistantMessageIdForActions = persistedAssistantEvent.message.id;
-          setMessages((current) =>
-            reconcileAdminAssistantPersistedMessage(
-              current,
-              persistedAssistantEvent,
-              assistantClientMessageId,
-            ),
-          );
-        }
-      }
-
-      if (confirmedNavigation) {
-        const executionKey = getAdminAssistantActionExecutionKey(
-          assistantMessageIdForActions,
-          confirmedNavigation,
-        );
-        if (claimActionKey(claimedActionKeysRef.current, executionKey)) {
-          setActionExecutionStates((current) => ({
-            ...current,
-            [executionKey]: "running",
-          }));
-          try {
-            const navigated = navigateFromAssistant(confirmedNavigation.path);
-            if (navigated) {
-              setStatus({
-                kind: "success",
-                message: `Opening ${navigationDestinationLabel(confirmedNavigation.label)}. Complete any unsaved-changes prompt to continue.`,
-              });
-            }
-          } finally {
-            setActionExecutionStates((current) => ({
-              ...current,
-              [executionKey]: "consumed",
-            }));
-          }
-        }
-      }
-      return;
+  async function handleAbort() {
+    const stopped = await transcript.abort();
+    if (stopped) {
+      setStatus({
+        kind: "success",
+        message: "Stop requested. The durable thread will show the final state.",
+      });
     }
+  }
 
+  function handleNewConversation() {
+    const nextThreadId = transcript.startNewConversation();
+    if (!nextThreadId) return;
     setStatus({
-      kind: result.status === "disabled" ? "disabled" : "error",
-      message: result.message,
+      kind: "idle",
+      message: "New durable assistant conversation ready.",
     });
+    window.setTimeout(() => textareaRef.current?.focus(), 0);
   }
 
-  function navigateFromAssistant(pathValue: string): boolean {
-    const path = safeAdminAssistantNavigationPath(pathValue);
-    if (!path) {
-      setStatus({
-        kind: "error",
-        message: "That navigation action is no longer available.",
-      });
-      return false;
-    }
-
-    const navigationAttempt = navigationAttemptRef.current + 1;
-    navigationAttemptRef.current = navigationAttempt;
-    pendingNavigationAttemptRef.current = navigationAttempt;
-
-    try {
-      const navigation = navigate({ to: path as string });
-      void Promise.resolve(navigation).then(
-        () => {
-          if (pendingNavigationAttemptRef.current !== navigationAttempt) return;
-          pendingNavigationAttemptRef.current = null;
-          setStatus({
-            kind: "idle",
-            message: "Ready on the current admin page.",
-          });
-        },
-        () => {
-          if (pendingNavigationAttemptRef.current !== navigationAttempt) return;
-          pendingNavigationAttemptRef.current = null;
-          setStatus({
-            kind: "error",
-            message:
-              "Navigation did not complete. Your current page was preserved.",
-          });
-        },
-      );
-      return true;
-    } catch {
-      if (pendingNavigationAttemptRef.current === navigationAttempt) {
-        pendingNavigationAttemptRef.current = null;
-      }
-      setStatus({
-        kind: "error",
-        message: "Navigation did not start. Your current page was preserved.",
-      });
-      return false;
-    }
-  }
-
-  async function handleAssistantAction(
-    action: AdminAssistantChatAction,
-    executionKey: string,
-  ) {
-    if (!claimActionKey(claimedActionKeysRef.current, executionKey)) return;
-    setActionExecutionStates((current) => ({
-      ...current,
-      [executionKey]: "running",
-    }));
-
-    try {
-      if (action.type === "navigate") {
-        navigateFromAssistant(action.path);
-        return;
-      }
-
-      const result = await executeAdminAssistantPageActionWithResult(action, {
-        executionKey,
-      });
-      setStatus(getAdminAssistantPageActionStatus(action, result));
-    } finally {
-      setActionExecutionStates((current) => ({
-        ...current,
-        [executionKey]: "consumed",
-      }));
-    }
+  function handleConversationChange(threadId: string) {
+    if (!transcript.switchConversation(threadId)) return;
+    setStatus({ kind: "idle", message: "Durable conversation restored." });
+    window.setTimeout(() => textareaRef.current?.focus(), 0);
   }
 
   function handleMovePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -425,6 +259,17 @@ export function AdminAssistantPanel({
   }
 
   const panelStyle = getPanelStyle(mode, position, size);
+  const visibleStatus: AdminAssistantStatus = transcript.operationError
+    ? { kind: "error", message: transcript.operationError }
+    : transcript.settlementNotice
+      ? {
+          kind:
+            transcript.settlementNotice.kind === "failed"
+              ? "error"
+              : "disabled",
+          message: transcript.settlementNotice.message,
+        }
+      : status;
 
   const panel = (
     <aside
@@ -448,12 +293,17 @@ export function AdminAssistantPanel({
       }}
     >
       <AdminAssistantPanelHeader
+        canStartNewConversation={transcript.canStartNewConversation}
+        conversationHistoryIds={transcript.conversationHistoryIds}
         contextLabel={contextLabel}
         mode={mode}
+        threadId={transcript.threadId}
+        onConversationChange={handleConversationChange}
         onModeChange={onModeChange}
         onMinimize={() => onOpenChange(false)}
         onMoveKeyDown={handleMoveKeyDown}
         onMovePointerDown={handleMovePointerDown}
+        onNewConversation={handleNewConversation}
       />
       <AdminAssistantTranscriptStatus
         state={transcript.state}
@@ -461,25 +311,23 @@ export function AdminAssistantPanel({
       />
 
       <AdminAssistantConversation
-        actionExecutionStates={actionExecutionStates}
-        messages={messages}
-        sending={sending}
-        onAction={(action, executionKey) => {
-          void handleAssistantAction(action, executionKey);
-        }}
-        onNavigate={(path) => {
-          navigateFromAssistant(path);
-        }}
+        messages={transcript.messages}
+        sending={transcript.sending}
         onSuggestion={(suggestion) => {
           setDraft(suggestion);
           window.setTimeout(() => textareaRef.current?.focus(), 0);
         }}
       />
-      <AdminAssistantStatusBanner status={status} />
+      <AdminAssistantStatusBanner status={visibleStatus} />
       <AdminAssistantComposer
+        aborting={transcript.aborting}
+        canAbort={transcript.canAbort}
         draft={draft}
-        sending={sending}
+        sending={transcript.sending}
         textareaRef={textareaRef}
+        onAbort={() => {
+          void handleAbort();
+        }}
         onDraftChange={setDraft}
         onSubmit={handleSubmit}
       />
@@ -515,40 +363,13 @@ export function AdminAssistantPanel({
   return panel;
 }
 
-function navigationDestinationLabel(actionLabel: string): string {
-  return actionLabel.replace(/^Open\s+/i, "").trim() || "dashboard page";
-}
-
-function readAssistantParts(
-  result: AdminAssistantChatResult,
-): AssistantMessagePart[] | undefined {
-  const rawMessage = (
-    result as unknown as {
-      message?: { parts?: unknown };
-      parts?: unknown;
-    }
-  ).message;
-  const rawParts =
-    rawMessage?.parts ?? (result as unknown as { parts?: unknown }).parts;
-  if (!Array.isArray(rawParts)) return undefined;
-
-  const parts: AssistantMessagePart[] = [];
-  for (const candidate of rawParts.slice(0, 40)) {
-    const parsed = assistantMessagePartSchema.safeParse(candidate);
-    if (parsed.success) parts.push(parsed.data);
-  }
-  return parts.length > 0 ? parts : undefined;
-}
-
-function claimActionKey(keys: Set<string>, executionKey: string): boolean {
-  if (keys.has(executionKey)) return false;
-  keys.add(executionKey);
-  while (keys.size > MAX_CLAIMED_ACTION_KEYS) {
+function claimBoundedToolCall(keys: Set<string>, toolCallId: string): void {
+  keys.add(toolCallId);
+  while (keys.size > MAX_QUEUED_COMPUTER_TOOL_CALLS) {
     const oldestKey = keys.values().next().value as string | undefined;
     if (!oldestKey) break;
     keys.delete(oldestKey);
   }
-  return true;
 }
 
 function getPanelStyle(

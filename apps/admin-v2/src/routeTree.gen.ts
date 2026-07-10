@@ -66,7 +66,6 @@ import { Route as AdminAnalyticsNewRouteImport } from './routes/admin/analytics/
 import { Route as AdminProductsProductIdIndexRouteImport } from './routes/admin/products/$productId/index'
 import { Route as AdminOrdersOrderIdIndexRouteImport } from './routes/admin/orders/$orderId/index'
 import { Route as ApiV1AdminSplatRouteImport } from './routes/api/v1/admin/$'
-import { Route as ApiAssistantConversationsSplatRouteImport } from './routes/api/assistant/conversations/$'
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
 import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$pageId/edit'
 import { Route as AdminOrdersOrderIdEditRouteImport } from './routes/admin/orders/$orderId/edit'
@@ -371,12 +370,6 @@ const ApiV1AdminSplatRoute = ApiV1AdminSplatRouteImport.update({
   path: '/api/v1/admin/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAssistantConversationsSplatRoute =
-  ApiAssistantConversationsSplatRouteImport.update({
-    id: '/api/assistant/conversations/$',
-    path: '/api/assistant/conversations/$',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AdminProductsProductIdEditRoute =
   AdminProductsProductIdEditRouteImport.update({
     id: '/products/$productId/edit',
@@ -506,7 +499,6 @@ export interface FileRoutesByFullPath {
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
-  '/api/assistant/conversations/$': typeof ApiAssistantConversationsSplatRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
@@ -576,7 +568,6 @@ export interface FileRoutesByTo {
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
-  '/api/assistant/conversations/$': typeof ApiAssistantConversationsSplatRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId': typeof AdminProductsProductIdIndexRoute
@@ -648,7 +639,6 @@ export interface FileRoutesById {
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
-  '/api/assistant/conversations/$': typeof ApiAssistantConversationsSplatRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
@@ -721,7 +711,6 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
-    | '/api/assistant/conversations/$'
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
@@ -791,7 +780,6 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
-    | '/api/assistant/conversations/$'
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId'
     | '/admin/products/$productId'
@@ -862,7 +850,6 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
-    | '/api/assistant/conversations/$'
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
@@ -881,7 +868,6 @@ export interface RootRouteChildren {
   InvoiceOrderIdRoute: typeof InvoiceOrderIdRoute
   ApiAssistantMcpRoute: typeof ApiAssistantMcpRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
-  ApiAssistantConversationsSplatRoute: typeof ApiAssistantConversationsSplatRoute
   ApiV1AdminSplatRoute: typeof ApiV1AdminSplatRoute
   ApiAssistantFlueAgentsSplatRoute: typeof ApiAssistantFlueAgentsSplatRoute
   ApiAssistantFlueComputerResultsRoute: typeof ApiAssistantFlueComputerResultsRoute
@@ -1288,13 +1274,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1AdminSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/assistant/conversations/$': {
-      id: '/api/assistant/conversations/$'
-      path: '/api/assistant/conversations/$'
-      fullPath: '/api/assistant/conversations/$'
-      preLoaderRoute: typeof ApiAssistantConversationsSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/products/$productId/edit': {
       id: '/admin/products/$productId/edit'
       path: '/products/$productId/edit'
@@ -1512,7 +1491,6 @@ const rootRouteChildren: RootRouteChildren = {
   InvoiceOrderIdRoute: InvoiceOrderIdRoute,
   ApiAssistantMcpRoute: ApiAssistantMcpRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
-  ApiAssistantConversationsSplatRoute: ApiAssistantConversationsSplatRoute,
   ApiV1AdminSplatRoute: ApiV1AdminSplatRoute,
   ApiAssistantFlueAgentsSplatRoute: ApiAssistantFlueAgentsSplatRoute,
   ApiAssistantFlueComputerResultsRoute: ApiAssistantFlueComputerResultsRoute,

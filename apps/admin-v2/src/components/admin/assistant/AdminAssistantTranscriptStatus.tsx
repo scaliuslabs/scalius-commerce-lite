@@ -1,4 +1,4 @@
-import { Check, CloudOff, Loader2, RefreshCw } from "lucide-react";
+import { CloudOff, Loader2, RefreshCw } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
 
@@ -14,13 +14,9 @@ export function AdminAssistantTranscriptStatus({
   state,
   onRetry,
 }: AdminAssistantTranscriptStatusProps) {
-  if (state.kind === "idle") return null;
+  if (state.kind === "idle" || state.kind === "connected") return null;
 
-  const Icon = state.kind === "connecting"
-    ? Loader2
-    : state.kind === "connected"
-      ? Check
-      : CloudOff;
+  const Icon = state.kind === "connecting" ? Loader2 : CloudOff;
 
   return (
     <div

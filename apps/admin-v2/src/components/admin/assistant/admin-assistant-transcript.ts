@@ -1,166 +1,152 @@
-import type {
-  AdminConversationContextMarker,
-  AdminConversationEvent,
-  AdminConversationMessageEvent,
-} from "../../../lib/admin-assistant-conversation";
-import {
-  createAdminConversationId,
-  isAdminConversationId,
-} from "../../../lib/admin-assistant-conversation";
-
-import type { AdminAssistantMessage } from "./assistant-panel-types";
-import type { AdminAssistantPageStateSnapshot } from "./page-state";
-
 export const ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY =
   "scalius.admin-assistant.conversation-id.v1";
+export const ADMIN_ASSISTANT_CONVERSATION_HISTORY_STORAGE_KEY =
+  "scalius.admin-assistant.conversation-history.v1";
 
-const SENSITIVE_CONTEXT_TERMS = [
-  "auth",
-  "authentication",
-  "credential",
-  "customer",
-  "order",
-  "payment",
-  "receipt",
-  "recovery",
-  "security",
-] as const;
+const CONVERSATION_ID_PATTERN = /^conv_[A-Za-z0-9_-]{22,64}$/u;
+const MAX_CONVERSATION_HISTORY_IDS = 20;
+const MAX_CONVERSATION_HISTORY_BYTES = 4_096;
+const RANDOM_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+let adminAssistantTabId: string | undefined;
 
 export function getOrCreateAdminAssistantConversationId(): string {
   const storage = readSessionStorage();
   if (storage) {
     try {
-      const stored = storage.getItem(ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY);
-      if (stored && isAdminConversationId(stored)) return stored;
+      const stored = storage.getItem(
+        ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      );
+      if (stored && CONVERSATION_ID_PATTERN.test(stored)) {
+        retainConversationId(storage, stored);
+        return stored;
+      }
 
-      const conversationId = createAdminConversationId();
-      storage.setItem(ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY, conversationId);
+      const conversationId = createBrowserIdentity("conv");
+      persistActiveConversationId(storage, conversationId);
       return conversationId;
     } catch {
-      // Privacy modes may deny storage even after exposing the Storage object.
+      // Privacy modes may deny storage even after exposing Storage.
     }
   }
 
-  return createAdminConversationId();
+  return createBrowserIdentity("conv");
 }
 
-export function getAdminAssistantConversationContextMarker(
-  pageState: AdminAssistantPageStateSnapshot | null,
-): AdminConversationContextMarker {
-  if (!pageState) return "admin:page";
-
-  const contextValues = [
-    pageState.routePath,
-    pageState.pageTitle,
-    pageState.pageHeading,
-    ...pageState.surfaces.flatMap((surface) => [surface.id, surface.label]),
-  ];
-  const normalized = contextValues
-    .filter((value): value is string => typeof value === "string")
-    .join(" ")
-    .toLowerCase();
-
-  return SENSITIVE_CONTEXT_TERMS.some((term) => normalized.includes(term))
-    ? "admin:sensitive"
-    : "admin:page";
+export function createNewAdminAssistantConversationId(): string {
+  const conversationId = createBrowserIdentity("conv");
+  const storage = readSessionStorage();
+  if (storage) {
+    try {
+      persistActiveConversationId(storage, conversationId);
+    } catch {
+      // The new in-memory thread still works when browser storage is denied.
+    }
+  }
+  return conversationId;
 }
 
-export function mergeAdminAssistantConversationEvents(
-  current: readonly AdminAssistantMessage[],
-  events: readonly AdminConversationEvent[],
-): AdminAssistantMessage[] {
-  const next = [...current];
-  const messageEvents = events
-    .filter(
-      (event): event is AdminConversationMessageEvent =>
-        event.type === "message.appended",
-    )
-    .sort((left, right) => left.sequence - right.sequence);
+export function getAdminAssistantConversationHistoryIds(): string[] {
+  const storage = readSessionStorage();
+  if (!storage) return [];
+  return readConversationIds(storage);
+}
 
-  for (const event of messageEvents) {
-    const existingIndex = next.findIndex(
-      (message) => message.id === event.message.id,
-    );
-    if (existingIndex >= 0) {
-      const existing = next[existingIndex];
-      next[existingIndex] = {
-        ...existing,
-        role: event.message.role,
-        content: event.message.content,
-        transcriptSequence: event.sequence,
-      };
+export function activateAdminAssistantConversationId(
+  conversationId: string,
+): boolean {
+  if (!CONVERSATION_ID_PATTERN.test(conversationId)) return false;
+  const storage = readSessionStorage();
+  if (storage) {
+    try {
+      persistActiveConversationId(storage, conversationId);
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Page-computer commands are bound to one live browser tab. This identity is
+ * deliberately process-local: a full reload creates a fresh tab binding while
+ * the durable conversation thread remains stable in sessionStorage.
+ */
+export function getOrCreateAdminAssistantTabId(): string {
+  adminAssistantTabId ??= createBrowserIdentity("tab");
+  return adminAssistantTabId;
+}
+
+function createBrowserIdentity(prefix: "conv" | "tab"): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  let result = "";
+  let accumulator = 0;
+  let bits = 0;
+  for (const byte of bytes) {
+    accumulator = (accumulator << 8) | byte;
+    bits += 8;
+    while (bits >= 6) {
+      bits -= 6;
+      result += RANDOM_ALPHABET[(accumulator >>> bits) & 63];
+      accumulator &= (1 << bits) - 1;
+    }
+  }
+  if (bits > 0) {
+    result += RANDOM_ALPHABET[(accumulator << (6 - bits)) & 63];
+  }
+  return `${prefix}_${result}`;
+}
+
+function persistActiveConversationId(
+  storage: Storage,
+  conversationId: string,
+): void {
+  storage.setItem(
+    ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+    conversationId,
+  );
+  retainConversationId(storage, conversationId);
+}
+
+function retainConversationId(storage: Storage, conversationId: string): void {
+  const ids = readConversationIds(storage).filter(
+    (candidate) => candidate !== conversationId,
+  );
+  ids.push(conversationId);
+  storage.setItem(
+    ADMIN_ASSISTANT_CONVERSATION_HISTORY_STORAGE_KEY,
+    JSON.stringify(ids.slice(-MAX_CONVERSATION_HISTORY_IDS)),
+  );
+}
+
+function readConversationIds(storage: Storage): string[] {
+  let raw: string | null;
+  try {
+    raw = storage.getItem(ADMIN_ASSISTANT_CONVERSATION_HISTORY_STORAGE_KEY);
+  } catch {
+    return [];
+  }
+  if (!raw || raw.length > MAX_CONVERSATION_HISTORY_BYTES) return [];
+
+  let value: unknown;
+  try {
+    value = JSON.parse(raw) as unknown;
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(value)) return [];
+  const ids: string[] = [];
+  for (const candidate of value) {
+    if (
+      typeof candidate !== "string" ||
+      !CONVERSATION_ID_PATTERN.test(candidate) ||
+      ids.includes(candidate)
+    ) {
       continue;
     }
-
-    const higherSequenceIndex = next.findIndex(
-      (message) =>
-        message.transcriptSequence !== undefined &&
-        message.transcriptSequence > event.sequence,
-    );
-    const firstPendingIndex = next.findIndex(
-      (message) => message.transcriptSequence === undefined,
-    );
-    const insertionIndex = higherSequenceIndex >= 0
-      ? higherSequenceIndex
-      : firstPendingIndex >= 0
-        ? firstPendingIndex
-        : next.length;
-    next.splice(insertionIndex, 0, toAdminAssistantMessage(event));
+    ids.push(candidate);
   }
-
-  return next;
-}
-
-export function reconcileAdminAssistantPersistedMessage(
-  current: readonly AdminAssistantMessage[],
-  event: AdminConversationMessageEvent,
-  optimisticMessageId: string,
-): AdminAssistantMessage[] {
-  const optimisticIndex = current.findIndex(
-    (message) => message.id === optimisticMessageId,
-  );
-  const durableIndex = current.findIndex(
-    (message) => message.id === event.message.id,
-  );
-  const optimistic = optimisticIndex >= 0 ? current[optimisticIndex] : undefined;
-  const durable = durableIndex >= 0 ? current[durableIndex] : undefined;
-  const targetIndex = optimisticIndex >= 0
-    ? optimisticIndex
-    : durableIndex >= 0
-      ? durableIndex
-      : current.length;
-  const retained = current.filter(
-    (message) =>
-      message.id !== optimisticMessageId && message.id !== event.message.id,
-  );
-  const insertionIndex = current
-    .slice(0, targetIndex)
-    .filter(
-      (message) =>
-        message.id !== optimisticMessageId && message.id !== event.message.id,
-    ).length;
-  const reconciled: AdminAssistantMessage = {
-    ...durable,
-    ...optimistic,
-    id: event.message.id,
-    role: event.message.role,
-    content: event.message.content,
-    transcriptSequence: event.sequence,
-  };
-
-  retained.splice(insertionIndex, 0, reconciled);
-  return retained;
-}
-
-function toAdminAssistantMessage(
-  event: AdminConversationMessageEvent,
-): AdminAssistantMessage {
-  return {
-    id: event.message.id,
-    role: event.message.role,
-    content: event.message.content,
-    transcriptSequence: event.sequence,
-  };
+  return ids.slice(-MAX_CONVERSATION_HISTORY_IDS);
 }
 
 function readSessionStorage(): Storage | null {
