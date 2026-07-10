@@ -36,4 +36,13 @@ describe("storefront layout data boundaries", () => {
     expect(serviceSource).toContain("metaCapiAccessToken.value.trim()");
     expect(routeSource).toContain("credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY");
   });
+
+  it("normalizes storefront currency through the shared supported-code contract", () => {
+    const source = readFileSync(STOREFRONT_SERVICE_SOURCE, "utf8");
+
+    expect(source).toContain("normalizeSupportedCurrencyCode");
+    expect(source).toContain("const currencyCode = normalizeSupportedCurrencyCode(currencyMap.currency_code)");
+    expect(source).toContain("code: DEFAULT_CURRENCY.code");
+    expect(source).not.toContain('code: currencyMap.currency_code ?? "BDT"');
+  });
 });

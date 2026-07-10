@@ -191,7 +191,7 @@ Payment webhook handlers attach the source `webhookEventId` to queued payment me
 - **No external gateway**: All operations are DB-only
 - **Tracking lifecycle**: `pending` -> `collected` (success) or `failed` (delivery attempt failed) -> `returned` (all attempts exhausted)
 - **`initCODTracking()`**: Creates a `codTracking` record with `deliveryAttempts: 0`, `codStatus: "pending"`
-- **`recordCODCollection()`**: Idempotent only when both the succeeded COD payment and collected tracking evidence exist. New collection fails closed if the COD tracking row is missing; otherwise it atomically via `db.batch()`: updates `codTracking` (collected status + details), inserts `orderPayments` (status: succeeded), updates `orders` (paymentStatus: PAID, paidAmount, balanceDue: 0). Fetches `getCurrencyConfig()` for currency code before batch. Admin COD collection records this evidence before inventory reconciliation so retries can safely repair stock/status without duplicating payment rows.
+- **`recordCODCollection()`**: Idempotent only when both the succeeded COD payment and collected tracking evidence exist. New collection fails closed if the COD tracking row is missing; otherwise it atomically via `db.batch()`: updates `codTracking` (collected status + details), inserts `orderPayments` (status: succeeded), updates `orders` (paymentStatus: PAID, paidAmount, balanceDue: 0). Amounts and the payment-ledger currency come from the immutable order currency snapshot; a mismatched existing payment row fails before mutation. Admin COD collection records this evidence before inventory reconciliation so retries can safely repair stock/status without duplicating payment rows.
 - **`recordCODFailure()`**: Increments `deliveryAttempts`, sets `codStatus: "failed"`, records `failureReason` (not_home/refused/no_cash/wrong_address/other)
 - **`markCODReturned()`**: Sets `codStatus: "returned"` and fails closed if no COD tracking row is updated; admin COD return records this marker before inventory restoration and rolls back the visible returned status claim if the marker or restoration step fails before `inventoryAction` changes.
 - **CODProvider.createPayment()**: Calls `initCODTracking()`, returns `transactionId: "COD-{orderId}"` (no clientSecret or redirectUrl)
@@ -209,7 +209,7 @@ The critical payment processing function uses `db.batch()` to atomically execute
 
 If any statement fails, all roll back. This prevents the prior split-write bug where a payment could be recorded but inventory left un-deducted.
 
-Uses `roundPrice()` and `pricesEqual()` from `@scalius/shared/price-utils` for float-safe balance calculations.
+Uses `resolveOrderCurrencySnapshot()`, `roundOrderMoney()`, and `orderMoneyEqual()` from `order-currency.ts`, so zero- and three-decimal historical orders are never reinterpreted using current store settings. Only wholly legacy-null currency snapshots fall back to BDT.
 
 ### Idempotency
 
@@ -385,12 +385,12 @@ Normal checkout order creation does not request an attached `initialPaymentSessi
 - `standardwebhooks` -- Polar webhook signature verification
 - `@scalius/database` -- `orders`, `orderItems`, `orderPayments`, `paymentPlans`, `codTracking`, `webhookEvents`, `settings`, `siteSettings` tables
 - `@scalius/core/errors` -- `ValidationError`, `ServiceUnavailableError`, `NotFoundError`, `ConflictError`
-- `@scalius/core/modules/settings/settings.service` -- `getCurrencyConfig()` for currency code
+- `@scalius/core/modules/payments/order-currency` -- immutable order currency/precision resolution, ledger-currency assertions, and snapshot-aware rounding
 - `@scalius/core/modules/inventory/release` -- `releaseMultiple()` for inventory release on cancel/refund
 - `@scalius/core/modules/inventory/inventory-transitions` -- `buildInventoryStatements()`, `applyInventoryForStatusChange()`
 - `@scalius/core/modules/orders/order-state-machine` -- `validateTransition()` for state machine checks
-- `@scalius/shared/price-utils` -- `roundPrice()`, `pricesEqual()` for float-safe comparisons
-- `@scalius/shared/currency` -- `getDecimalPlaces()` for ISO 4217 decimal lookup (used by route-layer amount conversions, SSLCommerz session formatting, and checkout config response)
+- `@scalius/shared/price-utils` -- precision-aware currency.js arithmetic used behind the order-currency boundary
+- `@scalius/shared/currency` -- supported ISO currency normalization and decimal lookup (used by order snapshots, route-layer provider conversions, SSLCommerz formatting, and checkout config)
 
 ## Known Gaps
 

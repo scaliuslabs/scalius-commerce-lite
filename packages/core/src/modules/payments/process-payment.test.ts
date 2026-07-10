@@ -635,4 +635,103 @@ describe("payment processing idempotency", () => {
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
+
+  it("applies a JPY full payment at the immutable zero-decimal precision", async () => {
+    const { db, inserts, updates } = createDbMock({
+      selectGetResults: [
+        {
+          id: "order_jpy",
+          shipmentClaimId: null,
+          shipmentClaimExpiresAt: null,
+          currencyCode: "JPY",
+          currencyDecimalPlaces: 0,
+        },
+        createPaymentOrder({
+          id: "order_jpy",
+          totalAmount: 100.49,
+          balanceDue: 100.49,
+          currencyCode: "JPY",
+          currencyDecimalPlaces: 0,
+        }),
+      ],
+      batchResults: [[[{ id: "order_jpy" }], [{ id: "pay_jpy" }]]],
+    });
+
+    await expect(processPaymentConfirmed(db as never, {
+      orderId: "order_jpy",
+      paymentGateway: "stripe",
+      paymentType: "full",
+      amount: 100.49,
+      metadata: { currency: "jpy" },
+    })).resolves.toEqual({ success: true });
+
+    expect(inserts).toContainEqual(expect.objectContaining({ amount: 100, currency: "JPY" }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      paidAmount: 100,
+      balanceDue: 0,
+      paymentStatus: PaymentStatus.PAID,
+    }));
+  });
+
+  it("applies a KWD deposit and balance at three-decimal precision", async () => {
+    const { db, updates } = createDbMock({
+      selectGetResults: [
+        {
+          id: "order_kwd",
+          shipmentClaimId: null,
+          shipmentClaimExpiresAt: null,
+          currencyCode: "KWD",
+          currencyDecimalPlaces: 3,
+        },
+        createPaymentOrder({
+          id: "order_kwd",
+          totalAmount: 2.469,
+          balanceDue: 2.469,
+          currencyCode: "KWD",
+          currencyDecimalPlaces: 3,
+        }),
+        {
+          status: PaymentPlanStatus.PENDING,
+          depositAmount: 1.235,
+          balanceDue: 1.234,
+        },
+      ],
+      batchResults: [[[{ id: "order_kwd" }], [{ id: "pay_kwd" }], [{ id: "plan_kwd" }]]],
+    });
+
+    await expect(processPaymentConfirmed(db as never, {
+      orderId: "order_kwd",
+      paymentGateway: "stripe",
+      paymentType: "deposit",
+      amount: 1.2346,
+      metadata: { currency: "KWD" },
+    })).resolves.toEqual({ success: true });
+
+    expect(updates).toContainEqual(expect.objectContaining({
+      paidAmount: 1.235,
+      balanceDue: 1.234,
+      paymentStatus: PaymentStatus.PARTIAL,
+    }));
+  });
+
+  it("fails closed when provider currency differs from the immutable order snapshot", async () => {
+    const { db, batch } = createDbMock({
+      selectGetResults: [{
+        id: "order_kwd",
+        shipmentClaimId: null,
+        shipmentClaimExpiresAt: null,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+      }],
+    });
+
+    await expect(processPaymentConfirmed(db as never, {
+      orderId: "order_kwd",
+      paymentGateway: "sslcommerz",
+      paymentType: "full",
+      amount: 1.235,
+      metadata: { currency: "BDT" },
+    })).resolves.toMatchObject({ success: false, error: expect.stringContaining("currency does not match") });
+    expect(batch).not.toHaveBeenCalled();
+  });
 });

@@ -12,6 +12,9 @@ const inventoryMocks = vi.hoisted(() => ({
     restoreDeductedMultiple: vi.fn(),
     validateStockBatchAvailability: vi.fn(),
 }));
+const settingsMocks = vi.hoisted(() => ({
+    getCurrencySettings: vi.fn(),
+}));
 
 vi.mock("../inventory", () => ({
     reserveStockBatch: inventoryMocks.reserveStockBatch,
@@ -20,6 +23,10 @@ vi.mock("../inventory", () => ({
     releaseReservedStockBatch: inventoryMocks.releaseReservedStockBatch,
     restoreDeductedMultiple: inventoryMocks.restoreDeductedMultiple,
     validateStockBatchAvailability: inventoryMocks.validateStockBatchAvailability,
+}));
+
+vi.mock("../settings/site-settings.service", () => ({
+    getCurrencySettings: settingsMocks.getCurrencySettings,
 }));
 
 import { createOrder, resolveAdminOrderItemInventory } from "./orders.admin";
@@ -32,6 +39,11 @@ beforeEach(() => {
     inventoryMocks.releaseReservedStockBatch.mockResolvedValue({ success: true, results: [] });
     inventoryMocks.restoreDeductedMultiple.mockResolvedValue({ success: true, results: [] });
     inventoryMocks.validateStockBatchAvailability.mockResolvedValue({ success: true, results: [] });
+    settingsMocks.getCurrencySettings.mockResolvedValue({
+        currencyCode: "BDT",
+        currencySymbol: "৳",
+        usdExchangeRate: "1",
+    });
 });
 
 interface SkuRow {
@@ -442,8 +454,102 @@ describe("resolveAdminOrderItemInventory", () => {
             paidAmount: 0,
             balanceDue: 260,
             paymentStatus: PaymentStatus.UNPAID,
+            currencyCode: "BDT",
+            currencyDecimalPlaces: 2,
+            subtotalAmountMinor: 20_000,
+            shippingAmountMinor: 6_000,
+            discountAmountMinor: 0,
+            taxAmountMinor: 0,
+            totalAmountMinor: 26_000,
+            taxLabel: null,
+            pricesIncludeTax: false,
         });
     });
+
+    it.each([
+        {
+            currencyCode: "JPY",
+            itemPrice: 100.49,
+            shippingCharge: 1.6,
+            discountAmount: 0.6,
+            expectedPrice: 100,
+            expectedTotal: 201,
+            expectedSubtotalMinor: 200,
+            expectedShippingMinor: 2,
+            expectedDiscountMinor: 1,
+            expectedTotalMinor: 201,
+            decimalPlaces: 0,
+        },
+        {
+            currencyCode: "KWD",
+            itemPrice: 1.2346,
+            shippingCharge: 0.0016,
+            discountAmount: 0.0006,
+            expectedPrice: 1.235,
+            expectedTotal: 2.471,
+            expectedSubtotalMinor: 2_470,
+            expectedShippingMinor: 2,
+            expectedDiscountMinor: 1,
+            expectedTotalMinor: 2_471,
+            decimalPlaces: 3,
+        },
+    ])(
+        "persists an immutable $currencyCode snapshot for new manual-order money",
+        async ({
+            currencyCode,
+            itemPrice,
+            shippingCharge,
+            discountAmount,
+            expectedPrice,
+            expectedTotal,
+            expectedSubtotalMinor,
+            expectedShippingMinor,
+            expectedDiscountMinor,
+            expectedTotalMinor,
+            decimalPlaces,
+        }) => {
+            settingsMocks.getCurrencySettings.mockResolvedValue({
+                currencyCode,
+                currencySymbol: currencyCode,
+                usdExchangeRate: "1",
+            });
+            const { db, insertValues } = createOrderDbWithSkuRows([{
+                id: "var_untracked",
+                productId: "prod_active",
+                trackInventory: false,
+                variantDeletedAt: null,
+                productActive: true,
+                productDeletedAt: null,
+            }]);
+
+            await createOrder(db, createOrderInput({
+                items: [{
+                    productId: "prod_active",
+                    variantId: "var_untracked",
+                    quantity: 2,
+                    price: itemPrice,
+                }],
+                shippingCharge,
+                discountAmount,
+            }));
+
+            const orderInsert = insertValues.find((values): values is Record<string, unknown> =>
+                !Array.isArray(values) && "currencyCode" in values,
+            );
+            const itemInsert = insertValues.find(Array.isArray);
+            expect(orderInsert).toMatchObject({
+                currencyCode,
+                currencyDecimalPlaces: decimalPlaces,
+                totalAmount: expectedTotal,
+                balanceDue: expectedTotal,
+                subtotalAmountMinor: expectedSubtotalMinor,
+                shippingAmountMinor: expectedShippingMinor,
+                discountAmountMinor: expectedDiscountMinor,
+                totalAmountMinor: expectedTotalMinor,
+            });
+            expect(itemInsert?.[0]).toMatchObject({ price: expectedPrice });
+        },
+    );
 
     it("uses strict release when a manual order write fails after reserving tracked stock", async () => {
         const { db, batch } = createOrderDbWithSkuRows([

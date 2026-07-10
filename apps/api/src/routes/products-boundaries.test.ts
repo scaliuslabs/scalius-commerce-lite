@@ -79,6 +79,34 @@ describe("product route query boundaries", () => {
     expect(feedSchema).toContain("variants: z.array(storefrontFeedVariantSchema)");
   });
 
+  it("keeps category-term feed search on the normalized cached projection", () => {
+    const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
+    const feedHandlerStart = source.indexOf(
+      "app.openapi(feedProductsRoute, async (c) => {",
+    );
+    const sitemapRouteStart = source.indexOf(
+      "// GET /api/v1/products/sitemap",
+      feedHandlerStart,
+    );
+    const feedHandler = source.slice(feedHandlerStart, sitemapRouteStart);
+
+    expect(source).toContain("search: normalizePublicFtsSearchCacheValue");
+    expect(source).toContain(
+      'if (normalizedPath.endsWith("/products/feed"))',
+    );
+    expect(source).toContain(
+      'return { page: 1, limit: 100, sort: "newest" };',
+    );
+    expect(feedHandler).toContain(
+      "const search = normalizePublicListingSearchParam(params.search);",
+    );
+    expect(feedHandler).toContain(
+      "getStorefrontFeedProducts(db, { ...params, search })",
+    );
+    expect(feedHandler).not.toContain("categories");
+    expect(feedHandler).not.toContain(".limit(");
+  });
+
   it("documents feed variants with only buyer-safe fields", () => {
     const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
     const variantSchemaStart = source.indexOf("const storefrontFeedVariantSchema = z.object({");

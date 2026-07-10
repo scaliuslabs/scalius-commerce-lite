@@ -257,7 +257,19 @@ function createHealthyFeedDiagnostics() {
         samples: [],
       },
       {
+        reason: "inconsistent_option_axes",
+        products: 0,
+        rows: 0,
+        samples: [],
+      },
+      {
         reason: "no_buyer_sku",
+        products: 0,
+        rows: 0,
+        samples: [],
+      },
+      {
+        reason: "non_positive_price",
         products: 0,
         rows: 0,
         samples: [],

@@ -288,7 +288,13 @@ function createUpdateQuery(label: string) {
 }
 
 function createPaymentDb(options: {
-  shipmentClaim?: { shipmentClaimId: string | null; shipmentClaimExpiresAt: number | null } | null;
+  shipmentClaim?: {
+    id?: string;
+    shipmentClaimId: string | null;
+    shipmentClaimExpiresAt: number | null;
+    currencyCode?: string | null;
+    currencyDecimalPlaces?: number | null;
+  } | null;
   existingPayment?: { id: string; amount: number; status: string } | null;
   orders: Array<{
     id: string;
@@ -299,12 +305,28 @@ function createPaymentDb(options: {
     status: string;
     inventoryPool: string;
     version: number;
+    currencyCode?: string | null;
+    currencyDecimalPlaces?: number | null;
   }>;
   extraSelects?: unknown[];
   batchResults: unknown[];
 }) {
+  const firstOrder = options.orders[0];
+  const defaultShipmentClaim = firstOrder
+    ? {
+        id: firstOrder.id,
+        shipmentClaimId: null,
+        shipmentClaimExpiresAt: null,
+        currencyCode: firstOrder.currencyCode ?? null,
+        currencyDecimalPlaces: firstOrder.currencyDecimalPlaces ?? null,
+      }
+    : null;
   const selectValues: unknown[] = [
-    options.shipmentClaim ?? null,
+    options.shipmentClaim === undefined
+      ? defaultShipmentClaim
+      : options.shipmentClaim === null
+        ? null
+        : { ...defaultShipmentClaim, ...options.shipmentClaim },
     options.existingPayment ?? null,
     ...options.orders,
     ...(options.extraSelects ?? []),

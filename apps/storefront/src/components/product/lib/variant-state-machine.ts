@@ -6,10 +6,10 @@
  *
  * Selection Rules:
  * 1. User can select one size and one color
- * 2. User can click to deselect their current selection
- * 3. Changing from one option to another does NOT clear the other attribute
- * 4. Only show available combinations based on stock
- * 5. When no variant exists for a combination, don't allow selection
+ * 2. Native radio selections are idempotent; explicit deselect actions are separate
+ * 3. Globally available axis values stay selectable
+ * 4. Selecting an incompatible value clears the other axis so selection cannot deadlock
+ * 5. Sold-out axis values are disabled
  */
 
 export interface Variant {
@@ -46,6 +46,17 @@ export interface VariantSelectionAction {
     | "DESELECT_COLOR"
     | "RESET";
   value?: string;
+}
+
+export interface VariantOptionSelectionInput {
+  selectedSize?: string | null;
+  selectedColor?: string | null;
+}
+
+export interface ExactVariantSelection<TVariant> {
+  variant: TVariant;
+  selectedSize?: string;
+  selectedColor?: string;
 }
 
 export interface VariantIndex {
@@ -175,6 +186,66 @@ export function extractVariantOptions(variants: Variant[]): {
   };
 }
 
+function normalizedOption(value: string | null | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized || undefined;
+}
+
+export function filterVariantsBySelection<
+  TVariant extends Pick<Variant, "size" | "color">,
+>(
+  variants: readonly TVariant[],
+  selection: VariantOptionSelectionInput,
+): TVariant[] {
+  const selectedSize = normalizedOption(selection.selectedSize);
+  const selectedColor = normalizedOption(selection.selectedColor);
+
+  return variants.filter((variant) => {
+    if (selectedSize && normalizedOption(variant.size) !== selectedSize) {
+      return false;
+    }
+    if (selectedColor && normalizedOption(variant.color) !== selectedColor) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Resolve query/hydration options only when every product axis is present and
+ * the values identify exactly one buyer SKU. Partial, invalid, and ambiguous
+ * inputs intentionally resolve to null.
+ */
+export function resolveExactVariantSelection<
+  TVariant extends Pick<Variant, "size" | "color">,
+>(
+  variants: readonly TVariant[],
+  selection: VariantOptionSelectionInput,
+): ExactVariantSelection<TVariant> | null {
+  const selectedSize = normalizedOption(selection.selectedSize);
+  const selectedColor = normalizedOption(selection.selectedColor);
+  const hasSize = variants.some((variant) => normalizedOption(variant.size));
+  const hasColor = variants.some((variant) => normalizedOption(variant.color));
+
+  if ((hasSize && !selectedSize) || (hasColor && !selectedColor)) {
+    return null;
+  }
+
+  const matches = filterVariantsBySelection(variants, {
+    selectedSize: hasSize ? selectedSize : undefined,
+    selectedColor: hasColor ? selectedColor : undefined,
+  });
+  if (matches.length !== 1) {
+    return null;
+  }
+
+  return {
+    variant: matches[0]!,
+    ...(hasSize && selectedSize ? { selectedSize } : {}),
+    ...(hasColor && selectedColor ? { selectedColor } : {}),
+  };
+}
+
 /**
  * Find variant that matches the current selection
  */
@@ -209,25 +280,43 @@ function findMatchingVariant(
 }
 
 /**
- * Get available sizes based on selected color and stock
+ * Globally buyer-selectable sizes. Compatibility is resolved after selection.
  */
-export function getAvailableSizes(
-  index: VariantIndex,
-  selectedColor: string | undefined,
-): Set<string> {
-  if (!selectedColor) return index.inStockSizes;
-  return index.inStockSizesByColor.get(selectedColor) || new Set<string>();
+export function getAvailableSizes(index: VariantIndex): Set<string> {
+  return index.inStockSizes;
 }
 
 /**
- * Get available colors based on selected size and stock
+ * Globally buyer-selectable colors. Compatibility is resolved after selection.
  */
-export function getAvailableColors(
+export function getAvailableColors(index: VariantIndex): Set<string> {
+  return index.inStockColors;
+}
+
+function hasAvailableCombination(
   index: VariantIndex,
   selectedSize: string | undefined,
-): Set<string> {
-  if (!selectedSize) return index.inStockColors;
-  return index.inStockColorsBySize.get(selectedSize) || new Set<string>();
+  selectedColor: string | undefined,
+): boolean {
+  return filterVariantsBySelection(index.variants, {
+    selectedSize,
+    selectedColor,
+  }).some(isVariantAvailable);
+}
+
+export function createSelectionState(
+  index: VariantIndex,
+  selection: VariantOptionSelectionInput,
+): VariantSelectionState {
+  const selectedSize = normalizedOption(selection.selectedSize);
+  const selectedColor = normalizedOption(selection.selectedColor);
+  return {
+    selectedSize,
+    selectedColor,
+    selectedVariant: findMatchingVariant(index, selectedSize, selectedColor),
+    availableSizes: getAvailableSizes(index),
+    availableColors: getAvailableColors(index),
+  };
 }
 
 /**
@@ -242,21 +331,7 @@ export function createInitialState(index: VariantIndex): VariantSelectionState {
   const selectedColor =
     options.colors.size === 1 ? Array.from(options.colors)[0] : undefined;
 
-  const availableSizes = getAvailableSizes(index, selectedColor);
-  const availableColors = getAvailableColors(index, selectedSize);
-  const selectedVariant = findMatchingVariant(
-    index,
-    selectedSize,
-    selectedColor,
-  );
-
-  return {
-    selectedSize,
-    selectedColor,
-    selectedVariant,
-    availableSizes,
-    availableColors,
-  };
+  return createSelectionState(index, { selectedSize, selectedColor });
 }
 
 /**
@@ -272,15 +347,25 @@ export function applyAction(
 
   switch (action.type) {
     case "SELECT_SIZE":
-      // Toggle logic: if clicking the same size, deselect it
-      newSelectedSize =
-        state.selectedSize === action.value ? undefined : action.value;
+      newSelectedSize = action.value;
+      if (
+        newSelectedSize &&
+        newSelectedColor &&
+        !hasAvailableCombination(index, newSelectedSize, newSelectedColor)
+      ) {
+        newSelectedColor = undefined;
+      }
       break;
 
     case "SELECT_COLOR":
-      // Toggle logic: if clicking the same color, deselect it
-      newSelectedColor =
-        state.selectedColor === action.value ? undefined : action.value;
+      newSelectedColor = action.value;
+      if (
+        newSelectedSize &&
+        newSelectedColor &&
+        !hasAvailableCombination(index, newSelectedSize, newSelectedColor)
+      ) {
+        newSelectedSize = undefined;
+      }
       break;
 
     case "DESELECT_SIZE":
@@ -297,24 +382,10 @@ export function applyAction(
       break;
   }
 
-  // Calculate new available options based on new selection
-  const availableSizes = getAvailableSizes(index, newSelectedColor);
-  const availableColors = getAvailableColors(index, newSelectedSize);
-
-  // Find matching variant
-  const selectedVariant = findMatchingVariant(
-    index,
-    newSelectedSize,
-    newSelectedColor,
-  );
-
-  return {
+  return createSelectionState(index, {
     selectedSize: newSelectedSize,
     selectedColor: newSelectedColor,
-    selectedVariant,
-    availableSizes,
-    availableColors,
-  };
+  });
 }
 
 export interface ValidationResult {
@@ -450,20 +521,22 @@ export function getSelectionStatus(
  */
 export function parseVariantFromDOM(element: HTMLElement): Variant {
   const rawTrackInventory = element.dataset.variantTrackInventory;
+  const decimal = (value: string | undefined): number => {
+    const parsed = Number.parseFloat(value ?? "");
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
 
   return {
     id: element.dataset.variantId || "",
     size: element.dataset.variantSize || null,
     color: element.dataset.variantColor || null,
-    price: parseInt(element.dataset.variantPrice || "0"),
-    discountedPrice: parseInt(element.dataset.variantDiscountedPrice || "0"),
-    discount: parseInt(element.dataset.variantDiscount || "0"),
+    price: decimal(element.dataset.variantPrice),
+    discountedPrice: decimal(element.dataset.variantDiscountedPrice),
+    discount: decimal(element.dataset.variantDiscount),
     discountType:
       (element.dataset.variantDiscountType as "percentage" | "flat") || null,
-    discountPercentage: parseInt(
-      element.dataset.variantDiscountPercentage || "0",
-    ),
-    discountAmount: parseInt(element.dataset.variantDiscountAmount || "0"),
+    discountPercentage: decimal(element.dataset.variantDiscountPercentage),
+    discountAmount: decimal(element.dataset.variantDiscountAmount),
     stock: parseInt(element.dataset.variantStock || "0"),
     reservedStock: parseInt(element.dataset.variantReservedStock || "0"),
     trackInventory:

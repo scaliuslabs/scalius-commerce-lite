@@ -391,7 +391,7 @@ function createRefundDbWithLostStatusCas() {
     status: "refunded",
     amount: 100,
   };
-  const selectResults = [order, [], null, null, [payment], [], [refundAttempt], order, [payment, refundPayment]];
+  const selectResults = [order, [], null, null, [payment], [refundAttempt], order, [payment, refundPayment]];
   let selectIndex = 0;
   let updateIndex = 0;
 

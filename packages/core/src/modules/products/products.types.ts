@@ -9,12 +9,19 @@ import type { ProductCondition } from "@scalius/shared/product-condition";
 // Variant Validation Schemas
 // ─────────────────────────────────────────
 
+export const MAX_PRODUCT_PRICE = 1_000_000_000_000;
+
+const variantPriceSchema = z
+    .number()
+    .min(0, "Price must be greater than or equal to 0")
+    .max(MAX_PRODUCT_PRICE, `Price must be at most ${MAX_PRODUCT_PRICE}`);
+
 export const createVariantSchema = z.object({
     size: z.string().nullable(),
     color: z.string().nullable(),
     weight: z.number().min(0).nullable(),
     sku: z.string().min(3, "SKU must be at least 3 characters"),
-    price: z.number().min(0, "Price must be greater than or equal to 0"),
+    price: variantPriceSchema,
     stock: z.number().min(0, "Stock must be greater than or equal to 0"),
     trackInventory: z.boolean().optional(),
     barcode: z.string().max(50).optional().nullable(),
@@ -41,7 +48,7 @@ export const bulkVariantSchema = z.object({
     color: z.string().nullable(),
     weight: z.number().min(0).nullable(),
     sku: z.string().min(3, "SKU must be at least 3 characters"),
-    price: z.number().min(0, "Price must be greater than or equal to 0"),
+    price: variantPriceSchema,
     stock: z.number().min(0, "Stock must be greater than or equal to 0"),
     trackInventory: z.boolean().optional(),
     barcode: z.string().max(50).optional().nullable(),
@@ -69,7 +76,7 @@ export const bulkUpdateVariantsSchema = z.object({
             color: z.string().nullable().optional(),
             weight: z.number().nullable().optional(),
             sku: z.string().optional(),
-            price: z.number().min(0).optional(),
+            price: variantPriceSchema.optional(),
             stock: z.number().min(0).optional(),
             trackInventory: z.boolean().optional(),
             barcode: z.string().max(50).nullable().optional(),

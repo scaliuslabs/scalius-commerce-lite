@@ -2,6 +2,7 @@
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
 import type { Database } from "@scalius/database/client";
+import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 import {
     buildStorefrontTaxAllocationLineId,
@@ -51,6 +52,7 @@ export interface StorefrontDeliveryPreflightInput {
     zone: string;
     area?: string | null;
     shippingMethodId?: string | null;
+    currencyCode?: string | null;
 }
 
 export interface StorefrontDeliveryPreflightResult {
@@ -83,6 +85,9 @@ export async function validateStorefrontDeliveryPreflight(
     data: StorefrontDeliveryPreflightInput,
     cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct">,
 ): Promise<StorefrontDeliveryPreflightResult> {
+    // API callers pass the merchant currency. Direct Core callers retain an
+    // explicit BDT fallback, matching direct cart-validation behavior.
+    const currencyCode = normalizeSupportedCurrencyCode(data.currencyCode) ?? DEFAULT_CURRENCY.code;
     const readBatch: unknown[] = [];
     readBatch.push(selectActiveDeliveryLocationRows(storefrontDb, data));
 
@@ -131,7 +136,7 @@ export async function validateStorefrontDeliveryPreflight(
             throw new ValidationError("Selected shipping method is misconfigured.");
         }
 
-        shippingCharge = roundPrice(methodFee);
+        shippingCharge = roundPrice(methodFee, currencyCode);
     }
 
     return markTrustedStorefrontDeliveryPreflightResult({
@@ -170,6 +175,10 @@ export async function createStorefrontOrder(
     prevalidatedCart?: StorefrontCartValidationResult,
     prevalidatedDelivery?: StorefrontDeliveryPreflightResult,
     customerIdentity?: CreateStorefrontOrderCustomerIdentity,
+    requestCurrency: { code: string; decimalPlaces: number } = {
+        code: DEFAULT_CURRENCY.code,
+        decimalPlaces: DEFAULT_CURRENCY.decimalPlaces,
+    },
 ): Promise<CreateStorefrontOrderResult> {
     if (prevalidatedCart && !isTrustedStorefrontCartValidationResult(prevalidatedCart)) {
         throw new ValidationError("Checkout cart validation could not be trusted. Please retry checkout.");
@@ -343,6 +352,7 @@ export async function createStorefrontOrder(
         discountAmount: verifiedDiscountAmount,
         discountType,
         applicableProductIds: applicableProductIds ? [...applicableProductIds] : undefined,
+        currency: requestCurrency,
     });
     const normalizedDiscountAmount = fromMinorUnits(taxQuote.discountMinor, taxQuote.decimalPlaces);
     const totalAmount = fromMinorUnits(taxQuote.totalMinor, taxQuote.decimalPlaces);

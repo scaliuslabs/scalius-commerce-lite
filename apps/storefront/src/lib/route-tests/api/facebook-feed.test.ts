@@ -49,17 +49,25 @@ function expectFeedPriceInvariant(body: string): void {
   expect(items.length).toBeGreaterThan(0);
 
   for (const item of items) {
-    const price = item.match(
+    const itemWithoutShipping = item.replace(
+      /<g:shipping\b[\s\S]*?<\/g:shipping>/gi,
+      "",
+    );
+    const price = itemWithoutShipping.match(
       /<g:price>(\d+(?:\.\d+)?) ([A-Z]{3})<\/g:price>/,
     );
-    const salePrice = item.match(
+    const salePrice = itemWithoutShipping.match(
       /<g:sale_price>(\d+(?:\.\d+)?) ([A-Z]{3})<\/g:sale_price>/,
     );
     expect(price, "Every feed item must have one base price").not.toBeNull();
-    expect(item.match(/<g:price>/g)).toHaveLength(1);
-    expect(item.match(/<g:sale_price>/g)?.length ?? 0).toBeLessThanOrEqual(1);
+    expect(itemWithoutShipping.match(/<g:price>/g)).toHaveLength(1);
+    expect(
+      itemWithoutShipping.match(/<g:sale_price>/g)?.length ?? 0,
+    ).toBeLessThanOrEqual(1);
+    expect(Number(price![1])).toBeGreaterThan(0);
     if (salePrice) {
       expect(salePrice[2]).toBe(price![2]);
+      expect(Number(salePrice[1])).toBeGreaterThan(0);
       expect(Number(salePrice[1])).toBeLessThan(Number(price![1]));
     }
   }
@@ -363,6 +371,22 @@ describe("Facebook product feed route", () => {
               discountAmount: null,
               discountPercentage: null,
             },
+            {
+              id: "var_free_xl",
+              productId: "prod_shirt",
+              size: "XL",
+              color: "Green",
+              sku: "SKU-FREE-XL",
+              price: 100,
+              stock: 2,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: "flat",
+              discountAmount: 100,
+              discountPercentage: null,
+            },
           ],
         },
       ],
@@ -376,6 +400,7 @@ describe("Facebook product feed route", () => {
     expect(body.match(/<item>/g)).toHaveLength(2);
     expect(body).toContain("<g:id>SKU-RED-M</g:id>");
     expect(body).toContain("<g:id>SKU-BLUE-L</g:id>");
+    expect(body).not.toContain("<g:id>SKU-FREE-XL</g:id>");
     expect(body).not.toContain("<g:id>prod_shirt</g:id>");
     expect(body).toContain("<g:item_group_id>prod_shirt</g:item_group_id>");
     expect(body).toContain(
@@ -636,6 +661,9 @@ describe("Facebook product feed route", () => {
           description: "Soft shirt",
           price: 1200,
           discountedPrice: 1100,
+          discountType: "flat",
+          discountPercentage: null,
+          discountAmount: 100,
           isActive: true,
           hasVariants: true,
           availableForSale: true,
@@ -838,8 +866,43 @@ describe("Facebook product feed route", () => {
     expect(body).not.toContain("<g:id>prod_sold_out</g:id>");
   });
 
-  it("emits zero discounted prices without falling back to the original price", async () => {
+  it("keeps free-shipping cost separate from the direct item price", async () => {
     mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_free_delivery",
+          slug: "free-delivery-product",
+          name: "Free Delivery Product",
+          description: "Catalog item with free shipping",
+          price: 1200,
+          discountedPrice: 1000,
+          discountType: "flat",
+          discountPercentage: null,
+          discountAmount: 200,
+          isActive: true,
+          availableForSale: true,
+          freeDelivery: true,
+          imageUrl: "https://cdn.example.test/products/free-delivery.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const response = await GET(context());
+    const body = await response.text();
+    const item = feedItemById(body, "prod_free_delivery");
+
+    expect(response.status).toBe(200);
+    expect(item).toContain("<g:price>1200.00 BDT</g:price>");
+    expect(item).toContain("<g:sale_price>1000.00 BDT</g:sale_price>");
+    expect(item).toContain("<g:shipping>");
+    expect(item).toContain("<g:price>0.00 BDT</g:price>");
+    expect(item.match(/<g:price>/g)).toHaveLength(2);
+    expectFeedPriceInvariant(body);
+  });
+
+  it("omits zero-current-price products from both catalog feeds", async () => {
+    mocks.getFeedProducts.mockResolvedValue({
       data: [
         {
           id: "prod_free",
@@ -848,22 +911,47 @@ describe("Facebook product feed route", () => {
           description: "Fully discounted item",
           price: 1200,
           discountedPrice: 0,
+          discountType: "flat",
+          discountPercentage: null,
+          discountAmount: 1200,
           isActive: true,
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/free.jpg",
         },
+        {
+          id: "prod_rounded_free",
+          slug: "rounded-free-sample",
+          name: "Rounded Free Sample",
+          description: "Positive raw price that rounds to zero in the feed",
+          price: 1,
+          discountedPrice: 0.004,
+          discountType: "flat",
+          discountPercentage: null,
+          discountAmount: 0.996,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/rounded-free.jpg",
+        },
       ],
-      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+      pagination: { page: 1, limit: 100, total: 2, totalPages: 1 },
     });
 
-    const response = await GET(context());
-    const body = await response.text();
+    const metaResponse = await GET(context());
+    const googleResponse = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+    const bodies = [await metaResponse.text(), await googleResponse.text()];
 
-    expect(response.status).toBe(200);
-    expect(body).toContain("<g:price>1200.00 BDT</g:price>");
-    expect(body).toContain("<g:sale_price>0.00 BDT</g:sale_price>");
-    expect(body).not.toContain("<g:price>0.00 BDT</g:price>");
-    expectFeedPriceInvariant(body);
+    expect(metaResponse.status).toBe(200);
+    expect(googleResponse.status).toBe(200);
+    for (const body of bodies) {
+      expect(body).toContain("<rss");
+      expect(body).not.toContain("<item>");
+      expect(body).not.toContain("prod_free");
+      expect(body).not.toContain("prod_rounded_free");
+      expect(body).not.toContain("<g:price>");
+      expect(body).not.toContain("<g:sale_price>");
+    }
   });
 
   it("keeps base/sale pricing invariant across Google and Meta feeds", async () => {
@@ -876,6 +964,9 @@ describe("Facebook product feed route", () => {
           description: "Catalog sale item",
           price: 1500,
           discountedPrice: 1250,
+          discountType: "flat",
+          discountPercentage: null,
+          discountAmount: 250,
           isActive: true,
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/discounted.jpg",
@@ -898,6 +989,9 @@ describe("Facebook product feed route", () => {
           description: "Discount below feed currency precision",
           price: 1.004,
           discountedPrice: 1.003,
+          discountType: "flat",
+          discountPercentage: null,
+          discountAmount: 0.001,
           isActive: true,
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/rounded-equal.jpg",
@@ -931,6 +1025,191 @@ describe("Facebook product feed route", () => {
     }
     expect(metaBody).toContain("<g:availability>in stock</g:availability>");
     expect(googleBody).toContain("<g:availability>in_stock</g:availability>");
+  });
+
+  it("caps catalog money at two decimals for three-decimal currencies", async () => {
+    mocks.getLayoutData.mockResolvedValue({
+      currency: { code: "KWD" },
+      media: undefined,
+    });
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [
+        {
+          id: "prod_kwd_sale",
+          slug: "kwd-sale",
+          name: "KWD Sale",
+          description: "Discount remains visible after feed rounding",
+          price: 1.236,
+          discountedPrice: 1.224,
+          discountType: "flat",
+          discountPercentage: null,
+          discountAmount: 0.012,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/kwd-sale.jpg",
+        },
+        {
+          id: "prod_kwd_rounded_equal",
+          slug: "kwd-rounded-equal",
+          name: "KWD Rounded Equal",
+          description: "Discount disappears at feed precision",
+          price: 1.234,
+          discountedPrice: 1.233,
+          discountType: "flat",
+          discountPercentage: null,
+          discountAmount: 0.001,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/kwd-rounded-equal.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 2, totalPages: 1 },
+    });
+
+    const metaResponse = await GET(context());
+    const googleResponse = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+    const bodies = [await metaResponse.text(), await googleResponse.text()];
+
+    expect(metaResponse.status).toBe(200);
+    expect(googleResponse.status).toBe(200);
+    for (const body of bodies) {
+      const sale = feedItemById(body, "prod_kwd_sale");
+      expect(sale).toContain("<g:price>1.24 KWD</g:price>");
+      expect(sale).toContain("<g:sale_price>1.22 KWD</g:sale_price>");
+      const roundedEqual = feedItemById(body, "prod_kwd_rounded_equal");
+      expect(roundedEqual).toContain("<g:price>1.23 KWD</g:price>");
+      expect(roundedEqual).not.toContain("<g:sale_price>");
+      expect(body).not.toMatch(/<g:(?:sale_)?price>\d+\.\d{3}/);
+      expectFeedPriceInvariant(body);
+    }
+  });
+
+  it("rounds the exact 1.005 boundary identically in Google and Meta feeds", async () => {
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [
+        {
+          id: "prod_rounding_boundary",
+          slug: "rounding-boundary",
+          name: "Rounding Boundary",
+          description: "Currency.js boundary regression",
+          price: 1.005,
+          discountedPrice: 0.9,
+          discountType: "percentage",
+          discountPercentage: 10,
+          discountAmount: null,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/rounding-boundary.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const metaResponse = await GET(context());
+    const googleResponse = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+
+    for (const response of [metaResponse, googleResponse]) {
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      const item = feedItemById(body, "prod_rounding_boundary");
+      expect(item).toContain("<g:price>1.01 BDT</g:price>");
+      expect(item).toContain("<g:sale_price>0.90 BDT</g:sale_price>");
+      expectFeedPriceInvariant(body);
+    }
+  });
+
+  it("omits exponent-form legacy prices from Google and Meta feeds", async () => {
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [
+        {
+          id: "prod_exponent_price",
+          slug: "exponent-price",
+          name: "Exponent Price",
+          description: "Legacy out-of-range price",
+          price: 1e21,
+          discountedPrice: 1e21,
+          discountType: null,
+          discountPercentage: null,
+          discountAmount: null,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/exponent-price.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const metaResponse = await GET(context());
+    const googleResponse = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+
+    for (const response of [metaResponse, googleResponse]) {
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).not.toContain("<item>");
+      expect(body).not.toContain("prod_exponent_price");
+      expect(body).not.toMatch(/<g:(?:sale_)?price>[^<]*e\+/i);
+    }
+  });
+
+  it("preserves fractional variant discounts at the feed precision", async () => {
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [
+        {
+          id: "prod_fractional",
+          slug: "fractional-variant",
+          name: "Fractional Variant",
+          description: "Fractional BDT discount",
+          price: 10.4,
+          discountedPrice: 0.4,
+          discountType: "flat",
+          discountPercentage: null,
+          discountAmount: 10,
+          isActive: true,
+          hasVariants: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/fractional.jpg",
+          variants: [
+            {
+              id: "var_fractional",
+              productId: "prod_fractional",
+              size: "M",
+              color: null,
+              sku: "SKU-FRACTIONAL",
+              price: 10.4,
+              stock: 3,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: null,
+              discountPercentage: null,
+              discountAmount: null,
+            },
+          ],
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const metaResponse = await GET(context());
+    const googleResponse = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+
+    for (const response of [metaResponse, googleResponse]) {
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      const item = feedItemById(body, "SKU-FRACTIONAL");
+      expect(item).toContain("<g:price>10.40 BDT</g:price>");
+      expect(item).toContain("<g:sale_price>0.40 BDT</g:sale_price>");
+      expectFeedPriceInvariant(body);
+    }
   });
 
   it("flattens rich-text product descriptions into safe catalog text", async () => {

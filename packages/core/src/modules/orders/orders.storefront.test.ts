@@ -444,6 +444,87 @@ describe("createStorefrontOrder product availability verification", () => {
     },
   );
 
+  it.each([
+    {
+      currencyCode: "JPY",
+      storedPrice: 100.49,
+      submittedPrice: 100,
+      quantity: 3,
+      expectedUnitPrice: 100,
+      expectedSubtotal: 300,
+    },
+    {
+      currencyCode: "KWD",
+      storedPrice: 1.2346,
+      submittedPrice: 1.235,
+      quantity: 3,
+      expectedUnitPrice: 1.235,
+      expectedSubtotal: 3.705,
+    },
+  ])(
+    "validates submitted and authoritative $currencyCode prices at ISO precision",
+    async ({
+      currencyCode,
+      storedPrice,
+      submittedPrice,
+      quantity,
+      expectedUnitPrice,
+      expectedSubtotal,
+    }) => {
+      const db = createDbMock(
+        [],
+        [createProduct({ price: storedPrice })],
+        [createVariant({ price: storedPrice, trackInventory: false })],
+      );
+
+      const result = await validateStorefrontCartItems(
+        db,
+        [{
+          productId: "prod_standard",
+          variantId: "var_standard",
+          quantity,
+          price: submittedPrice,
+          productName: "Standard Product",
+          variantLabel: null,
+        }],
+        { currencyCode },
+      );
+
+      expect(result).toMatchObject({
+        valid: true,
+        issues: [],
+        subtotal: expectedSubtotal,
+        items: [expect.objectContaining({
+          unitPrice: expectedUnitPrice,
+          quantity,
+        })],
+      });
+    },
+  );
+
+  it("uses an explicit BDT fallback for direct Core cart validation", async () => {
+    const db = createDbMock(
+      [],
+      [createProduct({ price: 1.234 })],
+      [createVariant({ price: 1.234, trackInventory: false })],
+    );
+
+    const result = await validateStorefrontCartItems(db, [{
+      productId: "prod_standard",
+      variantId: "var_standard",
+      quantity: 2,
+      price: 1.23,
+      productName: "Standard Product",
+      variantLabel: null,
+    }]);
+
+    expect(result).toMatchObject({
+      valid: true,
+      subtotal: 2.46,
+      items: [expect.objectContaining({ unitPrice: 1.23 })],
+    });
+  });
+
   it("rejects products without persisted variants as unavailable until product-level inventory exists", async () => {
     await expect(
       placeOrder({
@@ -530,6 +611,38 @@ describe("createStorefrontOrder product availability verification", () => {
     );
   });
 
+  it("accepts the advertised simple SKU when legacy default option labels have drifted", async () => {
+    const result = await placeOrder({
+      variants: [createVariant({
+        isDefault: true,
+        size: "Default",
+        color: "Default",
+        trackInventory: false,
+      })],
+      inputOverrides: {
+        items: [
+          {
+            cartKey: "line_simple_legacy_labels",
+            productId: "prod_standard",
+            variantId: "var_standard",
+            quantity: 1,
+            price: 125,
+            productName: "Standard Product",
+            variantLabel: "Default / Default",
+          },
+        ],
+      },
+    });
+
+    expect(result.commitPayload.items[0]).toEqual(
+      expect.objectContaining({
+        variantId: "var_standard",
+        variantLabel: null,
+        inventoryTracked: false,
+      }),
+    );
+  });
+
   it("accepts an explicitly submitted buyer option SKU", async () => {
     const result = await placeOrder({
       variants: [
@@ -554,6 +667,52 @@ describe("createStorefrontOrder product availability verification", () => {
       variantLabel: "M",
       inventoryTracked: true,
     }));
+  });
+
+  it("rejects checkout when legacy active SKUs mix option-axis shapes", async () => {
+    await expect(
+      placeOrder({
+        variants: [
+          createVariant({
+            id: "var_size_42",
+            size: "42",
+            color: null,
+            isDefault: false,
+          }),
+          createVariant({
+            id: "var_size_41_green",
+            size: "41",
+            color: "Green",
+            isDefault: false,
+          }),
+        ],
+        inputOverrides: {
+          items: [
+            {
+              cartKey: "line_mixed_axes",
+              productId: "prod_standard",
+              variantId: "var_size_42",
+              quantity: 1,
+              price: 125,
+              productName: "Standard Product",
+              variantLabel: "42",
+            },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "Some items in your cart need attention.",
+      details: {
+        itemIssues: [
+          expect.objectContaining({
+            cartKey: "line_mixed_axes",
+            code: "PRODUCT_UNAVAILABLE",
+            action: "remove",
+            message: "Standard Product is not available for checkout right now.",
+          }),
+        ],
+      },
+    });
   });
 
   it("rejects a sole no-option SKU when it is not the protected default SKU", async () => {
@@ -736,6 +895,33 @@ describe("createStorefrontOrder shipping verification", () => {
 
     expect(result.commitPayload.orderData.shippingCharge).toBe(75);
     expect(result.totalAmount).toBe(200);
+  });
+
+  it("rounds a KWD shipping fee with three-decimal checkout precision", async () => {
+    const db = createDbMock(
+      [[
+        [
+          createLocation({ id: "city_1", type: "city", parentId: null }),
+          createLocation({ id: "zone_1", type: "zone", parentId: "city_1" }),
+        ],
+        [createShippingMethod({ fee: 1.2346 })],
+      ]],
+      [],
+      [],
+    );
+
+    const result = await validateStorefrontDeliveryPreflight(
+      db,
+      {
+        city: "city_1",
+        zone: "zone_1",
+        shippingMethodId: "ship_standard",
+        currencyCode: "KWD",
+      },
+      { hasFreeDeliveryProduct: false },
+    );
+
+    expect(result.shippingCharge).toBe(1.235);
   });
 
   it("rejects missing or unknown shipping methods when shipping applies", async () => {

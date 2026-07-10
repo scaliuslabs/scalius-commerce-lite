@@ -107,6 +107,41 @@ describe("product sellable variant resolution", () => {
     });
   });
 
+  it("fails closed when active option SKUs mix option-axis shapes", () => {
+    const resolution = resolveBuyerVariants([
+      variant({ id: "var_size_42", size: "42", color: null, stock: 4 }),
+      variant({
+        id: "var_size_41_green",
+        size: "41",
+        color: "Green",
+        stock: 4,
+      }),
+    ]);
+
+    expect(resolution).toMatchObject({
+      mode: "ambiguous",
+      variants: [],
+      hasCustomerOptions: true,
+    });
+  });
+
+  it("fails closed when a no-option non-default row coexists with option SKUs", () => {
+    const resolution = resolveBuyerVariants([
+      variant({ id: "var_size_m", size: "M", stock: 4 }),
+      variant({
+        id: "var_invalid_no_option",
+        isDefault: false,
+        trackInventory: false,
+      }),
+    ]);
+
+    expect(resolution).toMatchObject({
+      mode: "ambiguous",
+      variants: [],
+      hasCustomerOptions: true,
+    });
+  });
+
   it("summarizes stock from buyer-visible SKUs only", () => {
     expect(getBuyerStockSummary([
       variant({ id: "var_default_prod_1", isDefault: true, trackInventory: false }),

@@ -3,12 +3,23 @@ import {
   PaymentRecordStatus,
   refundAttempts,
   orderPayments,
+  orders,
   webhookEvents,
   type RefundAttempt,
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { getDecimalPlaces } from "@scalius/shared/currency";
+import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
+import {
+  assertOrderPaymentCurrency,
+  resolveOrderCurrencySnapshot,
+  roundOrderMoney,
+  type OrderCurrencySnapshot,
+} from "./order-currency";
+import {
+  resolvePolarRefundProviderMoney,
+  resolveStripeRefundProviderMoney,
+} from "./refund-provider-money";
 import {
   FRESH_GATEWAY_SETTINGS_READ_OPTIONS,
   getPolarSettings,
@@ -55,11 +66,20 @@ type RefundAttemptProbeRow = Pick<
   | "amount"
   | "currency"
   | "status"
+  | "sourcePaymentId"
   | "sourceTransactionId"
   | "providerRefundId"
   | "providerIdempotencyKey"
   | "refundReference"
 >;
+
+interface RefundProviderReconciliationContext {
+  currency: OrderCurrencySnapshot;
+  sourcePayment: {
+    amount: number;
+    metadata: string | null;
+  } | null;
+}
 
 type ProviderProbeOutcome =
   | {
@@ -216,7 +236,7 @@ function buildRefundAttemptStateNotificationFact(
     orderId: attempt.orderId,
     notificationType,
     dedupeKey: `refund:${attempt.orderId}:${attempt.refundGroupId}:${state}`,
-    amount: roundPrice(attempt.amount),
+    amount: roundPrice(attempt.amount, attempt.currency),
     refundId: options.providerRefundId ?? attempt.providerRefundId ?? undefined,
   };
 }
@@ -233,8 +253,50 @@ function metadataMatchesAttempt(
   );
 }
 
-function expectedSmallestUnitAmount(attempt: RefundAttemptProbeRow): number {
-  return Math.round(roundPrice(attempt.amount) * Math.pow(10, getDecimalPlaces(attempt.currency)));
+async function assertRefundAttemptOrderCurrency(
+  db: Database,
+  attempt: RefundAttemptProbeRow,
+): Promise<RefundProviderReconciliationContext> {
+  const order = await db
+    .select({
+      currencyCode: orders.currencyCode,
+      currencyDecimalPlaces: orders.currencyDecimalPlaces,
+    })
+    .from(orders)
+    .where(eq(orders.id, attempt.orderId))
+    .get();
+  if (!order) {
+    throw new Error(`Order ${attempt.orderId} was not found for refund reconciliation.`);
+  }
+  const currency = resolveOrderCurrencySnapshot(order);
+  assertOrderPaymentCurrency(attempt.currency, currency, "Refund attempt");
+
+  const ledgerRows = await db
+    .select({
+      id: orderPayments.id,
+      amount: orderPayments.amount,
+      currency: orderPayments.currency,
+      metadata: orderPayments.metadata,
+    })
+    .from(orderPayments)
+    .where(eq(orderPayments.orderId, attempt.orderId))
+    .all();
+  for (const payment of ledgerRows) {
+    assertOrderPaymentCurrency(payment.currency, currency, "Order payment ledger");
+  }
+  if (!ledgerRows.some((payment) => payment.id === attempt.refundPaymentId)) {
+    throw new Error(`Refund payment ${attempt.refundPaymentId} was not found for reconciliation.`);
+  }
+  const sourcePayment = ledgerRows.find((payment) => payment.id === attempt.sourcePaymentId);
+  if (attempt.gateway === "polar" && !sourcePayment) {
+    throw new Error(`Polar source payment ${attempt.sourcePaymentId} was not found for reconciliation.`);
+  }
+  return {
+    currency,
+    sourcePayment: sourcePayment
+      ? { amount: sourcePayment.amount, metadata: sourcePayment.metadata }
+      : null,
+  };
 }
 
 async function claimRefundAttempt(
@@ -359,12 +421,17 @@ async function probeStripeRefund(
   db: Database,
   kv: KVNamespace | undefined,
   attempt: RefundAttemptProbeRow,
+  context: RefundProviderReconciliationContext,
   encryptionKey?: string,
 ): Promise<ProviderProbeOutcome> {
   const settings = await getStripeSettings(db, kv, encryptionKey, FRESH_GATEWAY_SETTINGS_READ_OPTIONS);
   if (!settings?.secretKey) {
     return { outcome: "unknown", error: "Stripe is not configured for refund reconciliation", manualReview: true };
   }
+  const expectedMoney = resolveStripeRefundProviderMoney(
+    attempt.amount,
+    context.currency,
+  );
 
   let refund: StripeRefundSnapshot | undefined;
   if (attempt.providerRefundId) {
@@ -380,7 +447,8 @@ async function probeStripeRefund(
     }
     refund = result.refunds?.find((candidate) =>
       metadataMatchesAttempt(candidate.metadata, attempt) &&
-      candidate.amount === expectedSmallestUnitAmount(attempt)
+      normalizeSupportedCurrencyCode(candidate.currency) === expectedMoney.currency &&
+      candidate.amount === expectedMoney.amountMinor
     );
   }
 
@@ -388,6 +456,44 @@ async function probeStripeRefund(
     return {
       outcome: "unknown",
       error: "No Stripe refund matched this attempt. Manual review required before retrying.",
+      manualReview: true,
+    };
+  }
+  if (
+    attempt.sourceTransactionId &&
+    refund.charge !== attempt.sourceTransactionId
+  ) {
+    return {
+      outcome: "unknown",
+      providerRefundId: refund.id,
+      providerStatus: refund.status ?? "unknown",
+      error: "Stripe refund source charge does not match the local refund attempt.",
+      manualReview: true,
+    };
+  }
+  if (
+    normalizeSupportedCurrencyCode(refund.currency) !==
+    context.currency.code
+  ) {
+    return {
+      outcome: "unknown",
+      error: "Stripe refund currency does not match the immutable order currency.",
+      manualReview: true,
+    };
+  }
+  if (refund.amount !== expectedMoney.amountMinor) {
+    return {
+      outcome: "unknown",
+      providerRefundId: refund.id,
+      providerStatus: refund.status ?? "unknown",
+      error: "Stripe refund amount does not match the immutable local refund attempt.",
+      responsePayload: {
+        id: refund.id,
+        status: refund.status,
+        amount: refund.amount,
+        currency: refund.currency,
+        charge: refund.charge,
+      },
       manualReview: true,
     };
   }
@@ -458,6 +564,7 @@ async function probePolarRefund(
   db: Database,
   kv: KVNamespace | undefined,
   attempt: RefundAttemptProbeRow,
+  context: RefundProviderReconciliationContext,
   encryptionKey?: string,
 ): Promise<ProviderProbeOutcome> {
   const settings = await getPolarSettings(db, kv, encryptionKey, FRESH_GATEWAY_SETTINGS_READ_OPTIONS);
@@ -485,6 +592,56 @@ async function probePolarRefund(
       manualReview: true,
     };
   }
+  if (
+    attempt.sourceTransactionId &&
+    refund.orderId !== attempt.sourceTransactionId
+  ) {
+    return {
+      outcome: "unknown",
+      providerRefundId: refund.id,
+      providerStatus: refund.status,
+      error: "Polar refund source order does not match the local refund attempt.",
+      manualReview: true,
+    };
+  }
+
+  const expectedMoney = resolvePolarRefundProviderMoney(
+    attempt.amount,
+    context.currency,
+    context.sourcePayment!,
+  );
+  if (normalizeSupportedCurrencyCode(refund.currency) !== expectedMoney.currency) {
+    return {
+      outcome: "unknown",
+      providerRefundId: refund.id,
+      providerStatus: refund.status,
+      error: "Polar refund currency does not match the source payment currency.",
+      responsePayload: {
+        id: refund.id,
+        status: refund.status,
+        amount: refund.amount,
+        currency: refund.currency,
+        orderId: refund.orderId,
+      },
+      manualReview: true,
+    };
+  }
+  if (refund.amount !== expectedMoney.amountMinor) {
+    return {
+      outcome: "unknown",
+      providerRefundId: refund.id,
+      providerStatus: refund.status,
+      error: "Polar refund amount does not match the immutable local refund attempt.",
+      responsePayload: {
+        id: refund.id,
+        status: refund.status,
+        amount: refund.amount,
+        currency: refund.currency,
+        orderId: refund.orderId,
+      },
+      manualReview: true,
+    };
+  }
 
   const payload = {
     id: refund.id,
@@ -507,15 +664,16 @@ async function probeProviderRefund(
   db: Database,
   kv: KVNamespace | undefined,
   attempt: RefundAttemptProbeRow,
+  context: RefundProviderReconciliationContext,
   encryptionKey?: string,
 ): Promise<ProviderProbeOutcome> {
   switch (attempt.gateway) {
     case "stripe":
-      return probeStripeRefund(db, kv, attempt, encryptionKey);
+      return probeStripeRefund(db, kv, attempt, context, encryptionKey);
     case "sslcommerz":
       return probeSSLCommerzRefund(db, kv, attempt, encryptionKey);
     case "polar":
-      return probePolarRefund(db, kv, attempt, encryptionKey);
+      return probePolarRefund(db, kv, attempt, context, encryptionKey);
     case "cod":
       return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
     default:
@@ -583,16 +741,26 @@ async function findStripeSourcePayment(
   return sourcePayment;
 }
 
-async function getRefundedAmountForSourcePayment(db: Database, sourcePaymentId: string): Promise<number> {
+async function getRefundedAmountForSourcePayment(
+  db: Database,
+  sourcePaymentId: string,
+  currency: OrderCurrencySnapshot,
+): Promise<number> {
   const rows = await db
-    .select({ amount: orderPayments.amount })
+    .select({ amount: orderPayments.amount, currency: orderPayments.currency })
     .from(refundAttempts)
     .innerJoin(orderPayments, eq(orderPayments.id, refundAttempts.refundPaymentId))
     .where(and(
       eq(refundAttempts.sourcePaymentId, sourcePaymentId),
       eq(orderPayments.status, PaymentRecordStatus.REFUNDED),
     ));
-  return roundPrice(rows.reduce((sum, row) => sum + Number(row.amount ?? 0), 0));
+  for (const row of rows) {
+    assertOrderPaymentCurrency(row.currency, currency, "Prior refund payment");
+  }
+  return roundOrderMoney(
+    rows.reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
+    currency,
+  );
 }
 
 async function getExistingRefundAttemptByProviderRefundId(
@@ -753,6 +921,19 @@ async function reconcileStripeExternalRefundWebhookEvent(
     }, nowSeconds);
     return { imported: 0, finalized: 0, skipped: 0, deferred: 1, finalizedOrderIds: [], refundNotifications: [] };
   }
+  const order = await db
+    .select({
+      currencyCode: orders.currencyCode,
+      currencyDecimalPlaces: orders.currencyDecimalPlaces,
+    })
+    .from(orders)
+    .where(eq(orders.id, sourcePayment.orderId))
+    .get();
+  if (!order) {
+    throw new Error(`Order ${sourcePayment.orderId} was not found for Stripe refund reconciliation.`);
+  }
+  const currency = resolveOrderCurrencySnapshot(order);
+  assertOrderPaymentCurrency(sourcePayment.currency, currency, "Stripe source payment");
 
   const listed = await listStripeRefundsForCharge(settings.secretKey, evidence.chargeId, 100);
   if (!listed.success) {
@@ -784,6 +965,7 @@ async function reconcileStripeExternalRefundWebhookEvent(
   const refundNotifications: RefundNotificationFact[] = [];
 
   for (const refund of succeededRefunds) {
+    assertOrderPaymentCurrency(refund.currency, currency, "Stripe provider refund");
     const existing = await getExistingRefundAttemptByProviderRefundId(db, refund.id);
     if (existing) {
       skipped += 1;
@@ -793,10 +975,12 @@ async function reconcileStripeExternalRefundWebhookEvent(
       continue;
     }
 
-    const decimals = getDecimalPlaces(refund.currency || sourcePayment.currency);
-    const amount = roundPrice(refund.amount / Math.pow(10, decimals));
-    const alreadyRefunded = await getRefundedAmountForSourcePayment(db, sourcePayment.id);
-    const remaining = roundPrice(Number(sourcePayment.amount ?? 0) - alreadyRefunded);
+    const amount = roundOrderMoney(
+      refund.amount / Math.pow(10, currency.decimalPlaces),
+      currency,
+    );
+    const alreadyRefunded = await getRefundedAmountForSourcePayment(db, sourcePayment.id, currency);
+    const remaining = roundOrderMoney(Number(sourcePayment.amount ?? 0) - alreadyRefunded, currency);
     if (amount <= 0 || amount > remaining + 0.000001) {
       deferred += 1;
       continue;
@@ -929,6 +1113,7 @@ export async function reconcileRefundAttemptById(
       amount: refundAttempts.amount,
       currency: refundAttempts.currency,
       status: refundAttempts.status,
+      sourcePaymentId: refundAttempts.sourcePaymentId,
       sourceTransactionId: refundAttempts.sourceTransactionId,
       providerRefundId: refundAttempts.providerRefundId,
       providerIdempotencyKey: refundAttempts.providerIdempotencyKey,
@@ -942,6 +1127,8 @@ export async function reconcileRefundAttemptById(
     return { status: "deferred", orderIds: [], refundNotifications: [] };
   }
 
+  const context = await assertRefundAttemptOrderCurrency(db, attempt);
+
   if (attempt.status === "pending") {
     await markAttemptFailed(db, attempt, {
       outcome: "rejected",
@@ -953,7 +1140,7 @@ export async function reconcileRefundAttemptById(
 
   const outcome = attempt.status === "reconcile_required"
     ? { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" } satisfies ProviderProbeOutcome
-    : await probeProviderRefund(db, kv, attempt, options.encryptionKey);
+    : await probeProviderRefund(db, kv, attempt, context, options.encryptionKey);
 
   if (outcome.outcome === "accepted") {
     await markAcceptedBeforeFinalize(db, attempt, outcome, nowSeconds);

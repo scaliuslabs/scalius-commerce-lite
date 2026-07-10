@@ -2,22 +2,30 @@ import { productImages, products, productVariants } from "@scalius/database/sche
 import type { Database } from "@scalius/database/client";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
+    calculateCatalogFeedDiscountedAmount,
+    isPositiveCatalogFeedAmount,
+} from "@scalius/shared/catalog-feed-money";
+import {
     normalizeCatalogDiscoveryBaseUrl,
     resolveCatalogDiscoveryImageUrl,
 } from "@scalius/shared/catalog-discovery-media";
+import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 export const PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT = 500;
 export const PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT = 500;
 export const PRODUCT_FEED_DIAGNOSTIC_SAMPLE_LIMIT = 5;
 export const PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT = 10;
+const PRODUCT_FEED_DIAGNOSTIC_ID_CHUNK_SIZE = 90;
 
 export const PRODUCT_FEED_DIAGNOSTIC_REASONS = [
     "feed_disabled",
     "storefront_url_unavailable",
     "product_feed_excluded",
     "inactive_deleted_unpublished",
+    "inconsistent_option_axes",
     "no_buyer_sku",
+    "non_positive_price",
     "missing_image",
     "unavailable_excluded",
 ] as const;
@@ -67,6 +75,10 @@ export interface ProductFeedDiagnosticScanProduct {
     isActive: boolean;
     excludeFromProductFeed: boolean;
     deletedAt: number | null;
+    price: number;
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
 }
 
 export interface ProductFeedDiagnosticScanVariant {
@@ -78,6 +90,10 @@ export interface ProductFeedDiagnosticScanVariant {
     reservedStock: number;
     isDefault: boolean;
     trackInventory: boolean;
+    price: number;
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
 }
 
 export interface ProductFeedDiagnosticScanInput {
@@ -89,6 +105,7 @@ export interface ProductFeedDiagnosticScanInput {
     truncated: boolean;
     sampleLimitPerReason: number;
     storefrontBaseUrl?: string | null;
+    currencyCode?: string;
 }
 
 type MutableReasonSummary = Omit<ProductFeedDiagnosticReasonSummary, "samples"> & {
@@ -99,6 +116,14 @@ type MutableReasonSummary = Omit<ProductFeedDiagnosticReasonSummary, "samples"> 
 function boundedInteger(value: number | undefined, fallback: number, max: number): number {
     if (!Number.isFinite(value) || value === undefined) return fallback;
     return Math.min(Math.max(Math.trunc(value), 1), max);
+}
+
+function chunkProductIds(productIds: string[]): string[][] {
+    const chunks: string[][] = [];
+    for (let index = 0; index < productIds.length; index += PRODUCT_FEED_DIAGNOSTIC_ID_CHUNK_SIZE) {
+        chunks.push(productIds.slice(index, index + PRODUCT_FEED_DIAGNOSTIC_ID_CHUNK_SIZE));
+    }
+    return chunks;
 }
 
 function createReasonSummaries(): Record<ProductFeedDiagnosticReason, MutableReasonSummary> {
@@ -148,8 +173,19 @@ function isBuyerOptionSku(variant: ProductFeedDiagnosticScanVariant): boolean {
 
 function getBuyerTopology(variants: ProductFeedDiagnosticScanVariant[]) {
     const activeSkus = variants.filter((variant) => variant.id !== "default");
-    const optionSkus = activeSkus.filter(isBuyerOptionSku);
+    const nonDefaultSkus = activeSkus.filter((variant) => !variant.isDefault);
+    const optionSkus = nonDefaultSkus.filter(isBuyerOptionSku);
     const simpleSku = activeSkus.length === 1 && activeSkus[0]?.isDefault ? activeSkus[0] : null;
+
+    if (
+        classifyProductVariantOptionAxes(nonDefaultSkus) === "mixed" ||
+        (optionSkus.length > 0 && nonDefaultSkus.some((variant) => !hasCustomerOption(variant)))
+    ) {
+        return {
+            mode: "inconsistent" as const,
+            candidateVariantRows: optionSkus.length,
+        };
+    }
 
     if (optionSkus.length > 0) {
         return { mode: "optioned" as const, variants: optionSkus };
@@ -162,6 +198,63 @@ function getBuyerTopology(variants: ProductFeedDiagnosticScanVariant[]) {
 
 function isVariantAvailable(variant: ProductFeedDiagnosticScanVariant): boolean {
     return !variant.trackInventory || variant.stock - variant.reservedStock > 0;
+}
+
+function hasSavedDiscount(value: {
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+}): boolean {
+    return (
+        value.discountType === "percentage" &&
+        (value.discountPercentage ?? 0) > 0
+    ) || (
+        value.discountType === "flat" &&
+        (value.discountAmount ?? 0) > 0
+    );
+}
+
+function getProductFeedPricing(
+    product: ProductFeedDiagnosticScanProduct,
+    currencyCode: string,
+) {
+    return {
+        basePrice: product.price,
+        feedPrice: calculateCatalogFeedDiscountedAmount(
+            product.price,
+            product.discountType,
+            product.discountPercentage,
+            product.discountAmount,
+            currencyCode,
+        ),
+    };
+}
+
+function getVariantFeedPricing(
+    product: ProductFeedDiagnosticScanProduct,
+    variant: ProductFeedDiagnosticScanVariant,
+    currencyCode: string,
+): { basePrice: number; feedPrice: number } {
+    const basePrice = variant.price ?? product.price;
+    const discount = hasSavedDiscount(variant) ? variant : product;
+    return {
+        basePrice,
+        feedPrice: calculateCatalogFeedDiscountedAmount(
+            basePrice,
+            discount.discountType,
+            discount.discountPercentage,
+            discount.discountAmount,
+            currencyCode,
+        ),
+    };
+}
+
+function hasPositiveFeedPricing(
+    pricing: { basePrice: number; feedPrice: number },
+    currencyCode: string,
+): boolean {
+    return isPositiveCatalogFeedAmount(pricing.basePrice, currencyCode) &&
+        isPositiveCatalogFeedAmount(pricing.feedPrice, currencyCode);
 }
 
 function hasValidFeedImage(imageUrl: string | null | undefined, storefrontBaseUrl: string): boolean {
@@ -191,6 +284,7 @@ export function buildProductFeedDiagnosticsFromScan({
     truncated,
     sampleLimitPerReason,
     storefrontBaseUrl,
+    currencyCode = "BDT",
 }: ProductFeedDiagnosticScanInput): ProductFeedDiagnosticsReport {
     const summaries = createReasonSummaries();
     const productsWithIssues = new Set<string>();
@@ -226,6 +320,16 @@ export function buildProductFeedDiagnosticsFromScan({
         }
 
         const topology = getBuyerTopology(variants.get(product.id) ?? []);
+        if (topology.mode === "inconsistent") {
+            recordIssue(
+                product,
+                "inconsistent_option_axes",
+                feedsPolicy.variantStrategy === "products"
+                    ? 1
+                    : topology.candidateVariantRows,
+            );
+            continue;
+        }
         if (topology.mode === "none") {
             recordIssue(product, "no_buyer_sku", 0);
             continue;
@@ -236,6 +340,13 @@ export function buildProductFeedDiagnosticsFromScan({
             : false;
 
         if (feedsPolicy.variantStrategy === "products" || topology.mode === "simple") {
+            if (!hasPositiveFeedPricing(
+                getProductFeedPricing(product, currencyCode),
+                currencyCode,
+            )) {
+                recordIssue(product, "non_positive_price", 1);
+                continue;
+            }
             const available =
                 topology.mode === "simple"
                     ? isVariantAvailable(topology.variant)
@@ -258,6 +369,13 @@ export function buildProductFeedDiagnosticsFromScan({
         }
 
         for (const variant of topology.variants) {
+            if (!hasPositiveFeedPricing(
+                getVariantFeedPricing(product, variant, currencyCode),
+                currencyCode,
+            )) {
+                recordIssue(product, "non_positive_price", 1);
+                continue;
+            }
             if (!feedsPolicy.includeUnavailableProducts && !isVariantAvailable(variant)) {
                 recordIssue(product, "unavailable_excluded", 1);
                 continue;
@@ -304,6 +422,7 @@ export async function getProductFeedDiagnostics(
         scanLimit?: number;
         sampleLimitPerReason?: number;
         storefrontBaseUrl?: string | null;
+        currencyCode?: string;
     } = {},
 ): Promise<ProductFeedDiagnosticsReport> {
     const scanLimit = boundedInteger(
@@ -324,6 +443,10 @@ export async function getProductFeedDiagnostics(
             slug: products.slug,
             isActive: products.isActive,
             excludeFromProductFeed: products.excludeFromProductFeed,
+            price: products.price,
+            discountType: products.discountType,
+            discountPercentage: products.discountPercentage,
+            discountAmount: products.discountAmount,
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
         })
@@ -338,6 +461,10 @@ export async function getProductFeedDiagnostics(
         slug: row.slug,
         isActive: Boolean(row.isActive),
         excludeFromProductFeed: Boolean(row.excludeFromProductFeed),
+        price: row.price,
+        discountType: row.discountType,
+        discountPercentage: row.discountPercentage,
+        discountAmount: row.discountAmount,
         deletedAt: row.deletedAt ?? null,
     }));
     const productIds = productRows.map((product) => product.id);
@@ -353,35 +480,55 @@ export async function getProductFeedDiagnostics(
             truncated,
             sampleLimitPerReason,
             storefrontBaseUrl: options.storefrontBaseUrl,
+            currencyCode: options.currencyCode,
         });
     }
 
-    const [imageRows, variantRows] = await Promise.all([
-        db
-            .select({
-                productId: productImages.productId,
-                url: productImages.url,
-            })
-            .from(productImages)
-            .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
-            .orderBy(productImages.productId)
-            .all(),
-        db
-            .select({
-                id: productVariants.id,
-                productId: productVariants.productId,
-                size: productVariants.size,
-                color: productVariants.color,
-                stock: productVariants.stock,
-                reservedStock: productVariants.reservedStock,
-                isDefault: productVariants.isDefault,
-                trackInventory: productVariants.trackInventory,
-            })
-            .from(productVariants)
-            .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
-            .orderBy(productVariants.productId)
-            .all(),
-    ]);
+    const enrichmentChunks: Array<{
+        imageRows: Array<{ productId: string; url: string }>;
+        variantRows: Array<ProductFeedDiagnosticScanVariant & { productId: string }>;
+    }> = [];
+    for (const productIdChunk of chunkProductIds(productIds)) {
+        const [imageRows, variantRows] = await Promise.all([
+                db
+                    .select({
+                        productId: productImages.productId,
+                        url: productImages.url,
+                    })
+                    .from(productImages)
+                    .where(and(
+                        eq(productImages.isPrimary, true),
+                        inArray(productImages.productId, productIdChunk),
+                    ))
+                    .orderBy(productImages.productId)
+                    .all(),
+                db
+                    .select({
+                        id: productVariants.id,
+                        productId: productVariants.productId,
+                        size: productVariants.size,
+                        color: productVariants.color,
+                        stock: productVariants.stock,
+                        reservedStock: productVariants.reservedStock,
+                        isDefault: productVariants.isDefault,
+                        trackInventory: productVariants.trackInventory,
+                        price: productVariants.price,
+                        discountType: productVariants.discountType,
+                        discountPercentage: productVariants.discountPercentage,
+                        discountAmount: productVariants.discountAmount,
+                    })
+                    .from(productVariants)
+                    .where(and(
+                        inArray(productVariants.productId, productIdChunk),
+                        isNull(productVariants.deletedAt),
+                    ))
+                    .orderBy(productVariants.productId)
+                    .all(),
+        ]);
+        enrichmentChunks.push({ imageRows, variantRows });
+    }
+    const imageRows = enrichmentChunks.flatMap((chunk) => chunk.imageRows);
+    const variantRows = enrichmentChunks.flatMap((chunk) => chunk.variantRows);
 
     const primaryImageUrls = new Map<string, string | null>();
     for (const row of imageRows) {
@@ -402,6 +549,10 @@ export async function getProductFeedDiagnostics(
             reservedStock: row.reservedStock,
             isDefault: Boolean(row.isDefault),
             trackInventory: Boolean(row.trackInventory),
+            price: row.price,
+            discountType: row.discountType,
+            discountPercentage: row.discountPercentage,
+            discountAmount: row.discountAmount,
         });
         variantMap.set(row.productId, productVariantsForProduct);
     }
@@ -415,5 +566,6 @@ export async function getProductFeedDiagnostics(
         truncated,
         sampleLimitPerReason,
         storefrontBaseUrl: options.storefrontBaseUrl,
+        currencyCode: options.currencyCode,
     });
 }

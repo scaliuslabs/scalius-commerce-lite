@@ -30,6 +30,10 @@ import { parseMediaOptimizationSettings } from "../settings/site-settings.servic
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
+import {
+  DEFAULT_CURRENCY,
+  normalizeSupportedCurrencyCode,
+} from "@scalius/shared/currency";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import {
   getActiveHomepageWidgets,
@@ -540,13 +544,21 @@ export async function getLayoutData(
       r.value,
     ]),
   );
-  const currencyData = {
-    code: currencyMap.currency_code ?? "BDT",
-    symbol: currencyMap.currency_symbol ?? "৳",
-    usdExchangeRate: currencyMap.usd_exchange_rate
-      ? parseFloat(currencyMap.usd_exchange_rate)
-      : 1,
-  };
+  const currencyCode = normalizeSupportedCurrencyCode(currencyMap.currency_code);
+  const parsedExchangeRate = Number(currencyMap.usd_exchange_rate);
+  const currencyData = currencyCode
+    ? {
+        code: currencyCode,
+        symbol: currencyMap.currency_symbol ?? DEFAULT_CURRENCY.symbol,
+        usdExchangeRate: Number.isFinite(parsedExchangeRate) && parsedExchangeRate > 0
+          ? parsedExchangeRate
+          : DEFAULT_CURRENCY.usdExchangeRate,
+      }
+    : {
+        code: DEFAULT_CURRENCY.code,
+        symbol: DEFAULT_CURRENCY.symbol,
+        usdExchangeRate: DEFAULT_CURRENCY.usdExchangeRate,
+      };
 
   // Process Theme
   let themeColors: Record<string, string> = {};

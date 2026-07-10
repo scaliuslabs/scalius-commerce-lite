@@ -24,6 +24,40 @@ export const DEFAULT_CURRENCY: CurrencyConfig = {
   decimalPlaces: 2,
 };
 
+/**
+ * Currency codes exposed by the dashboard currency picker. Keep this as the
+ * single runtime allowlist for settings writes and buyer-facing reads.
+ */
+export const SUPPORTED_CURRENCY_CODES = [
+  "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "CNY", "HKD", "SGD", "SEK",
+  "NOK", "DKK", "MXN", "BRL", "BDT", "INR", "PKR", "LKR", "NPR", "AFN", "BTN", "MVR",
+  "MYR", "PHP", "THB", "IDR", "VND", "MMK", "KHR", "LAK", "BND", "KRW", "TWD", "MNT",
+  "KPW", "MOP", "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "JOD", "IQD", "IRR", "YER",
+  "LBP", "SYP", "ILS", "KZT", "UZS", "KGS", "TJS", "TMT", "GEL", "AMD", "AZN", "TRY",
+  "RUB", "UAH", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RSD", "BAM", "MKD", "ALL",
+  "MDL", "BYN", "ISK", "ARS", "CLP", "COP", "PEN", "UYU", "PYG", "BOB", "VES", "GYD",
+  "SRD", "TTD", "JMD", "BBD", "BSD", "BZD", "CRC", "CUP", "DOP", "GTQ", "HNL", "HTG",
+  "NIO", "PAB", "AWG", "ANG", "KYD", "BMD", "XCD", "FKP", "NGN", "GHS", "XOF", "GMD",
+  "GNF", "SLL", "LRD", "CVE", "MRU", "KES", "TZS", "UGX", "RWF", "BIF", "ETB", "SOS",
+  "ERN", "DJF", "SDG", "SSP", "SCR", "KMF", "MGA", "MUR", "XAF", "CDF", "ZAR", "BWP",
+  "LSL", "SZL", "NAD", "MWK", "ZMW", "MZN", "AOA", "ZWL", "EGP", "DZD", "MAD", "TND",
+  "LYD", "STN", "FJD", "PGK", "WST", "TOP", "VUV", "SBD", "XPF", "XDR", "XAG", "XAU",
+] as const;
+
+export type SupportedCurrencyCode = (typeof SUPPORTED_CURRENCY_CODES)[number];
+
+const SUPPORTED_CURRENCY_CODE_SET = new Set<string>(SUPPORTED_CURRENCY_CODES);
+
+export function normalizeSupportedCurrencyCode(
+  value: unknown,
+): SupportedCurrencyCode | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase();
+  return SUPPORTED_CURRENCY_CODE_SET.has(normalized)
+    ? normalized as SupportedCurrencyCode
+    : null;
+}
+
 // ---------------------------------------------------------------------------
 // ISO 4217 decimal places lookup
 // ---------------------------------------------------------------------------

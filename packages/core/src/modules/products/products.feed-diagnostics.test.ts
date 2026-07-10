@@ -26,6 +26,10 @@ function product(
         isActive: true,
         excludeFromProductFeed: false,
         deletedAt: null,
+        price: 1200,
+        discountType: null,
+        discountPercentage: null,
+        discountAmount: null,
         ...overrides,
     };
 }
@@ -44,6 +48,10 @@ function variant(
         reservedStock: 0,
         isDefault: false,
         trackInventory: false,
+        price: 1200,
+        discountType: null,
+        discountPercentage: null,
+        discountAmount: null,
         ...overrides,
     };
 }
@@ -189,6 +197,257 @@ describe("product feed diagnostics", () => {
             ],
         });
         expect(report.totals.productsWithIssues).toBe(3);
+    });
+
+    it.each([
+        ["variants", 2],
+        ["products", 1],
+    ] as const)(
+        "reports mixed option-axis topology before %s feed rows are emitted",
+        (variantStrategy, expectedRows) => {
+            const report = buildProductFeedDiagnosticsFromScan({
+                products: [product("mixed_axes")],
+                primaryImageUrls: new Map([
+                    ["mixed_axes", "/mixed.jpg"],
+                ]),
+                variants: new Map([
+                    [
+                        "mixed_axes",
+                        [
+                            variant("var_size_42", "mixed_axes", {
+                                size: "42",
+                                color: null,
+                                stock: 4,
+                                trackInventory: true,
+                            }),
+                            variant("var_size_41_green", "mixed_axes", {
+                                size: "41",
+                                color: "Green",
+                                stock: 4,
+                                trackInventory: true,
+                            }),
+                        ],
+                    ],
+                ]),
+                feedsPolicy: { ...baseFeedsPolicy, variantStrategy },
+                scanLimit: 500,
+                truncated: false,
+                sampleLimitPerReason: 5,
+                storefrontBaseUrl: "https://store.example.test",
+            });
+
+            expect(report.totals).toMatchObject({
+                emittedRows: 0,
+                productsWithIssues: 1,
+                skippedRows: expectedRows,
+            });
+            expect(reasonCount(report, "inconsistent_option_axes")).toMatchObject({
+                products: 1,
+                rows: expectedRows,
+                samples: [
+                    expect.objectContaining({
+                        id: "mixed_axes",
+                        reason: "inconsistent_option_axes",
+                    }),
+                ],
+            });
+            expect(reasonCount(report, "no_buyer_sku")).toMatchObject({
+                products: 0,
+                rows: 0,
+            });
+        },
+    );
+
+    it("reports a non-positive product-row price", () => {
+        const report = buildProductFeedDiagnosticsFromScan({
+            products: [product("free_product", { price: 0 })],
+            primaryImageUrls: new Map([
+                ["free_product", "/free.jpg"],
+            ]),
+            variants: new Map([
+                [
+                    "free_product",
+                    [
+                        variant("var_free", "free_product", {
+                            isDefault: true,
+                            price: 0,
+                        }),
+                    ],
+                ],
+            ]),
+            feedsPolicy: { ...baseFeedsPolicy, variantStrategy: "products" },
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl: "https://store.example.test",
+        });
+
+        expect(report.totals).toMatchObject({
+            emittedRows: 0,
+            productsWithIssues: 1,
+            skippedRows: 1,
+        });
+        expect(reasonCount(report, "non_positive_price")).toMatchObject({
+            products: 1,
+            rows: 1,
+        });
+    });
+
+    it.each([
+        ["BDT", 0.004],
+        ["JPY", 0.4],
+    ])("reports a %s product price that quantizes to zero", (currencyCode, price) => {
+        const report = buildProductFeedDiagnosticsFromScan({
+            products: [product("rounded_free_product", { price })],
+            primaryImageUrls: new Map([
+                ["rounded_free_product", "/rounded-free.jpg"],
+            ]),
+            variants: new Map([
+                [
+                    "rounded_free_product",
+                    [
+                        variant("var_rounded_free", "rounded_free_product", {
+                            isDefault: true,
+                            price,
+                        }),
+                    ],
+                ],
+            ]),
+            feedsPolicy: { ...baseFeedsPolicy, variantStrategy: "products" },
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl: "https://store.example.test",
+            currencyCode,
+        });
+
+        expect(report.totals).toMatchObject({
+            emittedRows: 0,
+            productsWithIssues: 1,
+            skippedRows: 1,
+        });
+        expect(reasonCount(report, "non_positive_price")).toMatchObject({
+            products: 1,
+            rows: 1,
+        });
+    });
+
+    it("uses checkout discount order at the exact 1.005 catalog boundary", () => {
+        const report = buildProductFeedDiagnosticsFromScan({
+            products: [product("rounding_boundary", {
+                price: 1.005,
+                discountType: "percentage",
+                discountPercentage: 10,
+            })],
+            primaryImageUrls: new Map([
+                ["rounding_boundary", "/rounding-boundary.jpg"],
+            ]),
+            variants: new Map([
+                [
+                    "rounding_boundary",
+                    [
+                        variant("var_rounding_boundary", "rounding_boundary", {
+                            isDefault: true,
+                            price: 1.005,
+                        }),
+                    ],
+                ],
+            ]),
+            feedsPolicy: { ...baseFeedsPolicy, variantStrategy: "products" },
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl: "https://store.example.test",
+            currencyCode: "BDT",
+        });
+
+        expect(report.totals).toMatchObject({
+            emittedRows: 1,
+            productsWithIssues: 0,
+            skippedRows: 0,
+        });
+        expect(reasonCount(report, "non_positive_price")).toMatchObject({
+            products: 0,
+            rows: 0,
+        });
+    });
+
+    it("reports exponent-form legacy prices as non-positive feed money", () => {
+        const report = buildProductFeedDiagnosticsFromScan({
+            products: [product("exponent_price", { price: 1e21 })],
+            primaryImageUrls: new Map([
+                ["exponent_price", "/exponent-price.jpg"],
+            ]),
+            variants: new Map([
+                [
+                    "exponent_price",
+                    [
+                        variant("var_exponent_price", "exponent_price", {
+                            isDefault: true,
+                            price: 1e21,
+                        }),
+                    ],
+                ],
+            ]),
+            feedsPolicy: { ...baseFeedsPolicy, variantStrategy: "products" },
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl: "https://store.example.test",
+            currencyCode: "BDT",
+        });
+
+        expect(report.totals).toMatchObject({
+            emittedRows: 0,
+            productsWithIssues: 1,
+            skippedRows: 1,
+        });
+        expect(reasonCount(report, "non_positive_price")).toMatchObject({
+            products: 1,
+            rows: 1,
+        });
+    });
+
+    it("counts only non-positive effective variant rows as skipped", () => {
+        const report = buildProductFeedDiagnosticsFromScan({
+            products: [product("variant_prices", { price: 100 })],
+            primaryImageUrls: new Map([
+                ["variant_prices", "/variants.jpg"],
+            ]),
+            variants: new Map([
+                [
+                    "variant_prices",
+                    [
+                        variant("var_free", "variant_prices", {
+                            size: "S",
+                            price: 100,
+                            discountType: "flat",
+                            discountAmount: 100,
+                        }),
+                        variant("var_paid", "variant_prices", {
+                            size: "M",
+                            price: 100,
+                        }),
+                    ],
+                ],
+            ]),
+            feedsPolicy: baseFeedsPolicy,
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl: "https://store.example.test",
+        });
+
+        expect(report.totals).toMatchObject({
+            emittedRows: 1,
+            emittedVariantRows: 1,
+            productsWithIssues: 1,
+            skippedRows: 1,
+        });
+        expect(reasonCount(report, "non_positive_price")).toMatchObject({
+            products: 1,
+            rows: 1,
+        });
     });
 
     it.each([

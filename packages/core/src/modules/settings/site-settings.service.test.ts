@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ValidationError } from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
   upsertSetting: vi.fn(),
@@ -9,9 +10,83 @@ vi.mock("../payments/gateway-settings", () => ({
 }));
 
 import {
+  getCurrencySettings,
   getSeoSettings,
+  saveCurrencySettings,
   saveSeoSettings,
 } from "./site-settings.service";
+
+function createCurrencyReadDb(values: Record<string, string>) {
+  return {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          all: vi.fn(async () => Object.entries(values).map(([key, value]) => ({
+            key,
+            value,
+          }))),
+        })),
+      })),
+    })),
+  };
+}
+
+describe("site currency settings", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.upsertSetting.mockResolvedValue(undefined);
+  });
+
+  it("normalizes a supported legacy lowercase code on read", async () => {
+    const db = createCurrencyReadDb({
+      currency_code: " bdt ",
+      currency_symbol: "Tk",
+      usd_exchange_rate: "120",
+    });
+
+    await expect(getCurrencySettings(db as never)).resolves.toEqual({
+      currencyCode: "BDT",
+      currencySymbol: "Tk",
+      usdExchangeRate: "120",
+    });
+  });
+
+  it("fails closed to the complete default when the persisted code is unsupported", async () => {
+    const db = createCurrencyReadDb({
+      currency_code: "USDT",
+      currency_symbol: "₿",
+      usd_exchange_rate: "999",
+    });
+
+    await expect(getCurrencySettings(db as never)).resolves.toEqual({
+      currencyCode: "BDT",
+      currencySymbol: "৳",
+      usdExchangeRate: "1",
+    });
+  });
+
+  it("canonicalizes lowercase supported codes before persisting", async () => {
+    await saveCurrencySettings({} as never, { currencyCode: " usd " });
+
+    expect(mocks.upsertSetting).toHaveBeenCalledWith(
+      expect.anything(),
+      "currency",
+      "currency_code",
+      "USD",
+    );
+  });
+
+  it("rejects unsupported codes before any setting write", async () => {
+    await expect(
+      saveCurrencySettings({} as never, {
+        currencyCode: "USDT",
+        currencySymbol: "$",
+        usdExchangeRate: "1",
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+  });
+});
 
 function createSeoReadDb(discoveryValue?: string, returnPolicyValue?: string) {
   const query = {

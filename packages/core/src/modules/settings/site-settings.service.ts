@@ -7,7 +7,12 @@ import { siteSettings, settings } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
+import { ValidationError } from "@scalius/core/errors";
 import { upsertSetting } from "../payments/gateway-settings";
+import {
+  normalizeSupportedCurrencyCode,
+  type SupportedCurrencyCode,
+} from "@scalius/shared/currency";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
 import {
   mergeSeoDiscoverySettings,
@@ -113,7 +118,13 @@ export function parseMediaOptimizationSettings(
 // Currency
 // ─────────────────────────────────────────
 
-export async function getCurrencySettings(db: Database) {
+export interface CurrencySettings {
+  currencyCode: SupportedCurrencyCode;
+  currencySymbol: string;
+  usdExchangeRate: string;
+}
+
+export async function getCurrencySettings(db: Database): Promise<CurrencySettings> {
   const rows = await db
     .select({ key: settings.key, value: settings.value })
     .from(settings)
@@ -121,9 +132,18 @@ export async function getCurrencySettings(db: Database) {
     .all();
 
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const currencyCode = normalizeSupportedCurrencyCode(map["currency_code"]);
+
+  if (!currencyCode) {
+    return {
+      currencyCode: "BDT",
+      currencySymbol: "\u09F3",
+      usdExchangeRate: "1",
+    };
+  }
 
   return {
-    currencyCode: map["currency_code"] ?? "BDT",
+    currencyCode,
     currencySymbol: map["currency_symbol"] ?? "\u09F3",
     usdExchangeRate: map["usd_exchange_rate"] ?? "1",
   };
@@ -139,9 +159,13 @@ export async function saveCurrencySettings(
 ) {
   const ops: Promise<void>[] = [];
 
-  if (typeof data.currencyCode === "string" && data.currencyCode.trim()) {
+  if (data.currencyCode !== undefined) {
+    const currencyCode = normalizeSupportedCurrencyCode(data.currencyCode);
+    if (!currencyCode) {
+      throw new ValidationError("Select a supported three-letter currency code.");
+    }
     ops.push(
-      upsertSetting(db, "currency", "currency_code", data.currencyCode.trim()),
+      upsertSetting(db, "currency", "currency_code", currencyCode),
     );
   }
   if (typeof data.currencySymbol === "string" && data.currencySymbol.trim()) {

@@ -10,7 +10,11 @@ import {
 } from "./lib/pricing-engine";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
+import {
+  getBuyerStockSummary,
+  isVariantAvailable,
+} from "@/lib/product-sellable-variants";
+import { filterVariantsBySelection } from "./lib/variant-state-machine";
 
 interface Props {
   product: Product;
@@ -21,6 +25,9 @@ interface Props {
   isVariantSpecificImagesEnabled: boolean;
   variantImageAxis: "option1" | "option2";
   currencySymbol?: string;
+  currencyDecimalPlaces?: number;
+  initialSelectedSize?: string;
+  initialSelectedColor?: string;
   quickBuyNotice?: string | null;
 }
 
@@ -32,13 +39,16 @@ const {
   isVariantSpecificImagesEnabled,
   variantImageAxis,
   currencySymbol = DEFAULT_CURRENCY.symbol,
+  currencyDecimalPlaces = DEFAULT_CURRENCY.decimalPlaces,
+  initialSelectedSize: querySelectedSize,
+  initialSelectedColor: querySelectedColor,
   quickBuyNotice = null,
 } = Astro.props;
 
 const formatPrice = (price: number) =>
   `${currencySymbol}${price.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyDecimalPlaces,
+    maximumFractionDigits: currencyDecimalPlaces,
   })}`;
 
 const buyerStockSummary = getBuyerStockSummary(variants);
@@ -49,16 +59,30 @@ const stockStatus = buyerStockSummary.tone === "available"
 
 const option1Label = product.variantOption1Label?.trim() || "Option 1";
 const option2Label = product.variantOption2Label?.trim() || "Option 2";
+const initialSelectedSize =
+  querySelectedSize?.trim() ||
+  (sizeOptions.length === 1 ? sizeOptions[0] : undefined);
+const initialSelectedColor =
+  querySelectedColor?.trim() ||
+  (colorOptions.length === 1 ? colorOptions[0] : undefined);
 
 const productPricing: ProductPricing = {
   basePrice: product.price,
   discountType: product.discountType,
   discountPercentage: product.discountPercentage,
   discountAmount: product.discountAmount,
+  currencyDecimalPlaces,
 };
+const initialPricingVariants =
+  querySelectedSize || querySelectedColor
+    ? filterVariantsBySelection(variants, {
+        selectedSize: querySelectedSize,
+        selectedColor: querySelectedColor,
+      })
+    : variants;
 const initialPricePresentation = getBuyerVariantPricePresentation(
   productPricing,
-  variants,
+  initialPricingVariants,
 );
 const showsStartingPrice = initialPricePresentation.isStartingAt;
 const initialExactPricing = showsStartingPrice
@@ -74,6 +98,8 @@ const discountBadgeText = initialExactPricing
       initialExactPricing.discountType,
       initialExactPricing.discountPercentage,
       initialExactPricing.discountAmount,
+      currencySymbol,
+      currencyDecimalPlaces,
     )
   : null;
 
@@ -88,7 +114,8 @@ const productVariantsJson = serializeJsonForInlineScript(
       variant.discountAmount,
       product.discountType,
       product.discountPercentage,
-      product.discountAmount
+      product.discountAmount,
+      currencyDecimalPlaces,
     );
     const variantDiscountPercent =
       variantPrice > 0
@@ -143,6 +170,8 @@ const productVariantsJson = serializeJsonForInlineScript(
       >
         <p
           class="text-lg lg:text-3xl font-bold text-primary product-price whitespace-nowrap"
+          aria-live="polite"
+          aria-atomic="true"
         >
           {initialPriceText}
         </p>
@@ -233,22 +262,33 @@ const productVariantsJson = serializeJsonForInlineScript(
               <span class="text-destructive">*</span> {option1Label}
             </h2>
             <div class="flex flex-wrap gap-1.5">
-              {sizeOptions.map((size) => (
-                <label class="group relative" aria-label={`${option1Label}: ${size}`}>
-                  <input
-                    type="radio"
-                    name="size"
-                    value={size}
-                    class="sr-only peer"
-                  />
-                  <div
-                    class="size-btn h-7 min-w-8 flex items-center justify-center rounded-md bg-background border border-input px-2 text-xs font-medium text-foreground cursor-pointer hover:border-primary/60 hover:shadow-md active:scale-95 peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 transition-all duration-200 shadow-sm"
-                    data-size={size}
-                  >
-                    {size}
-                  </div>
-                </label>
-              ))}
+              {sizeOptions.map((size) => {
+                const isSelected = initialSelectedSize === size;
+                const isAvailable = variants.some(
+                  (variant) =>
+                    isVariantAvailable(variant) &&
+                    variant.size?.trim() === size,
+                );
+                return (
+                  <label class="group relative">
+                    <input
+                      type="radio"
+                      name="size"
+                      value={size}
+                      class="sr-only peer"
+                      checked={isSelected}
+                      disabled={!isSelected && !isAvailable}
+                      aria-label={`${option1Label}: ${size}`}
+                    />
+                    <div
+                      class="size-btn h-7 min-w-8 flex items-center justify-center rounded-md bg-background border border-input px-2 text-xs font-medium text-foreground cursor-pointer hover:border-primary/60 hover:shadow-md active:scale-95 peer-checked:bg-black peer-checked:text-white peer-checked:border-black peer-disabled:opacity-50 peer-disabled:line-through peer-disabled:cursor-not-allowed peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 transition-all duration-200 shadow-sm"
+                      data-size={size}
+                    >
+                      {size}
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </div>
         )
@@ -261,22 +301,33 @@ const productVariantsJson = serializeJsonForInlineScript(
               <span class="text-destructive">*</span> {option2Label}
             </h2>
             <div class="flex flex-wrap gap-1.5">
-              {colorOptions.map((color) => (
-                <label class="group relative" aria-label={`${option2Label}: ${color}`}>
-                  <input
-                    type="radio"
-                    name="color"
-                    value={color}
-                    class="sr-only peer"
-                  />
-                  <div
-                    class="color-btn h-7 min-w-8 flex items-center justify-center rounded-md bg-background border border-input px-2 text-xs font-medium text-foreground cursor-pointer hover:border-primary/60 hover:shadow-md active:scale-95 peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 transition-all duration-200 shadow-sm"
-                    data-color={color}
-                  >
-                    {color}
-                  </div>
-                </label>
-              ))}
+              {colorOptions.map((color) => {
+                const isSelected = initialSelectedColor === color;
+                const isAvailable = variants.some(
+                  (variant) =>
+                    isVariantAvailable(variant) &&
+                    variant.color?.trim() === color,
+                );
+                return (
+                  <label class="group relative">
+                    <input
+                      type="radio"
+                      name="color"
+                      value={color}
+                      class="sr-only peer"
+                      checked={isSelected}
+                      disabled={!isSelected && !isAvailable}
+                      aria-label={`${option2Label}: ${color}`}
+                    />
+                    <div
+                      class="color-btn h-7 min-w-8 flex items-center justify-center rounded-md bg-background border border-input px-2 text-xs font-medium text-foreground cursor-pointer hover:border-primary/60 hover:shadow-md active:scale-95 peer-checked:bg-black peer-checked:text-white peer-checked:border-black peer-disabled:opacity-50 peer-disabled:line-through peer-disabled:cursor-not-allowed peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 transition-all duration-200 shadow-sm"
+                      data-color={color}
+                    >
+                      {color}
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </div>
         )

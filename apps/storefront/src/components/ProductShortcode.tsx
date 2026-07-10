@@ -9,14 +9,27 @@ import { addToCart, type CartItemOption } from "@/store/cart";
 import { trackFbAddToCart } from "@/lib/analytics";
 import { Minus, Plus, ShoppingCart, Check } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { getCurrencySymbol, getCurrencyCode } from "@/lib/currency";
-import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
+import {
+  formatPrice,
+  getCurrencyCode,
+  getCurrencySymbol,
+  getDecimalPlaces,
+} from "@/lib/currency";
+import {
+  getBuyerVariantPricePresentation,
+  type ProductPricing,
+} from "@/components/product/lib/pricing-engine";
+import {
+  filterVariantsBySelection,
+  resolveExactVariantSelection,
+} from "@/components/product/lib/variant-state-machine";
 import {
   getProductImageUrl,
   hasProductImage,
   PRODUCT_IMAGE_FALLBACK,
 } from "@/lib/product-media";
 import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
+import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 
 interface ProductShortcodeProps {
   productData: ProductPageData;
@@ -33,6 +46,21 @@ export default function ProductShortcode({
   const isUnavailable = buyerVariants.length === 0;
   const option1Label = product.variantOption1Label?.trim() || "Option 1";
   const option2Label = product.variantOption2Label?.trim() || "Option 2";
+  const currencyCode = getCurrencyCode();
+  const currencySymbol = getCurrencySymbol();
+  const configuredDecimalPlaces =
+    typeof window !== "undefined" &&
+    Number.isInteger(window.__CURRENCY_DECIMAL_PLACES__) &&
+    window.__CURRENCY_DECIMAL_PLACES__! >= 0 &&
+    window.__CURRENCY_DECIMAL_PLACES__! <= 6
+      ? window.__CURRENCY_DECIMAL_PLACES__!
+      : getDecimalPlaces(currencyCode);
+  const formatBuyerPrice = (price: number) =>
+    formatPrice(price, {
+      symbol: currencySymbol,
+      code: currencyCode,
+      precision: configuredDecimalPlaces,
+    });
 
   const [selectedSize, setSelectedSize] = useState<string | undefined>();
   const [selectedColor, setSelectedColor] = useState<string | undefined>();
@@ -63,26 +91,36 @@ export default function ProductShortcode({
     [buyerVariants],
   );
 
-  const matchingVariant = buyerVariants.find(
-    (v) =>
-      (!sizeOptions.length || v.size === selectedSize) &&
-      (!colorOptions.length || v.color === selectedColor),
+  const exactSelection = resolveExactVariantSelection(buyerVariants, {
+    selectedSize,
+    selectedColor,
+  });
+  const matchingVariant = exactSelection?.variant;
+  const compatibleVariants = filterVariantsBySelection(buyerVariants, {
+    selectedSize,
+    selectedColor,
+  });
+  const productPricing: ProductPricing = {
+    basePrice: product.price,
+    discountType: product.discountType,
+    discountPercentage: product.discountPercentage,
+    discountAmount: product.discountAmount,
+    currencyDecimalPlaces: configuredDecimalPlaces,
+  };
+  const pricePresentation = getBuyerVariantPricePresentation(
+    productPricing,
+    matchingVariant ? [matchingVariant] : compatibleVariants,
   );
-
-  const finalPrice = matchingVariant
-    ? getVariantDiscountedPrice(
-        matchingVariant.price,
-        product.price,
-        matchingVariant.discountType,
-        matchingVariant.discountPercentage,
-        matchingVariant.discountAmount,
-        product.discountType,
-        product.discountPercentage,
-        product.discountAmount,
-      )
-    : product.discountedPrice;
-  const originalPrice = matchingVariant?.price || product.price;
-  const hasDiscount = finalPrice < originalPrice;
+  const finalPrice = pricePresentation.pricing.finalPrice;
+  const originalPrice = roundPriceToPrecision(
+    pricePresentation.pricing.originalPrice,
+    configuredDecimalPlaces,
+  );
+  const showsStartingPrice =
+    (sizeOptions.length > 0 || colorOptions.length > 0) && !matchingVariant;
+  const hasDiscount = Boolean(
+    matchingVariant && pricePresentation.pricing.hasDiscount,
+  );
   const currentDisplayImage = getProductImageUrl(currentImage, {
     width: 600,
     height: 600,
@@ -169,7 +207,7 @@ export default function ProductShortcode({
           item_price: finalPrice,
         },
       ],
-      currency: getCurrencyCode(),
+      currency: currencyCode,
       value: finalPrice * quantity,
     });
 
@@ -235,13 +273,11 @@ export default function ProductShortcode({
           </h3>
           <div className="flex items-center gap-3">
             <span className="text-2xl sm:text-3xl font-bold text-destructive">
-              {getCurrencySymbol()}
-              {finalPrice.toLocaleString()}
+              {`${showsStartingPrice ? "From " : ""}${formatBuyerPrice(finalPrice)}`}
             </span>
             {hasDiscount && (
               <span className="text-lg text-gray-500 line-through">
-                {getCurrencySymbol()}
-                {originalPrice.toLocaleString()}
+                {formatBuyerPrice(originalPrice)}
               </span>
             )}
           </div>

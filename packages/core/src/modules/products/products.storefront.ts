@@ -10,7 +10,7 @@ import {
     productAttributes,
 } from "@scalius/database/schema";
 import { and, sql, desc, eq, isNull, inArray, or, type SQL } from "drizzle-orm";
-import { ftsMatch } from "../../search/fts5";
+import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import {
@@ -40,9 +40,13 @@ type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilter
 type StorefrontProductConditionOptions = {
     includeLookupHandles?: boolean;
     includeVariantLookups?: boolean;
+    includeCategorySearchMatches?: boolean;
 };
 
 const MAX_PUBLIC_LOOKUP_TOKENS = 100;
+const MAX_PUBLIC_CATEGORY_SEARCH_SLUG_LENGTH = 160;
+// Leave room for non-IN predicates under D1's 100 bound-parameter limit.
+const STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE = 90;
 
 type StorefrontProductListRow = {
     id: string;
@@ -148,30 +152,66 @@ function buildCategoryLookupCondition(category: string): SQL {
     )`;
 }
 
+function buildFeedCategorySearchCondition(search: string): SQL | undefined {
+    const sanitized = sanitizeFtsQuery(search);
+    if (!sanitized) return undefined;
+
+    const normalizedSlug = search.trim().toLowerCase();
+    const categoryNameCondition = sql`${sql.raw("categories.rowid")} IN (
+        SELECT rowid
+        FROM ${sql.raw("categories_fts")}
+        WHERE ${sql.raw("categories_fts")} MATCH ${`name : (${sanitized})`}
+    )`;
+    const categoryMatch = or(
+        categoryNameCondition,
+        normalizedSlug.length <= MAX_PUBLIC_CATEGORY_SEARCH_SLUG_LENGTH
+            ? eq(categories.slug, normalizedSlug)
+            : undefined,
+    );
+    if (!categoryMatch) return undefined;
+
+    return sql`EXISTS (
+        SELECT 1
+        FROM "categories"
+        WHERE ${eq(categories.id, products.categoryId)}
+          AND ${isNull(categories.deletedAt)}
+          AND ${categoryMatch}
+    )`;
+}
+
 function buildProductLookupCondition(
     lookupTokens: string[],
     options: StorefrontProductConditionOptions = {},
 ): SQL {
-    const lookupConditions: SQL[] = [inArray(products.id, lookupTokens)];
+    const lookupBranches: SQL[] = [sql`SELECT value FROM public_lookup`];
 
     if (options.includeLookupHandles) {
-        lookupConditions.push(inArray(products.slug, lookupTokens));
+        lookupBranches.push(sql`
+            SELECT lookup_product.id
+            FROM "products" AS lookup_product
+            INNER JOIN public_lookup
+                ON lookup_product.slug = public_lookup.value
+        `);
     }
 
     if (options.includeVariantLookups) {
-        lookupConditions.push(sql`EXISTS (
-            SELECT 1
-            FROM "product_variants"
-            WHERE ${eq(productVariants.productId, products.id)}
-              AND ${isNull(productVariants.deletedAt)}
-              AND ${or(
-            inArray(productVariants.id, lookupTokens),
-            inArray(productVariants.sku, lookupTokens),
-        )}
-        )`);
+        lookupBranches.push(sql`
+            SELECT lookup_variant.product_id
+            FROM "product_variants" AS lookup_variant
+            INNER JOIN public_lookup
+                ON lookup_variant.id = public_lookup.value
+                OR lookup_variant.sku = public_lookup.value
+            WHERE lookup_variant.deleted_at IS NULL
+        `);
     }
 
-    return or(...lookupConditions) ?? sql`0 = 1`;
+    return sql`${products.id} IN (
+        WITH public_lookup(value) AS (
+            SELECT CAST(value AS TEXT)
+            FROM json_each(${JSON.stringify(lookupTokens)})
+        )
+        ${sql.join(lookupBranches, sql` UNION `)}
+    )`;
 }
 
 function buildStorefrontProductConditions(
@@ -192,8 +232,17 @@ function buildStorefrontProductConditions(
 
     if (category) conditions.push(buildCategoryLookupCondition(category));
     if (search) {
-        const cond = ftsMatch("products_fts", "products", search);
-        conditions.push(cond ?? sql`0 = 1`);
+        const searchConditions = [ftsMatch("products_fts", "products", search)];
+        if (options.includeCategorySearchMatches) {
+            searchConditions.push(buildFeedCategorySearchCondition(search));
+        }
+        conditions.push(
+            or(
+                ...searchConditions.filter(
+                    (condition): condition is SQL => Boolean(condition),
+                ),
+            ) ?? sql`0 = 1`,
+        );
     }
     if (minPrice !== undefined) conditions.push(sql`${products.price} >= ${minPrice}`);
     if (maxPrice !== undefined) conditions.push(sql`${products.price} <= ${maxPrice}`);
@@ -217,7 +266,7 @@ function buildStorefrontProductConditions(
 function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest") {
     const effectivePriceSql = sql`CASE
         WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN MAX(${products.price} - ${products.discountAmount}, 0)
-        WHEN ${products.discountPercentage} > 0 THEN ROUND(${products.price} * (1 - ${products.discountPercentage} / 100.0))
+        WHEN ${products.discountPercentage} > 0 THEN ${products.price} * (1 - ${products.discountPercentage} / 100.0)
         ELSE ${products.price}
     END`;
 
@@ -301,15 +350,33 @@ async function readPrimaryProductImageMap(
         return new Map();
     }
 
-    const images = await db
-        .select({
-            productId: productImages.productId,
-            url: productImages.url,
-            alt: productImages.alt,
-        })
-        .from(productImages)
-        .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
-        .all();
+    const images: Array<{
+        productId: string;
+        url: string;
+        alt: string | null;
+    }> = [];
+    for (
+        let offset = 0;
+        offset < productIds.length;
+        offset += STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE
+    ) {
+        const productIdChunk = productIds.slice(
+            offset,
+            offset + STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
+        );
+        images.push(...await db
+            .select({
+                productId: productImages.productId,
+                url: productImages.url,
+                alt: productImages.alt,
+            })
+            .from(productImages)
+            .where(and(
+                eq(productImages.isPrimary, true),
+                inArray(productImages.productId, productIdChunk),
+            ))
+            .all());
+    }
 
     return new Map(images.map((img) => [img.productId, { url: img.url, alt: img.alt }]));
 }
@@ -322,24 +389,40 @@ async function readStorefrontFeedAttributeMap(
         return new Map();
     }
 
-    const rows = await db
-        .select({
-            productId: productAttributeValues.productId,
-            name: productAttributes.name,
-            slug: productAttributes.slug,
-            value: productAttributeValues.value,
-        })
-        .from(productAttributeValues)
-        .innerJoin(
-            productAttributes,
-            and(
-                eq(productAttributeValues.attributeId, productAttributes.id),
-                eq(productAttributes.filterable, true),
-                isNull(productAttributes.deletedAt),
-            ),
-        )
-        .where(inArray(productAttributeValues.productId, productIds))
-        .all();
+    const rows: Array<{
+        productId: string;
+        name: string;
+        slug: string;
+        value: string;
+    }> = [];
+    for (
+        let offset = 0;
+        offset < productIds.length;
+        offset += STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE
+    ) {
+        const productIdChunk = productIds.slice(
+            offset,
+            offset + STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
+        );
+        rows.push(...await db
+            .select({
+                productId: productAttributeValues.productId,
+                name: productAttributes.name,
+                slug: productAttributes.slug,
+                value: productAttributeValues.value,
+            })
+            .from(productAttributeValues)
+            .innerJoin(
+                productAttributes,
+                and(
+                    eq(productAttributeValues.attributeId, productAttributes.id),
+                    eq(productAttributes.filterable, true),
+                    isNull(productAttributes.deletedAt),
+                ),
+            )
+            .where(inArray(productAttributeValues.productId, productIdChunk))
+            .all());
+    }
 
     const attributeMap = new Map<string, StorefrontFeedProductAttribute[]>();
     for (const row of rows) {
@@ -359,32 +442,50 @@ async function readStorefrontFeedVariantMap(
         return new Map();
     }
 
-    const rows = await db
-        .select({
-            id: productVariants.id,
-            productId: productVariants.productId,
-            size: productVariants.size,
-            color: productVariants.color,
-            weight: productVariants.weight,
-            sku: productVariants.sku,
-            barcode: productVariants.barcode,
-            barcodeType: productVariants.barcodeType,
-            price: productVariants.price,
-            stock: productVariants.stock,
-            reservedStock: productVariants.reservedStock,
-            isDefault: productVariants.isDefault,
-            trackInventory: productVariants.trackInventory,
-            discountType: productVariants.discountType,
-            discountPercentage: productVariants.discountPercentage,
-            discountAmount: productVariants.discountAmount,
-            colorSortOrder: productVariants.colorSortOrder,
-            sizeSortOrder: productVariants.sizeSortOrder,
-            deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
-        })
-        .from(productVariants)
-        .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
-        .orderBy(productVariants.productId, productVariants.colorSortOrder, productVariants.sizeSortOrder)
-        .all() as StorefrontFeedVariantRow[];
+    const rows: StorefrontFeedVariantRow[] = [];
+    for (
+        let offset = 0;
+        offset < productIds.length;
+        offset += STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE
+    ) {
+        const productIdChunk = productIds.slice(
+            offset,
+            offset + STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
+        );
+        rows.push(...await db
+            .select({
+                id: productVariants.id,
+                productId: productVariants.productId,
+                size: productVariants.size,
+                color: productVariants.color,
+                weight: productVariants.weight,
+                sku: productVariants.sku,
+                barcode: productVariants.barcode,
+                barcodeType: productVariants.barcodeType,
+                price: productVariants.price,
+                stock: productVariants.stock,
+                reservedStock: productVariants.reservedStock,
+                isDefault: productVariants.isDefault,
+                trackInventory: productVariants.trackInventory,
+                discountType: productVariants.discountType,
+                discountPercentage: productVariants.discountPercentage,
+                discountAmount: productVariants.discountAmount,
+                colorSortOrder: productVariants.colorSortOrder,
+                sizeSortOrder: productVariants.sizeSortOrder,
+                deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
+            })
+            .from(productVariants)
+            .where(and(
+                inArray(productVariants.productId, productIdChunk),
+                isNull(productVariants.deletedAt),
+            ))
+            .orderBy(
+                productVariants.productId,
+                productVariants.colorSortOrder,
+                productVariants.sizeSortOrder,
+            )
+            .all() as StorefrontFeedVariantRow[]);
+    }
 
     const variantMap = new Map<string, StorefrontFeedProductVariant[]>();
     for (const row of rows) {
@@ -515,6 +616,7 @@ export async function getStorefrontFeedProducts(
     const conditions = buildStorefrontProductConditions(params, {
         includeLookupHandles: true,
         includeVariantLookups: true,
+        includeCategorySearchMatches: true,
     });
     conditions.push(eq(products.excludeFromProductFeed, false));
     const orderBy = getStorefrontProductOrderBy(sort);
@@ -993,6 +1095,79 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 // Storefront search (variant-aware)
 // ─────────────────────────────────────────
 
+type StorefrontSearchProductVariant = {
+    id: string;
+    productId: string;
+    size: string | null;
+    color: string | null;
+    weight: number | null;
+    sku: string;
+    price: number;
+    stock: number;
+    reservedStock: number;
+    isDefault: boolean;
+    trackInventory: boolean;
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+    colorSortOrder: number | null;
+    sizeSortOrder: number | null;
+};
+
+async function readStorefrontSearchVariantMap(
+    db: Database,
+    productIds: string[],
+): Promise<Map<string, StorefrontSearchProductVariant[]>> {
+    const variantMap = new Map<string, StorefrontSearchProductVariant[]>();
+    for (
+        let offset = 0;
+        offset < productIds.length;
+        offset += STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE
+    ) {
+        const productIdChunk = productIds.slice(
+            offset,
+            offset + STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
+        );
+        const rows = await db
+            .select({
+                id: productVariants.id,
+                productId: productVariants.productId,
+                size: productVariants.size,
+                color: productVariants.color,
+                weight: productVariants.weight,
+                sku: productVariants.sku,
+                price: productVariants.price,
+                stock: productVariants.stock,
+                reservedStock: productVariants.reservedStock,
+                isDefault: productVariants.isDefault,
+                trackInventory: productVariants.trackInventory,
+                discountType: productVariants.discountType,
+                discountPercentage: productVariants.discountPercentage,
+                discountAmount: productVariants.discountAmount,
+                colorSortOrder: productVariants.colorSortOrder,
+                sizeSortOrder: productVariants.sizeSortOrder,
+            })
+            .from(productVariants)
+            .where(and(
+                inArray(productVariants.productId, productIdChunk),
+                isNull(productVariants.deletedAt),
+            ))
+            .orderBy(
+                productVariants.productId,
+                productVariants.colorSortOrder,
+                productVariants.sizeSortOrder,
+            )
+            .all();
+
+        for (const row of rows) {
+            const variants = variantMap.get(row.productId) ?? [];
+            variants.push(normalizeDefaultSkuOptions(row));
+            variantMap.set(row.productId, variants);
+        }
+    }
+    return variantMap;
+}
+
 /**
  * Lightweight variant-aware product search for cart/checkout use.
  * Returns products with their variants and primary image URL.
@@ -1038,43 +1213,10 @@ export async function searchStorefrontProducts(
     const count = Number((countResults[0] as { count: number } | undefined)?.count ?? 0);
     const totalPages = Math.ceil(count / limit);
 
-    const [images, variants] =
-        productIds.length > 0
-            ? await Promise.all([
-                db
-                    .select({ productId: productImages.productId, url: productImages.url, alt: productImages.alt })
-                    .from(productImages)
-                    .where(and(eq(productImages.isPrimary, true), inArray(productImages.productId, productIds)))
-                    .all() as Promise<Array<{ productId: string; url: string; alt: string | null }>>,
-                db
-                    .select({
-                        id: productVariants.id,
-                        productId: productVariants.productId,
-                        size: productVariants.size,
-                        color: productVariants.color,
-                        weight: productVariants.weight,
-                        sku: productVariants.sku,
-                        price: productVariants.price,
-                        stock: productVariants.stock,
-                        reservedStock: productVariants.reservedStock,
-                        isDefault: productVariants.isDefault,
-                        trackInventory: productVariants.trackInventory,
-                        discountType: productVariants.discountType,
-                        discountPercentage: productVariants.discountPercentage,
-                        discountAmount: productVariants.discountAmount,
-                        colorSortOrder: productVariants.colorSortOrder,
-                        sizeSortOrder: productVariants.sizeSortOrder,
-                    })
-                    .from(productVariants)
-                    .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
-                    .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder)
-                    .all() as Promise<Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null }>>,
-            ])
-            : [[], []];
-
-    const imageMap = new Map(
-        (images as Array<{ productId: string; url: string; alt: string | null }>).map((img) => [img.productId, { url: img.url, alt: img.alt }]),
-    );
+    const [imageMap, variantMap] = await Promise.all([
+        readPrimaryProductImageMap(db, productIds),
+        readStorefrontSearchVariantMap(db, productIds),
+    ]);
 
     return {
         data: results.map((product) => {
@@ -1083,14 +1225,7 @@ export async function searchStorefrontProducts(
                 ...product,
                 imageUrl: imgData?.url || null,
                 imageAlt: imgData?.alt || null,
-                variants: (variants as Array<{
-                    productId: string;
-                    isDefault: boolean;
-                    size: string | null;
-                    color: string | null;
-                } & Record<string, unknown>>)
-                    .filter((v) => v.productId === product.id)
-                    .map((v) => normalizeDefaultSkuOptions(v)),
+                variants: variantMap.get(product.id) ?? [],
             };
         }),
         pagination: {

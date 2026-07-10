@@ -1,4 +1,5 @@
 import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
+import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { getFeedProducts } from "@/lib/api/products";
 import { getLayoutData, type CurrencyData } from "@/lib/api/storefront";
 import type { PaginatedResponse, Product, ProductVariant } from "@/lib/api/types";
@@ -414,7 +415,8 @@ function productDescription(product: Product) {
 
 function toMinorUnits(amount: number, currency: UcpCatalogContext["currency"]): number {
   const multiplier = 10 ** currency.decimalPlaces;
-  return Math.max(0, Math.round(amount * multiplier));
+  const roundedAmount = roundPriceToPrecision(amount, currency.decimalPlaces);
+  return Math.max(0, Math.round(roundedAmount * multiplier));
 }
 
 function price(amount: number, context: UcpCatalogContext): UcpPrice {
@@ -610,7 +612,10 @@ function variantPrices(
   variant: ProductVariant,
   context: UcpCatalogContext,
 ) {
-  const basePrice = variant.price ?? product.price;
+  const basePrice = roundPriceToPrecision(
+    variant.price ?? product.price,
+    context.currency.decimalPlaces,
+  );
   const finalPrice = getVariantDiscountedPrice(
     variant.price,
     product.price,
@@ -620,6 +625,7 @@ function variantPrices(
     product.discountType,
     product.discountPercentage,
     product.discountAmount,
+    context.currency.decimalPlaces,
   );
 
   return {

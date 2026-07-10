@@ -16,11 +16,62 @@ function activePersistedSkuPredicate(alias: string, productId: SQL): SQL {
     `;
 }
 
+function availableSkuPredicate(alias: string): SQL {
+    return sql`(
+        ${sql.raw(`${alias}.track_inventory`)} = 0
+        OR (${sql.raw(`${alias}.stock`)} - ${sql.raw(`${alias}.reserved_stock`)}) > 0
+    )`;
+}
+
+function buyerOptionTopologyPredicate(
+    productId: SQL,
+    aliasPrefix: "buyer" | "buyer_available",
+    requireAvailable: boolean,
+): SQL {
+    const optionAlias = `${aliasPrefix}_option_sku`;
+    const shapeAlias = `${aliasPrefix}_option_shape_sku`;
+    const availability = requireAvailable
+        ? sql`AND ${availableSkuPredicate(optionAlias)}`
+        : sql``;
+
+    return sql`(
+        EXISTS (
+            SELECT 1
+            FROM "product_variants" AS ${sql.raw(optionAlias)}
+            WHERE ${activePersistedSkuPredicate(optionAlias, productId)}
+              AND ${sql.raw(`${optionAlias}.is_default`)} = 0
+              AND ${hasCustomerOptionPredicate(optionAlias)}
+              ${availability}
+        )
+        AND (
+            SELECT (
+                min(CASE
+                    WHEN trim(coalesce(${sql.raw(`${shapeAlias}.size`)}, '')) <> '' THEN 1
+                    ELSE 0
+                END) = max(CASE
+                    WHEN trim(coalesce(${sql.raw(`${shapeAlias}.size`)}, '')) <> '' THEN 1
+                    ELSE 0
+                END)
+                AND min(CASE
+                    WHEN trim(coalesce(${sql.raw(`${shapeAlias}.color`)}, '')) <> '' THEN 1
+                    ELSE 0
+                END) = max(CASE
+                    WHEN trim(coalesce(${sql.raw(`${shapeAlias}.color`)}, '')) <> '' THEN 1
+                    ELSE 0
+                END)
+            )
+            FROM "product_variants" AS ${sql.raw(shapeAlias)}
+            WHERE ${activePersistedSkuPredicate(shapeAlias, productId)}
+              AND ${sql.raw(`${shapeAlias}.is_default`)} = 0
+        ) = 1
+    )`;
+}
+
 /**
  * Public product visibility is stricter than "active product row".
  *
  * A storefront-visible product must have a buyer-resolvable SKU topology:
- * - at least one active non-default customer-option SKU, or
+ * - active non-default customer-option SKUs all use one option-axis shape, or
  * - exactly one active persisted no-option SKU for a simple product.
  *
  * Stock is intentionally not part of this predicate; sold-out products can stay
@@ -28,13 +79,7 @@ function activePersistedSkuPredicate(alias: string, productId: SQL): SQL {
  */
 export function publicProductHasBuyerResolvableSku(productId: SQL = sql`${products.id}`): SQL {
     return sql`(
-        EXISTS (
-            SELECT 1
-            FROM "product_variants" AS buyer_option_sku
-            WHERE ${activePersistedSkuPredicate("buyer_option_sku", productId)}
-              AND ${sql.raw("buyer_option_sku.is_default")} = 0
-              AND ${hasCustomerOptionPredicate("buyer_option_sku")}
-        )
+        ${buyerOptionTopologyPredicate(productId, "buyer", false)}
         OR (
             (
                 SELECT count(*)
@@ -52,32 +97,12 @@ export function publicProductHasBuyerResolvableSku(productId: SQL = sql`${produc
 }
 
 export function publicProductHasCustomerOptions(productId: SQL = sql`${products.id}`): SQL<boolean> {
-    return sql`EXISTS (
-        SELECT 1
-        FROM "product_variants" AS buyer_option_sku
-        WHERE ${activePersistedSkuPredicate("buyer_option_sku", productId)}
-          AND ${sql.raw("buyer_option_sku.is_default")} = 0
-          AND ${hasCustomerOptionPredicate("buyer_option_sku")}
-    )`;
-}
-
-function availableSkuPredicate(alias: string): SQL {
-    return sql`(
-        ${sql.raw(`${alias}.track_inventory`)} = 0
-        OR (${sql.raw(`${alias}.stock`)} - ${sql.raw(`${alias}.reserved_stock`)}) > 0
-    )`;
+    return sql`${buyerOptionTopologyPredicate(productId, "buyer", false)}`;
 }
 
 export function publicProductHasAvailableBuyerSku(productId: SQL = sql`${products.id}`): SQL<boolean> {
     return sql`(
-        EXISTS (
-            SELECT 1
-            FROM "product_variants" AS buyer_available_option_sku
-            WHERE ${activePersistedSkuPredicate("buyer_available_option_sku", productId)}
-              AND ${sql.raw("buyer_available_option_sku.is_default")} = 0
-              AND ${hasCustomerOptionPredicate("buyer_available_option_sku")}
-              AND ${availableSkuPredicate("buyer_available_option_sku")}
-        )
+        ${buyerOptionTopologyPredicate(productId, "buyer_available", true)}
         OR (
             (
                 SELECT count(*)

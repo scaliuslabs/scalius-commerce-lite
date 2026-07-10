@@ -66,7 +66,9 @@ const FEED_REASON_LABELS: Record<ProductFeedDiagnosticReason, string> = {
   storefront_url_unavailable: "Storefront URL unavailable",
   product_feed_excluded: "Excluded by product",
   inactive_deleted_unpublished: "Inactive or deleted",
+  inconsistent_option_axes: "Mixed SKU option fields",
   no_buyer_sku: "No buyer-safe SKU",
+  non_positive_price: "Non-positive current price",
   missing_image: "Missing primary image",
   unavailable_excluded: "Sold out hidden",
 };

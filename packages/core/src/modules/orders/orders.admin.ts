@@ -2,7 +2,6 @@
 // Admin order service: queries and CRUD mutations.
 
 import { safeBatch, type Database } from "@scalius/database/client";
-import { roundPrice, addPrices, subtractPrice } from "@scalius/shared/price-utils";
 import {
     orders,
     orderItems,
@@ -61,6 +60,14 @@ import type {
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-claim";
 import { computeOrderPaymentState } from "../payments/payment-state";
+import {
+    createOrderCurrencySnapshot,
+    resolveOrderCurrencySnapshot,
+    roundOrderMoney,
+    type OrderCurrencySnapshot,
+} from "../payments/order-currency";
+import { getCurrencySettings } from "../settings/site-settings.service";
+import { toMinorUnits } from "../tax";
 import {
     assertNoActiveRefundAttempt,
     assertNoActiveRefundAttemptsForOrders,
@@ -128,6 +135,51 @@ type AdminOrderSkuIssueCode =
     | "VARIANT_UNAVAILABLE"
     | "VARIANT_MISMATCH"
     | "PRODUCT_UNAVAILABLE";
+
+interface ManualOrderMoneyItem {
+    productId: string;
+    variantId: string | null;
+    quantity: number;
+    price: number;
+}
+
+function calculateManualOrderMoney(
+    items: ManualOrderMoneyItem[],
+    shippingCharge: number,
+    discountAmount: number | null,
+    currency: OrderCurrencySnapshot,
+) {
+    const normalizedItems = items.map((item) => ({
+        ...item,
+        price: roundOrderMoney(item.price, currency),
+    }));
+    const subtotal = normalizedItems.reduce(
+        (sum, item) => roundOrderMoney(
+            sum + roundOrderMoney(item.price * item.quantity, currency),
+            currency,
+        ),
+        0,
+    );
+    const normalizedShipping = roundOrderMoney(shippingCharge, currency);
+    const normalizedDiscount = roundOrderMoney(discountAmount ?? 0, currency);
+    const grossAmount = roundOrderMoney(subtotal + normalizedShipping, currency);
+    if (normalizedDiscount > grossAmount) {
+        throw new ValidationError("Discount amount cannot exceed the manual order subtotal and shipping.");
+    }
+    const totalAmount = roundOrderMoney(grossAmount - normalizedDiscount, currency);
+
+    return {
+        normalizedItems,
+        subtotal,
+        shippingCharge: normalizedShipping,
+        discountAmount: normalizedDiscount,
+        totalAmount,
+        subtotalAmountMinor: toMinorUnits(subtotal, currency.decimalPlaces),
+        shippingAmountMinor: toMinorUnits(normalizedShipping, currency.decimalPlaces),
+        discountAmountMinor: toMinorUnits(normalizedDiscount, currency.decimalPlaces),
+        totalAmountMinor: toMinorUnits(totalAmount, currency.decimalPlaces),
+    };
+}
 export type BuyerRecoveryPaymentMethod =
     | typeof PaymentMethod.SSLCOMMERZ
     | typeof PaymentMethod.POLAR;
@@ -1404,14 +1456,19 @@ export async function getOrderDetails(
  *   4. If batch fails, release all reservations (no orphaned holds)
  */
 export async function createOrder(db: Database, data: CreateOrderInput): Promise<{ id: string }> {
-    // Calculate total amount
-    const totalAmount = subtractPrice(
-        addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
-        data.discountAmount || 0,
+    const currentCurrency = await getCurrencySettings(db);
+    const currency = createOrderCurrencySnapshot(currentCurrency.currencyCode);
+    const money = calculateManualOrderMoney(
+        data.items,
+        data.shippingCharge,
+        data.discountAmount,
+        currency,
     );
+    const totalAmount = money.totalAmount;
     const initialPaymentState = computeOrderPaymentState({
         totalAmount,
         paidAmount: 0,
+        currency,
     });
 
     const { cityName, zoneName, areaName } = await resolveActiveDeliveryLocationNames(db, data);
@@ -1445,7 +1502,7 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
     // and holds stock atomically. If any variant has insufficient stock,
     // the order creation fails immediately with a clear error.
     const orderId = generateOrderId();
-    const trackedItems = await resolveAdminOrderItemInventory(db, data.items);
+    const trackedItems = await resolveAdminOrderItemInventory(db, money.normalizedItems);
     const reservationEntries: ReservationEntry[] = trackedItems
         .filter((item) => item.inventoryTracked)
         .map((item) => ({
@@ -1549,8 +1606,17 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
             areaName,
             notes: data.notes,
             totalAmount,
-            shippingCharge: data.shippingCharge,
-            discountAmount: data.discountAmount,
+            shippingCharge: money.shippingCharge,
+            discountAmount: money.discountAmount,
+            currencyCode: currency.code,
+            currencyDecimalPlaces: currency.decimalPlaces,
+            subtotalAmountMinor: money.subtotalAmountMinor,
+            shippingAmountMinor: money.shippingAmountMinor,
+            discountAmountMinor: money.discountAmountMinor,
+            taxAmountMinor: 0,
+            totalAmountMinor: money.totalAmountMinor,
+            taxLabel: null,
+            pricesIncludeTax: false,
             paidAmount: initialPaymentState.paidAmount,
             balanceDue: initialPaymentState.balanceDue,
             paymentStatus: initialPaymentState.paymentStatus,
@@ -1855,6 +1921,8 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             inventoryPool: orders.inventoryPool,
             paidAmount: orders.paidAmount,
             paymentStatus: orders.paymentStatus,
+            currencyCode: orders.currencyCode,
+            currencyDecimalPlaces: orders.currencyDecimalPlaces,
             version: orders.version,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
@@ -1876,13 +1944,21 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     await assertNoActiveRefundAttempt(db, id);
     await assertNoActivePaymentSessionAttempt(db, id);
 
+    const currency = resolveOrderCurrencySnapshot(existingOrder);
+    const money = calculateManualOrderMoney(
+        data.items,
+        data.shippingCharge,
+        data.discountAmount,
+        currency,
+    );
+
     // Validate status transition if status is changing
     if (nextStatus !== currentStatus) {
         validateTransition("order", currentStatus, nextStatus);
     }
 
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
-    const trackedNewItems = await resolveAdminOrderItemInventory(db, data.items);
+    const trackedNewItems = await resolveAdminOrderItemInventory(db, money.normalizedItems);
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
     const existingInventoryAction = existingOrder.inventoryAction as string;
     const targetRestoresStock = isStockRestoreStatus(nextStatus);
@@ -1891,10 +1967,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     const newEntries = buildInventoryEntries(trackedNewItems, pool);
     const { positiveEntries, negativeEntries } = computeInventoryDeltas(oldEntries, newEntries, pool);
 
-    const totalAmount = subtractPrice(
-        addPrices(...data.items.map(item => roundPrice(item.price * item.quantity)), data.shippingCharge),
-        data.discountAmount || 0,
-    );
+    const totalAmount = money.totalAmount;
     const nextPaymentState = computeOrderPaymentState({
         totalAmount,
         paidAmount: existingOrder.paidAmount,
@@ -1903,6 +1976,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             : existingOrder.paymentStatus === PaymentStatus.FAILED
                 ? PaymentStatus.FAILED
                 : undefined,
+        currency,
     });
     let customerId = existingOrder.customerId;
     let newCustomerId: string | null = null;
@@ -2036,8 +2110,17 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 areaName,
                 notes: data.notes,
                 totalAmount,
-                shippingCharge: data.shippingCharge,
-                discountAmount: data.discountAmount,
+                shippingCharge: money.shippingCharge,
+                discountAmount: money.discountAmount,
+                currencyCode: currency.code,
+                currencyDecimalPlaces: currency.decimalPlaces,
+                subtotalAmountMinor: money.subtotalAmountMinor,
+                shippingAmountMinor: money.shippingAmountMinor,
+                discountAmountMinor: money.discountAmountMinor,
+                taxAmountMinor: 0,
+                totalAmountMinor: money.totalAmountMinor,
+                taxLabel: null,
+                pricesIncludeTax: false,
                 paidAmount: nextPaymentState.paidAmount,
                 balanceDue: nextPaymentState.balanceDue,
                 paymentStatus: nextPaymentState.paymentStatus,

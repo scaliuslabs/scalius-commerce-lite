@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   getClientIp: vi.fn(() => "127.0.0.1"),
   getCustomerBySession: vi.fn(),
   getActivePaymentMethods: vi.fn(),
+  getCurrencySettings: vi.fn(),
   calculateStorefrontTaxQuote: vi.fn(),
   isDiscountValid: vi.fn(),
   calculateDiscountAmount: vi.fn(),
@@ -87,6 +88,14 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
   FRESH_GATEWAY_SETTINGS_READ_OPTIONS: { bypassMemoryCache: true },
   getActivePaymentMethods: mocks.getActivePaymentMethods,
 }));
+
+vi.mock("@scalius/core/modules/settings/site-settings.service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@scalius/core/modules/settings/site-settings.service")>();
+  return {
+    ...actual,
+    getCurrencySettings: mocks.getCurrencySettings,
+  };
+});
 
 vi.mock("@scalius/core/modules/tax", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@scalius/core/modules/tax")>();
@@ -145,6 +154,11 @@ beforeEach(() => {
   mocks.getActivePaymentMethods.mockResolvedValue({
     enabledMethods: ["cod"],
     defaultMethod: "cod",
+  });
+  mocks.getCurrencySettings.mockResolvedValue({
+    currencyCode: "BDT",
+    currencySymbol: "৳",
+    usdExchangeRate: "1",
   });
   mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
   mocks.isDiscountValid.mockResolvedValue({ valid: false });
@@ -361,6 +375,46 @@ describe("cart validation preflight", () => {
     expect(mocks.validateStorefrontDeliveryPreflight).not.toHaveBeenCalled();
   });
 
+  it.each(["JPY", "KWD"])(
+    "loads %s once and passes it to the authoritative cart validator",
+    async (currencyCode) => {
+      mocks.getCurrencySettings.mockResolvedValue({
+        currencyCode,
+        currencySymbol: currencyCode === "JPY" ? "¥" : "د.ك",
+        usdExchangeRate: "1",
+      });
+      const { app, kv } = createTestApp();
+
+      const response = await app.request(
+        "/api/v1/orders/cart-validation",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: [{
+              productId: "product_1",
+              variantId: "variant_1",
+              quantity: 1,
+              price: currencyCode === "JPY" ? 100 : 1.235,
+            }],
+          }),
+        },
+        { CACHE: kv } as never,
+      );
+
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(mocks.getCurrencySettings).toHaveBeenCalledOnce();
+      expect(mocks.validateStorefrontCartItems).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.any(Array),
+        {
+          inventoryPool: "regular",
+          currencyCode,
+        },
+      );
+    },
+  );
+
   it("returns every cart item issue without creating checkout side effects", async () => {
     mocks.validateStorefrontCartItems.mockResolvedValue({
       valid: false,
@@ -474,6 +528,7 @@ describe("cart validation preflight", () => {
         zone: "zone_1",
         area: null,
         shippingMethodId: "ship_1",
+        currencyCode: "BDT",
       },
       expect.objectContaining({ valid: true }),
     );
@@ -641,6 +696,121 @@ describe("authoritative tax quote", () => {
     expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      currencyCode: "JPY",
+      decimalPlaces: 0,
+      unitPrice: 100,
+      subtotal: 200,
+      subtotalMinor: 200,
+      shippingMinor: 60,
+      totalMinor: 260,
+    },
+    {
+      currencyCode: "KWD",
+      decimalPlaces: 3,
+      unitPrice: 1.235,
+      subtotal: 2.47,
+      subtotalMinor: 2_470,
+      shippingMinor: 60_000,
+      totalMinor: 62_470,
+    },
+  ])(
+    "keeps $currencyCode cart validation and tax-quote precision in parity",
+    async ({
+      currencyCode,
+      decimalPlaces,
+      unitPrice,
+      subtotal,
+      subtotalMinor,
+      shippingMinor,
+      totalMinor,
+    }) => {
+      mocks.getCurrencySettings.mockResolvedValue({
+        currencyCode,
+        currencySymbol: currencyCode === "JPY" ? "¥" : "د.ك",
+        usdExchangeRate: "1",
+      });
+      mocks.validateStorefrontCartItems.mockResolvedValue({
+        valid: true,
+        issues: [],
+        items: [{
+          index: 0,
+          cartKey: "line_currency",
+          productId: "product_1",
+          variantId: "variant_1",
+          quantity: 2,
+          unitPrice,
+          productName: "Currency product",
+          variantLabel: null,
+          freeDelivery: false,
+          inventoryTracked: true,
+          availableQuantity: 4,
+          taxClassId: null,
+        }],
+        subtotal,
+        hasFreeDeliveryProduct: false,
+      });
+      mocks.calculateStorefrontTaxQuote.mockResolvedValue({
+        ...DEFAULT_TAX_QUOTE,
+        currencyCode,
+        decimalPlaces,
+        subtotalMinor,
+        shippingMinor,
+        totalMinor,
+      });
+      const { app, kv } = createTestApp();
+
+      const response = await app.request(
+        "/api/v1/orders/tax-quote",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: [{
+              productId: "product_1",
+              variantId: "variant_1",
+              quantity: 2,
+            }],
+            city: "city_1",
+            zone: "zone_1",
+            shippingMethodId: "shipping_1",
+          }),
+        },
+        { CACHE: kv } as never,
+      );
+
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await response.json()).toMatchObject({
+        success: true,
+        data: {
+          currencyCode,
+          decimalPlaces,
+          subtotalMinor,
+          subtotalAmount: subtotal,
+          shippingMinor,
+          shippingAmount: 60,
+          totalMinor,
+          totalAmount: subtotal + 60,
+          items: [{ unitPrice, quantity: 2 }],
+        },
+      });
+      expect(mocks.getCurrencySettings).toHaveBeenCalledOnce();
+      expect(mocks.validateStorefrontCartItems).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.any(Array),
+        { inventoryPool: "regular", currencyCode },
+      );
+      expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          lines: [expect.objectContaining({ unitPrice, quantity: 2 })],
+          currency: { code: currencyCode, decimalPlaces },
+        }),
+      );
+    },
+  );
+
   it("passes validated product discount scope to the shared quote service", async () => {
     mocks.validateStorefrontCartItems.mockResolvedValue({
       valid: true,
@@ -708,6 +878,7 @@ describe("authoritative tax quote", () => {
       expect.any(Array),
       60,
       new Set(["product_1"]),
+      "BDT",
     );
   });
 });
@@ -954,6 +1125,100 @@ describe("checkout status recovery hints", () => {
   });
 });
 
+describe("create order currency parity", () => {
+  it.each([
+    { currencyCode: "JPY", decimalPlaces: 0, unitPrice: 100, subtotal: 200, totalMinor: 260 },
+    { currencyCode: "KWD", decimalPlaces: 3, unitPrice: 1.235, subtotal: 2.47, totalMinor: 62_470 },
+  ])(
+    "keeps $currencyCode cart authority through order creation",
+    async ({ currencyCode, decimalPlaces, unitPrice, subtotal, totalMinor }) => {
+      const cartValidation = {
+        valid: true,
+        issues: [],
+        items: [{
+          index: 0,
+          cartKey: null,
+          productId: "product_1",
+          variantId: "variant_1",
+          quantity: 2,
+          unitPrice,
+          productName: "Currency product",
+          variantLabel: null,
+          freeDelivery: false,
+          inventoryTracked: true,
+          availableQuantity: 4,
+          taxClassId: null,
+        }],
+        subtotal,
+        hasFreeDeliveryProduct: false,
+      };
+      const quote = {
+        ...DEFAULT_TAX_QUOTE,
+        currencyCode,
+        decimalPlaces,
+        subtotalMinor: currencyCode === "JPY" ? 200 : 2_470,
+        shippingMinor: currencyCode === "JPY" ? 60 : 60_000,
+        totalMinor,
+      };
+      mocks.getCurrencySettings.mockResolvedValue({
+        currencyCode,
+        currencySymbol: currencyCode === "JPY" ? "¥" : "د.ك",
+        usdExchangeRate: "1",
+      });
+      mocks.validateStorefrontCartItems.mockResolvedValue(cartValidation);
+      mocks.createStorefrontOrder.mockResolvedValue({
+        checkoutToken: `chk_${currencyCode.toLowerCase()}`,
+        orderId: `order_${currencyCode.toLowerCase()}`,
+        paymentMethod: "cod",
+        totalAmount: subtotal + 60,
+        taxQuote: quote,
+        commitPayload: { orderData: { id: `order_${currencyCode.toLowerCase()}` } },
+      });
+      const { app, kv } = createTestApp();
+
+      const response = await app.request(
+        "/api/v1/orders",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...validOrderBody,
+            items: [{
+              ...validOrderBody.items[0],
+              quantity: 2,
+              price: unitPrice,
+            }],
+          }),
+        },
+        { CACHE: kv } as never,
+      );
+
+      expect(response.status, await response.clone().text()).toBe(201);
+      expect(await response.json()).toMatchObject({
+        success: true,
+        data: {
+          currencyCode,
+          decimalPlaces,
+          totalAmount: subtotal + 60,
+          totalAmountMinor: totalMinor,
+        },
+      });
+      expect(mocks.getCurrencySettings).toHaveBeenCalledOnce();
+      expect(mocks.validateStorefrontCartItems).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.any(Array),
+        { inventoryPool: "regular", currencyCode },
+      );
+      expect(mocks.validateStorefrontDeliveryPreflight).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ currencyCode }),
+        cartValidation,
+      );
+      expect(mocks.createStorefrontOrder.mock.calls[0]?.[6]).toBe(cartValidation);
+    },
+  );
+});
+
 describe("create order commit/KV ordering", () => {
   it("commits the order before scheduling checkout recovery hints and side effects", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -1046,6 +1311,7 @@ describe("create order commit/KV ordering", () => {
           zoneName: "Mirpur",
         }),
         undefined,
+        { code: "BDT", decimalPlaces: 2 },
       );
       expect(mocks.markCheckoutAttemptCommitted).toHaveBeenCalledWith(
         expect.anything(),
@@ -1400,6 +1666,7 @@ describe("create order commit/KV ordering", () => {
         zone: "zone_1",
         area: null,
         shippingMethodId: undefined,
+        currencyCode: "BDT",
       },
       expect.objectContaining({ valid: true }),
     );
@@ -1809,6 +2076,7 @@ describe("create order commit/KV ordering", () => {
         customerId: "customer_signed_in",
         source: "authenticated",
       },
+      { code: "BDT", decimalPlaces: 2 },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -1972,6 +2240,43 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(mocks.markCheckoutAttemptFailed).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects SSLCommerz when the authoritative store currency is not BDT", async () => {
+    mocks.getCurrencySettings.mockResolvedValue({
+      currencyCode: "KWD",
+      currencySymbol: "د.ك",
+      usdExchangeRate: "1",
+    });
+    mocks.getActivePaymentMethods.mockResolvedValue({
+      enabledMethods: ["sslcommerz"],
+      defaultMethod: "sslcommerz",
+    });
+    const { app, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+      },
+      { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "SSLCommerz checkout requires the store currency to be BDT.",
+      },
+    });
+    expect(mocks.calculateStorefrontTaxQuote).not.toHaveBeenCalled();
+    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.claimCheckoutAttempt).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
   });
 

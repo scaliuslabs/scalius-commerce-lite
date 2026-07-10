@@ -264,6 +264,42 @@ describe("UCP storefront routes", () => {
     });
   });
 
+  it("omits legacy products whose active SKUs mix option-axis shapes", async () => {
+    const mixedProduct = catalogProduct({
+      variants: [
+        {
+          ...catalogProduct().variants![0]!,
+          id: "var_size_42",
+          sku: "SKU-42",
+          size: "42",
+          color: null,
+        },
+        {
+          ...catalogProduct().variants![0]!,
+          id: "var_size_41_green",
+          sku: "SKU-41-GREEN",
+          size: "41",
+          color: "Green",
+        },
+      ],
+    });
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [mixedProduct],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const response = await searchCatalog({
+      request: request(
+        { ucp: { version: "2026-04-08" }, query: "khaki" },
+        { "UCP-Agent": 'profile="https://agent.example.test/.well-known/ucp"' },
+      ),
+    } as never);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.products).toEqual([]);
+  });
+
   it("serves lookup from the feed projection without product-detail fallback", async () => {
     mocks.getFeedProducts.mockResolvedValueOnce({
       data: [],

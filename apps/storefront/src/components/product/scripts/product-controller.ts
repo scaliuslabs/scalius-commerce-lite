@@ -21,9 +21,12 @@ import {
 import {
   createVariantIndex,
   createInitialState,
+  createSelectionState,
   applyAction,
+  filterVariantsBySelection,
   validateSelection,
   loadVariantsFromDOM,
+  resolveExactVariantSelection,
   type VariantSelectionState,
   type Variant,
   type VariantIndex,
@@ -57,6 +60,8 @@ const cache = {
   actionsContainer: null as HTMLElement | null,
   sizeButtons: [] as HTMLElement[],
   colorButtons: [] as HTMLElement[],
+  sizeInputs: [] as HTMLInputElement[],
+  colorInputs: [] as HTMLInputElement[],
   thumbnails: [] as HTMLElement[],
   priceElements: [] as HTMLElement[],
   originalPriceElements: [] as HTMLElement[],
@@ -69,6 +74,11 @@ type ProductImageChangeDetail = {
 
 function parseDiscountType(value?: string): DiscountType {
   return value === "percentage" || value === "flat" ? value : null;
+}
+
+function parseDecimal(value: string | undefined): number {
+  const parsed = Number.parseFloat(value ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function init() {
@@ -85,6 +95,12 @@ function init() {
 
   cache.sizeButtons = Array.from(document.querySelectorAll(".size-btn"));
   cache.colorButtons = Array.from(document.querySelectorAll(".color-btn"));
+  cache.sizeInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[name="size"]'),
+  );
+  cache.colorInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[name="color"]'),
+  );
   cache.thumbnails = Array.from(document.querySelectorAll(".thumbnail-btn"));
   cache.priceElements = Array.from(document.querySelectorAll(".product-price"));
   cache.originalPriceElements = Array.from(
@@ -166,41 +182,53 @@ function initVariantSystem() {
   state.currentDisplayedImage = cache.container?.dataset.productImage || "";
 
   state.productPricing = {
-    basePrice: parseInt(cache.container?.dataset.productOriginalPrice || "0"),
+    basePrice: parseDecimal(cache.container?.dataset.productOriginalPrice),
     discountType: parseDiscountType(cache.container?.dataset.productDiscountType),
     discountPercentage:
-      parseInt(cache.container?.dataset.productDiscountPercentage || "0") ||
+      parseDecimal(cache.container?.dataset.productDiscountPercentage) ||
       null,
     discountAmount:
-      parseInt(cache.container?.dataset.productDiscountAmount || "0") || null,
+      parseDecimal(cache.container?.dataset.productDiscountAmount) || null,
+    currencyDecimalPlaces: (() => {
+      const value = Number.parseInt(
+        cache.container?.dataset.currencyDecimalPlaces || "2",
+        10,
+      );
+      return Number.isInteger(value) && value >= 0 && value <= 6 ? value : 2;
+    })(),
   };
 
   if (!state.variantIndex) return;
-  state.selection = createInitialState(state.variantIndex);
+  const initialSelection = createInitialState(state.variantIndex);
 
   const params = new URLSearchParams(window.location.search);
   const urlSize = params.get("size");
   const urlColor = params.get("color");
-
-  if (urlSize) handleVariantSelection("size", urlSize, false);
-  if (urlColor) handleVariantSelection("color", urlColor, false);
-
-  cache.sizeButtons.forEach((btn) => {
-    btn.addEventListener("click", () =>
-      handleVariantSelection("size", btn.dataset.size!),
-    );
+  const querySelection = resolveExactVariantSelection(state.variants, {
+    selectedSize: urlSize,
+    selectedColor: urlColor,
   });
-  cache.colorButtons.forEach((btn) => {
-    btn.addEventListener("click", () =>
-      handleVariantSelection("color", btn.dataset.color!),
-    );
+
+  state.selection = querySelection
+    ? createSelectionState(state.variantIndex, querySelection)
+    : initialSelection;
+
+  cache.sizeInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) handleVariantSelection("size", input.value);
+    });
+  });
+  cache.colorInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) handleVariantSelection("color", input.value);
+    });
   });
 
   refreshUI();
 }
 
 function handleVariantSelection(
-  type: string,
+  type: "size" | "color",
   value: string,
   updateHistory = true,
 ) {
@@ -252,6 +280,12 @@ function updateVariantButtons() {
     const el = cache.sizeButtons[i];
     const val = el.dataset.size!;
     const isSelected = selectedSize === val;
+    const isAvailable = availableSizes.has(val);
+    const input = cache.sizeInputs.find((candidate) => candidate.value === val);
+    if (input) {
+      input.checked = isSelected;
+      input.disabled = !isSelected && !isAvailable;
+    }
 
     if (isSelected) {
       el.classList.add("bg-black", "text-white", "border-black");
@@ -266,7 +300,7 @@ function updateVariantButtons() {
       el.classList.remove("bg-black", "text-white", "border-black");
       el.classList.add("bg-white", "text-gray-900");
 
-      if (availableSizes.has(val)) {
+      if (isAvailable) {
         el.classList.remove(
           "opacity-50",
           "line-through",
@@ -282,6 +316,12 @@ function updateVariantButtons() {
     const el = cache.colorButtons[i];
     const val = el.dataset.color!;
     const isSelected = selectedColor === val;
+    const isAvailable = availableColors.has(val);
+    const input = cache.colorInputs.find((candidate) => candidate.value === val);
+    if (input) {
+      input.checked = isSelected;
+      input.disabled = !isSelected && !isAvailable;
+    }
 
     if (isSelected) {
       el.classList.add("bg-black", "text-white", "border-black");
@@ -296,7 +336,7 @@ function updateVariantButtons() {
       el.classList.remove("bg-black", "text-white", "border-black");
       el.classList.add("bg-white", "text-gray-900");
 
-      if (availableColors.has(val)) {
+      if (isAvailable) {
         el.classList.remove(
           "opacity-50",
           "line-through",
@@ -344,9 +384,13 @@ function updatePriceDisplay() {
     !state.selection.selectedVariant;
 
   if (showsStartingPrice) {
+    const matchingVariants = filterVariantsBySelection(state.variants, {
+      selectedSize: state.selection.selectedSize,
+      selectedColor: state.selection.selectedColor,
+    });
     const startingPrice = getBuyerVariantPricePresentation(
       state.productPricing,
-      state.variants,
+      matchingVariants,
     ).pricing.finalPrice;
     const formattedStartingPrice = `From ${formatPrice(startingPrice)}`;
 

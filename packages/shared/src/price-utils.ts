@@ -14,6 +14,18 @@ export function roundPrice(amount: number, currencyCode?: string): number {
   return Currency(amount, { precision }).value;
 }
 
+/** Round using an already-resolved currency precision. */
+export function roundPriceToPrecision(
+  amount: number,
+  precision: number,
+): number {
+  const safePrecision =
+    Number.isInteger(precision) && precision >= 0 && precision <= 6
+      ? precision
+      : 2;
+  return Currency(amount, { precision: safePrecision }).value;
+}
+
 /**
  * Safe price addition that avoids float drift.
  */
@@ -66,4 +78,34 @@ export function calculateDiscountedPrice(
     return Math.max(Currency(price).subtract(discountAmount).value, 0);
   }
   return price;
+}
+
+/**
+ * Apply a discount to the raw stored price, then round the final result at the
+ * configured currency precision. This matches checkout quote validation.
+ */
+export function calculateDiscountedPriceAtPrecision(
+  price: number,
+  discountType: unknown,
+  discountPercentage: number | null | undefined,
+  discountAmount: number | null | undefined,
+  precision: number,
+): number {
+  let finalPrice = price;
+
+  if (
+    discountType === "percentage" &&
+    discountPercentage != null &&
+    discountPercentage > 0
+  ) {
+    finalPrice = price * (1 - discountPercentage / 100);
+  } else if (
+    discountType === "flat" &&
+    discountAmount != null &&
+    discountAmount > 0
+  ) {
+    finalPrice = price - discountAmount;
+  }
+
+  return roundPriceToPrecision(Math.max(finalPrice, 0), precision);
 }
