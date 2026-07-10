@@ -163,6 +163,19 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     vi.restoreAllMocks();
   });
 
+  it("does not mount the assistant workspace for a non-super-admin", async () => {
+    renderLauncher(
+      <section data-route-content="">Products route</section>,
+      { isSuperAdmin: false, permissions: ["products.view"] },
+    );
+    await flushReact();
+
+    expect(document.body.textContent).toContain("Products route");
+    expect(getAssistantWorkspace()).toBeNull();
+    expect(queryButton("Open admin assistant")).toBeNull();
+    expect(sdkMocks.createFlueClient).not.toHaveBeenCalled();
+  });
+
   it("renders one floating panel and real left/right workspace columns", async () => {
     renderLauncher();
 
@@ -499,11 +512,9 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(String(computerResultFetch.mock.calls[0]?.[0])).toBe(
       "/api/assistant/flue/computer/results",
     );
-    expect(document.body.textContent).toContain("Page command recorded");
+    expect(document.body.textContent).not.toContain("Page command recorded");
     expect(
-      document.querySelector('[data-assistant-tool="computer"]')?.getAttribute(
-        "aria-busy",
-      ),
+      document.querySelector('[data-assistant-tool="computer"]'),
     ).toBeNull();
     expect(document.body.textContent).not.toContain(command.ticket);
     expect(queryButton("Open Products")).toBeNull();
@@ -512,52 +523,6 @@ describe("AdminAssistantLauncher Flue cutover", () => {
         ADMIN_FLUE_COMPUTER_DEDUPE_STORAGE_KEY,
       ),
     ).toContain(requestId);
-  });
-
-  it("rejects a catalog-known page before navigation when RBAC denies it", async () => {
-    renderLauncher(undefined, {
-      isSuperAdmin: false,
-      permissions: ["products.view"],
-    });
-    await click(queryButton("Open admin assistant"));
-    const requestId = "p".repeat(22);
-    const program = "goto /admin/settings/taxes";
-
-    await emitSnapshot(
-      liveSnapshot([
-        message("user-taxes", "user", [
-          { type: "text", text: "Open the taxes page", state: "done" },
-        ]),
-        message("assistant-taxes", "assistant", [
-          {
-            type: "dynamic-tool",
-            toolName: "computer",
-            toolCallId: "tool-computer-taxes",
-            state: "output-available",
-            input: { program },
-            output: {
-              type: "client_command",
-              capability: "computer",
-              protocolVersion: 1,
-              status: "awaiting_client_execution",
-              authoritative: false,
-              replayPolicy: "client_dedupe_request_id_until_expiry",
-              surface: "admin",
-              requestId,
-              program,
-              expiresAt: new Date(Date.now() + 120_000).toISOString(),
-              ticket: `${"t".repeat(16)}.${"s".repeat(43)}`,
-            },
-          },
-        ]),
-      ]),
-    );
-
-    await vi.waitFor(() => expect(computerResultFetch).toHaveBeenCalledOnce());
-    expect(routerMocks.navigate).not.toHaveBeenCalled();
-    expect(
-      JSON.parse(String(computerResultFetch.mock.calls[0]?.[1]?.body)),
-    ).toMatchObject({ result: { ok: false, code: "ROUTE_BLOCKED" } });
   });
 
   it("blocks New and history switching until a settled replay page command finishes", async () => {
@@ -619,7 +584,7 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     ).not.toBe(before);
   });
 
-  it("renders authoritative tool activity compactly without dumping JSON", async () => {
+  it("hides terminal tool-only protocol messages and their JSON", async () => {
     renderLauncher();
     await click(queryButton("Open admin assistant"));
     const giantValue = `private-giant-${"x".repeat(2_000)}`;
@@ -647,14 +612,14 @@ describe("AdminAssistantLauncher Flue cutover", () => {
       ]),
     );
 
-    expect(document.body.textContent).toContain("Scalius result ready");
+    expect(document.body.textContent).not.toContain("Scalius result ready");
     expect(document.body.textContent).not.toContain(giantValue);
     expect(document.body.textContent).not.toContain(
       "private model reasoning must not render",
     );
     expect(
       document.querySelector('[data-assistant-tool="scalius"]'),
-    ).toBeTruthy();
+    ).toBeNull();
   });
 
   it("aborts active durable work through the exact thread", async () => {

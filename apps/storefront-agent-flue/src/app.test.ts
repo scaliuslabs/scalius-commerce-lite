@@ -133,8 +133,23 @@ describe("storefront Flue canary app", () => {
     const dispatched: unknown[] = [];
     const testApp = createStorefrontCanaryApp({
       recordAuthorizationFailure: () => undefined,
-      dispatchComputerResult: async (id, continuation) => {
-        dispatched.push({ id, continuation });
+      beginAgentAdmission: async () => ({
+        admissionId: "a".repeat(22),
+        admissionClaimToken: "l".repeat(43),
+        generation: Date.now(),
+      }),
+      finishAgentAdmission: async () => true,
+      consumeComputerHandoff: async ({ handoff, state }) => ({
+        ok: true,
+        status: "claimed",
+        state: state as "dispatched",
+        requestId: handoff.requestId,
+        dispatchClaimToken: "d".repeat(43),
+      }),
+      beginComputerHandoff: async () => true,
+      confirmComputerHandoff: async () => true,
+      dispatchComputerResult: async (id, continuation, generation) => {
+        dispatched.push({ id, continuation, generation });
         return { dispatchId: "dispatch_storefront_1", acceptedAt: new Date().toISOString() };
       },
     });
@@ -174,6 +189,7 @@ describe("storefront Flue canary app", () => {
           surface: "storefront",
           requestId: command.requestId,
         }),
+        generation: expect.any(Number),
       }),
     ]);
 
@@ -184,5 +200,139 @@ describe("storefront Flue canary app", () => {
     }, env);
     expect(crossThread.status).toBe(404);
     expect(dispatched).toHaveLength(1);
+  });
+
+  it("lets cancellation and result race through one D1 first winner", async () => {
+    const instanceId = await createThreadInstanceId("storefront", IDENTITY, THREAD_KEY);
+    const command = await issueScaliusComputerCommand({
+      surface: "storefront",
+      agentName: "shopping-assistant",
+      instanceId,
+      program: "observe",
+      signingKey: COMPUTER_KEY,
+    });
+    let winner: "cancelled" | "dispatched" | null = null;
+    const dispatched: string[] = [];
+    const testApp = createStorefrontCanaryApp({
+      recordAuthorizationFailure: () => undefined,
+      beginAgentAdmission: async () => ({
+        admissionId: "a".repeat(22),
+        admissionClaimToken: "l".repeat(43),
+        generation: Date.now(),
+      }),
+      finishAgentAdmission: async () => true,
+      consumeComputerHandoff: async ({ handoff, state }) => {
+        if (winner) return { ok: false as const, reason: "conflict" as const };
+        winner = state;
+        return state === "cancelled"
+          ? {
+              ok: true as const,
+              status: "claimed" as const,
+              state,
+              requestId: handoff.requestId,
+            }
+          : {
+              ok: true as const,
+              status: "claimed" as const,
+              state,
+              requestId: handoff.requestId,
+              dispatchClaimToken: "d".repeat(43),
+            };
+      },
+      beginComputerHandoff: async () => true,
+      confirmComputerHandoff: async () => true,
+      dispatchComputerResult: async () => {
+        dispatched.push("dispatch");
+        return { dispatchId: "dispatch_race", acceptedAt: new Date().toISOString() };
+      },
+    });
+    const headers = {
+      Authorization: `Bearer ${AUTH_TOKEN}`,
+      "X-Scalius-Tenant-Id": IDENTITY.tenantId,
+      "X-Scalius-Principal-Id": IDENTITY.principalId,
+      "X-Scalius-Thread-Id": IDENTITY.threadId,
+      "Content-Type": "application/json",
+    };
+    const env = {
+      CANARY_AUTH_TOKEN: AUTH_TOKEN,
+      THREAD_ID_SIGNING_KEY: THREAD_KEY,
+      COMPUTER_TICKET_SIGNING_KEY: COMPUTER_KEY,
+    };
+    const [result, cancel] = await Promise.all([
+      testApp.request(`/computer/results/${instanceId}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ticket: command.ticket,
+          program: command.program,
+          result: { ok: true, code: "OBSERVED", output: "Observed", changed: false },
+        }),
+      }, env),
+      testApp.request(`/computer/cancel/${instanceId}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ ticket: command.ticket, program: command.program }),
+      }, env),
+    ]);
+    expect([result.status, cancel.status].sort()).toEqual([202, 409]);
+    expect(dispatched.length).toBe(winner === "dispatched" ? 1 : 0);
+  });
+
+  it("marks an ambiguous dispatch uncertain and never retries it", async () => {
+    const instanceId = await createThreadInstanceId("storefront", IDENTITY, THREAD_KEY);
+    const command = await issueScaliusComputerCommand({
+      surface: "storefront",
+      agentName: "shopping-assistant",
+      instanceId,
+      program: "observe",
+      signingKey: COMPUTER_KEY,
+    });
+    const uncertain: unknown[] = [];
+    const dispatchComputerResult = async () => {
+      throw new Error("ambiguous dispatch response");
+    };
+    const testApp = createStorefrontCanaryApp({
+      recordAuthorizationFailure: () => undefined,
+      beginAgentAdmission: async () => ({
+        admissionId: "a".repeat(22),
+        admissionClaimToken: "l".repeat(43),
+        generation: Date.now(),
+      }),
+      finishAgentAdmission: async () => true,
+      consumeComputerHandoff: async ({ handoff }) => ({
+        ok: true,
+        status: "claimed",
+        state: "dispatched",
+        requestId: handoff.requestId,
+        dispatchClaimToken: "d".repeat(43),
+      }),
+      beginComputerHandoff: async () => true,
+      dispatchComputerResult,
+      markComputerHandoffUncertain: async (claim) => {
+        uncertain.push(claim);
+        return true;
+      },
+    });
+    const response = await testApp.request(`/computer/results/${instanceId}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${AUTH_TOKEN}`,
+        "X-Scalius-Tenant-Id": IDENTITY.tenantId,
+        "X-Scalius-Principal-Id": IDENTITY.principalId,
+        "X-Scalius-Thread-Id": IDENTITY.threadId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ticket: command.ticket,
+        program: command.program,
+        result: { ok: true, code: "OBSERVED", output: "Observed", changed: false },
+      }),
+    }, {
+      CANARY_AUTH_TOKEN: AUTH_TOKEN,
+      THREAD_ID_SIGNING_KEY: THREAD_KEY,
+      COMPUTER_TICKET_SIGNING_KEY: COMPUTER_KEY,
+    });
+    expect(response.status).toBe(503);
+    expect(uncertain).toHaveLength(1);
   });
 });

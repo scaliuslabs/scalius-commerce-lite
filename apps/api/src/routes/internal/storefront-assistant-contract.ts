@@ -26,6 +26,23 @@ export const STOREFRONT_ASSISTANT_AUTHORITY_PATHS = Object.freeze({
     `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/session/revoke`,
   flueAdmit: `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admit`,
   flueCommand: `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/command`,
+  flueComputerHandoffConsume:
+    `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/consume`,
+  flueComputerHandoffBegin:
+    `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/begin`,
+  flueComputerHandoffConfirm:
+    `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/confirm`,
+  flueComputerHandoffUncertain:
+    `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/uncertain`,
+  flueAdmissionBegin:
+    `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admission/begin`,
+  flueAdmissionFinish:
+    `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admission/finish`,
+  flueStopBegin: `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/begin`,
+  flueStopStatus: `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/status`,
+  flueStopReconcile:
+    `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/reconcile`,
+  flueStopFinish: `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/finish`,
 } as const);
 
 export const STOREFRONT_ASSISTANT_SUBJECT_PATTERN =
@@ -53,6 +70,39 @@ export const storefrontAssistantFlueCommandSchema = z.object({
   instanceId: z.string().regex(/^v1\.[A-Za-z0-9_-]{43}$/u),
   program: z.string().max(SCALIUS_COMMAND_LIMITS.programChars),
 }).strict();
+
+const storefrontComputerHandoffIdentitySchema = z.object({
+  instanceId: z.string().regex(/^v1\.[A-Za-z0-9_-]{43}$/u),
+  requestId: z.string().regex(/^[A-Za-z0-9_-]{22}$/u),
+  programDigest: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+}).strict();
+
+export const storefrontAssistantComputerHandoffConsumeSchema =
+  storefrontComputerHandoffIdentitySchema.extend({
+    state: z.enum(["cancelled", "dispatched"]),
+    ticketIssuedAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    ticketExpiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  }).strict();
+
+export const storefrontAssistantComputerHandoffConfirmSchema =
+  storefrontComputerHandoffIdentitySchema.extend({
+    dispatchClaimToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+  }).strict();
+
+export const storefrontAssistantAgentInstanceSchema = z.object({
+  instanceId: z.string().regex(/^v1\.[A-Za-z0-9_-]{43}$/u),
+}).strict();
+
+export const storefrontAssistantAdmissionFinishSchema =
+  storefrontAssistantAgentInstanceSchema.extend({
+    admissionId: z.string().regex(/^[A-Za-z0-9_-]{22}$/u),
+    admissionClaimToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+  }).strict();
+
+export const storefrontAssistantStopReconcileSchema =
+  storefrontAssistantAgentInstanceSchema.extend({
+    stoppedThroughIssuedAtMs: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  }).strict();
 
 export function isExactInternalStorefrontAssistantRequest(
   request: Request,

@@ -435,22 +435,16 @@ export function useStorefrontFlueAgent({
           { signal: deadline.controller.signal },
         );
         if (admission) {
-          // Defense in depth only: catch a prompt that commits after the first
-          // Flue abort. This does not replace the shared durable Stop barrier.
-          await active.client.agents.abort(AGENT_NAME, active.threadId, {
-            signal: deadline.controller.signal,
-          });
-          const reconciliation = reconcileStoppedAdmission
-            ? await reconcileStoppedAdmission({
-                threadId: active.threadId,
-                admissionStartedAt: admission.startedAt,
-                signal: deadline.controller.signal,
-              })
-            : { status: "pending" as const };
-          if (reconciliation.status !== "settled") {
-            throw new Error(
-              "Storefront Stop barrier has not confirmed the late admission.",
-            );
+          // The same-origin abort facade now owns the D1 Stop barrier, waits
+          // for this prompt admission, applies the Flue generation fence, and
+          // unlocks only after all computer dispatches settle. A supplied
+          // reconciler remains a compatibility observer, not authority.
+          if (reconcileStoppedAdmission) {
+            await reconcileStoppedAdmission({
+              threadId: active.threadId,
+              admissionStartedAt: admission.startedAt,
+              signal: deadline.controller.signal,
+            });
           }
           if (admissionAttemptRef.current === admission) {
             admissionAttemptRef.current = null;

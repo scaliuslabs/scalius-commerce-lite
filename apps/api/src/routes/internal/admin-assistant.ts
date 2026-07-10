@@ -13,6 +13,7 @@ import {
   listAssistantEvents,
   markAssistantComputerHandoffDispatchUncertain,
   readAssistantComputerStopBarrier,
+  reconcileAssistantAgentAdmissionAfterStop,
   recordAssistantComputerStopBarrier,
   revokeAssistantSession,
 } from "@scalius/core/modules/assistant";
@@ -40,6 +41,7 @@ import {
   adminAssistantFlueAdmitSchema,
   adminAssistantFlueCommandSchema,
   adminAssistantSessionCreateSchema,
+  adminAssistantStopReconcileSchema,
   adminAssistantWorkflowCreateSchema,
   isExactInternalAdminAssistantRequest,
   parseAdminAssistantJson,
@@ -84,6 +86,7 @@ const FLUE_SERVICE_HANDOFF_PATHS = new Set<string>([
   ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmissionFinish,
   ADMIN_ASSISTANT_AUTHORITY_PATHS.flueStopBegin,
   ADMIN_ASSISTANT_AUTHORITY_PATHS.flueStopStatus,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueStopReconcile,
   ADMIN_ASSISTANT_AUTHORITY_PATHS.flueStopFinish,
 ]);
 
@@ -456,6 +459,34 @@ for (const [path, operation] of [
     }
   });
 }
+
+app.post("/flue/stop/reconcile", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure(
+      "invalid_request",
+      "Scalius request headers are invalid.",
+      false,
+    ), 400);
+  }
+  try {
+    const input = await parseAdminAssistantJson(
+      c.req.raw,
+      adminAssistantStopReconcileSchema,
+    );
+    const authority = await resolveAdminFlueCommandAuthority(
+      c,
+      input.instanceId,
+    );
+    return ok(c, await reconcileAssistantAgentAdmissionAfterStop(c.get("db"), {
+      sessionId: authority.session.id,
+      agentInstanceId: input.instanceId,
+      stoppedThroughIssuedAtMs: input.stoppedThroughIssuedAtMs,
+    }));
+  } catch (error) {
+    const [status, code, message, retryable] = handoffError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
 
 app.post("/flue/computer-handoff/confirm", async (c) => {
   if (hasInvalidFlueServiceHeaders(c.req.raw)) {

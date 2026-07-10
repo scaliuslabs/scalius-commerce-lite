@@ -8,10 +8,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   ASSISTANT_COMPUTER_HANDOFF_AUDIT_RETENTION_SECONDS,
+  beginAssistantAgentAdmission,
   cleanupExpiredAssistantComputerHandoffs,
   confirmAssistantComputerHandoffDispatch,
   consumeAssistantComputerHandoff,
   readAssistantComputerStopBarrier,
+  reconcileAssistantAgentAdmissionAfterStop,
 } from "./assistant-computer-handoffs";
 
 const NOW = new Date("2026-07-11T10:00:00.000Z");
@@ -85,7 +87,115 @@ function createLedgerDb() {
   return { db, rows };
 }
 
+function existingAdmissionBarrierDb(stoppedThroughIssuedAtMs: number) {
+  const barrier: typeof assistantComputerStopBarriers.$inferSelect = {
+    sessionId: SESSION_ID,
+    agentInstanceId: INSTANCE_ID,
+    stoppedThroughIssuedAtMs,
+    stopping: false,
+    activeAdmissionId: null,
+    activeAdmissionClaimHash: null,
+    activeAdmissionExpiresAt: null,
+    lastStopCompletedAt: NOW,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+  return {
+    insert: () => ({
+      values: () => ({
+        onConflictDoNothing: () => ({ returning: async () => [] }),
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: () => ({ returning: async () => [structuredClone(barrier)] }),
+      }),
+    }),
+  } as unknown as Database;
+}
+
+function stoppedAdmissionReconciliationDb() {
+  const barrier: typeof assistantComputerStopBarriers.$inferSelect = {
+    sessionId: SESSION_ID,
+    agentInstanceId: INSTANCE_ID,
+    stoppedThroughIssuedAtMs: NOW.getTime(),
+    stopping: true,
+    activeAdmissionId: "a".repeat(22),
+    activeAdmissionClaimHash: "b".repeat(64),
+    activeAdmissionExpiresAt: new Date(NOW.getTime() - 60_000),
+    lastStopCompletedAt: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+  let updateIndex = 0;
+  const db = {
+    select: (projection?: unknown) => ({
+      from: (table: unknown) => ({
+        where: () => table === assistantComputerStopBarriers
+          ? { limit: async () => [structuredClone(barrier)] }
+          : projection
+            ? Promise.resolve([{ count: 0 }])
+            : { limit: async () => [] },
+      }),
+    }),
+    update: () => {
+      const current = updateIndex++;
+      return {
+        set: () => ({
+          where: () => ({
+            returning: async () => current === 0
+              ? [{
+                ...structuredClone(barrier),
+                activeAdmissionId: null,
+                activeAdmissionClaimHash: null,
+                activeAdmissionExpiresAt: null,
+              }]
+              : [{ requestId: REQUEST_ID }],
+          }),
+        }),
+      };
+    },
+    batch: async (queries: Promise<unknown>[]) => Promise.all(queries),
+  } as unknown as Database;
+  return db;
+}
+
 describe("assistant computer handoff ledger", () => {
+  it("opens a post-Stop admission with a generation strictly above the cutoff", async () => {
+    await expect(beginAssistantAgentAdmission(
+      existingAdmissionBarrierDb(NOW.getTime()),
+      {
+        sessionId: SESSION_ID,
+        agentInstanceId: INSTANCE_ID,
+        now: NOW,
+      },
+    )).resolves.toMatchObject({
+      status: "started",
+      admissionId: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/u),
+      admissionClaimToken: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/u),
+      generation: NOW.getTime() + 1,
+    });
+  });
+
+  it("clears a crash-stuck admission only after exact post-abort reconciliation", async () => {
+    await expect(reconcileAssistantAgentAdmissionAfterStop(
+      stoppedAdmissionReconciliationDb(),
+      {
+        sessionId: SESSION_ID,
+        agentInstanceId: INSTANCE_ID,
+        stoppedThroughIssuedAtMs: NOW.getTime(),
+        now: NOW,
+      },
+    )).resolves.toEqual({
+      status: "reconciled",
+      readiness: "ready",
+      stoppedThroughIssuedAtMs: NOW.getTime(),
+      blockedDispatches: 1,
+      pendingDispatches: 0,
+      pendingAdmissions: 0,
+    });
+  });
+
   it("makes cancellation terminal and idempotent before any dispatch claim", async () => {
     const { db, rows } = createLedgerDb();
     await expect(consumeAssistantComputerHandoff(db, input("cancelled"))).resolves.toEqual({

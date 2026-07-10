@@ -13,9 +13,12 @@ import {
 
 const FLUE_ADMISSION_PATH = "/api/v1/internal/storefront-assistant/flue/admit";
 const AGENT_RESULT_PATH_PREFIX = "/computer/results/";
+const AGENT_CANCEL_PATH_PREFIX = "/computer/cancel/";
 const AGENT_ORIGIN = "http://storefront-flue-agent.internal";
 const PUBLIC_RESULT_PATH_PATTERN =
   /^\/api\/assistant\/conversations\/(conv_[A-Za-z0-9_-]{22,64})\/computer\/results$/u;
+const PUBLIC_CANCEL_PATH_PATTERN =
+  /^\/api\/assistant\/conversations\/(conv_[A-Za-z0-9_-]{22,64})\/computer\/cancel$/u;
 const MAX_BODY_BYTES = SCALIUS_COMPUTER_LIMITS.resultEnvelopeBytes;
 const MAX_AGENT_RESPONSE_BYTES = 4_096;
 const MAX_AUTHORITY_RESPONSE_BYTES = 16_384;
@@ -85,19 +88,43 @@ export interface StorefrontFlueComputerProxyDependencies {
   now?: () => number;
 }
 
-interface BrowserResultBody {
+interface BrowserHandoffBody {
   surface: "storefront";
   threadId: string;
   requestId: string;
   ticket: string;
   program: string;
+}
+
+interface BrowserResultBody extends BrowserHandoffBody {
+  kind: "result";
   result: Record<string, unknown>;
+}
+
+interface BrowserCancellationBody extends BrowserHandoffBody {
+  kind: "cancel";
 }
 
 export async function proxyStorefrontFlueComputerResult(
   request: Request,
   dependencies: StorefrontFlueComputerProxyDependencies = {},
 ): Promise<Response> {
+  return proxyStorefrontFlueComputerHandoff(request, dependencies, "result");
+}
+
+export async function proxyStorefrontFlueComputerCancellation(
+  request: Request,
+  dependencies: StorefrontFlueComputerProxyDependencies = {},
+): Promise<Response> {
+  return proxyStorefrontFlueComputerHandoff(request, dependencies, "cancel");
+}
+
+async function proxyStorefrontFlueComputerHandoff(
+  request: Request,
+  dependencies: StorefrontFlueComputerProxyDependencies,
+  kind: "result" | "cancel",
+): Promise<Response> {
+  const cancellation = kind === "cancel";
   if (request.method !== "POST") {
     return jsonError(405, "METHOD_NOT_ALLOWED", "Method not allowed", {
       Allow: "POST",
@@ -108,30 +135,31 @@ export async function proxyStorefrontFlueComputerResult(
   if (!requestUrl || requestUrl.search || requestUrl.hash) {
     return jsonError(
       400,
-      "COMPUTER_RESULT_REQUEST_INVALID",
-      "Invalid computer result request",
+      cancellation ? "COMPUTER_CANCELLATION_REQUEST_INVALID" : "COMPUTER_RESULT_REQUEST_INVALID",
+      "Invalid computer handoff request",
     );
   }
-  const routeMatch = PUBLIC_RESULT_PATH_PATTERN.exec(requestUrl.pathname);
+  const routeMatch = (cancellation ? PUBLIC_CANCEL_PATH_PATTERN : PUBLIC_RESULT_PATH_PATTERN)
+    .exec(requestUrl.pathname);
   const routeThreadId = routeMatch?.[1] ?? "";
   if (!STOREFRONT_CONVERSATION_ID_PATTERN.test(routeThreadId)) {
     return jsonError(
       400,
-      "COMPUTER_RESULT_REQUEST_INVALID",
-      "Invalid computer result request",
+      cancellation ? "COMPUTER_CANCELLATION_REQUEST_INVALID" : "COMPUTER_RESULT_REQUEST_INVALID",
+      "Invalid computer handoff request",
     );
   }
   if (rejectCrossOriginConversationRequest(request, requestUrl)) {
     return jsonError(
       403,
-      "CROSS_ORIGIN_COMPUTER_RESULT",
+      cancellation ? "CROSS_ORIGIN_COMPUTER_CANCELLATION" : "CROSS_ORIGIN_COMPUTER_RESULT",
       "Cross-origin request denied",
     );
   }
   if (hasForbiddenClientHeader(request.headers)) {
     return jsonError(
       400,
-      "COMPUTER_RESULT_HEADER_FORBIDDEN",
+      cancellation ? "COMPUTER_CANCELLATION_HEADER_FORBIDDEN" : "COMPUTER_RESULT_HEADER_FORBIDDEN",
       "Forbidden request header",
     );
   }
@@ -165,8 +193,8 @@ export async function proxyStorefrontFlueComputerResult(
   ) {
     return jsonError(
       415,
-      "COMPUTER_RESULT_CONTENT_TYPE_INVALID",
-      "Computer results require application/json",
+      cancellation ? "COMPUTER_CANCELLATION_CONTENT_TYPE_INVALID" : "COMPUTER_RESULT_CONTENT_TYPE_INVALID",
+      "Computer handoffs require application/json",
     );
   }
 
@@ -174,16 +202,18 @@ export async function proxyStorefrontFlueComputerResult(
   if (body === "oversize") {
     return jsonError(
       413,
-      "COMPUTER_RESULT_TOO_LARGE",
-      "Computer result is too large",
+      cancellation ? "COMPUTER_CANCELLATION_TOO_LARGE" : "COMPUTER_RESULT_TOO_LARGE",
+      "Computer handoff is too large",
     );
   }
-  const parsedBody = parseBrowserResultBody(body);
+  const parsedBody = cancellation
+    ? parseBrowserCancellationBody(body)
+    : parseBrowserResultBody(body);
   if (!parsedBody || parsedBody.threadId !== routeThreadId) {
     return jsonError(
       400,
-      "COMPUTER_RESULT_INVALID",
-      "Computer result is invalid",
+      cancellation ? "COMPUTER_CANCELLATION_INVALID" : "COMPUTER_RESULT_INVALID",
+      "Computer handoff is invalid",
     );
   }
 
@@ -267,7 +297,9 @@ export async function proxyStorefrontFlueComputerResult(
     "X-Scalius-Principal-Id": authority.principalId,
     "X-Scalius-Thread-Id": authority.threadId,
   });
-  const target = `${AGENT_ORIGIN}${AGENT_RESULT_PATH_PREFIX}${authority.instanceId}`;
+  const target = `${AGENT_ORIGIN}${
+    cancellation ? AGENT_CANCEL_PATH_PREFIX : AGENT_RESULT_PATH_PREFIX
+  }${authority.instanceId}`;
   let agentResponse: Response;
   try {
     agentResponse = await dependencies.agent.fetch(target, {
@@ -277,13 +309,13 @@ export async function proxyStorefrontFlueComputerResult(
       body: JSON.stringify({
         ticket: parsedBody.ticket,
         program: parsedBody.program,
-        result: parsedBody.result,
+        ...(parsedBody.kind === "result" ? { result: parsedBody.result } : {}),
       }),
     });
   } catch {
     return jsonError(
       502,
-      "STOREFRONT_FLUE_RESULT_PROXY_FAILED",
+      cancellation ? "STOREFRONT_FLUE_CANCELLATION_PROXY_FAILED" : "STOREFRONT_FLUE_RESULT_PROXY_FAILED",
       "Assistant service request failed",
     );
   }
@@ -292,14 +324,15 @@ export async function proxyStorefrontFlueComputerResult(
     agentResponse,
     MAX_AGENT_RESPONSE_BYTES,
   );
-  if (
-    agentResponse.status !== 202 ||
-    !isRecord(responseBody) ||
-    responseBody.accepted !== true ||
-    responseBody.authoritative !== false ||
-    responseBody.status !== "queued_for_agent_interpretation" ||
-    responseBody.requestId !== parsedBody.requestId
-  ) {
+  const accepted = agentResponse.status === 202 &&
+    isRecord(responseBody) &&
+    responseBody.accepted === true &&
+    responseBody.requestId === parsedBody.requestId &&
+    (cancellation
+      ? responseBody.status === "cancelled"
+      : responseBody.authoritative === false &&
+        responseBody.status === "queued_for_agent_interpretation");
+  if (!accepted) {
     const status =
       agentResponse.status === 413
         ? 413
@@ -311,19 +344,20 @@ export async function proxyStorefrontFlueComputerResult(
     return jsonError(
       status,
       status === 413
-        ? "COMPUTER_RESULT_TOO_LARGE"
-        : "STOREFRONT_FLUE_RESULT_REJECTED",
+        ? cancellation ? "COMPUTER_CANCELLATION_TOO_LARGE" : "COMPUTER_RESULT_TOO_LARGE"
+        : cancellation ? "STOREFRONT_FLUE_CANCELLATION_REJECTED" : "STOREFRONT_FLUE_RESULT_REJECTED",
       status === 503
         ? "Assistant service is unavailable"
-        : "Computer result was rejected",
+        : "Computer handoff was rejected",
     );
   }
 
   return Response.json(
     {
       accepted: true,
-      authoritative: false,
-      status: "queued_for_agent_interpretation",
+      ...(cancellation
+        ? { status: "cancelled" }
+        : { authoritative: false, status: "queued_for_agent_interpretation" }),
       requestId: parsedBody.requestId,
     },
     { status: 202, headers: noStoreHeaders() },
@@ -464,11 +498,40 @@ function parseBrowserResultBody(value: unknown): BrowserResultBody | null {
   }
   return {
     surface: "storefront",
+    kind: "result",
     threadId: value.threadId,
     requestId: value.requestId,
     ticket: value.ticket,
     program: value.program,
     result: value.result,
+  };
+}
+
+function parseBrowserCancellationBody(
+  value: unknown,
+): BrowserCancellationBody | null {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["surface", "threadId", "requestId", "ticket", "program"])
+  ) return null;
+  if (
+    value.surface !== "storefront" ||
+    typeof value.threadId !== "string" ||
+    !STOREFRONT_CONVERSATION_ID_PATTERN.test(value.threadId) ||
+    typeof value.requestId !== "string" ||
+    !REQUEST_ID_PATTERN.test(value.requestId) ||
+    typeof value.ticket !== "string" ||
+    !TICKET_PATTERN.test(value.ticket) ||
+    typeof value.program !== "string" ||
+    !parseScaliusComputerProgram(value.program).ok
+  ) return null;
+  return {
+    surface: "storefront",
+    kind: "cancel",
+    threadId: value.threadId,
+    requestId: value.requestId,
+    ticket: value.ticket,
+    program: value.program,
   };
 }
 

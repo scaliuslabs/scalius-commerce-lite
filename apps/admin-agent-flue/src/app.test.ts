@@ -11,6 +11,7 @@ const THREAD_KEY = "admin-app-test-thread-key-at-least-32-bytes";
 const COMPUTER_KEY = "admin-app-test-computer-key-at-least-32-bytes";
 const IDENTITY = { tenantId: "merchant_a", principalId: "admin_1", threadId: "thread_1" };
 const CLAIM_TOKEN = "d".repeat(43);
+const ADMISSION_GENERATION = 1_783_632_000_000;
 
 function authHeaders() {
   return {
@@ -141,10 +142,11 @@ describe("admin Flue canary app", () => {
       beginAgentAdmission: async () => ({
         admissionId: "a".repeat(22),
         admissionClaimToken: "b".repeat(43),
+        generation: ADMISSION_GENERATION,
       }),
       finishAgentAdmission: async () => true,
-      dispatchComputerResult: async (id, continuation) => {
-        dispatched.push({ id, continuation });
+      dispatchComputerResult: async (id, continuation, generation) => {
+        dispatched.push({ id, continuation, generation });
         return { dispatchId: "dispatch_admin_1", acceptedAt: new Date().toISOString() };
       },
     });
@@ -171,6 +173,7 @@ describe("admin Flue canary app", () => {
           requestId: command.requestId,
           authoritative: false,
         }),
+        generation: ADMISSION_GENERATION,
       }),
     ]);
 
@@ -201,6 +204,7 @@ describe("admin Flue canary app", () => {
       beginComputerHandoff: vi.fn(async () => true),
       beginAgentAdmission: async () => ({
         admissionId: "a".repeat(22), admissionClaimToken: "b".repeat(43),
+        generation: ADMISSION_GENERATION,
       }),
       finishAgentAdmission: async () => true,
     });
@@ -275,6 +279,7 @@ describe("admin Flue canary app", () => {
       beginComputerHandoff: vi.fn(async () => true),
       beginAgentAdmission: async () => ({
         admissionId: "a".repeat(22), admissionClaimToken: "b".repeat(43),
+        generation: ADMISSION_GENERATION,
       }),
       finishAgentAdmission: async () => true,
     });
@@ -321,6 +326,7 @@ describe("admin Flue canary app", () => {
       failComputerHandoff: vi.fn(async () => true),
       beginAgentAdmission: async () => ({
         admissionId: "a".repeat(22), admissionClaimToken: "b".repeat(43),
+        generation: ADMISSION_GENERATION,
       }),
       finishAgentAdmission: async () => true,
     });
@@ -350,6 +356,7 @@ describe("admin Flue canary app", () => {
       markComputerHandoffUncertain: markUncertain,
       beginAgentAdmission: async () => ({
         admissionId: "a".repeat(22), admissionClaimToken: "b".repeat(43),
+        generation: ADMISSION_GENERATION,
       }),
       finishAgentAdmission: async () => true,
     });

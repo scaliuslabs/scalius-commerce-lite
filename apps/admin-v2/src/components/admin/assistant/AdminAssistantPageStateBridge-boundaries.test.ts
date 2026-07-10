@@ -55,9 +55,8 @@ describe("admin assistant page-state source boundary", () => {
       "@/components/admin/assistant/AdminAssistantPageStateBridge",
     );
     expect(adminRouteSource).toContain("const location = useLocation()");
-    expect(adminRouteSource).toContain(
-      "<AdminAssistantPageStateBridge routePath={location.pathname} />",
-    );
+    expect(adminRouteSource).toContain("enabled={isSuperAdmin}");
+    expect(adminRouteSource).toContain("routePath={location.pathname}");
     expect(adminRouteSource).not.toContain("routePath={location.href}");
     expect(adminRouteSource).not.toContain("routePath={location.search}");
   });

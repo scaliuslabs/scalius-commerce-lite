@@ -17,6 +17,8 @@ const PUBLIC_PATH =
 const PRIVATE_PATH =
   `http://admin-flue-agent.internal/agents/admin-copilot/${INSTANCE_ID}`;
 const AGENT_INTERNAL_ORIGIN_FOR_TEST = "http://admin-flue-agent.internal";
+const ADMISSION_GENERATION = 1_783_632_000_000;
+const STOP_GENERATION = ADMISSION_GENERATION + 1;
 
 const AUTHORITY = {
   surface: "admin" as const,
@@ -64,11 +66,23 @@ function dependencies(
             status: "started",
             admissionId: "a".repeat(22),
             admissionClaimToken: "b".repeat(43),
+            generation: ADMISSION_GENERATION,
           } });
         }
         if (path.endsWith("/stop/begin") || path.endsWith("/stop/status")) {
           return Response.json({ success: true, data: {
             status: "ready",
+            stoppedThroughIssuedAtMs: STOP_GENERATION,
+            pendingAdmissions: 0,
+            pendingDispatches: 0,
+          } });
+        }
+        if (path.endsWith("/stop/reconcile")) {
+          return Response.json({ success: true, data: {
+            status: "reconciled",
+            readiness: "ready",
+            stoppedThroughIssuedAtMs: STOP_GENERATION,
+            blockedDispatches: 0,
             pendingAdmissions: 0,
             pendingDispatches: 0,
           } });
@@ -117,6 +131,7 @@ describe("Admin same-origin Flue agent facade", () => {
         ["accept", "application/json"],
         ["authorization", `Bearer ${SERVICE_TOKEN}`],
         ["content-type", "application/json"],
+        ["x-flue-admission-generation", String(ADMISSION_GENERATION)],
         ["x-scalius-principal-id", PRINCIPAL_ID],
         ["x-scalius-tenant-id", TENANT_ID],
         ["x-scalius-thread-id", THREAD_ID],
@@ -284,6 +299,9 @@ describe("Admin same-origin Flue agent facade", () => {
       const headers = new Headers(init?.headers);
       expect(headers.get("content-type")).toBeNull();
       expect(headers.get("authorization")).toBe(`Bearer ${SERVICE_TOKEN}`);
+      expect(headers.get("x-flue-abort-through-generation")).toBe(
+        String(STOP_GENERATION),
+      );
       return Response.json(
         { aborted: true },
         { headers: { "Set-Cookie": "internal=never" } },
@@ -301,7 +319,7 @@ describe("Admin same-origin Flue agent facade", () => {
     await expect(response.json()).resolves.toEqual({ aborted: true });
   });
 
-  it("waits for a late prompt admission to settle before the one final abort", async () => {
+  it("fences Flue immediately, then waits for a late prompt admission to settle", async () => {
     const order: string[] = [];
     let activeAdmission = false;
     let releaseSend!: () => void;
@@ -316,6 +334,7 @@ describe("Admin same-origin Flue agent facade", () => {
           status: "started",
           admissionId: "a".repeat(22),
           admissionClaimToken: "b".repeat(43),
+          generation: ADMISSION_GENERATION,
         } });
       }
       if (path.endsWith("/admission/finish")) {
@@ -326,7 +345,20 @@ describe("Admin same-origin Flue agent facade", () => {
       if (path.endsWith("/stop/begin") || path.endsWith("/stop/status")) {
         return Response.json({ success: true, data: {
           status: activeAdmission ? "pending" : "ready",
+          stoppedThroughIssuedAtMs: STOP_GENERATION,
           pendingAdmissions: activeAdmission ? 1 : 0,
+          pendingDispatches: 0,
+        } });
+      }
+      if (path.endsWith("/stop/reconcile")) {
+        activeAdmission = false;
+        order.push("admission-reconciled");
+        return Response.json({ success: true, data: {
+          status: "reconciled",
+          readiness: "ready",
+          stoppedThroughIssuedAtMs: STOP_GENERATION,
+          blockedDispatches: 0,
+          pendingAdmissions: 0,
           pendingDispatches: 0,
         } });
       }
@@ -353,13 +385,18 @@ describe("Admin same-origin Flue agent facade", () => {
       deps,
     );
     await new Promise((resolve) => setTimeout(resolve, 75));
-    expect(order).not.toContain("flue-abort");
+    expect(order).toEqual(["flue-abort", "admission-reconciled"]);
     releaseSend();
 
     const [sendResponse, stopResponse] = await Promise.all([sending, stopping]);
     expect(sendResponse.status).toBe(202);
     expect(stopResponse.status).toBe(200);
-    expect(order).toEqual(["send-admitted", "admission-finished", "flue-abort"]);
+    expect(order).toEqual([
+      "flue-abort",
+      "admission-reconciled",
+      "send-admitted",
+      "admission-finished",
+    ]);
     expect(agentFetch.mock.calls.filter(([input]) => String(input).endsWith("/abort")))
       .toHaveLength(1);
   });

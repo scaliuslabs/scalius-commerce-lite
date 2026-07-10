@@ -40,6 +40,8 @@ export const ADMIN_ASSISTANT_AUTHORITY_PATHS = Object.freeze({
     `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admission/finish`,
   flueStopBegin: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/begin`,
   flueStopStatus: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/status`,
+  flueStopReconcile:
+    `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/reconcile`,
   flueStopFinish: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/finish`,
 } as const);
 
@@ -100,6 +102,12 @@ export const adminAssistantAdmissionFinishSchema =
   adminAssistantAgentInstanceSchema.extend({
     admissionId: z.string().regex(/^[A-Za-z0-9_-]{22}$/u),
     admissionClaimToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+  }).strict();
+
+export const adminAssistantStopReconcileSchema =
+  adminAssistantAgentInstanceSchema.extend({
+    stoppedThroughIssuedAtMs: z.number().int().positive()
+      .max(Number.MAX_SAFE_INTEGER),
   }).strict();
 
 export const adminAssistantWorkflowCreateSchema = z.object({

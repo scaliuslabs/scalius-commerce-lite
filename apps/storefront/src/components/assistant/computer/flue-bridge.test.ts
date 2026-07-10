@@ -516,9 +516,14 @@ describe("Storefront Flue computer coordinator", () => {
         }),
     );
     const phases: string[] = [];
+    const postCancellation = vi.fn(async (payload) => ({
+      accepted: true as const,
+      requestId: payload.requestId,
+    }));
     const coordinator = new StorefrontFlueComputerCoordinator({
       runtime,
       postResult,
+      postCancellation,
       now: () => NOW + 1_000,
       onPhase: (_requestId, phase) => phases.push(phase),
     });
@@ -529,6 +534,14 @@ describe("Storefront Flue computer coordinator", () => {
     coordinator.cancelPending();
 
     expect(postSignal?.aborted).toBe(true);
+    expect(postCancellation).toHaveBeenCalledOnce();
+    expect(postCancellation).toHaveBeenCalledWith({
+      surface: "storefront",
+      threadId: THREAD_ID,
+      requestId: issued.requestId,
+      ticket: issued.ticket,
+      program: issued.program,
+    });
     await expect(consuming).resolves.toEqual({
       status: "cancelled",
       requestId: issued.requestId,

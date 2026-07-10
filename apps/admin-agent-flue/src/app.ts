@@ -36,6 +36,12 @@ const AUTHORITY_TIMEOUT_MS = 5_000;
 const CLAIM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const ADMISSION_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;
 
+interface AgentAdmissionLease {
+  admissionId: string;
+  admissionClaimToken: string;
+  generation: number;
+}
+
 type HandoffTerminalState = "cancelled" | "dispatched";
 
 interface ConsumeComputerHandoffInput {
@@ -74,6 +80,7 @@ export interface AdminCanaryAppDependencies {
   dispatchComputerResult?: (
     instanceId: string,
     continuation: ScaliusComputerResultContinuation,
+    generation: number,
   ) => Promise<DispatchReceipt>;
   consumeComputerHandoff?: (
     input: ConsumeComputerHandoffInput,
@@ -92,17 +99,22 @@ export interface AdminCanaryAppDependencies {
   ) => Promise<boolean>;
   beginAgentAdmission?: (
     instanceId: string,
-  ) => Promise<{ admissionId: string; admissionClaimToken: string } | "blocked" | null>;
+  ) => Promise<AgentAdmissionLease | "blocked" | null>;
   finishAgentAdmission?: (
     instanceId: string,
-    lease: { admissionId: string; admissionClaimToken: string },
+    lease: AgentAdmissionLease,
   ) => Promise<boolean>;
 }
 
 export function createAdminCanaryApp(dependencies: AdminCanaryAppDependencies = {}) {
   const app = new Hono<{ Bindings: CanaryAuthEnv & AdminScaliusEnv }>();
   const dispatchComputerResult = dependencies.dispatchComputerResult ??
-    ((instanceId, continuation) => dispatch(adminCopilot, { id: instanceId, input: continuation }));
+    ((instanceId, continuation, generation) =>
+      dispatch(adminCopilot, {
+        id: instanceId,
+        input: continuation,
+        generation,
+      }));
 
   app.get("/health", (c) => {
     c.header("Cache-Control", "no-store");
@@ -178,7 +190,11 @@ export function createAdminCanaryApp(dependencies: AdminCanaryAppDependencies = 
       let dispatchReturned = false;
       let terminalized = false;
       try {
-        const receipt = await dispatchComputerResult(instanceId, admission.continuation);
+        const receipt = await dispatchComputerResult(
+          instanceId,
+          admission.continuation,
+          deliveryLease.generation,
+        );
         dispatchReturned = true;
         const confirmed = await transitionComputerHandoff(
           c.env.API,
@@ -384,30 +400,39 @@ async function beginAgentAdmission(
   api: AdminScaliusEnv["API"],
   instanceId: string,
   override?: AdminCanaryAppDependencies["beginAgentAdmission"],
-): Promise<{ admissionId: string; admissionClaimToken: string } | "blocked" | null> {
+): Promise<AgentAdmissionLease | "blocked" | null> {
   if (override) return override(instanceId);
   const result = await callAdmissionAuthority(api, ADMISSION_BEGIN_URL, { instanceId });
   if (result?.status === 409) return "blocked";
   const data = result?.data;
   if (!isRecord(data) || data.status !== "started" ||
       typeof data.admissionId !== "string" || !ADMISSION_ID_PATTERN.test(data.admissionId) ||
-      typeof data.admissionClaimToken !== "string" || !CLAIM_TOKEN_PATTERN.test(data.admissionClaimToken)) {
+      typeof data.admissionClaimToken !== "string" || !CLAIM_TOKEN_PATTERN.test(data.admissionClaimToken) ||
+      typeof data.generation !== "number" || !Number.isSafeInteger(data.generation) || data.generation <= 0) {
     return null;
   }
-  return { admissionId: data.admissionId, admissionClaimToken: data.admissionClaimToken };
+  return {
+    admissionId: data.admissionId,
+    admissionClaimToken: data.admissionClaimToken,
+    generation: data.generation,
+  };
 }
 
 async function finishAgentAdmission(
   api: AdminScaliusEnv["API"],
   instanceId: string,
-  lease: { admissionId: string; admissionClaimToken: string },
+  lease: AgentAdmissionLease,
   override?: AdminCanaryAppDependencies["finishAgentAdmission"],
 ): Promise<boolean> {
   if (override) return override(instanceId, lease);
   const data = (await callAdmissionAuthority(
     api,
     ADMISSION_FINISH_URL,
-    { instanceId, ...lease },
+    {
+      instanceId,
+      admissionId: lease.admissionId,
+      admissionClaimToken: lease.admissionClaimToken,
+    },
   ))?.data;
   return isRecord(data) && (data.status === "finished" || data.status === "replayed");
 }

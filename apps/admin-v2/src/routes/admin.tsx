@@ -69,7 +69,10 @@ function AdminLayout() {
                   <Outlet />
                 </div>
               </div>
-              <AdminAssistantPageStateBridge routePath={location.pathname} />
+              <AdminAssistantPageStateBridge
+                enabled={isSuperAdmin}
+                routePath={location.pathname}
+              />
               {/* Portal target for form action bars — sits OUTSIDE the scroll area */}
               <div id="form-action-bar-slot" />
             </SidebarInset>

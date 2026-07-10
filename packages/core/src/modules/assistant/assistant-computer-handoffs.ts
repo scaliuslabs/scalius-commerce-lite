@@ -82,8 +82,22 @@ export interface AssistantComputerStopBarrierResult {
   pendingAdmissions: number;
 }
 
+export interface AssistantAgentStopReconciliationResult {
+  status: "reconciled" | "replayed";
+  readiness: AssistantComputerStopBarrierResult["status"];
+  stoppedThroughIssuedAtMs: number;
+  blockedDispatches: number;
+  pendingDispatches: number;
+  pendingAdmissions: number;
+}
+
 export type BeginAssistantAgentAdmissionResult =
-  | { status: "started"; admissionId: string; admissionClaimToken: string }
+  | {
+    status: "started";
+    admissionId: string;
+    admissionClaimToken: string;
+    generation: number;
+  }
   | { status: "stopping" | "busy" };
 
 export interface CleanupAssistantComputerHandoffsResult {
@@ -228,7 +242,7 @@ export async function beginAssistantComputerHandoffDispatch(
     eq(assistantComputerHandoffs.dispatchStatus, "claimed"),
     isNull(assistantComputerHandoffs.dispatchConfirmedAt),
     isNull(assistantComputerHandoffs.dispatchFailedAt),
-  )).returning();
+    )).returning();
   if (started[0]) return { status: "started", requestId: claim.requestId };
 
   const existing = await requireDispatchClaimRow(db, claim);
@@ -303,7 +317,12 @@ export async function beginAssistantAgentAdmission(
     createdAt: now,
   }).onConflictDoNothing().returning();
   if (inserted[0]) {
-    return { status: "started", admissionId, admissionClaimToken };
+    return {
+      status: "started",
+      admissionId,
+      admissionClaimToken,
+      generation: admissionGeneration(inserted[0], now),
+    };
   }
 
   const opened = await db.update(assistantComputerStopBarriers).set(values)
@@ -312,9 +331,14 @@ export async function beginAssistantAgentAdmission(
       eq(assistantComputerStopBarriers.agentInstanceId, agentInstanceId),
       eq(assistantComputerStopBarriers.stopping, false),
       isNull(assistantComputerStopBarriers.activeAdmissionId),
-    )).returning();
+  )).returning();
   if (opened[0]) {
-    return { status: "started", admissionId, admissionClaimToken };
+    return {
+      status: "started",
+      admissionId,
+      admissionClaimToken,
+      generation: admissionGeneration(opened[0], now),
+    };
   }
 
   const barrier = await selectStopBarrier(db, agentInstanceId);
@@ -322,6 +346,22 @@ export async function beginAssistantAgentAdmission(
     throw new ServiceUnavailableError("Assistant admission barrier is unavailable.");
   }
   return { status: barrier.stopping ? "stopping" : "busy" };
+}
+
+function admissionGeneration(
+  barrier: typeof assistantComputerStopBarriers.$inferSelect,
+  now: Date,
+): number {
+  const generation = Math.max(
+    now.getTime(),
+    barrier.stoppedThroughIssuedAtMs + 1,
+  );
+  if (!Number.isSafeInteger(generation) || generation <= 0) {
+    throw new ServiceUnavailableError(
+      "Assistant admission generation is unavailable.",
+    );
+  }
+  return generation;
 }
 
 export async function finishAssistantAgentAdmission(
@@ -518,7 +558,10 @@ export async function recordAssistantComputerStopBarrier(
   }).onConflictDoUpdate({
     target: assistantComputerStopBarriers.agentInstanceId,
     set: {
-      stoppedThroughIssuedAtMs: sql`max(${assistantComputerStopBarriers.stoppedThroughIssuedAtMs}, ${stoppedThroughIssuedAtMs})`,
+      // A post-Stop admission may have used the prior cutoff + 1 when the
+      // wall clock repeated. Always advance the next Stop beyond that value.
+      stoppedThroughIssuedAtMs:
+        sql`max(${assistantComputerStopBarriers.stoppedThroughIssuedAtMs} + 1, ${stoppedThroughIssuedAtMs})`,
       stopping: true,
       updatedAt: now,
     },
@@ -586,6 +629,111 @@ export async function readAssistantComputerStopBarrier(
     barrier,
     blocked.length,
   );
+}
+
+/**
+ * Settles pre-cutoff admission state only after the caller has received an
+ * exact successful abort from the Flue Durable Object for the same cutoff.
+ * Expiry alone never grants this transition.
+ */
+export async function reconcileAssistantAgentAdmissionAfterStop(
+  db: Database,
+  input: {
+    sessionId: string;
+    agentInstanceId: string;
+    stoppedThroughIssuedAtMs: number;
+    now?: Date;
+  },
+): Promise<AssistantAgentStopReconciliationResult> {
+  const sessionId = requireOpaqueId(input.sessionId, "Session ID");
+  const agentInstanceId = requirePattern(
+    input.agentInstanceId,
+    INSTANCE_ID_PATTERN,
+    "Agent instance ID",
+  );
+  if (
+    !Number.isSafeInteger(input.stoppedThroughIssuedAtMs) ||
+    input.stoppedThroughIssuedAtMs <= 0
+  ) {
+    throw new ValidationError("Computer stop barrier is invalid.");
+  }
+  const now = d1Timestamp(input.now ?? new Date());
+  const existing = await selectStopBarrier(db, agentInstanceId);
+  if (
+    !existing ||
+    existing.sessionId !== sessionId ||
+    existing.stoppedThroughIssuedAtMs !== input.stoppedThroughIssuedAtMs ||
+    !existing.stopping
+  ) {
+    throw new ServiceUnavailableError(
+      "Assistant computer stop reconciliation is unavailable.",
+    );
+  }
+  const hadActiveAdmission = existing.activeAdmissionId !== null ||
+    existing.activeAdmissionClaimHash !== null;
+  const settleAdmission = db.update(assistantComputerStopBarriers).set({
+    activeAdmissionId: null,
+    activeAdmissionClaimHash: null,
+    activeAdmissionExpiresAt: null,
+    updatedAt: now,
+  }).where(and(
+    eq(assistantComputerStopBarriers.sessionId, sessionId),
+    eq(assistantComputerStopBarriers.agentInstanceId, agentInstanceId),
+    eq(assistantComputerStopBarriers.stopping, true),
+    eq(
+      assistantComputerStopBarriers.stoppedThroughIssuedAtMs,
+      input.stoppedThroughIssuedAtMs,
+    ),
+  )).returning();
+  const settleDispatches = db.update(assistantComputerHandoffs).set({
+    dispatchStatus: "blocked",
+    updatedAt: now,
+  }).where(and(
+    eq(assistantComputerHandoffs.sessionId, sessionId),
+    eq(assistantComputerHandoffs.agentInstanceId, agentInstanceId),
+    eq(assistantComputerHandoffs.state, "dispatched"),
+    or(
+      eq(assistantComputerHandoffs.dispatchStatus, "claimed"),
+      eq(assistantComputerHandoffs.dispatchStatus, "dispatching"),
+      eq(assistantComputerHandoffs.dispatchStatus, "uncertain"),
+    ),
+    lte(
+      assistantComputerHandoffs.ticketIssuedAtMs,
+      input.stoppedThroughIssuedAtMs,
+    ),
+  )).returning({ requestId: assistantComputerHandoffs.requestId });
+
+  const [barriers, blocked] = await db.batch([
+    settleAdmission,
+    settleDispatches,
+  ]);
+  const barrier = barriers[0];
+  if (
+    !barrier ||
+    barrier.sessionId !== sessionId ||
+    barrier.agentInstanceId !== agentInstanceId ||
+    barrier.stoppedThroughIssuedAtMs !== input.stoppedThroughIssuedAtMs ||
+    !barrier.stopping
+  ) {
+    throw new ServiceUnavailableError(
+      "Assistant computer stop reconciliation is unavailable.",
+    );
+  }
+  const readiness = await describeAssistantStopBarrier(
+    db,
+    barrier,
+    blocked.length,
+  );
+  return {
+    status: hadActiveAdmission || blocked.length > 0
+      ? "reconciled"
+      : "replayed",
+    readiness: readiness.status,
+    stoppedThroughIssuedAtMs: readiness.stoppedThroughIssuedAtMs,
+    blockedDispatches: readiness.blockedDispatches,
+    pendingDispatches: readiness.pendingDispatches,
+    pendingAdmissions: readiness.pendingAdmissions,
+  };
 }
 
 export async function finishAssistantComputerStopBarrier(

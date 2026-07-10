@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   recordStop: vi.fn(),
   readStop: vi.fn(),
   finishStop: vi.fn(),
+  reconcileStop: vi.fn(),
   resolveFlueAuthority: vi.fn(),
 }));
 
@@ -60,6 +61,7 @@ vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
     recordAssistantComputerStopBarrier: mocks.recordStop,
     readAssistantComputerStopBarrier: mocks.readStop,
     finishAssistantComputerStopBarrier: mocks.finishStop,
+    reconcileAssistantAgentAdmissionAfterStop: mocks.reconcileStop,
   };
 });
 
@@ -139,6 +141,7 @@ function authHeaders(overrides: {
   actorId?: string;
   dashboardSessionId?: string;
   permissions?: string[];
+  isSuperAdmin?: boolean;
   credential?: string | null;
 } = {}) {
   const headers: Record<string, string> = {
@@ -149,6 +152,7 @@ function authHeaders(overrides: {
       overrides.dashboardSessionId ?? "dashboard_session_1",
     "X-Test-Permissions": (overrides.permissions ?? [PERMISSIONS.PRODUCTS_VIEW])
       .join(","),
+    "X-Test-Super-Admin": overrides.isSuperAdmin === false ? "false" : "true",
   };
   if (overrides.credential !== null) {
     headers[ADMIN_ASSISTANT_SESSION_CREDENTIAL_HEADER] =
@@ -212,6 +216,7 @@ describe("internal Admin assistant authority boundary", () => {
         id: c.req.header("X-Test-Actor") ?? "admin_1",
         name: "Admin",
         email: "redacted@example.invalid",
+        isSuperAdmin: c.req.header("X-Test-Super-Admin") === "true",
       });
       c.set("session", {
         id: c.req.header("X-Test-Dashboard-Session") ?? "dashboard_session_1",
@@ -263,6 +268,7 @@ describe("internal Admin assistant authority boundary", () => {
       status: "started",
       admissionId: "a".repeat(22),
       admissionClaimToken: "b".repeat(43),
+      generation: NOW,
     });
     mocks.finishAdmission.mockResolvedValue({ status: "finished" });
     mocks.recordStop.mockResolvedValue({
@@ -274,6 +280,14 @@ describe("internal Admin assistant authority boundary", () => {
       pendingDispatches: 0, pendingAdmissions: 0,
     });
     mocks.finishStop.mockResolvedValue({ status: "finished" });
+    mocks.reconcileStop.mockResolvedValue({
+      status: "reconciled",
+      readiness: "ready",
+      stoppedThroughIssuedAtMs: NOW,
+      blockedDispatches: 0,
+      pendingDispatches: 0,
+      pendingAdmissions: 0,
+    });
 
     mocks.createSession.mockImplementation(async (
       _db: unknown,
@@ -443,6 +457,30 @@ describe("internal Admin assistant authority boundary", () => {
     expect(mocks.createSession).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ADMIN_ASSISTANT_AUTHORITY_PATHS.sessionCreate,
+    ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+  ])("denies non-super-admin session authority at %s", async (path) => {
+    const { app, env } = createTestApp();
+    const response = await post(
+      app,
+      env,
+      path,
+      path === ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit
+        ? { threadId: FLUE_THREAD_ID }
+        : { conversationKey: "conversation_1" },
+      authHeaders({
+        isSuperAdmin: false,
+        ...(path === ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit
+          ? { credential: null }
+          : {}),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
   it("admits Flue commands by bound instance without dashboard-cookie middleware", async () => {
     const { app, db, env } = createTestApp();
     const response = await post(
@@ -578,6 +616,26 @@ describe("internal Admin assistant authority boundary", () => {
       requestId,
       programDigest,
       dispatchClaimToken: "d".repeat(43),
+    });
+  });
+
+  it("reconciles a crash-stuck admission only for the exact confirmed Stop cutoff", async () => {
+    const { app, db, env } = createTestApp();
+    const instanceId = `v1.${"i".repeat(43)}`;
+    const response = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueStopReconcile,
+      { instanceId, stoppedThroughIssuedAtMs: NOW },
+      { "Content-Type": "application/json" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.authenticate).not.toHaveBeenCalled();
+    expect(mocks.reconcileStop).toHaveBeenCalledWith(db, {
+      sessionId: "as_session_1",
+      agentInstanceId: instanceId,
+      stoppedThroughIssuedAtMs: NOW,
     });
   });
 
