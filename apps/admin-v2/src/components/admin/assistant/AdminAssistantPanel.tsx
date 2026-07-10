@@ -115,7 +115,16 @@ export function AdminAssistantPanel({
   useEffect(() => {
     if (!open || !computerCoordinator || !transcript.threadId) return;
 
+    let latestUserMessage: string | undefined;
     for (const message of transcript.messages) {
+      if (message.role === "user") {
+        latestUserMessage = message.parts
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n")
+          .slice(0, 8_000);
+        continue;
+      }
       for (const part of message.parts) {
         if (
           part.type !== "dynamic-tool" ||
@@ -129,19 +138,23 @@ export function AdminAssistantPanel({
           queuedComputerToolCallsRef.current,
           part.toolCallId,
         );
+        const authorizingUserMessage = latestUserMessage;
         computerQueueRef.current = computerQueueRef.current
           .catch(() => undefined)
           .then(async () => {
             const outcome = await computerCoordinator.consume({
               threadId: transcript.threadId,
               tabId,
+              latestUserMessage: authorizingUserMessage,
               part,
             });
             if (outcome.status === "rejected") {
               setStatus({
                 kind: "error",
                 message:
-                  "A page command was rejected safely. Nothing was run for that command.",
+                  outcome.reason === "navigation_not_authorized"
+                    ? "Navigation needs one direct, exact destination request. Nothing was opened."
+                    : "A page command was rejected safely. Nothing was run for that command.",
               });
             } else if (outcome.status === "continuation_failed") {
               setStatus({
@@ -181,11 +194,16 @@ export function AdminAssistantPanel({
   }
 
   async function handleAbort() {
-    const stopped = await transcript.abort();
-    if (stopped) {
+    const outcome = await transcript.abort();
+    if (outcome === "requested") {
       setStatus({
         kind: "success",
         message: "Stop requested. The durable thread will show the final state.",
+      });
+    } else if (outcome === "idle") {
+      setStatus({
+        kind: "disabled",
+        message: "The assistant had already finished, so there was nothing to stop.",
       });
     }
   }
@@ -274,6 +292,7 @@ export function AdminAssistantPanel({
   const panel = (
     <aside
       id="admin-assistant-panel"
+      data-scalius-computer-exclude=""
       aria-label="Admin assistant"
       aria-describedby="admin-assistant-context"
       data-assistant-mode={mode}
@@ -311,6 +330,7 @@ export function AdminAssistantPanel({
       />
 
       <AdminAssistantConversation
+        threadId={transcript.threadId}
         messages={transcript.messages}
         sending={transcript.sending}
         onSuggestion={(suggestion) => {

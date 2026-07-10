@@ -15,7 +15,11 @@ describe("Admin assistant computer runtime", () => {
       <main>
         <h1>Products</h1>
         <button data-scalius-computer-action="allow">Open filters</button>
-      </main>`;
+      </main>
+      <aside data-scalius-computer-exclude>
+        <button>Minimize admin assistant</button>
+        <textarea aria-label="Message admin assistant"></textarea>
+      </aside>`;
     const clicked = vi.fn();
     document.querySelector("button")!.addEventListener("click", clicked);
     const runtime = createAdminAssistantComputerRuntime({
@@ -34,6 +38,8 @@ describe("Admin assistant computer runtime", () => {
     });
     expect(observed.output).toContain('route="/admin/products?status=active"');
     expect(observed.output).toContain('heading "Products"');
+    expect(observed.output).not.toContain("Minimize admin assistant");
+    expect(observed.output).not.toContain("Message admin assistant");
     const handle = observed.output.match(/(@r\d+\.e\d+) button "Open filters"/)?.[1];
     expect(handle).toBeTruthy();
     await expect(runtime.execute({

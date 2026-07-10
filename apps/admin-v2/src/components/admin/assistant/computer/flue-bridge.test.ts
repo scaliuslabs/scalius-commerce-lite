@@ -43,10 +43,18 @@ async function command(program: string, fill = 1) {
   });
 }
 
-function source(output: unknown, overrides: Partial<{ threadId: string; tabId: string }> = {}) {
+function source(
+  output: unknown,
+  overrides: Partial<{
+    threadId: string;
+    tabId: string;
+    latestUserMessage: string;
+  }> = {},
+) {
   return {
     threadId: overrides.threadId ?? THREAD_ID,
     tabId: overrides.tabId ?? TAB_ID,
+    latestUserMessage: overrides.latestUserMessage,
     part: toolPart(output),
   };
 }
@@ -150,6 +158,71 @@ describe("Admin Flue computer coordinator", () => {
       reason: "invalid_client_command",
     });
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("executes only an exact goto authorized by the latest explicit user turn", async () => {
+    const navigate = vi.fn();
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+      navigate,
+    });
+    const postResult = vi.fn(async (payload: Parameters<typeof postAdminFlueComputerResult>[0]) => ({
+      accepted: true as const,
+      requestId: payload.requestId,
+    }));
+    const coordinator = new AdminFlueComputerCoordinator({
+      runtime,
+      postResult,
+      now: () => NOW + 1_000,
+    });
+
+    const authorized = await command("goto /admin/products", 13);
+    await expect(
+      coordinator.consume(
+        source(authorized, { latestUserMessage: "Take me to products page" }),
+      ),
+    ).resolves.toMatchObject({ status: "continuation_accepted" });
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenLastCalledWith("/admin/products");
+    expect(postResult).toHaveBeenCalledOnce();
+
+    const unrelated = await command("goto /admin/products", 14);
+    await expect(
+      coordinator.consume(
+        source(unrelated, { latestUserMessage: "Take me to orders" }),
+      ),
+    ).resolves.toEqual({
+      status: "rejected",
+      reason: "navigation_not_authorized",
+    });
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(postResult).toHaveBeenCalledOnce();
+
+    // Rejection is durable through the ticket lifetime: a later matching turn
+    // cannot retroactively authorize the old command after replay/remount.
+    await expect(
+      coordinator.consume(
+        source(unrelated, { latestUserMessage: "Take me to products" }),
+      ),
+    ).resolves.toMatchObject({
+      status: "duplicate",
+      phase: "navigation_rejected",
+    });
+    expect(navigate).toHaveBeenCalledOnce();
+
+    const ambiguous = await command("goto /admin/products", 15);
+    await expect(
+      coordinator.consume(
+        source(ambiguous, {
+          latestUserMessage: "Take me to products or orders",
+        }),
+      ),
+    ).resolves.toEqual({
+      status: "rejected",
+      reason: "navigation_not_authorized",
+    });
+    expect(navigate).toHaveBeenCalledOnce();
   });
 
   it("preserves stale-revision and sensitive-control failures and posts them as untrusted", async () => {
