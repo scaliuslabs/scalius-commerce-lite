@@ -1023,6 +1023,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/internal/admin-assistant/capabilities/*": {
     POST: { allowAnyAdmin: true },
   },
+  "/api/v1/internal/admin-assistant/flue/admit": {
+    POST: { allowAnyAdmin: true },
+  },
 
   // =============================================
   // Inventory API

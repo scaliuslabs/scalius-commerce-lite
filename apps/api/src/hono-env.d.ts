@@ -66,6 +66,7 @@ declare global {
     FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
     CREDENTIAL_ENCRYPTION_KEY?: string;
     ASSISTANT_RATE_LIMIT_HMAC_KEY: string;
+    ASSISTANT_THREAD_SIGNING_KEY: string;
 
     // Variables (set in wrangler.jsonc [vars] or dashboard)
     BETTER_AUTH_URL?: string;

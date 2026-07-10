@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import {
+  ConflictError,
   UnauthorizedError,
 } from "@scalius/core/errors";
 
@@ -11,6 +12,7 @@ import { errorResponseFromError } from "../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
   createSession: vi.fn(),
+  bindAgentInstance: vi.fn(),
   resumeSession: vi.fn(),
   revokeSession: vi.fn(),
   createWorkflow: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
   return {
     ...actual,
     createAssistantSession: mocks.createSession,
+    bindAssistantAgentInstance: mocks.bindAgentInstance,
     resumeAssistantSession: mocks.resumeSession,
     revokeAssistantSession: mocks.revokeSession,
     createAssistantWorkflow: mocks.createWorkflow,
@@ -49,6 +52,9 @@ import { adminAssistantAuthorityRoutes } from "./admin-assistant";
 const CREDENTIAL = `session_asst_${"A".repeat(43)}`;
 const OTHER_CREDENTIAL = `session_asst_${"B".repeat(43)}`;
 const NOW = Date.parse("2026-07-10T00:00:00.000Z");
+const FUTURE = Date.parse("2030-07-10T08:00:00.000Z");
+const FLUE_SIGNING_KEY = "admin-flue-thread-signing-key-at-least-32-bytes";
+const FLUE_THREAD_ID = "conv_abcdefghijklmnopqrstuv";
 
 interface TestSession {
   id: string;
@@ -66,10 +72,16 @@ interface TestSession {
 
 let currentSession: TestSession | null;
 
-function createTestApp() {
+function createTestApp(envOverrides: Partial<Env> = {}) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = { id: "assistant-test-db" };
-  const env = {} as Env;
+  const env = {
+    STOREFRONT_URL: "https://storefront.test",
+    PUBLIC_API_BASE_URL: "https://api.test",
+    PROJECT_CACHE_PREFIX: "test-store",
+    ASSISTANT_THREAD_SIGNING_KEY: FLUE_SIGNING_KEY,
+    ...envOverrides,
+  } as Env;
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -195,7 +207,7 @@ describe("internal Admin assistant authority boundary", () => {
         permissionSnapshotHash: input.permissionSnapshotHash,
         safeMetadata: input.safeMetadata,
         lastEventSequence: 0,
-        expiresAt: NOW + 8 * 60 * 60 * 1_000,
+        expiresAt: FUTURE,
         lastSeenAt: NOW,
       };
       return {
@@ -215,6 +227,10 @@ describe("internal Admin assistant authority boundary", () => {
       ) {
         throw new UnauthorizedError("Assistant session unavailable.");
       }
+      return currentSession;
+    });
+    mocks.bindAgentInstance.mockImplementation(async () => {
+      if (!currentSession) throw new Error("Missing test session");
       return currentSession;
     });
     mocks.revokeSession.mockImplementation(async () => {
@@ -393,6 +409,193 @@ describe("internal Admin assistant authority boundary", () => {
       expect(response.status).toBe(401);
     }
     expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
+  it("admits and idempotently replays one API-owned opaque Admin Flue thread", async () => {
+    const { app, db, env } = createTestApp();
+    const headers = authHeaders({ credential: null });
+    const [first, replay] = await Promise.all([
+      post(
+        app,
+        env,
+        ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+        { threadId: FLUE_THREAD_ID },
+        headers,
+      ),
+      post(
+        app,
+        env,
+        ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+        { threadId: FLUE_THREAD_ID },
+        headers,
+      ),
+    ]);
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(mocks.createSession).toHaveBeenCalledTimes(2);
+    const firstCreate = mocks.createSession.mock.calls[0]![1];
+    const replayCreate = mocks.createSession.mock.calls[1]![1];
+    expect(firstCreate).toMatchObject({
+      surface: "admin",
+      actorType: "admin",
+      actorId: "admin_1",
+      conversationKey: FLUE_THREAD_ID,
+      credential: expect.stringMatching(/^session_asst_[A-Za-z0-9_-]{43}$/u),
+      permissionSnapshotHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      safeMetadata: {
+        schemaVersion: 1,
+        dashboardSessionHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      },
+      ttlSeconds: 28_800,
+    });
+    expect(firstCreate.credential).toBe(replayCreate.credential);
+    expect(firstCreate.credential).not.toContain(FLUE_SIGNING_KEY);
+
+    const firstBody = await first.json() as {
+      data: { agent: Record<string, unknown> };
+    };
+    const replayBody = await replay.json() as {
+      data: { agent: Record<string, unknown> };
+    };
+    expect(Object.keys(firstBody.data.agent).sort()).toEqual([
+      "expiresAt",
+      "instanceId",
+      "principalId",
+      "surface",
+      "tenantId",
+      "threadId",
+    ]);
+    expect(firstBody.data.agent).toEqual({
+      surface: "admin",
+      instanceId: expect.stringMatching(/^v1\.[A-Za-z0-9_-]{43}$/u),
+      tenantId: expect.stringMatching(/^tenant_[A-Za-z0-9_-]{43}$/u),
+      principalId: expect.stringMatching(/^principal_[A-Za-z0-9_-]{43}$/u),
+      threadId: FLUE_THREAD_ID,
+      expiresAt: FUTURE,
+    });
+    expect(replayBody.data.agent).toEqual(firstBody.data.agent);
+    expect(mocks.bindAgentInstance).toHaveBeenNthCalledWith(1, db, {
+      sessionId: "as_session_1",
+      agentInstanceId: firstBody.data.agent.instanceId,
+    });
+    const responseCanary = JSON.stringify(firstBody);
+    expect(responseCanary).not.toMatch(
+      /admin_1|dashboard_session_1|permissionSnapshotHash|credential|safeMetadata/,
+    );
+    expect(responseCanary).not.toContain(FLUE_SIGNING_KEY);
+  });
+
+  it("fails Admin admission closed on identity drift, binding conflict, and expiry", async () => {
+    const { app, env } = createTestApp();
+    const headers = authHeaders({ credential: null });
+    const admitted = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: FLUE_THREAD_ID },
+      headers,
+    );
+    expect(admitted.status).toBe(200);
+    const originalCredential = mocks.createSession.mock.calls[0]![1].credential;
+
+    mocks.createSession.mockImplementationOnce(async (_db, input) => {
+      expect(input.credential).not.toBe(originalCredential);
+      throw new ConflictError("Assistant session authority changed.");
+    });
+    const dashboardDrift = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: FLUE_THREAD_ID },
+      authHeaders({ credential: null, dashboardSessionId: "dashboard_session_2" }),
+    );
+    expect(dashboardDrift.status).toBe(409);
+
+    mocks.bindAgentInstance.mockRejectedValueOnce(
+      new ConflictError("Assistant session agent binding changed."),
+    );
+    const conflict = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: "conv_abcdefghijklmnopqrstuw" },
+      headers,
+    );
+    expect(conflict.status).toBe(409);
+
+    mocks.bindAgentInstance.mockImplementationOnce(async () => ({
+      ...currentSession!,
+      expiresAt: Date.now() - 1,
+    }));
+    const expired = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: "conv_abcdefghijklmnopqrstux" },
+      headers,
+    );
+    expect(expired.status).toBe(401);
+  });
+
+  it("rejects malformed, injected, public, and unconfigured Admin Flue admission", async () => {
+    const { app, env } = createTestApp();
+    const headers = authHeaders({ credential: null });
+    for (const body of [
+      { threadId: "thread_not_conv" },
+      { threadId: FLUE_THREAD_ID, actorId: "admin_2" },
+      { threadId: `conv_${"a".repeat(65)}` },
+      { threadId: FLUE_THREAD_ID, padding: "x".repeat(17_000) },
+    ]) {
+      const response = await post(
+        app,
+        env,
+        ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+        body,
+        headers,
+      );
+      expect(response.status).toBe(400);
+    }
+    const injected = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: FLUE_THREAD_ID },
+      { ...headers, "X-Scalius-Tenant-Id": "forged" },
+    );
+    expect(injected.status).toBe(400);
+
+    const publicResponse = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: FLUE_THREAD_ID },
+      headers,
+      "https://api.test",
+    );
+    expect(publicResponse.status).toBe(404);
+
+    for (const envOverrides of [
+      { ASSISTANT_THREAD_SIGNING_KEY: undefined as never },
+      { ASSISTANT_THREAD_SIGNING_KEY: "too-short" },
+      {
+        ASSISTANT_THREAD_SIGNING_KEY: FLUE_SIGNING_KEY,
+        ASSISTANT_RATE_LIMIT_HMAC_KEY: FLUE_SIGNING_KEY,
+      },
+    ]) {
+      const configured = createTestApp(envOverrides);
+      const response = await post(
+        configured.app,
+        configured.env,
+        ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+        { threadId: FLUE_THREAD_ID },
+        headers,
+      );
+      expect(response.status).toBe(503);
+      const text = await response.text();
+      expect(text).toContain("Assistant thread admission is unavailable.");
+      expect(text).not.toContain(FLUE_SIGNING_KEY);
+    }
   });
 
   it("fails resume closed across actor, surface, dashboard-session, permission, and credential drift", async () => {

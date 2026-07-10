@@ -1,11 +1,16 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { RateLimitError, UnauthorizedError } from "@scalius/core/errors";
+import {
+  ConflictError,
+  RateLimitError,
+  UnauthorizedError,
+} from "@scalius/core/errors";
 
 import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
+  bindAgentInstance: vi.fn(),
   consumeRateLimit: vi.fn(),
   resumeSession: vi.fn(),
   revokeSession: vi.fn(),
@@ -18,6 +23,7 @@ vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
   return {
     ...actual,
     createAssistantSession: mocks.createSession,
+    bindAssistantAgentInstance: mocks.bindAgentInstance,
     consumeAssistantRateLimit: mocks.consumeRateLimit,
     resumeAssistantSession: mocks.resumeSession,
     revokeAssistantSession: mocks.revokeSession,
@@ -51,6 +57,7 @@ type TestSession = {
 let currentSession: TestSession | null;
 let currentCredential: string | null;
 const CONVERSATION_ID = "conv_abcdefghijklmnopqrstuv";
+const FLUE_SIGNING_KEY = "storefront-flue-thread-signing-key-at-least-32-bytes";
 
 function createTestApp(envOverrides: Partial<Env> = {}) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
@@ -60,6 +67,7 @@ function createTestApp(envOverrides: Partial<Env> = {}) {
     PUBLIC_API_BASE_URL: "https://api.test",
     PROJECT_CACHE_PREFIX: "test-store",
     ASSISTANT_RATE_LIMIT_HMAC_KEY: "R".repeat(32),
+    ASSISTANT_THREAD_SIGNING_KEY: FLUE_SIGNING_KEY,
     ...envOverrides,
   } as Env;
 
@@ -158,6 +166,10 @@ describe("internal Storefront assistant session authority", () => {
       if (!currentSession || input.credential !== currentCredential) {
         throw new UnauthorizedError("Assistant session unavailable.");
       }
+      return currentSession;
+    });
+    mocks.bindAgentInstance.mockImplementation(async () => {
+      if (!currentSession) throw new Error("Missing test session");
       return currentSession;
     });
 
@@ -479,5 +491,247 @@ describe("internal Storefront assistant session authority", () => {
       success: true,
       data: { revoked: true, changed: true, session: { status: "revoked" } },
     });
+  });
+
+  it("admits and idempotently replays only the current credential-bound Storefront thread", async () => {
+    const { app, db, env } = createTestApp();
+    await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.sessionCreate,
+      { conversationId: CONVERSATION_ID },
+    );
+    const credential = currentCredential!;
+    const options = { cookie: assistantCookie(credential) };
+    const [first, replay] = await Promise.all([
+      post(
+        app,
+        env,
+        STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+        { threadId: CONVERSATION_ID },
+        options,
+      ),
+      post(
+        app,
+        env,
+        STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+        { threadId: CONVERSATION_ID },
+        options,
+      ),
+    ]);
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(mocks.resumeSession).toHaveBeenNthCalledWith(1, db, {
+      credential,
+      expectedSurface: "storefront",
+      expectedConversationKey: CONVERSATION_ID,
+      expectedPermissionSnapshotHash: null,
+      expectedSafeMetadata: currentSession!.safeMetadata,
+      touchAfterSeconds: 300,
+    });
+    const firstBody = await first.json() as {
+      data: { agent: Record<string, unknown> };
+    };
+    const replayBody = await replay.json() as {
+      data: { agent: Record<string, unknown> };
+    };
+    expect(Object.keys(firstBody.data.agent).sort()).toEqual([
+      "expiresAt",
+      "instanceId",
+      "principalId",
+      "surface",
+      "tenantId",
+      "threadId",
+    ]);
+    expect(firstBody.data.agent).toEqual({
+      surface: "storefront",
+      instanceId: expect.stringMatching(/^v1\.[A-Za-z0-9_-]{43}$/u),
+      tenantId: expect.stringMatching(/^tenant_[A-Za-z0-9_-]{43}$/u),
+      principalId: expect.stringMatching(/^principal_[A-Za-z0-9_-]{43}$/u),
+      threadId: CONVERSATION_ID,
+      expiresAt: currentSession!.expiresAt,
+    });
+    expect(replayBody.data.agent).toEqual(firstBody.data.agent);
+    expect(mocks.bindAgentInstance).toHaveBeenNthCalledWith(1, db, {
+      sessionId: "as_storefront_1",
+      agentInstanceId: firstBody.data.agent.instanceId,
+    });
+    const responseCanary = JSON.stringify(firstBody);
+    expect(responseCanary).not.toContain(credential);
+    expect(responseCanary).not.toContain(currentSession!.actorId!);
+    expect(responseCanary).not.toContain(FLUE_SIGNING_KEY);
+    expect(responseCanary).not.toMatch(/cookie|credential|actorId|sessionId/);
+  });
+
+  it("fails Storefront admission closed across thread, session, surface, tenant, expiry, and binding drift", async () => {
+    const { app, env } = createTestApp();
+    await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.sessionCreate,
+      { conversationId: CONVERSATION_ID },
+    );
+    const credential = currentCredential!;
+    const options = { cookie: assistantCookie(credential) };
+
+    const crossThread = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: "conv_abcdefghijklmnopqrstuw" },
+      options,
+    );
+    expect(crossThread.status).toBe(401);
+
+    const wrongSession = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: CONVERSATION_ID },
+      { cookie: assistantCookie(`session_asst_${"Z".repeat(43)}`) },
+    );
+    expect(wrongSession.status).toBe(401);
+
+    currentSession = { ...currentSession!, surface: "admin", actorType: "admin" };
+    const crossSurface = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: CONVERSATION_ID },
+      options,
+    );
+    expect(crossSurface.status).toBe(401);
+
+    currentSession = {
+      ...currentSession!,
+      surface: "storefront",
+      actorType: "guest",
+    };
+    const crossTenant = await post(
+      app,
+      { ...env, STOREFRONT_URL: "https://other-storefront.test" },
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: CONVERSATION_ID },
+      options,
+    );
+    expect(crossTenant.status).toBe(401);
+
+    currentSession = { ...currentSession!, status: "revoked" };
+    const revoked = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: CONVERSATION_ID },
+      options,
+    );
+    expect(revoked.status).toBe(401);
+
+    currentSession = {
+      ...currentSession!,
+      status: "active",
+      expiresAt: Date.now() - 1,
+    };
+    const expired = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: CONVERSATION_ID },
+      options,
+    );
+    expect(expired.status).toBe(401);
+
+    currentSession = {
+      ...currentSession!,
+      expiresAt: Date.now() + 60_000,
+      status: "active",
+    };
+    mocks.bindAgentInstance.mockRejectedValueOnce(
+      new ConflictError("Assistant session agent binding changed."),
+    );
+    const conflict = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: CONVERSATION_ID },
+      options,
+    );
+    expect(conflict.status).toBe(409);
+  });
+
+  it("rejects malformed, injected, public, and unconfigured Storefront Flue admission", async () => {
+    const { app, env } = createTestApp();
+    await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.sessionCreate,
+      { conversationId: CONVERSATION_ID },
+    );
+    const options = { cookie: assistantCookie(currentCredential!) };
+    for (const body of [
+      { threadId: "not_a_conversation" },
+      { threadId: CONVERSATION_ID, subject: "forged" },
+      { threadId: `conv_${"a".repeat(65)}` },
+      { threadId: CONVERSATION_ID, padding: "x".repeat(3_000) },
+    ]) {
+      const response = await post(
+        app,
+        env,
+        STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+        body,
+        options,
+      );
+      expect(response.status).toBe(400);
+    }
+    const injected = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: CONVERSATION_ID },
+      {
+        cookie: options.cookie,
+        headers: { "X-Scalius-Principal-Id": "forged" },
+      },
+    );
+    expect(injected.status).toBe(400);
+
+    const publicResponse = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+      { threadId: CONVERSATION_ID },
+      options,
+      "https://api.test",
+    );
+    expect(publicResponse.status).toBe(404);
+
+    for (const envOverrides of [
+      { ASSISTANT_THREAD_SIGNING_KEY: undefined as never },
+      { ASSISTANT_THREAD_SIGNING_KEY: "too-short" },
+      {
+        ASSISTANT_THREAD_SIGNING_KEY: FLUE_SIGNING_KEY,
+        ASSISTANT_RATE_LIMIT_HMAC_KEY: FLUE_SIGNING_KEY,
+      },
+      { STOREFRONT_URL: undefined as never },
+    ]) {
+      const configured = createTestApp(envOverrides);
+      await post(
+        configured.app,
+        configured.env,
+        STOREFRONT_ASSISTANT_AUTHORITY_PATHS.sessionCreate,
+        { conversationId: CONVERSATION_ID },
+      );
+      const response = await post(
+        configured.app,
+        configured.env,
+        STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmit,
+        { threadId: CONVERSATION_ID },
+        { cookie: assistantCookie(currentCredential!) },
+      );
+      expect(response.status).toBe(503);
+      const text = await response.text();
+      expect(text).not.toContain(FLUE_SIGNING_KEY);
+      expect(text).not.toContain(currentCredential!);
+    }
   });
 });
