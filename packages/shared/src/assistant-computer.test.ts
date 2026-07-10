@@ -224,15 +224,21 @@ function handleFor(output: string, label: string): string {
 }
 
 function browserController(overrides: {
-  route?: string;
+  route?: string | (() => string);
   allowsRoute?: (route: string) => boolean;
+  confirmationNow?: () => number;
+  confirmationTtlMs?: number;
+  createConfirmationToken?: () => string;
 } = {}) {
   const goto = vi.fn();
   const refresh = vi.fn();
   const page = createScaliusBrowserComputerAdapter({
     document,
     origin: "https://shop.example",
-    currentRoute: () => overrides.route ?? "/products",
+    currentRoute: () =>
+      typeof overrides.route === "function"
+        ? overrides.route()
+        : overrides.route ?? "/products",
     goto,
     refresh,
     allowsRoute: overrides.allowsRoute ?? ((route) => !route.startsWith("/admin")),
@@ -240,7 +246,13 @@ function browserController(overrides: {
     textMode: "semantic",
   });
   return {
-    controller: new ScaliusComputerController({ binding, adapter: page }),
+    controller: new ScaliusComputerController({
+      binding,
+      adapter: page,
+      confirmationNow: overrides.confirmationNow,
+      confirmationTtlMs: overrides.confirmationTtlMs,
+      createConfirmationToken: overrides.createConfirmationToken,
+    }),
     goto,
     refresh,
   };
@@ -576,5 +588,447 @@ describe("Scalius browser computer adapter", () => {
       program: `click ${handleFor(observed.output, "Save changes")}`,
     })).resolves.toMatchObject({ ok: true, code: "EXECUTED" });
     expect(clicked).toHaveBeenCalledOnce();
+  });
+});
+
+const CONFIRMATION_TOKEN = "confirmation_token_1234567890abcdef";
+
+async function armBrowserConfirmation(
+  controller: ScaliusComputerController,
+  label: string,
+  action: "click" | "submit" = "click",
+  confirmationExpiresAt?: number,
+) {
+  const observed = await controller.execute({ binding, program: "observe" });
+  const result = await controller.execute({
+    binding,
+    program: `${action} ${handleFor(observed.output, label)}`,
+    ...(confirmationExpiresAt === undefined ? {} : { confirmationExpiresAt }),
+  });
+  expect(result).toEqual({
+    ok: false,
+    code: "CONFIRMATION_REQUIRED",
+    output: "This exact page action is waiting for direct human confirmation.",
+    retryable: false,
+  });
+  const serializedResult = JSON.stringify(result);
+  expect(serializedResult).not.toContain(CONFIRMATION_TOKEN);
+  expect(serializedResult).not.toContain("/products");
+  expect(serializedResult).not.toContain("dom-");
+  const pending = controller.getPendingConfirmation();
+  expect(pending).not.toBeNull();
+  return pending!;
+}
+
+describe("Scalius generic exact-target confirmations", () => {
+  it("creates a fresh opaque crypto token for each local confirmation", async () => {
+    document.body.innerHTML = `
+      <main><button data-scalius-computer-confirm="required">Save product</button></main>`;
+    const { controller } = browserController();
+
+    const first = await armBrowserConfirmation(controller, "Save product");
+    expect(first.token).toMatch(/^[a-f0-9]{48}$/u);
+    controller.cancelPendingConfirmation({ binding, token: first.token });
+
+    const second = await armBrowserConfirmation(controller, "Save product");
+    expect(second.token).toMatch(/^[a-f0-9]{48}$/u);
+    expect(second.token).not.toBe(first.token);
+  });
+
+  it("confirms an exact click once without serializing local capability data", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button data-scalius-computer-confirm="required">Save changes</button>
+      </main>`;
+    const clicked = vi.fn();
+    document.querySelector("button")!.addEventListener("click", clicked);
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+
+    const pending = await armBrowserConfirmation(controller, "Save changes");
+    expect(pending).toMatchObject({
+      token: CONFIRMATION_TOKEN,
+      binding,
+      route: "/products",
+      revision: "r1",
+      action: "click",
+      expiresAt: expect.any(Number),
+    });
+    expect(pending.snapshotSignature).toMatch(/^[a-z0-9]+$/u);
+    expect(pending.targetId).toMatch(/^dom-\d+$/u);
+    expect(pending.targetFingerprint).toMatch(/^[a-z0-9.]+$/u);
+    expect(clicked).not.toHaveBeenCalled();
+
+    await expect(controller.confirmPendingConfirmation({
+      binding,
+      token: pending.token,
+    })).resolves.toEqual({
+      ok: true,
+      code: "CONFIRMED",
+      output: "Completed the confirmed page action.",
+      changed: true,
+    });
+    expect(clicked).toHaveBeenCalledOnce();
+    expect(controller.getPendingConfirmation()).toBeNull();
+
+    await expect(controller.confirmPendingConfirmation({
+      binding,
+      token: pending.token,
+    })).resolves.toMatchObject({
+      ok: false,
+      code: "CONFIRMATION_NOT_FOUND",
+    });
+    expect(clicked).toHaveBeenCalledOnce();
+  });
+
+  it("confirms an explicitly marked submit exactly once", async () => {
+    document.body.innerHTML = `
+      <main>
+        <form data-scalius-computer-confirm="required">
+          <input aria-label="Public query" />
+          <button type="submit">Create report</button>
+        </form>
+      </main>`;
+    const submitted = vi.fn((event: Event) => event.preventDefault());
+    document.querySelector("form")!.addEventListener("submit", submitted);
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+
+    const pending = await armBrowserConfirmation(
+      controller,
+      "Create report",
+      "submit",
+    );
+    expect(submitted).not.toHaveBeenCalled();
+    await controller.confirmPendingConfirmation({ binding, token: pending.token });
+    expect(submitted).toHaveBeenCalledOnce();
+  });
+
+  it("keeps one pending slot and does not expose it through another execution", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button data-scalius-computer-confirm="required">Publish product</button>
+      </main>`;
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const pending = await armBrowserConfirmation(controller, "Publish product");
+
+    const blocked = await controller.execute({ binding, program: "observe" });
+    expect(blocked).toEqual({
+      ok: false,
+      code: "BUSY",
+      output: "Resolve the pending human confirmation before another page command.",
+      retryable: false,
+    });
+    expect(JSON.stringify(blocked)).not.toContain(pending.token);
+    expect(JSON.stringify(blocked)).not.toContain(pending.targetId);
+    expect(JSON.stringify(blocked)).not.toContain(pending.route);
+  });
+
+  it("rejects a token mismatch without burning the valid local confirmation", async () => {
+    document.body.innerHTML = `
+      <main><button data-scalius-computer-confirm="required">Save product</button></main>`;
+    const clicked = vi.fn();
+    document.querySelector("button")!.addEventListener("click", clicked);
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const pending = await armBrowserConfirmation(controller, "Save product");
+
+    await expect(controller.confirmPendingConfirmation({
+      binding,
+      token: "incorrect_token_1234567890abcdef",
+    })).resolves.toMatchObject({
+      ok: false,
+      code: "CONFIRMATION_NOT_FOUND",
+    });
+    expect(clicked).not.toHaveBeenCalled();
+    expect(controller.getPendingConfirmation()).toEqual(pending);
+
+    await controller.confirmPendingConfirmation({ binding, token: pending.token });
+    expect(clicked).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a cross-thread confirmation without burning the bound one", async () => {
+    document.body.innerHTML = `
+      <main><button data-scalius-computer-confirm="required">Save product</button></main>`;
+    const clicked = vi.fn();
+    document.querySelector("button")!.addEventListener("click", clicked);
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const pending = await armBrowserConfirmation(controller, "Save product");
+
+    await expect(controller.confirmPendingConfirmation({
+      binding: { ...binding, threadId: "thread-2" },
+      token: pending.token,
+    })).resolves.toMatchObject({ ok: false, code: "INVALID_BINDING" });
+    expect(clicked).not.toHaveBeenCalled();
+
+    await controller.confirmPendingConfirmation({ binding, token: pending.token });
+    expect(clicked).toHaveBeenCalledOnce();
+  });
+
+  it("burns a cancelled confirmation and never performs its action", async () => {
+    document.body.innerHTML = `
+      <main><button data-scalius-computer-confirm="required">Save product</button></main>`;
+    const clicked = vi.fn();
+    document.querySelector("button")!.addEventListener("click", clicked);
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const pending = await armBrowserConfirmation(controller, "Save product");
+
+    expect(controller.cancelPendingConfirmation({
+      binding,
+      token: pending.token,
+    })).toMatchObject({ ok: true, code: "CANCELLED", changed: false });
+    await expect(controller.confirmPendingConfirmation({
+      binding,
+      token: pending.token,
+    })).resolves.toMatchObject({
+      ok: false,
+      code: "CONFIRMATION_NOT_FOUND",
+    });
+    expect(clicked).not.toHaveBeenCalled();
+  });
+
+  it("uses the earlier trusted expiry and burns an expired confirmation", async () => {
+    let now = 10_000;
+    document.body.innerHTML = `
+      <main><button data-scalius-computer-confirm="required">Save product</button></main>`;
+    const clicked = vi.fn();
+    document.querySelector("button")!.addEventListener("click", clicked);
+    const { controller } = browserController({
+      confirmationNow: () => now,
+      confirmationTtlMs: 60_000,
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const pending = await armBrowserConfirmation(
+      controller,
+      "Save product",
+      "click",
+      12_000,
+    );
+    expect(pending.expiresAt).toBe(12_000);
+    now = 12_000;
+
+    await expect(controller.confirmPendingConfirmation({
+      binding,
+      token: pending.token,
+    })).resolves.toMatchObject({
+      ok: false,
+      code: "CONFIRMATION_EXPIRED",
+    });
+    await expect(controller.confirmPendingConfirmation({
+      binding,
+      token: pending.token,
+    })).resolves.toMatchObject({
+      ok: false,
+      code: "CONFIRMATION_NOT_FOUND",
+    });
+    expect(clicked).not.toHaveBeenCalled();
+  });
+
+  it("allows only one side effect across concurrent duplicate confirmations", async () => {
+    document.body.innerHTML = `
+      <main><button data-scalius-computer-confirm="required">Save product</button></main>`;
+    const clicked = vi.fn();
+    document.querySelector("button")!.addEventListener("click", clicked);
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const pending = await armBrowserConfirmation(controller, "Save product");
+
+    const results = await Promise.all([
+      controller.confirmPendingConfirmation({ binding, token: pending.token }),
+      controller.confirmPendingConfirmation({ binding, token: pending.token }),
+    ]);
+    expect(results.map((result) => result.code).sort()).toEqual([
+      "CONFIRMATION_NOT_FOUND",
+      "CONFIRMED",
+    ]);
+    expect(clicked).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    {
+      name: "route",
+      mutate: (button: HTMLButtonElement, setRoute: (route: string) => void) =>
+        setRoute("/products/changed"),
+      code: "STALE_CONTEXT",
+    },
+    {
+      name: "snapshot signature",
+      mutate: () =>
+        document.querySelector("main")!.insertAdjacentHTML("afterbegin", "<h1>Changed</h1>"),
+      code: "STALE_CONTEXT",
+    },
+    {
+      name: "exact target",
+      mutate: (button: HTMLButtonElement) => button.replaceWith(button.cloneNode(true)),
+      code: "TARGET_GONE",
+    },
+    {
+      name: "accessible label",
+      mutate: (button: HTMLButtonElement) => {
+        button.textContent = "Save changed product";
+      },
+      code: "STALE_CONTEXT",
+    },
+    {
+      name: "action",
+      mutate: (button: HTMLButtonElement) => button.setAttribute("role", "textbox"),
+      code: "ACTION_NOT_ALLOWED",
+    },
+    {
+      name: "state",
+      mutate: (button: HTMLButtonElement) => button.setAttribute("aria-expanded", "true"),
+      code: "STALE_CONTEXT",
+    },
+    {
+      name: "disabled state",
+      mutate: (button: HTMLButtonElement) => {
+        button.disabled = true;
+      },
+      code: "TARGET_DISABLED",
+    },
+    {
+      name: "sensitive state",
+      mutate: (button: HTMLButtonElement) =>
+        button.setAttribute("data-scalius-computer-sensitive", ""),
+      code: "SENSITIVE_CONTROL",
+    },
+  ])("fails closed when the confirmed control's $name changes", async ({ mutate, code }) => {
+    let route = "/products";
+    document.body.innerHTML = `
+      <main><button data-scalius-computer-confirm="required">Save product</button></main>`;
+    const button = document.querySelector<HTMLButtonElement>("button")!;
+    const clicked = vi.fn();
+    button.addEventListener("click", clicked);
+    const { controller } = browserController({
+      route: () => route,
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const pending = await armBrowserConfirmation(controller, "Save product");
+    mutate(button, (nextRoute) => {
+      route = nextRoute;
+    });
+
+    await expect(controller.confirmPendingConfirmation({
+      binding,
+      token: pending.token,
+    })).resolves.toMatchObject({ ok: false, code });
+    expect(clicked).not.toHaveBeenCalled();
+  });
+
+  it("never converts specialized or permanently human-only controls into generic confirmations", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button
+          data-scalius-computer-confirm="required"
+          data-scalius-computer-human-confirmation="admin.media.image.generate"
+        >Generate image</button>
+        <button
+          data-scalius-computer-confirm="required"
+          data-scalius-computer-human-only
+        >Delete permanently</button>
+      </main>`;
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    let observed = await controller.execute({ binding, program: "observe" });
+    let result = await controller.execute({
+      binding,
+      program: `click ${handleFor(observed.output, "Generate image")}`,
+    });
+    expect(result).toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(getScaliusComputerHumanConfirmationId(result)).toBe(
+      "admin.media.image.generate",
+    );
+    expect(controller.getPendingConfirmation()).toBeNull();
+
+    observed = await controller.execute({ binding, program: "observe" });
+    result = await controller.execute({
+      binding,
+      program: `click ${handleFor(observed.output, "Delete permanently")}`,
+    });
+    expect(result).toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(controller.getPendingConfirmation()).toBeNull();
+  });
+
+  it("never arms a generic confirmation for a credential-hint form", async () => {
+    document.body.innerHTML = `
+      <main>
+        <form data-scalius-computer-confirm="required">
+          <input type="text" name="apiKey" />
+          <button type="submit">Save provider</button>
+        </form>
+      </main>`;
+    const submitted = vi.fn((event: Event) => event.preventDefault());
+    document.querySelector("form")!.addEventListener("submit", submitted);
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const observed = await controller.execute({ binding, program: "observe" });
+    const result = await controller.execute({
+      binding,
+      program: `submit ${handleFor(observed.output, "Save provider")}`,
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(controller.getPendingConfirmation()).toBeNull();
+    expect(submitted).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when any bounded form descendant is sensitive", async () => {
+    document.body.innerHTML = `
+      <main>
+        <form data-scalius-computer-confirm="required">
+          <div name="privateTokenMetadata"></div>
+          <button type="submit">Save integration</button>
+        </form>
+      </main>`;
+    const submitted = vi.fn((event: Event) => event.preventDefault());
+    document.querySelector("form")!.addEventListener("submit", submitted);
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const observed = await controller.execute({ binding, program: "observe" });
+    const result = await controller.execute({
+      binding,
+      program: `submit ${handleFor(observed.output, "Save integration")}`,
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(controller.getPendingConfirmation()).toBeNull();
+    expect(submitted).not.toHaveBeenCalled();
+  });
+
+  it("fails closed instead of scanning an oversized confirmation form", async () => {
+    document.body.innerHTML = `
+      <main>
+        <form data-scalius-computer-confirm="required">
+          ${"<span></span>".repeat(201)}
+          <button type="submit">Save oversized form</button>
+        </form>
+      </main>`;
+    const submitted = vi.fn((event: Event) => event.preventDefault());
+    document.querySelector("form")!.addEventListener("submit", submitted);
+    const { controller } = browserController({
+      createConfirmationToken: () => CONFIRMATION_TOKEN,
+    });
+    const observed = await controller.execute({ binding, program: "observe" });
+    const result = await controller.execute({
+      binding,
+      program: `submit ${handleFor(observed.output, "Save oversized form")}`,
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(controller.getPendingConfirmation()).toBeNull();
+    expect(submitted).not.toHaveBeenCalled();
   });
 });
