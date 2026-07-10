@@ -46,6 +46,7 @@ const BUYER_QUERY_STOP_WORDS = new Set([
   "collection",
   "collections",
   "could",
+  "currently",
   "do",
   "does",
   "find",
@@ -67,8 +68,11 @@ const BUYER_QUERY_STOP_WORDS = new Set([
   "my",
   "navigate",
   "need",
+  "now",
   "of",
   "open",
+  "option",
+  "options",
   "page",
   "please",
   "product",
@@ -90,9 +94,11 @@ const BUYER_QUERY_STOP_WORDS = new Set([
   "the",
   "there",
   "this",
+  "today",
   "to",
   "want",
   "visit",
+  "valid",
   "view",
   "what",
   "where",
@@ -114,7 +120,7 @@ export function searchQueryFromMessages(
   ) {
     return null;
   }
-  const terms = Array.from(latest, (character) => {
+  const terms = Array.from(latest.replace(/\bright\s+now\b/gi, " "), (character) => {
     const code = character.charCodeAt(0);
     return code <= 31 || code === 127 ? " " : character;
   })

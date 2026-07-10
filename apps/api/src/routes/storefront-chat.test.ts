@@ -531,6 +531,12 @@ describe("storefront chat route", () => {
       { role: "user", content: "Can you help me find khaki shoes?" },
     ])).toBe("khaki shoes");
     expect(searchQueryFromMessages([
+      {
+        role: "user",
+        content: "Do you sell shoes right now? Show me valid options.",
+      },
+    ])).toBe("shoes");
+    expect(searchQueryFromMessages([
       { role: "user", content: "What can I find here?" },
     ])).toBeNull();
     expect(searchQueryFromMessages([
