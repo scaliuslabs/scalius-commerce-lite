@@ -7,6 +7,12 @@ import {
   buildAdminCopilotInstructions,
   isKnownAdminEntryRoute,
 } from "./admin-copilot-policy";
+import {
+  ADMIN_AGENT_CAPABILITY_CALL_LIMIT,
+  ADMIN_AGENT_DURABILITY,
+  ADMIN_CAPABILITY_ONLY_SANDBOX,
+  createAdminCapabilityCallBudget,
+} from "./capability-runtime";
 
 const EXPECTED_ENTRY_ROUTES = [
   "/admin",
@@ -66,6 +72,7 @@ describe("Admin copilot runtime policy", () => {
     expect(instructions).toContain("Never answer a total from the number of visible table rows");
     expect(instructions).toContain("Never confirm, approve, or execute a prepared mutation yourself");
     expect(instructions).toContain("Never expose or quote internal tool names");
+    expect(instructions).toContain("Never use shell, filesystem, local image generation");
     expect(parseScaliusCommandProgram("call admin.api.get.products.stats -- {}"))
       .toMatchObject({
         ok: true,
@@ -89,7 +96,20 @@ describe("Admin copilot runtime policy", () => {
     expect(description).toBe("Operates the authenticated Scalius Admin dashboard.");
     expect(config.model).toBe("cloudflare/@cf/moonshotai/kimi-k2.6");
     expect(config.thinkingLevel).toBe("medium");
+    expect(config.durability).toEqual(ADMIN_AGENT_DURABILITY);
+    expect(config.sandbox).toBe(ADMIN_CAPABILITY_ONLY_SANDBOX);
     expect(config.tools?.map(({ name }) => name)).toEqual(["computer", "scalius"]);
     expect(config.instructions).toBe(buildAdminCopilotInstructions());
+  });
+
+  it("removes Flue's default shell/filesystem tools and bounds capability calls", async () => {
+    const env = await ADMIN_CAPABILITY_ONLY_SANDBOX.createSessionEnv({ id: "thread" });
+    expect(ADMIN_CAPABILITY_ONLY_SANDBOX.tools?.(env, { subagents: {} })).toEqual([]);
+    expect(await env.exists("/anything")).toBe(false);
+    await expect(env.exec("echo nope")).rejects.toThrow("workspace is unavailable");
+
+    const consume = createAdminCapabilityCallBudget();
+    for (let index = 0; index < ADMIN_AGENT_CAPABILITY_CALL_LIMIT; index += 1) consume();
+    expect(consume).toThrow("capability call limit");
   });
 });
