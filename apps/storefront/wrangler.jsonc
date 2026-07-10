@@ -44,6 +44,10 @@
 		{
 			"binding": "STOREFRONT_AGENT",
 			"service": "scalius-storefront-agent"
+		},
+		{
+			"binding": "STOREFRONT_FLUE_AGENT",
+			"service": "scalius-storefront-agent-flue-canary"
 		}
 	],
 	"vars": {
