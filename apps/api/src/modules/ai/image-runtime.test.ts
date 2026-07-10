@@ -159,4 +159,31 @@ describe("provider-neutral image runtime", () => {
     expect(JSON.stringify(caught)).not.toContain("buyer@example.test");
     expect((caught as Error).message).not.toContain("sk-private-image-prompt");
   });
+
+  it("rejects non-raster provider output before it reaches media storage", async () => {
+    vi.doMock("@ai-sdk/openai", () => ({
+      createOpenAI: vi.fn(() => ({ imageModel: vi.fn(() => ({ provider: "openai" })) })),
+    }));
+    vi.doMock("ai", () => ({
+      generateImage: vi.fn().mockResolvedValue({
+        image: {
+          mediaType: "image/svg+xml",
+          uint8Array: new Uint8Array([60, 115, 118, 103, 62]),
+        },
+        usage: {},
+      }),
+    }));
+    const { generateAiImage } = await import("./image-runtime");
+
+    await expect(generateAiImage({
+      provider: "openai",
+      modelId: "gpt-image-test",
+      settings: settingsFor("openai"),
+      env: {} as Env,
+      prompt: "A raster product photo",
+    })).rejects.toMatchObject({
+      name: "AiImageGenerationError",
+      message: "Image generation is temporarily unavailable.",
+    });
+  });
 });

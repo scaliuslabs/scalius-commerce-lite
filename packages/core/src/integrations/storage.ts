@@ -107,6 +107,26 @@ export interface UploadResult {
   mimeType: string;
 }
 
+export interface UploadFileMetadata {
+  customMetadata?: Record<string, string>;
+  sha256?: ArrayBuffer | ArrayBufferView | string;
+}
+
+function boundedCustomMetadata(
+  metadata: Record<string, string> | undefined,
+): Record<string, string> {
+  if (!metadata) return {};
+
+  return Object.fromEntries(
+    Object.entries(metadata)
+      .filter(
+        ([key, value]) =>
+          /^[a-zA-Z0-9_-]{1,64}$/.test(key) && value.length <= 512,
+      )
+      .slice(0, 16),
+  );
+}
+
 /**
  * Upload a file to Cloudflare R2.
  *
@@ -118,6 +138,7 @@ export async function uploadFile(
   file: File,
   bucket?: R2Bucket,
   publicUrl?: string,
+  metadata?: UploadFileMetadata,
 ): Promise<UploadResult> {
   const validation = validateImageFile(file);
   if (!validation.isValid) {
@@ -154,9 +175,11 @@ export async function uploadFile(
       cacheControl: "public, max-age=31536000, immutable",
     },
     customMetadata: {
+      ...boundedCustomMetadata(metadata?.customMetadata),
       originalFilename: file.name,
       uploadedAt: new Date().toISOString(),
     },
+    ...(metadata?.sha256 ? { sha256: metadata.sha256 } : {}),
   });
 
   const timeoutPromise = new Promise<never>((_, reject) =>

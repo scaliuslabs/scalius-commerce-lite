@@ -122,6 +122,7 @@ export async function uploadMediaFiles(
                     width: fileMeta?.width || null,
                     height: fileMeta?.height || null,
                     folderId: folderId || null,
+                    sourceType: "merchant_upload",
                     createdAt: sql`(unixepoch())`,
                     updatedAt: sql`(unixepoch())`,
                 }).returning();

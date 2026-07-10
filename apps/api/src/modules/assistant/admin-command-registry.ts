@@ -287,6 +287,7 @@ function deriveFlags(method: AdminHttpMethod, pathTemplate: string) {
     pathTemplate.startsWith("/api/v1/admin/fcm-token") ||
     pathTemplate.startsWith("/api/v1/admin/fraud-checker") ||
     pathTemplate === "/api/v1/admin/media/upload" ||
+    pathTemplate.startsWith("/api/v1/admin/media/image-generation/") ||
     /\/notifications\//.test(pathTemplate) ||
     /\/shipments(?:\/|$)|\/fulfill$/.test(pathTemplate) ||
     (/^\/api\/v1\/admin\/settings\/(?:delivery-providers|email|firebase|meta-conversions|polar|sms|sslcommerz|stripe|widget-ai)(?:\/|$)/.test(pathTemplate) &&
@@ -368,10 +369,15 @@ function deriveBounds(
   pathTemplate: string,
   bulk: boolean,
 ) {
-  const upload = pathTemplate === "/api/v1/admin/media/upload";
+  const upload = pathTemplate === "/api/v1/admin/media/upload" ||
+    pathTemplate === "/api/v1/admin/media/image-generation/save";
+  const generatedImageSave =
+    pathTemplate === "/api/v1/admin/media/image-generation/save";
   const aiPayload = pathTemplate.startsWith("/api/v1/admin/ai/") ||
-    pathTemplate.startsWith("/api/v1/admin/widget-generation-runs");
+    pathTemplate.startsWith("/api/v1/admin/widget-generation-runs") ||
+    pathTemplate === "/api/v1/admin/media/image-generation/generate";
   const exportResult = pathTemplate.endsWith("/export");
+  const imageResult = pathTemplate === "/api/v1/admin/media/image-generation/generate";
 
   return {
     input: {
@@ -380,14 +386,14 @@ function deriveBounds(
         : upload
           ? "multipart/form-data" as const
           : "application/json" as const,
-      maxBodyBytes: method === "GET" ? 0 : upload ? 64 * 1024 * 1024 : aiPayload ? 2 * 1024 * 1024 : 1024 * 1024,
+      maxBodyBytes: method === "GET" ? 0 : upload ? (generatedImageSave ? 12 * 1024 * 1024 : 64 * 1024 * 1024) : aiPayload ? 2 * 1024 * 1024 : 1024 * 1024,
       maxQueryChars: 16_384,
       maxPathParameterChars: 256,
-      maxItems: upload ? 20 : bulk ? 500 : aiPayload ? 50 : 1,
+      maxItems: upload ? (generatedImageSave ? 1 : 20) : bulk ? 500 : aiPayload ? 50 : 1,
       maxStringChars: aiPayload ? 250_000 : 32_768,
     },
     result: {
-      maxBytes: exportResult ? 16 * 1024 * 1024 : 2 * 1024 * 1024,
+      maxBytes: exportResult ? 16 * 1024 * 1024 : imageResult ? 10 * 1024 * 1024 : 2 * 1024 * 1024,
       maxItems: exportResult ? 10_000 : 500,
     },
   };

@@ -467,6 +467,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/media/upload": {
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
+  "/api/v1/admin/media/image-generation/generate": {
+    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
+  "/api/v1/admin/media/image-generation/save": {
+    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
   "/api/v1/admin/media/move": {
     POST: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
   },
