@@ -5,6 +5,7 @@ import {
   ADMIN_ROUTE_CONTEXT_STALE_MS,
   clearAdminRouteContextCache,
   getAdminRouteContext,
+  getFreshAdminRouteContext,
   primeAdminRouteContextCache,
   refreshAdminRouteContext,
 } from "./admin-route-context";
@@ -19,7 +20,11 @@ vi.mock("~/lib/auth.fns", () => ({
 
 type AdminRouteContext = Awaited<ReturnType<typeof adminRouteGuard>>;
 
-function makeContext(id: string): AdminRouteContext {
+function makeContext(
+  id: string,
+  access: { isSuperAdmin?: boolean; permissions?: string[] } = {},
+): AdminRouteContext {
+  const isSuperAdmin = access.isSuperAdmin ?? true;
   return {
     user: {
       id,
@@ -30,10 +35,10 @@ function makeContext(id: string): AdminRouteContext {
       twoFactorEnabled: false,
       mustChangePassword: false,
       mustEnrollTwoFactor: false,
-      isSuperAdmin: true,
+      isSuperAdmin,
     },
-    permissions: ["dashboard.view"],
-    isSuperAdmin: true,
+    permissions: access.permissions ?? ["dashboard.view"],
+    isSuperAdmin,
     hasAdminAccess: true,
   };
 }
@@ -94,6 +99,23 @@ describe("admin route context cache", () => {
     await flushMicrotasks();
 
     await expect(getAdminRouteContext()).resolves.toBe(refreshedContext);
+    expect(guard).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces a cached allow with a fresh revoked permission snapshot", async () => {
+    const cachedAllow = makeContext("tax-viewer", {
+      isSuperAdmin: false,
+      permissions: ["dashboard.view", "taxes.view"],
+    });
+    const revoked = makeContext("tax-viewer", {
+      isSuperAdmin: false,
+      permissions: ["dashboard.view"],
+    });
+    guard.mockResolvedValue(revoked);
+    primeAdminRouteContextCache(cachedAllow);
+
+    await expect(getFreshAdminRouteContext()).resolves.toBe(revoked);
+    await expect(getAdminRouteContext()).resolves.toBe(revoked);
     expect(guard).toHaveBeenCalledTimes(1);
   });
 

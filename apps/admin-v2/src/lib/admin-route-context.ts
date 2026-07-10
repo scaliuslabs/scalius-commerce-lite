@@ -91,3 +91,21 @@ export async function getAdminRouteContext(): Promise<AdminRouteContext> {
   }
   return context;
 }
+
+/**
+ * Revalidates a sensitive route against the current server-owned session and
+ * permissions instead of serving the responsive stale-context window.
+ */
+export async function getFreshAdminRouteContext(): Promise<AdminRouteContext> {
+  if (typeof window === "undefined") {
+    return adminRouteGuard();
+  }
+
+  clearAdminRouteContextCache();
+  const loadEpoch = adminRouteContextEpoch;
+  const context = await adminRouteGuard();
+  if (loadEpoch === adminRouteContextEpoch) {
+    writeAdminRouteContextCache(context);
+  }
+  return context;
+}
