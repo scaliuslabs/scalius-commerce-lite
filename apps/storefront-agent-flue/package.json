@@ -1,0 +1,26 @@
+{
+  "name": "@scalius/storefront-agent-flue",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "flue build --target cloudflare",
+    "deploy:dry-run": "wrangler deploy --dry-run --config dist/scalius_storefront_agent_flue_canary/wrangler.json",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@flue/runtime": "1.0.0-beta.9",
+    "agents": "0.16.0",
+    "hono": "^4.12.25"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "@flue/cli": "1.0.0-beta.9",
+    "@scalius/tsconfig": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9",
+    "wrangler": "4.107.1"
+  }
+}
