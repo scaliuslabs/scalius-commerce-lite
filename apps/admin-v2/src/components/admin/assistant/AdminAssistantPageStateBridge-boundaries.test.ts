@@ -61,21 +61,30 @@ describe("admin assistant page-state source boundary", () => {
     expect(adminRouteSource).not.toContain("routePath={location.search}");
   });
 
-  it("mounts the visible launcher after deferred header actions and before theme controls", () => {
+  it("mounts one persistent assistant workspace above the routed admin outlet", () => {
+    const adminRouteSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
+      "utf8",
+    );
     const adminHeaderSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminHeader.tsx"),
       "utf8",
     );
 
-    expect(adminHeaderSource).toContain(
+    expect(adminRouteSource).toContain(
       "@/components/admin/assistant/AdminAssistantLauncher",
     );
-    expect(adminHeaderSource.indexOf("<DeferredAdminHeaderActions")).toBeLessThan(
-      adminHeaderSource.indexOf("<AdminAssistantLauncher"),
+    expect(adminRouteSource.indexOf("<AppSidebar />")).toBeLessThan(
+      adminRouteSource.indexOf("<AdminAssistantLauncher>"),
     );
-    expect(adminHeaderSource.indexOf("<AdminAssistantLauncher")).toBeLessThan(
-      adminHeaderSource.indexOf("<DarkModeToggle"),
+    expect(adminRouteSource.indexOf("<AdminAssistantLauncher>")).toBeLessThan(
+      adminRouteSource.indexOf("<SidebarInset"),
     );
+    expect(adminRouteSource.indexOf("<AdminAssistantLauncher>")).toBeLessThan(
+      adminRouteSource.indexOf("<Outlet />"),
+    );
+    expect(adminRouteSource).toContain("</AdminAssistantLauncher>");
+    expect(adminHeaderSource).not.toContain("AdminAssistantLauncher");
   });
 
   it("keeps the bridge browser-only and away from admin API/domain authority", () => {
@@ -130,7 +139,9 @@ describe("admin assistant page-state source boundary", () => {
     expect(layoutSource).not.toContain("sessionStorage");
     expect(layoutSource).not.toContain("document.cookie");
     expect(layoutSource).not.toContain("fetch(");
-    expect(layoutSource).not.toMatch(/(?:messages|history|pageContext|credential|token)/);
+    expect(layoutSource).not.toMatch(
+      /(?:messages|history|pageContext|credential|token)/,
+    );
 
     expect(transcriptSessionSource).toContain("window.sessionStorage");
     expect(transcriptSessionSource).toContain(

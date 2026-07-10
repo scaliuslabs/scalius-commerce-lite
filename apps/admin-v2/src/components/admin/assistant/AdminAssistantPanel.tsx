@@ -1,6 +1,4 @@
-import {
-  Grip,
-} from "lucide-react";
+import { Grip } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -13,7 +11,6 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { createPortal } from "react-dom";
 
 import {
   assistantMessagePartSchema,
@@ -39,8 +36,6 @@ import {
 import {
   clampAdminAssistantPosition,
   getAdminAssistantViewport,
-  ADMIN_ASSISTANT_DOCK_LEFT_ID,
-  ADMIN_ASSISTANT_DOCK_RIGHT_ID,
   type AdminAssistantMode,
   type AdminAssistantPosition,
   type AdminAssistantSize,
@@ -62,9 +57,7 @@ import { AdminAssistantConversation } from "./AdminAssistantConversation";
 import { AdminAssistantPanelHeader } from "./AdminAssistantPanelHeader";
 import { AdminAssistantStatusBanner } from "./AdminAssistantStatusBanner";
 import { AdminAssistantTranscriptStatus } from "./AdminAssistantTranscriptStatus";
-import {
-  executeAdminAssistantPageActionWithResult,
-} from "./page-actions";
+import { executeAdminAssistantPageActionWithResult } from "./page-actions";
 import { ADMIN_NAVIGATION_CANCELLED_EVENT } from "../shared/admin-navigation-events";
 import { useAdminAssistantPageState } from "./useAdminAssistantPageState";
 import { useAdminAssistantTranscript } from "./useAdminAssistantTranscript";
@@ -84,6 +77,7 @@ interface AdminAssistantPanelProps {
 const MAX_HISTORY_MESSAGES = 6;
 const MAX_CLAIMED_ACTION_KEYS = 200;
 const KEYBOARD_GEOMETRY_STEP = 12;
+const ADMIN_ASSISTANT_MOBILE_BREAKPOINT = 768;
 
 export function AdminAssistantPanel({
   mode,
@@ -378,9 +372,7 @@ export function AdminAssistantPanel({
     }
   }
 
-  function handleMovePointerDown(
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ) {
+  function handleMovePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
     if (mode !== "floating") return;
     const startPosition = position;
     startPointerGesture(event, {
@@ -419,9 +411,7 @@ export function AdminAssistantPanel({
               ? startSize.width - deltaX
               : startSize.width + deltaX,
           height:
-            mode === "floating"
-              ? startSize.height + deltaY
-              : startSize.height,
+            mode === "floating" ? startSize.height + deltaY : startSize.height,
         });
       },
     });
@@ -444,10 +434,9 @@ export function AdminAssistantPanel({
       data-assistant-mode={mode}
       className={cn(
         "z-[80] flex flex-col overflow-hidden border border-border/90 bg-background text-foreground",
-        mode === "floating" &&
-          "fixed rounded-2xl shadow-2xl shadow-black/15",
+        mode === "floating" && "fixed rounded-2xl shadow-2xl shadow-black/15",
         mode !== "floating" &&
-          "fixed inset-y-0 h-dvh shadow-2xl shadow-black/15 lg:relative lg:inset-auto lg:z-20 lg:h-svh lg:shrink-0 lg:shadow-none",
+          "fixed inset-y-0 h-dvh shadow-2xl shadow-black/15 md:relative md:inset-auto md:z-20 md:h-svh md:shrink-0 md:shadow-none",
         mode === "dock-left" && "left-0 border-y-0 border-l-0",
         mode === "dock-right" && "right-0 border-y-0 border-r-0",
       )}
@@ -523,17 +512,7 @@ export function AdminAssistantPanel({
     </aside>
   );
 
-  const dockTarget = getDockTarget(mode);
-  return dockTarget ? createPortal(panel, dockTarget) : panel;
-}
-
-function getDockTarget(mode: AdminAssistantMode): HTMLElement | null {
-  if (mode === "floating" || typeof document === "undefined") return null;
-  return document.getElementById(
-    mode === "dock-left"
-      ? ADMIN_ASSISTANT_DOCK_LEFT_ID
-      : ADMIN_ASSISTANT_DOCK_RIGHT_ID,
-  );
+  return panel;
 }
 
 function navigationDestinationLabel(actionLabel: string): string {
@@ -543,11 +522,14 @@ function navigationDestinationLabel(actionLabel: string): string {
 function readAssistantParts(
   result: AdminAssistantChatResult,
 ): AssistantMessagePart[] | undefined {
-  const rawMessage = (result as unknown as {
-    message?: { parts?: unknown };
-    parts?: unknown;
-  }).message;
-  const rawParts = rawMessage?.parts ?? (result as unknown as { parts?: unknown }).parts;
+  const rawMessage = (
+    result as unknown as {
+      message?: { parts?: unknown };
+      parts?: unknown;
+    }
+  ).message;
+  const rawParts =
+    rawMessage?.parts ?? (result as unknown as { parts?: unknown }).parts;
   if (!Array.isArray(rawParts)) return undefined;
 
   const parts: AssistantMessagePart[] = [];
@@ -583,7 +565,8 @@ function getPanelStyle(
     };
   }
 
-  const compact = getAdminAssistantViewport().width < 640;
+  const compact =
+    getAdminAssistantViewport().width < ADMIN_ASSISTANT_MOBILE_BREAKPOINT;
   return {
     width: compact ? "100vw" : size.width,
     height: "100dvh",
@@ -608,10 +591,16 @@ function getKeyboardResizeSize(
 ): AdminAssistantSize | null {
   const step = KEYBOARD_GEOMETRY_STEP * (event.shiftKey ? 3 : 1);
   if (event.key === "ArrowRight") {
-    return { ...size, width: size.width + (mode === "dock-right" ? -step : step) };
+    return {
+      ...size,
+      width: size.width + (mode === "dock-right" ? -step : step),
+    };
   }
   if (event.key === "ArrowLeft") {
-    return { ...size, width: size.width + (mode === "dock-right" ? step : -step) };
+    return {
+      ...size,
+      width: size.width + (mode === "dock-right" ? step : -step),
+    };
   }
   if (mode === "floating" && event.key === "ArrowDown") {
     return { ...size, height: size.height + step };

@@ -24,8 +24,6 @@ export interface AdminAssistantLayoutPreferences {
 
 export const ADMIN_ASSISTANT_LAYOUT_STORAGE_KEY =
   "scalius:admin-assistant-layout:v1";
-export const ADMIN_ASSISTANT_DOCK_LEFT_ID = "admin-assistant-dock-left";
-export const ADMIN_ASSISTANT_DOCK_RIGHT_ID = "admin-assistant-dock-right";
 export const ADMIN_ASSISTANT_BUBBLE_SIZE = 56;
 export const ADMIN_ASSISTANT_MIN_PANEL_WIDTH = 320;
 export const ADMIN_ASSISTANT_MIN_PANEL_HEIGHT = 360;
@@ -49,7 +47,9 @@ export function getAdminAssistantViewport(): AdminAssistantViewport {
   };
 }
 
-export function getAdminAssistantEdgeGap(viewport: AdminAssistantViewport): number {
+export function getAdminAssistantEdgeGap(
+  viewport: AdminAssistantViewport,
+): number {
   return viewport.width < 640 ? COMPACT_EDGE_GAP : DESKTOP_EDGE_GAP;
 }
 
@@ -146,17 +146,14 @@ export function clampAdminAssistantSize(
         ADMIN_ASSISTANT_MIN_MAIN_CONTENT_WIDTH,
     ),
   );
-  const maxWidth = mode === "floating" ||
-      viewport.width < ADMIN_ASSISTANT_DOCK_REFLOW_MIN_VIEWPORT
-    ? Math.min(ADMIN_ASSISTANT_MAX_PANEL_WIDTH, availableWidth)
-    : Math.min(dockMaxWidth, availableWidth);
+  const maxWidth =
+    mode === "floating" ||
+    viewport.width < ADMIN_ASSISTANT_DOCK_REFLOW_MIN_VIEWPORT
+      ? Math.min(ADMIN_ASSISTANT_MAX_PANEL_WIDTH, availableWidth)
+      : Math.min(dockMaxWidth, availableWidth);
 
   return {
-    width: clampFinite(
-      size.width,
-      minWidth,
-      maxWidth,
-    ),
+    width: clampFinite(size.width, minWidth, maxWidth),
     height: clampFinite(
       size.height,
       minHeight,
@@ -191,9 +188,13 @@ export function readAdminAssistantLayoutPreferences(
     const raw = storage.getItem(ADMIN_ASSISTANT_LAYOUT_STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const mode = isAdminAssistantMode(parsed.mode) ? parsed.mode : fallback.mode;
-    const bubblePosition = readPosition(parsed.bubblePosition) ?? fallback.bubblePosition;
-    const panelPosition = readPosition(parsed.panelPosition) ?? fallback.panelPosition;
+    const mode = isAdminAssistantMode(parsed.mode)
+      ? parsed.mode
+      : fallback.mode;
+    const bubblePosition =
+      readPosition(parsed.bubblePosition) ?? fallback.bubblePosition;
+    const panelPosition =
+      readPosition(parsed.panelPosition) ?? fallback.panelPosition;
     const panelSize = readSize(parsed.panelSize) ?? fallback.panelSize;
 
     return clampAdminAssistantLayout(
@@ -225,8 +226,12 @@ export function writeAdminAssistantLayoutPreferences(
   }
 }
 
-export function isAdminAssistantMode(value: unknown): value is AdminAssistantMode {
-  return value === "floating" || value === "dock-left" || value === "dock-right";
+export function isAdminAssistantMode(
+  value: unknown,
+): value is AdminAssistantMode {
+  return (
+    value === "floating" || value === "dock-left" || value === "dock-right"
+  );
 }
 
 function readPosition(value: unknown): AdminAssistantPosition | null {
@@ -239,7 +244,8 @@ function readPosition(value: unknown): AdminAssistantPosition | null {
 function readSize(value: unknown): AdminAssistantSize | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
-  if (!Number.isFinite(record.width) || !Number.isFinite(record.height)) return null;
+  if (!Number.isFinite(record.width) || !Number.isFinite(record.height))
+    return null;
   return { width: Number(record.width), height: Number(record.height) };
 }
 
