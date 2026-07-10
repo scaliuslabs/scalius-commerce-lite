@@ -5,6 +5,7 @@ import {
 import type { ScaliusComputerClientCommand } from "@scalius/shared/assistant-computer-handoff";
 
 import type { AdminAssistantComputerRuntime } from "./runtime";
+import { isDirectAdminNavigationAuthorized } from "./navigation-authorization";
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;
 const THREAD_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -31,6 +32,7 @@ const CLIENT_COMMAND_KEYS = new Set([
 ]);
 
 export type AdminFlueComputerPhase =
+  | "navigation_rejected"
   | "executing"
   | "posting_untrusted_result"
   | "continuation_accepted"
@@ -44,6 +46,7 @@ export type AdminFlueComputerConsumeResult =
         | "binding_mismatch"
         | "invalid_client_command"
         | "expired_client_command"
+        | "navigation_not_authorized"
         | "request_id_collision"
         | "dedupe_capacity";
     }
@@ -75,6 +78,8 @@ export interface AdminFlueComputerPartSource {
   threadId: string;
   /** The tab identity used to construct the page runtime. */
   tabId: string;
+  /** Latest preceding user-authored turn from the trusted Flue projection. */
+  latestUserMessage?: string;
   part: unknown;
 }
 
@@ -182,6 +187,17 @@ export class AdminFlueComputerCoordinator {
       !this.#canPersistAnotherMarker(now)
     ) {
       return { status: "rejected", reason: "dedupe_capacity" };
+    }
+    if (
+      !isDirectAdminNavigationAuthorized(
+        source.latestUserMessage,
+        command.program,
+      )
+    ) {
+      // Claim a rejected signed request too. A later user turn or page reload
+      // must never turn an old ambiguous navigation into newly granted consent.
+      this.#setPhase(command, fingerprint, "navigation_rejected");
+      return { status: "rejected", reason: "navigation_not_authorized" };
     }
 
     // Claim before awaiting page work. Concurrent stream renders cannot run it twice.
@@ -418,7 +434,8 @@ function isPersistedCommandMarker(value: unknown): value is PersistedCommandMark
 }
 
 function isAdminFlueComputerPhase(value: unknown): value is AdminFlueComputerPhase {
-  return value === "executing" ||
+  return value === "navigation_rejected" ||
+    value === "executing" ||
     value === "posting_untrusted_result" ||
     value === "continuation_accepted" ||
     value === "continuation_failed";

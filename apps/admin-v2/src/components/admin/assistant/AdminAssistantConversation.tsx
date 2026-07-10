@@ -11,6 +11,7 @@ import { Button } from "../../ui/button";
 import { AdminAssistantConversationPart } from "./AdminAssistantConversationPart";
 
 interface AdminAssistantConversationProps {
+  threadId: string;
   messages: FlueConversationMessage[];
   sending: boolean;
   onSuggestion: (suggestion: string) => void;
@@ -24,27 +25,53 @@ const EMPTY_SUGGESTIONS = [
 const MAX_VISIBLE_MESSAGES = 80;
 
 export function AdminAssistantConversation({
+  threadId,
   messages,
   sending,
   onSuggestion,
 }: AdminAssistantConversationProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const followingLatestRef = useRef(true);
+  const priorLastMessageIdRef = useRef<string | undefined>(undefined);
   const visibleMessages = useMemo(
     () => messages.slice(-MAX_VISIBLE_MESSAGES),
     [messages],
   );
 
   useEffect(() => {
+    followingLatestRef.current = true;
+    priorLastMessageIdRef.current = undefined;
     endRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [threadId]);
+
+  useEffect(() => {
+    const lastMessage = messages.at(-1);
+    const newUserMessage =
+      lastMessage?.role === "user" &&
+      lastMessage.id !== priorLastMessageIdRef.current;
+    if (newUserMessage) followingLatestRef.current = true;
+    priorLastMessageIdRef.current = lastMessage?.id;
+    if (followingLatestRef.current) {
+      endRef.current?.scrollIntoView?.({ block: "nearest" });
+    }
   }, [messages, sending]);
 
   return (
     <div
+      ref={scrollRef}
       role="log"
       aria-live="polite"
       aria-relevant="additions text"
       aria-label="Assistant conversation"
       className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3"
+      onScroll={() => {
+        const element = scrollRef.current;
+        if (!element) return;
+        const distanceFromBottom =
+          element.scrollHeight - element.scrollTop - element.clientHeight;
+        followingLatestRef.current = distanceFromBottom <= 48;
+      }}
     >
       {messages.length === 0 ? (
         <section
@@ -62,8 +89,8 @@ export function AdminAssistantConversation({
               Work from where you are
             </h3>
             <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-              Ask for facts or tell the assistant to navigate, click, fill,
-              select, submit, or refresh the active dashboard page.
+              Ask for facts or tell the assistant to navigate, inspect, click,
+              fill, select, or refresh. You review and submit consequential forms.
             </p>
             <div
               className="mt-4 flex flex-wrap justify-center gap-1.5"
@@ -162,7 +189,11 @@ export function AdminAssistantConversation({
           </p>
         </div>
       ) : null}
-      <div ref={endRef} aria-hidden="true" />
+      <div
+        ref={endRef}
+        data-assistant-conversation-end=""
+        aria-hidden="true"
+      />
     </div>
   );
 }

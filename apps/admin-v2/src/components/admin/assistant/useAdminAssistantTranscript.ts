@@ -58,7 +58,7 @@ interface AdminAssistantTranscriptController {
   operationError: string | null;
   settlementNotice: AdminAssistantSettlementNotice | null;
   sendMessage: (message: string) => Promise<boolean>;
-  abort: () => Promise<boolean>;
+  abort: () => Promise<"requested" | "idle" | "failed">;
   startNewConversation: () => string | null;
   switchConversation: (threadId: string) => boolean;
   retry: () => void;
@@ -147,7 +147,9 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     [durableMessages, pendingMessages],
   );
   const admittedPendingMessage = pendingMessages.some(
-    (message) => message.submissionId !== undefined,
+    (message) =>
+      message.submissionId !== undefined &&
+      !settledSubmissionIds.has(message.submissionId),
   );
   const sending = admitting || admittedPendingMessage || activeSubmission;
   const settlementNotice = useMemo(
@@ -212,12 +214,19 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
           transport.threadId,
           { message },
         );
+        const durableSubmissionIds = new Set(
+          (transport.observation.getSnapshot().conversation?.messages ?? [])
+            .flatMap((durable) =>
+              durable.submissionId ? [durable.submissionId] : [],
+            ),
+        );
         setPendingMessages((current) =>
-          current.map((pending) =>
-            pending.id === optimisticId
-              ? { ...pending, submissionId: admission.submissionId }
-              : pending,
-          ),
+          current.flatMap((pending) => {
+            if (pending.id !== optimisticId) return [pending];
+            return durableSubmissionIds.has(admission.submissionId)
+              ? []
+              : [{ ...pending, submissionId: admission.submissionId }];
+          }),
         );
         if (
           snapshot.phase === "absent" ||
@@ -242,22 +251,22 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     [sending, snapshot.phase, transport],
   );
 
-  const abort = useCallback(async (): Promise<boolean> => {
-    if (!transport || admitting || aborting) return false;
+  const abort = useCallback(async (): Promise<"requested" | "idle" | "failed"> => {
+    if (!transport || admitting || aborting) return "failed";
     setAborting(true);
     setOperationError(null);
     try {
-      await transport.client.agents.abort(
+      const result = await transport.client.agents.abort(
         ADMIN_FLUE_AGENT_NAME,
         transport.threadId,
       );
       transport.observation.refresh();
-      return true;
+      return result.aborted ? "requested" : "idle";
     } catch {
       setOperationError(
         "The stop request could not be confirmed. The assistant may still be working.",
       );
-      return false;
+      return "failed";
     } finally {
       setAborting(false);
     }

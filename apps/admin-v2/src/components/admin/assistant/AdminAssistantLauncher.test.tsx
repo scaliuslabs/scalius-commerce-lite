@@ -150,6 +150,9 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
       "floating",
     );
+    expect(getAssistantPanel()?.hasAttribute("data-scalius-computer-exclude")).toBe(
+      true,
+    );
     expect(queryButton("Move assistant")).toBeTruthy();
     expect(queryButton("Resize assistant")).toBeTruthy();
 
@@ -313,6 +316,53 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(queryButton("Send assistant message")).toBeTruthy();
   });
 
+  it("reconciles a durable echo that wins the admission race without sticking busy", async () => {
+    const admission = deferred<{
+      streamUrl: string;
+      offset: string;
+      submissionId: string;
+    }>();
+    sdkMocks.send.mockReturnValueOnce(admission.promise);
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Fast answer please");
+    await click(queryButton("Send assistant message"));
+
+    await emitSnapshot(
+      liveSnapshot(
+        [
+          message(
+            "user-fast",
+            "user",
+            [{ type: "text", text: "Fast answer please", state: "done" }],
+            "submission-fast",
+          ),
+          message(
+            "assistant-fast",
+            "assistant",
+            [{ type: "text", text: "Done.", state: "done" }],
+            "submission-fast",
+          ),
+        ],
+        [{ submissionId: "submission-fast", outcome: "completed" }],
+      ),
+    );
+    admission.resolve({
+      streamUrl: `https://dashboard.test/api/assistant/flue/agents/admin-copilot/${THREAD_ID}`,
+      offset: "opaque-fast",
+      submissionId: "submission-fast",
+    });
+    await flushReact();
+
+    expect(queryButton("Send assistant message")).toBeTruthy();
+    expect(queryButton("Stop assistant")).toBeNull();
+    expect(
+      Array.from(
+        document.querySelectorAll('[data-assistant-message-role="user"]'),
+      ).map((entry) => entry.textContent),
+    ).toEqual(["Fast answer please"]);
+  });
+
   it("hydrates canonical Flue messages in durable order", async () => {
     sdkMocks.state.snapshot = liveSnapshot([
       message("user-1", "user", [
@@ -387,6 +437,13 @@ describe("AdminAssistantLauncher Flue cutover", () => {
 
     await emitSnapshot(
       liveSnapshot([
+        message("user-navigation", "user", [
+          {
+            type: "text",
+            text: "Take me to products page",
+            state: "done",
+          },
+        ]),
         message("assistant-computer", "assistant", [
           {
             type: "dynamic-tool",
@@ -500,6 +557,94 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(document.body.textContent).toContain(
       "Assistant work stopped. Review any page changes already completed before continuing.",
     );
+  });
+
+  it("does not claim a stop when Flue reports the thread was already idle", async () => {
+    sdkMocks.state.snapshot = liveSnapshot([
+      message(
+        "user-raced",
+        "user",
+        [{ type: "text", text: "Do the quick task", state: "done" }],
+        "submission-raced",
+      ),
+    ]);
+    sdkMocks.abort.mockResolvedValueOnce({ aborted: false });
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await click(queryButton("Stop assistant"));
+
+    expect(document.body.textContent).toContain(
+      "The assistant had already finished, so there was nothing to stop.",
+    );
+    expect(document.body.textContent).not.toContain(
+      "Stop requested. The durable thread will show the final state.",
+    );
+  });
+
+  it("follows live output only while the merchant remains near the bottom", async () => {
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    const end = document.querySelector<HTMLElement>(
+      "[data-assistant-conversation-end]",
+    );
+    const log = document.querySelector<HTMLElement>(
+      '[role="log"][aria-label="Assistant conversation"]',
+    );
+    expect(end).toBeTruthy();
+    expect(log).toBeTruthy();
+    const scrollIntoView = vi.fn();
+    if (end) end.scrollIntoView = scrollIntoView;
+
+    await emitSnapshot(
+      liveSnapshot([
+        message("user-scroll", "user", [
+          { type: "text", text: "Long answer", state: "done" },
+        ]),
+        message("assistant-scroll", "assistant", [
+          { type: "text", text: "First chunk", state: "streaming" },
+        ]),
+      ]),
+    );
+    expect(scrollIntoView).toHaveBeenCalled();
+
+    Object.defineProperties(log!, {
+      scrollHeight: { configurable: true, value: 1_000 },
+      clientHeight: { configurable: true, value: 200 },
+      scrollTop: { configurable: true, writable: true, value: 100 },
+    });
+    log?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    const callsWhileReading = scrollIntoView.mock.calls.length;
+
+    await emitSnapshot(
+      liveSnapshot([
+        message("user-scroll", "user", [
+          { type: "text", text: "Long answer", state: "done" },
+        ]),
+        message("assistant-scroll", "assistant", [
+          {
+            type: "text",
+            text: "First chunk and another chunk",
+            state: "streaming",
+          },
+        ]),
+      ]),
+    );
+    expect(scrollIntoView).toHaveBeenCalledTimes(callsWhileReading);
+
+    await emitSnapshot(
+      liveSnapshot([
+        message("user-scroll", "user", [
+          { type: "text", text: "Long answer", state: "done" },
+        ]),
+        message("assistant-scroll", "assistant", [
+          { type: "text", text: "Finished", state: "done" },
+        ]),
+        message("user-new", "user", [
+          { type: "text", text: "My next question", state: "done" },
+        ]),
+      ]),
+    );
+    expect(scrollIntoView.mock.calls.length).toBeGreaterThan(callsWhileReading);
   });
 
   it("keeps complete mobile dialog focus and inert semantics", async () => {
@@ -673,6 +818,16 @@ async function nextMacrotask() {
   await act(async () => {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
   });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 function setViewportWidth(width: number) {
