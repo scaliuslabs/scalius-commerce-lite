@@ -6,6 +6,7 @@ import {
   createScaliusBrowserComputerAdapter,
   normalizeScaliusComputerRoute,
   parseScaliusComputerProgram,
+  SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT,
   ScaliusComputerController,
   type ScaliusComputerBinding,
   type ScaliusComputerPageAdapter,
@@ -253,6 +254,52 @@ describe("Scalius browser computer adapter", () => {
     expect(inputEvents).toEqual(["input", "change"]);
     expect(select.value).toBe("shoes");
     expect(clicked).toHaveBeenCalledOnce();
+  });
+
+  it("fills an explicitly bridged rich-text editor through one sanitizer-host event", async () => {
+    document.body.innerHTML = `
+      <main>
+        <div data-scalius-computer-rich-text="sanitized-html">
+          <div role="textbox" contenteditable="true" aria-label="Product description"></div>
+        </div>
+      </main>`;
+    const bridge = document.querySelector<HTMLElement>(
+      "[data-scalius-computer-rich-text]",
+    )!;
+    const accepted = vi.fn((event: Event) => {
+      expect((event as CustomEvent<unknown>).detail).toBe(
+        "<h2>Built for rain</h2><p><strong>Dry</strong> all day.</p>",
+      );
+      event.preventDefault();
+    });
+    bridge.addEventListener(SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT, accepted);
+
+    const { controller } = browserController();
+    const observed = await controller.execute({ binding, program: "observe" });
+    const result = await controller.execute({
+      binding,
+      program:
+        `fill ${handleFor(observed.output, "Product description")} "<h2>Built for rain</h2><p><strong>Dry</strong> all day.</p>"`,
+    });
+
+    expect(result).toMatchObject({ ok: true, code: "EXECUTED" });
+    expect(accepted).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed when a rich-text marker has no accepting sanitizer bridge", async () => {
+    document.body.innerHTML = `
+      <main>
+        <div data-scalius-computer-rich-text="sanitized-html">
+          <div role="textbox" contenteditable="true" aria-label="Product description"></div>
+        </div>
+      </main>`;
+    const { controller } = browserController();
+    const observed = await controller.execute({ binding, program: "observe" });
+
+    await expect(controller.execute({
+      binding,
+      program: `fill ${handleFor(observed.output, "Product description")} "unsafe"`,
+    })).resolves.toMatchObject({ ok: false, code: "EXECUTION_FAILED" });
   });
 
   it("selects an exact accessible option from a portalled custom combobox", async () => {
