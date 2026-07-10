@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import {
+  bindAssistantAgentInstance,
   createAssistantSession,
   createAssistantSessionCredential,
   consumeAssistantRateLimit,
@@ -27,6 +28,7 @@ import {
   readStorefrontAssistantSessionCredential,
   storefrontAssistantSessionBoundSchema,
   storefrontAssistantSessionCreateSchema,
+  storefrontAssistantFlueAdmitSchema,
   storefrontAssistantSessionCookie,
 } from "./storefront-assistant-contract";
 import {
@@ -34,6 +36,13 @@ import {
   resolveStorefrontAssistantDeploymentContext,
   storefrontAssistantSessionMetadata,
 } from "./storefront-assistant-context";
+import {
+  assertFlueAdmissionSession,
+  createFlueAgentEnvelope,
+  deriveFlueThreadIdentity,
+  hasCallerSuppliedFlueIdentity,
+  requireAssistantThreadSigningKey,
+} from "./flue-thread-admission";
 
 const RANDOM_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -203,6 +212,61 @@ app.post("/session/revoke", async (c) => {
     revoked: true as const,
     changed: revoked.changed,
     session: compactSession(revoked.session),
+  });
+});
+
+app.post("/flue/admit", async (c) => {
+  if (hasCallerSuppliedFlueIdentity(c.req.raw.headers)) {
+    throw new ValidationError("Assistant thread admission header is invalid.");
+  }
+  const credential = readStorefrontAssistantSessionCredential(c.req.raw);
+  const input = await parseStorefrontAssistantJson(
+    c.req.raw,
+    storefrontAssistantFlueAdmitSchema,
+  );
+  const signingKey = requireAssistantThreadSigningKey(c.env);
+  const deployment = await resolveStorefrontAssistantDeploymentContext(c);
+  const session = await resumeAssistantSession(c.get("db"), {
+    credential,
+    expectedSurface: "storefront",
+    expectedConversationKey: input.threadId,
+    expectedPermissionSnapshotHash: null,
+    expectedSafeMetadata: storefrontAssistantSessionMetadata(deployment),
+    touchAfterSeconds: 5 * 60,
+  });
+  assertCurrentStorefrontAssistantSession(session, deployment);
+  assertFlueAdmissionSession(session, {
+    surface: "storefront",
+    threadId: input.threadId,
+  });
+  const identity = await deriveFlueThreadIdentity({
+    surface: "storefront",
+    deploymentBindingHash: deployment.deploymentBindingHash,
+    actorBinding: {
+      actorId: session.actorId,
+      authoritySessionId: session.id,
+    },
+    threadId: input.threadId,
+    signingKey,
+  });
+  const agent = await createFlueAgentEnvelope({
+    surface: "storefront",
+    identity,
+    signingKey,
+    expiresAt: session.expiresAt,
+  });
+  const bound = await bindAssistantAgentInstance(c.get("db"), {
+    sessionId: session.id,
+    agentInstanceId: agent.instanceId,
+  });
+  assertCurrentStorefrontAssistantSession(bound, deployment);
+  assertFlueAdmissionSession(bound, {
+    surface: "storefront",
+    threadId: input.threadId,
+  });
+
+  return ok(c, {
+    agent: { ...agent, expiresAt: bound.expiresAt },
   });
 });
 

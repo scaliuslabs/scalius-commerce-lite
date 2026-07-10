@@ -108,4 +108,15 @@ describe("route permissions", () => {
       "PUT",
     )).toEqual({ permission: PERMISSIONS.TAXES_MANAGE });
   });
+
+  it("admits Flue threads only through the exact fully-authenticated Admin route", () => {
+    expect(getRoutePermission(
+      "/api/v1/internal/admin-assistant/flue/admit",
+      "POST",
+    )).toEqual({ allowAnyAdmin: true });
+    expect(getRoutePermission(
+      "/api/v1/internal/admin-assistant/flue/other",
+      "POST",
+    )).toBeNull();
+  });
 });

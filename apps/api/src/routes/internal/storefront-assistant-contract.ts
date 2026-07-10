@@ -1,6 +1,7 @@
 import { UnauthorizedError, ValidationError } from "@scalius/core/errors";
 import { ASSISTANT_SESSION_CREDENTIAL_PREFIX } from "@scalius/core/modules/assistant";
 import { z } from "zod/v4";
+import { ASSISTANT_FLUE_THREAD_PATTERN } from "./flue-thread-admission";
 
 export const STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH =
   "/api/v1/internal/storefront-assistant";
@@ -21,6 +22,7 @@ export const STOREFRONT_ASSISTANT_AUTHORITY_PATHS = Object.freeze({
     `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/session/resolve`,
   sessionRevoke:
     `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/session/revoke`,
+  flueAdmit: `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admit`,
 } as const);
 
 export const STOREFRONT_ASSISTANT_SUBJECT_PATTERN =
@@ -38,6 +40,10 @@ export const storefrontAssistantSessionCreateSchema = z.object({
 
 export const storefrontAssistantSessionBoundSchema = z.object({
   conversationId: z.string().regex(STOREFRONT_ASSISTANT_CONVERSATION_PATTERN),
+}).strict();
+
+export const storefrontAssistantFlueAdmitSchema = z.object({
+  threadId: z.string().regex(ASSISTANT_FLUE_THREAD_PATTERN),
 }).strict();
 
 export function isExactInternalStorefrontAssistantRequest(

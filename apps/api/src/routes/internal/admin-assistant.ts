@@ -1,10 +1,12 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import {
+  bindAssistantAgentInstance,
   createAssistantSession,
   createAssistantWorkflow,
   listAssistantEvents,
   revokeAssistantSession,
 } from "@scalius/core/modules/assistant";
+import { ValidationError } from "@scalius/core/errors";
 import { cookieOriginGuardMiddleware } from "../../middleware/cookie-origin-guard";
 import { adminAuthMiddleware } from "../../middleware/admin-auth";
 import { ADMIN_COMMAND_POLICY_DIGEST } from "../../modules/assistant";
@@ -15,6 +17,7 @@ import {
   adminAssistantCapabilitySearchSchema,
   adminAssistantEmptyBodySchema,
   adminAssistantEventListSchema,
+  adminAssistantFlueAdmitSchema,
   adminAssistantSessionCreateSchema,
   adminAssistantWorkflowCreateSchema,
   isExactInternalAdminAssistantRequest,
@@ -34,6 +37,15 @@ import {
   safeWorkflowPlanForCapability,
   searchAuthorizedAdminCapabilities,
 } from "./admin-assistant-context";
+import {
+  assertFlueAdmissionSession,
+  createFlueAgentEnvelope,
+  deriveFlueThreadIdentity,
+  deriveHiddenAdminAssistantCredential,
+  hasCallerSuppliedFlueIdentity,
+  requireAssistantThreadSigningKey,
+} from "./flue-thread-admission";
+import { resolveStorefrontAssistantDeploymentContext } from "./storefront-assistant-context";
 
 const ADMIN_ASSISTANT_SESSION_TTL_SECONDS = 8 * 60 * 60;
 
@@ -105,6 +117,73 @@ app.post("/session/revoke", async (c) => {
   return ok(c, {
     session: compactAssistantSession(revoked.session),
     changed: revoked.changed,
+  });
+});
+
+app.post("/flue/admit", async (c) => {
+  if (hasCallerSuppliedFlueIdentity(c.req.raw.headers)) {
+    throw new ValidationError("Assistant thread admission header is invalid.");
+  }
+  const input = await parseAdminAssistantJson(
+    c.req.raw,
+    adminAssistantFlueAdmitSchema,
+  );
+  const signingKey = requireAssistantThreadSigningKey(c.env);
+  const [authority, deployment] = await Promise.all([
+    resolveAdminAssistantAuthorityContext(c),
+    resolveStorefrontAssistantDeploymentContext(c),
+  ]);
+  const identity = await deriveFlueThreadIdentity({
+    surface: "admin",
+    deploymentBindingHash: deployment.deploymentBindingHash,
+    actorBinding: {
+      actorId: authority.actorId,
+      dashboardSessionHash: authority.dashboardSessionHash,
+    },
+    threadId: input.threadId,
+    signingKey,
+  });
+  const credential = await deriveHiddenAdminAssistantCredential({
+    deploymentBindingHash: deployment.deploymentBindingHash,
+    actorId: authority.actorId,
+    dashboardSessionHash: authority.dashboardSessionHash,
+    permissionSnapshotHash: authority.permissionSnapshotHash,
+    threadId: input.threadId,
+    signingKey,
+  });
+  const created = await createAssistantSession(c.get("db"), {
+    surface: "admin",
+    actorType: "admin",
+    actorId: authority.actorId,
+    conversationKey: input.threadId,
+    credential,
+    permissionSnapshotHash: authority.permissionSnapshotHash,
+    safeMetadata: adminAssistantSessionMetadata(authority),
+    ttlSeconds: ADMIN_ASSISTANT_SESSION_TTL_SECONDS,
+  });
+  assertCurrentAdminAssistantSession(created.session, authority);
+  assertFlueAdmissionSession(created.session, {
+    surface: "admin",
+    threadId: input.threadId,
+  });
+  const agent = await createFlueAgentEnvelope({
+    surface: "admin",
+    identity,
+    signingKey,
+    expiresAt: created.session.expiresAt,
+  });
+  const bound = await bindAssistantAgentInstance(c.get("db"), {
+    sessionId: created.session.id,
+    agentInstanceId: agent.instanceId,
+  });
+  assertCurrentAdminAssistantSession(bound, authority);
+  assertFlueAdmissionSession(bound, {
+    surface: "admin",
+    threadId: input.threadId,
+  });
+
+  return ok(c, {
+    agent: { ...agent, expiresAt: bound.expiresAt },
   });
 });
 
