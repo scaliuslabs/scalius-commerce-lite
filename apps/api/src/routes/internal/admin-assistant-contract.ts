@@ -1,5 +1,6 @@
 import { UnauthorizedError, ValidationError } from "@scalius/core/errors";
 import { ASSISTANT_SESSION_CREDENTIAL_PREFIX } from "@scalius/core/modules/assistant";
+import { SCALIUS_COMMAND_LIMITS } from "@scalius/shared/assistant-command";
 import { z } from "zod/v4";
 import { ASSISTANT_FLUE_THREAD_PATTERN } from "./flue-thread-admission";
 
@@ -22,6 +23,7 @@ export const ADMIN_ASSISTANT_AUTHORITY_PATHS = Object.freeze({
   capabilitiesDescribe:
     `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/capabilities/describe`,
   flueAdmit: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admit`,
+  flueCommand: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/command`,
 } as const);
 
 const authorityPathSet = new Set<string>(
@@ -48,6 +50,11 @@ export const adminAssistantEmptyBodySchema = z.object({}).strict();
 
 export const adminAssistantFlueAdmitSchema = z.object({
   threadId: z.string().regex(ASSISTANT_FLUE_THREAD_PATTERN),
+}).strict();
+
+export const adminAssistantFlueCommandSchema = z.object({
+  instanceId: z.string().regex(/^v1\.[A-Za-z0-9_-]{43}$/u),
+  program: z.string().max(SCALIUS_COMMAND_LIMITS.programChars),
 }).strict();
 
 export const adminAssistantWorkflowCreateSchema = z.object({

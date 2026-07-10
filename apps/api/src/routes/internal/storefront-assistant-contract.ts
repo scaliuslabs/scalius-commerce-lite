@@ -1,5 +1,6 @@
 import { UnauthorizedError, ValidationError } from "@scalius/core/errors";
 import { ASSISTANT_SESSION_CREDENTIAL_PREFIX } from "@scalius/core/modules/assistant";
+import { SCALIUS_COMMAND_LIMITS } from "@scalius/shared/assistant-command";
 import { z } from "zod/v4";
 import { ASSISTANT_FLUE_THREAD_PATTERN } from "./flue-thread-admission";
 
@@ -13,6 +14,7 @@ export const STOREFRONT_ASSISTANT_AUDIENCE =
   "scalius-storefront-browser-v1";
 export const STOREFRONT_ASSISTANT_SESSION_TTL_SECONDS = 8 * 60 * 60;
 export const STOREFRONT_ASSISTANT_MAX_BODY_BYTES = 2 * 1024;
+export const STOREFRONT_ASSISTANT_COMMAND_MAX_BODY_BYTES = 8 * 1024;
 export const STOREFRONT_ASSISTANT_MAX_COOKIE_BYTES = 2 * 1024;
 
 export const STOREFRONT_ASSISTANT_AUTHORITY_PATHS = Object.freeze({
@@ -23,6 +25,7 @@ export const STOREFRONT_ASSISTANT_AUTHORITY_PATHS = Object.freeze({
   sessionRevoke:
     `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/session/revoke`,
   flueAdmit: `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admit`,
+  flueCommand: `${STOREFRONT_ASSISTANT_AUTHORITY_BASE_PATH}/flue/command`,
 } as const);
 
 export const STOREFRONT_ASSISTANT_SUBJECT_PATTERN =
@@ -44,6 +47,11 @@ export const storefrontAssistantSessionBoundSchema = z.object({
 
 export const storefrontAssistantFlueAdmitSchema = z.object({
   threadId: z.string().regex(ASSISTANT_FLUE_THREAD_PATTERN),
+}).strict();
+
+export const storefrontAssistantFlueCommandSchema = z.object({
+  instanceId: z.string().regex(/^v1\.[A-Za-z0-9_-]{43}$/u),
+  program: z.string().max(SCALIUS_COMMAND_LIMITS.programChars),
 }).strict();
 
 export function isExactInternalStorefrontAssistantRequest(
@@ -143,6 +151,7 @@ export function clearStorefrontAssistantSessionCookie(
 export async function parseStorefrontAssistantJson<T>(
   request: Request,
   schema: z.ZodType<T>,
+  maxBodyBytes = STOREFRONT_ASSISTANT_MAX_BODY_BYTES,
 ): Promise<T> {
   const contentType = request.headers.get("Content-Type")
     ?.split(";", 1)[0]
@@ -158,7 +167,7 @@ export async function parseStorefrontAssistantJson<T>(
     if (
       !Number.isSafeInteger(parsedLength) ||
       parsedLength < 0 ||
-      parsedLength > STOREFRONT_ASSISTANT_MAX_BODY_BYTES
+      parsedLength > maxBodyBytes
     ) {
       throw new ValidationError("Storefront assistant request is too large.");
     }
@@ -166,7 +175,7 @@ export async function parseStorefrontAssistantJson<T>(
 
   const text = await readBoundedText(
     request,
-    STOREFRONT_ASSISTANT_MAX_BODY_BYTES,
+    maxBodyBytes,
   );
   let value: unknown;
   try {

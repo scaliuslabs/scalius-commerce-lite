@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   revokeSession: vi.fn(),
   createWorkflow: vi.fn(),
   listEvents: vi.fn(),
+  executeCommand: vi.fn(),
 }));
 
 vi.mock("../../middleware/admin-auth", () => ({
@@ -40,6 +41,14 @@ vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
     listAssistantEvents: mocks.listEvents,
   };
 });
+
+vi.mock("./flue-command-execution", () => ({
+  executeAdminFlueCommand: mocks.executeCommand,
+  failure: (code: string, message: string, retryable: boolean) => ({
+    success: false,
+    error: { code, message, retryable },
+  }),
+}));
 
 import {
   ADMIN_ASSISTANT_AUTHORITY_BASE_PATH,
@@ -183,6 +192,10 @@ describe("internal Admin assistant authority boundary", () => {
           .filter(Boolean),
       ));
       await next();
+    });
+    mocks.executeCommand.mockResolvedValue({
+      success: true,
+      data: { command: "help", capabilities: [] },
     });
 
     mocks.createSession.mockImplementation(async (
@@ -351,6 +364,60 @@ describe("internal Admin assistant authority boundary", () => {
 
     expect(response.status).toBe(401);
     expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
+  it("admits Flue commands by bound instance without dashboard-cookie middleware", async () => {
+    const { app, db, env } = createTestApp();
+    const response = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueCommand,
+      { instanceId: `v1.${"i".repeat(43)}`, program: "help" },
+      { "Content-Type": "application/json" },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      data: { command: "help", capabilities: [] },
+    });
+    expect(mocks.authenticate).not.toHaveBeenCalled();
+    expect(mocks.executeCommand).toHaveBeenCalledWith(expect.objectContaining({
+      env,
+    }), {
+      instanceId: `v1.${"i".repeat(43)}`,
+      program: "help",
+    });
+    expect((mocks.executeCommand.mock.calls[0]?.[0] as { get(name: string): unknown })
+      .get("db")).toBe(db);
+  });
+
+  it("rejects identity headers and malformed command bodies before command work", async () => {
+    const { app, env } = createTestApp();
+    const injected = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueCommand,
+      { instanceId: `v1.${"i".repeat(43)}`, program: "help" },
+      { "Content-Type": "application/json", "X-Scalius-Tenant-Id": "forged" },
+    );
+    expect(injected.status).toBe(400);
+    await expect(injected.json()).resolves.toEqual({
+      success: false,
+      error: {
+        code: "invalid_request",
+        message: "Scalius request headers are invalid.",
+        retryable: false,
+      },
+    });
+    const malformed = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueCommand,
+      { instanceId: "guessed", program: "help", tenantId: "forged" },
+      { "Content-Type": "application/json" },
+    );
+    expect(malformed.status).toBe(400);
+    expect(mocks.executeCommand).not.toHaveBeenCalled();
   });
 
   it("derives session ownership and policy snapshot server-side without echoing credentials", async () => {

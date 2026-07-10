@@ -6,18 +6,25 @@ import {
   listAssistantEvents,
   revokeAssistantSession,
 } from "@scalius/core/modules/assistant";
-import { ValidationError } from "@scalius/core/errors";
+import {
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from "@scalius/core/errors";
 import { cookieOriginGuardMiddleware } from "../../middleware/cookie-origin-guard";
 import { adminAuthMiddleware } from "../../middleware/admin-auth";
 import { ADMIN_COMMAND_POLICY_DIGEST } from "../../modules/assistant";
 import { ok } from "../../utils/api-response";
 import {
   ADMIN_ASSISTANT_AUTHORITY_BASE_PATH,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS,
   adminAssistantCapabilityDescribeSchema,
   adminAssistantCapabilitySearchSchema,
   adminAssistantEmptyBodySchema,
   adminAssistantEventListSchema,
   adminAssistantFlueAdmitSchema,
+  adminAssistantFlueCommandSchema,
   adminAssistantSessionCreateSchema,
   adminAssistantWorkflowCreateSchema,
   isExactInternalAdminAssistantRequest,
@@ -45,6 +52,10 @@ import {
   hasCallerSuppliedFlueIdentity,
   requireAssistantThreadSigningKey,
 } from "./flue-thread-admission";
+import {
+  executeAdminFlueCommand,
+  failure as flueCommandFailure,
+} from "./flue-command-execution";
 import { resolveStorefrontAssistantDeploymentContext } from "./storefront-assistant-context";
 
 const ADMIN_ASSISTANT_SESSION_TTL_SECONDS = 8 * 60 * 60;
@@ -60,7 +71,13 @@ app.use("*", async (c, next) => {
   await next();
 });
 app.use("*", cookieOriginGuardMiddleware);
-app.use("*", adminAuthMiddleware);
+app.use("*", async (c, next) => {
+  if (new URL(c.req.url).pathname === ADMIN_ASSISTANT_AUTHORITY_PATHS.flueCommand) {
+    await next();
+    return;
+  }
+  return adminAuthMiddleware(c, next);
+});
 
 app.post("/session/create", async (c) => {
   const credential = readAdminAssistantSessionCredential(c.req.raw);
@@ -187,6 +204,27 @@ app.post("/flue/admit", async (c) => {
   });
 });
 
+app.post("/flue/command", async (c) => {
+  if (hasCallerSuppliedFlueIdentity(c.req.raw.headers)) {
+    return c.json(flueCommandFailure(
+      "invalid_request",
+      "Scalius request headers are invalid.",
+      false,
+    ), 400);
+  }
+  try {
+    const input = await parseAdminAssistantJson(
+      c.req.raw,
+      adminAssistantFlueCommandSchema,
+    );
+    const response = await executeAdminFlueCommand(c, input);
+    return c.json(response, response.success ? 200 : 400);
+  } catch (error) {
+    const [status, code, message, retryable] = commandError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
 app.post("/workflows/create", async (c) => {
   const credential = readAdminAssistantSessionCredential(c.req.raw);
   const input = await parseAdminAssistantJson(
@@ -296,3 +334,21 @@ app.all("*", (c) =>
 
 export { app as adminAssistantAuthorityRoutes };
 export { ADMIN_ASSISTANT_AUTHORITY_BASE_PATH };
+
+function commandError(
+  error: unknown,
+): [400 | 401 | 403 | 404 | 503, string, string, boolean] {
+  if (error instanceof UnauthorizedError) {
+    return [401, "access_unavailable", "Assistant access is unavailable.", false];
+  }
+  if (error instanceof ForbiddenError) {
+    return [403, "capability_forbidden", "That capability is not available.", false];
+  }
+  if (error instanceof NotFoundError) {
+    return [404, "capability_not_found", "That capability is not available.", false];
+  }
+  if (error instanceof ValidationError) {
+    return [400, "invalid_arguments", "Capability arguments are invalid.", false];
+  }
+  return [503, "scalius_unavailable", "Scalius is temporarily unavailable.", true];
+}
