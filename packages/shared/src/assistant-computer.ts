@@ -673,7 +673,7 @@ const SENSITIVE_SELECTOR = [
 const SENSITIVE_HINT =
   /(?:password|passcode|one.?time|\botp\b|secret|token|api.?key|card.?number|\bcvv\b|\bcvc\b|receipt|recovery)/i;
 const CONSEQUENTIAL_HINT =
-  /(?:delete|refund|place order|purchase|pay now|send (?:message|email|code)|publish|archive|cancel order|remove permanently|confirm payment)/i;
+  /(?:\b(?:delete|refund|purchase|publish|archive|save|create|update|apply|approve|reject|fulfill|ship|invite|enable|disable|reset)\b|place order|pay now|send (?:message|email|code)|cancel order|remove permanently|confirm payment)/i;
 export function createScaliusBrowserComputerAdapter(
   options: ScaliusBrowserComputerOptions,
 ): ScaliusComputerPageAdapter {

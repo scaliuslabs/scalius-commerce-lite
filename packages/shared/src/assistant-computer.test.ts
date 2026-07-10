@@ -315,4 +315,43 @@ describe("Scalius browser computer adapter", () => {
       code: "ROUTE_BLOCKED",
     });
   });
+
+  it.each([
+    "Save changes",
+    "Create product",
+    "Update order",
+    "Apply promotion",
+    "Approve return",
+    "Reject request",
+    "Fulfill order",
+    "Ship package",
+    "Invite admin",
+    "Enable gateway",
+    "Disable provider",
+    "Reset password",
+  ])("keeps an unregistered consequential click human-only: %s", async (label) => {
+    document.body.innerHTML = `<main><button>${label}</button></main>`;
+    const { controller } = browserController();
+    const observed = await controller.execute({ binding, program: "observe" });
+    expect(observed.output).toContain(`button "${label}" [human-only]`);
+    await expect(controller.execute({
+      binding,
+      program: `click ${handleFor(observed.output, label)}`,
+    })).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+  });
+
+  it("allows the host to register a confirmed consequential click explicitly", async () => {
+    document.body.innerHTML = '<main><button data-scalius-computer-action="allow">Save changes</button></main>';
+    const button = document.querySelector("button")!;
+    const clicked = vi.fn();
+    button.addEventListener("click", clicked);
+    const { controller } = browserController();
+    const observed = await controller.execute({ binding, program: "observe" });
+    expect(observed.output).not.toContain('button "Save changes" [human-only]');
+    await expect(controller.execute({
+      binding,
+      program: `click ${handleFor(observed.output, "Save changes")}`,
+    })).resolves.toMatchObject({ ok: true, code: "EXECUTED" });
+    expect(clicked).toHaveBeenCalledOnce();
+  });
 });
