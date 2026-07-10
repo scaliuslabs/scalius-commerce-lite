@@ -168,6 +168,39 @@ describe("publishStorefrontAssistantPageContext", () => {
     expect(events).toEqual([published]);
   });
 
+  it("keeps the route-owned product name when the SEO document title differs", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/products/khaki-high-top-casual-shoes-for-men",
+    );
+    document.title = "mhgvhgv";
+    window[STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL] =
+      buildStorefrontAssistantPageContext({
+        path: "/products/khaki-high-top-casual-shoes-for-men",
+        route: "/products/[slug]",
+        title: "Khaki High-Top Casual Shoes For Mens",
+        pageKind: "product",
+      });
+
+    const published = installStorefrontAssistantPageContextBridge();
+
+    expect(published?.page).toMatchObject({
+      path: "/products/khaki-high-top-casual-shoes-for-men",
+      route: "/products/[slug]",
+      title: "Khaki High-Top Casual Shoes For Mens",
+      kind: "product",
+    });
+
+    document.title = "Another SEO-only title";
+    document.dispatchEvent(new Event("astro:page-load"));
+    await Promise.resolve();
+
+    expect(
+      window[STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL]?.page.title,
+    ).toBe("Khaki High-Top Casual Shoes For Mens");
+  });
+
   it("exposes a frozen public assistant bridge with a sanitized context getter", () => {
     document.title = "Widget buyer@example.test";
     window.history.replaceState(null, "", "/products/widget");

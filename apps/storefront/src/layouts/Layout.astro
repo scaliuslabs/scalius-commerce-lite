@@ -45,6 +45,7 @@ interface Props {
   ogPrice?: string;
   ogCurrency?: string;
   noindex?: boolean;
+  assistantPageTitle?: string;
   assistantPageKind?: StorefrontAssistantPageKind;
   assistantSurface?: StorefrontAssistantSurfaceContext;
 }
@@ -61,6 +62,7 @@ const {
   ogPrice,
   ogCurrency,
   noindex,
+  assistantPageTitle,
   assistantPageKind,
   assistantSurface,
 } = Astro.props;
@@ -356,7 +358,7 @@ const runtimeGlobalsScript = [
     {noindex && <meta name="robots" content="noindex,follow" />}
 
     <StorefrontAssistantPageContext
-      title={title}
+      title={assistantPageTitle ?? title}
       canonicalUrl={canonicalUrl}
       pageKind={assistantPageKind}
       surface={assistantSurface}
