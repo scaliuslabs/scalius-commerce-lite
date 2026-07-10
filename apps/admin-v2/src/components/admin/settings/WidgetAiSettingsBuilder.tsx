@@ -19,6 +19,12 @@ import {
 } from "~/lib/api-functions/settings";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "@scalius/shared/utils";
+import {
+  DEFAULT_IMAGE_GENERATION_MODELS,
+  isImageGenerationModel,
+  isImageGenerationProvider,
+  normalizeCloudflareAiModelId,
+} from "@scalius/core/modules/ai/ai-config";
 import { CheckCircle2, KeyRound, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";
 
 type ProviderId = "openrouter" | "openai" | "gemini" | "cloudflare";
@@ -224,14 +230,31 @@ const defaultValues: WidgetAiValues = {
   },
 };
 
-function normalizeAllowedModels(value: unknown): string[] {
+function normalizeModelIdForProvider(
+  provider: ProviderId,
+  value: unknown,
+): string {
+  const model = normalizeModelId(value);
+  return provider === "cloudflare"
+    ? normalizeCloudflareAiModelId(model)
+    : model;
+}
+
+function normalizeAllowedModels(
+  value: unknown,
+  provider?: ProviderId,
+): string[] {
   if (!Array.isArray(value)) return [];
 
   const seen = new Set<string>();
   const models: string[] = [];
   for (const item of value) {
     if (typeof item !== "string") continue;
-    const model = item.trim();
+    const trimmed = item.trim();
+    const model =
+      provider === "cloudflare"
+        ? normalizeCloudflareAiModelId(trimmed)
+        : trimmed;
     if (!model || model.length > 200 || seen.has(model)) continue;
     seen.add(model);
     models.push(model);
@@ -273,8 +296,11 @@ function normalizeCapabilities(value: unknown): ProviderCapabilityValues {
   };
 }
 
-function parseAllowedModelsText(value: string): string[] {
-  return normalizeAllowedModels(value.split(/\r?\n|,/));
+function parseAllowedModelsText(
+  value: string,
+  provider?: ProviderId,
+): string[] {
+  return normalizeAllowedModels(value.split(/\r?\n|,/), provider);
 }
 
 function normalizeProvider(id: ProviderId, value: unknown): ProviderValues {
@@ -285,8 +311,13 @@ function normalizeProvider(id: ProviderId, value: unknown): ProviderValues {
   return {
     ...defaultValues.providers[id],
     enabled: typeof data.enabled === "boolean" ? data.enabled : defaultValues.providers[id].enabled,
-    defaultModel: typeof data.defaultModel === "string" ? data.defaultModel : defaultValues.providers[id].defaultModel,
-    allowedModels: normalizeAllowedModels(data.allowedModels),
+    defaultModel: normalizeModelIdForProvider(
+      id,
+      typeof data.defaultModel === "string"
+        ? data.defaultModel
+        : defaultValues.providers[id].defaultModel,
+    ),
+    allowedModels: normalizeAllowedModels(data.allowedModels, id),
     capabilities: normalizeCapabilities(data.capabilities),
     baseUrl: typeof data.baseUrl === "string" ? data.baseUrl : defaultValues.providers[id].baseUrl,
     appName: typeof data.appName === "string" ? data.appName : defaultValues.providers[id].appName,
@@ -315,7 +346,22 @@ function getProviderModelOptions(
   return normalizeAllowedModels([
     providers[provider].defaultModel,
     ...providers[provider].allowedModels,
-  ]);
+  ], provider);
+}
+
+function getProfileModelOptions(
+  profile: ProfileId,
+  providers: Record<ProviderId, ProviderValues>,
+  provider: ProviderId,
+): string[] {
+  if (profile !== "imageGeneration") {
+    return getProviderModelOptions(providers, provider);
+  }
+  if (!isImageGenerationProvider(provider)) return [];
+  return normalizeAllowedModels([
+    DEFAULT_IMAGE_GENERATION_MODELS[provider],
+    ...getProviderModelOptions(providers, provider),
+  ], provider).filter((model) => isImageGenerationModel(provider, model));
 }
 
 function getDefaultProfile(
@@ -347,7 +393,7 @@ function normalizeProfile(
       ? (value as Partial<ModelProfileValues>)
       : {};
   const provider = normalizeProviderId(data.provider, fallback.provider);
-  const savedModel = normalizeModelId(data.model);
+  const savedModel = normalizeModelIdForProvider(provider, data.model);
   const model =
     savedModel ||
     (id === "widgetGeneration"
@@ -439,8 +485,11 @@ export function buildWidgetAiSettingsUpdate(
           id,
           {
             enabled: provider.enabled,
-            defaultModel: provider.defaultModel.trim(),
-            allowedModels: normalizeAllowedModels(provider.allowedModels),
+            defaultModel: normalizeModelIdForProvider(
+              id,
+              provider.defaultModel,
+            ),
+            allowedModels: normalizeAllowedModels(provider.allowedModels, id),
             capabilities: {
               structuredOutput: provider.capabilities.structuredOutput,
               visionInput: provider.capabilities.visionInput,
@@ -462,7 +511,10 @@ export function buildWidgetAiSettingsUpdate(
           {
             enabled: profile.enabled,
             provider: profile.provider,
-            model: normalizeModelId(profile.model),
+            model: normalizeModelIdForProvider(
+              profile.provider,
+              profile.model,
+            ),
           },
         ];
       }),
@@ -578,17 +630,30 @@ export default function WidgetAiSettingsBuilder() {
   const setProfileEnabled = (profile: ProfileId, enabled: boolean) => {
     setValues((prev) => {
       const current = prev.profiles[profile];
-      const modelOptions = getProviderModelOptions(prev.providers, current.provider);
+      const provider =
+        profile === "imageGeneration" &&
+        !isImageGenerationProvider(current.provider)
+          ? "cloudflare"
+          : current.provider;
+      const modelOptions = getProfileModelOptions(
+        profile,
+        prev.providers,
+        provider,
+      );
+      const currentModelIsCompatible =
+        profile !== "imageGeneration" ||
+        isImageGenerationModel(provider, current.model);
       return {
         ...prev,
         profiles: {
           ...prev.profiles,
           [profile]: {
             ...current,
+            provider,
             enabled,
             model:
-              enabled && !current.model.trim()
-                ? modelOptions[0] || prev.providers[current.provider].defaultModel || ""
+              enabled && (!current.model.trim() || !currentModelIsCompatible)
+                ? modelOptions[0] || prev.providers[provider].defaultModel || ""
                 : current.model,
           },
         },
@@ -598,8 +663,12 @@ export default function WidgetAiSettingsBuilder() {
 
   const setProfileProvider = (profile: ProfileId, provider: ProviderId) => {
     setValues((prev) => {
-      const nextOptions = getProviderModelOptions(prev.providers, provider);
+      const nextOptions = getProfileModelOptions(profile, prev.providers, provider);
       const current = prev.profiles[profile];
+      const keepCurrent =
+        profile === "imageGeneration"
+          ? isImageGenerationModel(provider, current.model)
+          : Boolean(current.model);
       return {
         ...prev,
         profiles: {
@@ -607,7 +676,7 @@ export default function WidgetAiSettingsBuilder() {
           [profile]: {
             ...current,
             provider,
-            model: current.model || nextOptions[0] || "",
+            model: keepCurrent ? current.model : nextOptions[0] || "",
           },
         },
       };
@@ -695,7 +764,11 @@ export default function WidgetAiSettingsBuilder() {
         <div className="grid gap-2">
           {PROFILE_DEFINITIONS.map((profile) => {
             const profileValues = values.profiles[profile.id];
-            const modelOptions = getProviderModelOptions(values.providers, profileValues.provider);
+            const modelOptions = getProfileModelOptions(
+              profile.id,
+              values.providers,
+              profileValues.provider,
+            );
             return (
               <div
                 key={profile.id}
@@ -727,7 +800,11 @@ export default function WidgetAiSettingsBuilder() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PROVIDERS.map((provider) => (
+                      {PROVIDERS.filter(
+                        (provider) =>
+                          profile.id !== "imageGeneration" ||
+                          isImageGenerationProvider(provider.id),
+                      ).map((provider) => (
                         <SelectItem key={provider.id} value={provider.id}>
                           {provider.label}
                         </SelectItem>
@@ -751,6 +828,16 @@ export default function WidgetAiSettingsBuilder() {
                     value={profileValues.model}
                     disabled={!profileValues.enabled}
                     onChange={(event) => setProfileValue(profile.id, "model", event.target.value)}
+                    onBlur={(event) =>
+                      setProfileValue(
+                        profile.id,
+                        "model",
+                        normalizeModelIdForProvider(
+                          profileValues.provider,
+                          event.target.value,
+                        ),
+                      )
+                    }
                     placeholder="Model ID"
                   />
                   {modelOptions.length > 0 && (
@@ -826,6 +913,16 @@ export default function WidgetAiSettingsBuilder() {
                     data-1p-ignore="true"
                     value={valuesForProvider.defaultModel}
                     onChange={(event) => setProviderValue(provider.id, "defaultModel", event.target.value)}
+                    onBlur={(event) =>
+                      setProviderValue(
+                        provider.id,
+                        "defaultModel",
+                        normalizeModelIdForProvider(
+                          provider.id,
+                          event.target.value,
+                        ),
+                      )
+                    }
                     placeholder={provider.id === "cloudflare" ? "@cf/vendor/model or google/gemini-3.5-flash" : "Model ID"}
                   />
                 </div>
@@ -843,7 +940,7 @@ export default function WidgetAiSettingsBuilder() {
                       setProviderValue(
                         provider.id,
                         "allowedModels",
-                        parseAllowedModelsText(event.target.value),
+                        parseAllowedModelsText(event.target.value, provider.id),
                       )
                     }
                     placeholder={

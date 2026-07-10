@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createScaliusBrowserComputerAdapter,
+  getScaliusComputerHumanConfirmationId,
   normalizeScaliusComputerRoute,
   parseScaliusComputerProgram,
   SCALIUS_COMPUTER_LIMITS,
@@ -503,6 +504,63 @@ describe("Scalius browser computer adapter", () => {
       binding,
       program: `click ${handleFor(observed.output, label)}`,
     })).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+  });
+
+  it("returns only an app-owned human confirmation ID without clicking the control", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button
+          data-scalius-computer-human-only
+          data-scalius-computer-human-confirmation="admin.media.image.generate"
+        >Generate image</button>
+      </main>`;
+    const clicked = vi.fn();
+    document.querySelector("button")!.addEventListener("click", clicked);
+    const { controller } = browserController();
+    const observed = await controller.execute({ binding, program: "observe" });
+    const result = await controller.execute({
+      binding,
+      program: `click ${handleFor(observed.output, "Generate image")}`,
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(getScaliusComputerHumanConfirmationId(result)).toBe(
+      "admin.media.image.generate",
+    );
+    expect(clicked).not.toHaveBeenCalled();
+  });
+
+  it("refuses to defer an ambiguous duplicated app action ID", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button data-scalius-computer-human-confirmation="admin.media.image.generate.library-page">Generate first</button>
+        <button data-scalius-computer-human-confirmation="admin.media.image.generate.library-page">Generate second</button>
+      </main>`;
+    const { controller } = browserController();
+    const observed = await controller.execute({ binding, program: "observe" });
+    const result = await controller.execute({
+      binding,
+      program: `click ${handleFor(observed.output, "Generate first")}`,
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(getScaliusComputerHumanConfirmationId(result)).toBeNull();
+  });
+
+  it("never arms human confirmation for an already disabled operation", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button disabled data-scalius-computer-human-confirmation="admin.media.image.generate.library-page.panel-a">Generating image</button>
+      </main>`;
+    const { controller } = browserController();
+    const observed = await controller.execute({ binding, program: "observe" });
+    const result = await controller.execute({
+      binding,
+      program: `click ${handleFor(observed.output, "Generating image")}`,
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "TARGET_DISABLED" });
+    expect(getScaliusComputerHumanConfirmationId(result)).toBeNull();
   });
 
   it("allows the host to register a confirmed consequential click explicitly", async () => {

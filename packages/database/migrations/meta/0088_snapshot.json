@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e65a13c8-7bfe-4348-ae43-522261aa7a00",
+  "id": "be5b7249-7e18-4372-8eb8-e6e597be77e2",
   "prevId": "6004d459-e1d4-47e0-9490-bd2bc7d25b03",
   "tables": {
     "account": {
@@ -1387,6 +1387,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "retention_expires_at": {
+          "name": "retention_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "claimed_at": {
           "name": "claimed_at",
           "type": "integer",
@@ -1401,9 +1408,23 @@
           "notNull": false,
           "autoincrement": false
         },
+        "r2_key": {
+          "name": "r2_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "consumed_at": {
           "name": "consumed_at",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "consumed_media_id": {
+          "name": "consumed_media_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1422,6 +1443,13 @@
           "name": "ai_image_generation_previews_expires_idx",
           "columns": [
             "expires_at"
+          ],
+          "isUnique": false
+        },
+        "ai_image_generation_previews_retention_idx": {
+          "name": "ai_image_generation_previews_retention_idx",
+          "columns": [
+            "retention_expires_at"
           ],
           "isUnique": false
         }
@@ -11054,6 +11082,125 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "assistant_computer_handoffs": {
+      "name": "assistant_computer_handoffs",
+      "columns": {
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "agent_instance_id": {
+          "name": "agent_instance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "program_digest": {
+          "name": "program_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ticket_expires_at": {
+          "name": "ticket_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "retention_expires_at": {
+          "name": "retention_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dispatch_claim_hash": {
+          "name": "dispatch_claim_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dispatch_confirmed_at": {
+          "name": "dispatch_confirmed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {
+        "assistant_computer_handoffs_retention_expiry_idx": {
+          "name": "assistant_computer_handoffs_retention_expiry_idx",
+          "columns": [
+            "retention_expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "assistant_computer_handoffs_session_id_assistant_sessions_id_fk": {
+          "name": "assistant_computer_handoffs_session_id_assistant_sessions_id_fk",
+          "tableFrom": "assistant_computer_handoffs",
+          "tableTo": "assistant_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "assistant_computer_handoffs_instance_request_pk": {
+          "columns": [
+            "agent_instance_id",
+            "request_id"
+          ],
+          "name": "assistant_computer_handoffs_instance_request_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },

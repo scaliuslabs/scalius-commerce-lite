@@ -45,6 +45,16 @@ interface ComputerTicketPayload {
   expiresAt: number;
 }
 
+export interface VerifiedScaliusComputerHandoff {
+  surface: ScaliusComputerSurface;
+  agentName: string;
+  instanceId: string;
+  requestId: string;
+  programDigest: string;
+  issuedAt: number;
+  expiresAt: number;
+}
+
 export interface ScaliusComputerClientCommand<
   TSurface extends ScaliusComputerSurface = ScaliusComputerSurface,
 > {
@@ -79,10 +89,19 @@ export type ComputerHandoffFailureCode =
   | "INVALID_TICKET"
   | "EXPIRED_TICKET"
   | "INVALID_RESULT"
+  | "INVALID_CANCELLATION"
   | "OVERSIZE";
 
 export type ComputerResultAdmission =
-  | { ok: true; continuation: ScaliusComputerResultContinuation }
+  | {
+    ok: true;
+    continuation: ScaliusComputerResultContinuation;
+    handoff: VerifiedScaliusComputerHandoff;
+  }
+  | { ok: false; code: ComputerHandoffFailureCode };
+
+export type ComputerCancellationAdmission =
+  | { ok: true; handoff: VerifiedScaliusComputerHandoff }
   | { ok: false; code: ComputerHandoffFailureCode };
 
 export interface IssueComputerCommandOptions<
@@ -106,6 +125,8 @@ export interface AdmitComputerResultOptions {
   signingKey: string;
   now?: number;
 }
+
+export type AdmitComputerCancellationOptions = AdmitComputerResultOptions;
 
 export async function issueScaliusComputerCommand<TSurface extends ScaliusComputerSurface>(
   options: IssueComputerCommandOptions<TSurface>,
@@ -176,6 +197,7 @@ export async function admitScaliusComputerResult(
 
   return {
     ok: true,
+    handoff: mapVerifiedHandoff(verified.payload),
     continuation: {
       type: "UNTRUSTED_CLIENT_RESULT",
       protocolVersion: PROTOCOL_VERSION,
@@ -188,6 +210,53 @@ export async function admitScaliusComputerResult(
       result,
       warning: "Browser execution is untrusted and is not commerce authority.",
     },
+  };
+}
+
+export async function admitScaliusComputerCancellation(
+  options: AdmitComputerCancellationOptions,
+): Promise<ComputerCancellationAdmission> {
+  const body = await readBoundedJson(
+    options.request,
+    MAX_RESULT_BODY_BYTES,
+    "INVALID_CANCELLATION",
+  );
+  if (!body.ok) return body;
+  if (!hasOnlyKeys(body.value, ["ticket", "program"])) {
+    return { ok: false, code: "INVALID_CANCELLATION" };
+  }
+  const { ticket, program } = body.value;
+  if (typeof ticket !== "string" || typeof program !== "string") {
+    return { ok: false, code: "INVALID_CANCELLATION" };
+  }
+  const parsedProgram = parseScaliusComputerProgram(program);
+  if (!parsedProgram.ok) return { ok: false, code: "INVALID_PROGRAM" };
+
+  const verified = await verifyTicket({
+    ticket,
+    program,
+    surface: options.surface,
+    agentName: options.agentName,
+    instanceId: options.instanceId,
+    signingKey: options.signingKey,
+    now: options.now ?? Date.now(),
+  });
+  if (!verified.ok) return verified;
+
+  return { ok: true, handoff: mapVerifiedHandoff(verified.payload) };
+}
+
+function mapVerifiedHandoff(
+  payload: ComputerTicketPayload,
+): VerifiedScaliusComputerHandoff {
+  return {
+    surface: payload.surface,
+    agentName: payload.agentName,
+    instanceId: payload.instanceId,
+    requestId: payload.requestId,
+    programDigest: payload.programDigest,
+    issuedAt: payload.issuedAt,
+    expiresAt: payload.expiresAt,
   };
 }
 
@@ -224,7 +293,7 @@ async function verifyTicket(options: {
       payload.expiresAt <= payload.issuedAt ||
       payload.expiresAt - payload.issuedAt > MAX_TICKET_TTL_MS ||
       payload.issuedAt > options.now + MAX_CLOCK_SKEW_MS ||
-      payload.expiresAt < options.now
+      payload.expiresAt <= options.now
     ) {
       return { ok: false, code: "EXPIRED_TICKET" };
     }
@@ -272,10 +341,14 @@ function isComputerResult(value: unknown): value is ScaliusComputerResult {
 async function readBoundedJson(
   request: Request,
   maxBytes: number,
-): Promise<{ ok: true; value: unknown } | { ok: false; code: "INVALID_RESULT" | "OVERSIZE" }> {
+  invalidCode: "INVALID_RESULT" | "INVALID_CANCELLATION" = "INVALID_RESULT",
+): Promise<
+  { ok: true; value: unknown } |
+  { ok: false; code: "INVALID_RESULT" | "INVALID_CANCELLATION" | "OVERSIZE" }
+> {
   const declaredLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes) return { ok: false, code: "OVERSIZE" };
-  if (!request.body) return { ok: false, code: "INVALID_RESULT" };
+  if (!request.body) return { ok: false, code: invalidCode };
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -298,7 +371,7 @@ async function readBoundedJson(
   try {
     return { ok: true, value: JSON.parse(new TextDecoder().decode(bytes)) };
   } catch {
-    return { ok: false, code: "INVALID_RESULT" };
+    return { ok: false, code: invalidCode };
   }
 }
 

@@ -2,6 +2,10 @@ export const SCALIUS_COMPUTER_DESCRIPTION =
   "Control the visible Scalius page. Start with observe, use its revision-bound handles, and call help only when needed.";
 export const SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT =
   "scalius:computer-rich-text-fill";
+const SCALIUS_COMPUTER_HUMAN_CONFIRMATION_PREFIX =
+  "Direct human confirmation is required for application action: ";
+const SCALIUS_COMPUTER_HUMAN_CONFIRMATION_ID_PATTERN =
+  /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+){1,7}$/u;
 export const SCALIUS_COMPUTER_LIMITS = {
   programChars: 8_192,
   valueChars: 4_000,
@@ -90,6 +94,8 @@ export interface ScaliusComputerTarget {
   disabled?: boolean;
   sensitive?: boolean;
   humanOnly?: boolean;
+  /** Trusted app-owned action ID; never derived from the model or label text. */
+  humanConfirmationId?: string;
 }
 export interface ScaliusComputerPageSnapshot {
   route: string;
@@ -606,10 +612,16 @@ function targetPreflight(
   if (target.sensitive) {
     return failure("SENSITIVE_CONTROL", "Protected controls must be completed by the person using the page.", false);
   }
-  if (target.humanOnly) {
-    return failure("HUMAN_REQUIRED", "This control requires direct human interaction.", false);
-  }
   if (target.disabled) return failure("TARGET_DISABLED", "That control is disabled.", true);
+  if (target.humanOnly) {
+    return failure(
+      "HUMAN_REQUIRED",
+      target.humanConfirmationId
+        ? `${SCALIUS_COMPUTER_HUMAN_CONFIRMATION_PREFIX}${target.humanConfirmationId}`
+        : "This control requires direct human interaction.",
+      false,
+    );
+  }
   if (!target.actions.includes(action)) {
     return failure("ACTION_NOT_ALLOWED", `${action} is not allowed for that control.`, false);
   }
@@ -632,6 +644,28 @@ function failure(
   retryable: boolean,
 ): ScaliusComputerResult {
   return { ok: false, code, output, retryable };
+}
+
+export function getScaliusComputerHumanConfirmationId(
+  result: ScaliusComputerResult,
+): string | null {
+  if (result.ok || result.code !== "HUMAN_REQUIRED") return null;
+  if (!result.output.startsWith(SCALIUS_COMPUTER_HUMAN_CONFIRMATION_PREFIX)) {
+    return null;
+  }
+  const actionId = result.output.slice(
+    SCALIUS_COMPUTER_HUMAN_CONFIRMATION_PREFIX.length,
+  );
+  return isScaliusComputerHumanConfirmationId(actionId)
+    ? actionId
+    : null;
+}
+
+export function isScaliusComputerHumanConfirmationId(
+  value: unknown,
+): value is string {
+  return typeof value === "string" &&
+    SCALIUS_COMPUTER_HUMAN_CONFIRMATION_ID_PATTERN.test(value);
 }
 function adapterFailureMessage(code: ScaliusComputerErrorCode): string {
   const messages: Partial<Record<ScaliusComputerErrorCode, string>> = {
@@ -767,6 +801,24 @@ export function createScaliusBrowserComputerAdapter(
       targets.push(target);
       elements.set(target.id, element);
     }
+    const confirmationCounts = new Map<string, number>();
+    for (const target of targets) {
+      if (!target.humanConfirmationId) continue;
+      confirmationCounts.set(
+        target.humanConfirmationId,
+        (confirmationCounts.get(target.humanConfirmationId) ?? 0) + 1,
+      );
+    }
+    for (const target of targets) {
+      if (
+        target.humanConfirmationId &&
+        confirmationCounts.get(target.humanConfirmationId) !== 1
+      ) {
+        // An app action must identify exactly one visible control. Ambiguous
+        // duplicates remain human-only but cannot resume an agent command.
+        target.humanConfirmationId = undefined;
+      }
+    }
     const textCandidates = arrayOfElements(document.querySelectorAll(
       options.textMode === "semantic" ? SEMANTIC_TEXT_SELECTOR : HEADING_SELECTOR,
     ));
@@ -803,8 +855,8 @@ export function createScaliusBrowserComputerAdapter(
     const target = inspectTarget(document, element, options.origin, action.targetId);
     if (!target) return { ok: false, code: "TARGET_GONE" };
     if (target.sensitive) return { ok: false, code: "SENSITIVE_CONTROL" };
-    if (target.humanOnly) return { ok: false, code: "HUMAN_REQUIRED" };
     if (target.disabled) return { ok: false, code: "TARGET_DISABLED" };
+    if (target.humanOnly) return { ok: false, code: "HUMAN_REQUIRED" };
     if (!target.actions.includes(action.name)) return { ok: false, code: "ACTION_NOT_ALLOWED" };
     if (action.name === "click") {
       if (!element.click) return { ok: false, code: "EXECUTION_FAILED" };
@@ -930,7 +982,16 @@ function inspectTarget(
   const route = role === "link" ? safeLinkRoute(attribute(element, "href"), origin) : undefined;
   const disabled = Boolean(element.disabled) || attribute(element, "aria-disabled") === "true" || hasAncestorFlag(element, "inert");
   const explicitlyAllowed = attribute(element, "data-scalius-computer-action") === "allow";
-  const humanOnly = hasAncestorFlag(element, "data-scalius-computer-human-only") ||
+  const rawHumanConfirmationId = attribute(
+    element,
+    "data-scalius-computer-human-confirmation",
+  );
+  const humanConfirmationId =
+    isScaliusComputerHumanConfirmationId(rawHumanConfirmationId)
+      ? rawHumanConfirmationId
+      : undefined;
+  const humanOnly = Boolean(humanConfirmationId) ||
+    hasAncestorFlag(element, "data-scalius-computer-human-only") ||
     type === "file" || (role === "link" && !route) ||
     (submitter || tag === "form") && (!form || !submitAllowed(element, form)) ||
     (!explicitlyAllowed && CONSEQUENTIAL_HINT.test(name));
@@ -953,7 +1014,18 @@ function inspectTarget(
     const value = cleanText(element.value ?? "", 80);
     if (value) states.push(`value=${quote(value)}`);
   }
-  return { id, role, name: name || `Unnamed ${role}`, actions, states, route, disabled, sensitive, humanOnly };
+  return {
+    id,
+    role,
+    name: name || `Unnamed ${role}`,
+    actions,
+    states,
+    route,
+    disabled,
+    sensitive,
+    humanOnly,
+    humanConfirmationId,
+  };
 }
 function accessibleName(document: DocumentLike, element: ElementLike, role: string): string {
   const direct = attribute(element, "aria-label");

@@ -14,6 +14,17 @@ export {
   listAssistantEvents,
 } from "./assistant-events";
 export {
+  ASSISTANT_COMPUTER_HANDOFF_AUDIT_RETENTION_SECONDS,
+  cleanupExpiredAssistantComputerHandoffs,
+  confirmAssistantComputerHandoffDispatch,
+  consumeAssistantComputerHandoff,
+} from "./assistant-computer-handoffs";
+export type {
+  AssistantComputerHandoffState,
+  CleanupAssistantComputerHandoffsResult,
+  ConsumeAssistantComputerHandoffResult,
+} from "./assistant-computer-handoffs";
+export {
   bindAssistantAgentInstance,
   createAssistantSession,
   createAssistantWorkflow,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  admitScaliusComputerCancellation,
   admitScaliusComputerResult,
   issueScaliusComputerCommand,
   type ScaliusComputerClientCommand,
@@ -22,6 +23,17 @@ function resultRequest(command: ScaliusComputerClientCommand, overrides: Record<
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ ticket: command.ticket, program: command.program, result: RESULT, ...overrides }),
+  });
+}
+
+function cancellationRequest(
+  command: ScaliusComputerClientCommand,
+  overrides: Record<string, unknown> = {},
+) {
+  return new Request("https://agent.test/computer/cancel/opaque", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ticket: command.ticket, program: command.program, ...overrides }),
   });
 }
 
@@ -78,6 +90,15 @@ describe("assistant computer handoff", () => {
     });
     expect(admitted).toEqual({
       ok: true,
+      handoff: {
+        surface: "admin",
+        agentName: "admin-copilot",
+        instanceId: INSTANCE_ID,
+        requestId: command.requestId,
+        programDigest: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/u),
+        issuedAt: NOW,
+        expiresAt: NOW + 120_000,
+      },
       continuation: {
         type: "UNTRUSTED_CLIENT_RESULT",
         protocolVersion: 1,
@@ -91,6 +112,77 @@ describe("assistant computer handoff", () => {
         warning: "Browser execution is untrusted and is not commerce authority.",
       },
     });
+  });
+
+  it("verifies an exact cancellation without accepting client result fields", async () => {
+    const command = await issue();
+    const admitted = await admitScaliusComputerCancellation({
+      request: cancellationRequest(command),
+      surface: "admin",
+      agentName: "admin-copilot",
+      instanceId: INSTANCE_ID,
+      signingKey: SIGNING_KEY,
+      now: NOW + 1_000,
+    });
+
+    expect(admitted).toEqual({
+      ok: true,
+      handoff: {
+        surface: "admin",
+        agentName: "admin-copilot",
+        instanceId: INSTANCE_ID,
+        requestId: command.requestId,
+        programDigest: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/u),
+        issuedAt: NOW,
+        expiresAt: NOW + 120_000,
+      },
+    });
+
+    const injected = await admitScaliusComputerCancellation({
+      request: cancellationRequest(command, { result: RESULT }),
+      surface: "admin",
+      agentName: "admin-copilot",
+      instanceId: INSTANCE_ID,
+      signingKey: SIGNING_KEY,
+      now: NOW + 1_000,
+    });
+    expect(injected).toEqual({ ok: false, code: "INVALID_CANCELLATION" });
+  });
+
+  it("rejects cancellation ticket, program, instance, and expiry drift", async () => {
+    const command = await issue();
+    const exact = {
+      surface: "admin" as const,
+      agentName: "admin-copilot",
+      signingKey: SIGNING_KEY,
+    };
+    const [tampered, changedProgram, crossThread, expired] = await Promise.all([
+      admitScaliusComputerCancellation({
+        ...exact,
+        request: cancellationRequest(command, { ticket: `${command.ticket.slice(0, -1)}x` }),
+        instanceId: INSTANCE_ID,
+        now: NOW + 1_000,
+      }),
+      admitScaliusComputerCancellation({
+        ...exact,
+        request: cancellationRequest(command, { program: "refresh" }),
+        instanceId: INSTANCE_ID,
+        now: NOW + 1_000,
+      }),
+      admitScaliusComputerCancellation({
+        ...exact,
+        request: cancellationRequest(command),
+        instanceId: OTHER_INSTANCE_ID,
+        now: NOW + 1_000,
+      }),
+      admitScaliusComputerCancellation({
+        ...exact,
+        request: cancellationRequest(command),
+        instanceId: INSTANCE_ID,
+        now: NOW + 120_000,
+      }),
+    ]);
+    expect([tampered, changedProgram, crossThread, expired].every((item) => !item.ok)).toBe(true);
   });
 
   it.each([
@@ -127,7 +219,7 @@ describe("assistant computer handoff", () => {
       surface: "admin" as const,
       agentName: "admin-copilot",
       instanceId: INSTANCE_ID,
-      now: NOW + 120_001,
+      now: NOW + 120_000,
     })],
   ])("rejects %s", async (_name, buildOptions) => {
     const command = await issue();

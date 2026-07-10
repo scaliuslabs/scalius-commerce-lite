@@ -4,6 +4,10 @@ const mocks = vi.hoisted(() => ({
   safeBatch: vi.fn(),
   uploadFile: vi.fn(),
   deleteFile: vi.fn(),
+  isAmbiguousStorageWriteError: vi.fn(
+    (error: unknown) =>
+      error instanceof Error && error.name === "AmbiguousStorageWriteError",
+  ),
 }));
 
 vi.mock("@scalius/database/client", async (importOriginal) => ({
@@ -14,18 +18,24 @@ vi.mock("@scalius/database/client", async (importOriginal) => ({
 vi.mock("../../integrations/storage", () => ({
   uploadFile: mocks.uploadFile,
   deleteFile: mocks.deleteFile,
+  isAmbiguousStorageWriteError: mocks.isAmbiguousStorageWriteError,
   extractKeyFromUrl: (url: string) => new URL(url).pathname.replace(/^\//, ""),
 }));
 
 import {
-  enforceGeneratedImageGenerationLimit,
+  cleanupExpiredGeneratedImagePreviews,
   recordGeneratedImagePreview,
   saveGeneratedImagePreview,
   sha256Hex,
 } from "./generated-image.service";
 
 const NOW = new Date("2026-07-10T12:00:00.000Z");
-const BYTES = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+const BYTES = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  ),
+  (character) => character.charCodeAt(0),
+);
 
 function recordDb(count = 0) {
   let inserted: Record<string, unknown> | undefined;
@@ -63,20 +73,35 @@ function preview(overrides: Record<string, unknown> = {}) {
     costStatus: "not_reported",
     createdAt: NOW,
     expiresAt: new Date(NOW.getTime() + 15 * 60_000),
+    retentionExpiresAt: new Date(NOW.getTime() + 7 * 24 * 60 * 60_000),
     claimedAt: null,
     claimToken: null,
     consumedAt: null,
+    consumedMediaId: null,
+    r2Key: null,
     ...overrides,
   };
 }
 
-function saveDb(selectResults: unknown[][], claimRows: unknown[] = [{ id: "claim" }]) {
+function saveDb(
+  selectResults: Array<
+    unknown[] | ((claimToken: string | null) => unknown[])
+  >,
+  claimRows: unknown[] = [{ id: "claim" }],
+) {
   const insertedValues: Array<Record<string, unknown>> = [];
+  const updateSetValues: Array<Record<string, unknown>> = [];
+  let activeClaimToken: string | null = null;
   let updateCount = 0;
   const db = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(async () => selectResults.shift() ?? []),
+        where: vi.fn(async () => {
+          const result = selectResults.shift() ?? [];
+          return typeof result === "function"
+            ? result(activeClaimToken)
+            : result;
+        }),
       })),
     })),
     update: vi.fn(() => {
@@ -84,6 +109,10 @@ function saveDb(selectResults: unknown[][], claimRows: unknown[] = [{ id: "claim
       const current = updateCount;
       return {
         set: vi.fn((setValue: Record<string, unknown>) => {
+          updateSetValues.push(setValue);
+          if (typeof setValue.claimToken === "string") {
+            activeClaimToken = setValue.claimToken;
+          }
           const whereResult = {
             returning: vi.fn(() => {
               if (current === 1) {
@@ -110,7 +139,7 @@ function saveDb(selectResults: unknown[][], claimRows: unknown[] = [{ id: "claim
     })),
     delete: vi.fn(() => ({ where: vi.fn(() => ({ kind: "delete" })) })),
   };
-  return { db, insertedValues };
+  return { db, insertedValues, updateSetValues };
 }
 
 describe("generated media authority", () => {
@@ -150,12 +179,48 @@ describe("generated media authority", () => {
     expect(JSON.stringify(inserted())).not.toContain(prompt);
   });
 
-  it("enforces the D1-backed per-admin generation bound before provider work", async () => {
-    const { db } = recordDb(5);
+  it("cleans settled orphan keys after retention but never deletes consumed media", async () => {
+    const bucket = { id: "scheduled-bucket" } as unknown as R2Bucket;
+    const rows = [
+      { id: "consumed", r2Key: "generated/consumed.png", consumedAt: NOW },
+      { id: "orphan", r2Key: "generated/orphan.png", consumedAt: null },
+      { id: "no-key", r2Key: null, consumedAt: null },
+      { id: "retry-later", r2Key: "generated/retry.png", consumedAt: null },
+    ];
+    const returning = vi.fn().mockResolvedValue([
+      { id: "consumed" },
+      { id: "orphan" },
+      { id: "no-key" },
+    ]);
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({ limit: vi.fn().mockResolvedValue(rows) })),
+        })),
+      })),
+      delete: vi.fn(() => ({
+        where: vi.fn(() => ({ returning })),
+      })),
+    };
+    mocks.deleteFile.mockImplementation(async (key: string) => {
+      if (key.endsWith("retry.png")) throw new Error("R2 unavailable");
+    });
 
     await expect(
-      enforceGeneratedImageGenerationLimit(db as never, "admin_1", NOW),
-    ).rejects.toMatchObject({ status: 429, code: "RATE_LIMIT" });
+      cleanupExpiredGeneratedImagePreviews(db as never, NOW, bucket),
+    ).resolves.toBe(3);
+    expect(mocks.deleteFile).toHaveBeenCalledTimes(2);
+    expect(mocks.deleteFile).toHaveBeenCalledWith(
+      "generated/orphan.png",
+      bucket,
+    );
+    expect(mocks.deleteFile).toHaveBeenCalledWith(
+      "generated/retry.png",
+      bucket,
+    );
+    expect(mocks.deleteFile).not.toHaveBeenCalledWith(
+      "generated/consumed.png",
+    );
   });
 
   it("verifies bytes and persists authoritative provenance with a raw R2 checksum", async () => {
@@ -170,7 +235,7 @@ describe("generated media authority", () => {
       url: "https://cdn.test/generated.png",
     };
     mocks.uploadFile.mockResolvedValue({
-      key: "generated.png",
+      key: "generated/aig_abcdefghijklmnop.png",
       url: saved.url,
       size: BYTES.byteLength,
       filename: "generated-aig_abcdefghijklmnop.png",
@@ -195,6 +260,7 @@ describe("generated media authority", () => {
       undefined,
       expect.objectContaining({
         sha256: expect.any(ArrayBuffer),
+        objectKey: "generated/aig_abcdefghijklmnop.png",
         customMetadata: expect.objectContaining({
           source: "ai_generated",
           generationId: "aig_abcdefghijklmnop",
@@ -211,6 +277,8 @@ describe("generated media authority", () => {
       generationCostStatus: "not_reported",
       altText: "Black running shoe on white background",
       folderId: "folder_1",
+      width: 1,
+      height: 1,
     });
   });
 
@@ -220,7 +288,11 @@ describe("generated media authority", () => {
       generationId: "aig_abcdefghijklmnop",
     };
     const { db } = saveDb([
-      [preview({ consumedAt: NOW })],
+      [preview({
+        consumedAt: NOW,
+        consumedMediaId: existing.id,
+        expiresAt: new Date(NOW.getTime() - 1),
+      })],
       [existing],
     ]);
 
@@ -240,14 +312,14 @@ describe("generated media authority", () => {
     const committed = {
       id: "media_committed",
       generationId: "aig_abcdefghijklmnop",
-      url: "https://cdn.test/generated.png",
+      url: "https://cdn.test/generated/aig_abcdefghijklmnop.png",
     };
-    const { db } = saveDb([
+    const { db, updateSetValues } = saveDb([
       [preview({ imageSha256 })],
       [committed],
     ]);
     mocks.uploadFile.mockResolvedValue({
-      key: "generated.png",
+      key: "generated/aig_abcdefghijklmnop.png",
       url: committed.url,
       size: BYTES.byteLength,
       filename: "generated-aig_abcdefghijklmnop.png",
@@ -264,6 +336,91 @@ describe("generated media authority", () => {
       }),
     ).resolves.toEqual(committed);
     expect(mocks.deleteFile).not.toHaveBeenCalled();
+    expect(updateSetValues.at(-1)).toMatchObject({
+      consumedMediaId: "media_committed",
+      r2Key: "generated/aig_abcdefghijklmnop.png",
+      claimedAt: null,
+      claimToken: null,
+    });
+  });
+
+  it("retains deterministic R2 evidence instead of racing a late put after timeout", async () => {
+    const imageSha256 = await sha256Hex(BYTES);
+    const { db, updateSetValues } = saveDb([
+      [preview({ imageSha256 })],
+      [],
+      (claimToken) => [{ claimToken }],
+    ]);
+    const ambiguous = new Error(
+      "Media storage timed out. The save was not confirmed.",
+    );
+    ambiguous.name = "AmbiguousStorageWriteError";
+    mocks.uploadFile.mockRejectedValue(ambiguous);
+
+    await expect(
+      saveGeneratedImagePreview(db as never, {
+        generationId: "aig_abcdefghijklmnop",
+        userId: "admin_1",
+        file: new File([BYTES], "preview.png", { type: "image/png" }),
+        now: NOW,
+      }),
+    ).rejects.toBe(ambiguous);
+
+    expect(mocks.deleteFile).not.toHaveBeenCalled();
+    expect(updateSetValues[0]).toMatchObject({
+      r2Key: "generated/aig_abcdefghijklmnop.png",
+    });
+    expect(updateSetValues).toHaveLength(1);
+    expect(updateSetValues[0]).toMatchObject({
+      claimedAt: NOW,
+      claimToken: expect.stringMatching(/^aic_/u),
+      r2Key: "generated/aig_abcdefghijklmnop.png",
+    });
+  });
+
+  it("never deletes prior ambiguous storage evidence when a reclaimed retry fails", async () => {
+    const imageSha256 = await sha256Hex(BYTES);
+    const key = "generated/aig_abcdefghijklmnop.png";
+    const ambiguous = new Error("Media storage timed out");
+    ambiguous.name = "AmbiguousStorageWriteError";
+    const retryFailure = new Error("R2 rejected retry");
+    const first = saveDb([
+      [preview({ imageSha256 })],
+      [],
+      (claimToken) => [{ claimToken }],
+    ]);
+    const second = saveDb([
+      [preview({
+        imageSha256,
+        r2Key: key,
+        claimedAt: NOW,
+      })],
+      [],
+      (claimToken) => [{ claimToken }],
+    ]);
+    mocks.uploadFile
+      .mockRejectedValueOnce(ambiguous)
+      .mockRejectedValueOnce(retryFailure);
+
+    await expect(saveGeneratedImagePreview(first.db as never, {
+      generationId: "aig_abcdefghijklmnop",
+      userId: "admin_1",
+      file: new File([BYTES], "preview.png", { type: "image/png" }),
+      now: NOW,
+    })).rejects.toBe(ambiguous);
+    await expect(saveGeneratedImagePreview(second.db as never, {
+      generationId: "aig_abcdefghijklmnop",
+      userId: "admin_1",
+      file: new File([BYTES], "preview.png", { type: "image/png" }),
+      now: new Date(NOW.getTime() + 3 * 60_000),
+    })).rejects.toBe(retryFailure);
+
+    expect(mocks.deleteFile).not.toHaveBeenCalled();
+    expect(second.updateSetValues.at(-1)).toMatchObject({
+      claimedAt: null,
+      claimToken: null,
+    });
+    expect(second.updateSetValues.at(-1)).not.toHaveProperty("r2Key");
   });
 
   it("rejects an unknown target folder before claiming or uploading", async () => {

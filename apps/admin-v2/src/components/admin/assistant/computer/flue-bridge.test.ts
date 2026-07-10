@@ -7,6 +7,7 @@ import { issueScaliusComputerCommand } from "@scalius/shared/assistant-computer-
 import {
   ADMIN_FLUE_COMPUTER_DEDUPE_STORAGE_KEY,
   AdminFlueComputerCoordinator,
+  cancelAdminFlueComputerHandoff,
   parseAdminFlueComputerClientCommand,
   postAdminFlueComputerResult,
   type AdminFlueDynamicToolPart,
@@ -133,6 +134,410 @@ describe("Admin Flue computer coordinator", () => {
     });
     expect(execute).toHaveBeenCalledOnce();
     expect(postResult).toHaveBeenCalledOnce();
+  });
+
+  it("resumes the exact signed continuation only after the real app action completes", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button
+          data-scalius-computer-human-only
+          data-scalius-computer-human-confirmation="admin.media.image.generate.library-page.panel-a"
+        >Generate image</button>
+      </main>`;
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(
+      /(@r\d+\.e\d+) button "Generate image"/u,
+    )?.[1];
+    expect(handle).toBeTruthy();
+    const postResult = vi.fn(async (payload: Parameters<typeof postAdminFlueComputerResult>[0]) => ({
+      accepted: true as const,
+      requestId: payload.requestId,
+    }));
+    const phases: string[] = [];
+    const coordinator = new AdminFlueComputerCoordinator({
+      runtime,
+      postResult,
+      now: () => NOW + 1_000,
+      onPhase: (_requestId, phase) => phases.push(phase),
+    });
+    const issued = await command(`click ${handle}`, 15);
+
+    await expect(coordinator.consume(source(issued))).resolves.toEqual({
+      status: "awaiting_human_confirmation",
+      requestId: issued.requestId,
+      actionId: "admin.media.image.generate.library-page.panel-a",
+    });
+    expect(postResult).not.toHaveBeenCalled();
+    expect(coordinator.pendingHumanConfirmationCount()).toBe(1);
+    expect(phases).toEqual(["executing", "awaiting_human_confirmation"]);
+    const operationId = `aho_${"a".repeat(24)}`;
+
+    const otherThread = new AdminFlueComputerCoordinator({
+      runtime: createAdminAssistantComputerRuntime({
+        threadId: "admin-thread-2",
+        tabId: TAB_ID,
+      }),
+      postResult,
+      now: () => NOW + 1_000,
+    });
+    await expect(otherThread.confirmHumanAction({
+      actionId: "admin.media.image.generate.library-page",
+      operationId,
+      outcome: "succeeded",
+    })).resolves.toEqual({
+      status: "ignored",
+      reason: "no_pending_confirmation",
+    });
+    expect(coordinator.pendingHumanConfirmationCount()).toBe(1);
+
+    await expect(coordinator.confirmHumanAction({
+      actionId: "admin.media.image.save.library-page.panel-a",
+      operationId,
+      outcome: "succeeded",
+    })).resolves.toEqual({
+      status: "ignored",
+      reason: "no_pending_confirmation",
+    });
+    expect(postResult).not.toHaveBeenCalled();
+
+    expect(coordinator.registerHumanActionStart({
+      actionId: "admin.media.image.generate.library-page.panel-a",
+      operationId,
+    })).toBe(true);
+    await expect(coordinator.confirmHumanAction({
+      actionId: "admin.media.image.generate.library-page.panel-a",
+      operationId,
+      outcome: "succeeded",
+    })).resolves.toMatchObject({
+      status: "continuation_accepted",
+      requestId: issued.requestId,
+      authoritative: false,
+      result: { ok: true, code: "EXECUTED", changed: true },
+    });
+    expect(postResult).toHaveBeenCalledOnce();
+    expect(postResult).toHaveBeenCalledWith(expect.objectContaining({
+      surface: "admin",
+      threadId: THREAD_ID,
+      requestId: issued.requestId,
+      ticket: issued.ticket,
+      program: issued.program,
+      result: expect.objectContaining({
+        ok: true,
+        code: "EXECUTED",
+        output: expect.stringContaining("untrusted"),
+      }),
+    }));
+    expect(coordinator.pendingHumanConfirmationCount()).toBe(0);
+    await expect(coordinator.confirmHumanAction({
+      actionId: "admin.media.image.generate.library-page.panel-a",
+      operationId,
+      outcome: "succeeded",
+    })).resolves.toEqual({
+      status: "ignored",
+      reason: "no_pending_confirmation",
+    });
+    expect(postResult).toHaveBeenCalledOnce();
+  });
+
+  it("reconstructs a reload from opaque markers and resumes the exact replayed submission", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button
+          data-scalius-computer-human-only
+          data-scalius-computer-human-confirmation="admin.media.image.save.media-picker.panel-b"
+        >Save generated image</button>
+      </main>`;
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(
+      /(@r\d+\.e\d+) button "Save generated image"/u,
+    )?.[1];
+    const clock = NOW + 1_000;
+    const postResult = vi.fn(async (payload: Parameters<typeof postAdminFlueComputerResult>[0]) => ({
+      accepted: true as const,
+      requestId: payload.requestId,
+    }));
+    const coordinator = new AdminFlueComputerCoordinator({
+      runtime,
+      postResult,
+      now: () => clock,
+    });
+    const issued = await command(`click ${handle}`, 16);
+
+    await expect(coordinator.consume(source(issued))).resolves.toMatchObject({
+      status: "awaiting_human_confirmation",
+    });
+    const persisted = window.sessionStorage.getItem(
+      ADMIN_FLUE_COMPUTER_DEDUPE_STORAGE_KEY,
+    );
+    expect(persisted).toContain(issued.requestId);
+    expect(persisted).toContain("awaiting_human_confirmation");
+    expect(persisted).not.toContain(issued.ticket);
+    expect(persisted).not.toContain(issued.program);
+    expect(persisted).toContain("admin.media.image.save.media-picker.panel-b");
+    expect(persisted).toContain(issued.ticket.slice(-43));
+
+    const remounted = new AdminFlueComputerCoordinator({
+      runtime: createAdminAssistantComputerRuntime({
+        threadId: THREAD_ID,
+        tabId: TAB_ID,
+      }),
+      postResult,
+      now: () => clock,
+    });
+    await expect(remounted.consume(source(issued))).resolves.toMatchObject({
+      status: "continuation_accepted",
+      requestId: issued.requestId,
+      result: {
+        ok: false,
+        code: "HUMAN_REQUIRED",
+        output: expect.stringContaining("cancelled after the page reloaded"),
+      },
+    });
+    await expect(remounted.confirmHumanAction({
+      actionId: "admin.media.image.save.media-picker.panel-b",
+      operationId: `aho_${"b".repeat(24)}`,
+      outcome: "succeeded",
+    })).resolves.toEqual({
+      status: "ignored",
+      reason: "no_pending_confirmation",
+    });
+    expect(postResult).toHaveBeenCalledOnce();
+    expect(postResult).toHaveBeenCalledWith(expect.objectContaining({
+      threadId: THREAD_ID,
+      requestId: issued.requestId,
+      ticket: issued.ticket,
+      program: issued.program,
+    }));
+  });
+
+  it("does not arm from a manual operation that started before the computer command", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button data-scalius-computer-human-confirmation="admin.media.image.generate.media-picker.panel-c">Generate image</button>
+      </main>`;
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(
+      /(@r\d+\.e\d+) button "Generate image"/u,
+    )?.[1];
+    const postResult = vi.fn(async (payload: Parameters<typeof postAdminFlueComputerResult>[0]) => ({
+      accepted: true as const,
+      requestId: payload.requestId,
+    }));
+    const coordinator = new AdminFlueComputerCoordinator({
+      runtime,
+      postResult,
+      now: () => NOW + 1_000,
+    });
+    const operationId = `aho_${"d".repeat(24)}`;
+    expect(coordinator.registerHumanActionStart({
+      actionId: "admin.media.image.generate.media-picker.panel-c",
+      operationId,
+    })).toBe(false);
+
+    const issued = await command(`click ${handle}`, 18);
+    await expect(coordinator.consume(source(issued))).resolves.toMatchObject({
+      status: "continuation_accepted",
+      result: { ok: false, code: "BUSY" },
+    });
+    expect(coordinator.pendingHumanConfirmationCount()).toBe(0);
+    await expect(coordinator.confirmHumanAction({
+      actionId: "admin.media.image.generate.media-picker.panel-c",
+      operationId,
+      outcome: "succeeded",
+    })).resolves.toEqual({
+      status: "ignored",
+      reason: "no_pending_confirmation",
+    });
+    expect(postResult).toHaveBeenCalledOnce();
+  });
+
+  it("cancels pending confirmation terminally so a late operation cannot post", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button data-scalius-computer-human-confirmation="admin.media.image.generate.library-page.panel-d">Generate image</button>
+      </main>`;
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(
+      /(@r\d+\.e\d+) button "Generate image"/u,
+    )?.[1];
+    const postResult = vi.fn();
+    const issued = await command(`click ${handle}`, 19);
+    const cancelHandoff = vi.fn(async () => ({
+      accepted: true as const,
+      requestId: issued.requestId,
+    }));
+    const coordinator = new AdminFlueComputerCoordinator({
+      runtime,
+      postResult,
+      cancelHandoff,
+      now: () => NOW + 1_000,
+    });
+    await expect(coordinator.consume(source(issued))).resolves.toMatchObject({
+      status: "awaiting_human_confirmation",
+    });
+
+    await expect(coordinator.cancelPendingHumanConfirmations()).resolves.toEqual({
+      cancelled: 1,
+      durable: 1,
+      failed: 0,
+    });
+    expect(coordinator.pendingHumanConfirmationCount()).toBe(0);
+    expect(window.sessionStorage.getItem(
+      ADMIN_FLUE_COMPUTER_DEDUPE_STORAGE_KEY,
+    )).toContain("continuation_cancelled");
+    const operationId = `aho_${"e".repeat(24)}`;
+    coordinator.registerHumanActionStart({
+      actionId: "admin.media.image.generate.library-page.panel-d",
+      operationId,
+    });
+    await expect(coordinator.confirmHumanAction({
+      actionId: "admin.media.image.generate.library-page.panel-d",
+      operationId,
+      outcome: "succeeded",
+    })).resolves.toEqual({
+      status: "ignored",
+      reason: "no_pending_confirmation",
+    });
+    expect(postResult).not.toHaveBeenCalled();
+    expect(cancelHandoff).toHaveBeenCalledWith({
+      surface: "admin",
+      threadId: THREAD_ID,
+      requestId: issued.requestId,
+      ticket: issued.ticket,
+      program: issued.program,
+    });
+  });
+
+  it("resumes with a terminal cancellation when the exact visible preview is replaced", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button data-scalius-computer-human-confirmation="admin.media.image.save.library-page.panel-e">Save generated image</button>
+      </main>`;
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(
+      /(@r\d+\.e\d+) button "Save generated image"/u,
+    )?.[1];
+    const postResult = vi.fn(
+      async (payload: Parameters<typeof postAdminFlueComputerResult>[0]) => ({
+        accepted: true as const,
+        requestId: payload.requestId,
+      }),
+    );
+    const coordinator = new AdminFlueComputerCoordinator({
+      runtime,
+      postResult,
+      now: () => NOW + 1_000,
+    });
+    const issued = await command(`click ${handle}`, 20);
+    await expect(coordinator.consume(source(issued))).resolves.toMatchObject({
+      status: "awaiting_human_confirmation",
+    });
+
+    await expect(coordinator.cancelHumanAction(
+      "admin.media.image.save.library-page.panel-e",
+    )).resolves.toMatchObject({
+      status: "continuation_accepted",
+      requestId: issued.requestId,
+      result: {
+        ok: false,
+        code: "HUMAN_REQUIRED",
+        output: expect.stringContaining("cancelled before confirmation"),
+      },
+    });
+    expect(coordinator.pendingHumanConfirmationCount()).toBe(0);
+    expect(postResult).toHaveBeenCalledOnce();
+    await expect(coordinator.cancelHumanAction(
+      "admin.media.image.save.library-page.panel-e",
+    )).resolves.toEqual({
+      status: "ignored",
+      reason: "no_pending_confirmation",
+    });
+    expect(postResult).toHaveBeenCalledOnce();
+  });
+
+  it("expires stale human confirmation without posting a continuation", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button
+          data-scalius-computer-human-only
+          data-scalius-computer-human-confirmation="admin.media.image.save.media-picker.panel-b"
+        >Save generated image</button>
+      </main>`;
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(
+      /(@r\d+\.e\d+) button "Save generated image"/u,
+    )?.[1];
+    let clock = NOW + 1_000;
+    const postResult = vi.fn();
+    const coordinator = new AdminFlueComputerCoordinator({
+      runtime,
+      postResult,
+      now: () => clock,
+    });
+    const issued = await command(`click ${handle}`, 17);
+    await expect(coordinator.consume(source(issued))).resolves.toMatchObject({
+      status: "awaiting_human_confirmation",
+    });
+    const operationId = `aho_${"c".repeat(24)}`;
+    expect(coordinator.registerHumanActionStart({
+      actionId: "admin.media.image.save.media-picker.panel-b",
+      operationId,
+    })).toBe(true);
+
+    clock = NOW + 120_001;
+    expect(coordinator.expirePendingHumanConfirmations(clock)).toBe(1);
+    expect(coordinator.pendingHumanConfirmationCount()).toBe(0);
+    await expect(coordinator.confirmHumanAction({
+      actionId: "admin.media.image.save.media-picker.panel-b",
+      operationId,
+      outcome: "succeeded",
+    })).resolves.toEqual({
+      status: "ignored",
+      reason: "no_pending_confirmation",
+    });
+    expect(postResult).not.toHaveBeenCalled();
   });
 
   it("rejects expired, cross-thread, cross-tab, and cross-surface commands before page work", async () => {
@@ -464,5 +869,41 @@ describe("Admin Flue command parsing and same-origin result POST", () => {
     await expect(postAdminFlueComputerResult(payload, vi.fn(async () =>
       Response.json({ accepted: true, requestId: "wrong-request" }, { status: 202 }),
     ))).rejects.toThrow("not accepted");
+  });
+
+  it("terminally cancels a signed handoff without posting a result", async () => {
+    const issued = await command("observe", 12);
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("/api/assistant/flue/computer/cancel");
+      expect(init).toMatchObject({
+        method: "POST",
+        credentials: "same-origin",
+        keepalive: true,
+      });
+      await expect(new Response(init?.body).json()).resolves.toEqual({
+        surface: "admin",
+        threadId: THREAD_ID,
+        requestId: issued.requestId,
+        ticket: issued.ticket,
+        program: issued.program,
+      });
+      return Response.json({
+        accepted: true,
+        status: "cancelled",
+        requestId: issued.requestId,
+      }, { status: 202 });
+    });
+
+    await expect(cancelAdminFlueComputerHandoff({
+      surface: "admin",
+      threadId: THREAD_ID,
+      requestId: issued.requestId,
+      ticket: issued.ticket,
+      program: issued.program,
+    }, fetcher)).resolves.toEqual({
+      accepted: true,
+      requestId: issued.requestId,
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 });

@@ -1,6 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import {
   bindAssistantAgentInstance,
+  confirmAssistantComputerHandoffDispatch,
+  consumeAssistantComputerHandoff,
   createAssistantSession,
   createAssistantWorkflow,
   listAssistantEvents,
@@ -21,6 +23,8 @@ import {
   ADMIN_ASSISTANT_AUTHORITY_PATHS,
   adminAssistantCapabilityDescribeSchema,
   adminAssistantCapabilitySearchSchema,
+  adminAssistantComputerHandoffConfirmSchema,
+  adminAssistantComputerHandoffConsumeSchema,
   adminAssistantEmptyBodySchema,
   adminAssistantEventListSchema,
   adminAssistantFlueAdmitSchema,
@@ -57,8 +61,13 @@ import {
   failure as flueCommandFailure,
 } from "./flue-command-execution";
 import { resolveStorefrontAssistantDeploymentContext } from "./storefront-assistant-context";
+import { resolveAdminFlueCommandAuthority } from "./flue-command-authority";
 
 const ADMIN_ASSISTANT_SESSION_TTL_SECONDS = 8 * 60 * 60;
+const FLUE_SERVICE_HANDOFF_PATHS = new Set<string>([
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConsume,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConfirm,
+]);
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -72,7 +81,11 @@ app.use("*", async (c, next) => {
 });
 app.use("*", cookieOriginGuardMiddleware);
 app.use("*", async (c, next) => {
-  if (new URL(c.req.url).pathname === ADMIN_ASSISTANT_AUTHORITY_PATHS.flueCommand) {
+  const path = new URL(c.req.url).pathname;
+  if (
+    path === ADMIN_ASSISTANT_AUTHORITY_PATHS.flueCommand ||
+    FLUE_SERVICE_HANDOFF_PATHS.has(path)
+  ) {
     await next();
     return;
   }
@@ -228,6 +241,77 @@ app.post("/flue/command", async (c) => {
   }
 });
 
+app.post("/flue/computer-handoff/consume", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure(
+      "invalid_request",
+      "Scalius request headers are invalid.",
+      false,
+    ), 400);
+  }
+  try {
+    const input = await parseAdminAssistantJson(
+      c.req.raw,
+      adminAssistantComputerHandoffConsumeSchema,
+    );
+    const authority = await resolveAdminFlueCommandAuthority(c, input.instanceId);
+    const result = await consumeAssistantComputerHandoff(c.get("db"), {
+      sessionId: authority.session.id,
+      agentInstanceId: input.instanceId,
+      requestId: input.requestId,
+      programDigest: input.programDigest,
+      state: input.state,
+      ticketExpiresAt: input.ticketExpiresAt,
+    });
+    if (result.status === "conflict") {
+      return c.json(flueCommandFailure(
+        "handoff_terminal_conflict",
+        "Computer handoff already reached a terminal state.",
+        false,
+      ), 409);
+    }
+    if (result.status === "uncertain") {
+      return c.json(flueCommandFailure(
+        "handoff_dispatch_uncertain",
+        "Computer handoff dispatch state is uncertain.",
+        false,
+      ), 503);
+    }
+    return ok(c, result);
+  } catch (error) {
+    const [status, code, message, retryable] = handoffError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+app.post("/flue/computer-handoff/confirm", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure(
+      "invalid_request",
+      "Scalius request headers are invalid.",
+      false,
+    ), 400);
+  }
+  try {
+    const input = await parseAdminAssistantJson(
+      c.req.raw,
+      adminAssistantComputerHandoffConfirmSchema,
+    );
+    const authority = await resolveAdminFlueCommandAuthority(c, input.instanceId);
+    const result = await confirmAssistantComputerHandoffDispatch(c.get("db"), {
+      sessionId: authority.session.id,
+      agentInstanceId: input.instanceId,
+      requestId: input.requestId,
+      programDigest: input.programDigest,
+      dispatchClaimToken: input.dispatchClaimToken,
+    });
+    return ok(c, result);
+  } catch (error) {
+    const [status, code, message, retryable] = handoffError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
 app.post("/workflows/create", async (c) => {
   const credential = readAdminAssistantSessionCredential(c.req.raw);
   const input = await parseAdminAssistantJson(
@@ -354,4 +438,24 @@ function commandError(
     return [400, "invalid_arguments", "Capability arguments are invalid.", false];
   }
   return [503, "scalius_unavailable", "Scalius is temporarily unavailable.", true];
+}
+
+function hasInvalidFlueServiceHeaders(request: Request): boolean {
+  return request.headers.has("cookie") ||
+    hasCallerSuppliedFlueIdentity(request.headers);
+}
+
+function handoffError(
+  error: unknown,
+): [400 | 401 | 403 | 503, string, string, boolean] {
+  if (error instanceof UnauthorizedError) {
+    return [401, "access_unavailable", "Assistant access is unavailable.", false];
+  }
+  if (error instanceof ForbiddenError) {
+    return [403, "access_forbidden", "Assistant access is unavailable.", false];
+  }
+  if (error instanceof ValidationError) {
+    return [400, "invalid_handoff", "Computer handoff is invalid.", false];
+  }
+  return [503, "handoff_unavailable", "Computer handoff state is unavailable.", false];
 }

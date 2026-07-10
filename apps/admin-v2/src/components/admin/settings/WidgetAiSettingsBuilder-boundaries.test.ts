@@ -120,4 +120,67 @@ describe("WidgetAiSettingsBuilder model profile boundaries", () => {
       },
     });
   });
+
+  it("shows and saves canonical Cloudflare catalog IDs without changing direct providers", () => {
+    const values = normalizeWidgetAiSettingsData({
+      activeProvider: "cloudflare",
+      providers: {
+        cloudflare: {
+          enabled: true,
+          defaultModel: "@google/nano-banana-2-lite",
+          allowedModels: [
+            "@openai/gpt-image-1",
+            "@cf/black-forest-labs/flux-2-dev",
+          ],
+        },
+        openai: {
+          enabled: true,
+          defaultModel: "@openai/gpt-image-1",
+        },
+      },
+      profiles: {
+        imageGeneration: {
+          enabled: true,
+          provider: "cloudflare",
+          model: "@google/nano-banana-2-lite",
+        },
+      },
+    });
+
+    expect(values.providers.cloudflare.defaultModel).toBe(
+      "google/nano-banana-2-lite",
+    );
+    expect(values.providers.cloudflare.allowedModels).toEqual([
+      "openai/gpt-image-1",
+      "@cf/black-forest-labs/flux-2-dev",
+    ]);
+    expect(values.profiles.imageGeneration.model).toBe(
+      "google/nano-banana-2-lite",
+    );
+    expect(values.providers.openai.defaultModel).toBe(
+      "@openai/gpt-image-1",
+    );
+
+    const payload = buildWidgetAiSettingsUpdate(values);
+    expect(payload).toMatchObject({
+      providers: {
+        cloudflare: {
+          defaultModel: "google/nano-banana-2-lite",
+          allowedModels: [
+            "openai/gpt-image-1",
+            "@cf/black-forest-labs/flux-2-dev",
+          ],
+        },
+        openai: {
+          defaultModel: "@openai/gpt-image-1",
+        },
+      },
+      profiles: {
+        imageGeneration: {
+          provider: "cloudflare",
+          model: "google/nano-banana-2-lite",
+        },
+      },
+    });
+  });
 });

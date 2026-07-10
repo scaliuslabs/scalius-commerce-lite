@@ -5,12 +5,15 @@ import {
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 
 const RESULT_PATH_PREFIX = "/computer/results/";
+const CANCEL_PATH_PREFIX = "/computer/cancel/";
 const AGENT_ORIGIN = "http://admin-flue-agent.internal";
 const PUBLIC_RESULT_PATH = "/api/assistant/flue/computer/results";
+const PUBLIC_CANCEL_PATH = "/api/assistant/flue/computer/cancel";
 const MAX_BODY_BYTES = SCALIUS_COMPUTER_LIMITS.resultEnvelopeBytes;
 const MAX_COOKIE_BYTES = 8_192;
 const MAX_AGENT_RESPONSE_BYTES = 4_096;
 const MIN_SERVICE_TOKEN_CHARS = 32;
+const HANDOFF_PROXY_TIMEOUT_MS = 5_000;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;
 const IDENTITY_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const THREAD_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -63,19 +66,49 @@ export interface AdminFlueComputerProxyDependencies {
   resolveAuthority?: ResolveAdminFlueComputerAuthority;
 }
 
-interface BrowserResultBody {
+interface BrowserHandoffBody {
   surface: "admin";
   threadId: string;
   requestId: string;
   ticket: string;
   program: string;
+}
+
+interface BrowserResultBody extends BrowserHandoffBody {
+  kind: "result";
   result: Record<string, unknown>;
+}
+
+interface BrowserCancellationBody extends BrowserHandoffBody {
+  kind: "cancel";
 }
 
 export async function proxyAdminFlueComputerResult(
   request: Request,
   dependencies: AdminFlueComputerProxyDependencies = {},
 ): Promise<Response> {
+  return proxyAdminFlueComputerHandoff(request, dependencies, "result");
+}
+
+export async function proxyAdminFlueComputerCancellation(
+  request: Request,
+  dependencies: AdminFlueComputerProxyDependencies = {},
+): Promise<Response> {
+  return proxyAdminFlueComputerHandoff(request, dependencies, "cancel");
+}
+
+async function proxyAdminFlueComputerHandoff(
+  request: Request,
+  dependencies: AdminFlueComputerProxyDependencies,
+  kind: "result" | "cancel",
+): Promise<Response> {
+  const cancellation = kind === "cancel";
+  const invalidRequestCode = cancellation
+    ? "COMPUTER_CANCELLATION_REQUEST_INVALID"
+    : "COMPUTER_RESULT_REQUEST_INVALID";
+  const expectedPublicPath = cancellation
+    ? PUBLIC_CANCEL_PATH
+    : PUBLIC_RESULT_PATH;
   if (request.method !== "POST") {
     return jsonError(405, "METHOD_NOT_ALLOWED", "Method not allowed", { Allow: "POST" });
   }
@@ -83,23 +116,35 @@ export async function proxyAdminFlueComputerResult(
   try {
     requestUrl = new URL(request.url);
   } catch {
-    return jsonError(400, "COMPUTER_RESULT_REQUEST_INVALID", "Invalid computer result request");
+    return jsonError(400, invalidRequestCode, "Invalid computer handoff request");
   }
   if (
     (requestUrl.protocol !== "http:" && requestUrl.protocol !== "https:") ||
     requestUrl.username ||
     requestUrl.password ||
-    requestUrl.pathname !== PUBLIC_RESULT_PATH ||
+    requestUrl.pathname !== expectedPublicPath ||
     requestUrl.search ||
     requestUrl.hash
   ) {
-    return jsonError(400, "COMPUTER_RESULT_REQUEST_INVALID", "Invalid computer result request");
+    return jsonError(400, invalidRequestCode, "Invalid computer handoff request");
   }
   if (rejectCrossOriginRequest(request, requestUrl)) {
-    return jsonError(403, "CROSS_ORIGIN_COMPUTER_RESULT", "Cross-origin request denied");
+    return jsonError(
+      403,
+      cancellation
+        ? "CROSS_ORIGIN_COMPUTER_CANCELLATION"
+        : "CROSS_ORIGIN_COMPUTER_RESULT",
+      "Cross-origin request denied",
+    );
   }
   if (hasForbiddenClientHeader(request.headers)) {
-    return jsonError(400, "COMPUTER_RESULT_HEADER_FORBIDDEN", "Forbidden request header");
+    return jsonError(
+      400,
+      cancellation
+        ? "COMPUTER_CANCELLATION_HEADER_FORBIDDEN"
+        : "COMPUTER_RESULT_HEADER_FORBIDDEN",
+      "Forbidden request header",
+    );
   }
   const cookie = request.headers.get("cookie")?.trim() ?? "";
   if (!cookie) {
@@ -109,16 +154,32 @@ export async function proxyAdminFlueComputerResult(
     return jsonError(431, "ADMIN_SESSION_HEADER_TOO_LARGE", "Dashboard session header is too large");
   }
   if (!/^application\/json(?:\s*;|$)/iu.test(request.headers.get("content-type")?.trim() ?? "")) {
-    return jsonError(415, "COMPUTER_RESULT_CONTENT_TYPE_INVALID", "Computer results require application/json");
+    return jsonError(
+      415,
+      cancellation
+        ? "COMPUTER_CANCELLATION_CONTENT_TYPE_INVALID"
+        : "COMPUTER_RESULT_CONTENT_TYPE_INVALID",
+      "Computer handoffs require application/json",
+    );
   }
 
   const body = await readBoundedJson(request, MAX_BODY_BYTES);
   if (body === "oversize") {
-    return jsonError(413, "COMPUTER_RESULT_TOO_LARGE", "Computer result is too large");
+    return jsonError(
+      413,
+      cancellation ? "COMPUTER_CANCELLATION_TOO_LARGE" : "COMPUTER_RESULT_TOO_LARGE",
+      "Computer handoff is too large",
+    );
   }
-  const parsedBody = parseBrowserResultBody(body);
+  const parsedBody = cancellation
+    ? parseBrowserCancellationBody(body)
+    : parseBrowserResultBody(body);
   if (!parsedBody) {
-    return jsonError(400, "COMPUTER_RESULT_INVALID", "Computer result is invalid");
+    return jsonError(
+      400,
+      cancellation ? "COMPUTER_CANCELLATION_INVALID" : "COMPUTER_RESULT_INVALID",
+      "Computer handoff is invalid",
+    );
   }
 
   // Authority is intentionally required. Until the API-owned admission slice
@@ -176,47 +237,71 @@ export async function proxyAdminFlueComputerResult(
     "X-Scalius-Principal-Id": authority.principalId,
     "X-Scalius-Thread-Id": authority.threadId,
   });
-  const target = `${AGENT_ORIGIN}${RESULT_PATH_PREFIX}${authority.instanceId}`;
+  const target = `${AGENT_ORIGIN}${
+    cancellation ? CANCEL_PATH_PREFIX : RESULT_PATH_PREFIX
+  }${authority.instanceId}`;
   let agentResponse: Response;
   try {
     agentResponse = await dependencies.agent.fetch(target, {
       method: "POST",
       headers: outboundHeaders,
       redirect: "manual",
+      signal: AbortSignal.timeout(HANDOFF_PROXY_TIMEOUT_MS),
       body: JSON.stringify({
         ticket: parsedBody.ticket,
         program: parsedBody.program,
-        result: parsedBody.result,
+        ...(parsedBody.kind === "result"
+          ? { result: parsedBody.result }
+          : {}),
       }),
     });
   } catch {
-    return jsonError(502, "ADMIN_FLUE_RESULT_PROXY_FAILED", "Assistant service request failed");
+    return jsonError(
+      502,
+      cancellation
+        ? "ADMIN_FLUE_CANCELLATION_PROXY_FAILED"
+        : "ADMIN_FLUE_RESULT_PROXY_FAILED",
+      "Assistant service request failed",
+    );
   }
 
   const responseBody = await readBoundedResponseJson(agentResponse, MAX_AGENT_RESPONSE_BYTES);
-  if (
-    agentResponse.status !== 202 ||
-    !isRecord(responseBody) ||
-    responseBody.accepted !== true ||
-    responseBody.authoritative !== false ||
-    responseBody.status !== "queued_for_agent_interpretation" ||
-    responseBody.requestId !== parsedBody.requestId
-  ) {
+  const accepted = agentResponse.status === 202 &&
+    isRecord(responseBody) &&
+    responseBody.accepted === true &&
+    responseBody.requestId === parsedBody.requestId &&
+    (cancellation
+      ? responseBody.status === "cancelled"
+      : responseBody.authoritative === false &&
+        responseBody.status === "queued_for_agent_interpretation");
+  if (!accepted) {
     const status = agentResponse.status === 413 ? 413 :
       agentResponse.status === 400 ? 400 :
         agentResponse.status === 503 ? 503 : 502;
     return jsonError(
       status,
-      status === 413 ? "COMPUTER_RESULT_TOO_LARGE" : "ADMIN_FLUE_RESULT_REJECTED",
-      status === 503 ? "Assistant service is unavailable" : "Computer result was rejected",
+      status === 413
+        ? cancellation
+          ? "COMPUTER_CANCELLATION_TOO_LARGE"
+          : "COMPUTER_RESULT_TOO_LARGE"
+        : cancellation
+          ? "ADMIN_FLUE_CANCELLATION_REJECTED"
+          : "ADMIN_FLUE_RESULT_REJECTED",
+      status === 503
+        ? "Assistant service is unavailable"
+        : "Computer handoff was rejected",
     );
   }
 
   return Response.json(
     {
       accepted: true,
-      authoritative: false,
-      status: "queued_for_agent_interpretation",
+      ...(cancellation
+        ? { status: "cancelled" }
+        : {
+            authoritative: false,
+            status: "queued_for_agent_interpretation",
+          }),
       requestId: parsedBody.requestId,
     },
     { status: 202, headers: noStoreHeaders() },
@@ -267,7 +352,24 @@ function parseBrowserResultBody(value: unknown): BrowserResultBody | null {
     !parseScaliusComputerProgram(value.program).ok ||
     !isComputerResult(value.result)
   ) return null;
-  return value as unknown as BrowserResultBody;
+  return { ...(value as unknown as BrowserHandoffBody), kind: "result", result: value.result };
+}
+
+function parseBrowserCancellationBody(
+  value: unknown,
+): BrowserCancellationBody | null {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    "surface", "threadId", "requestId", "ticket", "program",
+  ])) return null;
+  if (
+    value.surface !== "admin" ||
+    typeof value.threadId !== "string" || !THREAD_ID_PATTERN.test(value.threadId) ||
+    typeof value.requestId !== "string" || !REQUEST_ID_PATTERN.test(value.requestId) ||
+    typeof value.ticket !== "string" || !TICKET_PATTERN.test(value.ticket) ||
+    typeof value.program !== "string" ||
+    !parseScaliusComputerProgram(value.program).ok
+  ) return null;
+  return { ...(value as unknown as BrowserHandoffBody), kind: "cancel" };
 }
 
 function isComputerResult(value: unknown): value is Record<string, unknown> {

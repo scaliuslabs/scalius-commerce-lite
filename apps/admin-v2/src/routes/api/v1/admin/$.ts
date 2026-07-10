@@ -63,6 +63,14 @@ export async function proxyToApi(request: Request): Promise<Response> {
   };
   if (timeout.signal) {
     init.signal = timeout.signal;
+  } else if (
+    request.method === "POST" &&
+    url.pathname === "/api/v1/admin/media/image-generation/generate"
+  ) {
+    // Generation is the one pre-save write whose provider work is safe to
+    // cancel with the browser. Saving remains server-authoritative and must
+    // not be abandoned merely because the client disconnected.
+    init.signal = request.signal;
   }
 
   // Forward body for non-GET requests

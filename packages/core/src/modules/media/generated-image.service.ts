@@ -7,23 +7,32 @@ import {
 import {
   ConflictError,
   NotFoundError,
-  RateLimitError,
   ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
-import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  or,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 import {
   deleteFile,
   extractKeyFromUrl,
+  isAmbiguousStorageWriteError,
   uploadFile,
 } from "../../integrations/storage";
+import { inspectGeneratedRaster } from "./generated-raster";
 
 const GENERATED_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 const GENERATED_IMAGE_PREVIEW_TTL_MS = 15 * 60 * 1_000;
-const GENERATED_IMAGE_RATE_WINDOW_MS = 60 * 1_000;
-const GENERATED_IMAGE_RATE_LIMIT = 5;
+const GENERATED_IMAGE_AUTHORITY_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
+const GENERATED_IMAGE_CLEANUP_LIMIT = 50;
 const GENERATED_IMAGE_TOKEN_LIMIT = 1_000_000_000;
 const GENERATED_IMAGE_CLAIM_LEASE_MS = 2 * 60 * 1_000;
 
@@ -80,6 +89,19 @@ function assertGeneratedRaster(mediaType: string, size: number): void {
   }
 }
 
+function requireGeneratedRaster(
+  bytes: ArrayBuffer | Uint8Array,
+  mediaType: string,
+): { width: number; height: number } {
+  const inspected = inspectGeneratedRaster(bytes, mediaType);
+  if (!inspected) {
+    throw new ValidationError(
+      "Generated image bytes do not match a supported raster format.",
+    );
+  }
+  return { width: inspected.width, height: inspected.height };
+}
+
 function hex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes), (byte) =>
     byte.toString(16).padStart(2, "0"),
@@ -103,46 +125,45 @@ export async function sha256Hex(value: ArrayBuffer | Uint8Array | string): Promi
   return hex(await sha256Digest(value));
 }
 
-async function cleanupExpiredGeneratedImagePreviews(
+export async function cleanupExpiredGeneratedImagePreviews(
   db: Database,
-  now: Date,
-): Promise<void> {
-  await db
-    .delete(aiImageGenerationPreviews)
-    .where(lte(aiImageGenerationPreviews.expiresAt, now));
-}
-
-async function enforceGeneratedImageRateLimit(
-  db: Database,
-  userId: string,
-  now: Date,
-): Promise<void> {
-  const windowStart = new Date(now.getTime() - GENERATED_IMAGE_RATE_WINDOW_MS);
-  const [row] = await db
-    .select({ count: sql<number>`count(*)` })
+  now = new Date(),
+  bucket?: R2Bucket,
+): Promise<number> {
+  const expired = await db
+    .select({
+      id: aiImageGenerationPreviews.id,
+      r2Key: aiImageGenerationPreviews.r2Key,
+      consumedAt: aiImageGenerationPreviews.consumedAt,
+    })
     .from(aiImageGenerationPreviews)
+    .where(lte(aiImageGenerationPreviews.retentionExpiresAt, now))
+    .limit(GENERATED_IMAGE_CLEANUP_LIMIT);
+  const ids: string[] = [];
+  for (const row of expired) {
+    if (row.r2Key && !row.consumedAt) {
+      try {
+        // Retention is seven days, far beyond the 15-minute save authority and
+        // two-minute claim lease, so any ambiguous R2 put has settled before
+        // this deterministic orphan key is removed.
+        await deleteFile(row.r2Key, bucket);
+      } catch {
+        continue;
+      }
+    }
+    ids.push(row.id);
+  }
+  if (ids.length === 0) return 0;
+  const deleted = await db
+    .delete(aiImageGenerationPreviews)
     .where(
       and(
-        eq(aiImageGenerationPreviews.userId, userId),
-        gt(aiImageGenerationPreviews.createdAt, windowStart),
+        inArray(aiImageGenerationPreviews.id, ids),
+        lte(aiImageGenerationPreviews.retentionExpiresAt, now),
       ),
-    );
-
-  if ((row?.count ?? 0) >= GENERATED_IMAGE_RATE_LIMIT) {
-    throw new RateLimitError(
-      "Too many image-generation requests. Please wait a minute and try again.",
-      60,
-    );
-  }
-}
-
-export async function enforceGeneratedImageGenerationLimit(
-  db: Database,
-  userId: string,
-  now = new Date(),
-): Promise<void> {
-  await cleanupExpiredGeneratedImagePreviews(db, now);
-  await enforceGeneratedImageRateLimit(db, userId, now);
+    )
+    .returning({ id: aiImageGenerationPreviews.id });
+  return deleted.length;
 }
 
 export async function recordGeneratedImagePreview(
@@ -174,6 +195,7 @@ export async function recordGeneratedImagePreview(
     throw new ValidationError("Image prompt must contain 1-4000 characters.");
   }
   assertGeneratedRaster(input.mediaType, input.bytes.byteLength);
+  requireGeneratedRaster(input.bytes, input.mediaType);
 
   const [imageHash, promptHash] = await Promise.all([
     sha256Hex(input.bytes),
@@ -181,6 +203,9 @@ export async function recordGeneratedImagePreview(
   ]);
   const usage = normalizedUsage(input.usage);
   const expiresAt = new Date(now.getTime() + GENERATED_IMAGE_PREVIEW_TTL_MS);
+  const retentionExpiresAt = new Date(
+    now.getTime() + GENERATED_IMAGE_AUTHORITY_RETENTION_MS,
+  );
   const id = `aig_${nanoid()}`;
 
   await db.insert(aiImageGenerationPreviews).values({
@@ -199,6 +224,7 @@ export async function recordGeneratedImagePreview(
     costStatus: "not_reported",
     createdAt: now,
     expiresAt,
+    retentionExpiresAt,
   });
 
   return {
@@ -217,10 +243,15 @@ async function releaseGeneratedImageClaim(
   generationId: string,
   userId: string,
   claimToken: string,
+  clearR2Key = false,
 ): Promise<void> {
   await db
     .update(aiImageGenerationPreviews)
-    .set({ claimedAt: null })
+    .set({
+      claimedAt: null,
+      claimToken: null,
+      ...(clearR2Key ? { r2Key: null } : {}),
+    })
     .where(
       and(
         eq(aiImageGenerationPreviews.id, generationId),
@@ -282,7 +313,14 @@ export async function saveGeneratedImagePreview(
     const [existing] = await db
       .select()
       .from(media)
-      .where(eq(media.generationId, generationId));
+      .where(
+        and(
+          eq(media.generationId, generationId),
+          preview.consumedMediaId
+            ? eq(media.id, preview.consumedMediaId)
+            : eq(media.generationId, generationId),
+        ),
+      );
     if (existing) return existing;
     throw new ServiceUnavailableError(
       "The generated image save is incomplete. Generate a new image before retrying.",
@@ -299,6 +337,7 @@ export async function saveGeneratedImagePreview(
   }
 
   const fileBytes = await input.file.arrayBuffer();
+  const dimensions = requireGeneratedRaster(fileBytes, input.file.type);
   const imageHash = await sha256Hex(fileBytes);
   if (imageHash !== preview.imageSha256) {
     throw new ValidationError("Generated image preview bytes do not match.");
@@ -314,11 +353,20 @@ export async function saveGeneratedImagePreview(
     if (!folder) throw new NotFoundError("Media folder not found.");
   }
 
+  const extension = GENERATED_IMAGE_EXTENSIONS[preview.mimeType];
+  const r2Key = `generated/${generationId}.${extension}`;
+  const hadPriorStorageEvidence = Boolean(preview.r2Key);
+  if (preview.r2Key && preview.r2Key !== r2Key) {
+    throw new ServiceUnavailableError(
+      "Generated image storage authority is inconsistent.",
+    );
+  }
+
   const staleClaimBefore = new Date(now.getTime() - GENERATED_IMAGE_CLAIM_LEASE_MS);
   const claimToken = `aic_${nanoid()}`;
   const [claim] = await db
     .update(aiImageGenerationPreviews)
-    .set({ claimedAt: now, claimToken })
+    .set({ claimedAt: now, claimToken, r2Key })
     .where(
       and(
         eq(aiImageGenerationPreviews.id, generationId),
@@ -343,18 +391,18 @@ export async function saveGeneratedImagePreview(
     );
   }
 
-  const extension = GENERATED_IMAGE_EXTENSIONS[preview.mimeType];
   const generatedFile = new File(
     [fileBytes],
     `generated-${generationId}.${extension}`,
     { type: preview.mimeType },
   );
-  let uploadedKey: string | null = null;
+  const uploadedKey = r2Key;
   const mediaId = `media_${nanoid()}`;
 
   try {
     const imageDigest = await sha256Digest(fileBytes);
     const upload = await uploadFile(generatedFile, undefined, undefined, {
+      objectKey: r2Key,
       // Workers R2 accepts the raw SHA-256 digest ArrayBuffer. This avoids
       // checksum string encoding ambiguity while R2 verifies the write.
       sha256: imageDigest,
@@ -367,7 +415,11 @@ export async function saveGeneratedImagePreview(
         costStatus: preview.costStatus,
       },
     });
-    uploadedKey = upload.key;
+    if (upload.key !== r2Key) {
+      throw new ServiceUnavailableError(
+        "Generated image storage authority is inconsistent.",
+      );
+    }
 
     // Refresh this exact claim after the bounded (<=30s) R2 write. A stale
     // request that resumes after another request reclaimed the lease cannot
@@ -402,6 +454,8 @@ export async function saveGeneratedImagePreview(
           size: upload.size,
           mimeType: upload.mimeType,
           altText,
+          width: dimensions.width,
+          height: dimensions.height,
           folderId,
           sourceType: "ai_generated",
           generationId,
@@ -420,7 +474,11 @@ export async function saveGeneratedImagePreview(
         .returning(),
       db
         .update(aiImageGenerationPreviews)
-        .set({ consumedAt: commitAt })
+        .set({
+          consumedAt: commitAt,
+          consumedMediaId: mediaId,
+          r2Key,
+        })
         .where(
           and(
             eq(aiImageGenerationPreviews.id, generationId),
@@ -438,28 +496,11 @@ export async function saveGeneratedImagePreview(
     // A zero-row guarded transition is not a D1 error, so explicitly
     // compensate before touching R2. This path should be unreachable after a
     // successful claim but keeps the save fail-closed under stale/corrupt state.
-    await safeBatch(db, [
-      db.delete(media).where(eq(media.id, mediaId)),
-      db
-        .update(aiImageGenerationPreviews)
-        .set({ claimedAt: null, claimToken: null, consumedAt: null })
-        .where(
-          and(
-            eq(aiImageGenerationPreviews.id, generationId),
-            eq(aiImageGenerationPreviews.userId, userId),
-            eq(aiImageGenerationPreviews.claimToken, claimToken),
-          ),
-        ),
-    ]);
+    await safeBatch(db, [db.delete(media).where(eq(media.id, mediaId))]);
     throw new ServiceUnavailableError(
       "Generated image save could not be committed.",
     );
   } catch (error) {
-    if (!uploadedKey) {
-      await releaseGeneratedImageClaim(db, generationId, userId, claimToken);
-      throw error;
-    }
-
     // A D1 batch can commit and still lose its response. Reconcile the unique
     // generation ID before deleting R2; D1 is authoritative and strongly
     // consistent. If the read itself is unavailable, retain both object and
@@ -471,6 +512,22 @@ export async function saveGeneratedImagePreview(
         .where(eq(media.generationId, generationId));
       if (committed) {
         const committedKey = extractKeyFromUrl(committed.url);
+        await db
+          .update(aiImageGenerationPreviews)
+          .set({
+            consumedAt: committed.generatedAt ?? input.now ?? new Date(),
+            consumedMediaId: committed.id,
+            r2Key: committedKey ?? uploadedKey,
+            claimedAt: null,
+            claimToken: null,
+          })
+          .where(
+            and(
+              eq(aiImageGenerationPreviews.id, generationId),
+              eq(aiImageGenerationPreviews.userId, userId),
+              isNull(aiImageGenerationPreviews.consumedAt),
+            ),
+          );
         if (committedKey && committedKey !== uploadedKey) {
           try {
             await deleteFile(uploadedKey);
@@ -481,16 +538,57 @@ export async function saveGeneratedImagePreview(
         }
         return committed;
       }
+      const [currentAuthority] = await db
+        .select({ claimToken: aiImageGenerationPreviews.claimToken })
+        .from(aiImageGenerationPreviews)
+        .where(
+          and(
+            eq(aiImageGenerationPreviews.id, generationId),
+            eq(aiImageGenerationPreviews.userId, userId),
+          ),
+        );
+      if (!currentAuthority || currentAuthority.claimToken !== claimToken) {
+        throw error;
+      }
     } catch {
       throw error;
     }
 
+    // A local upload deadline cannot cancel R2's in-flight put. Keep both the
+    // deterministic key and claim lease, and never issue a racing delete. An
+    // immediate retry therefore cannot race the original put; a later retry
+    // can safely overwrite the same key with the exact hash-verified bytes.
+    if (isAmbiguousStorageWriteError(error)) {
+      throw error;
+    }
+
+    // A prior timed-out put may still materialize after this retry fails. The
+    // shared deterministic key remains cleanup evidence and must not be
+    // deleted or cleared by a later non-ambiguous failure.
+    if (hadPriorStorageEvidence) {
+      await releaseGeneratedImageClaim(
+        db,
+        generationId,
+        userId,
+        claimToken,
+      );
+      throw error;
+    }
+
+    let objectDeleted = false;
     try {
       await deleteFile(uploadedKey);
+      objectDeleted = true;
     } catch {
       // The media row was not committed; an orphan is safer than a broken row.
     }
-    await releaseGeneratedImageClaim(db, generationId, userId, claimToken);
+    await releaseGeneratedImageClaim(
+      db,
+      generationId,
+      userId,
+      claimToken,
+      objectDeleted,
+    );
     throw error;
   }
 }

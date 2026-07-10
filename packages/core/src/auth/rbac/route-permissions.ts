@@ -1035,6 +1035,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/internal/admin-assistant/flue/command": {
     POST: { allowAnyAdmin: true },
   },
+  "/api/v1/internal/admin-assistant/flue/computer-handoff/*": {
+    POST: { allowAnyAdmin: true },
+  },
 
   // =============================================
   // Inventory API

@@ -80,7 +80,7 @@ function toMediaFolder(folder: MediaFolderDto): MediaFolder {
 export class MediaApiClient {
   static async generateImagePreview(input: {
     prompt: string;
-    aspectRatio: "auto" | "1:1" | "4:5" | "3:2" | "16:9";
+    aspectRatio: "auto" | "1:1" | "2:3" | "4:5" | "3:2" | "16:9";
     seed?: number;
     signal?: AbortSignal;
   }): Promise<GeneratedImagePreview> {

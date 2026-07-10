@@ -4,6 +4,8 @@ import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/orders/aba
 import { cleanupExpiredOrderPaymentRecoveryChallenges } from "@scalius/core/modules/orders";
 import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete-orders";
 import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
+import { cleanupExpiredGeneratedImagePreviews } from "@scalius/core/modules/media";
+import { cleanupExpiredAssistantComputerHandoffs } from "@scalius/core/modules/assistant";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
@@ -154,6 +156,27 @@ async function runScheduledMaintenanceInner(
   const db = getDb(env);
   const timed = <T>(operation: string, fn: () => Promise<T>) =>
     timedScheduledOperation(runContext, operation, fn);
+
+  const deletedGeneratedImagePreviews = await timed(
+    "generated_image_preview_cleanup",
+    () => cleanupExpiredGeneratedImagePreviews(db, new Date(), env.BUCKET),
+  );
+  if (deletedGeneratedImagePreviews > 0) {
+    console.log(
+      `[scheduled] Generated image preview cleanup: deleted=${deletedGeneratedImagePreviews}`,
+    );
+  }
+  const handoffCleanup = await timed(
+    "assistant_computer_handoff_cleanup",
+    () => cleanupExpiredAssistantComputerHandoffs(db),
+  );
+  if (handoffCleanup.scanned > 0 || handoffCleanup.hasMore) {
+    console.log(
+      `[scheduled] Assistant computer handoff cleanup: scanned=${handoffCleanup.scanned}, ` +
+        `deleted=${handoffCleanup.deleted}, limit=${handoffCleanup.limit}, ` +
+        `hasMore=${handoffCleanup.hasMore}`,
+    );
+  }
 
   const result = await timed("inventory_expiry_sweep", () =>
     releaseExpiredReservations(db, 30, {

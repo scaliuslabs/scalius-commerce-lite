@@ -110,6 +110,25 @@ export interface UploadResult {
 export interface UploadFileMetadata {
   customMetadata?: Record<string, string>;
   sha256?: ArrayBuffer | ArrayBufferView | string;
+  objectKey?: string;
+}
+
+/**
+ * R2 does not cancel an in-flight put when the caller's local deadline wins.
+ * Callers must retain their deterministic object-key cleanup evidence when
+ * this error is raised; a late successful put can still materialize.
+ */
+export class AmbiguousStorageWriteError extends ServiceUnavailableError {
+  constructor() {
+    super("Media storage timed out. The save was not confirmed.");
+    this.name = "AmbiguousStorageWriteError";
+  }
+}
+
+export function isAmbiguousStorageWriteError(
+  error: unknown,
+): error is AmbiguousStorageWriteError {
+  return error instanceof AmbiguousStorageWriteError;
 }
 
 function boundedCustomMetadata(
@@ -125,6 +144,63 @@ function boundedCustomMetadata(
       )
       .slice(0, 16),
   );
+}
+
+function validatedObjectKey(value: string | undefined, fallback: string): string {
+  if (value === undefined) return fallback;
+  const key = value.trim();
+  if (
+    key.length === 0 ||
+    key.length > 320 ||
+    key.startsWith("/") ||
+    key.endsWith("/") ||
+    key.includes("..") ||
+    key.includes("//") ||
+    !/^[A-Za-z0-9][A-Za-z0-9/_-]*\.[A-Za-z0-9]{1,10}$/u.test(key)
+  ) {
+    throw new ValidationError("Media storage key is invalid.");
+  }
+  return key;
+}
+
+function byteViewsEqual(
+  left: ArrayBuffer | ArrayBufferView,
+  right: ArrayBuffer | ArrayBufferView,
+): boolean {
+  const leftBytes = ArrayBuffer.isView(left)
+    ? new Uint8Array(left.buffer, left.byteOffset, left.byteLength)
+    : new Uint8Array(left);
+  const rightBytes = ArrayBuffer.isView(right)
+    ? new Uint8Array(right.buffer, right.byteOffset, right.byteLength)
+    : new Uint8Array(right);
+  if (leftBytes.byteLength !== rightBytes.byteLength) return false;
+  return leftBytes.every((byte, index) => byte === rightBytes[index]);
+}
+
+function reconciledUploadMatches(
+  object: R2Object,
+  expectedSize: number,
+  expectedSha256: UploadFileMetadata["sha256"],
+): boolean {
+  if (object.size !== expectedSize) return false;
+  if (!expectedSha256 || typeof expectedSha256 === "string") return true;
+  const storedSha256 = r2ObjectSha256(object);
+  return Boolean(
+    storedSha256 && byteViewsEqual(storedSha256, expectedSha256),
+  );
+}
+
+function r2ObjectSha256(object: R2Object): ArrayBuffer | undefined {
+  if (!("checksums" in object)) return undefined;
+  const checksums = object.checksums;
+  if (
+    typeof checksums !== "object" ||
+    checksums === null ||
+    !("sha256" in checksums)
+  ) return undefined;
+  return checksums.sha256 instanceof ArrayBuffer
+    ? checksums.sha256
+    : undefined;
 }
 
 /**
@@ -147,25 +223,20 @@ export async function uploadFile(
 
   const r2 = bucket ?? _bucket;
   if (!r2) {
-    throw new ServiceUnavailableError(
-      "R2 bucket binding is not available. " +
-        "Pass the bucket argument explicitly or call initStorage() first.",
-    );
+    throw new ServiceUnavailableError("Media storage is temporarily unavailable.");
   }
 
   // Use the R2_PUBLIC_URL configured via initStorage() in middleware.
   // If not set, the URL field in the result will just be the bare key.
   const baseUrl = (publicUrl ?? _publicUrl) || "";
   const ext = file.name.split(".").pop();
-  const key = `${nanoid()}.${ext}`;
+  const key = validatedObjectKey(metadata?.objectKey, `${nanoid()}.${ext}`);
 
   let fileBuffer: ArrayBuffer;
   try {
     fileBuffer = await file.arrayBuffer();
-  } catch (err: unknown) {
-    throw new ServiceUnavailableError(
-      `Failed to read file: ${err instanceof Error ? err.message : "Unknown error"}`,
-    );
+  } catch {
+    throw new ServiceUnavailableError("Media storage is temporarily unavailable.");
   }
 
   // Upload with timeout
@@ -182,23 +253,40 @@ export async function uploadFile(
     ...(metadata?.sha256 ? { sha256: metadata.sha256 } : {}),
   });
 
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
       () => reject(new Error(`Upload timeout after ${UPLOAD_TIMEOUT} ms`)),
       UPLOAD_TIMEOUT,
-    ),
-  );
+    );
+  });
 
   try {
     await Promise.race([uploadPromise, timeoutPromise]);
   } catch (err: unknown) {
-    let userMessage = err instanceof Error ? err.message : "Upload failed";
-    if (userMessage.includes("timeout"))
-      userMessage =
-        "Upload timeout – file may be too large or connection is slow";
-    if (userMessage.includes("NetworkingError"))
-      userMessage = "Network error – please check your connection";
-    throw new ServiceUnavailableError(userMessage);
+    if (err instanceof Error && err.message.includes("timeout")) {
+      try {
+        const reconciled = await r2.head(key);
+        if (
+          reconciled &&
+          reconciledUploadMatches(reconciled, file.size, metadata?.sha256)
+        ) {
+          return {
+            key,
+            url: buildPublicUrl(baseUrl, key),
+            size: file.size,
+            filename: file.name,
+            mimeType: file.type,
+          };
+        }
+      } catch {
+        // The deterministic key remains available to the caller for cleanup.
+      }
+      throw new AmbiguousStorageWriteError();
+    }
+    throw new ServiceUnavailableError("Media storage is temporarily unavailable.");
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 
   return {
@@ -224,11 +312,8 @@ export async function deleteFile(
 
   try {
     await r2.delete(key);
-    console.log(`[R2] Deleted: ${key}`);
-  } catch (err: unknown) {
-    throw new ServiceUnavailableError(
-      `Failed to delete file: ${err instanceof Error ? err.message : "Unknown error"}`,
-    );
+  } catch {
+    throw new ServiceUnavailableError("Media storage is temporarily unavailable.");
   }
 }
 

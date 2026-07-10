@@ -47363,6 +47363,7 @@
                     "enum": [
                       "auto",
                       "1:1",
+                      "2:3",
                       "4:5",
                       "3:2",
                       "16:9"
@@ -47386,6 +47387,70 @@
         "responses": {
           "200": {
             "description": "Generated image bytes with bounded provenance headers",
+            "headers": {
+              "X-Scalius-Generation-Id": {
+                "description": "Opaque generated preview authority ID",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Scalius-Generation-Provider": {
+                "description": "Configured image provider",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Scalius-Generation-Model": {
+                "description": "Percent-encoded configured image model",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Scalius-Generation-Prompt-Hash": {
+                "description": "SHA-256 hash of the normalized prompt",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Scalius-Generation-Cost-Status": {
+                "description": "Whether the provider reported generation cost",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "reported",
+                    "not_reported"
+                  ]
+                }
+              },
+              "X-Scalius-Generation-Expires-At": {
+                "description": "Preview save-authority expiry timestamp",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "X-Scalius-Generation-Input-Tokens": {
+                "description": "Provider-reported input tokens when available",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "X-Scalius-Generation-Output-Tokens": {
+                "description": "Provider-reported output tokens when available",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "X-Scalius-Generation-Total-Tokens": {
+                "description": "Provider-reported total tokens when available",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              }
+            },
             "content": {
               "image/png": {
                 "schema": {
@@ -47701,6 +47766,37 @@
           "Admin - Media"
         ],
         "summary": "Verify and save a generated image preview to the media library",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "generationId": {
+                    "type": "string",
+                    "pattern": "^aig_[A-Za-z0-9_-]{10,100}$"
+                  },
+                  "altText": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "folderId": {
+                    "type": "string",
+                    "maxLength": 255
+                  }
+                },
+                "required": [
+                  "file",
+                  "generationId"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Generated image saved to the media library",

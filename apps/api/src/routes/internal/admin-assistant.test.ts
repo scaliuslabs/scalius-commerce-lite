@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   createWorkflow: vi.fn(),
   listEvents: vi.fn(),
   executeCommand: vi.fn(),
+  consumeHandoff: vi.fn(),
+  confirmHandoff: vi.fn(),
+  resolveFlueAuthority: vi.fn(),
 }));
 
 vi.mock("../../middleware/admin-auth", () => ({
@@ -39,6 +42,18 @@ vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
     revokeAssistantSession: mocks.revokeSession,
     createAssistantWorkflow: mocks.createWorkflow,
     listAssistantEvents: mocks.listEvents,
+    consumeAssistantComputerHandoff: mocks.consumeHandoff,
+    confirmAssistantComputerHandoffDispatch: mocks.confirmHandoff,
+  };
+});
+
+vi.mock("./flue-command-authority", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("./flue-command-authority")
+  >();
+  return {
+    ...actual,
+    resolveAdminFlueCommandAuthority: mocks.resolveFlueAuthority,
   };
 });
 
@@ -197,6 +212,23 @@ describe("internal Admin assistant authority boundary", () => {
       success: true,
       data: { command: "help", capabilities: [] },
     });
+    mocks.resolveFlueAuthority.mockResolvedValue({
+      session: { id: "as_session_1" },
+      permissions: new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    });
+    mocks.consumeHandoff.mockImplementation(async (_db, input) => ({
+      status: "claimed",
+      state: input.state,
+      requestId: input.requestId,
+      ...(input.state === "dispatched"
+        ? { dispatchClaimToken: "d".repeat(43) }
+        : {}),
+    }));
+    mocks.confirmHandoff.mockImplementation(async (_db, input) => ({
+      status: "confirmed",
+      state: "dispatched",
+      requestId: input.requestId,
+    }));
 
     mocks.createSession.mockImplementation(async (
       _db: unknown,
@@ -430,6 +462,136 @@ describe("internal Admin assistant authority boundary", () => {
     );
     expect(malformed.status).toBe(400);
     expect(mocks.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it("atomically consumes and confirms bound-instance handoffs without dashboard middleware", async () => {
+    const { app, db, env } = createTestApp();
+    const instanceId = `v1.${"i".repeat(43)}`;
+    const requestId = "abcdefghijklmnopqrstuv";
+    const programDigest = "p".repeat(43);
+    const ticketExpiresAt = Date.now() + 120_000;
+    const consumed = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConsume,
+      {
+        instanceId,
+        requestId,
+        programDigest,
+        state: "dispatched",
+        ticketExpiresAt,
+      },
+      { "Content-Type": "application/json" },
+    );
+    expect(consumed.status).toBe(200);
+    await expect(consumed.json()).resolves.toEqual({
+      success: true,
+      data: {
+        status: "claimed",
+        state: "dispatched",
+        requestId,
+        dispatchClaimToken: "d".repeat(43),
+      },
+    });
+    expect(mocks.authenticate).not.toHaveBeenCalled();
+    expect(mocks.resolveFlueAuthority).toHaveBeenCalledWith(
+      expect.objectContaining({ env }),
+      instanceId,
+    );
+    expect(mocks.consumeHandoff).toHaveBeenCalledWith(db, {
+      sessionId: "as_session_1",
+      agentInstanceId: instanceId,
+      requestId,
+      programDigest,
+      state: "dispatched",
+      ticketExpiresAt,
+    });
+
+    const confirmed = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConfirm,
+      {
+        instanceId,
+        requestId,
+        programDigest,
+        dispatchClaimToken: "d".repeat(43),
+      },
+      { "Content-Type": "application/json" },
+    );
+    expect(confirmed.status).toBe(200);
+    await expect(confirmed.json()).resolves.toEqual({
+      success: true,
+      data: { status: "confirmed", state: "dispatched", requestId },
+    });
+    expect(mocks.confirmHandoff).toHaveBeenCalledWith(db, {
+      sessionId: "as_session_1",
+      agentInstanceId: instanceId,
+      requestId,
+      programDigest,
+      dispatchClaimToken: "d".repeat(43),
+    });
+  });
+
+  it("fails handoff conflicts, uncertainty, injected identity, and malformed bodies closed", async () => {
+    const { app, env } = createTestApp();
+    const body = {
+      instanceId: `v1.${"i".repeat(43)}`,
+      requestId: "abcdefghijklmnopqrstuv",
+      programDigest: "p".repeat(43),
+      state: "cancelled",
+      ticketExpiresAt: Date.now() + 120_000,
+    };
+    mocks.consumeHandoff.mockResolvedValueOnce({
+      status: "conflict",
+      state: "dispatched",
+      requestId: body.requestId,
+    });
+    const conflict = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConsume,
+      body,
+      { "Content-Type": "application/json" },
+    );
+    expect(conflict.status).toBe(409);
+    await expect(conflict.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: "handoff_terminal_conflict", retryable: false },
+    });
+
+    mocks.consumeHandoff.mockResolvedValueOnce({
+      status: "uncertain",
+      state: "dispatched",
+      requestId: body.requestId,
+    });
+    const uncertain = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConsume,
+      { ...body, state: "dispatched" },
+      { "Content-Type": "application/json" },
+    );
+    expect(uncertain.status).toBe(503);
+    await expect(uncertain.json()).resolves.toMatchObject({
+      error: { code: "handoff_dispatch_uncertain", retryable: false },
+    });
+
+    for (const [invalidBody, headers] of [
+      [body, { "Content-Type": "application/json", Cookie: "forged=1" }],
+      [body, { "Content-Type": "application/json", "X-Scalius-Thread-Id": "forged" }],
+      [{ ...body, requestId: "short" }, { "Content-Type": "application/json" }],
+    ] as const) {
+      const invalid = await post(
+        app,
+        env,
+        ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConsume,
+        invalidBody,
+        headers,
+      );
+      expect(invalid.status).toBe(400);
+    }
+    expect(mocks.consumeHandoff).toHaveBeenCalledTimes(2);
   });
 
   it("derives session ownership and policy snapshot server-side without echoing credentials", async () => {

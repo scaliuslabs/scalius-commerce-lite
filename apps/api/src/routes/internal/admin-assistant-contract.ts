@@ -24,6 +24,10 @@ export const ADMIN_ASSISTANT_AUTHORITY_PATHS = Object.freeze({
     `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/capabilities/describe`,
   flueAdmit: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admit`,
   flueCommand: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/command`,
+  flueComputerHandoffConsume:
+    `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/consume`,
+  flueComputerHandoffConfirm:
+    `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/confirm`,
 } as const);
 
 const authorityPathSet = new Set<string>(
@@ -56,6 +60,23 @@ export const adminAssistantFlueCommandSchema = z.object({
   instanceId: z.string().regex(/^v1\.[A-Za-z0-9_-]{43}$/u),
   program: z.string().max(SCALIUS_COMMAND_LIMITS.programChars),
 }).strict();
+
+const computerHandoffIdentitySchema = z.object({
+  instanceId: z.string().regex(/^v1\.[A-Za-z0-9_-]{43}$/u),
+  requestId: z.string().regex(/^[A-Za-z0-9_-]{22}$/u),
+  programDigest: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+}).strict();
+
+export const adminAssistantComputerHandoffConsumeSchema =
+  computerHandoffIdentitySchema.extend({
+    state: z.enum(["cancelled", "dispatched"]),
+    ticketExpiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  }).strict();
+
+export const adminAssistantComputerHandoffConfirmSchema =
+  computerHandoffIdentitySchema.extend({
+    dispatchClaimToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+  }).strict();
 
 export const adminAssistantWorkflowCreateSchema = z.object({
   clientRequestId: opaqueIdSchema,

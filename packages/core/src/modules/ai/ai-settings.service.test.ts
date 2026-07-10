@@ -459,6 +459,104 @@ describe("widget AI settings", () => {
     ).toBe("google/gemini-3.5-flash");
   });
 
+  it("canonicalizes third-party Cloudflare model IDs in provider and profile storage", () => {
+    const config = normalizeWidgetAiConfig({
+      providers: {
+        cloudflare: {
+          enabled: true,
+          defaultModel: " @google/nano-banana-2-lite ",
+          allowedModels: [
+            "@openai/gpt-image-1",
+            "@cf/black-forest-labs/flux-2-dev",
+          ],
+        },
+        openai: {
+          defaultModel: "@openai/gpt-image-1",
+          allowedModels: ["@google/nano-banana-2-lite"],
+        },
+      },
+      profiles: {
+        imageGeneration: {
+          enabled: true,
+          provider: "cloudflare",
+          model: "@google/nano-banana-2-lite",
+        },
+      },
+    });
+
+    expect(config.providers.cloudflare).toMatchObject({
+      defaultModel: "google/nano-banana-2-lite",
+      allowedModels: [
+        "openai/gpt-image-1",
+        "@cf/black-forest-labs/flux-2-dev",
+      ],
+    });
+    expect(config.profiles.imageGeneration).toEqual({
+      enabled: true,
+      provider: "cloudflare",
+      model: "google/nano-banana-2-lite",
+    });
+    expect(config.providers.openai).toMatchObject({
+      defaultModel: "@openai/gpt-image-1",
+      allowedModels: ["@google/nano-banana-2-lite"],
+    });
+  });
+
+  it("resolves a unified Cloudflare image model under Cloudflare credentials", () => {
+    const runtime: WidgetAiRuntimeSettings = {
+      ...normalizeWidgetAiConfig({
+        providers: {
+          cloudflare: {
+            enabled: true,
+            defaultModel: "@google/nano-banana-2",
+          },
+        },
+        profiles: {
+          imageGeneration: {
+            enabled: true,
+            provider: "cloudflare",
+            model: "@google/nano-banana-2",
+          },
+        },
+      }),
+      apiKeys: {},
+      credentialErrors: {},
+      hasCloudflareBinding: true,
+    };
+
+    expect(resolveAiModelProfile(runtime, "imageGeneration")).toMatchObject({
+      provider: "cloudflare",
+      model: "google/nano-banana-2",
+    });
+  });
+
+  it("rejects unreviewed Cloudflare image model schemas", () => {
+    const runtime: WidgetAiRuntimeSettings = {
+      ...normalizeWidgetAiConfig({
+        providers: {
+          cloudflare: {
+            enabled: true,
+            defaultModel: "google/nano-banana-2-lite",
+          },
+        },
+        profiles: {
+          imageGeneration: {
+            enabled: true,
+            provider: "cloudflare",
+            model: "google/nano-banana-2-lite",
+          },
+        },
+      }),
+      apiKeys: {},
+      credentialErrors: {},
+      hasCloudflareBinding: true,
+    };
+
+    expect(() => resolveAiModelProfile(runtime, "imageGeneration")).toThrow(
+      "not supported",
+    );
+  });
+
   it("rejects malformed Cloudflare model IDs before provider dispatch", () => {
     const runtime: WidgetAiRuntimeSettings = {
       ...DEFAULT_WIDGET_AI_CONFIG,

@@ -76,6 +76,7 @@ import { Route as AdminCollectionsCollectionIdEditRouteImport } from './routes/a
 import { Route as AdminCategoriesCategoryIdEditRouteImport } from './routes/admin/categories/$categoryId/edit'
 import { Route as AdminAnalyticsAnalyticsIdEditRouteImport } from './routes/admin/analytics/$analyticsId/edit'
 import { Route as ApiAssistantFlueComputerResultsRouteImport } from './routes/api/assistant/flue/computer/results'
+import { Route as ApiAssistantFlueComputerCancelRouteImport } from './routes/api/assistant/flue/computer/cancel'
 import { Route as ApiAssistantFlueAgentsSplatRouteImport } from './routes/api/assistant/flue/agents/$'
 
 const ScannerRoute = ScannerRouteImport.update({
@@ -428,6 +429,12 @@ const ApiAssistantFlueComputerResultsRoute =
     path: '/api/assistant/flue/computer/results',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAssistantFlueComputerCancelRoute =
+  ApiAssistantFlueComputerCancelRouteImport.update({
+    id: '/api/assistant/flue/computer/cancel',
+    path: '/api/assistant/flue/computer/cancel',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAssistantFlueAgentsSplatRoute =
   ApiAssistantFlueAgentsSplatRouteImport.update({
     id: '/api/assistant/flue/agents/$',
@@ -503,6 +510,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
   '/api/assistant/flue/agents/$': typeof ApiAssistantFlueAgentsSplatRoute
+  '/api/assistant/flue/computer/cancel': typeof ApiAssistantFlueComputerCancelRoute
   '/api/assistant/flue/computer/results': typeof ApiAssistantFlueComputerResultsRoute
 }
 export interface FileRoutesByTo {
@@ -572,6 +580,7 @@ export interface FileRoutesByTo {
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId': typeof AdminProductsProductIdIndexRoute
   '/api/assistant/flue/agents/$': typeof ApiAssistantFlueAgentsSplatRoute
+  '/api/assistant/flue/computer/cancel': typeof ApiAssistantFlueComputerCancelRoute
   '/api/assistant/flue/computer/results': typeof ApiAssistantFlueComputerResultsRoute
 }
 export interface FileRoutesById {
@@ -643,6 +652,7 @@ export interface FileRoutesById {
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
   '/api/assistant/flue/agents/$': typeof ApiAssistantFlueAgentsSplatRoute
+  '/api/assistant/flue/computer/cancel': typeof ApiAssistantFlueComputerCancelRoute
   '/api/assistant/flue/computer/results': typeof ApiAssistantFlueComputerResultsRoute
 }
 export interface FileRouteTypes {
@@ -715,6 +725,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
     | '/api/assistant/flue/agents/$'
+    | '/api/assistant/flue/computer/cancel'
     | '/api/assistant/flue/computer/results'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -784,6 +795,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId'
     | '/admin/products/$productId'
     | '/api/assistant/flue/agents/$'
+    | '/api/assistant/flue/computer/cancel'
     | '/api/assistant/flue/computer/results'
   id:
     | '__root__'
@@ -854,6 +866,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
     | '/api/assistant/flue/agents/$'
+    | '/api/assistant/flue/computer/cancel'
     | '/api/assistant/flue/computer/results'
   fileRoutesById: FileRoutesById
 }
@@ -870,6 +883,7 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiV1AdminSplatRoute: typeof ApiV1AdminSplatRoute
   ApiAssistantFlueAgentsSplatRoute: typeof ApiAssistantFlueAgentsSplatRoute
+  ApiAssistantFlueComputerCancelRoute: typeof ApiAssistantFlueComputerCancelRoute
   ApiAssistantFlueComputerResultsRoute: typeof ApiAssistantFlueComputerResultsRoute
 }
 
@@ -1344,6 +1358,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAssistantFlueComputerResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/assistant/flue/computer/cancel': {
+      id: '/api/assistant/flue/computer/cancel'
+      path: '/api/assistant/flue/computer/cancel'
+      fullPath: '/api/assistant/flue/computer/cancel'
+      preLoaderRoute: typeof ApiAssistantFlueComputerCancelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/assistant/flue/agents/$': {
       id: '/api/assistant/flue/agents/$'
       path: '/api/assistant/flue/agents/$'
@@ -1493,6 +1514,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiV1AdminSplatRoute: ApiV1AdminSplatRoute,
   ApiAssistantFlueAgentsSplatRoute: ApiAssistantFlueAgentsSplatRoute,
+  ApiAssistantFlueComputerCancelRoute: ApiAssistantFlueComputerCancelRoute,
   ApiAssistantFlueComputerResultsRoute: ApiAssistantFlueComputerResultsRoute,
 }
 export const routeTree = rootRouteImport

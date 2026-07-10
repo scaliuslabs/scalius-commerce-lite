@@ -17,6 +17,78 @@ export const SYSTEM_PROMPT_CACHE_TTL = 300;
 // ============================================================================
 
 export const AI_PROVIDER_IDS = ["openrouter", "openai", "gemini", "cloudflare"] as const;
+export const IMAGE_GENERATION_PROVIDER_IDS = [
+  "openai",
+  "gemini",
+  "cloudflare",
+] as const;
+export const DEFAULT_IMAGE_GENERATION_MODELS = {
+  openai: "gpt-image-1",
+  gemini: "imagen-4.0-generate-001",
+  cloudflare: "google/nano-banana-2",
+} as const;
+
+/**
+ * Image bindings are deliberately an exact catalog, not a family regex.
+ * Workers AI model families do not share one request/response contract, so a
+ * newly named model must be reviewed against its current schema before it can
+ * reach the runtime.
+ */
+export const CLOUDFLARE_IMAGE_MODEL_CAPABILITIES = {
+  "@cf/black-forest-labs/flux-2-dev": {
+    input: "native-multipart-pixels",
+    output: "native-base64",
+  },
+  "@cf/black-forest-labs/flux-2-klein-4b": {
+    input: "native-multipart-pixels",
+    output: "native-base64",
+  },
+  "@cf/black-forest-labs/flux-2-klein-9b": {
+    input: "native-multipart-pixels",
+    output: "native-base64",
+  },
+  "@cf/black-forest-labs/flux-1-schnell": {
+    input: "native-json-default-size",
+    output: "native-base64",
+  },
+  "@cf/bytedance/stable-diffusion-xl-lightning": {
+    input: "native-json-pixels",
+    output: "native-raster",
+  },
+  "@cf/stabilityai/stable-diffusion-xl-base-1.0": {
+    input: "native-json-pixels",
+    output: "native-raster",
+  },
+  "google/nano-banana": {
+    input: "unified-google-nano-banana",
+    output: "unified-https-url",
+  },
+  "google/nano-banana-2": {
+    input: "unified-google-nano-banana",
+    output: "unified-https-url",
+  },
+  "google/nano-banana-pro": {
+    input: "unified-google-nano-banana",
+    output: "unified-https-url",
+  },
+  "google/imagen-4": {
+    input: "unified-google-imagen-4",
+    output: "unified-https-url",
+  },
+  "openai/gpt-image-1.5": {
+    input: "unified-openai-gpt-image-1.5",
+    output: "unified-https-url",
+  },
+  "openai/gpt-image-2": {
+    input: "unified-openai-gpt-image-2",
+    output: "unified-https-url",
+  },
+} as const;
+
+export type CloudflareImageModelId =
+  keyof typeof CLOUDFLARE_IMAGE_MODEL_CAPABILITIES;
+export type CloudflareImageModelCapability =
+  (typeof CLOUDFLARE_IMAGE_MODEL_CAPABILITIES)[CloudflareImageModelId];
 export const AI_MODEL_PROFILE_IDS = [
   "adminChat",
   "storefrontChat",
@@ -28,6 +100,60 @@ export const WIDGET_AI_STRUCTURED_OUTPUT_MODES = ["auto", "sdk", "text"] as cons
 export const WIDGET_AI_VISION_INPUT_MODES = ["auto", "enabled", "disabled"] as const;
 
 export type WidgetAiProvider = (typeof AI_PROVIDER_IDS)[number];
+export type ImageGenerationProvider =
+  (typeof IMAGE_GENERATION_PROVIDER_IDS)[number];
+
+export function isImageGenerationProvider(
+  provider: WidgetAiProvider,
+): provider is ImageGenerationProvider {
+  return (IMAGE_GENERATION_PROVIDER_IDS as readonly string[]).includes(provider);
+}
+
+/**
+ * Cloudflare Unified Billing/catalog IDs use `provider/model`; native Workers
+ * AI models keep the `@cf/author/model` prefix. Canonicalize only the common
+ * accidental third-party `@provider/model` spelling.
+ */
+export function normalizeCloudflareAiModelId(rawModel: string): string {
+  const model = rawModel.trim();
+  if (/^@cf\//iu.test(model)) return model;
+  if (/^@(openai|google)\//iu.test(model)) return model.slice(1);
+  return model;
+}
+
+export function getCloudflareImageModelCapability(
+  rawModel: string,
+): CloudflareImageModelCapability | undefined {
+  const model = normalizeCloudflareAiModelId(rawModel);
+  if (!Object.hasOwn(CLOUDFLARE_IMAGE_MODEL_CAPABILITIES, model)) {
+    return undefined;
+  }
+  return CLOUDFLARE_IMAGE_MODEL_CAPABILITIES[model as CloudflareImageModelId];
+}
+
+export function isImageGenerationModel(
+  provider: WidgetAiProvider,
+  rawModel: string,
+): boolean {
+  const normalizedModel =
+    provider === "cloudflare"
+      ? normalizeCloudflareAiModelId(rawModel)
+      : rawModel.trim();
+  const model = normalizedModel.toLowerCase();
+  if (!model || !isImageGenerationProvider(provider)) return false;
+  if (provider === "cloudflare") {
+    return (
+      normalizedModel === model &&
+      getCloudflareImageModelCapability(normalizedModel) !== undefined
+    );
+  }
+  if (provider === "openai") {
+    return /^(?:gpt-image-[a-z0-9._-]+|dall-e-[23])$/u.test(model);
+  }
+  return /^(?:imagen-[a-z0-9._-]+|gemini-[a-z0-9._-]*image[a-z0-9._-]*)$/u.test(
+    model,
+  );
+}
 export type AiModelProfileId = (typeof AI_MODEL_PROFILE_IDS)[number];
 export type WidgetAiStructuredOutputMode = (typeof WIDGET_AI_STRUCTURED_OUTPUT_MODES)[number];
 export type WidgetAiVisionInputMode = (typeof WIDGET_AI_VISION_INPUT_MODES)[number];
