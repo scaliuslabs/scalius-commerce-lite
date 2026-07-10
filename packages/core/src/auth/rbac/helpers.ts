@@ -23,6 +23,11 @@ const permissionCache = new Map<
 const CACHE_TTL = 300; // 5 minutes in KV
 const PERMISSION_CACHE_VERSION = getRbacSeedCacheKey();
 
+interface D1PermissionResolution {
+  userFound: boolean;
+  permissions: Set<string>;
+}
+
 /**
  * Get the cache key for a user's permissions
  */
@@ -67,6 +72,20 @@ export async function clearPermissionCacheForRole(
 }
 
 /**
+ * Resolve a user's effective permissions directly from D1.
+ *
+ * Security-sensitive authority rechecks use this path so a revoked role grant
+ * or a new explicit denial takes effect without waiting for local/KV caches to
+ * expire. This function never reads from or writes to either permission cache.
+ */
+export async function getFreshUserPermissionsFromD1(
+  db: Database,
+  userId: string,
+): Promise<Set<string>> {
+  return (await resolveUserPermissionsFromD1(db, userId)).permissions;
+}
+
+/**
  * Get all effective permissions for a user
  * Resolution order:
  * 1. Super admin -> all permissions
@@ -103,7 +122,32 @@ export async function getUserPermissions(
     }
   }
 
-  // Batch all 3 queries in a single D1 round-trip (was 3 sequential awaits)
+  const resolution = await resolveUserPermissionsFromD1(db, userId);
+  if (!resolution.userFound) {
+    return new Set();
+  }
+  const effectivePermissions = resolution.permissions;
+
+  // Cache the result in local memory
+  permissionCache.set(userId, {
+    permissions: effectivePermissions,
+    timestamp: Date.now(),
+  });
+
+  // Cache the result in KV for other isolates.
+  if (kv) {
+    await kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(effectivePermissions)), { expirationTtl: CACHE_TTL });
+  }
+
+  return effectivePermissions;
+}
+
+async function resolveUserPermissionsFromD1(
+  db: Database,
+  userId: string,
+): Promise<D1PermissionResolution> {
+  // Keep the user/super-admin row, role grants, and user overrides in one D1
+  // batch so every result comes from the same authoritative recheck.
   const [userResult, rolePerms, overrides] = await db.batch([
     db.select({ id: user.id, isSuperAdmin: user.isSuperAdmin })
       .from(user).where(eq(user.id, userId)).limit(1),
@@ -123,49 +167,30 @@ export async function getUserPermissions(
     { permissionName: string; granted: boolean }[],
   ];
 
-  if (userResult.length === 0) {
-    return new Set();
-  }
-
   const userData = userResult[0];
-  if (!userData) return new Set();
-
-  // Super admin has all permissions
-  if (userData.isSuperAdmin) {
-    const permSet = new Set(getAllPermissionNames());
-
-    permissionCache.set(userId, { permissions: permSet, timestamp: Date.now() });
-    if (kv) {
-      await kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(permSet)), { expirationTtl: CACHE_TTL });
-    }
-    return permSet;
+  if (!userData) {
+    return { userFound: false, permissions: new Set() };
   }
 
-  const effectivePermissions = new Set<string>(rolePerms.map((rp) => rp.permissionName));
+  if (userData.isSuperAdmin) {
+    return {
+      userFound: true,
+      permissions: new Set(getAllPermissionNames()),
+    };
+  }
 
-  // Apply overrides
+  const effectivePermissions = new Set<string>(
+    rolePerms.map((rolePermission) => rolePermission.permissionName),
+  );
   for (const override of overrides) {
     if (override.granted) {
-      // Grant: add to effective permissions
       effectivePermissions.add(override.permissionName);
     } else {
-      // Denial: remove from effective permissions
       effectivePermissions.delete(override.permissionName);
     }
   }
 
-  // Cache the result in local memory
-  permissionCache.set(userId, {
-    permissions: effectivePermissions,
-    timestamp: Date.now(),
-  });
-
-  // Cache the result in KV for other isolates.
-  if (kv) {
-    await kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(effectivePermissions)), { expirationTtl: CACHE_TTL });
-  }
-
-  return effectivePermissions;
+  return { userFound: true, permissions: effectivePermissions };
 }
 
 /**

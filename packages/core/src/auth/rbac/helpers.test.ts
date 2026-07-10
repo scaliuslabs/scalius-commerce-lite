@@ -3,6 +3,7 @@ import { getAllPermissionNames, PERMISSIONS } from "./permissions";
 import {
   clearAllPermissionCache,
   clearPermissionCache,
+  getFreshUserPermissionsFromD1,
   getUserPermissions,
 } from "./helpers";
 import { getRbacSeedCacheKey } from "./auto-seed";
@@ -111,5 +112,82 @@ describe("RBAC permission cache", () => {
     // Three select builders form the D1 batch; there is no fourth permissions-table
     // read after the authoritative super-admin row is known.
     expect(db.select).toHaveBeenCalledTimes(3);
+  });
+
+  it("bypasses stale KV and local role grants after D1 revokes the role permission", async () => {
+    const selectChain = createSelectChain();
+    const db = {
+      select: vi.fn(() => selectChain),
+      batch: vi.fn().mockResolvedValue([
+        [{ id: "user_1", isSuperAdmin: false }],
+        [],
+        [],
+      ]),
+    };
+    const kv = {
+      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const stale = await getUserPermissions(db as never, "user_1", kv as never);
+    const fresh = await getFreshUserPermissionsFromD1(db as never, "user_1");
+
+    expect(stale).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    expect(fresh).toEqual(new Set());
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(kv.get).toHaveBeenCalledTimes(1);
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("honors a fresh D1 explicit denial even when KV still contains the role grant", async () => {
+    const selectChain = createSelectChain();
+    const db = {
+      select: vi.fn(() => selectChain),
+      batch: vi.fn().mockResolvedValue([
+        [{ id: "user_1", isSuperAdmin: false }],
+        [{ permissionName: PERMISSIONS.PRODUCTS_VIEW }],
+        [{ permissionName: PERMISSIONS.PRODUCTS_VIEW, granted: false }],
+      ]),
+    };
+    const kv = {
+      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const stale = await getUserPermissions(db as never, "user_1", kv as never);
+    const fresh = await getFreshUserPermissionsFromD1(db as never, "user_1");
+
+    expect(stale).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    expect(fresh).toEqual(new Set());
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(kv.get).toHaveBeenCalledTimes(1);
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("uses current D1 super-admin truth instead of a stale limited cache", async () => {
+    const selectChain = createSelectChain();
+    const db = {
+      select: vi.fn(() => selectChain),
+      batch: vi.fn().mockResolvedValue([
+        [{ id: "super_3", isSuperAdmin: true }],
+        [],
+        [],
+      ]),
+    };
+    const kv = {
+      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const stale = await getUserPermissions(db as never, "super_3", kv as never);
+    const fresh = await getFreshUserPermissionsFromD1(db as never, "super_3");
+
+    expect(stale).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+    expect(fresh).toEqual(new Set(getAllPermissionNames()));
+    expect(fresh).toContain(PERMISSIONS.TAXES_VIEW);
+    expect(fresh).toContain(PERMISSIONS.TAXES_MANAGE);
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(kv.get).toHaveBeenCalledTimes(1);
+    expect(kv.put).not.toHaveBeenCalled();
   });
 });

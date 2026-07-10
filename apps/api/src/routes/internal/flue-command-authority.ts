@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
-import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
+import { getFreshUserPermissionsFromD1 } from "@scalius/core/auth/rbac/helpers";
 import {
   constantTimeAssistantHashEqual,
   hashAssistantArguments,
@@ -58,7 +58,6 @@ export async function resolveAdminFlueCommandAuthority(
   const [userRows, sessionRows] = await retryTransientD1(() => db.batch([
     db.select({
       id: users.id,
-      isSuperAdmin: users.isSuperAdmin,
       banned: users.banned,
       banExpires: users.banExpires,
       twoFactorEnabled: users.twoFactorEnabled,
@@ -83,7 +82,6 @@ export async function resolveAdminFlueCommandAuthority(
   ])) as [
     Array<{
       id: string;
-      isSuperAdmin: boolean | null;
       banned: boolean | null;
       banExpires: Date | null;
       twoFactorEnabled: boolean | null;
@@ -113,11 +111,8 @@ export async function resolveAdminFlueCommandAuthority(
   }
 
   await retryTransientD1(() => autoSeedRbacIfNeeded(db, c.env.CACHE));
-  const permissions = await getUserPermissions(
-    db,
-    actorId,
-    c.env.CACHE,
-    truthy(user.isSuperAdmin),
+  const permissions = await retryTransientD1(() =>
+    getFreshUserPermissionsFromD1(db, actorId)
   );
   if (permissions.size === 0) {
     throw new ForbiddenError("Admin access is required.");
