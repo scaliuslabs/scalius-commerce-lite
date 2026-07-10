@@ -41,7 +41,9 @@ export interface AdminScaliusEnv {
 export function createAdminScaliusTool(
   instanceId: string,
   api?: ScaliusCommandApiBinding,
-  testOptions: Pick<RunScaliusCommandOptions, "timeoutMs"> = {},
+  options: Pick<RunScaliusCommandOptions, "timeoutMs"> & {
+    beforeRun?: () => void;
+  } = {},
 ) {
   return defineTool({
     name: "scalius",
@@ -49,12 +51,13 @@ export function createAdminScaliusTool(
     input,
     output,
     async run({ input: { program } }) {
+      options.beforeRun?.();
       return runScaliusCommand({
         surface: "admin",
         instanceId,
         program,
         api,
-        ...testOptions,
+        timeoutMs: options.timeoutMs,
       });
     },
   });

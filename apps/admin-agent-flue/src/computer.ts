@@ -32,7 +32,11 @@ const output = v.object({
 export function createAdminComputerTool(
   instanceId: string,
   signingKey: string,
-  testOptions: { now?: number; randomBytes?: Uint8Array } = {},
+  options: {
+    now?: number;
+    randomBytes?: Uint8Array;
+    beforeRun?: () => void;
+  } = {},
 ) {
   return defineTool({
     name: "computer",
@@ -41,6 +45,7 @@ export function createAdminComputerTool(
     input,
     output,
     async run({ input: { program } }) {
+      options.beforeRun?.();
       const parsed = parseScaliusComputerProgram(program);
       const command = parsed.ok ? parsed.commands[0] : undefined;
       if (command?.name === "goto") {
@@ -55,7 +60,8 @@ export function createAdminComputerTool(
         instanceId,
         program,
         signingKey,
-        ...testOptions,
+        now: options.now,
+        randomBytes: options.randomBytes,
       });
     },
   });
