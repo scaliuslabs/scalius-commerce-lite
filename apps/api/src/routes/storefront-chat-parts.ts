@@ -65,6 +65,22 @@ function compactString(value: unknown, maxLength: number): string | null {
   return compactStorefrontChatText(value, maxLength);
 }
 
+/**
+ * Catalog resource IDs are trusted structured MCP data, not conversational
+ * text. Validate their exact public identifier grammar without running the
+ * secret redactor: persisted SKU IDs can legitimately contain long random or
+ * hexadecimal segments that resemble bearer tokens.
+ */
+function compactResourceReference(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 &&
+      normalized.length <= 240 &&
+      /^[A-Za-z0-9][A-Za-z0-9._:/~-]*$/.test(normalized)
+    ? normalized
+    : null;
+}
+
 function safeImageUrl(value: unknown): string | undefined {
   const text = compactString(value, 1_000);
   if (!text) return undefined;
@@ -116,8 +132,8 @@ function selectedCatalogVariant(
   if (selectedVariantId) {
     const exactVariant = variants.find((variant) => {
       const metadata = isJsonRecord(variant.metadata) ? variant.metadata : null;
-      const rawId = compactString(metadata?.variant_id, 240);
-      const publicId = compactString(variant.id, 240);
+      const rawId = compactResourceReference(metadata?.variant_id);
+      const publicId = compactResourceReference(variant.id);
       return rawId === selectedVariantId ||
         publicId === selectedVariantId ||
         publicId?.endsWith(`/${selectedVariantId}`) === true;
@@ -357,7 +373,7 @@ function mapCatalogProduct(
   origin: string | null,
   applyPageSelection: boolean,
 ): CatalogProjection | null {
-  const id = compactString(product.id, 240);
+  const id = compactResourceReference(product.id);
   const title = compactString(product.title, 240);
   const path = productPath(product, origin);
   if (!id || !title || !path) return null;
@@ -394,6 +410,9 @@ function mapCatalogProduct(
     ...tagBadges(product),
   ])).slice(0, 6);
   const imageUrl = firstImage(product, selectedVariant);
+  const selectedVariantId = selectedVariant && useVariantPair
+    ? compactResourceReference(selectedVariant.id)
+    : null;
 
   const candidate: ProductCard = {
     id,
@@ -416,11 +435,7 @@ function mapCatalogProduct(
       ? { compareAtPrice: majorAmount(pricing.listPrice) }
       : {}),
     availability: stock.value,
-    ...(selectedVariant &&
-        useVariantPair &&
-        compactString(selectedVariant.id, 240)
-      ? { selectedVariantId: compactString(selectedVariant.id, 240)! }
-      : {}),
+    ...(selectedVariantId ? { selectedVariantId } : {}),
     badges,
   };
   const parsed = assistantMessagePartSchema.safeParse({

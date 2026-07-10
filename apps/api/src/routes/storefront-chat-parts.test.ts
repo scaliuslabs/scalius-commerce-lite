@@ -246,6 +246,49 @@ describe("authoritative storefront assistant rich parts", () => {
     ]);
   });
 
+  it("preserves trusted persisted SKU IDs that resemble secret tokens", () => {
+    const variantId =
+      "gid://scalius/product-variant/var_default_771c03fc4744ac84bee8e3a8";
+    const response = buildStorefrontAssistantResponse({
+      modelText: "",
+      contexts: [context("catalog_search", {
+        ucp: { status: "success", version: "2026-04-08" },
+        products: [product({
+          id: "gid://scalius/product/prod_miLvKbzvhtRXN6TCQwhgc",
+          title: "Everyday Loafers",
+          url: `${ORIGIN}/products/everyday-loafers`,
+          handle: "everyday-loafers",
+          options: [],
+          price_range: {
+            min: { amount: 170_000, currency: "BDT" },
+            max: { amount: 170_000, currency: "BDT" },
+          },
+          variants: [{
+            id: variantId,
+            price: { amount: 170_000, currency: "BDT" },
+            availability: { available: true, status: "in_stock" },
+            metadata: {
+              product_id: "prod_miLvKbzvhtRXN6TCQwhgc",
+              variant_id: "var_default_771c03fc4744ac84bee8e3a8",
+            },
+          }],
+        })],
+      })],
+      payload: payload("Do you sell shoes?"),
+      origin: ORIGIN,
+      searchQuery: "shoes",
+    });
+
+    expect(response.deterministic).toBe(true);
+    expect(response.hasCatalogFacts).toBe(true);
+    expect(response.text).toContain("Everyday Loafers");
+    expect(response.parts[1]).toMatchObject({
+      type: "product_grid",
+      products: [{ selectedVariantId: variantId }],
+    });
+    expect(JSON.stringify(response)).not.toContain("[redacted-token]");
+  });
+
   it("keeps recommendation reasoning model-backed while attaching verified cards", () => {
     const response = buildStorefrontAssistantResponse({
       modelText:
