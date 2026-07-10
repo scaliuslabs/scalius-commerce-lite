@@ -186,6 +186,31 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       expect.objectContaining({ id: "db" }),
       "admin_1",
       cache,
+      false,
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps super-admin tax access independent of lagging seeded permission rows", async () => {
+    mockBetterAuthSession({ user: { isSuperAdmin: true } });
+    mocks.getUserPermissions.mockImplementation(
+      async (_db, _userId, _cache, knownIsSuperAdmin) =>
+        knownIsSuperAdmin
+          ? new Set(Object.values(PERMISSIONS))
+          : new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await adminAuthMiddleware(
+      createContext("/api/v1/admin/taxes") as never,
+      next,
+    );
+
+    expect(mocks.getUserPermissions).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      "admin_1",
+      undefined,
+      true,
     );
     expect(next).toHaveBeenCalledTimes(1);
   });

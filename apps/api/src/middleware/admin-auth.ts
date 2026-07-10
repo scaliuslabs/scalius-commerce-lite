@@ -368,7 +368,12 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // permissions for super admins — no need for a separate isSuperAdmin() query.
     const db = c.get("db");
     await retryTransientD1(() => autoSeedRbacIfNeeded(db, c.env.CACHE));
-    const userPerms = await getUserPermissions(db, user.id, c.env.CACHE);
+    const userPerms = await getUserPermissions(
+        db,
+        user.id,
+        c.env.CACHE,
+        user.isSuperAdmin === true,
+    );
 
     // Gate: must have at least one RBAC permission (super admins get all).
     // Do NOT fall back to legacy user.role check — RBAC is the source of truth.

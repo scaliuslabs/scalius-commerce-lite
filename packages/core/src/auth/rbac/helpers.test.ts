@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PERMISSIONS } from "./permissions";
+import { getAllPermissionNames, PERMISSIONS } from "./permissions";
 import {
   clearAllPermissionCache,
   clearPermissionCache,
@@ -70,5 +70,46 @@ describe("RBAC permission cache", () => {
     expect(kv.delete).toHaveBeenCalledWith(
       `rbac:perms:user_1:${getRbacSeedCacheKey()}`,
     );
+  });
+
+  it("derives known super-admin authority from the code registry before stale caches", async () => {
+    const db = { batch: vi.fn(), select: vi.fn() };
+    const kv = {
+      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
+      put: vi.fn(),
+    };
+
+    const resolved = await getUserPermissions(
+      db as never,
+      "super_1",
+      kv as never,
+      true,
+    );
+
+    expect(resolved).toEqual(new Set(getAllPermissionNames()));
+    expect(resolved).toContain(PERMISSIONS.TAXES_VIEW);
+    expect(resolved).toContain(PERMISSIONS.TAXES_MANAGE);
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("uses the code registry when D1 identifies a super admin", async () => {
+    const selectChain = createSelectChain();
+    const db = {
+      select: vi.fn(() => selectChain),
+      batch: vi.fn().mockResolvedValue([
+        [{ id: "super_2", isSuperAdmin: true }],
+        [],
+        [],
+      ]),
+    };
+
+    const resolved = await getUserPermissions(db as never, "super_2");
+
+    expect(resolved).toEqual(new Set(getAllPermissionNames()));
+    expect(resolved).toContain(PERMISSIONS.TAXES_VIEW);
+    // Three select builders form the D1 batch; there is no fourth permissions-table
+    // read after the authoritative super-admin row is known.
+    expect(db.select).toHaveBeenCalledTimes(3);
   });
 });
