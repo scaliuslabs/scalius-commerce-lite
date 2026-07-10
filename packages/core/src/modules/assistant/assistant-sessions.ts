@@ -16,7 +16,7 @@ import {
   type AssistantRiskClass,
   type AssistantSurface,
 } from "@scalius/shared/assistant-contracts";
-import { and, eq, gt, isNull, lte } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, or } from "drizzle-orm";
 
 import { canonicalizeAssistantJson, hashAssistantSessionCredential } from "./assistant-crypto";
 import {
@@ -37,6 +37,7 @@ import {
   requireOpaqueId,
   selectSession,
   selectSessionByConversationKey,
+  selectSessionByAgentInstanceId,
   selectSessionByCredentialHash,
   selectWorkflow,
   selectWorkflowByRequest,
@@ -281,6 +282,120 @@ export async function revokeAssistantSession(
   const existing = await selectSession(db, sessionId);
   if (!existing) throw new NotFoundError("Assistant session not found.");
   return { session: mapSession(existing), changed: false };
+}
+
+/**
+ * Bind an API-authorized assistant session to one opaque Flue agent instance.
+ * The instance ID is routing metadata, never a browser/session credential.
+ */
+export async function bindAssistantAgentInstance(
+  db: Database,
+  input: {
+    sessionId: string;
+    agentInstanceId: string;
+    now?: Date;
+  },
+): Promise<AssistantSessionView> {
+  const sessionId = requireOpaqueId(input.sessionId, "Session ID");
+  const agentInstanceId = requireOpaqueId(
+    input.agentInstanceId,
+    "Agent instance ID",
+  );
+  const now = d1Timestamp(input.now ?? new Date());
+  const current = await selectSession(db, sessionId);
+  if (!current) throw new NotFoundError("Assistant session not found.");
+  await loadActiveSession(db, sessionId, now);
+
+  if (current.agentInstanceId === agentInstanceId) {
+    return mapSession(current);
+  }
+  if (current.agentInstanceId !== null) {
+    throw new ConflictError(
+      "Assistant session is already bound to another agent instance.",
+    );
+  }
+
+  try {
+    const updated = await db.update(assistantSessions).set({
+      agentInstanceId,
+      updatedAt: now,
+    }).where(and(
+      eq(assistantSessions.id, sessionId),
+      eq(assistantSessions.status, "active"),
+      gt(assistantSessions.expiresAt, now),
+      isNull(assistantSessions.agentInstanceId),
+    )).returning();
+    if (updated[0]) return mapSession(updated[0]);
+  } catch {
+    // Unique-index and concurrent-binding failures intentionally collapse into
+    // one safe conflict without exposing another tenant's instance identifier.
+    throw new ConflictError(
+      "Assistant agent instance is already bound to another session.",
+    );
+  }
+
+  const raced = await selectSession(db, sessionId);
+  if (raced?.agentInstanceId === agentInstanceId) return mapSession(raced);
+  throw new ConflictError("Assistant session agent binding changed.");
+}
+
+/**
+ * Resolve an already-bound instance after the caller has authenticated the
+ * internal Agent Worker service. This function does not authenticate a request.
+ */
+export async function resolveAssistantSessionByAgentInstance(
+  db: Database,
+  input: {
+    agentInstanceId: string;
+    expectedSurface: AssistantSurface;
+    touchAfterSeconds?: number;
+    now?: Date;
+  },
+): Promise<AssistantSessionView> {
+  const agentInstanceId = requireOpaqueId(
+    input.agentInstanceId,
+    "Agent instance ID",
+  );
+  const surface = parseContract(
+    () => assistantSurfaceSchema.parse(input.expectedSurface),
+    "Assistant surface is invalid.",
+  );
+  const now = d1Timestamp(input.now ?? new Date());
+  const row = await selectSessionByAgentInstanceId(db, agentInstanceId);
+  if (!row || row.agentInstanceId !== agentInstanceId || row.surface !== surface) {
+    throw new NotFoundError("Assistant agent session not found.");
+  }
+  await loadActiveSession(db, row.id, now);
+
+  const touchAfterSeconds = input.touchAfterSeconds ?? 5 * 60;
+  if (
+    !Number.isSafeInteger(touchAfterSeconds) ||
+    touchAfterSeconds < 0 ||
+    touchAfterSeconds > 24 * 60 * 60
+  ) {
+    throw new ValidationError(
+      "Assistant session touch interval must be between 0 and 86400 seconds.",
+    );
+  }
+  const touchThreshold = new Date(now.getTime() - touchAfterSeconds * 1_000);
+  if (row.lastSeenAt <= touchThreshold) {
+    const touched = await db.update(assistantSessions).set({
+      lastSeenAt: now,
+      updatedAt: now,
+    }).where(and(
+      eq(assistantSessions.id, row.id),
+      eq(assistantSessions.agentInstanceId, agentInstanceId),
+      eq(assistantSessions.surface, surface),
+      eq(assistantSessions.status, "active"),
+      gt(assistantSessions.expiresAt, now),
+      or(
+        isNull(assistantSessions.lastSeenAt),
+        lte(assistantSessions.lastSeenAt, touchThreshold),
+      ),
+    )).returning();
+    if (touched[0]) return mapSession(touched[0]);
+  }
+  return mapSession(row);
 }
 
 export async function createAssistantWorkflow(

@@ -610,6 +610,13 @@
       "when": 1783633298126,
       "tag": "0086_tax_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1783689161739,
+      "tag": "0087_mighty_rafael_vega",
+      "breakpoints": true
     }
   ]
 }

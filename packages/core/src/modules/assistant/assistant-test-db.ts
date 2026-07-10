@@ -387,6 +387,7 @@ function materializeInsertedRow(
 ): Record<string, unknown> {
   if (table === assistantSessions) {
     return {
+      agentInstanceId: null,
       revokedAt: null,
       ...values,
     };

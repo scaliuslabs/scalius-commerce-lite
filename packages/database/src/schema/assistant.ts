@@ -23,6 +23,9 @@ export const assistantSessions = sqliteTable("assistant_sessions", {
   actorId: text("actor_id"),
   credentialHash: text("credential_hash").notNull(),
   conversationKey: text("conversation_key").notNull(),
+  // Opaque Flue Durable Object instance selected by trusted API admission.
+  // It is deliberately non-reversible and never acts as a browser credential.
+  agentInstanceId: text("agent_instance_id"),
   status: text("status", { enum: ["active", "revoked", "expired"] }).notNull().default("active"),
   lastEventSequence: integer("last_event_sequence").notNull().default(0),
   permissionSnapshotHash: text("permission_snapshot_hash"),
@@ -35,6 +38,7 @@ export const assistantSessions = sqliteTable("assistant_sessions", {
 }, (table) => [
   uniqueIndex("assistant_sessions_credential_hash_unique").on(table.credentialHash),
   uniqueIndex("assistant_sessions_conversation_key_unique").on(table.conversationKey),
+  uniqueIndex("assistant_sessions_agent_instance_id_unique").on(table.agentInstanceId),
   index("assistant_sessions_actor_surface_idx").on(table.actorType, table.actorId, table.surface),
   index("assistant_sessions_status_expiry_idx").on(table.status, table.expiresAt),
 ]);
