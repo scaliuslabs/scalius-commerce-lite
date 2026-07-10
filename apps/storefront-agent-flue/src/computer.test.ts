@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { SCALIUS_COMPUTER_LIMITS } from "@scalius/shared/assistant-computer";
 import { createStorefrontComputerTool } from "./computer";
 
 const INSTANCE_ID = `v1.${"b".repeat(43)}`;
@@ -31,4 +32,17 @@ it("rejects arbitrary URLs and JavaScript instead of handing them to the client"
   await expect(tool.run({ input: { program: "javascript alert(1)" } })).rejects.toThrow(
     "Invalid computer program",
   );
+  await expect(tool.run({
+    input: { program: "x".repeat(SCALIUS_COMPUTER_LIMITS.programChars + 1) },
+  })).rejects.toThrow("Invalid computer program");
+});
+
+it("hands off one boundary-sized rich value", async () => {
+  const tool = createStorefrontComputerTool(INSTANCE_ID, SIGNING_KEY);
+  const value = `<p>${"x".repeat(3_993)}</p>`;
+  const program = `fill @r1.e1 ${JSON.stringify(value)}`;
+  await expect(tool.run({ input: { program } })).resolves.toMatchObject({
+    program,
+    surface: "storefront",
+  });
 });

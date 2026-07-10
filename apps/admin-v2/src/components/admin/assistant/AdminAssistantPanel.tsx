@@ -66,8 +66,10 @@ export function AdminAssistantPanel({
   const openRef = useRef(open);
   const queuedComputerToolCallsRef = useRef(new Set<string>());
   const computerQueueRef = useRef(Promise.resolve());
+  const pendingComputerToolCallsRef = useRef(0);
   const startPointerGesture = usePointerGesture();
   const [draft, setDraft] = useState("");
+  const [computerBusy, setComputerBusy] = useState(false);
   const [status, setStatus] = useState<AdminAssistantStatus>({
     kind: "idle",
     message: "Ready on the current admin page.",
@@ -76,6 +78,10 @@ export function AdminAssistantPanel({
   openRef.current = open;
 
   const tabId = useMemo(getOrCreateAdminAssistantTabId, []);
+  const computerRuntimeGuard = useMemo(
+    () => ({ active: true, threadId: transcript.threadId }),
+    [transcript.threadId],
+  );
   const computerRuntime = useMemo(() => {
     if (!transcript.threadId) return null;
     return createAdminAssistantComputerRuntime({
@@ -85,9 +91,11 @@ export function AdminAssistantPanel({
         await navigate({ to: route as string });
       },
       isActive: () =>
-        openRef.current && document.visibilityState !== "hidden",
+        computerRuntimeGuard.active &&
+        openRef.current &&
+        document.visibilityState !== "hidden",
     });
-  }, [navigate, tabId, transcript.threadId]);
+  }, [computerRuntimeGuard, navigate, tabId, transcript.threadId]);
   const computerCoordinator = useMemo(
     () =>
       computerRuntime
@@ -108,8 +116,16 @@ export function AdminAssistantPanel({
   }, [open]);
 
   useEffect(() => {
+    return () => {
+      computerRuntimeGuard.active = false;
+    };
+  }, [computerRuntimeGuard]);
+
+  useEffect(() => {
     queuedComputerToolCallsRef.current.clear();
     computerQueueRef.current = Promise.resolve();
+    pendingComputerToolCallsRef.current = 0;
+    setComputerBusy(false);
   }, [transcript.threadId]);
 
   useEffect(() => {
@@ -139,15 +155,20 @@ export function AdminAssistantPanel({
           part.toolCallId,
         );
         const authorizingUserMessage = latestUserMessage;
+        const commandGuard = computerRuntimeGuard;
+        pendingComputerToolCallsRef.current += 1;
+        setComputerBusy(true);
         computerQueueRef.current = computerQueueRef.current
           .catch(() => undefined)
           .then(async () => {
+            if (!commandGuard.active) return;
             const outcome = await computerCoordinator.consume({
-              threadId: transcript.threadId,
+              threadId: commandGuard.threadId,
               tabId,
               latestUserMessage: authorizingUserMessage,
               part,
             });
+            if (!commandGuard.active) return;
             if (outcome.status === "rejected") {
               setStatus({
                 kind: "error",
@@ -163,11 +184,20 @@ export function AdminAssistantPanel({
                   "The page command finished, but its result could not return to the assistant. Ask it to observe before trying again.",
               });
             }
+          })
+          .finally(() => {
+            if (!commandGuard.active) return;
+            pendingComputerToolCallsRef.current = Math.max(
+              0,
+              pendingComputerToolCallsRef.current - 1,
+            );
+            setComputerBusy(pendingComputerToolCallsRef.current > 0);
           });
       }
     }
   }, [
     computerCoordinator,
+    computerRuntimeGuard,
     open,
     tabId,
     transcript.messages,
@@ -209,6 +239,7 @@ export function AdminAssistantPanel({
   }
 
   function handleNewConversation() {
+    if (pendingComputerToolCallsRef.current > 0) return;
     const nextThreadId = transcript.startNewConversation();
     if (!nextThreadId) return;
     setStatus({
@@ -219,6 +250,7 @@ export function AdminAssistantPanel({
   }
 
   function handleConversationChange(threadId: string) {
+    if (pendingComputerToolCallsRef.current > 0) return;
     if (!transcript.switchConversation(threadId)) return;
     setStatus({ kind: "idle", message: "Durable conversation restored." });
     window.setTimeout(() => textareaRef.current?.focus(), 0);
@@ -312,7 +344,9 @@ export function AdminAssistantPanel({
       }}
     >
       <AdminAssistantPanelHeader
-        canStartNewConversation={transcript.canStartNewConversation}
+        canStartNewConversation={
+          transcript.canStartNewConversation && !computerBusy
+        }
         conversationHistoryIds={transcript.conversationHistoryIds}
         contextLabel={contextLabel}
         mode={mode}

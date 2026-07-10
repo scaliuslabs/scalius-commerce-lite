@@ -42,17 +42,38 @@ export function isDirectAdminNavigationAuthorized(
   const destination = ADMIN_NAVIGATION_DESTINATIONS.get(pathname);
   if (!destination || route !== destination.path) return false;
 
-  const requested = directAdminNavigationDestination(latestUserMessage);
-  if (!requested) return false;
-  const requestedTokens = canonicalDestinationTokens(requested);
-  if (requestedTokens.length === 0) return false;
+  return getAuthorizedAdminNavigationRoutes(latestUserMessage).includes(route);
+}
 
-  return [destination.path.replace(/^\/admin\/?/u, ""), ...destination.labels]
-    .map(canonicalDestinationTokens)
-    .some(
-      (candidate) =>
-        candidate.length > 0 && candidate.join("|") === requestedTokens.join("|"),
-    );
+/** Resolve at most one catalog route from the latest direct user navigation
+ * request. The browser runtime uses this same scope for goto and visible-link
+ * clicks, so a model cannot bypass destination consent by switching verbs. */
+export function getAuthorizedAdminNavigationRoutes(
+  latestUserMessage: string | undefined,
+): string[] {
+  if (!latestUserMessage) return [];
+
+  const requested = directAdminNavigationDestination(latestUserMessage);
+  if (!requested) return [];
+  if (/^(?:a|an|any|some)\b/iu.test(requested)) return [];
+  const requestedTokens = canonicalDestinationTokens(requested);
+  if (requestedTokens.length === 0) return [];
+
+  const matchingRoutes = new Set<string>();
+  for (const destination of ADMIN_NAVIGATION_DESTINATIONS.values()) {
+    const matches = [
+      destination.path.replace(/^\/admin\/?/u, ""),
+      ...destination.labels,
+    ]
+      .map(canonicalDestinationTokens)
+      .some(
+        (candidate) =>
+          candidate.length > 0 &&
+          candidate.join("|") === requestedTokens.join("|"),
+      );
+    if (matches) matchingRoutes.add(destination.path);
+  }
+  return matchingRoutes.size === 1 ? [...matchingRoutes] : [];
 }
 
 function buildAdminNavigationDestinations(): Map<

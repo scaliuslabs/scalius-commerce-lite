@@ -229,6 +229,12 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(queryButton("Open assistant conversation history")?.disabled).toBe(
       false,
     );
+    await pointerDown(queryButton("Open assistant conversation history"));
+    const historyMenu = document.querySelector<HTMLElement>('[role="menu"]');
+    expect(historyMenu?.hasAttribute("data-scalius-computer-exclude")).toBe(
+      true,
+    );
+    await keyDown(historyMenu, "Escape");
 
     await emitSnapshot(
       liveSnapshot([
@@ -479,6 +485,65 @@ describe("AdminAssistantLauncher Flue cutover", () => {
         ADMIN_FLUE_COMPUTER_DEDUPE_STORAGE_KEY,
       ),
     ).toContain(requestId);
+  });
+
+  it("blocks New and history switching until a settled replay page command finishes", async () => {
+    const continuation = deferred<Response>();
+    computerResultFetch.mockReturnValueOnce(continuation.promise);
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    const requestId = "q".repeat(22);
+    await emitSnapshot(
+      liveSnapshot([
+        message("assistant-replay", "assistant", [
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "tool-replay-1",
+            state: "output-available",
+            input: { program: "observe" },
+            output: {
+              type: "client_command",
+              capability: "computer",
+              protocolVersion: 1,
+              status: "awaiting_client_execution",
+              authoritative: false,
+              replayPolicy: "client_dedupe_request_id_until_expiry",
+              surface: "admin",
+              requestId,
+              program: "observe",
+              expiresAt: new Date(Date.now() + 120_000).toISOString(),
+              ticket: `${"t".repeat(16)}.${"s".repeat(43)}`,
+            },
+          },
+        ]),
+      ]),
+    );
+    await vi.waitFor(() => expect(computerResultFetch).toHaveBeenCalledOnce());
+    const newConversation = queryButton("New assistant conversation");
+    expect(newConversation?.disabled).toBe(true);
+    const before = window.sessionStorage.getItem(
+      ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+    );
+    await click(newConversation);
+    expect(
+      window.sessionStorage.getItem(
+        ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      ),
+    ).toBe(before);
+
+    continuation.resolve(
+      Response.json({ accepted: true, requestId }, { status: 202 }),
+    );
+    await vi.waitFor(() => {
+      expect(queryButton("New assistant conversation")?.disabled).toBe(false);
+    });
+    await click(queryButton("New assistant conversation"));
+    expect(
+      window.sessionStorage.getItem(
+        ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      ),
+    ).not.toBe(before);
   });
 
   it("renders authoritative tool activity compactly without dumping JSON", async () => {
@@ -767,6 +832,20 @@ async function click(element: HTMLElement | null) {
   await act(async () => {
     element?.dispatchEvent(
       new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+  });
+  await flushReact();
+}
+
+async function pointerDown(element: HTMLElement | null) {
+  expect(element).toBeTruthy();
+  await act(async () => {
+    element?.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+      }),
     );
   });
   await flushReact();

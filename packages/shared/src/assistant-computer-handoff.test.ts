@@ -140,7 +140,7 @@ describe("assistant computer handoff", () => {
     const command = await issue();
     const [oversized, invalid] = await Promise.all([
       admitScaliusComputerResult({
-        request: resultRequest(command, { result: { ...RESULT, output: "x".repeat(20_001) } }),
+        request: resultRequest(command, { result: { ...RESULT, output: "x".repeat(50_000) } }),
         surface: "admin",
         agentName: "admin-copilot",
         instanceId: INSTANCE_ID,

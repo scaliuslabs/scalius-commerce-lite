@@ -71,23 +71,28 @@ describe("Admin assistant computer runtime", () => {
     await expect(runtime.execute({
       binding: runtime.binding,
       program: 'goto "/admin/orders?status=pending"',
+      authorizedNavigationRoutes: ["/admin/orders?status=pending"],
     })).resolves.toMatchObject({ ok: true, code: "NAVIGATED" });
     expect(navigate).toHaveBeenCalledWith("/admin/orders?status=pending");
     await expect(runtime.execute({
       binding: runtime.binding,
       program: 'goto "/products"',
+      authorizedNavigationRoutes: ["/products"],
     })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
     await expect(runtime.execute({
       binding: runtime.binding,
       program: 'goto "/admin/settings/taxes"',
+      authorizedNavigationRoutes: ["/admin/settings/taxes"],
     })).resolves.toMatchObject({ ok: true, code: "NAVIGATED" });
     await expect(runtime.execute({
       binding: runtime.binding,
       program: 'goto "/admin/products/prod_private"',
+      authorizedNavigationRoutes: ["/admin/products/prod_private"],
     })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
     await expect(runtime.execute({
       binding: runtime.binding,
       program: 'goto "/admin/not-a-catalog-route"',
+      authorizedNavigationRoutes: ["/admin/not-a-catalog-route"],
     })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
     await expect(runtime.execute({
       binding: runtime.binding,

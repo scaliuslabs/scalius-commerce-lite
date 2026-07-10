@@ -1,9 +1,13 @@
+import {
+  parseScaliusComputerProgram,
+  SCALIUS_COMPUTER_LIMITS,
+} from "@scalius/shared/assistant-computer";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 
 const RESULT_PATH_PREFIX = "/computer/results/";
 const AGENT_ORIGIN = "http://admin-flue-agent.internal";
 const PUBLIC_RESULT_PATH = "/api/assistant/flue/computer/results";
-const MAX_BODY_BYTES = 20_000;
+const MAX_BODY_BYTES = SCALIUS_COMPUTER_LIMITS.resultEnvelopeBytes;
 const MAX_COOKIE_BYTES = 8_192;
 const MAX_AGENT_RESPONSE_BYTES = 4_096;
 const MIN_SERVICE_TOKEN_CHARS = 32;
@@ -259,7 +263,8 @@ function parseBrowserResultBody(value: unknown): BrowserResultBody | null {
     typeof value.threadId !== "string" || !THREAD_ID_PATTERN.test(value.threadId) ||
     typeof value.requestId !== "string" || !REQUEST_ID_PATTERN.test(value.requestId) ||
     typeof value.ticket !== "string" || !TICKET_PATTERN.test(value.ticket) ||
-    typeof value.program !== "string" || value.program.length > 4_096 ||
+    typeof value.program !== "string" ||
+    !parseScaliusComputerProgram(value.program).ok ||
     !isComputerResult(value.result)
   ) return null;
   return value as unknown as BrowserResultBody;

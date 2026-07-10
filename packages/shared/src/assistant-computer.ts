@@ -2,6 +2,12 @@ export const SCALIUS_COMPUTER_DESCRIPTION =
   "Control the visible Scalius page. Start with observe, use its revision-bound handles, and call help only when needed.";
 export const SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT =
   "scalius:computer-rich-text-fill";
+export const SCALIUS_COMPUTER_LIMITS = {
+  programChars: 8_192,
+  valueChars: 4_000,
+  resultEnvelopeBytes: 48 * 1_024,
+  resultOutputChars: 12_000,
+} as const;
 export const SCALIUS_COMPUTER_COMMANDS = [
   "observe",
   "help",
@@ -24,6 +30,12 @@ export interface ScaliusComputerBinding {
 export interface ScaliusComputerRequest {
   binding: ScaliusComputerBinding;
   program: string;
+  /**
+   * Trusted, application-derived routes authorized by the latest explicit user
+   * navigation request. This is never model input. Both direct goto and visible
+   * link clicks fail closed unless their exact normalized route appears here.
+   */
+  authorizedNavigationRoutes?: readonly string[];
 }
 export type ScaliusComputerCommand =
   | { name: "observe" }
@@ -132,9 +144,9 @@ interface Lexeme {
   value: string;
   quoted: boolean;
 }
-const MAX_PROGRAM_CHARS = 4_096;
+const MAX_PROGRAM_CHARS = SCALIUS_COMPUTER_LIMITS.programChars;
 const MAX_COMMANDS = 8;
-const MAX_VALUE_CHARS = 2_000;
+const MAX_VALUE_CHARS = SCALIUS_COMPUTER_LIMITS.valueChars;
 const MAX_BINDING_ID_CHARS = 160;
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 const HANDLE_PATTERN = /^@r([1-9][0-9]{0,9})\.e([1-9][0-9]{0,3})$/;
@@ -175,7 +187,10 @@ export class ScaliusComputerController {
     }
     this.#busy = true;
     try {
-      return await this.#run(parsed.commands);
+      return await this.#run(
+        parsed.commands,
+        normalizeAuthorizedNavigationRoutes(request.authorizedNavigationRoutes),
+      );
     } catch {
       this.#invalidate();
       return failure(
@@ -187,7 +202,10 @@ export class ScaliusComputerController {
       this.#busy = false;
     }
   }
-  async #run(commands: readonly ScaliusComputerCommand[]): Promise<ScaliusComputerResult> {
+  async #run(
+    commands: readonly ScaliusComputerCommand[],
+    authorizedNavigationRoutes: ReadonlySet<string>,
+  ): Promise<ScaliusComputerResult> {
     const first = commands[0];
     if (!first) {
       return failure("INVALID_PROGRAM", "Program is empty.", false);
@@ -203,8 +221,16 @@ export class ScaliusComputerController {
     if (first.name === "observe") return this.#observe();
     if (first.name === "goto") {
       const route = normalizeScaliusComputerRoute(first.route);
-      if (!route || !this.#adapter.allowsRoute(route)) {
-        return failure("ROUTE_BLOCKED", "Only an allowed same-origin page route can be opened.", false);
+      if (
+        !route ||
+        !this.#adapter.allowsRoute(route) ||
+        !authorizedNavigationRoutes.has(route)
+      ) {
+        return failure(
+          "ROUTE_BLOCKED",
+          "Navigation requires one exact route authorized by the latest user request.",
+          false,
+        );
       }
       await this.#adapter.goto(route);
       this.#invalidate();
@@ -225,7 +251,7 @@ export class ScaliusComputerController {
         changed: true,
       };
     }
-    return this.#act(commands);
+    return this.#act(commands, authorizedNavigationRoutes);
   }
   #observe(): ScaliusComputerResult {
     const snapshot = this.#adapter.capture();
@@ -268,7 +294,10 @@ export class ScaliusComputerController {
       changed: false,
     };
   }
-  async #act(commands: readonly ScaliusComputerCommand[]): Promise<ScaliusComputerResult> {
+  async #act(
+    commands: readonly ScaliusComputerCommand[],
+    authorizedNavigationRoutes: ReadonlySet<string>,
+  ): Promise<ScaliusComputerResult> {
     const observed = this.#observed;
     if (!observed) {
       return failure("OBSERVE_REQUIRED", "Observe the page before using an element handle.", true);
@@ -298,6 +327,21 @@ export class ScaliusComputerController {
       if (preflight) {
         if (completed > 0) this.#invalidate();
         return preflight;
+      }
+      if (
+        command.name === "click" &&
+        target.route &&
+        (
+          !this.#adapter.allowsRoute(target.route) ||
+          !authorizedNavigationRoutes.has(target.route)
+        )
+      ) {
+        if (completed > 0) this.#invalidate();
+        return failure(
+          "ROUTE_BLOCKED",
+          "That link requires one exact destination authorized by the latest user request.",
+          false,
+        );
       }
       const result = await this.#adapter.act(toAdapterAction(command, target.id));
       if (!result.ok) {
@@ -401,6 +445,19 @@ export function normalizeScaliusComputerRoute(value: string): string | null {
   } catch {
     return null;
   }
+}
+function normalizeAuthorizedNavigationRoutes(
+  routes: readonly string[] | undefined,
+): ReadonlySet<string> {
+  if (!routes || routes.length === 0 || routes.length > 32) return new Set();
+  const normalized = new Set<string>();
+  for (const route of routes) {
+    if (typeof route !== "string") return new Set();
+    const candidate = normalizeScaliusComputerRoute(route);
+    if (!candidate) return new Set();
+    normalized.add(candidate);
+  }
+  return normalized;
 }
 function parseCommand(
   tokens: readonly Lexeme[],

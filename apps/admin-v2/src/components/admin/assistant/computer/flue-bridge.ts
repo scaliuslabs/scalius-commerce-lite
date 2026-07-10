@@ -1,17 +1,21 @@
 import {
   parseScaliusComputerProgram,
+  SCALIUS_COMPUTER_LIMITS,
   type ScaliusComputerResult,
 } from "@scalius/shared/assistant-computer";
 import type { ScaliusComputerClientCommand } from "@scalius/shared/assistant-computer-handoff";
 
 import type { AdminAssistantComputerRuntime } from "./runtime";
-import { isDirectAdminNavigationAuthorized } from "./navigation-authorization";
+import {
+  getAuthorizedAdminNavigationRoutes,
+  isDirectAdminNavigationAuthorized,
+} from "./navigation-authorization";
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;
 const THREAD_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const TICKET_PATTERN = /^[A-Za-z0-9_-]{16,1600}\.[A-Za-z0-9_-]{43}$/u;
 const MAX_CLIENT_COMMAND_LIFETIME_MS = 125_000;
-const MAX_RESULT_REQUEST_BYTES = 20_000;
+const MAX_RESULT_REQUEST_BYTES = SCALIUS_COMPUTER_LIMITS.resultEnvelopeBytes;
 const MAX_RESULT_RESPONSE_BYTES = 4_096;
 const RESULT_ENDPOINT = "/api/assistant/flue/computer/results";
 export const ADMIN_FLUE_COMPUTER_DEDUPE_STORAGE_KEY =
@@ -162,6 +166,9 @@ export class AdminFlueComputerCoordinator {
     const parsed = parseAdminFlueComputerClientCommand(source.part.output, now);
     if (!parsed.ok) return { status: "rejected", reason: parsed.reason };
     const command = parsed.command;
+    const authorizedNavigationRoutes = getAuthorizedAdminNavigationRoutes(
+      source.latestUserMessage,
+    );
     const fingerprint = `${command.ticket}\n${command.program}`;
     const existing = this.#tracked.get(command.requestId);
     if (existing) {
@@ -207,6 +214,7 @@ export class AdminFlueComputerCoordinator {
       result = await this.#runtime.execute({
         binding: this.#runtime.binding,
         program: command.program,
+        authorizedNavigationRoutes,
       });
     } catch {
       result = {

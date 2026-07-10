@@ -102,6 +102,34 @@ export function isAuthorizedStorefrontGoto(
   return true;
 }
 
+/** Return the exact route scope the browser may use for this command. For
+ * direct goto, preserve the existing Scalius/visible-page provenance check.
+ * For a revision-bound click, pre-authorize only one candidate route matching
+ * the latest explicit shopper destination; the runtime still resolves the
+ * clicked handle and compares its route before touching the DOM. */
+export function getAuthorizedStorefrontNavigationRoutes(
+  program: string,
+  authority: StorefrontNavigationAuthority | undefined,
+): string[] {
+  const parsed = parseScaliusComputerProgram(program);
+  const command = parsed.ok ? parsed.commands[0] : undefined;
+  if (!command || !authority) return [];
+  if (command.name === "goto") {
+    const route = normalizeScaliusComputerRoute(command.route);
+    return route && isAuthorizedStorefrontGoto(program, authority) ? [route] : [];
+  }
+
+  const matchingRoutes = new Set(
+    authority.candidates
+      .map((candidate) => normalizeScaliusComputerRoute(candidate.route))
+      .filter((route): route is string => Boolean(route))
+      .filter((route) =>
+        isAuthorizedStorefrontGoto(`goto ${JSON.stringify(route)}`, authority),
+      ),
+  );
+  return matchingRoutes.size === 1 ? [...matchingRoutes] : [];
+}
+
 function findLatestUserIndex(
   messages: readonly FlueConversationMessage[],
   throughIndex: number,

@@ -225,6 +225,76 @@ describe("Admin Flue computer coordinator", () => {
     expect(navigate).toHaveBeenCalledOnce();
   });
 
+  it("binds visible link clicks to the same exact catalog destination intent", async () => {
+    document.body.innerHTML = `
+      <main>
+        <a href="/admin/products">Products</a>
+        <a href="/admin/products/prod_private">Private product</a>
+      </main>`;
+    const links = [...document.querySelectorAll<HTMLAnchorElement>("a")];
+    const clicked = vi.fn((event: Event) => event.preventDefault());
+    for (const link of links) link.addEventListener("click", clicked);
+
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+    });
+    const postResult = vi.fn(
+      async (payload: Parameters<typeof postAdminFlueComputerResult>[0]) => ({
+        accepted: true as const,
+        requestId: payload.requestId,
+      }),
+    );
+    const coordinator = new AdminFlueComputerCoordinator({
+      runtime,
+      postResult,
+      now: () => NOW + 1_000,
+    });
+    const observed = await coordinator.consume(source(await command("observe", 16)));
+    if (observed.status !== "continuation_accepted") {
+      throw new Error("observe failed");
+    }
+    const productsHandle = observed.result.output.match(
+      /(@r\d+\.e\d+) link "Products"/u,
+    )?.[1];
+    const detailHandle = observed.result.output.match(
+      /(@r\d+\.e\d+) link "Private product"/u,
+    )?.[1];
+    expect(productsHandle).toBeTruthy();
+    expect(detailHandle).toBeTruthy();
+
+    const unrelated = await coordinator.consume(
+      source(await command(`click ${productsHandle}`, 17), {
+        latestUserMessage: "How many products do we have?",
+      }),
+    );
+    expect(unrelated).toMatchObject({
+      status: "continuation_accepted",
+      result: { ok: false, code: "ROUTE_BLOCKED" },
+    });
+    const detail = await coordinator.consume(
+      source(await command(`click ${detailHandle}`, 18), {
+        latestUserMessage: "Take me to a product",
+      }),
+    );
+    expect(detail).toMatchObject({
+      status: "continuation_accepted",
+      result: { ok: false, code: "ROUTE_BLOCKED" },
+    });
+    expect(clicked).not.toHaveBeenCalled();
+
+    const exact = await coordinator.consume(
+      source(await command(`click ${productsHandle}`, 19), {
+        latestUserMessage: "Take me to products page",
+      }),
+    );
+    expect(exact).toMatchObject({
+      status: "continuation_accepted",
+      result: { ok: true, code: "EXECUTED" },
+    });
+    expect(clicked).toHaveBeenCalledOnce();
+  });
+
   it("preserves stale-revision and sensitive-control failures and posts them as untrusted", async () => {
     document.body.innerHTML = `
       <main>

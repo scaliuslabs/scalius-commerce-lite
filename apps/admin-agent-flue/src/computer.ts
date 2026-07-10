@@ -1,9 +1,13 @@
 import { defineTool } from "@flue/runtime";
+import { SCALIUS_COMPUTER_LIMITS } from "@scalius/shared/assistant-computer";
 import { issueScaliusComputerCommand } from "@scalius/shared/assistant-computer-handoff";
 import * as v from "valibot";
 
 const input = v.object({
-  program: v.pipe(v.string(), v.maxLength(4_096)),
+  program: v.pipe(
+    v.string(),
+    v.maxLength(SCALIUS_COMPUTER_LIMITS.programChars),
+  ),
 });
 
 const output = v.object({

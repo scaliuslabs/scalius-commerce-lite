@@ -35,6 +35,24 @@ describe("Storefront assistant computer runtime", () => {
     expect(observed.output).toContain('heading "Red shoe"');
     expect(observed.output).toContain('text "Lightweight everyday trainer."');
     expect(observed.output).toContain('link "Browse shoes" route="/collections/shoes"');
+    const linkHandle = observed.output.match(
+      /(@r\d+\.e\d+) link "Browse shoes"/u,
+    )?.[1];
+    expect(linkHandle).toBeTruthy();
+    const link = document.querySelector<HTMLAnchorElement>("a")!;
+    const clicked = vi.fn((event: Event) => event.preventDefault());
+    link.addEventListener("click", clicked);
+    await expect(runtime.execute({
+      binding: runtime.binding,
+      program: `click ${linkHandle}`,
+    })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
+    expect(clicked).not.toHaveBeenCalled();
+    await expect(runtime.execute({
+      binding: runtime.binding,
+      program: `click ${linkHandle}`,
+      authorizedNavigationRoutes: ["/collections/shoes"],
+    })).resolves.toMatchObject({ ok: true, code: "EXECUTED" });
+    expect(clicked).toHaveBeenCalledOnce();
 
     await expect(runtime.execute({
       binding: { ...runtime.binding, threadId: "another-thread" },
@@ -71,6 +89,7 @@ describe("Storefront assistant computer runtime", () => {
     await expect(runtime.execute({
       binding: runtime.binding,
       program: `goto "${route}"`,
+      authorizedNavigationRoutes: [route],
     })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -87,6 +106,7 @@ describe("Storefront assistant computer runtime", () => {
     await expect(runtime.execute({
       binding: runtime.binding,
       program: 'goto "/search?q=running%20shoe"',
+      authorizedNavigationRoutes: ["/search?q=running%20shoe"],
     })).resolves.toMatchObject({ ok: true, code: "NAVIGATED" });
     expect(navigate).toHaveBeenCalledWith("/search?q=running%20shoe");
     await expect(runtime.execute({
@@ -140,6 +160,7 @@ describe("Storefront assistant computer runtime", () => {
     await expect(runtime.execute({
       binding: runtime.binding,
       program: 'goto "/products"',
+      authorizedNavigationRoutes: ["/products"],
     })).resolves.toMatchObject({ ok: true, code: "NAVIGATED" });
     expect(navigate).toHaveBeenCalledWith("/products");
     await expect(runtime.execute({
@@ -167,6 +188,7 @@ describe("Storefront assistant computer runtime", () => {
     await expect(runtime.execute({
       binding: runtime.binding,
       program: `goto "/products/red-shoe?${key}=opaque"`,
+      authorizedNavigationRoutes: [`/products/red-shoe?${key}=opaque`],
     })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -181,6 +203,7 @@ describe("Storefront assistant computer runtime", () => {
     await expect(runtime.execute({
       binding: runtime.binding,
       program: 'goto "/search?q=secret%20code"',
+      authorizedNavigationRoutes: ["/search?q=secret%20code"],
     })).resolves.toMatchObject({ ok: true, code: "NAVIGATED" });
     expect(navigate).toHaveBeenCalledWith("/search?q=secret%20code");
   });

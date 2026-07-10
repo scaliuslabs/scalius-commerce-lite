@@ -1,4 +1,7 @@
-import { parseScaliusComputerProgram } from "@scalius/shared/assistant-computer";
+import {
+  parseScaliusComputerProgram,
+  SCALIUS_COMPUTER_LIMITS,
+} from "@scalius/shared/assistant-computer";
 
 import {
   STOREFRONT_ASSISTANT_API_ORIGIN,
@@ -13,7 +16,7 @@ const AGENT_RESULT_PATH_PREFIX = "/computer/results/";
 const AGENT_ORIGIN = "http://storefront-flue-agent.internal";
 const PUBLIC_RESULT_PATH_PATTERN =
   /^\/api\/assistant\/conversations\/(conv_[A-Za-z0-9_-]{22,64})\/computer\/results$/u;
-const MAX_BODY_BYTES = 20_000;
+const MAX_BODY_BYTES = SCALIUS_COMPUTER_LIMITS.resultEnvelopeBytes;
 const MAX_AGENT_RESPONSE_BYTES = 4_096;
 const MAX_AUTHORITY_RESPONSE_BYTES = 16_384;
 const MIN_SERVICE_TOKEN_CHARS = 32;
