@@ -35,6 +35,11 @@ export interface ScaliusComputerRequest {
   binding: ScaliusComputerBinding;
   program: string;
   /**
+   * Trusted local metadata for a human-confirmed handoff. It is never parsed
+   * from the model program and is capped by the controller's local TTL.
+   */
+  confirmationExpiresAt?: number;
+  /**
    * Trusted, application-derived routes authorized by the latest explicit user
    * navigation request. This is never model input. Both direct goto and visible
    * link clicks fail closed unless their exact normalized route appears here.
@@ -62,6 +67,7 @@ export type ScaliusComputerErrorCode =
   | "TARGET_DISABLED"
   | "SENSITIVE_CONTROL"
   | "HUMAN_REQUIRED"
+  | "CONFIRMATION_REQUIRED"
   | "ACTION_NOT_ALLOWED"
   | "VALUE_NOT_FOUND"
   | "EXECUTION_FAILED";
@@ -96,6 +102,8 @@ export interface ScaliusComputerTarget {
   humanOnly?: boolean;
   /** Trusted app-owned action ID; never derived from the model or label text. */
   humanConfirmationId?: string;
+  /** This exact terminal control needs a local, two-phase human confirmation. */
+  confirmationRequired?: boolean;
 }
 export interface ScaliusComputerPageSnapshot {
   route: string;
@@ -106,10 +114,10 @@ export interface ScaliusComputerPageSnapshot {
   truncated?: boolean;
 }
 export type ScaliusComputerAdapterAction =
-  | { name: "click"; targetId: string }
+  | { name: "click"; targetId: string; confirmed?: true }
   | { name: "fill"; targetId: string; value: string }
   | { name: "select"; targetId: string; value: string }
-  | { name: "submit"; targetId: string };
+  | { name: "submit"; targetId: string; confirmed?: true };
 export type ScaliusComputerAdapterResult =
   | { ok: true }
   | {
@@ -139,7 +147,58 @@ export interface ScaliusComputerControllerOptions {
   binding: ScaliusComputerBinding;
   adapter: ScaliusComputerPageAdapter;
   maxOutputChars?: number;
+  confirmationTtlMs?: number;
+  /** Deterministic test seam. Production callers should omit this option. */
+  confirmationNow?: () => number;
+  /** Deterministic test seam. Production callers must use the crypto default. */
+  createConfirmationToken?: () => string;
 }
+/**
+ * Ephemeral browser-local capability data. Callers must never serialize,
+ * persist, log, or append this descriptor to an agent transcript.
+ */
+export interface ScaliusComputerPendingConfirmation {
+  token: string;
+  binding: ScaliusComputerBinding;
+  route: string;
+  revision: string;
+  snapshotSignature: string;
+  targetId: string;
+  targetFingerprint: string;
+  action: Extract<ScaliusComputerAction, "click" | "submit">;
+  expiresAt: number;
+}
+export interface ScaliusComputerConfirmationRequest {
+  binding: ScaliusComputerBinding;
+  token: string;
+}
+export type ScaliusComputerConfirmationErrorCode =
+  | "INVALID_BINDING"
+  | "BUSY"
+  | "CONFIRMATION_NOT_FOUND"
+  | "CONFIRMATION_EXPIRED"
+  | "INACTIVE_TAB"
+  | "STALE_CONTEXT"
+  | "TARGET_GONE"
+  | "TARGET_DISABLED"
+  | "SENSITIVE_CONTROL"
+  | "HUMAN_REQUIRED"
+  | "ACTION_NOT_ALLOWED"
+  | "VALUE_NOT_FOUND"
+  | "EXECUTION_FAILED";
+export type ScaliusComputerConfirmationResult =
+  | {
+      ok: true;
+      code: "CONFIRMED" | "CANCELLED";
+      output: string;
+      changed: boolean;
+    }
+  | {
+      ok: false;
+      code: ScaliusComputerConfirmationErrorCode;
+      output: string;
+      retryable: false;
+    };
 interface ObservedPage {
   revisionNumber: number;
   signature: string;
@@ -150,11 +209,20 @@ interface Lexeme {
   value: string;
   quoted: boolean;
 }
+interface PendingConfirmationState {
+  descriptor: ScaliusComputerPendingConfirmation;
+  action: Extract<ScaliusComputerAdapterAction, { name: "click" | "submit" }>;
+  /** Exact ephemeral comparison value; never exposed, logged, or persisted. */
+  targetCanonical: string;
+}
 const MAX_PROGRAM_CHARS = SCALIUS_COMPUTER_LIMITS.programChars;
 const MAX_COMMANDS = 8;
 const MAX_VALUE_CHARS = SCALIUS_COMPUTER_LIMITS.valueChars;
 const MAX_BINDING_ID_CHARS = 160;
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
+const DEFAULT_CONFIRMATION_TTL_MS = 60_000;
+const MAX_CONFIRMATION_TTL_MS = 5 * 60_000;
+const CONFIRMATION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{24,256}$/u;
 const HANDLE_PATTERN = /^@r([1-9][0-9]{0,9})\.e([1-9][0-9]{0,3})$/;
 const BINDING_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const COMMAND_SET = new Set<string>(SCALIUS_COMPUTER_COMMANDS);
@@ -162,7 +230,11 @@ export class ScaliusComputerController {
   readonly #binding: ScaliusComputerBinding;
   readonly #adapter: ScaliusComputerPageAdapter;
   readonly #maxOutputChars: number;
+  readonly #confirmationTtlMs: number;
+  readonly #confirmationNow: () => number;
+  readonly #createConfirmationToken: () => string;
   #observed: ObservedPage | null = null;
+  #pendingConfirmation: PendingConfirmationState | null = null;
   #revision = 0;
   #busy = false;
   constructor(options: ScaliusComputerControllerOptions) {
@@ -176,6 +248,188 @@ export class ScaliusComputerController {
       1_000,
       DEFAULT_MAX_OUTPUT_CHARS,
     );
+    this.#confirmationTtlMs = clampInteger(
+      options.confirmationTtlMs ?? DEFAULT_CONFIRMATION_TTL_MS,
+      1_000,
+      MAX_CONFIRMATION_TTL_MS,
+    );
+    this.#confirmationNow = options.confirmationNow ?? Date.now;
+    this.#createConfirmationToken = options.createConfirmationToken ??
+      createOpaqueConfirmationToken;
+  }
+  getPendingConfirmation(): ScaliusComputerPendingConfirmation | null {
+    const pending = this.#pendingConfirmation?.descriptor;
+    if (!pending) return null;
+    return {
+      ...pending,
+      binding: { ...pending.binding },
+    };
+  }
+  async confirmPendingConfirmation(
+    request: ScaliusComputerConfirmationRequest,
+  ): Promise<ScaliusComputerConfirmationResult> {
+    if (!bindingsMatch(this.#binding, request.binding)) {
+      return confirmationFailure(
+        "INVALID_BINDING",
+        "This confirmation belongs to another thread or tab.",
+      );
+    }
+    const pending = this.#pendingConfirmation;
+    if (!pending || !tokensMatch(pending.descriptor.token, request.token)) {
+      return confirmationFailure(
+        "CONFIRMATION_NOT_FOUND",
+        "That confirmation is no longer available.",
+      );
+    }
+    if (this.#busy) {
+      return confirmationFailure("BUSY", "Another page command is still running.");
+    }
+
+    // Burn synchronously before capture, validation, or the first awaited side
+    // effect. Concurrent, duplicate, cancelled, and late confirmations cannot
+    // reuse this capability.
+    this.#pendingConfirmation = null;
+    this.#invalidate();
+    if (this.#confirmationNow() >= pending.descriptor.expiresAt) {
+      return confirmationFailure(
+        "CONFIRMATION_EXPIRED",
+        "That confirmation expired without changing the page.",
+      );
+    }
+    if (!this.#adapter.isActive()) {
+      return confirmationFailure(
+        "INACTIVE_TAB",
+        "The bound browser tab is not active.",
+      );
+    }
+
+    this.#busy = true;
+    try {
+      const live = this.#adapter.capture();
+      if (
+        pending.descriptor.revision !== `r${this.#revision}` ||
+        live.route !== pending.descriptor.route
+      ) {
+        return confirmationFailure(
+          "STALE_CONTEXT",
+          "The page revision or route changed before confirmation.",
+        );
+      }
+      const target = live.targets.find((candidate) =>
+        candidate.id === pending.descriptor.targetId
+      );
+      if (!target) {
+        return confirmationFailure(
+          "TARGET_GONE",
+          "That control is no longer on the page.",
+        );
+      }
+      if (target.sensitive) {
+        return confirmationFailure(
+          "SENSITIVE_CONTROL",
+          "Protected controls must be completed directly by the person using the page.",
+        );
+      }
+      if (target.disabled) {
+        return confirmationFailure("TARGET_DISABLED", "That control is disabled.");
+      }
+      if (!target.actions.includes(pending.descriptor.action)) {
+        return confirmationFailure(
+          "ACTION_NOT_ALLOWED",
+          "That confirmed operation is no longer allowed for this control.",
+        );
+      }
+      if (target.humanOnly) {
+        return confirmationFailure(
+          "HUMAN_REQUIRED",
+          "This control requires direct human interaction.",
+        );
+      }
+      if (
+        !target.confirmationRequired
+      ) {
+        return confirmationFailure(
+          "ACTION_NOT_ALLOWED",
+          "That confirmed operation is no longer allowed for this control.",
+        );
+      }
+      if (
+        pending.action.name !== pending.descriptor.action ||
+        pending.action.targetId !== pending.descriptor.targetId
+      ) {
+        return confirmationFailure(
+          "ACTION_NOT_ALLOWED",
+          "The exact confirmed operation no longer matches this control.",
+        );
+      }
+      if (
+        live.signature !== pending.descriptor.snapshotSignature ||
+        targetCanonical(target) !== pending.targetCanonical ||
+        targetFingerprint(target) !== pending.descriptor.targetFingerprint
+      ) {
+        return confirmationFailure(
+          "STALE_CONTEXT",
+          "The page or exact control changed before confirmation.",
+        );
+      }
+      const result = await this.#adapter.act({
+        ...pending.action,
+        confirmed: true,
+      });
+      if (!result.ok) {
+        return confirmationFailure(
+          result.code,
+          adapterFailureMessage(result.code),
+        );
+      }
+      return {
+        ok: true,
+        code: "CONFIRMED",
+        output: "Completed the confirmed page action.",
+        changed: true,
+      };
+    } catch {
+      return confirmationFailure(
+        "EXECUTION_FAILED",
+        "The page could not complete the confirmed action.",
+      );
+    } finally {
+      this.#busy = false;
+    }
+  }
+  cancelPendingConfirmation(
+    request: ScaliusComputerConfirmationRequest,
+  ): ScaliusComputerConfirmationResult {
+    if (!bindingsMatch(this.#binding, request.binding)) {
+      return confirmationFailure(
+        "INVALID_BINDING",
+        "This confirmation belongs to another thread or tab.",
+      );
+    }
+    const pending = this.#pendingConfirmation;
+    if (!pending || !tokensMatch(pending.descriptor.token, request.token)) {
+      return confirmationFailure(
+        "CONFIRMATION_NOT_FOUND",
+        "That confirmation is no longer available.",
+      );
+    }
+    if (this.#busy) {
+      return confirmationFailure("BUSY", "Another page command is still running.");
+    }
+    this.#pendingConfirmation = null;
+    this.#invalidate();
+    if (this.#confirmationNow() >= pending.descriptor.expiresAt) {
+      return confirmationFailure(
+        "CONFIRMATION_EXPIRED",
+        "That confirmation expired without changing the page.",
+      );
+    }
+    return {
+      ok: true,
+      code: "CANCELLED",
+      output: "Cancelled the pending page action.",
+      changed: false,
+    };
   }
   async execute(request: ScaliusComputerRequest): Promise<ScaliusComputerResult> {
     if (!bindingsMatch(this.#binding, request.binding)) {
@@ -183,6 +437,13 @@ export class ScaliusComputerController {
     }
     if (!this.#adapter.isActive()) {
       return failure("INACTIVE_TAB", "The bound browser tab is not active.", true);
+    }
+    if (this.#pendingConfirmation) {
+      return failure(
+        "BUSY",
+        "Resolve the pending human confirmation before another page command.",
+        false,
+      );
     }
     if (this.#busy) {
       return failure("BUSY", "Another page command is still running.", true);
@@ -196,6 +457,7 @@ export class ScaliusComputerController {
       return await this.#run(
         parsed.commands,
         normalizeAuthorizedNavigationRoutes(request.authorizedNavigationRoutes),
+        request.confirmationExpiresAt,
       );
     } catch {
       this.#invalidate();
@@ -211,6 +473,7 @@ export class ScaliusComputerController {
   async #run(
     commands: readonly ScaliusComputerCommand[],
     authorizedNavigationRoutes: ReadonlySet<string>,
+    confirmationExpiresAt: number | undefined,
   ): Promise<ScaliusComputerResult> {
     const first = commands[0];
     if (!first) {
@@ -257,7 +520,11 @@ export class ScaliusComputerController {
         changed: true,
       };
     }
-    return this.#act(commands, authorizedNavigationRoutes);
+    return this.#act(
+      commands,
+      authorizedNavigationRoutes,
+      confirmationExpiresAt,
+    );
   }
   #observe(): ScaliusComputerResult {
     const snapshot = this.#adapter.capture();
@@ -279,6 +546,7 @@ export class ScaliusComputerController {
         target.disabled ? "disabled" : "",
         target.sensitive ? "sensitive" : "",
         target.humanOnly ? "human-only" : "",
+        target.confirmationRequired ? "confirmation-required" : "",
       ].filter(Boolean);
       const route = target.route ? ` route=${quote(target.route)}` : "";
       const state = flags.length > 0 ? ` [${flags.join(",")}]` : "";
@@ -303,6 +571,7 @@ export class ScaliusComputerController {
   async #act(
     commands: readonly ScaliusComputerCommand[],
     authorizedNavigationRoutes: ReadonlySet<string>,
+    confirmationExpiresAt: number | undefined,
   ): Promise<ScaliusComputerResult> {
     const observed = this.#observed;
     if (!observed) {
@@ -346,6 +615,45 @@ export class ScaliusComputerController {
         return failure(
           "ROUTE_BLOCKED",
           "That link requires one exact destination authorized by the latest user request.",
+          false,
+        );
+      }
+      if (
+        target.confirmationRequired &&
+        (command.name === "click" || command.name === "submit")
+      ) {
+        const token = this.#createConfirmationToken();
+        if (!CONFIRMATION_TOKEN_PATTERN.test(token)) {
+          throw new Error("Invalid confirmation token");
+        }
+        const now = this.#confirmationNow();
+        const expiresAt = effectiveConfirmationExpiry(
+          confirmationExpiresAt,
+          now,
+          this.#confirmationTtlMs,
+        );
+        const adapterAction = toAdapterAction(command, target.id);
+        if (adapterAction.name !== "click" && adapterAction.name !== "submit") {
+          throw new Error("Invalid confirmation action");
+        }
+        this.#pendingConfirmation = {
+          descriptor: {
+            token,
+            binding: { ...this.#binding },
+            route: observed.route,
+            revision: `r${observed.revisionNumber}`,
+            snapshotSignature: observed.signature,
+            targetId: target.id,
+            targetFingerprint: targetFingerprint(target),
+            action: command.name,
+            expiresAt,
+          },
+          action: adapterAction,
+          targetCanonical: targetCanonical(target),
+        };
+        return failure(
+          "CONFIRMATION_REQUIRED",
+          "This exact page action is waiting for direct human confirmation.",
           false,
         );
       }
@@ -645,6 +953,70 @@ function failure(
 ): ScaliusComputerResult {
   return { ok: false, code, output, retryable };
 }
+function confirmationFailure(
+  code: ScaliusComputerConfirmationErrorCode,
+  output: string,
+): ScaliusComputerConfirmationResult {
+  return { ok: false, code, output, retryable: false };
+}
+function effectiveConfirmationExpiry(
+  requestedExpiresAt: number | undefined,
+  now: number,
+  ttlMs: number,
+): number {
+  const localExpiry = now + ttlMs;
+  if (
+    typeof requestedExpiresAt !== "number" ||
+    !Number.isSafeInteger(requestedExpiresAt)
+  ) {
+    return localExpiry;
+  }
+  return Math.min(requestedExpiresAt, localExpiry);
+}
+function createOpaqueConfirmationToken(): string {
+  const cryptoApi = (globalThis as unknown as {
+    crypto?: {
+      getRandomValues(values: Uint8Array): Uint8Array;
+    };
+  }).crypto;
+  if (!cryptoApi?.getRandomValues) {
+    throw new Error("Cryptographically secure randomness is unavailable");
+  }
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(24));
+  let token = "";
+  for (let index = 0; index < bytes.length; index += 1) {
+    token += (bytes[index] ?? 0).toString(16).padStart(2, "0");
+  }
+  return token;
+}
+function tokensMatch(expected: string, actual: string): boolean {
+  if (expected.length !== actual.length) return false;
+  let difference = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    difference |= expected.charCodeAt(index) ^ actual.charCodeAt(index);
+  }
+  return difference === 0;
+}
+function targetFingerprint(target: ScaliusComputerTarget): string {
+  const canonical = targetCanonical(target);
+  return ["a", "b", "c", "d"]
+    .map((domain) => hashText(`${domain}\u0000${canonical}`))
+    .join(".");
+}
+function targetCanonical(target: ScaliusComputerTarget): string {
+  return JSON.stringify([
+    target.role,
+    target.name,
+    target.actions,
+    target.states ?? [],
+    target.route ?? null,
+    Boolean(target.disabled),
+    Boolean(target.sensitive),
+    Boolean(target.humanOnly),
+    target.humanConfirmationId ?? null,
+    Boolean(target.confirmationRequired),
+  ]);
+}
 
 export function getScaliusComputerHumanConfirmationId(
   result: ScaliusComputerResult,
@@ -735,6 +1107,8 @@ interface ElementLike {
   value?: string;
   form?: ElementLike | null;
   options?: ArrayLike<ElementLike>;
+  children?: ArrayLike<unknown>;
+  elements?: ArrayLike<unknown>;
   getAttribute(name: string): string | null;
   hasAttribute(name: string): boolean;
   querySelectorAll?(selector: string): ArrayLike<unknown>;
@@ -765,10 +1139,7 @@ const HEADING_SELECTOR =
   "main h1,main h2,main h3,[role='heading'],[role='status'],[role='alert'],[data-scalius-computer-text]";
 const SEMANTIC_TEXT_SELECTOR =
   `${HEADING_SELECTOR},main p,main li,main th,main td`;
-const SENSITIVE_SELECTOR = [
-  "input[type='password']", "input[type='file']", "[autocomplete='one-time-code']",
-  "[autocomplete^='cc-']", "[data-scalius-computer-sensitive]",
-].join(",");
+const MAX_FORM_SENSITIVITY_CANDIDATES = 200;
 const SENSITIVE_HINT =
   /(?:password|passcode|one.?time|\botp\b|secret|token|api.?key|card.?number|\bcvv\b|\bcvc\b|receipt|recovery)/i;
 const CONSEQUENTIAL_HINT =
@@ -857,6 +1228,13 @@ export function createScaliusBrowserComputerAdapter(
     if (target.sensitive) return { ok: false, code: "SENSITIVE_CONTROL" };
     if (target.disabled) return { ok: false, code: "TARGET_DISABLED" };
     if (target.humanOnly) return { ok: false, code: "HUMAN_REQUIRED" };
+    if (
+      target.confirmationRequired &&
+      (action.name === "click" || action.name === "submit") &&
+      action.confirmed !== true
+    ) {
+      return { ok: false, code: "HUMAN_REQUIRED" };
+    }
     if (!target.actions.includes(action.name)) return { ok: false, code: "ACTION_NOT_ALLOWED" };
     if (action.name === "click") {
       if (!element.click) return { ok: false, code: "EXECUTION_FAILED" };
@@ -986,15 +1364,44 @@ function inspectTarget(
     element,
     "data-scalius-computer-human-confirmation",
   );
+  const humanConfirmationRequested = element.hasAttribute(
+    "data-scalius-computer-human-confirmation",
+  );
   const humanConfirmationId =
     isScaliusComputerHumanConfirmationId(rawHumanConfirmationId)
       ? rawHumanConfirmationId
       : undefined;
-  const humanOnly = Boolean(humanConfirmationId) ||
+  const genericConfirmationRequested =
+    attribute(element, "data-scalius-computer-confirm") === "required" ||
+    Boolean(form) &&
+      (submitter || tag === "form") &&
+      attribute(form as ElementLike, "data-scalius-computer-confirm") ===
+        "required";
+  const containsSensitiveSubmission = Boolean(form) &&
+    (submitter || tag === "form") &&
+    containsSensitiveControl(form as ElementLike);
+  const permanentlyHumanOnly = humanConfirmationRequested ||
     hasAncestorFlag(element, "data-scalius-computer-human-only") ||
-    type === "file" || (role === "link" && !route) ||
-    (submitter || tag === "form") && (!form || !submitAllowed(element, form)) ||
-    (!explicitlyAllowed && CONSEQUENTIAL_HINT.test(name));
+    type === "file" ||
+    (role === "link" && !route) ||
+    (submitter || tag === "form") &&
+      (!form || !submitAllowed(element, form));
+  const confirmationRequired = !sensitive &&
+    !permanentlyHumanOnly &&
+    genericConfirmationRequested &&
+    !containsSensitiveSubmission &&
+    (submitter || tag === "form" || [
+      "link",
+      "button",
+      "checkbox",
+      "radio",
+      "switch",
+      "tab",
+      "menuitem",
+    ].includes(role));
+  const humanOnly = permanentlyHumanOnly ||
+    (!explicitlyAllowed && !confirmationRequired && CONSEQUENTIAL_HINT.test(name)) ||
+    (genericConfirmationRequested && !confirmationRequired);
   const actions: ScaliusComputerAction[] = submitter || tag === "form"
     ? ["submit"]
     : role === "textbox" ? ["fill"]
@@ -1025,6 +1432,7 @@ function inspectTarget(
     sensitive,
     humanOnly,
     humanConfirmationId,
+    confirmationRequired,
   };
 }
 function accessibleName(document: DocumentLike, element: ElementLike, role: string): string {
@@ -1117,10 +1525,42 @@ function isInsideInteractive(element: ElementLike): boolean {
 }
 function submitAllowed(element: ElementLike, form: ElementLike): boolean {
   return attribute(element, "data-scalius-computer-submit") === "allow" ||
-    attribute(form, "data-scalius-computer-submit") === "allow";
+    attribute(form, "data-scalius-computer-submit") === "allow" ||
+    attribute(element, "data-scalius-computer-confirm") === "required" ||
+    attribute(form, "data-scalius-computer-confirm") === "required";
 }
 function containsSensitiveControl(form: ElementLike): boolean {
-  return arrayOfElements(form.querySelectorAll?.(SENSITIVE_SELECTOR) ?? []).length > 0;
+  if (isSensitive(form)) return true;
+
+  // Walk every descendant, including non-control metadata nodes that can carry
+  // a sensitive marker. Inspect collection lengths before enumeration so a
+  // hostile/accidentally huge form fails closed without an unbounded DOM scan.
+  const stack: ElementLike[] = [form];
+  let visited = 0;
+  while (stack.length > 0) {
+    const parent = stack.pop();
+    const children = parent?.children;
+    if (!children) return true;
+    if (visited + children.length > MAX_FORM_SENSITIVITY_CANDIDATES) return true;
+    for (let index = 0; index < children.length; index += 1) {
+      const child = asElement(children[index]);
+      if (!child) return true;
+      visited += 1;
+      if (isSensitive(child)) return true;
+      stack.push(child);
+    }
+  }
+
+  // HTML permits form-associated controls outside the form subtree. They are
+  // submitted by requestSubmit(), so protect them under the same bounded rule.
+  if (form.elements) {
+    if (form.elements.length > MAX_FORM_SENSITIVITY_CANDIDATES) return true;
+    for (let index = 0; index < form.elements.length; index += 1) {
+      const control = asElement(form.elements[index]);
+      if (!control || isSensitive(control)) return true;
+    }
+  }
+  return false;
 }
 function safeLinkRoute(href: string, origin: string): string | undefined {
   if (!href) return undefined;
@@ -1159,6 +1599,9 @@ function hashSnapshot(
   textCount: number,
 ): string {
   const source = JSON.stringify([route, title, targetCount, textCount, targets, text]);
+  return hashText(source);
+}
+function hashText(source: string): string {
   let hash = 2166136261;
   for (let index = 0; index < source.length; index += 1) {
     hash ^= source.charCodeAt(index);
