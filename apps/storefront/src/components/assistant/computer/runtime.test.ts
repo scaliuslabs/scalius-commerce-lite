@@ -55,6 +55,12 @@ describe("Storefront assistant computer runtime", () => {
     "/_astro/app.js",
     "/.well-known/ucp",
     "/cdn-cgi/trace",
+    "/checkout",
+    "/checkout/payment",
+    "/account",
+    "/account/orders/order_1",
+    "/order-success",
+    "/payment-recovery",
   ])("blocks non-buyer route %s", async (route) => {
     const navigate = vi.fn();
     const runtime = createStorefrontAssistantComputerRuntime({
@@ -83,10 +89,6 @@ describe("Storefront assistant computer runtime", () => {
       program: 'goto "/search?q=running%20shoe"',
     })).resolves.toMatchObject({ ok: true, code: "NAVIGATED" });
     expect(navigate).toHaveBeenCalledWith("/search?q=running%20shoe");
-    await expect(runtime.execute({
-      binding: runtime.binding,
-      program: 'goto "/checkout"',
-    })).resolves.toMatchObject({ ok: true, code: "NAVIGATED" });
     await expect(runtime.execute({
       binding: runtime.binding,
       program: "refresh",
