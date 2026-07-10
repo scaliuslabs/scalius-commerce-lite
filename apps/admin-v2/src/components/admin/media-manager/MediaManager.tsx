@@ -184,6 +184,7 @@ export function MediaManager({
               </div>
 
               <GeneratedImagePanel
+                confirmationScope="media-picker"
                 folderId={
                   mm.currentFolderId === "all" ? null : mm.currentFolderId
                 }

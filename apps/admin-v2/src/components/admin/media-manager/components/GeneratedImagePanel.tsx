@@ -1,4 +1,10 @@
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import { ImagePlus, Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -6,6 +12,16 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  ADMIN_ASSISTANT_HUMAN_ACTIONS,
+  adminAssistantHumanActionId,
+  cancelAdminAssistantHumanAction,
+  claimAdminAssistantHumanAction,
+  createAdminAssistantHumanActionInstanceId,
+  finishAdminAssistantHumanAction,
+  type AdminAssistantHumanActionOperation,
+  type AdminAssistantHumanActionScope,
+} from "~/lib/admin-assistant-human-confirmation";
 
 import { MediaApiClient } from "../api/mediaClient";
 import type { GeneratedImagePreview, MediaFile } from "../types";
@@ -14,11 +30,13 @@ interface GeneratedImagePanelProps {
   folderId?: string | null;
   onSaved: (file: MediaFile) => void | Promise<void>;
   saveActionLabel?: string;
+  confirmationScope: AdminAssistantHumanActionScope;
 }
 
 const ASPECT_RATIOS = [
   { value: "auto", label: "Provider default" },
   { value: "1:1", label: "Square (1:1)" },
+  { value: "2:3", label: "Portrait (2:3)" },
   { value: "4:5", label: "Portrait (4:5)" },
   { value: "3:2", label: "Landscape (3:2)" },
   { value: "16:9", label: "Wide (16:9)" },
@@ -30,12 +48,20 @@ export function GeneratedImagePanel({
   folderId,
   onSaved,
   saveActionLabel = "Save to media library",
+  confirmationScope,
 }: GeneratedImagePanelProps) {
   const promptId = useId();
   const altTextId = useId();
   const aspectRatioId = useId();
   const abortRef = useRef<AbortController | null>(null);
+  const activeGenerateOperationRef =
+    useRef<AdminAssistantHumanActionOperation | null>(null);
+  const activeSaveOperationRef =
+    useRef<AdminAssistantHumanActionOperation | null>(null);
   const [open, setOpen] = useState(false);
+  const [confirmationInstanceId, setConfirmationInstanceId] = useState<
+    string | null
+  >(null);
   const [prompt, setPrompt] = useState("");
   const [altText, setAltText] = useState("");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("auto");
@@ -44,6 +70,20 @@ export function GeneratedImagePanel({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const generateConfirmationId = confirmationInstanceId
+    ? adminAssistantHumanActionId(
+      ADMIN_ASSISTANT_HUMAN_ACTIONS.generateImage,
+      confirmationScope,
+      confirmationInstanceId,
+    )
+    : null;
+  const saveConfirmationId = confirmationInstanceId
+    ? adminAssistantHumanActionId(
+      ADMIN_ASSISTANT_HUMAN_ACTIONS.saveGeneratedImage,
+      confirmationScope,
+      confirmationInstanceId,
+    )
+    : null;
 
   useEffect(() => {
     if (!preview) {
@@ -56,21 +96,46 @@ export function GeneratedImagePanel({
   }, [preview]);
 
   useEffect(() => {
-    return () => abortRef.current?.abort();
-  }, []);
+    if (!generateConfirmationId || !saveConfirmationId) return undefined;
+    return () => {
+      const generateOperation = activeGenerateOperationRef.current;
+      if (generateOperation?.actionId === generateConfirmationId) {
+        finishAdminAssistantHumanAction(generateOperation, "cancelled");
+        activeGenerateOperationRef.current = null;
+      } else {
+        cancelAdminAssistantHumanAction(generateConfirmationId);
+      }
+      if (activeSaveOperationRef.current?.actionId !== saveConfirmationId) {
+        cancelAdminAssistantHumanAction(saveConfirmationId);
+      }
+      abortRef.current?.abort();
+    };
+  }, [generateConfirmationId, saveConfirmationId]);
 
   const discardPreview = () => {
+    if (preview && saveConfirmationId) {
+      cancelAdminAssistantHumanAction(saveConfirmationId);
+    }
     setPreview(null);
     setError(null);
   };
 
-  const generate = async () => {
+  const generate = async (event: MouseEvent<HTMLButtonElement>) => {
     const normalizedPrompt = prompt.trim();
-    if (!normalizedPrompt) return;
+    if (!normalizedPrompt || !generateConfirmationId) return;
+    const operation = claimAdminAssistantHumanAction(
+      generateConfirmationId,
+      event.nativeEvent,
+    );
+    if (!operation) return;
+    activeGenerateOperationRef.current = operation;
 
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    if (preview && saveConfirmationId) {
+      cancelAdminAssistantHumanAction(saveConfirmationId);
+    }
     setIsGenerating(true);
     setError(null);
     setPreview(null);
@@ -81,8 +146,13 @@ export function GeneratedImagePanel({
         signal: controller.signal,
       });
       setPreview(generated);
+      finishAdminAssistantHumanAction(operation, "succeeded");
     } catch (caught) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        finishAdminAssistantHumanAction(operation, "cancelled");
+        return;
+      }
+      finishAdminAssistantHumanAction(operation, "failed");
       setError(
         caught instanceof Error
           ? caught.message
@@ -90,13 +160,24 @@ export function GeneratedImagePanel({
       );
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
+      if (activeGenerateOperationRef.current === operation) {
+        activeGenerateOperationRef.current = null;
+      }
       setIsGenerating(false);
     }
   };
 
-  const save = async () => {
-    if (!preview) return;
+  const save = async (event: MouseEvent<HTMLButtonElement>) => {
+    if (!preview || !saveConfirmationId) return;
+    const operation = claimAdminAssistantHumanAction(
+      saveConfirmationId,
+      event.nativeEvent,
+    );
+    if (!operation) return;
+    activeSaveOperationRef.current = operation;
     if (preview.expiresAt.getTime() <= Date.now()) {
+      finishAdminAssistantHumanAction(operation, "failed");
+      activeSaveOperationRef.current = null;
       setError("This preview expired. Generate it again before saving.");
       return;
     }
@@ -110,6 +191,7 @@ export function GeneratedImagePanel({
         folderId,
       });
       await onSaved(saved);
+      finishAdminAssistantHumanAction(operation, "succeeded");
       toast.success("Generated image saved", {
         description: "The verified image is now in your media library.",
       });
@@ -117,12 +199,16 @@ export function GeneratedImagePanel({
       setPrompt("");
       setAltText("");
     } catch (caught) {
+      finishAdminAssistantHumanAction(operation, "failed");
       setError(
         caught instanceof Error
           ? caught.message
           : "Saving the generated image failed. Please try again.",
       );
     } finally {
+      if (activeSaveOperationRef.current === operation) {
+        activeSaveOperationRef.current = null;
+      }
       setIsSaving(false);
     }
   };
@@ -147,17 +233,33 @@ export function GeneratedImagePanel({
           type="button"
           variant="outline"
           size="sm"
+          disabled={isSaving}
           aria-expanded={open}
           aria-controls={`${promptId}-panel`}
           data-scalius-computer-action="allow"
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => {
+            if (open) {
+              if (isGenerating) {
+                abortRef.current?.abort();
+              }
+              if (preview && saveConfirmationId) {
+                cancelAdminAssistantHumanAction(saveConfirmationId);
+              }
+              setConfirmationInstanceId(null);
+            } else {
+              setConfirmationInstanceId(
+                createAdminAssistantHumanActionInstanceId(),
+              );
+            }
+            setOpen((current) => !current);
+          }}
         >
           <Sparkles className="mr-2 h-4 w-4" />
           {open ? "Close generator" : "Generate with AI"}
         </Button>
       </div>
 
-      {open && (
+      {open && generateConfirmationId && saveConfirmationId && (
         <div id={`${promptId}-panel`} className="mt-3 grid gap-3 lg:grid-cols-2">
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -212,6 +314,9 @@ export function GeneratedImagePanel({
               type="button"
               disabled={!prompt.trim() || isGenerating || isSaving}
               data-scalius-computer-human-only
+              data-scalius-computer-human-confirmation={
+                generateConfirmationId
+              }
               onClick={generate}
             >
               {isGenerating ? (
@@ -258,6 +363,9 @@ export function GeneratedImagePanel({
                     type="button"
                     disabled={isSaving}
                     data-scalius-computer-human-only
+                    data-scalius-computer-human-confirmation={
+                      saveConfirmationId
+                    }
                     onClick={save}
                   >
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

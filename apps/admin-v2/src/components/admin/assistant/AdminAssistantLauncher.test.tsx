@@ -15,6 +15,7 @@ const sdkMocks = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   const send = vi.fn();
   const abort = vi.fn();
+  const history = vi.fn();
   const refresh = vi.fn();
   const close = vi.fn();
   const subscribe = vi.fn((listener: () => void) => {
@@ -41,6 +42,7 @@ const sdkMocks = vi.hoisted(() => {
     agents: {
       send,
       abort,
+      history,
       observe,
     },
   };
@@ -55,6 +57,7 @@ const sdkMocks = vi.hoisted(() => {
     observation,
     observe,
     refresh,
+    history,
     send,
     state,
     subscribe,
@@ -101,6 +104,7 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     sdkMocks.listeners.clear();
     sdkMocks.send.mockReset();
     sdkMocks.abort.mockReset();
+    sdkMocks.history.mockReset();
     sdkMocks.refresh.mockReset();
     sdkMocks.close.mockReset();
     sdkMocks.subscribe.mockClear();
@@ -115,6 +119,25 @@ describe("AdminAssistantLauncher Flue cutover", () => {
       submissionId: "submission-1",
     });
     sdkMocks.abort.mockResolvedValue({ aborted: true });
+    sdkMocks.history.mockImplementation(async () => {
+      const conversation = sdkMocks.state.snapshot.conversation;
+      const messages = conversation?.messages ?? [];
+      const settlements = [...(conversation?.settlements ?? [])];
+      const settledIds = new Set(settlements.map((entry) => entry.submissionId));
+      for (const submissionId of messages.flatMap((entry) =>
+        entry.submissionId ? [entry.submissionId] : [])) {
+        if (!settledIds.has(submissionId)) {
+          settlements.push({ submissionId, outcome: "aborted" });
+        }
+      }
+      return {
+        v: 1 as const,
+        conversationId: THREAD_ID,
+        offset: "opaque-history-after-stop",
+        messages,
+        settlements,
+      };
+    });
     routerMocks.navigate.mockReset();
     routerMocks.navigate.mockResolvedValue(undefined);
 
@@ -601,9 +624,14 @@ describe("AdminAssistantLauncher Flue cutover", () => {
       "admin-copilot",
       THREAD_ID,
     );
+    expect(sdkMocks.history).toHaveBeenCalledWith(
+      "admin-copilot",
+      THREAD_ID,
+      { signal: expect.any(AbortSignal) },
+    );
     expect(sdkMocks.refresh).toHaveBeenCalledOnce();
     expect(document.body.textContent).toContain(
-      "Stop requested. The durable thread will show the final state.",
+      "Stop recorded. Pending page actions were cancelled and the durable thread is no longer running.",
     );
 
     await emitSnapshot(
@@ -638,12 +666,14 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     await click(queryButton("Open admin assistant"));
     await click(queryButton("Stop assistant"));
 
+    expect(sdkMocks.history).toHaveBeenCalledOnce();
     expect(document.body.textContent).toContain(
       "The assistant had already finished, so there was nothing to stop.",
     );
     expect(document.body.textContent).not.toContain(
-      "Stop requested. The durable thread will show the final state.",
+      "Stop recorded. Pending page actions were cancelled and the durable thread is no longer running.",
     );
+    expect(queryButton("Stop assistant")).toBeNull();
   });
 
   it("follows live output only while the merchant remains near the bottom", async () => {

@@ -4,6 +4,7 @@ import {
   type AgentConversationObservationSnapshot,
   type FlueClient,
   type FlueConversationMessage,
+  type FlueConversationSnapshot,
 } from "@flue/sdk";
 import {
   useCallback,
@@ -58,7 +59,7 @@ interface AdminAssistantTranscriptController {
   operationError: string | null;
   settlementNotice: AdminAssistantSettlementNotice | null;
   sendMessage: (message: string) => Promise<boolean>;
-  abort: () => Promise<"requested" | "idle" | "failed">;
+  abort: () => Promise<"settled" | "requested" | "idle" | "failed">;
   startNewConversation: () => string | null;
   switchConversation: (threadId: string) => boolean;
   retry: () => void;
@@ -74,6 +75,8 @@ const EMPTY_OBSERVATION_SNAPSHOT: AgentConversationObservationSnapshot = {
 
 const NOOP_UNSUBSCRIBE = () => {};
 const NOOP_SUBSCRIBE = () => NOOP_UNSUBSCRIBE;
+const ABORT_RECONCILIATION_TIMEOUT_MS = 4_000;
+const ABORT_RECONCILIATION_POLL_MS = 75;
 let optimisticSequence = 0;
 
 export function useAdminAssistantTranscript(): AdminAssistantTranscriptController {
@@ -90,6 +93,8 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
   const [admitting, setAdmitting] = useState(false);
   const [aborting, setAborting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [locallyTerminalSubmissionIds, setLocallyTerminalSubmissionIds] =
+    useState<ReadonlySet<string>>(() => new Set());
 
   const subscribe = useCallback(
     (listener: () => void) =>
@@ -110,14 +115,20 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     () => snapshot.conversation?.messages ?? [],
     [snapshot.conversation?.messages],
   );
-  const settledSubmissionIds = useMemo(
-    () =>
-      new Set(
+  const durableSettledSubmissionIds = useMemo(
+    () => new Set(
         (snapshot.conversation?.settlements ?? []).map(
           (settlement) => settlement.submissionId,
         ),
       ),
     [snapshot.conversation?.settlements],
+  );
+  const settledSubmissionIds = useMemo(
+    () => new Set([
+      ...durableSettledSubmissionIds,
+      ...locallyTerminalSubmissionIds,
+    ]),
+    [durableSettledSubmissionIds, locallyTerminalSubmissionIds],
   );
   const activeSubmission = durableMessages.some(
     (message) =>
@@ -141,6 +152,10 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
       return next.length === current.length ? current : next;
     });
   }, [durableMessages]);
+
+  useEffect(() => {
+    setLocallyTerminalSubmissionIds(new Set());
+  }, [threadId]);
 
   const messages = useMemo(
     () => mergePendingMessages(durableMessages, pendingMessages),
@@ -251,7 +266,9 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     [sending, snapshot.phase, transport],
   );
 
-  const abort = useCallback(async (): Promise<"requested" | "idle" | "failed"> => {
+  const abort = useCallback(async (): Promise<
+    "settled" | "requested" | "idle" | "failed"
+  > => {
     if (!transport || admitting || aborting) return "failed";
     setAborting(true);
     setOperationError(null);
@@ -260,8 +277,31 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
         ADMIN_FLUE_AGENT_NAME,
         transport.threadId,
       );
+      const canonical = await reconcileAbortWithCanonicalHistory(
+        transport,
+        result.aborted,
+      );
+      if (!result.aborted || (canonical && !hasActiveSubmission(canonical))) {
+        const knownIds = new Set(
+          (canonical?.messages ??
+            transport.observation.getSnapshot().conversation?.messages ?? [])
+            .flatMap((message) =>
+              message.submissionId ? [message.submissionId] : []
+            ),
+        );
+        for (const message of pendingMessages) {
+          if (message.submissionId) knownIds.add(message.submissionId);
+        }
+        setPendingMessages([]);
+        setLocallyTerminalSubmissionIds((current) =>
+          new Set([...current, ...knownIds])
+        );
+      }
       transport.observation.refresh();
-      return result.aborted ? "requested" : "idle";
+      if (!result.aborted) return "idle";
+      return canonical && !hasActiveSubmission(canonical)
+        ? "settled"
+        : "requested";
     } catch {
       setOperationError(
         "The stop request could not be confirmed. The assistant may still be working.",
@@ -270,7 +310,7 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     } finally {
       setAborting(false);
     }
-  }, [aborting, admitting, transport]);
+  }, [aborting, admitting, pendingMessages, transport]);
 
   const retry = useCallback(() => {
     setOperationError(null);
@@ -296,6 +336,48 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     retry,
     clearOperationError: () => setOperationError(null),
   };
+}
+
+async function reconcileAbortWithCanonicalHistory(
+  transport: AdminFlueTransport,
+  waitForTerminal: boolean,
+): Promise<FlueConversationSnapshot | null> {
+  const deadline = Date.now() + ABORT_RECONCILIATION_TIMEOUT_MS;
+  let latest: FlueConversationSnapshot | null = null;
+  do {
+    const remaining = Math.max(1, deadline - Date.now());
+    try {
+      latest = await transport.client.agents.history(
+        ADMIN_FLUE_AGENT_NAME,
+        transport.threadId,
+        { signal: AbortSignal.timeout(remaining) },
+      );
+    } catch {
+      return latest;
+    }
+    if (!waitForTerminal || !hasActiveSubmission(latest)) return latest;
+    if (Date.now() >= deadline) return latest;
+    await new Promise((resolve) =>
+      setTimeout(
+        resolve,
+        Math.min(ABORT_RECONCILIATION_POLL_MS, deadline - Date.now()),
+      )
+    );
+  } while (Date.now() < deadline);
+  return latest;
+}
+
+function hasActiveSubmission(
+  conversation: Pick<FlueConversationSnapshot, "messages" | "settlements">,
+): boolean {
+  const settled = new Set(
+    conversation.settlements.map((entry) => entry.submissionId),
+  );
+  return conversation.messages.some(
+    (message) =>
+      message.submissionId !== undefined &&
+      !settled.has(message.submissionId),
+  );
 }
 
 function createBrowserTransport(threadId: string): AdminFlueTransport | null {

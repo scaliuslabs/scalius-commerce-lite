@@ -2,9 +2,11 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../../utils/api-response";
+import { RateLimitError } from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
-  enforceGeneratedImageGenerationLimit: vi.fn(),
+  cleanupExpiredGeneratedImagePreviews: vi.fn(),
+  consumeAssistantRateLimit: vi.fn(),
   recordGeneratedImagePreview: vi.fn(),
   saveGeneratedImagePreview: vi.fn(),
   resolveAiModelProfile: vi.fn(),
@@ -15,10 +17,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@scalius/core/modules/media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/media")>()),
-  enforceGeneratedImageGenerationLimit:
-    mocks.enforceGeneratedImageGenerationLimit,
+  cleanupExpiredGeneratedImagePreviews:
+    mocks.cleanupExpiredGeneratedImagePreviews,
   recordGeneratedImagePreview: mocks.recordGeneratedImagePreview,
   saveGeneratedImagePreview: mocks.saveGeneratedImagePreview,
+}));
+
+vi.mock("@scalius/core/modules/assistant", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/assistant")>()),
+  consumeAssistantRateLimit: mocks.consumeAssistantRateLimit,
 }));
 
 vi.mock("@scalius/core/modules/ai", async (importOriginal) => ({
@@ -61,10 +68,24 @@ function testApp() {
   return app;
 }
 
+function executionContext(): ExecutionContext {
+  return {
+    waitUntil: vi.fn(),
+    passThroughOnException: vi.fn(),
+  } as unknown as ExecutionContext;
+}
+
 describe("Admin generated media routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.loadAiRuntimeSettings.mockResolvedValue({ id: "settings" });
+    mocks.cleanupExpiredGeneratedImagePreviews.mockResolvedValue(0);
+    mocks.consumeAssistantRateLimit.mockResolvedValue({
+      allowed: true,
+      count: 1,
+      remaining: 4,
+      resetAt: new Date("2026-07-10T12:01:00.000Z"),
+    });
     mocks.resolveAiModelProfile.mockReturnValue({
       provider: "cloudflare",
       model: "@cf/black-forest-labs/flux-2-dev",
@@ -94,7 +115,11 @@ describe("Admin generated media routes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, aspectRatio: "1:1" }),
       },
-      { AI: { run: vi.fn() } } as unknown as Env,
+      {
+        AI: { run: vi.fn() },
+        ASSISTANT_RATE_LIMIT_HMAC_KEY: "a".repeat(32),
+      } as unknown as Env,
+      executionContext(),
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -112,7 +137,17 @@ describe("Admin generated media routes", () => {
       "not_reported",
     );
     expect([...response.headers.values()].join(" ")).not.toContain(prompt);
-    expect(mocks.enforceGeneratedImageGenerationLimit).toHaveBeenCalledOnce();
+    expect(mocks.consumeAssistantRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      {
+        scope: "admin.media.image.generate",
+        bucket: "admin_1",
+        hashKey: "a".repeat(32),
+        limit: 5,
+        windowSeconds: 60,
+      },
+    );
+    expect(mocks.cleanupExpiredGeneratedImagePreviews).toHaveBeenCalledOnce();
     expect(mocks.generateAiImage).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "cloudflare",
@@ -121,6 +156,73 @@ describe("Admin generated media routes", () => {
         aspectRatio: "1:1",
       }),
     );
+  });
+
+  it("consumes the atomic D1 attempt before provider work and counts failures", async () => {
+    mocks.consumeAssistantRateLimit.mockRejectedValueOnce(
+      new RateLimitError("Too many requests"),
+    );
+
+    const response = await testApp().request(
+      "/api/v1/admin/media/image-generation/generate",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "Premium studio shoe photograph" }),
+      },
+      {
+        AI: { run: vi.fn() },
+        ASSISTANT_RATE_LIMIT_HMAC_KEY: "a".repeat(32),
+      } as unknown as Env,
+      executionContext(),
+    );
+
+    expect(response.status).toBe(429);
+    expect(mocks.generateAiImage).not.toHaveBeenCalled();
+    expect(mocks.recordGeneratedImagePreview).not.toHaveBeenCalled();
+  });
+
+  it("publishes binary preview headers and a multipart save body in OpenAPI", () => {
+    const document = testApp().getOpenAPIDocument({
+      openapi: "3.1.0",
+      info: { title: "test", version: "1" },
+    });
+    const generate = document.paths?.[
+      "/api/v1/admin/media/image-generation/generate"
+    ]?.post;
+    const save = document.paths?.[
+      "/api/v1/admin/media/image-generation/save"
+    ]?.post;
+
+    expect(generate?.responses?.["200"]).toMatchObject({
+      headers: {
+        "X-Scalius-Generation-Id": expect.any(Object),
+        "X-Scalius-Generation-Provider": expect.any(Object),
+        "X-Scalius-Generation-Model": expect.any(Object),
+        "X-Scalius-Generation-Prompt-Hash": expect.any(Object),
+        "X-Scalius-Generation-Cost-Status": expect.any(Object),
+        "X-Scalius-Generation-Expires-At": expect.any(Object),
+      },
+    });
+    expect(save?.requestBody).toMatchObject({
+      content: {
+        "multipart/form-data": {
+          schema: {
+            type: "object",
+            required: expect.arrayContaining(["file", "generationId"]),
+            properties: {
+              file: expect.objectContaining({
+                type: "string",
+                format: "binary",
+              }),
+              generationId: expect.any(Object),
+              altText: expect.any(Object),
+              folderId: expect.any(Object),
+            },
+          },
+        },
+      },
+    });
   });
 
   it("saves the exact multipart preview through server-side fingerprint authority", async () => {

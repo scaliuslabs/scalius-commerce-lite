@@ -110,6 +110,7 @@ export function MediaManagerPage() {
               </div>
 
               <GeneratedImagePanel
+                confirmationScope="library-page"
                 folderId={
                   mm.currentFolderId === "all" ? null : mm.currentFolderId
                 }

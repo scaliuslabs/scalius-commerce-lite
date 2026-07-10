@@ -12,6 +12,10 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 
 import { cn } from "@scalius/shared/utils";
+import {
+  ADMIN_ASSISTANT_HUMAN_ACTIONS,
+  subscribeAdminAssistantHumanConfirmation,
+} from "~/lib/admin-assistant-human-confirmation";
 
 import {
   getOrCreateAdminAssistantTabId,
@@ -67,9 +71,13 @@ export function AdminAssistantPanel({
   const queuedComputerToolCallsRef = useRef(new Set<string>());
   const computerQueueRef = useRef(Promise.resolve());
   const pendingComputerToolCallsRef = useRef(0);
+  const pendingHumanConfirmationsRef = useRef(0);
   const startPointerGesture = usePointerGesture();
   const [draft, setDraft] = useState("");
   const [computerBusy, setComputerBusy] = useState(false);
+  const [pendingConfirmationExpiry, setPendingConfirmationExpiry] = useState<
+    number | null
+  >(null);
   const [status, setStatus] = useState<AdminAssistantStatus>({
     kind: "idle",
     message: "Ready on the current admin page.",
@@ -125,6 +133,8 @@ export function AdminAssistantPanel({
     queuedComputerToolCallsRef.current.clear();
     computerQueueRef.current = Promise.resolve();
     pendingComputerToolCallsRef.current = 0;
+    pendingHumanConfirmationsRef.current = 0;
+    setPendingConfirmationExpiry(null);
     setComputerBusy(false);
   }, [transcript.threadId]);
 
@@ -174,7 +184,7 @@ export function AdminAssistantPanel({
                 kind: "error",
                 message:
                   outcome.reason === "navigation_not_authorized"
-                    ? "Navigation needs one direct, exact destination request. Nothing was opened."
+                    ? "That page isn't part of the current request, so nothing was opened."
                     : "A page command was rejected safely. Nothing was run for that command.",
               });
             } else if (outcome.status === "continuation_failed") {
@@ -182,6 +192,31 @@ export function AdminAssistantPanel({
                 kind: "error",
                 message:
                   "The page command finished, but its result could not return to the assistant. Ask it to observe before trying again.",
+              });
+            } else if (outcome.status === "awaiting_human_confirmation") {
+              pendingHumanConfirmationsRef.current =
+                computerCoordinator.pendingHumanConfirmationCount();
+              setPendingConfirmationExpiry(
+                computerCoordinator.nextPendingHumanConfirmationExpiry(),
+              );
+              setComputerBusy(true);
+              setStatus({
+                kind: "disabled",
+                message:
+                  outcome.actionId.startsWith(
+                    `${ADMIN_ASSISTANT_HUMAN_ACTIONS.generateImage}.`,
+                  )
+                    ? "Ready for your confirmation: click Generate image. The assistant will resume automatically when generation finishes."
+                    : "Ready for your confirmation: click Save. The assistant will resume automatically when saving finishes.",
+              });
+            } else if (
+              outcome.status === "duplicate" &&
+              outcome.phase === "awaiting_human_confirmation"
+            ) {
+              setStatus({
+                kind: "error",
+                message:
+                  "A confirmation was pending before this page reloaded. Its secret ticket was not persisted; ask the assistant to prepare the action again.",
               });
             }
           })
@@ -191,7 +226,10 @@ export function AdminAssistantPanel({
               0,
               pendingComputerToolCallsRef.current - 1,
             );
-            setComputerBusy(pendingComputerToolCallsRef.current > 0);
+            setComputerBusy(
+              pendingComputerToolCallsRef.current > 0 ||
+                pendingHumanConfirmationsRef.current > 0,
+            );
           });
       }
     }
@@ -202,6 +240,92 @@ export function AdminAssistantPanel({
     tabId,
     transcript.messages,
     transcript.threadId,
+  ]);
+
+  useEffect(() => {
+    if (!computerCoordinator || !transcript.threadId) return undefined;
+    const commandGuard = computerRuntimeGuard;
+    return subscribeAdminAssistantHumanConfirmation((confirmation) => {
+      computerQueueRef.current = computerQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (!commandGuard.active) return;
+          if (confirmation.phase === "started") {
+            computerCoordinator.registerHumanActionStart(confirmation);
+            return;
+          }
+          const outcome = confirmation.phase === "cancelled"
+            ? await computerCoordinator.cancelHumanAction(
+              confirmation.actionId,
+            )
+            : await computerCoordinator.confirmHumanAction(confirmation);
+          if (!commandGuard.active) return;
+          pendingHumanConfirmationsRef.current =
+            computerCoordinator.pendingHumanConfirmationCount();
+          setPendingConfirmationExpiry(
+            computerCoordinator.nextPendingHumanConfirmationExpiry(),
+          );
+          setComputerBusy(
+            pendingComputerToolCallsRef.current > 0 ||
+              pendingHumanConfirmationsRef.current > 0,
+          );
+          if (outcome.status === "continuation_accepted") {
+            const succeeded = confirmation.phase === "finished" &&
+              confirmation.outcome === "succeeded";
+            setStatus({
+              kind: succeeded ? "success" : "disabled",
+              message:
+                succeeded
+                  ? "Confirmed action finished. The same assistant task resumed automatically and will verify current state."
+                  : "The assistant resumed after the visible action was cancelled or failed.",
+            });
+          } else if (outcome.status === "continuation_failed") {
+            setStatus({
+              kind: "error",
+              message:
+                "The action finished, but its exact assistant continuation could not be resumed. Ask the assistant to observe current state.",
+            });
+          } else if (outcome.reason === "expired_confirmation") {
+            setStatus({
+              kind: "error",
+              message:
+                "That confirmation expired before it could resume the assistant. Ask it to prepare the action again.",
+            });
+          }
+        });
+    });
+  }, [computerCoordinator, computerRuntimeGuard, transcript.threadId]);
+
+  useEffect(() => {
+    if (!computerCoordinator || pendingConfirmationExpiry === null) {
+      return undefined;
+    }
+    const commandGuard = computerRuntimeGuard;
+    const timeout = window.setTimeout(() => {
+      if (!commandGuard.active) return;
+      const expired = computerCoordinator.expirePendingHumanConfirmations();
+      pendingHumanConfirmationsRef.current =
+        computerCoordinator.pendingHumanConfirmationCount();
+      setPendingConfirmationExpiry(
+        computerCoordinator.nextPendingHumanConfirmationExpiry(),
+      );
+      setComputerBusy(
+        pendingComputerToolCallsRef.current > 0 ||
+          pendingHumanConfirmationsRef.current > 0,
+      );
+      if (expired > 0) {
+        setStatus({
+          kind: "error",
+          message:
+            "Human confirmation expired. The assistant task can be retried from fresh page state.",
+        });
+      }
+    }, Math.max(0, pendingConfirmationExpiry - Date.now() + 25));
+    return () => window.clearTimeout(timeout);
+  }, [
+    computerCoordinator,
+    computerRuntimeGuard,
+    pendingConfirmationExpiry,
   ]);
 
   if (!open) return null;
@@ -224,22 +348,53 @@ export function AdminAssistantPanel({
   }
 
   async function handleAbort() {
-    const outcome = await transcript.abort();
-    if (outcome === "requested") {
+    const cancellationPromise = computerCoordinator
+      ? computerCoordinator.cancelPendingHumanConfirmations()
+      : Promise.resolve({ cancelled: 0, durable: 0, failed: 0 });
+    const abortPromise = transcript.abort();
+    const [cancellation, outcome] = await Promise.all([
+      cancellationPromise,
+      abortPromise,
+    ]);
+    if (cancellation.cancelled > 0) {
+      pendingHumanConfirmationsRef.current = 0;
+      setPendingConfirmationExpiry(null);
+      setComputerBusy(pendingComputerToolCallsRef.current > 0);
+    }
+    if (cancellation.failed > 0) {
+      setStatus({
+        kind: "error",
+        message:
+          "The page action is blocked in this tab, but its durable cancellation could not be confirmed. Start a new conversation before continuing.",
+      });
+    } else if (outcome === "settled") {
       setStatus({
         kind: "success",
-        message: "Stop requested. The durable thread will show the final state.",
+        message:
+          "Stop recorded. Pending page actions were cancelled and the durable thread is no longer running.",
+      });
+    } else if (outcome === "requested") {
+      setStatus({
+        kind: "disabled",
+        message:
+          "Stop was recorded. Waiting for the durable thread to publish its terminal state.",
       });
     } else if (outcome === "idle") {
       setStatus({
         kind: "disabled",
-        message: "The assistant had already finished, so there was nothing to stop.",
+        message:
+          cancellation.durable > 0
+            ? "The pending page action was cancelled. The assistant was already idle."
+            : "The assistant had already finished, so there was nothing to stop.",
       });
     }
   }
 
   function handleNewConversation() {
-    if (pendingComputerToolCallsRef.current > 0) return;
+    if (
+      pendingComputerToolCallsRef.current > 0 ||
+      pendingHumanConfirmationsRef.current > 0
+    ) return;
     const nextThreadId = transcript.startNewConversation();
     if (!nextThreadId) return;
     setStatus({
@@ -250,7 +405,10 @@ export function AdminAssistantPanel({
   }
 
   function handleConversationChange(threadId: string) {
-    if (pendingComputerToolCallsRef.current > 0) return;
+    if (
+      pendingComputerToolCallsRef.current > 0 ||
+      pendingHumanConfirmationsRef.current > 0
+    ) return;
     if (!transcript.switchConversation(threadId)) return;
     setStatus({ kind: "idle", message: "Durable conversation restored." });
     window.setTimeout(() => textareaRef.current?.focus(), 0);
@@ -375,7 +533,7 @@ export function AdminAssistantPanel({
       <AdminAssistantStatusBanner status={visibleStatus} />
       <AdminAssistantComposer
         aborting={transcript.aborting}
-        canAbort={transcript.canAbort}
+        canAbort={transcript.canAbort || computerBusy}
         draft={draft}
         sending={transcript.sending}
         textareaRef={textareaRef}

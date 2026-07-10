@@ -14000,7 +14000,7 @@ export type PostApiV1AdminDiscountsByIdRestoreResponse = PostApiV1AdminDiscounts
 export type PostApiV1AdminMediaImageGenerationGenerateData = {
     body?: {
         prompt: string;
-        aspectRatio?: 'auto' | '1:1' | '4:5' | '3:2' | '16:9';
+        aspectRatio?: 'auto' | '1:1' | '2:3' | '4:5' | '3:2' | '16:9';
         seed?: number;
     };
     path?: never;
@@ -14100,7 +14100,12 @@ export type PostApiV1AdminMediaImageGenerationGenerateResponses = {
 export type PostApiV1AdminMediaImageGenerationGenerateResponse = PostApiV1AdminMediaImageGenerationGenerateResponses[keyof PostApiV1AdminMediaImageGenerationGenerateResponses];
 
 export type PostApiV1AdminMediaImageGenerationSaveData = {
-    body?: never;
+    body?: {
+        file: Blob | File;
+        generationId: string;
+        altText?: string;
+        folderId?: string;
+    };
     path?: never;
     query?: never;
     url: '/api/v1/admin/media/image-generation/save';

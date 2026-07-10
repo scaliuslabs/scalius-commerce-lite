@@ -3,7 +3,11 @@
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
-import { NotFoundError, ValidationError } from "../../utils/api-error";
+import {
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+} from "../../utils/api-error";
 import {
     successEnvelope,
     paginatedEnvelope,
@@ -14,24 +18,25 @@ import {
 } from "../../schemas/responses";
 import { mediaSchema, mediaFolderSchema } from "../../schemas/entities";
 import {
-    listMediaFiles,
-    uploadMediaFiles,
-    updateMediaFile,
-    deleteMediaFile,
-    moveMediaFiles,
-    listMediaFolders,
-    createMediaFolder,
-    updateMediaFolder,
-    deleteMediaFolder,
-    updateMediaSchema,
-    moveMediaSchema,
+    cleanupExpiredGeneratedImagePreviews,
     createFolderSchema,
-    updateFolderSchema
-    ,enforceGeneratedImageGenerationLimit
-    ,recordGeneratedImagePreview
-    ,saveGeneratedImagePreview
+    createMediaFolder,
+    deleteMediaFile,
+    deleteMediaFolder,
+    listMediaFiles,
+    listMediaFolders,
+    moveMediaFiles,
+    moveMediaSchema,
+    recordGeneratedImagePreview,
+    saveGeneratedImagePreview,
+    updateFolderSchema,
+    updateMediaFile,
+    updateMediaFolder,
+    updateMediaSchema,
+    uploadMediaFiles,
 } from "@scalius/core/modules/media";
 import { resolveAiModelProfile } from "@scalius/core/modules/ai";
+import { consumeAssistantRateLimit } from "@scalius/core/modules/assistant";
 import { generateAiImage } from "../../modules/ai/image-runtime";
 import { loadAiRuntimeSettings } from "../../modules/ai/model-runtime";
 import { enforceAiRateLimit } from "./ai-rate-limit";
@@ -66,10 +71,59 @@ const uploadResponseSchema = successEnvelope(
 const generateImageSchema = z
     .object({
         prompt: z.string().trim().min(1).max(4_000),
-        aspectRatio: z.enum(["auto", "1:1", "4:5", "3:2", "16:9"]).default("auto"),
+        aspectRatio: z.enum(["auto", "1:1", "2:3", "4:5", "3:2", "16:9"]).default("auto"),
         seed: z.number().int().min(0).max(2_147_483_647).optional(),
     })
     .strict();
+
+const generatedImageSaveMultipartSchema = z.object({
+    file: z.file().openapi({ type: "string", format: "binary" }),
+    generationId: z.string().regex(/^aig_[A-Za-z0-9_-]{10,100}$/),
+    altText: z.string().max(500).optional(),
+    folderId: z.string().max(255).optional(),
+});
+
+const generatedImageResponseHeaders = {
+    "X-Scalius-Generation-Id": {
+        description: "Opaque generated preview authority ID",
+        schema: { type: "string" as const },
+    },
+    "X-Scalius-Generation-Provider": {
+        description: "Configured image provider",
+        schema: { type: "string" as const },
+    },
+    "X-Scalius-Generation-Model": {
+        description: "Percent-encoded configured image model",
+        schema: { type: "string" as const },
+    },
+    "X-Scalius-Generation-Prompt-Hash": {
+        description: "SHA-256 hash of the normalized prompt",
+        schema: { type: "string" as const },
+    },
+    "X-Scalius-Generation-Cost-Status": {
+        description: "Whether the provider reported generation cost",
+        schema: {
+            type: "string" as const,
+            enum: ["reported", "not_reported"],
+        },
+    },
+    "X-Scalius-Generation-Expires-At": {
+        description: "Preview save-authority expiry timestamp",
+        schema: { type: "string" as const, format: "date-time" },
+    },
+    "X-Scalius-Generation-Input-Tokens": {
+        description: "Provider-reported input tokens when available",
+        schema: { type: "string" as const, pattern: "^\\d+$" },
+    },
+    "X-Scalius-Generation-Output-Tokens": {
+        description: "Provider-reported output tokens when available",
+        schema: { type: "string" as const, pattern: "^\\d+$" },
+    },
+    "X-Scalius-Generation-Total-Tokens": {
+        description: "Provider-reported total tokens when available",
+        schema: { type: "string" as const, pattern: "^\\d+$" },
+    },
+};
 
 function setOptionalNumberHeader(
     headers: Headers,
@@ -92,6 +146,7 @@ const generateImageRoute = createRoute({
     responses: {
         200: {
             description: "Generated image bytes with bounded provenance headers",
+            headers: generatedImageResponseHeaders,
             content: {
                 "image/png": { schema: z.string().openapi({ format: "binary" }) },
                 "image/jpeg": { schema: z.string().openapi({ format: "binary" }) },
@@ -112,7 +167,25 @@ app.openapi(generateImageRoute, (async (c: AdminRouteContext<typeof generateImag
     // Admin AI traffic, while D1 independently caps costly image previews and
     // creates the authority window used by the later verified save.
     await enforceAiRateLimit(c);
-    await enforceGeneratedImageGenerationLimit(db, user.id);
+    const rateLimitKey = c.env.ASSISTANT_RATE_LIMIT_HMAC_KEY?.trim();
+    if (!rateLimitKey || new TextEncoder().encode(rateLimitKey).byteLength < 32) {
+        throw new ServiceUnavailableError(
+            "Image-generation admission is temporarily unavailable.",
+        );
+    }
+    await consumeAssistantRateLimit(db, {
+        scope: "admin.media.image.generate",
+        bucket: user.id,
+        hashKey: rateLimitKey,
+        limit: 5,
+        windowSeconds: 60,
+    });
+    c.executionCtx.waitUntil(
+        cleanupExpiredGeneratedImagePreviews(db, new Date(), c.env.BUCKET).then(
+            () => undefined,
+            () => undefined,
+        ),
+    );
 
     const settings = await loadAiRuntimeSettings(c);
     const profile = resolveAiModelProfile(settings, "imageGeneration");
@@ -177,6 +250,15 @@ const saveGeneratedImageRoute = createRoute({
     path: "/image-generation/save",
     tags: ["Admin - Media"],
     summary: "Verify and save a generated image preview to the media library",
+    request: {
+        body: {
+            content: {
+                "multipart/form-data": {
+                    schema: generatedImageSaveMultipartSchema,
+                },
+            },
+        },
+    },
     responses: {
         200: {
             description: "Generated image saved to the media library",

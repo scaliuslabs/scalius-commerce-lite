@@ -118,5 +118,9 @@ describe("route permissions", () => {
       "/api/v1/internal/admin-assistant/flue/other",
       "POST",
     )).toBeNull();
+    expect(getRoutePermission(
+      "/api/v1/internal/admin-assistant/flue/computer-handoff/consume",
+      "POST",
+    )).toEqual({ allowAnyAdmin: true });
   });
 });

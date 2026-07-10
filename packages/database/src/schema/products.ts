@@ -314,15 +314,21 @@ export const aiImageGenerationPreviews = sqliteTable("ai_image_generation_previe
         .notNull()
         .default(UNIX_NOW),
     expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    retentionExpiresAt: integer("retention_expires_at", { mode: "timestamp" }).notNull(),
     claimedAt: integer("claimed_at", { mode: "timestamp" }),
     claimToken: text("claim_token"),
+    r2Key: text("r2_key"),
     consumedAt: integer("consumed_at", { mode: "timestamp" }),
+    consumedMediaId: text("consumed_media_id"),
 }, (table) => [
     index("ai_image_generation_previews_user_created_idx").on(
         table.userId,
         table.createdAt,
     ),
     index("ai_image_generation_previews_expires_idx").on(table.expiresAt),
+    index("ai_image_generation_previews_retention_idx").on(
+        table.retentionExpiresAt,
+    ),
 ]);
 
 export type Product = InferSelectModel<typeof products>;

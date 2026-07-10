@@ -201,9 +201,30 @@ export const assistantRateLimitWindows = sqliteTable("assistant_rate_limit_windo
   index("assistant_rate_limit_expiry_idx").on(table.expiresAt),
 ]);
 
+export const assistantComputerHandoffs = sqliteTable("assistant_computer_handoffs", {
+  sessionId: text("session_id").notNull().references(() => assistantSessions.id),
+  agentInstanceId: text("agent_instance_id").notNull(),
+  requestId: text("request_id").notNull(),
+  programDigest: text("program_digest").notNull(),
+  state: text("state", { enum: ["cancelled", "dispatched"] }).notNull(),
+  ticketExpiresAt: integer("ticket_expires_at", { mode: "timestamp" }).notNull(),
+  retentionExpiresAt: integer("retention_expires_at", { mode: "timestamp" }).notNull(),
+  dispatchClaimHash: text("dispatch_claim_hash"),
+  dispatchConfirmedAt: integer("dispatch_confirmed_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+  primaryKey({
+    name: "assistant_computer_handoffs_instance_request_pk",
+    columns: [table.agentInstanceId, table.requestId],
+  }),
+  index("assistant_computer_handoffs_retention_expiry_idx").on(table.retentionExpiresAt),
+]);
+
 export type AssistantSession = InferSelectModel<typeof assistantSessions>;
 export type AssistantWorkflow = InferSelectModel<typeof assistantWorkflows>;
 export type AssistantAction = InferSelectModel<typeof assistantActions>;
 export type AssistantActionExecution = InferSelectModel<typeof assistantActionExecutions>;
 export type AssistantEvent = InferSelectModel<typeof assistantEvents>;
 export type AssistantRateLimitWindow = InferSelectModel<typeof assistantRateLimitWindows>;
+export type AssistantComputerHandoff = InferSelectModel<typeof assistantComputerHandoffs>;

@@ -10,6 +10,9 @@ import {
   AI_MODEL_PROFILE_IDS,
   AI_PROVIDER_IDS,
   DEFAULT_WIDGET_AI_PROVIDER_CAPABILITIES,
+  isImageGenerationModel,
+  isImageGenerationProvider,
+  normalizeCloudflareAiModelId,
   ERROR_MESSAGES,
   GENERATION_CONFIG,
   SYSTEM_PROMPT_FALLBACKS,
@@ -230,7 +233,10 @@ function asString(value: unknown, fallback = "") {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
-function normalizeModelList(value: unknown): string[] {
+function normalizeModelList(
+  value: unknown,
+  provider?: WidgetAiProvider,
+): string[] {
   if (!Array.isArray(value)) return [];
 
   const seen = new Set<string>();
@@ -238,7 +244,11 @@ function normalizeModelList(value: unknown): string[] {
 
   for (const item of value) {
     if (typeof item !== "string") continue;
-    const model = item.trim();
+    const trimmed = item.trim();
+    const model =
+      provider === "cloudflare"
+        ? normalizeCloudflareAiModelId(trimmed)
+        : trimmed;
     if (!model || model.length > 200 || seen.has(model)) continue;
     seen.add(model);
     models.push(model);
@@ -251,19 +261,6 @@ function normalizeProfileModel(value: unknown): string {
   if (typeof value !== "string") return "";
   const model = value.trim();
   return model && model.length <= 200 ? model : "";
-}
-
-function normalizeCloudflareAiModelId(model: string): string {
-  const trimmed = model.trim();
-  if (/^@cf\//i.test(trimmed)) return trimmed;
-
-  // Cloudflare's unified AI catalog uses IDs like `google/gemini-3.5-flash`.
-  // Merchants sometimes paste them with an `@` from older Workers AI examples.
-  if (/^@[a-z0-9][a-z0-9._-]*\//i.test(trimmed)) {
-    return trimmed.slice(1);
-  }
-
-  return trimmed;
 }
 
 function isCloudflareAiModelId(model: string): boolean {
@@ -371,8 +368,13 @@ function normalizeProvider(
   const normalized: WidgetAiProviderConfig = {
     enabled:
       typeof input.enabled === "boolean" ? input.enabled : defaults.enabled,
-    defaultModel: asString(input.defaultModel, defaults.defaultModel),
-    allowedModels: normalizeModelList(input.allowedModels),
+    defaultModel:
+      provider === "cloudflare"
+        ? normalizeCloudflareAiModelId(
+            asString(input.defaultModel, defaults.defaultModel),
+          )
+        : asString(input.defaultModel, defaults.defaultModel),
+    allowedModels: normalizeModelList(input.allowedModels, provider),
     capabilities: normalizeCapabilityConfig(
       provider,
       input.capabilities ?? defaults.capabilities,
@@ -451,7 +453,13 @@ function normalizeAiModelProfile(
   const fallbackModel = hasProvider && isProvider(rawProvider)
     ? providers[rawProvider].defaultModel
     : defaults.model;
-  const model = normalizeProfileModel(hasModel ? input.model : fallbackModel);
+  const normalizedModel = normalizeProfileModel(
+    hasModel ? input.model : fallbackModel,
+  );
+  const model =
+    provider === "cloudflare"
+      ? normalizeCloudflareAiModelId(normalizedModel)
+      : normalizedModel;
   const modelMalformed = hasModel && !model;
 
   const enabled =
@@ -810,6 +818,16 @@ export async function updateWidgetAiSettings(
     parseJsonObject(values[WIDGET_AI_CONFIG_KEY]),
   );
   const nextConfig = mergeWidgetAiConfig(current, update);
+  const imageProfile = nextConfig.profiles.imageGeneration;
+  if (
+    imageProfile.enabled &&
+    (!isImageGenerationProvider(imageProfile.provider) ||
+      !isImageGenerationModel(imageProfile.provider, imageProfile.model))
+  ) {
+    throw new ValidationError(
+      "Image generation requires a supported image provider and image-generation model.",
+    );
+  }
 
   await upsertPlainSetting(
     db,
@@ -961,6 +979,15 @@ export function resolveAiModelProfile(
   }
 
   const provider = profile.provider;
+  if (
+    profileId === "imageGeneration" &&
+    (!isImageGenerationProvider(provider) ||
+      !isImageGenerationModel(provider, requestedModel ?? profile.model))
+  ) {
+    throw new ValidationError(
+      "The saved image-generation provider or model is not supported.",
+    );
+  }
   if (!settings.providers[provider]?.enabled) {
     throw new ValidationError(`AI provider "${provider}" is disabled.`);
   }
@@ -975,11 +1002,16 @@ export function resolveAiModelProfile(
   return {
     id: profileId,
     provider,
-    model: requireAllowedWidgetAiModel(
-      settings,
-      provider,
-      requestedModel ?? profile.model,
-    ),
+    model:
+      profileId === "imageGeneration"
+        ? provider === "cloudflare"
+          ? normalizeCloudflareAiModelId(requestedModel ?? profile.model)
+          : (requestedModel ?? profile.model).trim()
+        : requireAllowedWidgetAiModel(
+            settings,
+            provider,
+            requestedModel ?? profile.model,
+          ),
     profile,
   };
 }

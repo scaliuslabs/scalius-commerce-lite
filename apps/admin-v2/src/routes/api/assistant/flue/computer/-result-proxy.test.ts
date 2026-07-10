@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  proxyAdminFlueComputerCancellation,
   proxyAdminFlueComputerResult,
   type AdminFlueComputerAuthority,
   type AdminFlueComputerProxyDependencies,
@@ -52,6 +53,17 @@ function resultBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function cancellationBody(overrides: Record<string, unknown> = {}) {
+  return {
+    surface: "admin",
+    threadId: THREAD_ID,
+    requestId: REQUEST_ID,
+    ticket: TICKET,
+    program: "observe",
+    ...overrides,
+  };
+}
+
 function request(
   body: unknown = resultBody(),
   init: { headers?: Record<string, string>; method?: string; rawBody?: string } = {},
@@ -67,6 +79,23 @@ function request(
     method: init.method ?? "POST",
     headers,
     body: init.method === "GET" ? undefined : (init.rawBody ?? JSON.stringify(body)),
+  });
+}
+
+function cancellationRequest(
+  body: unknown = cancellationBody(),
+  headers: Record<string, string> = {},
+) {
+  return new Request(`${ORIGIN}/api/assistant/flue/computer/cancel`, {
+    method: "POST",
+    headers: {
+      Cookie: COOKIE,
+      Origin: ORIGIN,
+      "Sec-Fetch-Site": "same-origin",
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(body),
   });
 }
 
@@ -251,6 +280,87 @@ describe("Admin Flue computer result proxy", () => {
     expect(mismatched.status).toBe(502);
     await expect(mismatched.json()).resolves.toMatchObject({
       error: { code: "ADMIN_FLUE_RESULT_REJECTED" },
+    });
+  });
+
+  it("terminally cancels through the same authority without forwarding a result", async () => {
+    const agentFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe(
+        `http://admin-flue-agent.internal/computer/cancel/${INSTANCE_ID}`,
+      );
+      expect(init).toMatchObject({
+        method: "POST",
+        redirect: "manual",
+        signal: expect.any(AbortSignal),
+      });
+      expect([...new Headers(init?.headers).entries()]).toEqual([
+        ["accept", "application/json"],
+        ["authorization", `Bearer ${SERVICE_TOKEN}`],
+        ["content-type", "application/json"],
+        ["x-scalius-principal-id", "user_1"],
+        ["x-scalius-tenant-id", "tenant_1"],
+        ["x-scalius-thread-id", THREAD_ID],
+      ]);
+      await expect(new Response(init?.body).json()).resolves.toEqual({
+        ticket: TICKET,
+        program: "observe",
+      });
+      return Response.json({
+        accepted: true,
+        status: "cancelled",
+        requestId: REQUEST_ID,
+      }, { status: 202 });
+    });
+    const deps = dependencies({ agent: { fetch: agentFetch } });
+
+    const response = await proxyAdminFlueComputerCancellation(
+      cancellationRequest(),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      accepted: true,
+      status: "cancelled",
+      requestId: REQUEST_ID,
+    });
+    expect(deps.resolveAuthority).toHaveBeenCalledOnce();
+    expect(agentFetch).toHaveBeenCalledOnce();
+  });
+
+  it("rejects cancellation result injection, cross-origin use, and mismatched admission", async () => {
+    const injectedDeps = dependencies();
+    const injected = await proxyAdminFlueComputerCancellation(
+      cancellationRequest(cancellationBody({ result: RESULT })),
+      injectedDeps,
+    );
+    expect(injected.status).toBe(400);
+    expect(injectedDeps.resolveAuthority).not.toHaveBeenCalled();
+
+    const crossOriginDeps = dependencies();
+    const crossOrigin = await proxyAdminFlueComputerCancellation(
+      cancellationRequest(cancellationBody(), { Origin: "https://evil.test" }),
+      crossOriginDeps,
+    );
+    expect(crossOrigin.status).toBe(403);
+    expect(crossOriginDeps.resolveAuthority).not.toHaveBeenCalled();
+
+    const mismatch = await proxyAdminFlueComputerCancellation(
+      cancellationRequest(),
+      dependencies({
+        agent: {
+          fetch: vi.fn(async () => Response.json({
+            accepted: true,
+            status: "cancelled",
+            requestId: "zyxwvutsrqponmlkjihgfe",
+          }, { status: 202 })),
+        },
+      }),
+    );
+    expect(mismatch.status).toBe(502);
+    await expect(mismatch.json()).resolves.toMatchObject({
+      error: { code: "ADMIN_FLUE_CANCELLATION_REJECTED" },
     });
   });
 });
