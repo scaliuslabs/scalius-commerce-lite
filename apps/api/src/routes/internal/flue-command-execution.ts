@@ -6,7 +6,11 @@ import {
   type ScaliusCommand,
   type ScaliusCommandJsonObject,
 } from "@scalius/shared/assistant-command";
-import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import {
+  calculateDiscountedPrice,
+  calculateDiscountedPriceAtPrecision,
+} from "@scalius/shared/price-utils";
 import { getDashboardSummaryStats } from "@scalius/core/modules/analytics/dashboard.service";
 import * as ProductsAdmin from "@scalius/core/modules/products/products.admin";
 import {
@@ -43,6 +47,18 @@ interface CapabilityDescriptor {
   permission?: string;
 }
 
+/**
+ * Projection limits keep every successful command inside the Worker client's
+ * 16 KiB / 160-key admission envelope. Lists remain pageable; detail responses
+ * disclose exact truncation counts instead of silently pretending completeness.
+ */
+export const FLUE_COMMAND_PROJECTION_LIMITS = Object.freeze({
+  productResults: 4,
+  productImages: 4,
+  productOptions: 12,
+  urlChars: 512,
+});
+
 const ADMIN_CAPABILITIES: readonly CapabilityDescriptor[] = Object.freeze([
   {
     id: "admin.api.get.dashboard.metrics-summary",
@@ -68,7 +84,7 @@ const ADMIN_CAPABILITIES: readonly CapabilityDescriptor[] = Object.freeze([
     arguments: {
       search: "optional text, max 120",
       page: "optional integer 1..1000",
-      limit: "optional integer 1..10",
+      limit: "optional integer 1..4",
     } as ScaliusCommandJsonObject,
     permission: "products.view",
   },
@@ -91,7 +107,7 @@ const STOREFRONT_CAPABILITIES: readonly CapabilityDescriptor[] = Object.freeze([
     arguments: {
       query: "search text, max 120",
       page: "optional integer 1..20",
-      limit: "optional integer 1..8",
+      limit: "optional integer 1..4",
     } as ScaliusCommandJsonObject,
   },
   {
@@ -101,7 +117,7 @@ const STOREFRONT_CAPABILITIES: readonly CapabilityDescriptor[] = Object.freeze([
     mode: "read",
     arguments: {
       page: "optional integer 1..20",
-      limit: "optional integer 1..8",
+      limit: "optional integer 1..4",
       sort: "optional newest, price-asc, price-desc, name-asc, name-desc, or discount",
     } as ScaliusCommandJsonObject,
   },
@@ -117,7 +133,8 @@ const STOREFRONT_CAPABILITIES: readonly CapabilityDescriptor[] = Object.freeze([
 const adminProductsInput = z.object({
   search: z.string().trim().min(1).max(120).optional(),
   page: z.number().int().min(1).max(1_000).default(1),
-  limit: z.number().int().min(1).max(10).default(5),
+  limit: z.number().int().min(1).max(FLUE_COMMAND_PROJECTION_LIMITS.productResults)
+    .default(FLUE_COMMAND_PROJECTION_LIMITS.productResults),
 }).strict();
 const idInput = z.object({
   id: z.string().trim().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/u),
@@ -126,11 +143,13 @@ const emptyInput = z.object({}).strict();
 const catalogSearchInput = z.object({
   query: z.string().trim().min(1).max(120),
   page: z.number().int().min(1).max(20).default(1),
-  limit: z.number().int().min(1).max(8).default(5),
+  limit: z.number().int().min(1).max(FLUE_COMMAND_PROJECTION_LIMITS.productResults)
+    .default(FLUE_COMMAND_PROJECTION_LIMITS.productResults),
 }).strict();
 const catalogListInput = z.object({
   page: z.number().int().min(1).max(20).default(1),
-  limit: z.number().int().min(1).max(8).default(5),
+  limit: z.number().int().min(1).max(FLUE_COMMAND_PROJECTION_LIMITS.productResults)
+    .default(FLUE_COMMAND_PROJECTION_LIMITS.productResults),
   sort: z.enum([
     "newest",
     "price-asc",
@@ -153,6 +172,7 @@ export async function executeAdminFlueCommand(
   const authority = await resolveAdminFlueCommandAuthority(c, input.instanceId);
   return executeCommand({
     c,
+    surface: "admin",
     command: parsed.command,
     capabilities: ADMIN_CAPABILITIES.filter(
       (capability) => !capability.permission || authority.permissions.has(capability.permission),
@@ -170,6 +190,7 @@ export async function executeStorefrontFlueCommand(
   await resolveStorefrontFlueCommandAuthority(c, input.instanceId);
   return executeCommand({
     c,
+    surface: "storefront",
     command: parsed.command,
     capabilities: STOREFRONT_CAPABILITIES,
     call: (command) => callStorefrontCapability(c, command),
@@ -178,6 +199,7 @@ export async function executeStorefrontFlueCommand(
 
 async function executeCommand(input: {
   c: Context<{ Bindings: Env }>;
+  surface: "admin" | "storefront";
   command: ScaliusCommand;
   capabilities: readonly CapabilityDescriptor[];
   call: (command: Extract<ScaliusCommand, { name: "call" }>) => Promise<ScaliusCommandJsonObject>;
@@ -187,7 +209,9 @@ async function executeCommand(input: {
     return success({
       command: "help",
       usage: SCALIUS_COMMAND_HELP.split("\n"),
-      guidance: "Discover one capability, call reads, and use computer for visible page interaction. Mutations remain merchant-confirmed.",
+      guidance: input.surface === "admin"
+        ? "Discover one capability, call reads, and use computer for visible page interaction. Mutations remain merchant-confirmed."
+        : "Discover one capability, call reads, and use computer for visible page interaction. Consequential changes require customer confirmation.",
       capabilities: capabilities.map(compactCapability),
     });
   }
@@ -216,7 +240,9 @@ async function executeCommand(input: {
   if (command.name === "prepare") {
     return failure(
       "mutation_not_ready",
-      "This mutation has no verified preview and confirmation adapter yet. Use the visible Admin controls.",
+      input.surface === "admin"
+        ? "This mutation has no verified preview and confirmation adapter yet. Use the visible Admin controls."
+        : "This action has no verified preview and confirmation adapter yet. Use the visible storefront controls.",
       false,
     );
   }
@@ -244,14 +270,41 @@ async function callAdminCapability(
         getCurrencySettings(db),
       ]);
       return {
-        currency: { code: currency.currencyCode, symbol: currency.currencySymbol },
-        stats: stats as unknown as ScaliusCommandJsonObject,
+        currency: compactCurrency(currency),
+        stats: {
+          totalProducts: finiteNumber(stats.totalProducts),
+          totalCustomers: finiteNumber(stats.totalCustomers),
+          currentMonth: {
+            orders: finiteNumber(stats.currentMonth.orders),
+            revenue: finiteNumber(stats.currentMonth.revenue),
+            orderGrowth: finiteNumber(stats.currentMonth.orderGrowth),
+            revenueGrowth: finiteNumber(stats.currentMonth.revenueGrowth),
+            orderStatus: {
+              delivered: finiteNumber(stats.currentMonth.orderStatus.delivered),
+              processing: finiteNumber(stats.currentMonth.orderStatus.processing),
+              shipping: finiteNumber(stats.currentMonth.orderStatus.shipping),
+              cancelled: finiteNumber(stats.currentMonth.orderStatus.cancelled),
+            },
+          },
+          lastMonth: {
+            orders: finiteNumber(stats.lastMonth.orders),
+            revenue: finiteNumber(stats.lastMonth.revenue),
+          },
+        },
       };
     }
     case "admin.api.get.products.stats": {
       requirePermission("products.view");
       parseArguments(emptyInput, command.arguments);
-      return { stats: await ProductsAdmin.getProductStats(db) };
+      const stats = await ProductsAdmin.getProductStats(db);
+      return {
+        stats: {
+          totalProducts: finiteNumber(stats.totalProducts),
+          activeProducts: finiteNumber(stats.activeProducts),
+          productsWithImages: finiteNumber(stats.productsWithImages),
+          categoriesCount: finiteNumber(stats.categoriesCount),
+        },
+      };
     }
     case "admin.api.get.products": {
       requirePermission("products.view");
@@ -268,12 +321,12 @@ async function callAdminCapability(
         getCurrencySettings(db),
       ]);
       return {
-        currency: { code: currency.currencyCode, symbol: currency.currencySymbol },
+        currency: compactCurrency(currency),
         products: result.products.slice(0, args.limit).map((product) => ({
-          id: product.id,
+          id: stringValue(product.id),
           name: compactText(product.name, 180),
-          slug: product.slug,
-          route: `/admin/products/${product.id}`,
+          slug: compactText(product.slug, 160),
+          route: safeProductRoute("/admin/products/", product.id),
           active: Boolean(product.isActive),
           category: compactText(product.category?.name, 120),
           price: finiteNumber(product.price),
@@ -282,7 +335,7 @@ async function callAdminCapability(
           imageUrl: safeHttpUrl(product.primaryImage),
           updatedAt: validDate(product.updatedAt),
         })),
-        pagination: result.pagination,
+        pagination: compactPagination(result.pagination),
       };
     }
     case "admin.api.get.products.by-id": {
@@ -294,12 +347,12 @@ async function callAdminCapability(
       ]);
       const record = asRecord(result);
       return {
-        currency: { code: currency.currencyCode, symbol: currency.currencySymbol },
+        currency: compactCurrency(currency),
         product: {
           id: stringValue(record.id),
           name: compactText(record.name, 180),
           slug: stringValue(record.slug),
-          route: `/admin/products/${args.id}`,
+          route: safeProductRoute("/admin/products/", args.id),
           active: Boolean(record.isActive),
           price: finiteNumber(record.price),
           category: compactText(asRecord(record.category).name, 120),
@@ -330,12 +383,12 @@ async function callStorefrontCapability(
         getCurrencySettings(db),
       ]);
       return {
-        currency: { code: currency.currencyCode, symbol: currency.currencySymbol },
+        currency: compactCurrency(currency),
         products: result.data.slice(0, args.limit).map((product) => ({
-          id: product.id,
+          id: stringValue(product.id),
           name: compactText(product.name, 180),
-          slug: product.slug,
-          route: `/products/${product.slug}`,
+          slug: compactText(product.slug, 160),
+          route: safeProductRoute("/products/", product.slug),
           price: finiteNumber(product.price),
           currentPrice: finiteNumber(calculateDiscountedPrice(
             product.price,
@@ -347,7 +400,7 @@ async function callStorefrontCapability(
           availableForSale: Array.isArray(product.variants) &&
             product.variants.some(variantAvailableForSale),
         })),
-        pagination: result.pagination,
+        pagination: compactPagination(result.pagination),
       };
     }
     case "catalog.list": {
@@ -361,18 +414,18 @@ async function callStorefrontCapability(
         getCurrencySettings(db),
       ]);
       return {
-        currency: { code: currency.currencyCode, symbol: currency.currencySymbol },
+        currency: compactCurrency(currency),
         products: result.products.slice(0, args.limit).map((product) => ({
-          id: product.id,
+          id: stringValue(product.id),
           name: compactText(product.name, 180),
-          slug: product.slug,
-          route: `/products/${product.slug}`,
+          slug: compactText(product.slug, 160),
+          route: safeProductRoute("/products/", product.slug),
           price: finiteNumber(product.price),
           currentPrice: finiteNumber(product.discountedPrice),
           imageUrl: safeHttpUrl(product.imageUrl),
           availableForSale: Boolean(product.availableForSale),
         })),
-        pagination: result.pagination,
+        pagination: compactPagination(result.pagination),
       };
     }
     case "catalog.product": {
@@ -386,29 +439,41 @@ async function callStorefrontCapability(
       const option1Label = compactText(product.variantOption1Label, 80);
       const option2Label = compactText(product.variantOption2Label, 80);
       const variants = Array.isArray(result.variants) ? result.variants : [];
+      const images = Array.isArray(result.images) ? result.images : [];
+      const projectedImages = images
+        .slice(0, FLUE_COMMAND_PROJECTION_LIMITS.productImages)
+        .map((image) => ({
+          url: safeHttpUrl(asRecord(image).url),
+          alt: compactText(asRecord(image).alt, 180),
+        }))
+        .filter((image): image is { url: string; alt: string | null } =>
+          image.url !== null);
       const availableForSale = variants.some(variantAvailableForSale);
       return {
-        currency: { code: currency.currencyCode, symbol: currency.currencySymbol },
+        currency: compactCurrency(currency),
         product: {
           id: stringValue(product.id),
           name: compactText(product.name, 180),
           slug: stringValue(product.slug),
-          route: `/products/${args.slug}`,
+          route: safeProductRoute("/products/", args.slug),
           price: finiteNumber(product.price),
           currentPrice: finiteNumber(product.discountedPrice),
           freeDelivery: Boolean(product.freeDelivery),
           availableForSale,
           category: compactText(asRecord(result.category).name, 120),
-          images: (Array.isArray(result.images) ? result.images : []).slice(0, 6)
-            .map((image) => ({
-              url: safeHttpUrl(asRecord(image).url),
-              alt: compactText(asRecord(image).alt, 180),
-            })).filter((image) => image.url !== null),
-          options: variants.slice(0, 40).map((variantValue) => {
+          images: projectedImages,
+          imageSummary: {
+            total: images.length,
+            returned: projectedImages.length,
+            truncated: images.length > projectedImages.length,
+          },
+          options: variants.slice(0, FLUE_COMMAND_PROJECTION_LIMITS.productOptions)
+            .map((variantValue) => {
             const variant = asRecord(variantValue);
             const tracked = Boolean(variant.trackInventory);
             const stock = finiteNumber(variant.stock) ?? 0;
             const reserved = finiteNumber(variant.reservedStock) ?? 0;
+            const basePrice = finiteNumber(variant.price) ?? finiteNumber(product.price) ?? 0;
             return {
               id: stringValue(variant.id),
               values: [
@@ -419,16 +484,21 @@ async function callStorefrontCapability(
                   ? { name: option2Label, value: compactText(variant.color, 100) }
                   : null,
               ].filter((value) => value !== null),
-              price: finiteNumber(variant.price),
-              currentPrice: finiteNumber(calculateDiscountedPrice(
-                finiteNumber(variant.price) ?? finiteNumber(product.price) ?? 0,
-                stringValue(variant.discountType),
-                finiteNumber(variant.discountPercentage),
-                finiteNumber(variant.discountAmount),
-              )),
+              price: basePrice,
+              currentPrice: finiteNumber(calculateVariantCurrentPrice({
+                basePrice,
+                currencyCode: currency.currencyCode,
+                product,
+                variant,
+              })),
               availableForSale: !tracked || stock - reserved > 0,
             };
           }),
+          optionSummary: {
+            total: variants.length,
+            returned: Math.min(variants.length, FLUE_COMMAND_PROJECTION_LIMITS.productOptions),
+            truncated: variants.length > FLUE_COMMAND_PROJECTION_LIMITS.productOptions,
+          },
         },
       };
     }
@@ -491,16 +561,73 @@ function finiteNumber(value: unknown): number | null {
 }
 
 function safeHttpUrl(value: unknown): string | null {
-  if (typeof value !== "string" || value.length > 2_048) return null;
+  if (
+    typeof value !== "string" ||
+    value.length > FLUE_COMMAND_PROJECTION_LIMITS.urlChars
+  ) return null;
   try {
     const url = new URL(value);
+    const normalized = url.toString();
     return (url.protocol === "https:" || url.protocol === "http:") &&
-        !url.username && !url.password
-      ? url.toString()
+        !url.username && !url.password &&
+        normalized.length <= FLUE_COMMAND_PROJECTION_LIMITS.urlChars
+      ? normalized
       : null;
   } catch {
     return null;
   }
+}
+
+function compactCurrency(value: {
+  currencyCode: string;
+  currencySymbol: string;
+}): ScaliusCommandJsonObject {
+  return {
+    code: compactText(value.currencyCode, 3),
+    symbol: compactText(value.currencySymbol, 16),
+  };
+}
+
+function safeProductRoute(prefix: "/admin/products/" | "/products/", value: unknown): string | null {
+  if (
+    typeof value !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/u.test(value)
+  ) return null;
+  return `${prefix}${value}`;
+}
+
+function compactPagination(value: unknown): ScaliusCommandJsonObject {
+  const pagination = asRecord(value);
+  return {
+    page: finiteNumber(pagination.page),
+    limit: finiteNumber(pagination.limit),
+    total: finiteNumber(pagination.total),
+    totalPages: finiteNumber(pagination.totalPages),
+    hasNextPage: Boolean(pagination.hasNextPage),
+    hasPrevPage: Boolean(pagination.hasPrevPage),
+  };
+}
+
+function calculateVariantCurrentPrice(input: {
+  basePrice: number;
+  currencyCode: string;
+  product: Record<string, unknown>;
+  variant: Record<string, unknown>;
+}): number {
+  const variantType = stringValue(input.variant.discountType);
+  const variantPercentage = finiteNumber(input.variant.discountPercentage);
+  const variantAmount = finiteNumber(input.variant.discountAmount);
+  const variantHasDiscount =
+    (variantType === "percentage" && variantPercentage !== null && variantPercentage > 0) ||
+    (variantType === "flat" && variantAmount !== null && variantAmount > 0);
+  const discountSource = variantHasDiscount ? input.variant : input.product;
+  return calculateDiscountedPriceAtPrecision(
+    input.basePrice,
+    stringValue(discountSource.discountType),
+    finiteNumber(discountSource.discountPercentage),
+    finiteNumber(discountSource.discountAmount),
+    getDecimalPlaces(input.currencyCode),
+  );
 }
 
 function validDate(value: unknown): string | null {

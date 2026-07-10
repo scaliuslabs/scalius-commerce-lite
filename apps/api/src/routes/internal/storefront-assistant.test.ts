@@ -286,6 +286,18 @@ describe("internal Storefront assistant session authority", () => {
       success: false,
       error: { code: "invalid_request", retryable: false },
     });
+    const cookieInjected = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueCommand,
+      { instanceId: `v1.${"i".repeat(43)}`, program: "help" },
+      { cookie: "caller=controlled" },
+    );
+    expect(cookieInjected.status).toBe(400);
+    await expect(cookieInjected.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: "invalid_request", retryable: false },
+    });
     const expanded = await post(
       app,
       env,
@@ -295,6 +307,42 @@ describe("internal Storefront assistant session authority", () => {
     );
     expect(expanded.status).toBe(400);
     expect(mocks.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it("accepts the maximum parser-valid escaped command envelope within 16 KiB", async () => {
+    const { app, env } = createTestApp();
+    const program = `prepare catalog.test -- ${JSON.stringify({
+      query: "\\".repeat(2_048),
+    })}`;
+    expect(new TextEncoder().encode(JSON.stringify({
+      instanceId: `v1.${"i".repeat(43)}`,
+      program,
+    })).byteLength).toBeGreaterThan(8 * 1_024);
+    mocks.executeCommand.mockResolvedValueOnce({
+      success: false,
+      error: {
+        code: "mutation_not_ready",
+        message: "Use the visible storefront controls.",
+        retryable: false,
+      },
+    });
+
+    const response = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueCommand,
+      { instanceId: `v1.${"i".repeat(43)}`, program },
+      { cookie: null },
+    );
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: "mutation_not_ready" },
+    });
+    expect(mocks.executeCommand).toHaveBeenCalledWith(
+      expect.anything(),
+      { instanceId: `v1.${"i".repeat(43)}`, program },
+    );
   });
 
   it("creates a strong guest-only subject and credential bound to hashed deployment metadata", async () => {

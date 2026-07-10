@@ -205,7 +205,10 @@ app.post("/flue/admit", async (c) => {
 });
 
 app.post("/flue/command", async (c) => {
-  if (hasCallerSuppliedFlueIdentity(c.req.raw.headers)) {
+  if (
+    c.req.raw.headers.has("cookie") ||
+    hasCallerSuppliedFlueIdentity(c.req.raw.headers)
+  ) {
     return c.json(flueCommandFailure(
       "invalid_request",
       "Scalius request headers are invalid.",

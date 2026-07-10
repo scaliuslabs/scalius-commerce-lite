@@ -409,6 +409,18 @@ describe("internal Admin assistant authority boundary", () => {
         retryable: false,
       },
     });
+    const cookieInjected = await post(
+      app,
+      env,
+      ADMIN_ASSISTANT_AUTHORITY_PATHS.flueCommand,
+      { instanceId: `v1.${"i".repeat(43)}`, program: "help" },
+      { "Content-Type": "application/json", Cookie: "session=caller-controlled" },
+    );
+    expect(cookieInjected.status).toBe(400);
+    await expect(cookieInjected.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: "invalid_request", retryable: false },
+    });
     const malformed = await post(
       app,
       env,
