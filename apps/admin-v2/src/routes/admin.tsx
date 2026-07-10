@@ -12,6 +12,7 @@ import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { DeferredToaster } from "@/components/ui/deferred-toaster";
 import { AdminAssistantPageStateBridge } from "@/components/admin/assistant/AdminAssistantPageStateBridge";
+import { AdminAssistantLauncher } from "@/components/admin/assistant/AdminAssistantLauncher";
 import {
   getAdminRouteContext,
   primeAdminRouteContextCache,
@@ -22,10 +23,6 @@ import {
   shouldAllowAdminPath,
 } from "~/lib/admin-access";
 import { useAdminNestedScrollRestoration } from "~/lib/admin-scroll-restoration";
-import {
-  ADMIN_ASSISTANT_DOCK_LEFT_ID,
-  ADMIN_ASSISTANT_DOCK_RIGHT_ID,
-} from "@/components/admin/assistant/assistant-layout";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
@@ -60,23 +57,23 @@ function AdminLayout() {
       <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
         <SidebarProvider>
           <AppSidebar />
-          <div id={ADMIN_ASSISTANT_DOCK_LEFT_ID} className="contents" />
-          <SidebarInset className="h-svh min-w-0 overflow-hidden">
-            <AdminHeader user={user} />
-            <div
-              id="admin-main-scroll"
-              data-scroll-restoration-id="admin-main-scroll"
-              className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-4 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
-            >
-              <div className="max-w-7xl mx-auto">
-                <Outlet />
+          <AdminAssistantLauncher>
+            <SidebarInset className="h-svh min-w-0 overflow-hidden">
+              <AdminHeader user={user} />
+              <div
+                id="admin-main-scroll"
+                data-scroll-restoration-id="admin-main-scroll"
+                className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-4 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
+              >
+                <div className="max-w-7xl mx-auto">
+                  <Outlet />
+                </div>
               </div>
-            </div>
-            <AdminAssistantPageStateBridge routePath={location.pathname} />
-            {/* Portal target for form action bars — sits OUTSIDE the scroll area */}
-            <div id="form-action-bar-slot" />
-          </SidebarInset>
-          <div id={ADMIN_ASSISTANT_DOCK_RIGHT_ID} className="contents" />
+              <AdminAssistantPageStateBridge routePath={location.pathname} />
+              {/* Portal target for form action bars — sits OUTSIDE the scroll area */}
+              <div id="form-action-bar-slot" />
+            </SidebarInset>
+          </AdminAssistantLauncher>
         </SidebarProvider>
         <DeferredToaster />
       </PermissionProvider>

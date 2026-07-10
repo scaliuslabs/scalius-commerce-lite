@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,8 +46,9 @@ import {
 import { ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY } from "./admin-assistant-transcript";
 import { ADMIN_NAVIGATION_CANCELLED_EVENT } from "../shared/admin-navigation-events";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("AdminAssistantLauncher", () => {
   let root: Root;
@@ -55,11 +56,6 @@ describe("AdminAssistantLauncher", () => {
 
   beforeEach(() => {
     document.body.innerHTML = "";
-    const leftDock = document.createElement("div");
-    leftDock.id = "admin-assistant-dock-left";
-    const rightDock = document.createElement("div");
-    rightDock.id = "admin-assistant-dock-right";
-    document.body.append(leftDock, rightDock);
     window.sessionStorage.clear();
     delete window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL];
     resetAdminAssistantPageActionsForTest();
@@ -73,17 +69,15 @@ describe("AdminAssistantLauncher", () => {
     mocks.readConversationEvents.mockReset();
     mocks.requestSequence = 0;
     mocks.eventSequence = 0;
-    mocks.createConversationId.mockReturnValue(
-      "conv_abcdefghijklmnopqrstuv",
-    );
+    mocks.createConversationId.mockReturnValue("conv_abcdefghijklmnopqrstuv");
     mocks.createConversationRequestId.mockImplementation(
       (purpose = "message") => {
         mocks.requestSequence += 1;
         return `${purpose}_${String(mocks.requestSequence).padStart(22, "a")}`;
       },
     );
-    mocks.isConversationId.mockImplementation(
-      (value: string) => /^conv_[A-Za-z0-9_-]{22,64}$/.test(value),
+    mocks.isConversationId.mockImplementation((value: string) =>
+      /^conv_[A-Za-z0-9_-]{22,64}$/.test(value),
     );
     mocks.readConversationEvents.mockResolvedValue(emptyReplay());
     mocks.appendConversationMessage.mockImplementation(
@@ -109,7 +103,9 @@ describe("AdminAssistantLauncher", () => {
             resolve(after);
             return;
           }
-          signal.addEventListener("abort", () => resolve(after), { once: true });
+          signal.addEventListener("abort", () => resolve(after), {
+            once: true,
+          });
         }),
     );
 
@@ -127,9 +123,11 @@ describe("AdminAssistantLauncher", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders a movable bubble with floating, left-docked, and right-docked controls", async () => {
+  it("renders floating and real left/right workspace columns without portals", async () => {
     renderLauncher();
 
+    expect(getAssistantWorkspace()?.dataset.mode).toBe("closed");
+    expect(getAssistantDockSlot()?.hidden).toBe(true);
     const trigger = queryButton("Open admin assistant");
     expect(trigger).toBeTruthy();
     expect(trigger?.getAttribute("aria-expanded")).toBe("false");
@@ -140,14 +138,16 @@ describe("AdminAssistantLauncher", () => {
     expect(trigger?.getAttribute("aria-expanded")).toBe("true");
     expect(document.body.textContent).toContain("Admin assistant");
     expect(getAssistantPanel()?.tagName).toBe("ASIDE");
-    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe("floating");
+    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
+      "floating",
+    );
     expect(queryButton("Move assistant")).toBeTruthy();
     expect(queryButton("Resize assistant")).toBeTruthy();
     expect(queryButton("Dock assistant left")).toBeTruthy();
     expect(queryButton("Dock assistant right")).toBeTruthy();
-    expect(queryButton("Use floating assistant")?.getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    expect(
+      queryButton("Use floating assistant")?.getAttribute("aria-pressed"),
+    ).toBe("true");
     expect(queryButton("Minimize admin assistant")).toBeTruthy();
     expect(queryButton("Send assistant message")).toBeTruthy();
     expect(
@@ -160,20 +160,21 @@ describe("AdminAssistantLauncher", () => {
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
       "dock-left",
     );
-    expect(getAssistantPanel()?.parentElement?.id).toBe(
-      "admin-assistant-dock-left",
-    );
-    expect(queryButton("Dock assistant left")?.getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
+    expect(getAssistantWorkspace()?.dataset.side).toBe("start");
+    expect(getAssistantPanel()?.parentElement).toBe(getAssistantDockSlot());
+    expect(getAssistantDockSlot()?.hidden).toBe(false);
+    expect(
+      queryButton("Dock assistant left")?.getAttribute("aria-pressed"),
+    ).toBe("true");
 
     await click(queryButton("Dock assistant right"));
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
       "dock-right",
     );
-    expect(getAssistantPanel()?.parentElement?.id).toBe(
-      "admin-assistant-dock-right",
-    );
+    expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
+    expect(getAssistantWorkspace()?.dataset.side).toBe("end");
+    expect(getAssistantPanel()?.parentElement).toBe(getAssistantDockSlot());
 
     await click(queryButton("Use floating assistant"));
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
@@ -182,6 +183,30 @@ describe("AdminAssistantLauncher", () => {
 
     await click(queryButton("Minimize admin assistant"));
     expect(getAssistantPanel()).toBeNull();
+    expect(getAssistantWorkspace()?.dataset.mode).toBe("closed");
+    expect(getAssistantDockSlot()?.hidden).toBe(true);
+  });
+
+  it("keeps the assistant mounted when only routed workspace content changes", async () => {
+    renderLauncher(<section data-route-content="">Products route</section>);
+    await click(queryButton("Open admin assistant"));
+    await click(queryButton("Dock assistant right"));
+
+    const panelBeforeRouteChange = getAssistantPanel();
+    expect(panelBeforeRouteChange).toBeTruthy();
+    expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
+
+    renderLauncher(<section data-route-content="">Orders route</section>);
+    await flushReact();
+
+    expect(getAssistantPanel()).toBe(panelBeforeRouteChange);
+    expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
+    expect(
+      document.querySelector("[data-assistant-page-slot]")?.textContent,
+    ).toContain("Orders route");
+    expect(
+      document.querySelector("[data-assistant-page-slot]")?.textContent,
+    ).not.toContain("Products route");
   });
 
   it("supports keyboard movement, resizing, shortcut toggle, and Escape collapse", async () => {
@@ -190,7 +215,9 @@ describe("AdminAssistantLauncher", () => {
     const trigger = queryButton("Open admin assistant");
     const initialLeft = Number.parseInt(trigger?.style.left ?? "0", 10);
     await keyDown(trigger, "ArrowLeft");
-    expect(Number.parseInt(trigger?.style.left ?? "0", 10)).toBeLessThan(initialLeft);
+    expect(Number.parseInt(trigger?.style.left ?? "0", 10)).toBeLessThan(
+      initialLeft,
+    );
 
     await keyDown(window, "a", { altKey: true, shiftKey: true });
     expect(getAssistantPanel()).toBeTruthy();
@@ -198,7 +225,9 @@ describe("AdminAssistantLauncher", () => {
     const panel = getAssistantPanel();
     const initialWidth = Number.parseInt(panel?.style.width ?? "0", 10);
     await keyDown(queryButton("Resize assistant"), "ArrowLeft");
-    expect(Number.parseInt(panel?.style.width ?? "0", 10)).toBeLessThan(initialWidth);
+    expect(Number.parseInt(panel?.style.width ?? "0", 10)).toBeLessThan(
+      initialWidth,
+    );
 
     await keyDown(panel, "Escape");
     expect(getAssistantPanel()).toBeNull();
@@ -253,9 +282,9 @@ describe("AdminAssistantLauncher", () => {
         history: [],
       },
     });
-    expect(JSON.stringify(mocks.sendAdminAssistantMessage.mock.calls[0])).not.toContain(
-      "SuperSecret123",
-    );
+    expect(
+      JSON.stringify(mocks.sendAdminAssistantMessage.mock.calls[0]),
+    ).not.toContain("SuperSecret123");
     expect(mocks.appendConversationMessage).toHaveBeenCalledTimes(2);
     expect(mocks.appendConversationMessage).toHaveBeenNthCalledWith(
       1,
@@ -282,9 +311,7 @@ describe("AdminAssistantLauncher", () => {
     ).toBeLessThan(mocks.sendAdminAssistantMessage.mock.invocationCallOrder[0]);
     expect(
       mocks.sendAdminAssistantMessage.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      mocks.appendConversationMessage.mock.invocationCallOrder[1],
-    );
+    ).toBeLessThan(mocks.appendConversationMessage.mock.invocationCallOrder[1]);
     expect(document.body.textContent).toContain("Use the status filter first.");
   });
 
@@ -339,7 +366,10 @@ describe("AdminAssistantLauncher", () => {
     );
     mocks.sendAdminAssistantMessage.mockResolvedValue({
       status: "ok",
-      message: { role: "assistant", content: "You can still use this response." },
+      message: {
+        role: "assistant",
+        content: "You can still use this response.",
+      },
       usage: null,
     });
 
@@ -351,9 +381,13 @@ describe("AdminAssistantLauncher", () => {
 
     expect(mocks.sendAdminAssistantMessage).toHaveBeenCalledTimes(1);
     expect(mocks.appendConversationMessage).toHaveBeenCalledTimes(1);
-    expect(document.body.textContent).toContain("You can still use this response.");
+    expect(document.body.textContent).toContain(
+      "You can still use this response.",
+    );
     expect(
-      document.querySelector('[data-assistant-transcript-state="disconnected"]'),
+      document.querySelector(
+        '[data-assistant-transcript-state="disconnected"]',
+      ),
     ).toBeTruthy();
     expect(queryButton("Retry transcript connection")).toBeTruthy();
 
@@ -370,7 +404,9 @@ describe("AdminAssistantLauncher", () => {
       message: {
         role: "assistant",
         content: "Use Products to manage catalog items.",
-        parts: [{ type: "text", text: "Use Products to manage catalog items." }],
+        parts: [
+          { type: "text", text: "Use Products to manage catalog items." },
+        ],
       },
       usage: null,
       actions: [
@@ -431,7 +467,9 @@ describe("AdminAssistantLauncher", () => {
   });
 
   it("renders the disabled adminChat state without throwing in the console", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     mocks.sendAdminAssistantMessage.mockResolvedValue({
       status: "disabled",
       reason: "unconfigured",
@@ -451,7 +489,10 @@ describe("AdminAssistantLauncher", () => {
   it("keeps advisory navigation click-confirmed", async () => {
     mocks.sendAdminAssistantMessage.mockResolvedValue({
       status: "ok",
-      message: { role: "assistant", content: "Use Products to manage catalog items." },
+      message: {
+        role: "assistant",
+        content: "Use Products to manage catalog items.",
+      },
       usage: null,
       actions: [
         { type: "navigate", path: "/admin/products", label: "Open Products" },
@@ -541,7 +582,10 @@ describe("AdminAssistantLauncher", () => {
     );
     mocks.sendAdminAssistantMessage.mockResolvedValue({
       status: "ok",
-      message: { role: "assistant", content: "Here is the replacement description." },
+      message: {
+        role: "assistant",
+        content: "Here is the replacement description.",
+      },
       usage: null,
       actions: [
         {
@@ -676,7 +720,9 @@ describe("AdminAssistantLauncher", () => {
     await click(queryButton("Send assistant message"));
     await flushReact();
 
-    expect(document.body.textContent).toContain("Use Products for catalog edits.");
+    expect(document.body.textContent).toContain(
+      "Use Products for catalog edits.",
+    );
     expect(document.body.textContent).toContain("Open Products.");
     expect(document.body.textContent).not.toContain("**Products**");
     expect(document.body.textContent).not.toContain("`Products`");
@@ -688,11 +734,22 @@ describe("AdminAssistantLauncher", () => {
   it("drops unsafe navigation actions before rendering buttons", async () => {
     mocks.sendAdminAssistantMessage.mockResolvedValue({
       status: "ok",
-      message: { role: "assistant", content: "I can point you to safe dashboard pages." },
+      message: {
+        role: "assistant",
+        content: "I can point you to safe dashboard pages.",
+      },
       usage: null,
       actions: [
-        { type: "navigate", path: "https://evil.test/admin", label: "Open Evil" },
-        { type: "navigate", path: "/admin/orders/123", label: "Open Order Detail" },
+        {
+          type: "navigate",
+          path: "https://evil.test/admin",
+          label: "Open Evil",
+        },
+        {
+          type: "navigate",
+          path: "/admin/orders/123",
+          label: "Open Order Detail",
+        },
       ],
     });
 
@@ -707,9 +764,9 @@ describe("AdminAssistantLauncher", () => {
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
-  function renderLauncher() {
+  function renderLauncher(children?: ReactNode) {
     act(() => {
-      root.render(<AdminAssistantLauncher />);
+      root.render(<AdminAssistantLauncher>{children}</AdminAssistantLauncher>);
     });
   }
 });
@@ -724,6 +781,16 @@ function getAssistantPanel(): HTMLElement | null {
   return document.querySelector<HTMLElement>(
     'aside[aria-label="Admin assistant"]',
   );
+}
+
+function getAssistantWorkspace(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(
+    "[data-admin-assistant-workspace]",
+  );
+}
+
+function getAssistantDockSlot(): HTMLElement | null {
+  return document.querySelector<HTMLElement>("[data-assistant-dock-slot]");
 }
 
 async function click(element: HTMLElement | null) {

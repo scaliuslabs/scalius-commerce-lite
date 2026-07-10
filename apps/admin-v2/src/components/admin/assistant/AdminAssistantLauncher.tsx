@@ -5,8 +5,17 @@ import {
   useEffect,
   useRef,
   useState,
+  type PropsWithChildren,
 } from "react";
 
+import {
+  AssistantDockLayout,
+  type AssistantDockMode,
+  type AssistantDockSide,
+} from "@scalius/ui/assistant";
+import "@scalius/ui/assistant/styles.css";
+
+import { TooltipProvider } from "../../ui/tooltip";
 import { AdminAssistantBubble } from "./AdminAssistantBubble";
 import { useAdminAssistantLayout } from "./useAdminAssistantLayout";
 
@@ -22,7 +31,11 @@ const AdminAssistantPanel = lazy(() =>
   })),
 );
 
-export function AdminAssistantLauncher() {
+type AdminAssistantLauncherProps = PropsWithChildren;
+
+export function AdminAssistantLauncher({
+  children,
+}: AdminAssistantLauncherProps) {
   const layout = useAdminAssistantLayout();
   const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
@@ -58,41 +71,59 @@ export function AdminAssistantLauncher() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [handleOpenChange, layout.mounted, open, openAssistant]);
 
-  if (!layout.mounted) return null;
+  const structuralMode: AssistantDockMode = !open
+    ? "closed"
+    : layout.mode === "floating"
+      ? "floating"
+      : "docked";
+  const structuralSide: AssistantDockSide =
+    layout.mode === "dock-left" ? "start" : "end";
+
+  const panel = hasOpened ? (
+    <Suspense
+      fallback={
+        <div
+          role="status"
+          className="fixed bottom-4 right-4 z-[80] rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground shadow-lg"
+        >
+          Opening assistant…
+        </div>
+      }
+    >
+      <AdminAssistantPanel
+        mode={layout.mode}
+        open={open}
+        position={layout.panelPosition}
+        size={layout.panelSize}
+        onModeChange={layout.setMode}
+        onOpenChange={handleOpenChange}
+        onPositionChange={layout.setPanelPosition}
+        onSizeChange={layout.setPanelSize}
+      />
+    </Suspense>
+  ) : null;
 
   return (
-    <>
-      <AdminAssistantBubble
-        open={open}
-        position={layout.bubblePosition}
-        triggerRef={triggerRef}
-        onOpen={openAssistant}
-        onPositionChange={layout.setBubblePosition}
-      />
-
-      {hasOpened ? (
-        <Suspense
-          fallback={
-            <div
-              role="status"
-              className="fixed bottom-4 right-4 z-[80] rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground shadow-lg"
-            >
-              Opening assistant…
-            </div>
-          }
-        >
-          <AdminAssistantPanel
-            mode={layout.mode}
+    <TooltipProvider delayDuration={0}>
+      <AssistantDockLayout
+        mode={structuralMode}
+        side={structuralSide}
+        width={layout.panelSize.width}
+        dock={panel}
+        className="min-w-0 flex-1"
+        data-admin-assistant-workspace=""
+      >
+        {children}
+        {layout.mounted ? (
+          <AdminAssistantBubble
             open={open}
-            position={layout.panelPosition}
-            size={layout.panelSize}
-            onModeChange={layout.setMode}
-            onOpenChange={handleOpenChange}
-            onPositionChange={layout.setPanelPosition}
-            onSizeChange={layout.setPanelSize}
+            position={layout.bubblePosition}
+            triggerRef={triggerRef}
+            onOpen={openAssistant}
+            onPositionChange={layout.setBubblePosition}
           />
-        </Suspense>
-      ) : null}
-    </>
+        ) : null}
+      </AssistantDockLayout>
+    </TooltipProvider>
   );
 }
