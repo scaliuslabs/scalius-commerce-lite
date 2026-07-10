@@ -8,6 +8,8 @@ import {
   revokeAssistantSession,
 } from "@scalius/core/modules/assistant";
 import {
+  ForbiddenError,
+  NotFoundError,
   ServiceUnavailableError,
   UnauthorizedError,
   ValidationError,
@@ -20,6 +22,7 @@ import { ok } from "../../utils/api-response";
 
 import {
   STOREFRONT_ASSISTANT_AUDIENCE,
+  STOREFRONT_ASSISTANT_COMMAND_MAX_BODY_BYTES,
   STOREFRONT_ASSISTANT_SESSION_TTL_SECONDS,
   clearStorefrontAssistantSessionCookie,
   hasForbiddenStorefrontAssistantAuthorityHeader,
@@ -29,6 +32,7 @@ import {
   storefrontAssistantSessionBoundSchema,
   storefrontAssistantSessionCreateSchema,
   storefrontAssistantFlueAdmitSchema,
+  storefrontAssistantFlueCommandSchema,
   storefrontAssistantSessionCookie,
 } from "./storefront-assistant-contract";
 import {
@@ -43,6 +47,10 @@ import {
   hasCallerSuppliedFlueIdentity,
   requireAssistantThreadSigningKey,
 } from "./flue-thread-admission";
+import {
+  executeStorefrontFlueCommand,
+  failure as flueCommandFailure,
+} from "./flue-command-execution";
 
 const RANDOM_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -270,6 +278,46 @@ app.post("/flue/admit", async (c) => {
   });
 });
 
+app.post("/flue/command", async (c) => {
+  if (hasCallerSuppliedFlueIdentity(c.req.raw.headers)) {
+    return c.json(flueCommandFailure(
+      "invalid_request",
+      "Scalius request headers are invalid.",
+      false,
+    ), 400);
+  }
+  try {
+    const input = await parseStorefrontAssistantJson(
+      c.req.raw,
+      storefrontAssistantFlueCommandSchema,
+      STOREFRONT_ASSISTANT_COMMAND_MAX_BODY_BYTES,
+    );
+    const response = await executeStorefrontFlueCommand(c, input);
+    return c.json(response, response.success ? 200 : 400);
+  } catch (error) {
+    const [status, code, message, retryable] = storefrontCommandError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
 app.all("*", (c) => c.json({ success: false, error: "not_found" }, 404));
 
 export { app as storefrontAssistantAuthorityRoutes };
+
+function storefrontCommandError(
+  error: unknown,
+): [400 | 401 | 403 | 404 | 503, string, string, boolean] {
+  if (error instanceof UnauthorizedError) {
+    return [401, "access_unavailable", "Assistant access is unavailable.", false];
+  }
+  if (error instanceof ForbiddenError) {
+    return [403, "capability_forbidden", "That capability is not available.", false];
+  }
+  if (error instanceof NotFoundError) {
+    return [404, "capability_not_found", "That capability is not available.", false];
+  }
+  if (error instanceof ValidationError) {
+    return [400, "invalid_arguments", "Capability arguments are invalid.", false];
+  }
+  return [503, "scalius_unavailable", "Scalius is temporarily unavailable.", true];
+}

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   consumeRateLimit: vi.fn(),
   resumeSession: vi.fn(),
   revokeSession: vi.fn(),
+  executeCommand: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
@@ -29,6 +30,14 @@ vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
     revokeAssistantSession: mocks.revokeSession,
   };
 });
+
+vi.mock("./flue-command-execution", () => ({
+  executeStorefrontFlueCommand: mocks.executeCommand,
+  failure: (code: string, message: string, retryable: boolean) => ({
+    success: false,
+    error: { code, message, retryable },
+  }),
+}));
 
 import {
   STOREFRONT_ASSISTANT_AUDIENCE,
@@ -123,6 +132,10 @@ describe("internal Storefront assistant session authority", () => {
       count: 1,
       remaining: 9,
       resetAt: Date.now() + 3_600_000,
+    });
+    mocks.executeCommand.mockResolvedValue({
+      success: true,
+      data: { command: "help", capabilities: [] },
     });
 
     mocks.createSession.mockImplementation(async (
@@ -230,6 +243,58 @@ describe("internal Storefront assistant session authority", () => {
       error: "not_found",
     });
     expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
+  it("admits Storefront Flue commands only through bound instance authority", async () => {
+    const { app, db, env } = createTestApp();
+    const response = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueCommand,
+      { instanceId: `v1.${"i".repeat(43)}`, program: "help" },
+      { cookie: null },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      data: { command: "help", capabilities: [] },
+    });
+    expect(mocks.executeCommand).toHaveBeenCalledWith(expect.objectContaining({
+      env,
+    }), {
+      instanceId: `v1.${"i".repeat(43)}`,
+      program: "help",
+    });
+    expect((mocks.executeCommand.mock.calls[0]?.[0] as { get(name: string): unknown })
+      .get("db")).toBe(db);
+  });
+
+  it("rejects Storefront command identity injection and expanded bodies", async () => {
+    const { app, env } = createTestApp();
+    const injected = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueCommand,
+      { instanceId: `v1.${"i".repeat(43)}`, program: "help" },
+      {
+        cookie: null,
+        headers: { "X-Scalius-Principal-Id": "forged" },
+      },
+    );
+    expect(injected.status).toBe(400);
+    await expect(injected.json()).resolves.toMatchObject({
+      success: false,
+      error: { code: "invalid_request", retryable: false },
+    });
+    const expanded = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueCommand,
+      { instanceId: `v1.${"i".repeat(43)}`, program: "help", subject: "forged" },
+      { cookie: null },
+    );
+    expect(expanded.status).toBe(400);
+    expect(mocks.executeCommand).not.toHaveBeenCalled();
   });
 
   it("creates a strong guest-only subject and credential bound to hashed deployment metadata", async () => {
