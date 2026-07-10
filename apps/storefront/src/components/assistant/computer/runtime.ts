@@ -79,7 +79,8 @@ export function isAllowedStorefrontComputerRoute(route: string): boolean {
   const firstSegment = pathname.split("/").filter(Boolean)[0]?.toLowerCase() ?? "";
   return firstSegment !== "admin" && firstSegment !== "api" &&
     firstSegment !== ".well-known" && firstSegment !== "cdn-cgi" &&
-    !firstSegment.startsWith("_");
+    !firstSegment.startsWith("_") &&
+    !isPrivateStorefrontPath(pathname);
 }
 
 export function isSensitiveStorefrontComputerRoute(route: string): boolean {
@@ -87,11 +88,15 @@ export function isSensitiveStorefrontComputerRoute(route: string): boolean {
   if (!normalized) return true;
   const parsed = new URL(normalized, "https://storefront.invalid");
   if (hasSensitiveQueryKey(parsed)) return true;
-  const pathname = decodeURIComponent(parsed.pathname).toLowerCase();
-  return pathname === "/checkout" || pathname.startsWith("/checkout/") ||
-    pathname === "/account" || pathname.startsWith("/account/") ||
-    pathname === "/order-success" || pathname.startsWith("/order-success/") ||
-    pathname === "/payment-recovery" || pathname.startsWith("/payment-recovery/");
+  return isPrivateStorefrontPath(decodeURIComponent(parsed.pathname));
+}
+
+function isPrivateStorefrontPath(pathname: string): boolean {
+  const normalized = pathname.toLowerCase();
+  return normalized === "/checkout" || normalized.startsWith("/checkout/") ||
+    normalized === "/account" || normalized.startsWith("/account/") ||
+    normalized === "/order-success" || normalized.startsWith("/order-success/") ||
+    normalized === "/payment-recovery" || normalized.startsWith("/payment-recovery/");
 }
 
 function resolveDocument(provided?: Document): Document {
