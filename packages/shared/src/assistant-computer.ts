@@ -1,5 +1,7 @@
 export const SCALIUS_COMPUTER_DESCRIPTION =
   "Control the visible Scalius page. Start with observe, use its revision-bound handles, and call help only when needed.";
+export const SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT =
+  "scalius:computer-rich-text-fill";
 export const SCALIUS_COMPUTER_COMMANDS = [
   "observe",
   "help",
@@ -592,7 +594,7 @@ function computerHelp(topic?: ScaliusComputerCommandName): string {
     help: "help [command] — show this compact command reference.",
     goto: "goto \"/path?query\" — open one allowed same-origin route; use it alone.",
     click: "click @rN.eN — activate a visible safe control.",
-    fill: "fill @rN.eN \"text\" — replace a visible editable value.",
+    fill: "fill @rN.eN \"text\" — replace a visible editable value; explicitly marked rich-text editors accept sanitized HTML.",
     select: "select @rN.eN \"value or label\" — choose one enabled option.",
     submit: "submit @rN.eN — submit a form explicitly registered for agent use.",
     refresh: "refresh — reload the current page; use it alone.",
@@ -652,7 +654,13 @@ interface ElementLike {
 }
 interface DocumentLike {
   title?: string;
-  defaultView?: { Event?: new (type: string, init?: { bubbles?: boolean }) => unknown };
+  defaultView?: {
+    Event?: new (type: string, init?: { bubbles?: boolean }) => unknown;
+    CustomEvent?: new (
+      type: string,
+      init?: { bubbles?: boolean; cancelable?: boolean; detail?: unknown },
+    ) => unknown;
+  };
   querySelectorAll(selector: string): ArrayLike<unknown>;
   getElementById(id: string): unknown;
 }
@@ -750,6 +758,19 @@ export function createScaliusBrowserComputerAdapter(
     if (action.name === "fill") {
       if (element.readOnly) return { ok: false, code: "TARGET_DISABLED" };
       element.focus?.();
+      const richTextBridge = ancestorWithAttribute(
+        element,
+        "data-scalius-computer-rich-text",
+      );
+      if (richTextBridge) {
+        return dispatchRichTextFill(
+            document,
+            richTextBridge,
+            action.value,
+          )
+          ? { ok: true }
+          : { ok: false, code: "EXECUTION_FAILED" };
+      }
       if (attribute(element, "contenteditable") === "true") element.textContent = action.value;
       else setElementValue(document, element, action.value);
       dispatch(document, element, "input");
@@ -920,6 +941,38 @@ function isSensitive(element: ElementLike): boolean {
 }
 function isExcluded(element: ElementLike): boolean {
   return hasAncestorFlag(element, "data-scalius-computer-exclude") || hasAncestorFlag(element, "inert");
+}
+function ancestorWithAttribute(
+  element: ElementLike,
+  name: string,
+): ElementLike | null {
+  let current: ElementLike | null | undefined = element;
+  while (current) {
+    if (current.hasAttribute(name)) return current;
+    current = current.parentElement;
+  }
+  return null;
+}
+function dispatchRichTextFill(
+  document: DocumentLike,
+  bridge: ElementLike,
+  value: string,
+): boolean {
+  const CustomEventConstructor = document.defaultView?.CustomEvent ??
+    (globalThis as {
+      CustomEvent?: new (
+        type: string,
+        init?: { bubbles?: boolean; cancelable?: boolean; detail?: unknown },
+      ) => unknown;
+    }).CustomEvent;
+  if (!CustomEventConstructor || !bridge.dispatchEvent) return false;
+  const accepted = bridge.dispatchEvent(new CustomEventConstructor(
+    SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT,
+    { bubbles: false, cancelable: true, detail: value },
+  ));
+  // The explicit bridge cancels only after it has sanitized and accepted the
+  // value. A missing/misconfigured bridge therefore fails closed.
+  return accepted === false;
 }
 function isHidden(element: ElementLike): boolean {
   return elementName(element) === "input" && attribute(element, "type") === "hidden" ||

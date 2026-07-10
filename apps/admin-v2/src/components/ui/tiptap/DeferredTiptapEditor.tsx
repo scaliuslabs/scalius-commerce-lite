@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT } from "@scalius/shared/assistant-computer";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { cn } from "@scalius/shared/utils";
 import { RichContent } from "../rich-content";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
@@ -81,6 +83,7 @@ export function DeferredTiptapEditor({
   compact = false,
 }: DeferredTiptapEditorProps) {
   const isAliveRef = useRef(true);
+  const richTextBridgeRef = useRef<HTMLDivElement>(null);
   const mountRequestedRef = useRef(false);
   const [shouldMountEditor, setShouldMountEditor] = useState(false);
   const [autoFocusEditor, setAutoFocusEditor] = useState(false);
@@ -108,36 +111,66 @@ export function DeferredTiptapEditor({
   }, []);
 
   useEffect(() => {
+    const bridge = richTextBridgeRef.current;
+    if (!bridge) return undefined;
+    const acceptComputerFill = (rawEvent: Event) => {
+      const event = rawEvent as CustomEvent<unknown>;
+      if (typeof event.detail !== "string" || event.detail.length > 4_000) {
+        return;
+      }
+      onChange(sanitizeHtml(event.detail));
+      event.preventDefault();
+    };
+    bridge.addEventListener(
+      SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT,
+      acceptComputerFill,
+    );
+    return () => {
+      bridge.removeEventListener(
+        SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT,
+        acceptComputerFill,
+      );
+    };
+  }, [onChange, shouldMountEditor]);
+
+  useEffect(() => {
     loadAndMountEditor(false);
   }, [loadAndMountEditor]);
 
   if (shouldMountEditor) {
     return (
-      <Suspense
-        fallback={
-          <EditorLoadingShell className={className} compact={compact} />
-        }
+      <div
+        ref={richTextBridgeRef}
+        data-scalius-computer-rich-text="sanitized-html"
       >
-        <TiptapEditor
-          content={content}
-          onChange={onChange}
-          placeholder={placeholder}
-          className={className}
-          compact={compact}
-          autoFocus={autoFocusEditor}
-        />
-      </Suspense>
+        <Suspense
+          fallback={
+            <EditorLoadingShell className={className} compact={compact} />
+          }
+        >
+          <TiptapEditor
+            content={content}
+            onChange={onChange}
+            placeholder={placeholder}
+            className={className}
+            compact={compact}
+            autoFocus={autoFocusEditor}
+          />
+        </Suspense>
+      </div>
     );
   }
 
   return (
     <div
+      ref={richTextBridgeRef}
       className={cn(
         "overflow-hidden rounded-md border bg-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         getDeferredEditorMinHeightClass(compact),
         className,
       )}
       role="textbox"
+      data-scalius-computer-rich-text="sanitized-html"
       tabIndex={0}
       aria-multiline="true"
       aria-label="Rich text editor"
