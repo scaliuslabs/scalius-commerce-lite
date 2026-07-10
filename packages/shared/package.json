@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./assistant-computer": "./src/assistant-computer.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {
