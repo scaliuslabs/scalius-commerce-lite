@@ -6,7 +6,7 @@
  *
  * Selection Rules:
  * 1. User can select one size and one color
- * 2. Native radio selections are idempotent; explicit deselect actions are separate
+ * 2. Explicit select actions are idempotent; toggle actions can clear an axis
  * 3. Globally available axis values stay selectable
  * 4. Selecting an incompatible value clears the other axis so selection cannot deadlock
  * 5. Sold-out axis values are disabled
@@ -36,12 +36,16 @@ export interface VariantSelectionState {
   selectedVariant: Variant | null;
   availableSizes: Set<string>;
   availableColors: Set<string>;
+  sizeOptionAvailability: Map<string, VariantOptionAvailability>;
+  colorOptionAvailability: Map<string, VariantOptionAvailability>;
 }
 
 export interface VariantSelectionAction {
   type:
     | "SELECT_SIZE"
     | "SELECT_COLOR"
+    | "TOGGLE_SIZE"
+    | "TOGGLE_COLOR"
     | "DESELECT_SIZE"
     | "DESELECT_COLOR"
     | "RESET";
@@ -53,10 +57,34 @@ export interface VariantOptionSelectionInput {
   selectedColor?: string | null;
 }
 
+export type VariantOptionAxis = "size" | "color";
+export type VariantOptionAvailability =
+  | "available"
+  | "incompatible"
+  | "sold_out";
+
+type AvailabilityVariant = Pick<
+  Variant,
+  "size" | "color" | "stock" | "reservedStock" | "trackInventory"
+>;
+
+export interface VariantOptionSelectionTransition {
+  selectedSize?: string;
+  selectedColor?: string;
+  clearedAxis?: VariantOptionAxis;
+}
+
 export interface ExactVariantSelection<TVariant> {
   variant: TVariant;
   selectedSize?: string;
   selectedColor?: string;
+}
+
+export function shouldShowStartingVariantPrice(
+  hasCustomerOptions: boolean,
+  exactVariant: unknown,
+): boolean {
+  return hasCustomerOptions && !exactVariant;
 }
 
 export interface VariantIndex {
@@ -110,8 +138,141 @@ function addToMapArray(
   map.set(key, [value]);
 }
 
-function isVariantAvailable(variant: Pick<Variant, "stock" | "reservedStock" | "trackInventory">): boolean {
-  return variant.trackInventory === false || (variant.stock - (variant.reservedStock ?? 0)) > 0;
+export function isVariantBuyerAvailable(
+  variant: Pick<Variant, "stock" | "reservedStock" | "trackInventory">,
+): boolean {
+  return (
+    variant.trackInventory === false ||
+    variant.stock - (variant.reservedStock ?? 0) > 0
+  );
+}
+
+/**
+ * Classifies one value independently from its visual control.
+ *
+ * `sold_out` means there is no buyer-available SKU for the value anywhere and
+ * the control must be disabled. `incompatible` means the value is available on
+ * another SKU, but not with the current opposing-axis selection. It stays
+ * selectable so choosing it can safely clear the opposing axis.
+ */
+export function getVariantOptionAvailability<
+  TVariant extends AvailabilityVariant,
+>(
+  variants: readonly TVariant[],
+  axis: VariantOptionAxis,
+  option: string,
+  selection: VariantOptionSelectionInput,
+): VariantOptionAvailability {
+  const normalizedValue = normalizedOption(option);
+  if (!normalizedValue) return "sold_out";
+
+  const matchesAxis = (variant: TVariant) =>
+    normalizedOption(axis === "size" ? variant.size : variant.color) ===
+    normalizedValue;
+  const globallyAvailable = variants.some(
+    (variant) => matchesAxis(variant) && isVariantBuyerAvailable(variant),
+  );
+  if (!globallyAvailable) return "sold_out";
+
+  const opposingValue = normalizedOption(
+    axis === "size" ? selection.selectedColor : selection.selectedSize,
+  );
+  if (!opposingValue) return "available";
+
+  const hasCompatibleSku = variants.some((variant) => {
+    if (!matchesAxis(variant) || !isVariantBuyerAvailable(variant))
+      return false;
+    return (
+      normalizedOption(axis === "size" ? variant.color : variant.size) ===
+      opposingValue
+    );
+  });
+  return hasCompatibleSku ? "available" : "incompatible";
+}
+
+export function getVariantOptionAvailabilityMap<
+  TVariant extends AvailabilityVariant,
+>(
+  variants: readonly TVariant[],
+  axis: VariantOptionAxis,
+  options: Iterable<string>,
+  selection: VariantOptionSelectionInput,
+): Map<string, VariantOptionAvailability> {
+  return new Map(
+    Array.from(options, (option) => [
+      option,
+      getVariantOptionAvailability(variants, axis, option, selection),
+    ]),
+  );
+}
+
+/**
+ * Select an available value and clear an incompatible opposing selection.
+ * Sold-out values fail closed and leave the selection untouched.
+ */
+export function selectVariantOption<TVariant extends AvailabilityVariant>(
+  variants: readonly TVariant[],
+  selection: VariantOptionSelectionInput,
+  axis: VariantOptionAxis,
+  value: string,
+): VariantOptionSelectionTransition {
+  const selectedSize = normalizedOption(selection.selectedSize);
+  const selectedColor = normalizedOption(selection.selectedColor);
+  const normalizedValue = normalizedOption(value);
+  if (!normalizedValue) return { selectedSize, selectedColor };
+
+  const availability = getVariantOptionAvailability(
+    variants,
+    axis,
+    normalizedValue,
+    { selectedSize, selectedColor },
+  );
+  if (availability === "sold_out") return { selectedSize, selectedColor };
+
+  if (axis === "size") {
+    return {
+      selectedSize: normalizedValue,
+      ...(availability === "incompatible"
+        ? { clearedAxis: "color" as const }
+        : selectedColor
+          ? { selectedColor }
+          : {}),
+    };
+  }
+
+  return {
+    selectedColor: normalizedValue,
+    ...(availability === "incompatible"
+      ? { clearedAxis: "size" as const }
+      : selectedSize
+        ? { selectedSize }
+        : {}),
+  };
+}
+
+export function toggleVariantOption<TVariant extends AvailabilityVariant>(
+  variants: readonly TVariant[],
+  selection: VariantOptionSelectionInput,
+  axis: VariantOptionAxis,
+  value: string,
+): VariantOptionSelectionTransition {
+  const normalizedValue = normalizedOption(value);
+  const selectedSize = normalizedOption(selection.selectedSize);
+  const selectedColor = normalizedOption(selection.selectedColor);
+  const currentValue = axis === "size" ? selectedSize : selectedColor;
+
+  if (normalizedValue && currentValue === normalizedValue) {
+    return axis === "size"
+      ? { selectedColor, clearedAxis: "size" }
+      : { selectedSize, clearedAxis: "color" };
+  }
+
+  return selectVariantOption(
+    variants,
+    { selectedSize, selectedColor },
+    axis,
+    value,
+  );
 }
 
 /**
@@ -139,7 +300,7 @@ export function createVariantIndex(variants: Variant[]): VariantIndex {
       variantBySizeColor.set(`${v.size}||${v.color}`, v);
     }
 
-    if (isVariantAvailable(v)) {
+    if (isVariantBuyerAvailable(v)) {
       if (v.size) inStockSizes.add(v.size);
       if (v.color) inStockColors.add(v.color);
 
@@ -186,7 +347,9 @@ export function extractVariantOptions(variants: Variant[]): {
   };
 }
 
-function normalizedOption(value: string | null | undefined): string | undefined {
+function normalizedOption(
+  value: string | null | undefined,
+): string | undefined {
   const normalized = value?.trim();
   return normalized || undefined;
 }
@@ -227,6 +390,12 @@ export function resolveExactVariantSelection<
   const hasSize = variants.some((variant) => normalizedOption(variant.size));
   const hasColor = variants.some((variant) => normalizedOption(variant.color));
 
+  // Extra axes are invalid input, not ignorable metadata. This keeps simple
+  // and one-axis product URLs from appearing to honor impossible selections.
+  if ((!hasSize && selectedSize) || (!hasColor && selectedColor)) {
+    return null;
+  }
+
   if ((hasSize && !selectedSize) || (hasColor && !selectedColor)) {
     return null;
   }
@@ -244,6 +413,20 @@ export function resolveExactVariantSelection<
     ...(hasSize && selectedSize ? { selectedSize } : {}),
     ...(hasColor && selectedColor ? { selectedColor } : {}),
   };
+}
+
+/** Resolve an exact URL/hydration selection only when the SKU is purchasable. */
+export function resolveExactAvailableVariantSelection<
+  TVariant extends Pick<
+    Variant,
+    "size" | "color" | "stock" | "reservedStock" | "trackInventory"
+  >,
+>(
+  variants: readonly TVariant[],
+  selection: VariantOptionSelectionInput,
+): ExactVariantSelection<TVariant> | null {
+  const exact = resolveExactVariantSelection(variants, selection);
+  return exact && isVariantBuyerAvailable(exact.variant) ? exact : null;
 }
 
 /**
@@ -293,29 +476,31 @@ export function getAvailableColors(index: VariantIndex): Set<string> {
   return index.inStockColors;
 }
 
-function hasAvailableCombination(
-  index: VariantIndex,
-  selectedSize: string | undefined,
-  selectedColor: string | undefined,
-): boolean {
-  return filterVariantsBySelection(index.variants, {
-    selectedSize,
-    selectedColor,
-  }).some(isVariantAvailable);
-}
-
 export function createSelectionState(
   index: VariantIndex,
   selection: VariantOptionSelectionInput,
 ): VariantSelectionState {
   const selectedSize = normalizedOption(selection.selectedSize);
   const selectedColor = normalizedOption(selection.selectedColor);
+  const normalizedSelection = { selectedSize, selectedColor };
   return {
     selectedSize,
     selectedColor,
     selectedVariant: findMatchingVariant(index, selectedSize, selectedColor),
     availableSizes: getAvailableSizes(index),
     availableColors: getAvailableColors(index),
+    sizeOptionAvailability: getVariantOptionAvailabilityMap(
+      index.variants,
+      "size",
+      index.options.sizes,
+      normalizedSelection,
+    ),
+    colorOptionAvailability: getVariantOptionAvailabilityMap(
+      index.variants,
+      "color",
+      index.options.colors,
+      normalizedSelection,
+    ),
   };
 }
 
@@ -323,13 +508,19 @@ export function createSelectionState(
  * Create initial state
  */
 export function createInitialState(index: VariantIndex): VariantSelectionState {
-  // Auto-select if only one option available
+  // Auto-select a sole axis only when that value is buyer-available somewhere.
   const options = index.options;
 
   const selectedSize =
-    options.sizes.size === 1 ? Array.from(options.sizes)[0] : undefined;
+    options.sizes.size === 1 &&
+    index.inStockSizes.has(Array.from(options.sizes)[0] ?? "")
+      ? Array.from(options.sizes)[0]
+      : undefined;
   const selectedColor =
-    options.colors.size === 1 ? Array.from(options.colors)[0] : undefined;
+    options.colors.size === 1 &&
+    index.inStockColors.has(Array.from(options.colors)[0] ?? "")
+      ? Array.from(options.colors)[0]
+      : undefined;
 
   return createSelectionState(index, { selectedSize, selectedColor });
 }
@@ -346,27 +537,53 @@ export function applyAction(
   let newSelectedColor = state.selectedColor;
 
   switch (action.type) {
-    case "SELECT_SIZE":
-      newSelectedSize = action.value;
-      if (
-        newSelectedSize &&
-        newSelectedColor &&
-        !hasAvailableCombination(index, newSelectedSize, newSelectedColor)
-      ) {
-        newSelectedColor = undefined;
-      }
+    case "SELECT_SIZE": {
+      const next = selectVariantOption(
+        index.variants,
+        state,
+        "size",
+        action.value ?? "",
+      );
+      newSelectedSize = next.selectedSize;
+      newSelectedColor = next.selectedColor;
       break;
+    }
 
-    case "SELECT_COLOR":
-      newSelectedColor = action.value;
-      if (
-        newSelectedSize &&
-        newSelectedColor &&
-        !hasAvailableCombination(index, newSelectedSize, newSelectedColor)
-      ) {
-        newSelectedSize = undefined;
-      }
+    case "SELECT_COLOR": {
+      const next = selectVariantOption(
+        index.variants,
+        state,
+        "color",
+        action.value ?? "",
+      );
+      newSelectedSize = next.selectedSize;
+      newSelectedColor = next.selectedColor;
       break;
+    }
+
+    case "TOGGLE_SIZE": {
+      const next = toggleVariantOption(
+        index.variants,
+        state,
+        "size",
+        action.value ?? "",
+      );
+      newSelectedSize = next.selectedSize;
+      newSelectedColor = next.selectedColor;
+      break;
+    }
+
+    case "TOGGLE_COLOR": {
+      const next = toggleVariantOption(
+        index.variants,
+        state,
+        "color",
+        action.value ?? "",
+      );
+      newSelectedSize = next.selectedSize;
+      newSelectedColor = next.selectedColor;
+      break;
+    }
 
     case "DESELECT_SIZE":
       newSelectedSize = undefined;
@@ -437,7 +654,7 @@ export function validateSelection(
   }
 
   // Check stock
-  if (!isVariantAvailable(variant)) {
+  if (!isVariantBuyerAvailable(variant)) {
     return {
       valid: false,
       error: "Selected option out of stock",

@@ -8,17 +8,28 @@ const COMPONENT_DIR = storefrontSourcePath("components");
 
 describe("product shortcode purchase boundaries", () => {
   it("uses buyer-visible variants and disables purchase actions for unavailable products", () => {
-    const source = readFileSync(`${COMPONENT_DIR}/ProductShortcode.tsx`, "utf8");
+    const source = readFileSync(
+      `${COMPONENT_DIR}/ProductShortcode.tsx`,
+      "utf8",
+    );
 
     expect(source).toContain("resolveBuyerVariants");
     expect(source).toContain("const buyerVariants = useMemo(");
-    expect(source).toContain("const isUnavailable = buyerVariants.length === 0;");
+    expect(source).toContain("buyerVariants.length === 0 ||");
+    expect(source).toContain(
+      "!buyerVariants.some((variant) => isVariantAvailable(variant))",
+    );
     expect(source).toContain("This product is not available right now.");
-    expect(source.match(/disabled=\{isUnavailable\}/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(
+      source.match(/disabled=\{isUnavailable\}/g)?.length,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it("uses merchant-defined option labels for cart context and visible selectors", () => {
-    const source = readFileSync(`${COMPONENT_DIR}/ProductShortcode.tsx`, "utf8");
+    const source = readFileSync(
+      `${COMPONENT_DIR}/ProductShortcode.tsx`,
+      "utf8",
+    );
 
     expect(source).toContain("product.variantOption1Label");
     expect(source).toContain("product.variantOption2Label");
@@ -30,7 +41,10 @@ describe("product shortcode purchase boundaries", () => {
   });
 
   it("uses configured currency precision for arithmetic and display", () => {
-    const source = readFileSync(`${COMPONENT_DIR}/ProductShortcode.tsx`, "utf8");
+    const source = readFileSync(
+      `${COMPONENT_DIR}/ProductShortcode.tsx`,
+      "utf8",
+    );
 
     expect(source).toContain("window.__CURRENCY_DECIMAL_PLACES__");
     expect(source).toContain("configuredDecimalPlaces,");
@@ -40,7 +54,10 @@ describe("product shortcode purchase boundaries", () => {
   });
 
   it("shows the lowest compatible buyer SKU as From until selection is exact", () => {
-    const source = readFileSync(`${COMPONENT_DIR}/ProductShortcode.tsx`, "utf8");
+    const source = readFileSync(
+      `${COMPONENT_DIR}/ProductShortcode.tsx`,
+      "utf8",
+    );
     const productPricing = {
       basePrice: 50_000,
       discountType: null,
@@ -93,9 +110,37 @@ describe("product shortcode purchase boundaries", () => {
     ).toBe(45_000);
     expect(source).toContain("filterVariantsBySelection(buyerVariants");
     expect(source).toContain("getBuyerVariantPricePresentation(");
-    expect(source).toContain("showsStartingPrice ? \"From \" : \"\"");
+    expect(source).toContain('showsStartingPrice ? "From " : ""');
     expect(source).toContain(
       "matchingVariant && pricePresentation.pricing.hasDiscount",
     );
+  });
+
+  it("uses the shared compatibility and toggle state for accessible option controls", () => {
+    const source = readFileSync(
+      `${COMPONENT_DIR}/ProductShortcode.tsx`,
+      "utf8",
+    );
+
+    expect(source).toContain("getVariantOptionAvailabilityMap(");
+    expect(source).toContain("globalSizeAvailability");
+    expect(source).toContain('!== "sold_out"');
+    expect(source).toContain("selectVariantOption(");
+    expect(source).toContain("toggleVariantOption(");
+    expect(source).toContain('availability === "incompatible"');
+    expect(source).toContain('availability === "sold_out"');
+    expect(source).toContain("data-option-availability={availability}");
+    expect(source).toContain('data-option-axis="size"');
+    expect(source).toContain('navigateOptionButtons(event, "size")');
+    expect(source).toContain("if (nextValue) selectOption(axis, nextValue)");
+    expect(source).not.toContain("next?.click()");
+    expect(source).toContain("aria-pressed={isSelected}");
+    expect(source).toContain("Selected; activate again to clear.");
+    expect(source).toContain("shouldShowStartingVariantPrice(");
+    expect(source).toContain(
+      "border-dashed border-muted-foreground bg-muted text-foreground",
+    );
+    expect(source).toContain("isVariantAvailable(matchingVariant)");
+    expect(source).toContain("stock: matchingVariant.stock");
   });
 });

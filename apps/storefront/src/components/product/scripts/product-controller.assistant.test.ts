@@ -20,6 +20,8 @@ function variant(
   color: string | null,
   price: number,
   stock = 5,
+  reservedStock = 0,
+  trackInventory = true,
 ) {
   return {
     id,
@@ -32,8 +34,8 @@ function variant(
     discountPercentage: 0,
     discountAmount: 0,
     stock,
-    reservedStock: 0,
-    trackInventory: true,
+    reservedStock,
+    trackInventory,
     colorSortOrder: 0,
     sizeSortOrder: 0,
   };
@@ -45,16 +47,20 @@ function renderProductControllerDom(
     variant("var_42_green", "42", "Green", 4_500),
   ],
 ) {
-  const sizeInputs = [...new Set(variants.flatMap((item) => item.size ? [item.size] : []))]
+  const sizeButtons = [
+    ...new Set(variants.flatMap((item) => (item.size ? [item.size] : []))),
+  ]
     .map(
       (size) =>
-        `<label><input type="radio" name="size" value="${size}" /><span class="size-btn" data-size="${size}"></span></label>`,
+        `<button type="button" class="size-btn" data-size="${size}" aria-pressed="false">${size}</button>`,
     )
     .join("");
-  const colorInputs = [...new Set(variants.flatMap((item) => item.color ? [item.color] : []))]
+  const colorButtons = [
+    ...new Set(variants.flatMap((item) => (item.color ? [item.color] : []))),
+  ]
     .map(
       (color) =>
-        `<label><input type="radio" name="color" value="${color}" /><span class="color-btn" data-color="${color}"></span></label>`,
+        `<button type="button" class="color-btn" data-color="${color}" aria-pressed="false">${color}</button>`,
     )
     .join("");
   document.body.innerHTML = `
@@ -71,12 +77,20 @@ function renderProductControllerDom(
       data-currency-decimal-places="2"
       data-product-free-delivery="false"
     >
-      <div id="product-actions" data-option1-label="Weight" data-option2-label="Style"></div>
+      <div id="product-actions" data-option1-label="Weight" data-option2-label="Style">
+        <div id="variant-unavailable-query-notice" class="hidden"></div>
+        <button type="button" data-action="add-to-cart"><span data-action-label="add-to-cart">Add to Cart</span></button>
+        <button type="button" data-action="buy-now"><span data-action-label="buy-now">Buy Now</span></button>
+      </div>
+      <div id="product-stock-badge" class="text-primary bg-primary/10" data-stock-tone="available">
+        <span id="product-stock-text">In Stock</span>
+      </div>
       <input id="quantity" value="1" />
       <button id="quantity-minus"></button>
       <button id="quantity-plus"></button>
-      ${sizeInputs}
-      ${colorInputs}
+      ${sizeButtons}
+      ${colorButtons}
+      <p id="variant-availability-status" aria-live="polite"></p>
       <span class="product-price"></span>
       <span class="product-original-price"></span>
       <span class="discount-badge"></span>
@@ -86,36 +100,45 @@ function renderProductControllerDom(
 }
 
 function chooseOption(name: "size" | "color", value: string): void {
-  const input = document.querySelector<HTMLInputElement>(
-    `input[name="${name}"][value="${value}"]`,
+  const button = document.querySelector<HTMLButtonElement>(
+    `.${name}-btn[data-${name}="${value}"]`,
   );
-  expect(input).not.toBeNull();
-  input!.checked = true;
-  input!.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(button).not.toBeNull();
+  button!.click();
 }
 
 function clickOption(name: "size" | "color", value: string): void {
-  const input = document.querySelector<HTMLInputElement>(
-    `input[name="${name}"][value="${value}"]`,
+  const button = document.querySelector<HTMLButtonElement>(
+    `.${name}-btn[data-${name}="${value}"]`,
   );
-  expect(input).not.toBeNull();
-  input!.click();
+  expect(button).not.toBeNull();
+  button!.click();
 }
 
-function chooseOptionByNativeKeyboard(
+function chooseOptionByKeyboard(
   name: "size" | "color",
   value: string,
+  key: "Enter" | " " = "Enter",
 ): void {
-  const input = document.querySelector<HTMLInputElement>(
-    `input[name="${name}"][value="${value}"]`,
+  const button = document.querySelector<HTMLButtonElement>(
+    `.${name}-btn[data-${name}="${value}"]`,
   );
-  expect(input).not.toBeNull();
-  input!.focus();
-  input!.dispatchEvent(
-    new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+  expect(button).not.toBeNull();
+  button!.focus();
+  button!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+}
+
+function pressArrow(
+  name: "size" | "color",
+  value: string,
+  key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown",
+): void {
+  const button = document.querySelector<HTMLButtonElement>(
+    `.${name}-btn[data-${name}="${value}"]`,
   );
-  input!.checked = true;
-  input!.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(button).not.toBeNull();
+  button!.focus();
+  button!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
 }
 
 describe("product controller assistant surface", () => {
@@ -191,24 +214,20 @@ describe("product controller assistant surface", () => {
     expect(document.querySelector(".product-price")?.textContent).toBe(
       "৳4,050.00",
     );
-    expect(
-      document.querySelector(".product-original-price")?.textContent,
-    ).toBe("৳4,500.00");
+    expect(document.querySelector(".product-original-price")?.textContent).toBe(
+      "৳4,500.00",
+    );
     expect(
       document.querySelector(".product-original-price")?.classList,
     ).not.toContain("hidden");
-    expect(document.querySelector(".discount-badge")?.textContent).toBe(
-      "-10%",
-    );
+    expect(document.querySelector(".discount-badge")?.textContent).toBe("-10%");
     expect(document.querySelector(".discount-badge")?.classList).not.toContain(
       "hidden",
     );
   });
 
   it("publishes the only simple SKU as exact immediately", () => {
-    renderProductControllerDom([
-      variant("var_default", null, null, 4_500),
-    ]);
+    renderProductControllerDom([variant("var_default", null, null, 4_500)]);
 
     init();
 
@@ -248,18 +267,32 @@ describe("product controller assistant surface", () => {
       "From ৳41,040.00",
     );
     expect(
-      document.querySelector<HTMLInputElement>(
-        'input[name="color"][value="Blue"]',
-      )?.disabled,
+      document.querySelector<HTMLButtonElement>('.color-btn[data-color="Blue"]')
+        ?.disabled,
     ).toBe(true);
     expect(
-      document.querySelector<HTMLInputElement>(
-        'input[name="color"][value="Red"]',
-      )?.disabled,
+      document.querySelector<HTMLButtonElement>('.color-btn[data-color="Red"]')
+        ?.disabled,
     ).toBe(false);
+    const incompatibleGreen = document.querySelector<HTMLButtonElement>(
+      '.color-btn[data-color="Green"]',
+    );
+    expect(incompatibleGreen?.disabled).toBe(false);
+    expect(incompatibleGreen?.dataset.optionAvailability).toBe("incompatible");
+    expect(incompatibleGreen?.classList).toContain("border-dashed");
+    expect(incompatibleGreen?.classList).not.toContain("line-through");
+    expect(incompatibleGreen?.classList).not.toContain("opacity-50");
+    expect(incompatibleGreen?.getAttribute("aria-label")).toContain(
+      "Not available with Weight 40",
+    );
+    const soldOutBlue = document.querySelector<HTMLButtonElement>(
+      '.color-btn[data-color="Blue"]',
+    );
+    expect(soldOutBlue?.dataset.optionAvailability).toBe("sold_out");
+    expect(soldOutBlue?.classList).toContain("line-through");
   });
 
-  it("switches disjoint combinations with pointer and native-radio keyboard changes", () => {
+  it("switches disjoint combinations with pointer and Arrow-key navigation", () => {
     renderProductControllerDom([
       variant("var_40_red", "40", "Red", 45_000),
       variant("var_41_green", "41", "Green", 4_500),
@@ -278,10 +311,14 @@ describe("product controller assistant surface", () => {
       }),
     );
 
-    clickOption("size", "41");
     expect(
-      document.querySelector<HTMLInputElement>(
-        'input[name="color"][value="Green"]',
+      document.querySelector<HTMLButtonElement>('.size-btn[data-size="41"]')
+        ?.dataset.optionAvailability,
+    ).toBe("incompatible");
+    pressArrow("size", "40", "ArrowRight");
+    expect(
+      document.querySelector<HTMLButtonElement>(
+        '.color-btn[data-color="Green"]',
       )?.disabled,
     ).toBe(false);
     expect(assistantMocks.update).toHaveBeenLastCalledWith(
@@ -290,8 +327,14 @@ describe("product controller assistant surface", () => {
         availability: "selection_required",
       }),
     );
+    expect(document.activeElement).toBe(
+      document.querySelector('.size-btn[data-size="41"]'),
+    );
+    expect(
+      document.getElementById("variant-availability-status")?.textContent,
+    ).toContain("Style selection cleared");
 
-    chooseOptionByNativeKeyboard("color", "Green");
+    chooseOptionByKeyboard("color", "Green");
     expect(assistantMocks.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         selectedVariantId: "var_41_green",
@@ -302,10 +345,68 @@ describe("product controller assistant surface", () => {
       }),
     );
 
-    chooseOptionByNativeKeyboard("size", "40");
+    chooseOptionByKeyboard("size", "40", " ");
     expect(assistantMocks.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         selectedOptions: [{ name: "Weight", label: "40" }],
+        availability: "selection_required",
+      }),
+    );
+  });
+
+  it("clears a selected option on a second click and keeps URL, price, and assistant context exact", () => {
+    renderProductControllerDom([
+      variant("var_40_red", "40", "Red", 45_000),
+      variant("var_40_green", "40", "Green", 4_500),
+    ]);
+
+    init();
+    clickOption("color", "Red");
+    expect(window.location.search).toBe("?size=40&color=Red");
+
+    clickOption("color", "Red");
+
+    expect(
+      document
+        .querySelector<HTMLButtonElement>('.color-btn[data-color="Red"]')
+        ?.getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(window.location.search).toBe("?size=40");
+    expect(document.querySelector(".product-price")?.textContent).toBe(
+      "From ৳4,050.00",
+    );
+    expect(assistantMocks.update).toHaveBeenLastCalledWith({
+      kind: "product",
+      productId: "prod_rice",
+      slug: "rice",
+      selectedOptions: [{ name: "Weight", label: "40" }],
+      displayedPrice: 4_050,
+      availability: "selection_required",
+    });
+    expect(
+      document.getElementById("variant-availability-status")?.textContent,
+    ).toBe("Style Red cleared.");
+  });
+
+  it("clears a selected option with Enter without disturbing the opposing selection", () => {
+    renderProductControllerDom([
+      variant("var_40_red", "40", "Red", 45_000),
+      variant("var_41_red", "41", "Red", 4_500),
+    ]);
+
+    init();
+    chooseOption("size", "40");
+    chooseOptionByKeyboard("size", "40", "Enter");
+
+    expect(window.location.search).toBe("?color=Red");
+    expect(
+      document
+        .querySelector<HTMLButtonElement>('.size-btn[data-size="40"]')
+        ?.getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(assistantMocks.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        selectedOptions: [{ name: "Style", label: "Red" }],
         availability: "selection_required",
       }),
     );
@@ -316,11 +417,7 @@ describe("product controller assistant surface", () => {
       variant("var_42_red", "42", "Red", 45_600),
       variant("var_42_green", "42", "Green", 4_500),
     ]);
-    window.history.replaceState(
-      null,
-      "",
-      "/products/rice?size=42&color=Green",
-    );
+    window.history.replaceState(null, "", "/products/rice?size=42&color=Green");
 
     init();
 
@@ -337,18 +434,170 @@ describe("product controller assistant surface", () => {
       availability: "in_stock",
     });
     expect(
-      document.querySelector<HTMLInputElement>(
-        'input[name="size"][value="42"]',
-      )?.checked,
-    ).toBe(true);
+      document
+        .querySelector<HTMLButtonElement>('.size-btn[data-size="42"]')
+        ?.getAttribute("aria-pressed"),
+    ).toBe("true");
     expect(
-      document.querySelector<HTMLInputElement>(
-        'input[name="color"][value="Green"]',
-      )?.checked,
-    ).toBe(true);
+      document
+        .querySelector<HTMLButtonElement>('.color-btn[data-color="Green"]')
+        ?.getAttribute("aria-pressed"),
+    ).toBe("true");
     expect(document.querySelector(".product-price")?.textContent).toBe(
       "৳4,050.00",
     );
+  });
+
+  it("sanitizes a sold-out deep link while preserving an explicit unavailable request until buyer input", () => {
+    renderProductControllerDom([
+      variant("var_40_red", "40", "Red", 45_000, 5, 5),
+      variant("var_40_blue", "40", "Blue", 4_500, 3),
+    ]);
+    window.history.replaceState(null, "", "/products/rice?size=40&color=Red");
+
+    init();
+
+    expect(window.location.search).toBe("");
+    expect(
+      document
+        .querySelector<HTMLButtonElement>('.size-btn[data-size="40"]')
+        ?.getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(
+      document
+        .querySelector<HTMLButtonElement>('.color-btn[data-color="Red"]')
+        ?.getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(
+      document.getElementById("variant-unavailable-query-notice")?.classList,
+    ).not.toContain("hidden");
+    expect(document.getElementById("product-stock-text")?.textContent).toBe(
+      "Out of Stock",
+    );
+    expect(
+      document.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]')
+        ?.disabled,
+    ).toBe(true);
+    expect(document.querySelector(".product-price")?.textContent).toBe(
+      "৳40,500.00",
+    );
+    expect(assistantMocks.register).toHaveBeenLastCalledWith({
+      kind: "product",
+      productId: "prod_rice",
+      slug: "rice",
+      selectedVariantId: "var_40_red",
+      selectedOptions: [
+        { name: "Weight", label: "40" },
+        { name: "Style", label: "Red" },
+      ],
+      displayedPrice: 40_500,
+      availability: "out_of_stock",
+    });
+
+    clickOption("color", "Blue");
+
+    expect(
+      document.getElementById("variant-unavailable-query-notice")?.classList,
+    ).toContain("hidden");
+    expect(document.getElementById("product-stock-text")?.textContent).toBe(
+      "Low Stock",
+    );
+    expect(
+      document.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]')
+        ?.disabled,
+    ).toBe(false);
+    expect(window.location.search).toBe("?color=Blue");
+    expect(assistantMocks.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        selectedOptions: [{ name: "Style", label: "Blue" }],
+        availability: "selection_required",
+      }),
+    );
+  });
+
+  it("updates stock and purchase actions from exact or compatible partial SKUs", () => {
+    renderProductControllerDom([
+      variant("var_40_red", "40", "Red", 45_000, 2),
+      variant("var_42_green", "42", "Green", 4_500, 60),
+    ]);
+
+    init();
+    expect(document.getElementById("product-stock-text")?.textContent).toBe(
+      "In Stock",
+    );
+
+    clickOption("size", "40");
+    expect(document.getElementById("product-stock-text")?.textContent).toBe(
+      "Low Stock",
+    );
+
+    clickOption("color", "Red");
+    expect(document.getElementById("product-stock-text")?.textContent).toBe(
+      "Low Stock",
+    );
+    expect(
+      document.querySelector<HTMLButtonElement>('[data-action="buy-now"]')
+        ?.disabled,
+    ).toBe(false);
+
+    clickOption("color", "Red");
+    expect(document.getElementById("product-stock-text")?.textContent).toBe(
+      "Low Stock",
+    );
+
+    clickOption("size", "40");
+    expect(document.getElementById("product-stock-text")?.textContent).toBe(
+      "In Stock",
+    );
+  });
+
+  it("treats an exact untracked zero-stock SKU as in stock", () => {
+    renderProductControllerDom([
+      variant("var_40_red", "40", "Red", 4_500, 0, 0, false),
+    ]);
+
+    init();
+
+    expect(document.getElementById("product-stock-text")?.textContent).toBe(
+      "In Stock",
+    );
+    expect(
+      document.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]')
+        ?.disabled,
+    ).toBe(false);
+  });
+
+  it("keeps no-query sold-out singleton SSR state and hydrated pricing truthful", () => {
+    renderProductControllerDom([
+      variant("var_40_red", "40", "Red", 4_500, 1, 1),
+    ]);
+
+    init();
+
+    expect(window.location.search).toBe("");
+    expect(document.querySelector(".product-price")?.textContent).toBe(
+      "From ৳4,050.00",
+    );
+    expect(document.getElementById("product-stock-text")?.textContent).toBe(
+      "Out of Stock",
+    );
+    expect(
+      document
+        .querySelector<HTMLButtonElement>('.size-btn[data-size="40"]')
+        ?.getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(
+      document.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]')
+        ?.disabled,
+    ).toBe(true);
+    expect(assistantMocks.register).toHaveBeenLastCalledWith({
+      kind: "product",
+      productId: "prod_rice",
+      slug: "rice",
+      selectedOptions: [],
+      displayedPrice: 4_050,
+      availability: "out_of_stock",
+    });
   });
 
   it("ignores partial query selections", () => {
@@ -366,10 +615,49 @@ describe("product controller assistant surface", () => {
     });
   });
 
-  it("preserves three-decimal buyer arithmetic and formatting", () => {
+  it("sanitizes extra option axes for a simple product without losing its SKU", () => {
+    renderProductControllerDom([variant("var_default", null, null, 4_500)]);
+    window.history.replaceState(null, "", "/products/rice?size=42&color=Red");
+
+    init();
+
+    expect(window.location.search).toBe("");
+    expect(assistantMocks.register).toHaveBeenLastCalledWith({
+      kind: "product",
+      productId: "prod_rice",
+      slug: "rice",
+      selectedVariantId: "var_default",
+      selectedOptions: [],
+      displayedPrice: 4_050,
+      availability: "in_stock",
+    });
+  });
+
+  it("rejects and sanitizes an extra color axis on a size-only product", () => {
     renderProductControllerDom([
-      variant("var_default", null, null, 1.234),
+      variant("var_40", "40", null, 45_000),
+      variant("var_42", "42", null, 4_500),
     ]);
+    window.history.replaceState(null, "", "/products/rice?size=40&color=Red");
+
+    init();
+
+    expect(window.location.search).toBe("");
+    expect(
+      document
+        .querySelector<HTMLButtonElement>('.size-btn[data-size="40"]')
+        ?.getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(assistantMocks.register).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        selectedOptions: [],
+        availability: "selection_required",
+      }),
+    );
+  });
+
+  it("preserves three-decimal buyer arithmetic and formatting", () => {
+    renderProductControllerDom([variant("var_default", null, null, 1.234)]);
     const container = document.getElementById("product-container")!;
     container.dataset.productOriginalPrice = "1.234";
     container.dataset.currencyDecimalPlaces = "3";
@@ -394,9 +682,7 @@ describe("product controller assistant surface", () => {
   });
 
   it("discounts the raw price before rounding the final buyer price", () => {
-    renderProductControllerDom([
-      variant("var_default", null, null, 1.005),
-    ]);
+    renderProductControllerDom([variant("var_default", null, null, 1.005)]);
     const container = document.getElementById("product-container")!;
     container.dataset.productOriginalPrice = "1.005";
 
@@ -411,12 +697,10 @@ describe("product controller assistant surface", () => {
       displayedPrice: 0.9,
       availability: "in_stock",
     });
-    expect(document.querySelector(".product-price")?.textContent).toBe(
-      "৳0.90",
+    expect(document.querySelector(".product-price")?.textContent).toBe("৳0.90");
+    expect(document.querySelector(".product-original-price")?.textContent).toBe(
+      "৳1.01",
     );
-    expect(
-      document.querySelector(".product-original-price")?.textContent,
-    ).toBe("৳1.01");
   });
 
   it("prefers an available SKU over a lower sold-out starting price", () => {
@@ -439,14 +723,12 @@ describe("product controller assistant surface", () => {
       "From ৳41,040.00",
     );
     expect(
-      document.querySelector<HTMLInputElement>(
-        'input[name="size"][value="42"]',
-      )?.disabled,
+      document.querySelector<HTMLButtonElement>('.size-btn[data-size="42"]')
+        ?.disabled,
     ).toBe(true);
     expect(
-      document.querySelector<HTMLInputElement>(
-        'input[name="size"][value="40"]',
-      )?.disabled,
+      document.querySelector<HTMLButtonElement>('.size-btn[data-size="40"]')
+        ?.disabled,
     ).toBe(false);
   });
 });

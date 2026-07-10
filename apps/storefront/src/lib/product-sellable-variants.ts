@@ -13,7 +13,11 @@ type BuyerVariant = Pick<
   | "trackInventory"
 >;
 
-export type BuyerProductMode = "simple" | "optioned" | "unavailable" | "ambiguous";
+export type BuyerProductMode =
+  | "simple"
+  | "optioned"
+  | "unavailable"
+  | "ambiguous";
 
 export interface BuyerVariantResolution<TVariant extends BuyerVariant> {
   mode: BuyerProductMode;
@@ -26,16 +30,27 @@ function normalizedOption(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-export function hasCustomerOption(variant: Pick<BuyerVariant, "size" | "color">): boolean {
-  return Boolean(normalizedOption(variant.size) || normalizedOption(variant.color));
+export function hasCustomerOption(
+  variant: Pick<BuyerVariant, "size" | "color">,
+): boolean {
+  return Boolean(
+    normalizedOption(variant.size) || normalizedOption(variant.color),
+  );
 }
 
-export function isActivePersistedVariant(variant: Pick<BuyerVariant, "id" | "deletedAt">): boolean {
+export function isActivePersistedVariant(
+  variant: Pick<BuyerVariant, "id" | "deletedAt">,
+): boolean {
   return !variant.deletedAt && variant.id !== "default";
 }
 
-export function isVariantAvailable(variant: Pick<BuyerVariant, "stock" | "reservedStock" | "trackInventory">): boolean {
-  return variant.trackInventory === false || Math.max(0, variant.stock - (variant.reservedStock ?? 0)) > 0;
+export function isVariantAvailable(
+  variant: Pick<BuyerVariant, "stock" | "reservedStock" | "trackInventory">,
+): boolean {
+  return (
+    variant.trackInventory === false ||
+    Math.max(0, variant.stock - (variant.reservedStock ?? 0)) > 0
+  );
 }
 
 export function availableQuantityForVariant(
@@ -94,7 +109,12 @@ export function resolveBuyerVariants<TVariant extends BuyerVariant>(
   };
 }
 
-export function getBuyerStockSummary(variants: readonly BuyerVariant[]): {
+export function getBuyerStockSummary(
+  variants: readonly Pick<
+    BuyerVariant,
+    "stock" | "reservedStock" | "trackInventory"
+  >[],
+): {
   canPurchaseAny: boolean;
   text: "Unavailable" | "In Stock" | "Low Stock" | "Out of Stock";
   tone: "available" | "unavailable";
@@ -108,7 +128,8 @@ export function getBuyerStockSummary(variants: readonly BuyerVariant[]): {
   }
 
   const totalAvailable = variants.reduce(
-    (sum, variant) => sum + Math.max(0, variant.stock - (variant.reservedStock ?? 0)),
+    (sum, variant) =>
+      sum + Math.max(0, variant.stock - (variant.reservedStock ?? 0)),
     0,
   );
 

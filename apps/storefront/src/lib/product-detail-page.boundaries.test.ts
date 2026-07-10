@@ -119,9 +119,8 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain(
       "getBuyerVariantPricePresentation(\n  productPricing,\n  initialPricingVariants,",
     );
-    expect(source).toContain(
-      "const showsStartingPrice = initialPricePresentation.isStartingAt;",
-    );
+    expect(source).toContain("const showsStartingPrice = shouldShowStartingVariantPrice(");
+    expect(source).toContain("initialStockVariant,");
     expect(source).toContain(
       '`${showsStartingPrice ? "From " : ""}${formatPrice(initialDisplayedPrice)}`',
     );
@@ -139,14 +138,20 @@ describe("product detail page SKU boundaries", () => {
       "const buyerDisplayedPrice = buyerPricePresentation.pricing.finalPrice;",
     );
     expect(source).toContain("price: formatMetadataPrice(buyerDisplayedPrice)");
-    expect(source).toContain("ogPrice={formatMetadataPrice(buyerDisplayedPrice)}");
+    expect(source).toContain(
+      "ogPrice={formatMetadataPrice(buyerDisplayedPrice)}",
+    );
     expect(source).toContain(
       "data-product-price={String(buyerDisplayedPrice)}",
     );
     expect(source).toContain("discountedPrice: buyerDisplayedPrice");
-    expect(source).toContain("data-currency-decimal-places={String(currencyDecimalPlaces)}");
+    expect(source).toContain(
+      "data-currency-decimal-places={String(currencyDecimalPlaces)}",
+    );
     expect(source).not.toContain("price: buyerDisplayedPrice.toFixed(2)");
-    expect(source).not.toContain("ogPrice={product.discountedPrice.toFixed(2)}");
+    expect(source).not.toContain(
+      "ogPrice={product.discountedPrice.toFixed(2)}",
+    );
     expect(source).not.toContain(
       "data-product-price={String(product.discountedPrice)}",
     );
@@ -156,7 +161,7 @@ describe("product detail page SKU boundaries", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
     expect(source).toContain(
-      "const queryVariantSelection = resolveExactVariantSelection(buyerVariants",
+      "const requestedQueryVariantSelection = resolveExactVariantSelection(buyerVariants",
     );
     expect(source).toContain(
       'selectedSize: Astro.url.searchParams.get("size")',
@@ -165,31 +170,68 @@ describe("product detail page SKU boundaries", () => {
       'selectedColor: Astro.url.searchParams.get("color")',
     );
     expect(source).toContain(
-      "const selectedBuyerVariant = queryVariantSelection?.variant ?? null;",
+      "isVariantAvailable(requestedQueryVariantSelection.variant)",
+    );
+    expect(source).toContain("const unavailableQueryVariantSelection =");
+    expect(source).toContain(
+      "const selectedBuyerVariant = requestedQueryVariantSelection?.variant ?? null;",
     );
     expect(source).toContain("const fbViewVariants = selectedBuyerVariant");
-    expect(source).toContain("const primarySchemaVariant = selectedBuyerVariant");
-    expect(source).toContain("initialSelectedSize={queryVariantSelection?.selectedSize}");
-    expect(source).toContain("initialSelectedColor={queryVariantSelection?.selectedColor}");
+    expect(source).toContain(
+      "const primarySchemaVariant = selectedBuyerVariant",
+    );
+    expect(source).toContain(
+      "initialSelectedSize={queryVariantSelection?.selectedSize}",
+    );
+    expect(source).toContain(
+      "initialSelectedColor={queryVariantSelection?.selectedColor}",
+    );
+    expect(source).toContain(
+      "initialUnavailableVariant={unavailableQueryVariantSelection?.variant}",
+    );
   });
 
-  it("binds option UI to accessible native radio state", () => {
+  it("SSR-classifies accessible option toggles without disabling compatible switches", () => {
     const source = readFileSync(PRODUCT_SUMMARY_SOURCE, "utf8");
 
-    expect(source).toContain('type="radio"');
-    expect(source).toContain("checked={isSelected}");
-    expect(source).toContain("disabled={!isSelected && !isAvailable}");
-    expect(source).toContain("peer-checked:bg-black");
-    expect(source).toContain("peer-disabled:opacity-50");
+    expect(source).toContain("getVariantOptionAvailabilityMap(");
+    expect(source).toContain('type="button"');
+    expect(source).toContain('aria-pressed={isSelected ? "true" : "false"}');
+    expect(source).toContain("data-option-availability={availability}");
+    expect(source).toContain('disabled={availability === "sold_out"}');
+    expect(source).toContain('availability === "incompatible"');
+    expect(source).toContain(
+      "bg-muted text-foreground border-dashed border-muted-foreground",
+    );
+    expect(source).not.toContain(
+      "bg-muted/50 text-muted-foreground border-dashed border-muted-foreground/40 opacity-50",
+    );
+    expect(source).toContain("line-through cursor-not-allowed");
+    expect(source).toContain('id="variant-availability-status"');
     expect(source).toContain('aria-live="polite"');
-    expect(source).not.toContain("!initialSelectedColor ||");
-    expect(source).not.toContain("!initialSelectedSize ||");
+    expect(source).toContain("Selected; activate again to clear.");
+    expect(source).toContain("globalSizeAvailability");
+    expect(source).toContain('!== "sold_out"');
+    expect(source).toContain('id="product-stock-badge"');
+    expect(source).toContain('id="variant-unavailable-query-notice"');
+    expect(source).toContain('data-action-label="add-to-cart"');
+    expect(source).toContain(
+      "initialUnavailableVariant ?? initialSelectedVariant ?? null",
+    );
+    expect(source).toContain(
+      "initialPricingVariants = initialUnavailableVariant",
+    );
+    expect(source).toContain("shouldShowStartingVariantPrice(");
+    expect(source).toContain("initialStockVariant,");
+    expect(source).not.toContain('type="radio"');
   });
 
   it("keeps assistant product context tied to the buyer-facing product name", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
-    expect(source).toContain("const pageTitle = product.metaTitle || product.name;");
+    expect(source).toContain(
+      "const pageTitle = product.metaTitle || product.name;",
+    );
     expect(source).toContain("assistantPageTitle={product.name}");
     expect(source).toContain('assistantPageKind="product"');
     expect(source).not.toContain("assistantPageTitle={pageTitle}");
@@ -198,8 +240,12 @@ describe("product detail page SKU boundaries", () => {
   it("uses product.hasVariants for customer option metadata instead of buyer SKU count", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
-    expect(source).toContain("data-product-has-variants={product.hasVariants.toString()}");
-    expect(source).not.toContain("data-product-has-variants={(buyerVariants.length > 0).toString()}");
+    expect(source).toContain(
+      "data-product-has-variants={product.hasVariants.toString()}",
+    );
+    expect(source).not.toContain(
+      "data-product-has-variants={(buyerVariants.length > 0).toString()}",
+    );
   });
 
   it("emits ProductGroup JSON-LD only for optioned buyer variants when enabled", () => {
@@ -210,7 +256,9 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain('"@type": "ProductGroup"');
     expect(source).toContain("url: canonicalUrl");
     expect(source).toContain("hasVariant: buyerVariants.map");
-    expect(source).toContain("url: buildVariantProductUrl(variant) ?? canonicalUrl");
+    expect(source).toContain(
+      "url: buildVariantProductUrl(variant) ?? canonicalUrl",
+    );
     expect(source).toContain('url.searchParams.set("size", size)');
     expect(source).toContain('url.searchParams.set("color", color)');
     expect(source).toContain("isVariantAvailable(variant)");
@@ -230,21 +278,31 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("product.variantOption2Schema");
     expect(source).toContain("return productOptionMetadata[axis].schema");
     expect(source).toContain("return productOptionMetadata[axis].label");
-    expect(source).toContain("if (schema === \"none\" || props[schema]) continue;");
+    expect(source).toContain(
+      'if (schema === "none" || props[schema]) continue;',
+    );
     expect(source).toContain("props[schema] = option.value;");
-    expect(source).toContain("`${getProductOptionLabel(option.axis)}: ${option.value}`");
-    expect(source).toContain("PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema(\"option1\")");
-    expect(source).toContain("PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema(\"option2\")");
-    expect(source).not.toContain('`${product.name} - Size:');
-    expect(source).not.toContain('`${product.name} - Color:');
-    expect(source).not.toContain('props.size =');
-    expect(source).not.toContain('props.color =');
+    expect(source).toContain(
+      "`${getProductOptionLabel(option.axis)}: ${option.value}`",
+    );
+    expect(source).toContain(
+      'PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema("option1")',
+    );
+    expect(source).toContain(
+      'PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema("option2")',
+    );
+    expect(source).not.toContain("`${product.name} - Size:");
+    expect(source).not.toContain("`${product.name} - Color:");
+    expect(source).not.toContain("props.size =");
+    expect(source).not.toContain("props.color =");
   });
 
   it("uses catalog-discovery image validation for Product JSON-LD and social images", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
-    expect(source).toContain("resolveCatalogDiscoveryImageUrl(primaryImageUrl, storefrontUrl");
+    expect(source).toContain(
+      "resolveCatalogDiscoveryImageUrl(primaryImageUrl, storefrontUrl",
+    );
     expect(source).toContain("getOptimizedImageUrl(imageUrl");
     expect(source).toContain("image: [ogImageUrl]");
     expect(source).not.toContain("toAbsoluteStorefrontSeoUrl");
@@ -256,35 +314,49 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("const productCategoryUrl = productCategory");
     expect(source).toContain("productCategory.canonicalPath");
     expect(source).toContain("item: productCategoryUrl");
-    expect(source).not.toContain('item: `${storefrontUrl}/categories/${productCategory.slug}`');
+    expect(source).not.toContain(
+      "item: `${storefrontUrl}/categories/${productCategory.slug}`",
+    );
   });
 
   it("keeps Product offer schema tied to active shipping methods and schema-safe GTINs", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
     expect(source).toContain("getShippingMethods()");
-    expect(source).toContain("discoverySettings.structuredData.offerShippingDetails");
+    expect(source).toContain(
+      "discoverySettings.structuredData.offerShippingDetails",
+    );
     expect(source).toContain("buildOfferShippingDetails({");
     expect(source).toContain("shippingMethods,");
     expect(source).toContain("freeDelivery: product.freeDelivery");
     expect(source).toContain("shippingDetails: offerShippingDetails");
     expect(source).toContain("buildMerchantReturnPolicyJsonLd({");
     expect(source).toContain("settings: layoutData.seo?.returnPolicy");
-    expect(source).toContain("hasMerchantReturnPolicy: merchantReturnPolicyJsonLd");
-    expect(source).toContain("gtinJsonLdForVariant(variant.barcode, variant.barcodeType)");
+    expect(source).toContain(
+      "hasMerchantReturnPolicy: merchantReturnPolicyJsonLd",
+    );
+    expect(source).toContain(
+      "gtinJsonLdForVariant(variant.barcode, variant.barcodeType)",
+    );
     expect(source).toContain("primarySchemaVariant?.barcode");
     expect(source).not.toContain("priceValidUntil");
-    expect(source).toContain("normalizeSavedProductCondition(product.productCondition)");
+    expect(source).toContain(
+      "normalizeSavedProductCondition(product.productCondition)",
+    );
     expect(source).toContain("PRODUCT_CONDITION_SCHEMA_URLS[productCondition]");
     expect(source).toContain("itemCondition: productConditionSchemaUrl");
-    expect(source).not.toContain('itemCondition: "https://schema.org/NewCondition"');
+    expect(source).not.toContain(
+      'itemCondition: "https://schema.org/NewCondition"',
+    );
     expect(source).toContain("sellerSchemaName");
     expect(source).toContain("layoutData.business?.companyName");
     expect(source).toContain("layoutData.business?.legalName");
     expect(source).not.toContain("layoutData?.footer?.copyrightText");
     expect(source).not.toContain("layoutData?.header?.logo?.alt");
     expect(source).not.toContain('||\n  "Store"');
-    expect(source).toContain("const brandName = brandAttribute?.value?.trim() || null");
+    expect(source).toContain(
+      "const brandName = brandAttribute?.value?.trim() || null",
+    );
     expect(source).not.toContain("brandAttribute?.value || storeName");
   });
 });
