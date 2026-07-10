@@ -507,6 +507,8 @@ function generateProductItem(
     format,
   );
   const { basePrice, feedPrice } = getFeedItemPricing(feedItem);
+  const formattedBasePrice = formatFeedPrice(basePrice, currencyCode);
+  const formattedFeedPrice = formatFeedPrice(feedPrice, currencyCode);
 
   // Get category mappings
   const categorySlug = product.category?.slug || "";
@@ -527,7 +529,7 @@ function generateProductItem(
   if (condition) {
     item += `    <g:condition>${condition}</g:condition>\n`;
   }
-  item += `    <g:price>${formatFeedPrice(feedPrice, currencyCode)}</g:price>\n`;
+  item += `    <g:price>${formattedBasePrice}</g:price>\n`;
 
   // Image (required)
   item += `    <g:image_link>${escapeXml(imageLink)}</g:image_link>\n`;
@@ -551,8 +553,8 @@ function generateProductItem(
   // Optional fields
 
   // Sale price if there's a discount
-  if (feedPrice < basePrice) {
-    item += `    <g:sale_price>${formatFeedPrice(feedPrice, currencyCode)}</g:sale_price>\n`;
+  if (feedPrice < basePrice && formattedFeedPrice !== formattedBasePrice) {
+    item += `    <g:sale_price>${formattedFeedPrice}</g:sale_price>\n`;
   }
 
   // Item group ID for variants

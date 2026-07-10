@@ -1228,6 +1228,14 @@ export function evaluateSitemapIndexPolicy(locs, { policy, storefrontOrigin } = 
   };
 }
 
+function parseFeedMoney(value) {
+  const match = String(value ?? "").trim().match(/^(\d+(?:\.\d{1,2})?)\s+([A-Z]{3})$/);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  return { amount, currency: match[2] };
+}
+
 export function evaluateProductFeedXml(
   body,
   { availabilityValues, storefrontOrigin } = {},
@@ -1237,6 +1245,8 @@ export function evaluateProductFeedXml(
   const links = [];
   const imageLinks = [];
   const availabilityMarkers = [];
+  const priceMarkers = [];
+  const salePriceMarkers = [];
   const errors = [];
 
   if (!/<rss\b/i.test(body) || !/<channel\b/i.test(body)) {
@@ -1261,10 +1271,20 @@ export function evaluateProductFeedXml(
       ...extractTagValues(item, "availability"),
       ...extractTagValues(item, "g:availability"),
     ].filter(Boolean);
+    const itemPrices = [
+      ...extractTagValues(item, "price"),
+      ...extractTagValues(item, "g:price"),
+    ].filter(Boolean);
+    const itemSalePrices = [
+      ...extractTagValues(item, "sale_price"),
+      ...extractTagValues(item, "g:sale_price"),
+    ].filter(Boolean);
 
     links.push(...itemLinks);
     imageLinks.push(...itemImageLinks);
     availabilityMarkers.push(...itemAvailability);
+    priceMarkers.push(...itemPrices);
+    salePriceMarkers.push(...itemSalePrices);
 
     if (itemLinks.length === 0) {
       errors.push(`feed item ${itemNumber} must include a product link.`);
@@ -1274,6 +1294,30 @@ export function evaluateProductFeedXml(
     }
     if (itemAvailability.length === 0) {
       errors.push(`feed item ${itemNumber} must include availability.`);
+    }
+    if (itemPrices.length !== 1) {
+      errors.push(`feed item ${itemNumber} must include exactly one price.`);
+    }
+    if (itemSalePrices.length > 1) {
+      errors.push(`feed item ${itemNumber} must include at most one sale_price.`);
+    }
+
+    const parsedPrice = itemPrices.length === 1 ? parseFeedMoney(itemPrices[0]) : null;
+    if (itemPrices.length === 1 && !parsedPrice) {
+      errors.push(`feed item ${itemNumber} price must be a non-negative amount plus ISO currency.`);
+    }
+    const parsedSalePrice = itemSalePrices.length === 1
+      ? parseFeedMoney(itemSalePrices[0])
+      : null;
+    if (itemSalePrices.length === 1 && !parsedSalePrice) {
+      errors.push(`feed item ${itemNumber} sale_price must be a non-negative amount plus ISO currency.`);
+    }
+    if (parsedPrice && parsedSalePrice) {
+      if (parsedPrice.currency !== parsedSalePrice.currency) {
+        errors.push(`feed item ${itemNumber} sale_price currency must match price currency.`);
+      } else if (parsedSalePrice.amount >= parsedPrice.amount) {
+        errors.push(`feed item ${itemNumber} sale_price must be lower than price.`);
+      }
     }
 
     if (allowedAvailability) {
@@ -1305,6 +1349,8 @@ export function evaluateProductFeedXml(
     imageLinkCount: imageLinks.length,
     availabilityCount: availabilityMarkers.length,
     availabilityValues: availabilityMarkers,
+    priceCount: priceMarkers.length,
+    salePriceCount: salePriceMarkers.length,
     firstStorefrontItemUrl: links.find((link) => storefrontOrigin ? isSameOrigin(link, storefrontOrigin) : isHttpUrl(link)) ?? null,
   };
 }

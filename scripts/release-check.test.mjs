@@ -1603,7 +1603,7 @@ function sitemapIndexXml(locs) {
   ].join("");
 }
 
-function feedXml({ availability = "in_stock" } = {}) {
+function feedXml({ availability = "in_stock", price = "10.00 BDT", salePrice } = {}) {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel>',
@@ -1612,6 +1612,8 @@ function feedXml({ availability = "in_stock" } = {}) {
     "<g:link>https://storefront.example.test/products/demo-product</g:link>",
     "<g:image_link>https://cloud.example.test/demo.png</g:image_link>",
     `<g:availability>${availability}</g:availability>`,
+    `<g:price>${price}</g:price>`,
+    ...(salePrice === undefined ? [] : [`<g:sale_price>${salePrice}</g:sale_price>`]),
     "</item>",
     "</channel></rss>",
   ].join("");
@@ -3990,6 +3992,8 @@ describe("release-check discovery evaluators", () => {
       linkCount: 1,
       imageLinkCount: 1,
       availabilityCount: 1,
+      priceCount: 1,
+      salePriceCount: 0,
       firstStorefrontItemUrl: "https://storefront.example.test/products/demo-product",
     });
     expect(evaluateFacebookFeedXml(feedWithChannelLink, { storefrontOrigin })).toMatchObject({
@@ -4011,6 +4015,29 @@ describe("release-check discovery evaluators", () => {
       errors: ["feed availability value is not allowed: in stock"],
     });
 
+    expect(evaluateProductFeedXml(feedXml({
+      price: "12.00 BDT",
+      salePrice: "10.00 BDT",
+    }), { storefrontOrigin })).toMatchObject({
+      ok: true,
+      priceCount: 1,
+      salePriceCount: 1,
+    });
+    expect(evaluateProductFeedXml(feedXml({
+      price: "10.00 BDT",
+      salePrice: "10.00 BDT",
+    }), { storefrontOrigin })).toMatchObject({
+      ok: false,
+      errors: ["feed item 1 sale_price must be lower than price."],
+    });
+    expect(evaluateProductFeedXml(feedXml({
+      price: "10.00 BDT",
+      salePrice: "9.00 USD",
+    }), { storefrontOrigin })).toMatchObject({
+      ok: false,
+      errors: ["feed item 1 sale_price currency must match price currency."],
+    });
+
     expect(evaluateProductFeedXml(emptyFeedXml(), {
       availabilityValues: ["in_stock", "out_of_stock"],
       storefrontOrigin,
@@ -4020,6 +4047,8 @@ describe("release-check discovery evaluators", () => {
       linkCount: 0,
       imageLinkCount: 0,
       availabilityCount: 0,
+      priceCount: 0,
+      salePriceCount: 0,
       firstStorefrontItemUrl: null,
     });
 
@@ -4030,6 +4059,7 @@ describe("release-check discovery evaluators", () => {
       errors: [
         "feed item 1 must include an image_link.",
         "feed item 1 must include availability.",
+        "feed item 1 must include exactly one price.",
         "feed product link is not absolute http(s): /products/demo",
       ],
     });
@@ -4039,6 +4069,7 @@ describe("release-check discovery evaluators", () => {
       "<g:link>https://storefront.example.test/products/demo-product</g:link>",
       "<g:image_link>https://cloud.example.test/demo.png</g:image_link>",
       "<g:availability>in stock</g:availability>",
+      "<g:price>10.00 BDT</g:price>",
       "</item></channel>",
     ].join("");
     expect(evaluateProductFeedXml(missingRssShell, { storefrontOrigin })).toMatchObject({
