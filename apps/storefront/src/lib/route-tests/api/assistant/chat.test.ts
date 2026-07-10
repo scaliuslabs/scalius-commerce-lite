@@ -472,7 +472,15 @@ describe("storefront assistant chat proxy", () => {
                   {
                     id: "gid://scalius/product/prod_secret",
                     title: "Secret Path",
-                    path: "/products/shoes-chk_private_receipt",
+                    path: "/products/shoes_chk_private_receipt",
+                    availability: "in_stock",
+                    badges: [],
+                  },
+                  {
+                    id: "gid://scalius/product/prod_hex_secret",
+                    title: "Hex Secret Path",
+                    path:
+                      "/products/prefix_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_suffix",
                     availability: "in_stock",
                     badges: [],
                   },
@@ -510,6 +518,9 @@ describe("storefront assistant chat proxy", () => {
     expect(JSON.stringify(body)).not.toContain("private-token-value");
     expect(JSON.stringify(body)).not.toContain("evil.example.test");
     expect(JSON.stringify(body)).not.toContain("chk_private_receipt");
+    expect(JSON.stringify(body)).not.toContain(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
   });
 
   it("rejects duplicate comparison cells and orders valid cells by product", async () => {
