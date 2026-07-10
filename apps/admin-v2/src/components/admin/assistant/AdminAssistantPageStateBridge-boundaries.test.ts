@@ -14,6 +14,7 @@ const LAYOUT_PREFERENCE_FILES = [
   "useAdminAssistantLayout.ts",
 ] as const;
 const TRANSCRIPT_SESSION_FILES = ["admin-assistant-transcript.ts"] as const;
+const COMPUTER_DEDUPE_FILES = ["computer/flue-bridge.ts"] as const;
 
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir)
@@ -123,9 +124,11 @@ describe("admin assistant page-state source boundary", () => {
     const source = readAssistantSource([
       ...LAYOUT_PREFERENCE_FILES,
       ...TRANSCRIPT_SESSION_FILES,
+      ...COMPUTER_DEDUPE_FILES,
     ]);
     const layoutSource = readFiles(LAYOUT_PREFERENCE_FILES);
     const transcriptSessionSource = readFiles(TRANSCRIPT_SESSION_FILES);
+    const computerDedupeSource = readFiles(COMPUTER_DEDUPE_FILES);
 
     expect(source).not.toContain("/api/assistant/mcp");
     expect(source).not.toContain("fetch(");
@@ -133,6 +136,15 @@ describe("admin assistant page-state source boundary", () => {
     expect(source).not.toContain("localStorage");
     expect(source).not.toContain("sessionStorage");
     expect(source).not.toMatch(/window\.(?:localStorage|sessionStorage)/);
+    expect(source).toContain('from "@flue/sdk"');
+    expect(source).toContain("client.agents.send(");
+    expect(source).toContain("client.agents.abort(");
+    expect(source).toContain("client.agents.observe(");
+    expect(source).not.toContain("sendAdminAssistantMessage");
+    expect(source).not.toContain("appendAdminConversationMessage");
+    expect(source).not.toContain("pollAdminConversationEvents");
+    expect(source).not.toContain("readAdminConversationEvents");
+    expect(source).not.toContain("/api/assistant/conversations");
 
     expect(layoutSource).toContain("scalius:admin-assistant-layout:v1");
     expect(layoutSource).toContain("window.localStorage");
@@ -147,13 +159,36 @@ describe("admin assistant page-state source boundary", () => {
     expect(transcriptSessionSource).toContain(
       "scalius.admin-assistant.conversation-id.v1",
     );
-    expect(transcriptSessionSource).toMatch(
-      /storage\.setItem\(ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY, conversationId\)/,
+    expect(transcriptSessionSource).toContain(
+      "scalius.admin-assistant.conversation-history.v1",
     );
-    expect(transcriptSessionSource.match(/\.setItem\(/g)).toHaveLength(1);
+    expect(transcriptSessionSource).toMatch(
+      /storage\.setItem\(\s*ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,\s*conversationId,?\s*\)/,
+    );
+    expect(transcriptSessionSource.match(/\.setItem\(/g)).toHaveLength(2);
     expect(transcriptSessionSource).not.toContain("localStorage");
     expect(transcriptSessionSource).not.toContain("document.cookie");
     expect(transcriptSessionSource).not.toContain("fetch(");
-    expect(transcriptSessionSource).not.toContain("JSON.stringify");
+    expect(transcriptSessionSource).toContain(
+      "JSON.stringify(ids.slice(-MAX_CONVERSATION_HISTORY_IDS))",
+    );
+    expect(transcriptSessionSource).not.toMatch(
+      /JSON\.stringify\((?:messages|content|program|ticket|result)/,
+    );
+
+    expect(computerDedupeSource).toContain(
+      "scalius.admin-flue.computer-dedupe.v1",
+    );
+    const persistedMarker = computerDedupeSource.match(
+      /interface PersistedCommandMarker \{([\s\S]*?)\n\}/,
+    )?.[1];
+    expect(persistedMarker).toBeDefined();
+    expect(persistedMarker).toContain("threadId: string");
+    expect(persistedMarker).toContain("requestId: string");
+    expect(persistedMarker).toContain("expiresAt: number");
+    expect(persistedMarker).toContain("phase: AdminFlueComputerPhase");
+    expect(persistedMarker).not.toMatch(/(?:program|ticket|result|page|value)/i);
+    expect(computerDedupeSource).not.toContain("localStorage");
+    expect(computerDedupeSource).not.toContain("document.cookie");
   });
 });

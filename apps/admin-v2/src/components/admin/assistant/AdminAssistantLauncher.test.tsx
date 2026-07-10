@@ -1,385 +1,327 @@
 // @vitest-environment happy-dom
 
+import type {
+  AgentConversationObservationSnapshot,
+  FlueConversationMessage,
+  FlueConversationPart,
+} from "@flue/sdk";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  sendAdminAssistantMessage: vi.fn(),
-  navigate: vi.fn(),
-  appendConversationMessage: vi.fn(),
-  createConversationId: vi.fn(),
-  createConversationRequestId: vi.fn(),
-  isConversationId: vi.fn(),
-  pollConversationEvents: vi.fn(),
-  readConversationEvents: vi.fn(),
-  requestSequence: 0,
-  eventSequence: 0,
-}));
+const THREAD_ID = "conv_abcdefghijklmnopqrstuv";
 
-vi.mock("../../../lib/api-functions/ai", () => ({
-  sendAdminAssistantMessage: mocks.sendAdminAssistantMessage,
+const sdkMocks = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  const send = vi.fn();
+  const abort = vi.fn();
+  const refresh = vi.fn();
+  const close = vi.fn();
+  const subscribe = vi.fn((listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  });
+  const observe = vi.fn();
+  const createFlueClient = vi.fn();
+  const state: { snapshot: AgentConversationObservationSnapshot } = {
+    snapshot: {
+      conversation: undefined,
+      offset: undefined,
+      phase: "absent",
+      error: undefined,
+    },
+  };
+  const observation = {
+    getSnapshot: () => state.snapshot,
+    subscribe,
+    refresh,
+    close,
+  };
+  const client = {
+    agents: {
+      send,
+      abort,
+      observe,
+    },
+  };
+  observe.mockReturnValue(observation);
+  createFlueClient.mockReturnValue(client);
+  return {
+    abort,
+    client,
+    close,
+    createFlueClient,
+    listeners,
+    observation,
+    observe,
+    refresh,
+    send,
+    state,
+    subscribe,
+  };
+});
+
+const routerMocks = vi.hoisted(() => ({ navigate: vi.fn() }));
+
+vi.mock("@flue/sdk", () => ({
+  createFlueClient: sdkMocks.createFlueClient,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => mocks.navigate,
-}));
-
-vi.mock("../../../lib/admin-assistant-conversation", () => ({
-  appendAdminConversationMessage: mocks.appendConversationMessage,
-  createAdminConversationId: mocks.createConversationId,
-  createAdminConversationRequestId: mocks.createConversationRequestId,
-  isAdminConversationId: mocks.isConversationId,
-  pollAdminConversationEvents: mocks.pollConversationEvents,
-  readAdminConversationEvents: mocks.readConversationEvents,
+  useNavigate: () => routerMocks.navigate,
 }));
 
 import { AdminAssistantLauncher } from "./AdminAssistantLauncher";
 import {
-  registerAdminAssistantPageActionHandler,
-  resetAdminAssistantPageActionsForTest,
-} from "./page-actions";
-import {
-  ADMIN_ASSISTANT_PAGE_STATE_GLOBAL,
-  type AdminAssistantPageStateSnapshot,
-} from "./page-state";
-import { ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY } from "./admin-assistant-transcript";
-import { ADMIN_NAVIGATION_CANCELLED_EVENT } from "../shared/admin-navigation-events";
+  ADMIN_ASSISTANT_CONVERSATION_HISTORY_STORAGE_KEY,
+  ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+} from "./admin-assistant-transcript";
+import { ADMIN_FLUE_COMPUTER_DEDUPE_STORAGE_KEY } from "./computer/flue-bridge";
 
-(
-  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
 
-describe("AdminAssistantLauncher", () => {
+describe("AdminAssistantLauncher Flue cutover", () => {
   let root: Root;
   let host: HTMLDivElement;
+  let computerResultFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     document.body.innerHTML = "";
     document.body.style.overflow = "";
     document.documentElement.style.overflow = "";
-    setViewportWidth(1024);
     window.sessionStorage.clear();
-    delete window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL];
-    resetAdminAssistantPageActionsForTest();
-    mocks.sendAdminAssistantMessage.mockReset();
-    mocks.navigate.mockReset();
-    mocks.appendConversationMessage.mockReset();
-    mocks.createConversationId.mockReset();
-    mocks.createConversationRequestId.mockReset();
-    mocks.isConversationId.mockReset();
-    mocks.pollConversationEvents.mockReset();
-    mocks.readConversationEvents.mockReset();
-    mocks.requestSequence = 0;
-    mocks.eventSequence = 0;
-    mocks.createConversationId.mockReturnValue("conv_abcdefghijklmnopqrstuv");
-    mocks.createConversationRequestId.mockImplementation(
-      (purpose = "message") => {
-        mocks.requestSequence += 1;
-        return `${purpose}_${String(mocks.requestSequence).padStart(22, "a")}`;
-      },
+    window.sessionStorage.setItem(
+      ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      THREAD_ID,
     );
-    mocks.isConversationId.mockImplementation((value: string) =>
-      /^conv_[A-Za-z0-9_-]{22,64}$/.test(value),
-    );
-    mocks.readConversationEvents.mockResolvedValue(emptyReplay());
-    mocks.appendConversationMessage.mockImplementation(
-      async (_conversationId: string, input: ConversationAppendInput) => {
-        mocks.eventSequence += 1;
-        const event = conversationMessageEvent(
-          mocks.eventSequence,
-          input.role,
-          input.content,
-          input.contextMarker,
-        );
-        return {
-          replayed: false,
-          event,
-          expiresAt: 1_725_604_800_000,
-        };
-      },
-    );
-    mocks.pollConversationEvents.mockImplementation(
-      ({ after = 0, signal }: { after?: number; signal: AbortSignal }) =>
-        new Promise<number>((resolve) => {
-          if (signal.aborted) {
-            resolve(after);
-            return;
-          }
-          signal.addEventListener("abort", () => resolve(after), {
-            once: true,
-          });
-        }),
-    );
+    window.history.replaceState({}, "", "/admin");
+    setViewportWidth(1024);
+
+    sdkMocks.listeners.clear();
+    sdkMocks.send.mockReset();
+    sdkMocks.abort.mockReset();
+    sdkMocks.refresh.mockReset();
+    sdkMocks.close.mockReset();
+    sdkMocks.subscribe.mockClear();
+    sdkMocks.observe.mockClear();
+    sdkMocks.createFlueClient.mockClear();
+    sdkMocks.observe.mockReturnValue(sdkMocks.observation);
+    sdkMocks.createFlueClient.mockReturnValue(sdkMocks.client);
+    sdkMocks.state.snapshot = liveSnapshot();
+    sdkMocks.send.mockResolvedValue({
+      streamUrl: `https://dashboard.test/api/assistant/flue/agents/admin-copilot/${THREAD_ID}`,
+      offset: "opaque-offset-1",
+      submissionId: "submission-1",
+    });
+    sdkMocks.abort.mockResolvedValue({ aborted: true });
+    routerMocks.navigate.mockReset();
+    routerMocks.navigate.mockResolvedValue(undefined);
+
+    computerResultFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { requestId: string };
+      return Response.json(
+        { accepted: true, requestId: body.requestId },
+        { status: 202 },
+      );
+    });
+    vi.stubGlobal("fetch", computerResultFetch);
 
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
   });
 
-  afterEach(() => {
-    act(() => {
-      root.unmount();
-    });
-    delete window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL];
-    resetAdminAssistantPageActionsForTest();
+  afterEach(async () => {
+    act(() => root.unmount());
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it("renders floating and real left/right workspace columns without portals", async () => {
+  it("renders one floating panel and real left/right workspace columns", async () => {
     renderLauncher();
 
     expect(getAssistantWorkspace()?.dataset.mode).toBe("closed");
-    expect(getAssistantDockSlot()?.hidden).toBe(true);
     const trigger = queryButton("Open admin assistant");
-    expect(trigger).toBeTruthy();
     expect(trigger?.getAttribute("aria-expanded")).toBe("false");
-    expect(trigger?.className).toContain("rounded-full");
 
     await click(trigger);
-
-    expect(trigger?.getAttribute("aria-expanded")).toBe("true");
-    expect(document.body.textContent).toContain("Admin assistant");
-    expect(getAssistantPanel()?.tagName).toBe("ASIDE");
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
       "floating",
     );
     expect(queryButton("Move assistant")).toBeTruthy();
     expect(queryButton("Resize assistant")).toBeTruthy();
-    expect(queryButton("Dock assistant left")).toBeTruthy();
-    expect(queryButton("Dock assistant right")).toBeTruthy();
-    expect(
-      queryButton("Use floating assistant")?.getAttribute("aria-pressed"),
-    ).toBe("true");
-    expect(queryButton("Minimize admin assistant")).toBeTruthy();
-    expect(queryButton("Send assistant message")).toBeTruthy();
-    expect(
-      document.querySelector<HTMLTextAreaElement>(
-        'textarea[aria-label="Message admin assistant"]',
-      ),
-    ).toBeTruthy();
 
     await click(queryButton("Dock assistant left"));
-    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
-      "dock-left",
-    );
     expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
     expect(getAssistantWorkspace()?.dataset.side).toBe("start");
     expect(getAssistantPanel()?.closest("[data-assistant-dock-slot]")).toBe(
       getAssistantDockSlot(),
     );
-    expect(getAssistantDockSlot()?.hidden).toBe(false);
-    expect(
-      queryButton("Dock assistant left")?.getAttribute("aria-pressed"),
-    ).toBe("true");
 
     await click(queryButton("Dock assistant right"));
-    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
-      "dock-right",
-    );
-    expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
     expect(getAssistantWorkspace()?.dataset.side).toBe("end");
-    expect(getAssistantPanel()?.closest("[data-assistant-dock-slot]")).toBe(
-      getAssistantDockSlot(),
-    );
-
-    await click(queryButton("Use floating assistant"));
-    expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
-      "floating",
-    );
+    expect(
+      queryButton("Dock assistant right")?.getAttribute("aria-pressed"),
+    ).toBe("true");
 
     await click(queryButton("Minimize admin assistant"));
     expect(getAssistantPanel()).toBeNull();
     expect(getAssistantWorkspace()?.dataset.mode).toBe("closed");
-    expect(getAssistantDockSlot()?.hidden).toBe(true);
   });
 
-  it("keeps the assistant mounted when only routed workspace content changes", async () => {
+  it("keeps the same durable thread and panel while routed content changes", async () => {
     renderLauncher(<section data-route-content="">Products route</section>);
     await click(queryButton("Open admin assistant"));
     await click(queryButton("Dock assistant right"));
-
     const panelBeforeRouteChange = getAssistantPanel();
-    expect(panelBeforeRouteChange).toBeTruthy();
-    expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
+
+    await emitSnapshot(
+      liveSnapshot([
+        message("assistant-1", "assistant", [
+          { type: "text", text: "Products are ready.", state: "done" },
+        ]),
+      ]),
+    );
 
     renderLauncher(<section data-route-content="">Orders route</section>);
     await flushReact();
 
     expect(getAssistantPanel()).toBe(panelBeforeRouteChange);
+    expect(document.body.textContent).toContain("Products are ready.");
     expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
+    expect(sdkMocks.createFlueClient).toHaveBeenCalledTimes(1);
+    expect(sdkMocks.observe).toHaveBeenCalledTimes(1);
     expect(
-      document.querySelector("[data-assistant-page-slot]")?.textContent,
-    ).toContain("Orders route");
-    expect(
-      document.querySelector("[data-assistant-page-slot]")?.textContent,
-    ).not.toContain("Products route");
+      window.sessionStorage.getItem(
+        ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      ),
+    ).toBe(THREAD_ID);
   });
 
-  it("supports keyboard movement, resizing, shortcut toggle, and Escape collapse", async () => {
+  it("starts a real new thread, retains prior history, and reconnects it after remount", async () => {
     renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    expect(queryButton("New assistant conversation")).toBeTruthy();
 
-    const trigger = queryButton("Open admin assistant");
-    const initialLeft = Number.parseInt(trigger?.style.left ?? "0", 10);
-    await keyDown(trigger, "ArrowLeft");
-    expect(Number.parseInt(trigger?.style.left ?? "0", 10)).toBeLessThan(
-      initialLeft,
+    await click(queryButton("New assistant conversation"));
+    const nextThreadId = window.sessionStorage.getItem(
+      ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
     );
-
-    await keyDown(window, "a", { altKey: true, shiftKey: true });
-    expect(getAssistantPanel()).toBeTruthy();
-
-    const panel = getAssistantPanel();
-    const initialWidth = Number.parseInt(panel?.style.width ?? "0", 10);
-    await keyDown(queryButton("Resize assistant"), "ArrowLeft");
-    expect(Number.parseInt(panel?.style.width ?? "0", 10)).toBeLessThan(
-      initialWidth,
-    );
-
-    await keyDown(panel, "Escape");
-    expect(getAssistantPanel()).toBeNull();
-    expect(document.activeElement).toBe(trigger);
-  });
-
-  it("uses a complete mobile dialog boundary and never leaves an inert page behind", async () => {
-    setViewportWidth(390);
-    renderLauncher(<button>Page action</button>);
-
-    const trigger = queryButton("Open admin assistant");
-    trigger?.focus();
-    await click(trigger);
-    await nextMacrotask();
-
-    const workspace = getAssistantWorkspace();
-    const page = document.querySelector<HTMLElement>(
-      "[data-assistant-page-slot]",
-    );
-    const dialog = document.querySelector<HTMLElement>(
-      '[data-assistant-modal-boundary][role="dialog"]',
-    );
-    expect(workspace?.dataset.mobile).toBe("true");
-    expect(page?.hasAttribute("inert")).toBe(true);
-    expect(page?.getAttribute("aria-hidden")).toBe("true");
-    expect(dialog?.getAttribute("aria-label")).toBe("Admin assistant");
-    expect(dialog?.getAttribute("aria-modal")).toBe("true");
-    expect(dialog?.contains(getAssistantPanel())).toBe(true);
-    expect(dialog?.contains(document.activeElement)).toBe(true);
-    expect(document.body.style.overflow).toBe("hidden");
-    expect(document.documentElement.style.overflow).toBe("hidden");
-
-    await click(queryButton("Minimize admin assistant"));
-    await nextMacrotask();
+    expect(nextThreadId).toMatch(/^conv_[A-Za-z0-9_-]{22}$/u);
+    expect(nextThreadId).not.toBe(THREAD_ID);
     expect(
-      document.querySelector('[data-assistant-modal-boundary][role="dialog"]'),
-    ).toBeNull();
-    expect(page?.hasAttribute("inert")).toBe(false);
-    expect(page?.hasAttribute("aria-hidden")).toBe(false);
-    expect(document.body.style.overflow).toBe("");
-    expect(document.documentElement.style.overflow).toBe("");
-    expect(document.activeElement).toBe(trigger);
-
-    await click(trigger);
-    const reopenedDialog = document.querySelector<HTMLElement>(
-      '[data-assistant-modal-boundary][role="dialog"]',
+      JSON.parse(
+        window.sessionStorage.getItem(
+          ADMIN_ASSISTANT_CONVERSATION_HISTORY_STORAGE_KEY,
+        ) ?? "[]",
+      ),
+    ).toEqual([THREAD_ID, nextThreadId]);
+    expect(sdkMocks.observe).toHaveBeenLastCalledWith(
+      "admin-copilot",
+      nextThreadId,
+      { live: "long-poll" },
     );
-    expect(page?.hasAttribute("inert")).toBe(Boolean(reopenedDialog));
-    await keyDown(reopenedDialog, "Escape");
+    expect(queryButton("Open assistant conversation history")?.disabled).toBe(
+      false,
+    );
+
+    await emitSnapshot(
+      liveSnapshot([
+        message("assistant-new", "assistant", [
+          {
+            type: "text",
+            text: "This is the new durable conversation.",
+            state: "done",
+          },
+        ]),
+      ]),
+    );
+
+    act(() => root.unmount());
     await nextMacrotask();
-    expect(page?.hasAttribute("inert")).toBe(false);
-    expect(document.activeElement).toBe(trigger);
+    host.remove();
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await flushReact();
+
+    expect(sdkMocks.observe).toHaveBeenLastCalledWith(
+      "admin-copilot",
+      nextThreadId,
+      { live: "long-poll" },
+    );
+    expect(document.body.textContent).toContain(
+      "This is the new durable conversation.",
+    );
   });
 
-  it("sends only the typed message and sanitized page-state context", async () => {
-    const pageState: AdminAssistantPageStateSnapshot = {
-      version: 1,
-      routePath: "/admin/orders/[redacted-token]",
-      pageTitle: "Orders",
-      pageHeading: "Order [redacted-number]",
-      mainScroll: {
-        top: 0,
-        maxTop: 0,
-        viewportHeight: 600,
-        contentHeight: 600,
-        atTop: true,
-        atBottom: true,
-      },
-      surfaces: [
-        {
-          id: "orders-table",
-          kind: "table",
-          label: "Orders",
-          rowCount: 12,
-          selectedCount: 1,
-        },
-      ],
-    };
-    window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL] = pageState;
-    const hiddenInput = document.createElement("input");
-    hiddenInput.value = "SuperSecret123";
-    document.body.append(hiddenInput);
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: { role: "assistant", content: "Use the status filter first." },
-      usage: null,
-    });
+  it("sends only the typed prompt through the same-origin Flue facade", async () => {
+    const secretInput = document.createElement("input");
+    secretInput.value = "SuperSecret123";
+    document.body.append(secretInput);
 
     renderLauncher();
     await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("What should I check here?");
+    await typeAssistantMessage("Take me to products");
     await click(queryButton("Send assistant message"));
     await flushReact();
 
-    expect(mocks.sendAdminAssistantMessage).toHaveBeenCalledTimes(1);
-    expect(mocks.sendAdminAssistantMessage).toHaveBeenCalledWith({
-      data: {
-        message: "What should I check here?",
-        pageContext: pageState,
-        history: [],
-      },
+    expect(sdkMocks.createFlueClient).toHaveBeenCalledWith({
+      baseUrl: "/api/assistant/flue",
     });
-    expect(
-      JSON.stringify(mocks.sendAdminAssistantMessage.mock.calls[0]),
-    ).not.toContain("SuperSecret123");
-    expect(mocks.appendConversationMessage).toHaveBeenCalledTimes(2);
-    expect(mocks.appendConversationMessage).toHaveBeenNthCalledWith(
-      1,
-      "conv_abcdefghijklmnopqrstuv",
-      {
-        clientMessageId: expect.stringMatching(/^message_[A-Za-z0-9_-]{22}$/),
-        role: "user",
-        content: "What should I check here?",
-        contextMarker: "admin:sensitive",
-      },
+    expect(sdkMocks.observe).toHaveBeenCalledWith(
+      "admin-copilot",
+      THREAD_ID,
+      { live: "long-poll" },
     );
-    expect(mocks.appendConversationMessage).toHaveBeenNthCalledWith(
-      2,
-      "conv_abcdefghijklmnopqrstuv",
-      {
-        clientMessageId: expect.stringMatching(/^message_[A-Za-z0-9_-]{22}$/),
-        role: "assistant",
-        content: "Use the status filter first.",
-        contextMarker: "admin:sensitive",
-      },
+    expect(sdkMocks.send).toHaveBeenCalledWith(
+      "admin-copilot",
+      THREAD_ID,
+      { message: "Take me to products" },
     );
-    expect(
-      mocks.appendConversationMessage.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.sendAdminAssistantMessage.mock.invocationCallOrder[0]);
-    expect(
-      mocks.sendAdminAssistantMessage.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.appendConversationMessage.mock.invocationCallOrder[1]);
-    expect(document.body.textContent).toContain("Use the status filter first.");
+    expect(JSON.stringify(sdkMocks.send.mock.calls)).not.toContain(
+      "SuperSecret123",
+    );
+    expect(document.body.textContent).toContain("Take me to products");
+    expect(queryButton("Stop assistant")).toBeTruthy();
+
+    await emitSnapshot(
+      liveSnapshot(
+        [
+          message(
+            "user-1",
+            "user",
+            [{ type: "text", text: "Take me to products", state: "done" }],
+            "submission-1",
+          ),
+          message(
+            "assistant-1",
+            "assistant",
+            [{ type: "text", text: "I am on it.", state: "done" }],
+            "submission-1",
+          ),
+        ],
+        [{ submissionId: "submission-1", outcome: "completed" }],
+      ),
+    );
+
+    expect(document.body.textContent).toContain("I am on it.");
+    expect(queryButton("Send assistant message")).toBeTruthy();
   });
 
-  it("hydrates ordered messages once, reconciles replay duplicates, and polls from the cursor", async () => {
-    mocks.readConversationEvents.mockResolvedValue({
-      ...emptyReplay(),
-      events: [
-        conversationMessageEvent(2, "assistant", "Second", "admin:page"),
-        conversationMessageEvent(1, "user", "First", "admin:page"),
-        conversationMessageEvent(2, "assistant", "Second", "admin:page"),
-      ],
-      cursor: 2,
-    });
+  it("hydrates canonical Flue messages in durable order", async () => {
+    sdkMocks.state.snapshot = liveSnapshot([
+      message("user-1", "user", [
+        { type: "text", text: "First", state: "done" },
+      ]),
+      message("assistant-1", "assistant", [
+        { type: "text", text: "Second", state: "done" },
+      ]),
+    ]);
 
     renderLauncher();
     await click(queryButton("Open admin assistant"));
@@ -388,435 +330,227 @@ describe("AdminAssistantLauncher", () => {
     const messages = Array.from(
       document.querySelectorAll<HTMLElement>("[data-assistant-message-role]"),
     );
-    expect(messages).toHaveLength(2);
-    expect(messages.map((message) => message.textContent)).toEqual([
+    expect(messages.map((entry) => entry.textContent)).toEqual([
       "First",
       "Second",
     ]);
-    expect(mocks.readConversationEvents).toHaveBeenCalledWith(
-      "conv_abcdefghijklmnopqrstuv",
-      expect.objectContaining({ after: 0, limit: 100 }),
+    expect(sdkMocks.subscribe).toHaveBeenCalledTimes(1);
+    expect(
+      document.querySelector('[data-assistant-transcript-state="disconnected"]'),
+    ).toBeNull();
+  });
+
+  it("shows truthful admission failure and retries a failed observation", async () => {
+    sdkMocks.send.mockRejectedValueOnce(new Error("internal secret"));
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Help me");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    expect(document.body.textContent).toContain(
+      "Assistant request failed before it was admitted. Nothing was changed.",
     );
-    expect(mocks.pollConversationEvents).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: "conv_abcdefghijklmnopqrstuv",
-        after: 2,
-        limit: 100,
-      }),
+    expect(document.body.textContent).not.toContain("internal secret");
+
+    await emitSnapshot({
+      conversation: undefined,
+      offset: undefined,
+      phase: "error",
+      error: new Error("private transport detail"),
+    });
+    expect(
+      document.querySelector('[data-assistant-transcript-state="disconnected"]'),
+    ).toBeTruthy();
+    await click(queryButton("Retry transcript connection"));
+    expect(sdkMocks.refresh).toHaveBeenCalledOnce();
+  });
+
+  it("executes a signed computer navigation automatically and renders no link card", async () => {
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    const requestId = "r".repeat(22);
+    const program = "goto /admin/products";
+    const command = {
+      type: "client_command",
+      capability: "computer",
+      protocolVersion: 1,
+      status: "awaiting_client_execution",
+      authoritative: false,
+      replayPolicy: "client_dedupe_request_id_until_expiry",
+      surface: "admin",
+      requestId,
+      program,
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      ticket: `${"t".repeat(16)}.${"s".repeat(43)}`,
+    } as const;
+
+    await emitSnapshot(
+      liveSnapshot([
+        message("assistant-computer", "assistant", [
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "tool-computer-1",
+            state: "output-available",
+            input: { program },
+            output: command,
+          },
+        ]),
+      ]),
     );
+
+    await vi.waitFor(() => {
+      expect(routerMocks.navigate).toHaveBeenCalledWith({
+        to: "/admin/products",
+      });
+      expect(computerResultFetch).toHaveBeenCalledOnce();
+    });
+    expect(String(computerResultFetch.mock.calls[0]?.[0])).toBe(
+      "/api/assistant/flue/computer/results",
+    );
+    expect(document.body.textContent).toContain("Page command recorded");
+    expect(
+      document.querySelector('[data-assistant-tool="computer"]')?.getAttribute(
+        "aria-busy",
+      ),
+    ).toBeNull();
+    expect(document.body.textContent).not.toContain(command.ticket);
+    expect(queryButton("Open Products")).toBeNull();
     expect(
       window.sessionStorage.getItem(
-        ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+        ADMIN_FLUE_COMPUTER_DEDUPE_STORAGE_KEY,
       ),
-    ).toBe("conv_abcdefghijklmnopqrstuv");
-    expect(window.sessionStorage.length).toBe(1);
-    expect(
-      document.querySelector('[data-assistant-transcript-state="connected"]'),
-    ).toBeTruthy();
+    ).toContain(requestId);
   });
 
-  it("continues one-shot chat when transcript append fails and offers an accessible retry", async () => {
-    mocks.appendConversationMessage.mockRejectedValueOnce(
-      new Error("transcript unavailable"),
-    );
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: {
-        role: "assistant",
-        content: "You can still use this response.",
-      },
-      usage: null,
-    });
-
+  it("renders authoritative tool activity compactly without dumping JSON", async () => {
     renderLauncher();
     await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Help me anyway");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    expect(mocks.sendAdminAssistantMessage).toHaveBeenCalledTimes(1);
-    expect(mocks.appendConversationMessage).toHaveBeenCalledTimes(1);
-    expect(document.body.textContent).toContain(
-      "You can still use this response.",
-    );
-    expect(
-      document.querySelector(
-        '[data-assistant-transcript-state="disconnected"]',
-      ),
-    ).toBeTruthy();
-    expect(queryButton("Retry transcript connection")).toBeTruthy();
-
-    await click(queryButton("Retry transcript connection"));
-    expect(mocks.readConversationEvents).toHaveBeenCalledTimes(2);
-    expect(
-      document.querySelector('[data-assistant-transcript-state="connected"]'),
-    ).toBeTruthy();
-  });
-
-  it("persists assistant text only and truthfully loses live actions after reload", async () => {
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: {
-        role: "assistant",
-        content: "Use Products to manage catalog items.",
-        parts: [
-          { type: "text", text: "Use Products to manage catalog items." },
-        ],
-      },
-      usage: null,
-      actions: [
-        { type: "navigate", path: "/admin/products", label: "Open Products" },
-      ],
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Where do I manage products?");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    expect(queryButton("Open Products")).toBeTruthy();
-    const persistedAssistantInput =
-      mocks.appendConversationMessage.mock.calls[1]?.[1];
-    expect(persistedAssistantInput).toEqual({
-      clientMessageId: expect.stringMatching(/^message_[A-Za-z0-9_-]{22}$/),
-      role: "assistant",
-      content: "Use Products to manage catalog items.",
-      contextMarker: "admin:page",
-    });
-    expect(persistedAssistantInput).not.toHaveProperty("parts");
-    expect(persistedAssistantInput).not.toHaveProperty("actions");
-
-    act(() => root.unmount());
-    host.remove();
-    host = document.createElement("div");
-    document.body.append(host);
-    root = createRoot(host);
-    mocks.readConversationEvents.mockResolvedValue({
-      ...emptyReplay(),
-      events: [
-        conversationMessageEvent(
-          1,
-          "user",
-          "Where do I manage products?",
-          "admin:page",
-        ),
-        conversationMessageEvent(
-          2,
-          "assistant",
-          "Use Products to manage catalog items.",
-          "admin:page",
-        ),
-      ],
-      cursor: 2,
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await flushReact();
-
-    expect(document.body.textContent).toContain(
-      "Use Products to manage catalog items.",
-    );
-    expect(queryButton("Open Products")).toBeNull();
-  });
-
-  it("renders the disabled adminChat state without throwing in the console", async () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "disabled",
-      reason: "unconfigured",
-      message: "Admin chat is not ready. Save a valid provider key first.",
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Can you help?");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    expect(document.body.textContent).toContain("Admin chat is not ready.");
-    expect(consoleError).not.toHaveBeenCalled();
-  });
-
-  it("keeps advisory navigation click-confirmed", async () => {
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: {
-        role: "assistant",
-        content: "Use Products to manage catalog items.",
-      },
-      usage: null,
-      actions: [
-        { type: "navigate", path: "/admin/products", label: "Open Products" },
-      ],
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Where do I manage products?");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    const action = queryButton("Open Products");
-    expect(action).toBeTruthy();
-    expect(mocks.navigate).not.toHaveBeenCalled();
-
-    await click(action);
-    expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products" });
-  });
-
-  it("navigates immediately for an unambiguous user-confirmed destination", async () => {
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: {
-        role: "assistant",
-        content: "Use the visible Products action to continue.",
-      },
-      usage: null,
-      actions: [
-        { type: "navigate", path: "/admin/products", label: "Open Products" },
-      ],
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Can you take me to products page?");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    expect(mocks.navigate).toHaveBeenCalledTimes(1);
-    expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products" });
-    expect(document.body.textContent).toContain("Opening Products");
-    expect(queryButton("Open Products")?.disabled).toBe(true);
-  });
-
-  it("does not keep the composer busy while a dirty-form blocker holds navigation", async () => {
-    mocks.navigate.mockReturnValue(new Promise<void>(() => {}));
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: { role: "assistant", content: "Opening Products." },
-      usage: null,
-      actions: [
-        { type: "navigate", path: "/admin/products", label: "Open Products" },
-      ],
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Open products");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products" });
-    expect(
-      document.querySelector<HTMLTextAreaElement>(
-        'textarea[aria-label="Message admin assistant"]',
-      )?.disabled,
-    ).toBe(false);
-    expect(queryButton("Open Products")?.disabled).toBe(true);
-
-    window.dispatchEvent(new Event(ADMIN_NAVIGATION_CANCELLED_EVENT));
-    await flushReact();
-
-    expect(document.querySelector("[data-assistant-status]")).toBeNull();
-    expect(
-      document.querySelector<HTMLTextAreaElement>(
-        'textarea[aria-label="Message admin assistant"]',
-      )?.disabled,
-    ).toBe(false);
-  });
-
-  it("runs click-confirmed registered page actions through the browser executor", async () => {
-    const handler = vi.fn(() => true);
-    registerAdminAssistantPageActionHandler(
-      "product-edit-form:apply_field_draft",
-      handler,
-    );
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: {
-        role: "assistant",
-        content: "Here is the replacement description.",
-      },
-      usage: null,
-      actions: [
-        {
-          type: "apply_field_draft",
-          id: "product-edit-form:apply_field_draft",
-          targetId: "product-edit-form",
-          label: "Apply to description",
-          fieldName: "description",
-          value: "<p>Here is the replacement description.</p>",
-        },
-      ],
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Improve this product description");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    const action = queryButton("Apply to description");
-    expect(action).toBeTruthy();
-    expect(handler).not.toHaveBeenCalled();
-
-    await click(action);
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "apply_field_draft",
-        id: "product-edit-form:apply_field_draft",
-        targetId: "product-edit-form",
-        fieldName: "description",
-        value: "<p>Here is the replacement description.</p>",
-      }),
-    );
-    expect(action?.disabled).toBe(true);
-    expect(document.body.textContent).toContain(
-      "Draft applied to the visible form. Review it before saving.",
+    const giantValue = `private-giant-${"x".repeat(2_000)}`;
+    await emitSnapshot(
+      liveSnapshot([
+        message("assistant-tool", "assistant", [
+          {
+            type: "reasoning",
+            text: "private model reasoning must not render",
+            state: "done",
+          },
+          {
+            type: "dynamic-tool",
+            toolName: "scalius",
+            toolCallId: "tool-scalius-1",
+            state: "output-available",
+            input: { program: "show admin.dashboard" },
+            output: {
+              ok: true,
+              authoritative: true,
+              data: { giantValue },
+            },
+          },
+        ]),
+      ]),
     );
 
-    await click(action);
-    expect(handler).toHaveBeenCalledTimes(1);
-  });
-
-  it("reports a registered form save only after the handler confirms success", async () => {
-    const handler = vi.fn(async () => true);
-    registerAdminAssistantPageActionHandler(
-      "product-edit:prod_one:instance-a:save_registered_form",
-      handler,
-    );
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: { role: "assistant", content: "The form is ready to save." },
-      usage: null,
-      actions: [
-        {
-          type: "save_registered_form",
-          id: "product-edit:prod_one:instance-a:save_registered_form",
-          targetId: "product-edit:prod_one:instance-a",
-          label: "Save visible form",
-        },
-      ],
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Save this product");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    const action = queryButton("Save visible form");
-    await click(action);
-
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(action?.disabled).toBe(true);
-    expect(document.body.textContent).toContain(
-      "Visible form saved successfully.",
-    );
-  });
-
-  it("reports a failed registered save without claiming the form changed", async () => {
-    const handler = vi.fn(async () => false);
-    registerAdminAssistantPageActionHandler(
-      "product-edit:prod_one:instance-a:save_registered_form",
-      handler,
-    );
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: { role: "assistant", content: "The form is ready to save." },
-      usage: null,
-      actions: [
-        {
-          type: "save_registered_form",
-          id: "product-edit:prod_one:instance-a:save_registered_form",
-          targetId: "product-edit:prod_one:instance-a",
-          label: "Save visible form",
-        },
-      ],
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Save this product");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    const action = queryButton("Save visible form");
-    await click(action);
-
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(action?.disabled).toBe(true);
-    expect(document.body.textContent).toContain(
-      "The visible form was not saved. Review the page error, then request a new save action.",
-    );
+    expect(document.body.textContent).toContain("Scalius result ready");
+    expect(document.body.textContent).not.toContain(giantValue);
     expect(document.body.textContent).not.toContain(
-      "Visible form saved successfully.",
+      "private model reasoning must not render",
+    );
+    expect(
+      document.querySelector('[data-assistant-tool="scalius"]'),
+    ).toBeTruthy();
+  });
+
+  it("aborts active durable work through the exact thread", async () => {
+    sdkMocks.state.snapshot = liveSnapshot([
+      message(
+        "user-active",
+        "user",
+        [{ type: "text", text: "Do the task", state: "done" }],
+        "submission-active",
+      ),
+    ]);
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+
+    await click(queryButton("Stop assistant"));
+    expect(sdkMocks.abort).toHaveBeenCalledWith(
+      "admin-copilot",
+      THREAD_ID,
+    );
+    expect(sdkMocks.refresh).toHaveBeenCalledOnce();
+    expect(document.body.textContent).toContain(
+      "Stop requested. The durable thread will show the final state.",
+    );
+
+    await emitSnapshot(
+      liveSnapshot(
+        [
+          message(
+            "user-active",
+            "user",
+            [{ type: "text", text: "Do the task", state: "done" }],
+            "submission-active",
+          ),
+        ],
+        [{ submissionId: "submission-active", outcome: "aborted" }],
+      ),
+    );
+    expect(document.body.textContent).toContain(
+      "Assistant work stopped. Review any page changes already completed before continuing.",
     );
   });
 
-  it("renders assistant markdown as chat typography instead of raw syntax", async () => {
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: {
-        role: "assistant",
-        content:
-          "Use **Products** for catalog edits.\n\n1. Open `Products`.\n2. Save after reviewing.",
-      },
-      usage: null,
-    });
+  it("keeps complete mobile dialog focus and inert semantics", async () => {
+    setViewportWidth(390);
+    renderLauncher(<button>Page action</button>);
+    const trigger = queryButton("Open admin assistant");
+    trigger?.focus();
+    await click(trigger);
+    await nextMacrotask();
 
+    const page = document.querySelector<HTMLElement>(
+      "[data-assistant-page-slot]",
+    );
+    const dialog = document.querySelector<HTMLElement>(
+      '[data-assistant-modal-boundary][role="dialog"]',
+    );
+    expect(getAssistantWorkspace()?.dataset.mobile).toBe("true");
+    expect(page?.hasAttribute("inert")).toBe(true);
+    expect(page?.getAttribute("aria-hidden")).toBe("true");
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    expect(dialog?.contains(document.activeElement)).toBe(true);
+    expect(document.body.style.overflow).toBe("hidden");
+
+    await keyDown(dialog, "Escape");
+    await nextMacrotask();
+    expect(page?.hasAttribute("inert")).toBe(false);
+    expect(document.body.style.overflow).toBe("");
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("renders streamed markdown as compact chat typography", async () => {
     renderLauncher();
     await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("How do I edit products?");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    expect(document.body.textContent).toContain(
-      "Use Products for catalog edits.",
+    await emitSnapshot(
+      liveSnapshot([
+        message("assistant-markdown", "assistant", [
+          {
+            type: "text",
+            text:
+              "Use **Products** for catalog edits.\n\n1. Open `Products`.\n2. Review changes.",
+            state: "done",
+          },
+        ]),
+      ]),
     );
-    expect(document.body.textContent).toContain("Open Products.");
+
+    expect(document.body.textContent).toContain("Use Products for catalog edits.");
     expect(document.body.textContent).not.toContain("**Products**");
-    expect(document.body.textContent).not.toContain("`Products`");
     expect(document.querySelector("strong")?.textContent).toBe("Products");
     expect(document.querySelector("code")?.textContent).toBe("Products");
     expect(document.querySelectorAll("ol li")).toHaveLength(2);
-  });
-
-  it("drops unsafe navigation actions before rendering buttons", async () => {
-    mocks.sendAdminAssistantMessage.mockResolvedValue({
-      status: "ok",
-      message: {
-        role: "assistant",
-        content: "I can point you to safe dashboard pages.",
-      },
-      usage: null,
-      actions: [
-        {
-          type: "navigate",
-          path: "https://evil.test/admin",
-          label: "Open Evil",
-        },
-        {
-          type: "navigate",
-          path: "/admin/orders/123",
-          label: "Open Order Detail",
-        },
-      ],
-    });
-
-    renderLauncher();
-    await click(queryButton("Open admin assistant"));
-    await typeAssistantMessage("Open that order");
-    await click(queryButton("Send assistant message"));
-    await flushReact();
-
-    expect(queryButton("Open Evil")).toBeNull();
-    expect(queryButton("Open Order Detail")).toBeNull();
-    expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
   function renderLauncher(children?: ReactNode) {
@@ -825,6 +559,41 @@ describe("AdminAssistantLauncher", () => {
     });
   }
 });
+
+function liveSnapshot(
+  messages: FlueConversationMessage[] = [],
+  settlements: NonNullable<
+    AgentConversationObservationSnapshot["conversation"]
+  >["settlements"] = [],
+): AgentConversationObservationSnapshot {
+  return {
+    conversation: {
+      conversationId: THREAD_ID,
+      messages,
+      settlements,
+    },
+    offset: "opaque-offset-live",
+    phase: "live",
+    error: undefined,
+  };
+}
+
+function message(
+  id: string,
+  role: "user" | "assistant",
+  parts: FlueConversationPart[],
+  submissionId?: string,
+): FlueConversationMessage {
+  return { id, role, parts, ...(submissionId ? { submissionId } : {}) };
+}
+
+async function emitSnapshot(snapshot: AgentConversationObservationSnapshot) {
+  await act(async () => {
+    sdkMocks.state.snapshot = snapshot;
+    for (const listener of sdkMocks.listeners) listener();
+  });
+  await flushReact();
+}
 
 function queryButton(label: string): HTMLButtonElement | null {
   return document.querySelector<HTMLButtonElement>(
@@ -898,18 +667,12 @@ async function flushReact() {
   await act(async () => {
     await vi.dynamicImportSettled();
   });
-  for (let index = 0; index < 4; index += 1) {
-    await act(async () => {
-      await Promise.resolve();
-    });
-  }
 }
 
 async function nextMacrotask() {
   await act(async () => {
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
   });
-  await flushReact();
 }
 
 function setViewportWidth(width: number) {
@@ -917,43 +680,5 @@ function setViewportWidth(width: number) {
     configurable: true,
     value: width,
   });
-}
-
-interface ConversationAppendInput {
-  clientMessageId: string;
-  role: "user" | "assistant";
-  content: string;
-  contextMarker: "admin:page" | "admin:sensitive";
-}
-
-function conversationMessageEvent(
-  sequence: number,
-  role: "user" | "assistant",
-  content: string,
-  contextMarker: "admin:page" | "admin:sensitive",
-) {
-  return {
-    eventId: `event_${sequence}`,
-    sequence,
-    type: "message.appended" as const,
-    occurredAt: 1_725_000_000_000 + sequence,
-    message: {
-      id: `message_${sequence}`,
-      role,
-      content,
-      contextMarker,
-      createdAt: 1_725_000_000_000 + sequence,
-    },
-  };
-}
-
-function emptyReplay() {
-  return {
-    events: [],
-    cursor: 0,
-    earliestCursor: 0,
-    hasMore: false,
-    expiresAt: 1_725_604_800_000,
-    cancellation: null,
-  };
+  window.dispatchEvent(new Event("resize"));
 }

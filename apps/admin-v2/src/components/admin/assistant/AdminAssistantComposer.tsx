@@ -1,4 +1,5 @@
 import {
+  CircleStop,
   Loader2,
   SendHorizontal,
 } from "lucide-react";
@@ -12,17 +13,23 @@ import { Button } from "../../ui/button";
 import { Textarea } from "../../ui/textarea";
 
 interface AdminAssistantComposerProps {
+  aborting: boolean;
+  canAbort: boolean;
   draft: string;
   sending: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
+  onAbort: () => void;
   onDraftChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
 export function AdminAssistantComposer({
+  aborting,
+  canAbort,
   draft,
   sending,
   textareaRef,
+  onAbort,
   onDraftChange,
   onSubmit,
 }: AdminAssistantComposerProps) {
@@ -62,20 +69,41 @@ export function AdminAssistantComposer({
           <p id="admin-assistant-composer-help" className="text-[10px] text-muted-foreground">
             Enter to send · Shift + Enter for a new line
           </p>
-          <Button
-            type="submit"
-            size="sm"
-            className="h-8 gap-1.5 rounded-lg px-2.5 text-xs"
-            disabled={sending || draft.trim().length === 0}
-            aria-label="Send assistant message"
-          >
-            {sending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-            ) : (
-              <SendHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-            )}
-            Send
-          </Button>
+          {sending ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 rounded-lg px-2.5 text-xs"
+              disabled={!canAbort || aborting}
+              aria-label="Stop assistant"
+              onClick={onAbort}
+            >
+              {aborting ? (
+                <Loader2
+                  className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : (
+                <CircleStop className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              Stop
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              size="sm"
+              className="h-8 gap-1.5 rounded-lg px-2.5 text-xs"
+              disabled={draft.trim().length === 0}
+              aria-label="Send assistant message"
+            >
+              <SendHorizontal
+                className="h-3.5 w-3.5"
+                aria-hidden="true"
+              />
+              Send
+            </Button>
+          )}
         </div>
       </div>
     </form>

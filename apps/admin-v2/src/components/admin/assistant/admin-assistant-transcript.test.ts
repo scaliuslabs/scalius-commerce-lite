@@ -1,192 +1,87 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const conversationMocks = vi.hoisted(() => ({
-  createConversationId: vi.fn(),
-  isConversationId: vi.fn(),
-}));
-
-vi.mock("../../../lib/admin-assistant-conversation", () => ({
-  createAdminConversationId: conversationMocks.createConversationId,
-  isAdminConversationId: conversationMocks.isConversationId,
-}));
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
-  getAdminAssistantConversationContextMarker,
+  ADMIN_ASSISTANT_CONVERSATION_HISTORY_STORAGE_KEY,
+  createNewAdminAssistantConversationId,
+  activateAdminAssistantConversationId,
+  getAdminAssistantConversationHistoryIds,
   getOrCreateAdminAssistantConversationId,
-  mergeAdminAssistantConversationEvents,
-  reconcileAdminAssistantPersistedMessage,
+  getOrCreateAdminAssistantTabId,
 } from "./admin-assistant-transcript";
-import type { AdminAssistantMessage } from "./assistant-panel-types";
-import type { AdminAssistantPageStateSnapshot } from "./page-state";
 
-const CONVERSATION_ID = "conv_abcdefghijklmnopqrstuv";
+describe("Admin Flue browser identities", () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
 
-beforeEach(() => {
-  window.sessionStorage.clear();
-  conversationMocks.createConversationId.mockReset();
-  conversationMocks.isConversationId.mockReset();
-  conversationMocks.createConversationId.mockReturnValue(CONVERSATION_ID);
-  conversationMocks.isConversationId.mockImplementation(
-    (value: string) => value === CONVERSATION_ID,
-  );
-});
+  it("keeps one valid durable thread ID in this browser tab", () => {
+    const first = getOrCreateAdminAssistantConversationId();
+    const second = getOrCreateAdminAssistantConversationId();
 
-describe("admin assistant transcript helpers", () => {
-  it("stores only a strong conversation ID in per-tab session storage", () => {
-    expect(getOrCreateAdminAssistantConversationId()).toBe(CONVERSATION_ID);
-    expect(getOrCreateAdminAssistantConversationId()).toBe(CONVERSATION_ID);
-
-    expect(window.sessionStorage.length).toBe(1);
+    expect(first).toMatch(/^conv_[A-Za-z0-9_-]{22}$/u);
+    expect(second).toBe(first);
     expect(
       window.sessionStorage.getItem(
         ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
       ),
-    ).toBe(CONVERSATION_ID);
-    expect(conversationMocks.createConversationId).toHaveBeenCalledTimes(1);
+    ).toBe(first);
   });
 
-  it("marks customer, order, auth, security, credential, payment, receipt, and recovery contexts sensitive", () => {
-    for (const value of [
-      "customers",
-      "orders",
-      "auth",
-      "security",
-      "credentials",
-      "payments",
-      "receipts",
-      "recovery",
-    ]) {
-      expect(
-        getAdminAssistantConversationContextMarker(
-          pageState({ routePath: `/admin/settings/${value}` }),
-        ),
-      ).toBe("admin:sensitive");
-    }
-
-    expect(
-      getAdminAssistantConversationContextMarker(
-        pageState({ routePath: "/admin/products", pageTitle: "Products" }),
-      ),
-    ).toBe("admin:page");
-    expect(
-      getAdminAssistantConversationContextMarker(
-        pageState({
-          routePath: "/admin/settings",
-          surfaces: [{ id: "payment-provider", kind: "form" }],
-        }),
-      ),
-    ).toBe("admin:sensitive");
-  });
-
-  it("orders and deduplicates only user/assistant message events", () => {
-    const merged = mergeAdminAssistantConversationEvents([], [
-      messageEvent(2, "assistant", "Second"),
-      cancellationEvent(3),
-      messageEvent(1, "user", "First"),
-      messageEvent(2, "assistant", "Second"),
-    ]);
-
-    expect(merged).toEqual([
-      expect.objectContaining({
-        id: "message_1",
-        role: "user",
-        content: "First",
-        transcriptSequence: 1,
-      }),
-      expect.objectContaining({
-        id: "message_2",
-        role: "assistant",
-        content: "Second",
-        transcriptSequence: 2,
-      }),
-    ]);
-  });
-
-  it("reconciles a replay race while keeping live actions in memory only", () => {
-    const optimistic: AdminAssistantMessage = {
-      id: "message_client_1",
-      role: "assistant",
-      content: "Open products.",
-      parts: [{ type: "text", text: "Open products." }],
-      actions: [
-        { type: "navigate", path: "/admin/products", label: "Open Products" },
-      ],
-    };
-    const event = messageEvent(4, "assistant", "Open products.");
-    const raced = mergeAdminAssistantConversationEvents(
-      [optimistic],
-      [event, event],
+  it("replaces malformed persisted thread IDs instead of forwarding them", () => {
+    window.sessionStorage.setItem(
+      ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      "conv_invalid/path",
     );
 
-    const reconciled = reconcileAdminAssistantPersistedMessage(
-      raced,
-      event,
-      optimistic.id,
-    );
-    expect(reconciled).toHaveLength(1);
-    expect(reconciled[0]).toMatchObject({
-      id: "message_4",
-      parts: optimistic.parts,
-      actions: optimistic.actions,
-      transcriptSequence: 4,
-    });
+    const replacement = getOrCreateAdminAssistantConversationId();
+    expect(replacement).toMatch(/^conv_[A-Za-z0-9_-]{22}$/u);
+    expect(replacement).not.toBe("conv_invalid/path");
+  });
 
-    const rehydrated = mergeAdminAssistantConversationEvents([], [event]);
-    expect(rehydrated[0]).not.toHaveProperty("parts");
-    expect(rehydrated[0]).not.toHaveProperty("actions");
+  it("uses a process-local tab binding distinct from the durable thread", () => {
+    const threadId = getOrCreateAdminAssistantConversationId();
+    const firstTabId = getOrCreateAdminAssistantTabId();
+    const secondTabId = getOrCreateAdminAssistantTabId();
+
+    expect(firstTabId).toMatch(/^tab_[A-Za-z0-9_-]{22}$/u);
+    expect(secondTabId).toBe(firstTabId);
+    expect(firstTabId).not.toBe(threadId);
+    expect(getAdminAssistantConversationHistoryIds()).toContain(threadId);
+    expect(getAdminAssistantConversationHistoryIds()).not.toContain(
+      firstTabId,
+    );
+  });
+
+  it("rotates the active thread while retaining prior durable thread IDs", () => {
+    const first = getOrCreateAdminAssistantConversationId();
+    const second = createNewAdminAssistantConversationId();
+
+    expect(second).toMatch(/^conv_[A-Za-z0-9_-]{22}$/u);
+    expect(second).not.toBe(first);
+    expect(
+      window.sessionStorage.getItem(
+        ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      ),
+    ).toBe(second);
+    expect(getAdminAssistantConversationHistoryIds()).toEqual([first, second]);
+    expect(
+      window.sessionStorage.getItem(
+        ADMIN_ASSISTANT_CONVERSATION_HISTORY_STORAGE_KEY,
+      ),
+    ).not.toContain("message");
+
+    expect(activateAdminAssistantConversationId(first)).toBe(true);
+    expect(
+      window.sessionStorage.getItem(
+        ADMIN_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      ),
+    ).toBe(first);
+    expect(getAdminAssistantConversationHistoryIds()).toEqual([second, first]);
+    expect(activateAdminAssistantConversationId("conv_invalid/path")).toBe(
+      false,
+    );
   });
 });
-
-function pageState(
-  overrides: Partial<AdminAssistantPageStateSnapshot>,
-): AdminAssistantPageStateSnapshot {
-  return {
-    version: 1,
-    routePath: "/admin",
-    pageTitle: null,
-    pageHeading: null,
-    mainScroll: {
-      top: 0,
-      maxTop: 0,
-      viewportHeight: 600,
-      contentHeight: 600,
-      atTop: true,
-      atBottom: true,
-    },
-    surfaces: [],
-    ...overrides,
-  };
-}
-
-function messageEvent(
-  sequence: number,
-  role: "user" | "assistant",
-  content: string,
-) {
-  return {
-    eventId: `event_${sequence}`,
-    sequence,
-    type: "message.appended" as const,
-    occurredAt: 1_725_000_000_000 + sequence,
-    message: {
-      id: `message_${sequence}`,
-      role,
-      content,
-      contextMarker: "admin:page" as const,
-      createdAt: 1_725_000_000_000 + sequence,
-    },
-  };
-}
-
-function cancellationEvent(sequence: number) {
-  return {
-    eventId: `event_${sequence}`,
-    sequence,
-    type: "stream.cancelled" as const,
-    occurredAt: 1_725_000_000_000 + sequence,
-    cancellation: { runHash: "a".repeat(64) },
-  };
-}
