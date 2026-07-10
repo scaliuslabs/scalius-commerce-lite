@@ -13997,6 +13997,98 @@ export type PostApiV1AdminDiscountsByIdRestoreResponses = {
 
 export type PostApiV1AdminDiscountsByIdRestoreResponse = PostApiV1AdminDiscountsByIdRestoreResponses[keyof PostApiV1AdminDiscountsByIdRestoreResponses];
 
+export type GetApiV1AdminMediaImageGenerationCapabilitiesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/media/image-generation/capabilities';
+};
+
+export type GetApiV1AdminMediaImageGenerationCapabilitiesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaImageGenerationCapabilitiesError = GetApiV1AdminMediaImageGenerationCapabilitiesErrors[keyof GetApiV1AdminMediaImageGenerationCapabilitiesErrors];
+
+export type GetApiV1AdminMediaImageGenerationCapabilitiesResponses = {
+    /**
+     * Configured image-model capabilities
+     */
+    200: {
+        success: true;
+        data: {
+            aspectRatios: Array<'auto' | '1:1' | '2:3' | '4:5' | '3:2' | '16:9'>;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaImageGenerationCapabilitiesResponse = GetApiV1AdminMediaImageGenerationCapabilitiesResponses[keyof GetApiV1AdminMediaImageGenerationCapabilitiesResponses];
+
 export type PostApiV1AdminMediaImageGenerationGenerateData = {
     body?: {
         prompt: string;

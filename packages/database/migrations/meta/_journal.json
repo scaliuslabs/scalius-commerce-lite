@@ -624,6 +624,13 @@
       "when": 1783697014108,
       "tag": "0088_redundant_maelstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "6",
+      "when": 1783724833309,
+      "tag": "0089_small_power_pack",
+      "breakpoints": true
     }
   ]
 }

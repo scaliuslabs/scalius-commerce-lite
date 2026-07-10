@@ -47,11 +47,11 @@ function concretePath(pathTemplate: string): string {
 
 describe("Admin command registry drift", () => {
   it("matches every current authenticated Admin OpenAPI operation exactly", () => {
-    expect(ADMIN_OPENAPI_PATH_COUNT).toBe(220);
-    expect(ADMIN_OPENAPI_OPERATION_COUNT).toBe(319);
-    expect(ADMIN_OPENAPI_PATH_INVENTORY).toHaveLength(220);
+    expect(ADMIN_OPENAPI_PATH_COUNT).toBe(221);
+    expect(ADMIN_OPENAPI_OPERATION_COUNT).toBe(320);
+    expect(ADMIN_OPENAPI_PATH_INVENTORY).toHaveLength(221);
     expect(frozenAdminOperations()).toEqual(liveAdminOperations());
-    expect(ADMIN_COMMAND_REGISTRY).toHaveLength(319);
+    expect(ADMIN_COMMAND_REGISTRY).toHaveLength(320);
   });
 
   it("resolves the exact effective ROUTE_PERMISSIONS requirement for every operation", () => {
@@ -68,7 +68,7 @@ describe("Admin command registry drift", () => {
   });
 
   it("makes permission and policy changes deliberate through a stable digest", () => {
-    expect(ADMIN_COMMAND_POLICY_DIGEST).toBe("admin-command-v1-319-d3de721e");
+    expect(ADMIN_COMMAND_POLICY_DIGEST).toBe("admin-command-v1-320-517d4abb");
   });
 
   it("contains no generic HTTP, OpenAPI, URL, SQL, shell, or DOM executor", () => {

@@ -22,6 +22,11 @@ const PUBLIC_AGENT_PATH_PATTERN =
 const INSTANCE_ID_PATTERN = /^v1\.[A-Za-z0-9_-]{43}$/u;
 const IDENTITY_PATTERN = /^(?:tenant|principal)_[A-Za-z0-9_-]{43}$/u;
 const SUBMISSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+const ADMISSION_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;
+const CLAIM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const RUNTIME_BASE = "http://api.internal/api/v1/internal/admin-assistant/flue";
+const STOP_SETTLEMENT_TIMEOUT_MS = 4_000;
+const STOP_SETTLEMENT_POLL_MS = 50;
 
 const FORWARDED_RESPONSE_HEADERS = [
   "Content-Type",
@@ -54,6 +59,7 @@ interface AgentSendAdmission {
 
 export interface AdminFlueAgentFacadeDependencies {
   agent?: Pick<Fetcher, "fetch">;
+  api?: Pick<Fetcher, "fetch">;
   serviceToken?: string;
   resolveAuthority?: ResolveAdminFlueComputerAuthority;
 }
@@ -153,6 +159,7 @@ export async function proxyAdminFlueAgentFacade(
   }
   if (
     !dependencies.agent ||
+    ((endpoint.kind === "send" || endpoint.kind === "abort") && !dependencies.api) ||
     !dependencies.serviceToken ||
     dependencies.serviceToken.length < MIN_SERVICE_TOKEN_CHARACTERS
   ) {
@@ -161,6 +168,20 @@ export async function proxyAdminFlueAgentFacade(
       "ADMIN_FLUE_SERVICE_UNAVAILABLE",
       "Assistant service is unavailable",
     );
+  }
+
+  let admissionLease: { admissionId: string; admissionClaimToken: string } | null = null;
+  if (endpoint.kind === "send") {
+    admissionLease = await beginAdmission(dependencies.api!, authority.instanceId);
+    if (!admissionLease) {
+      return jsonError(409, "ADMIN_FLUE_ADMISSION_BLOCKED", "Assistant Stop is in progress");
+    }
+  }
+  if (endpoint.kind === "abort") {
+    const ready = await beginAndAwaitStop(dependencies.api!, authority.instanceId, request.signal);
+    if (!ready) {
+      return jsonError(503, "ADMIN_FLUE_STOP_UNCONFIRMED", "Assistant work could not be safely stopped");
+    }
   }
 
   const headers = createAgentHeaders(
@@ -183,11 +204,26 @@ export async function proxyAdminFlueAgentFacade(
   try {
     agentResponse = await dependencies.agent.fetch(target, init);
   } catch {
+    if (admissionLease) {
+      await finishAdmission(dependencies.api!, authority.instanceId, admissionLease);
+    }
     return jsonError(
       502,
       "ADMIN_FLUE_PROXY_FAILED",
       "Assistant service request failed",
     );
+  }
+
+  if (admissionLease) {
+    const finished = await finishAdmission(
+      dependencies.api!,
+      authority.instanceId,
+      admissionLease,
+    );
+    if (!finished) {
+      await agentResponse.body?.cancel();
+      return jsonError(503, "ADMIN_FLUE_ADMISSION_UNSETTLED", "Assistant admission could not be settled");
+    }
   }
 
   if (agentResponse.status >= 300 && agentResponse.status < 400) {
@@ -204,7 +240,26 @@ export async function proxyAdminFlueAgentFacade(
     return sanitizeSendAdmission(agentResponse, requestUrl, endpoint.threadId);
   }
   if (endpoint.kind === "abort") {
-    return sanitizeAbortResponse(agentResponse);
+    const sanitized = await sanitizeAbortResponse(agentResponse);
+    if (!sanitized.ok) return sanitized.response;
+    const settled = await awaitStopReadiness(
+      dependencies.api!,
+      authority.instanceId,
+      request.signal,
+      true,
+    );
+    if (!settled) {
+      return jsonError(503, "ADMIN_FLUE_STOP_UNCONFIRMED", "Assistant Stop could not be reconciled");
+    }
+    const finished = await callRuntimeGate(
+      dependencies.api!,
+      "/stop/finish",
+      { instanceId: authority.instanceId },
+    );
+    if (!finished.ok) {
+      return jsonError(503, "ADMIN_FLUE_STOP_UNCONFIRMED", "Assistant Stop could not be confirmed");
+    }
+    return sanitized.response;
   }
   if (agentResponse.status !== 200) {
     await agentResponse.body?.cancel();
@@ -425,14 +480,16 @@ function parseSendAdmission(value: unknown): AgentSendAdmission | null {
   };
 }
 
-async function sanitizeAbortResponse(response: Response): Promise<Response> {
+async function sanitizeAbortResponse(
+  response: Response,
+): Promise<{ ok: true; response: Response } | { ok: false; response: Response }> {
   if (response.status !== 200) {
     await response.body?.cancel();
-    return jsonError(
+    return { ok: false, response: jsonError(
       502,
       "ADMIN_FLUE_ABORT_INVALID",
       "Assistant abort returned an invalid response",
-    );
+    ) };
   }
   const value = await readBoundedResponseJson(response, MAX_CONTROL_RESPONSE_BYTES);
   if (
@@ -440,16 +497,109 @@ async function sanitizeAbortResponse(response: Response): Promise<Response> {
     Object.keys(value).length !== 1 ||
     typeof value.aborted !== "boolean"
   ) {
-    return jsonError(
+    return { ok: false, response: jsonError(
       502,
       "ADMIN_FLUE_ABORT_INVALID",
       "Assistant abort returned an invalid response",
-    );
+    ) };
   }
-  return Response.json(
+  return { ok: true, response: Response.json(
     { aborted: value.aborted },
     { headers: { "Cache-Control": "no-store" } },
-  );
+  ) };
+}
+
+async function beginAdmission(
+  api: Pick<Fetcher, "fetch">,
+  instanceId: string,
+): Promise<{ admissionId: string; admissionClaimToken: string } | null> {
+  const result = await callRuntimeGate(api, "/admission/begin", { instanceId });
+  const data = result.data;
+  if (
+    !result.ok ||
+    !isRecord(data) ||
+    data.status !== "started" ||
+    typeof data.admissionId !== "string" ||
+    !ADMISSION_ID_PATTERN.test(data.admissionId) ||
+    typeof data.admissionClaimToken !== "string" ||
+    !CLAIM_TOKEN_PATTERN.test(data.admissionClaimToken)
+  ) return null;
+  return {
+    admissionId: data.admissionId,
+    admissionClaimToken: data.admissionClaimToken,
+  };
+}
+
+async function finishAdmission(
+  api: Pick<Fetcher, "fetch">,
+  instanceId: string,
+  lease: { admissionId: string; admissionClaimToken: string },
+): Promise<boolean> {
+  const result = await callRuntimeGate(api, "/admission/finish", {
+    instanceId,
+    ...lease,
+  });
+  return result.ok && isRecord(result.data) &&
+    (result.data.status === "finished" || result.data.status === "replayed");
+}
+
+async function beginAndAwaitStop(
+  api: Pick<Fetcher, "fetch">,
+  instanceId: string,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const result = await callRuntimeGate(api, "/stop/begin", { instanceId });
+  if (!result.ok) return false;
+  if (isPreAbortReady(result)) return true;
+  return awaitStopReadiness(api, instanceId, signal, false);
+}
+
+async function awaitStopReadiness(
+  api: Pick<Fetcher, "fetch">,
+  instanceId: string,
+  signal: AbortSignal,
+  includeDispatches: boolean,
+): Promise<boolean> {
+  const deadline = Date.now() + STOP_SETTLEMENT_TIMEOUT_MS;
+  let result: RuntimeGateResult = { ok: false };
+  while (Date.now() < deadline && !signal.aborted) {
+    result = await callRuntimeGate(api, "/stop/status", { instanceId });
+    if (includeDispatches ? isReadyStop(result) : isPreAbortReady(result)) return true;
+    await new Promise((resolve) => setTimeout(resolve, STOP_SETTLEMENT_POLL_MS));
+  }
+  return includeDispatches ? isReadyStop(result) : isPreAbortReady(result);
+}
+
+function isPreAbortReady(result: RuntimeGateResult): boolean {
+  return result.ok && isRecord(result.data) && result.data.pendingAdmissions === 0;
+}
+
+function isReadyStop(result: RuntimeGateResult): boolean {
+  return result.ok && isRecord(result.data) && result.data.status === "ready" &&
+    result.data.pendingAdmissions === 0 && result.data.pendingDispatches === 0;
+}
+
+interface RuntimeGateResult { ok: boolean; data?: unknown }
+
+async function callRuntimeGate(
+  api: Pick<Fetcher, "fetch">,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<RuntimeGateResult> {
+  try {
+    const response = await api.fetch(`${RUNTIME_BASE}${path}`, {
+      method: "POST",
+      redirect: "manual",
+      signal: AbortSignal.timeout(2_000),
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const value = await readBoundedResponseJson(response, MAX_CONTROL_RESPONSE_BYTES);
+    if (!response.ok || !isRecord(value) || value.success !== true) return { ok: false };
+    return { ok: true, data: value.data };
+  } catch {
+    return { ok: false };
+  }
 }
 
 function streamingAgentResponse(

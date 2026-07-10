@@ -4,6 +4,7 @@ import {
   ADMIN_ASSISTANT_HUMAN_ACTIONS,
   adminAssistantHumanActionId,
   cancelAdminAssistantHumanAction,
+  cancelAllAdminAssistantHumanActions,
   claimAdminAssistantHumanAction,
   finishAdminAssistantHumanAction,
   subscribeAdminAssistantHumanConfirmation,
@@ -72,6 +73,31 @@ describe("Admin assistant human confirmation broker", () => {
       actionId,
       phase: "cancelled",
     });
+  });
+
+  it("cancels every running human-confirmed operation when Stop begins", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeAdminAssistantHumanConfirmation(listener);
+    const operation = claimAdminAssistantHumanAction(
+      adminAssistantHumanActionId(
+        ADMIN_ASSISTANT_HUMAN_ACTIONS.generateImage,
+        "library-page",
+        "panel-stop",
+      ),
+      trustedClick(),
+    );
+    if (!operation) throw new Error("trusted activation was not claimed");
+
+    cancelAllAdminAssistantHumanActions();
+    finishAdminAssistantHumanAction(operation, "succeeded");
+    unsubscribe();
+
+    expect(listener).toHaveBeenLastCalledWith({
+      ...operation,
+      phase: "finished",
+      outcome: "cancelled",
+    });
+    expect(listener).toHaveBeenCalledTimes(2);
   });
 });
 

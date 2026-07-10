@@ -470,6 +470,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/media/image-generation/generate": {
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
+  "/api/v1/admin/media/image-generation/capabilities": {
+    GET: { permission: PERMISSIONS.MEDIA_VIEW },
+  },
   "/api/v1/admin/media/image-generation/save": {
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
@@ -1036,6 +1039,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { allowAnyAdmin: true },
   },
   "/api/v1/internal/admin-assistant/flue/computer-handoff/*": {
+    POST: { allowAnyAdmin: true },
+  },
+  "/api/v1/internal/admin-assistant/flue/admission/*": {
+    POST: { allowAnyAdmin: true },
+  },
+  "/api/v1/internal/admin-assistant/flue/stop/*": {
     POST: { allowAnyAdmin: true },
   },
 

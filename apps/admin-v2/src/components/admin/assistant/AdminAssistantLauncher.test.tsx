@@ -314,7 +314,10 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(sdkMocks.send).toHaveBeenCalledWith(
       "admin-copilot",
       THREAD_ID,
-      { message: "Take me to products" },
+      expect.objectContaining({
+        message: "Take me to products",
+        signal: expect.any(AbortSignal),
+      }),
     );
     expect(JSON.stringify(sdkMocks.send.mock.calls)).not.toContain(
       "SuperSecret123",
@@ -670,6 +673,7 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(sdkMocks.abort).toHaveBeenCalledWith(
       "admin-copilot",
       THREAD_ID,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(sdkMocks.history).toHaveBeenCalledWith(
       "admin-copilot",

@@ -61,6 +61,45 @@ const OPENAI_GPT_IMAGE_MODELS = new Set([
   "gpt-image-2",
 ]);
 
+export const AI_IMAGE_ASPECT_RATIOS = [
+  "auto", "1:1", "2:3", "4:5", "3:2", "16:9",
+] as const;
+export type AiImageAspectRatio = (typeof AI_IMAGE_ASPECT_RATIOS)[number];
+
+export function supportedAiImageAspectRatios(
+  provider: WidgetAiProvider,
+  rawModelId: string,
+): readonly AiImageAspectRatio[] {
+  const modelId = provider === "cloudflare"
+    ? normalizeCloudflareAiModelId(rawModelId)
+    : rawModelId.trim();
+  if (provider === "cloudflare") {
+    const input = getCloudflareImageModelCapability(modelId)?.input;
+    if (
+      input === "native-json-pixels" ||
+      input === "native-multipart-pixels" ||
+      input === "unified-google-nano-banana"
+    ) {
+      return AI_IMAGE_ASPECT_RATIOS;
+    }
+    if (input === "unified-google-imagen-4") return ["auto", "1:1", "16:9"];
+    if (input === "unified-openai-gpt-image-1.5") return ["auto", "1:1"];
+    if (input === "unified-openai-gpt-image-2") return ["auto", "1:1", "2:3", "3:2"];
+    return ["auto"];
+  }
+  if (provider === "openai") {
+    return OPENAI_GPT_IMAGE_MODELS.has(modelId)
+      ? ["auto", "1:1", "2:3", "3:2"]
+      : ["auto", "1:1"];
+  }
+  if (provider === "gemini") {
+    return modelId.startsWith("imagen-")
+      ? ["auto", "1:1", "16:9"]
+      : ["auto", "1:1", "2:3", "4:5", "3:2", "16:9"];
+  }
+  return ["auto"];
+}
+
 export type GeneratedAiImage = {
   bytes: Uint8Array;
   mediaType: string;

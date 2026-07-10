@@ -10,6 +10,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -20,6 +21,7 @@ import {
   getAdminAssistantConversationHistoryIds,
   getOrCreateAdminAssistantConversationId,
 } from "./admin-assistant-transcript";
+import { cancelAllAdminAssistantHumanActions } from "~/lib/admin-assistant-human-confirmation";
 
 export const ADMIN_FLUE_AGENT_NAME = "admin-copilot";
 export const ADMIN_FLUE_SAME_ORIGIN_BASE_URL = "/api/assistant/flue";
@@ -45,6 +47,12 @@ interface AdminFlueTransport {
 interface AdminAssistantSettlementNotice {
   kind: "failed" | "aborted";
   message: string;
+}
+
+interface AdminAssistantAdmissionAttempt {
+  controller: AbortController;
+  optimisticId: string;
+  clearDeadline: () => void;
 }
 
 interface AdminAssistantTranscriptController {
@@ -77,6 +85,8 @@ const NOOP_UNSUBSCRIBE = () => {};
 const NOOP_SUBSCRIBE = () => NOOP_UNSUBSCRIBE;
 const ABORT_RECONCILIATION_TIMEOUT_MS = 4_000;
 const ABORT_RECONCILIATION_POLL_MS = 75;
+const SEND_ADMISSION_DEADLINE_MS = 15_000;
+const ABORT_ADMISSION_DEADLINE_MS = 8_000;
 let optimisticSequence = 0;
 
 export function useAdminAssistantTranscript(): AdminAssistantTranscriptController {
@@ -93,6 +103,12 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
   const [admitting, setAdmitting] = useState(false);
   const [aborting, setAborting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const admissionAttemptRef = useRef<AdminAssistantAdmissionAttempt | null>(
+    null,
+  );
+  const abortPromiseRef = useRef<
+    Promise<"settled" | "requested" | "idle" | "failed"> | null
+  >(null);
   const [locallyTerminalSubmissionIds, setLocallyTerminalSubmissionIds] =
     useState<ReadonlySet<string>>(() => new Set());
 
@@ -154,6 +170,15 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
   }, [durableMessages]);
 
   useEffect(() => {
+    const admission = admissionAttemptRef.current;
+    if (admission) {
+      admission.controller.abort(
+        new DOMException("Assistant thread changed", "AbortError"),
+      );
+      admission.clearDeadline();
+      admissionAttemptRef.current = null;
+    }
+    abortPromiseRef.current = null;
     setLocallyTerminalSubmissionIds(new Set());
   }, [threadId]);
 
@@ -223,12 +248,30 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
       setAdmitting(true);
       setOperationError(null);
 
+      const deadline = deadlineController(
+        SEND_ADMISSION_DEADLINE_MS,
+        "Assistant admission",
+      );
+      const attempt: AdminAssistantAdmissionAttempt = {
+        ...deadline,
+        optimisticId,
+      };
+      admissionAttemptRef.current = attempt;
+
       try {
         const admission = await transport.client.agents.send(
           ADMIN_FLUE_AGENT_NAME,
           transport.threadId,
-          { message },
+          { message, signal: attempt.controller.signal },
         );
+        if (
+          attempt.controller.signal.aborted ||
+          admissionAttemptRef.current !== attempt
+        ) {
+          return false;
+        }
+        attempt.clearDeadline();
+        admissionAttemptRef.current = null;
         const durableSubmissionIds = new Set(
           (transport.observation.getSnapshot().conversation?.messages ?? [])
             .flatMap((durable) =>
@@ -252,14 +295,23 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
         }
         return true;
       } catch {
+        const ownsAdmission = admissionAttemptRef.current === attempt;
+        if (ownsAdmission) admissionAttemptRef.current = null;
+        attempt.clearDeadline();
         setPendingMessages((current) =>
           current.filter((pending) => pending.id !== optimisticId),
         );
-        setOperationError(
-          "Assistant request failed before it was admitted. Nothing was changed.",
-        );
+        if (ownsAdmission) {
+          setOperationError(
+            "Assistant request failed before it was admitted. Nothing was changed.",
+          );
+        }
         return false;
       } finally {
+        if (admissionAttemptRef.current === attempt) {
+          admissionAttemptRef.current = null;
+          attempt.clearDeadline();
+        }
         setAdmitting(false);
       }
     },
@@ -269,48 +321,78 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
   const abort = useCallback(async (): Promise<
     "settled" | "requested" | "idle" | "failed"
   > => {
-    if (!transport || admitting || aborting) return "failed";
-    setAborting(true);
-    setOperationError(null);
-    try {
-      const result = await transport.client.agents.abort(
-        ADMIN_FLUE_AGENT_NAME,
-        transport.threadId,
-      );
-      const canonical = await reconcileAbortWithCanonicalHistory(
-        transport,
-        result.aborted,
-      );
-      if (!result.aborted || (canonical && !hasActiveSubmission(canonical))) {
-        const knownIds = new Set(
-          (canonical?.messages ??
-            transport.observation.getSnapshot().conversation?.messages ?? [])
-            .flatMap((message) =>
-              message.submissionId ? [message.submissionId] : []
-            ),
-        );
-        for (const message of pendingMessages) {
-          if (message.submissionId) knownIds.add(message.submissionId);
-        }
-        setPendingMessages([]);
-        setLocallyTerminalSubmissionIds((current) =>
-          new Set([...current, ...knownIds])
-        );
-      }
-      transport.observation.refresh();
-      if (!result.aborted) return "idle";
-      return canonical && !hasActiveSubmission(canonical)
-        ? "settled"
-        : "requested";
-    } catch {
-      setOperationError(
-        "The stop request could not be confirmed. The assistant may still be working.",
-      );
-      return "failed";
-    } finally {
-      setAborting(false);
+    if (abortPromiseRef.current) return abortPromiseRef.current;
+    if (!transport || (!admitting && !admittedPendingMessage && !activeSubmission)) {
+      return "idle";
     }
-  }, [aborting, admitting, pendingMessages, transport]);
+
+    const operation = (async () => {
+      setAborting(true);
+      setOperationError(null);
+      cancelAllAdminAssistantHumanActions();
+
+      const admission = admissionAttemptRef.current;
+      if (admission) {
+        admission.controller.abort(
+          new DOMException("Assistant admission was stopped", "AbortError"),
+        );
+        admission.clearDeadline();
+        admissionAttemptRef.current = null;
+        setPendingMessages((current) =>
+          current.filter((pending) => pending.id !== admission.optimisticId),
+        );
+        setAdmitting(false);
+      }
+
+      const deadline = deadlineController(
+        ABORT_ADMISSION_DEADLINE_MS,
+        "Assistant stop",
+      );
+      try {
+        const result = await transport.client.agents.abort(
+          ADMIN_FLUE_AGENT_NAME,
+          transport.threadId,
+          { signal: deadline.controller.signal },
+        );
+        const canonical = await reconcileAbortWithCanonicalHistory(
+          transport,
+          result.aborted,
+        );
+        if (!result.aborted || (canonical && !hasActiveSubmission(canonical))) {
+          const knownIds = new Set(
+            (canonical?.messages ??
+              transport.observation.getSnapshot().conversation?.messages ?? [])
+              .flatMap((message) =>
+                message.submissionId ? [message.submissionId] : []
+              ),
+          );
+          for (const message of pendingMessages) {
+            if (message.submissionId) knownIds.add(message.submissionId);
+          }
+          setPendingMessages([]);
+          setLocallyTerminalSubmissionIds((current) =>
+            new Set([...current, ...knownIds])
+          );
+        }
+        transport.observation.refresh();
+        if (!result.aborted) return "idle";
+        return canonical && !hasActiveSubmission(canonical)
+          ? "settled"
+          : "requested";
+      } catch {
+        setOperationError(
+          "The stop request could not be confirmed. The assistant may still be working.",
+        );
+        return "failed";
+      } finally {
+        deadline.clearDeadline();
+        setAborting(false);
+        abortPromiseRef.current = null;
+      }
+    })();
+    abortPromiseRef.current = operation;
+    return operation;
+  }, [activeSubmission, admittedPendingMessage, admitting, pendingMessages, transport]);
 
   const retry = useCallback(() => {
     setOperationError(null);
@@ -325,7 +407,7 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     sending,
     aborting,
     canAbort:
-      (admittedPendingMessage || activeSubmission) && !admitting && !aborting,
+      (admitting || admittedPendingMessage || activeSubmission) && !aborting,
     canStartNewConversation: !sending && !aborting,
     operationError,
     settlementNotice,
@@ -335,6 +417,20 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     switchConversation,
     retry,
     clearOperationError: () => setOperationError(null),
+  };
+}
+
+function deadlineController(milliseconds: number, label: string): {
+  controller: AbortController;
+  clearDeadline: () => void;
+} {
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => {
+    controller.abort(new DOMException(`${label} timed out`, "TimeoutError"));
+  }, milliseconds);
+  return {
+    controller,
+    clearDeadline: () => globalThis.clearTimeout(timeout),
   };
 }
 

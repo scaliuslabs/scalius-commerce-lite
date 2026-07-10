@@ -34,6 +34,22 @@ describe("generated media client", () => {
     vi.unstubAllGlobals();
   });
 
+  it("accepts only the bounded configured-model aspect-ratio capability", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      success: true,
+      data: { aspectRatios: ["auto", "1:1"] },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(MediaApiClient.getImageGenerationCapabilities()).resolves.toEqual({
+      aspectRatios: ["auto", "1:1"],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/admin/media/image-generation/capabilities",
+      { headers: { Accept: "application/json" } },
+    );
+  });
+
   it("requires and decodes the bounded binary provenance headers", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(new Uint8Array([1, 2, 3]), {

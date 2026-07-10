@@ -207,10 +207,16 @@ export const assistantComputerHandoffs = sqliteTable("assistant_computer_handoff
   requestId: text("request_id").notNull(),
   programDigest: text("program_digest").notNull(),
   state: text("state", { enum: ["cancelled", "dispatched"] }).notNull(),
+  ticketIssuedAtMs: integer("ticket_issued_at_ms").notNull(),
   ticketExpiresAt: integer("ticket_expires_at", { mode: "timestamp" }).notNull(),
   retentionExpiresAt: integer("retention_expires_at", { mode: "timestamp" }).notNull(),
   dispatchClaimHash: text("dispatch_claim_hash"),
+  dispatchStatus: text("dispatch_status", {
+    enum: ["claimed", "dispatching", "confirmed", "failed", "uncertain", "blocked"],
+  }),
   dispatchConfirmedAt: integer("dispatch_confirmed_at", { mode: "timestamp" }),
+  dispatchFailedAt: integer("dispatch_failed_at", { mode: "timestamp" }),
+  dispatchUncertainAt: integer("dispatch_uncertain_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
 }, (table) => [
@@ -219,6 +225,26 @@ export const assistantComputerHandoffs = sqliteTable("assistant_computer_handoff
     columns: [table.agentInstanceId, table.requestId],
   }),
   index("assistant_computer_handoffs_retention_expiry_idx").on(table.retentionExpiresAt),
+  index("assistant_computer_handoffs_instance_dispatch_idx").on(
+    table.agentInstanceId,
+    table.dispatchStatus,
+    table.ticketIssuedAtMs,
+  ),
+]);
+
+export const assistantComputerStopBarriers = sqliteTable("assistant_computer_stop_barriers", {
+  sessionId: text("session_id").notNull().references(() => assistantSessions.id),
+  agentInstanceId: text("agent_instance_id").primaryKey(),
+  stoppedThroughIssuedAtMs: integer("stopped_through_issued_at_ms").notNull(),
+  stopping: integer("stopping", { mode: "boolean" }).notNull().default(false),
+  activeAdmissionId: text("active_admission_id"),
+  activeAdmissionClaimHash: text("active_admission_claim_hash"),
+  activeAdmissionExpiresAt: integer("active_admission_expires_at", { mode: "timestamp" }),
+  lastStopCompletedAt: integer("last_stop_completed_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+  index("assistant_computer_stop_barriers_session_idx").on(table.sessionId),
 ]);
 
 export type AssistantSession = InferSelectModel<typeof assistantSessions>;
@@ -228,3 +254,6 @@ export type AssistantActionExecution = InferSelectModel<typeof assistantActionEx
 export type AssistantEvent = InferSelectModel<typeof assistantEvents>;
 export type AssistantRateLimitWindow = InferSelectModel<typeof assistantRateLimitWindows>;
 export type AssistantComputerHandoff = InferSelectModel<typeof assistantComputerHandoffs>;
+export type AssistantComputerStopBarrier = InferSelectModel<
+  typeof assistantComputerStopBarriers
+>;
