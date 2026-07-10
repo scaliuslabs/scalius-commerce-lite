@@ -423,6 +423,7 @@ export async function collectStorefrontMcpContexts(
     args: JsonRecord;
     id: string;
     expectedProductIds?: string[];
+    required?: boolean;
   };
   const plans: ToolPlan[] = [{
     tool: "storefront_discovery_policy",
@@ -504,8 +505,9 @@ export async function collectStorefrontMcpContexts(
         args: {
         id: productId,
         ...(selected.length > 0 ? { selected } : {}),
-      },
+        },
         id: "storefront-chat-catalog-product",
+        required: storefrontIntentPrefersCurrentProduct(intent, payload),
       });
     }
   }
@@ -516,6 +518,8 @@ export async function collectStorefrontMcpContexts(
       tool: "catalog_lookup",
       args: { ids: visibleProductIds },
       id: "storefront-chat-visible-products",
+      required: intent.kind === "factual_comparison" ||
+        intent.kind === "recommendation_comparison",
     });
   }
 
@@ -544,6 +548,7 @@ export async function collectStorefrontMcpContexts(
       tool: "catalog_search",
       args: { query: searchQuery, limit: 5 },
       id: "storefront-chat-catalog-search",
+      required: true,
     });
   }
 
@@ -556,10 +561,19 @@ export async function collectStorefrontMcpContexts(
       tool: "cart_validate",
       args: { items: cartItems },
       id: "storefront-chat-cart-validate",
+      required: true,
     });
   }
 
-  const contexts = (await Promise.all(plans.map(addToolContext)))
+  const outcomes = await Promise.all(plans.map(async (plan) => ({
+    plan,
+    context: await addToolContext(plan),
+  })));
+  if (outcomes.some(({ plan, context }) => plan.required && !context)) {
+    throw unavailableStorefrontToolsError();
+  }
+  const contexts = outcomes
+    .map(({ context }) => context)
     .filter((context): context is StorefrontMcpContext => context !== null);
 
   if (contexts.length === 0) {

@@ -6,6 +6,7 @@ import {
 import type { FetchLike } from "./storefront-runtime";
 import {
   UNSAFE_TERMS,
+  apiBinding,
   boot,
   catalogCategoriesContext,
   createEnv,
@@ -47,6 +48,33 @@ describe("storefront catalog MCP server", () => {
     for (const unsafeTerm of UNSAFE_TERMS) {
       expect(serialized).not.toContain(unsafeTerm);
     }
+  });
+
+  it("routes catalog reads through the Storefront service binding by default", async () => {
+    const storefrontFetch = vi.fn<FetchLike>().mockResolvedValue(json({
+      ucp: { status: "success", version: UCP_VERSION },
+      products: [],
+    }));
+    const env = createEnv();
+    env.STOREFRONT = apiBinding(storefrontFetch);
+    const { client } = await boot(null, env);
+
+    const result = await client.callTool({
+      name: "catalog_search",
+      arguments: { query: "shoes", limit: 5 },
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(storefrontFetch).toHaveBeenCalledTimes(1);
+    const [input, init] = storefrontFetch.mock.calls[0]!;
+    expect(requestUrl(input)).toBe(
+      "https://storefront.example.test/ucp/catalog/search",
+    );
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("UCP-Agent")).toBe(
+      `profile="${DEFAULT_AGENT_PROFILE_URL}"`,
+    );
   });
 
   it("rejects unbounded catalog and cart validation inputs before storefront fetches", async () => {

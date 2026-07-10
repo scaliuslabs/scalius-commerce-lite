@@ -19,6 +19,10 @@
     {
       "binding": "API",
       "service": "scalius-api"
+    },
+    {
+      "binding": "STOREFRONT",
+      "service": "scalius-storefront"
     }
   ],
   "durable_objects": {

@@ -9,6 +9,7 @@ export interface AdminAgentRuntimeEnv {
 
 export interface StorefrontAgentRuntimeEnv {
   API: Fetcher;
+  STOREFRONT: Fetcher;
   STOREFRONT_CONVERSATIONS?: ConversationObjectNamespace;
   STOREFRONT_URL?: string;
   AGENT_PROFILE_URL?: string;

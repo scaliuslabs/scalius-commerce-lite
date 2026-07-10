@@ -260,14 +260,22 @@ export function createEnv(
   return {
     ...BASE_TEST_ENV,
     API: apiBinding(apiFetch),
+    STOREFRONT: apiBinding(
+      mockJsonFetch({ ucp: { status: "success" }, products: [] }),
+    ),
   };
 }
 
 export async function boot(
-  fetchImpl: FetchLike = vi.fn().mockResolvedValue(json({ ucp: { status: "success" } })),
+  fetchImpl: FetchLike | null = vi.fn().mockResolvedValue(
+    json({ ucp: { status: "success" } }),
+  ),
   env: TestAgentEnv = createEnv(),
 ) {
-  const server = createStorefrontCatalogMcpServer(env, { fetchImpl });
+  const server = createStorefrontCatalogMcpServer(
+    env,
+    fetchImpl ? { fetchImpl } : {},
+  );
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
   await Promise.all([

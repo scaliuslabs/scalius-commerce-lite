@@ -442,7 +442,9 @@ export function createStorefrontCatalogMcpServer(
   env: StorefrontAgentRuntimeEnv,
   options: StorefrontCatalogMcpOptions = {},
 ): McpServer {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = options.fetchImpl ?? env.STOREFRONT.fetch.bind(
+    env.STOREFRONT,
+  );
   const server = new McpServer({
     name: env.AGENT_NAME?.trim() || "scalius-storefront-catalog-agent",
     version: env.AGENT_VERSION?.trim() || "0.1.0",
