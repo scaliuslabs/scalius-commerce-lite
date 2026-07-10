@@ -24,6 +24,108 @@ const EMPTY_SUGGESTIONS = [
 ] as const;
 const MAX_VISIBLE_MESSAGES = 80;
 
+/**
+ * Flue can persist tool progress, tool completion, and the final answer as
+ * separate messages for one submission. The merchant needs one conversational
+ * result, not a protocol timeline, so keep only active/error progress and the
+ * latest completed answer for each submission (or user turn when no durable
+ * submission id is available).
+ */
+export function projectAdminAssistantMessages(
+  messages: readonly FlueConversationMessage[],
+): FlueConversationMessage[] {
+  const groups = new Map<
+    string,
+    { messages: FlueConversationMessage[]; lastIndex: number }
+  >();
+  const groupKeyByIndex = new Map<number, string>();
+  let turn = 0;
+
+  messages.forEach((message, index) => {
+    if (message.role === "user") {
+      turn += 1;
+      return;
+    }
+    const key = message.submissionId
+      ? `submission:${message.submissionId}`
+      : `turn:${turn}`;
+    const group = groups.get(key) ?? { messages: [], lastIndex: index };
+    group.messages.push(message);
+    group.lastIndex = index;
+    groups.set(key, group);
+    groupKeyByIndex.set(index, key);
+  });
+
+  const projectedByIndex = new Map<number, FlueConversationMessage>();
+  for (const group of groups.values()) {
+    const terminalToolCalls = new Set<string>();
+    for (const message of group.messages) {
+      for (const part of message.parts) {
+        if (
+          part.type === "dynamic-tool" &&
+          (part.state === "output-available" ||
+            part.state === "output-error")
+        ) {
+          terminalToolCalls.add(part.toolCallId);
+        }
+      }
+    }
+
+    let lastTextMessage: FlueConversationMessage | undefined;
+    for (let index = group.messages.length - 1; index >= 0; index -= 1) {
+      const candidate = group.messages[index];
+      if (
+        candidate?.parts.some(
+          (part) => part.type === "text" && part.text.trim().length > 0,
+        )
+      ) {
+        lastTextMessage = candidate;
+        break;
+      }
+    }
+    const errorParts = group.messages
+      .flatMap((message) =>
+        message.parts.filter(
+          (part) =>
+            part.type === "dynamic-tool" && part.state === "output-error",
+        ),
+      )
+      .slice(-2);
+    const activeParts = lastTextMessage
+      ? []
+      : group.messages
+          .flatMap((message) =>
+            message.parts.filter(
+              (part) =>
+                part.type === "dynamic-tool" &&
+                part.state === "input-available" &&
+                !terminalToolCalls.has(part.toolCallId),
+            ),
+          )
+          .slice(-2);
+    const textParts = lastTextMessage
+      ? lastTextMessage.parts.filter(
+          (part) => part.type === "text" && part.text.trim().length > 0,
+        )
+      : [];
+    const parts = [...textParts, ...errorParts, ...activeParts];
+    if (parts.length === 0) continue;
+
+    const source = lastTextMessage ?? group.messages.at(-1);
+    if (!source) continue;
+    projectedByIndex.set(group.lastIndex, { ...source, parts });
+  }
+
+  return messages.flatMap((message, index) => {
+    if (message.role === "user") return [message];
+    const key = groupKeyByIndex.get(index);
+    const group = key ? groups.get(key) : undefined;
+    if (!group || group.lastIndex !== index) return [];
+    const projected = projectedByIndex.get(index);
+    return projected ? [projected] : [];
+  });
+}
+
 export function AdminAssistantConversation({
   threadId,
   messages,
@@ -34,9 +136,13 @@ export function AdminAssistantConversation({
   const scrollRef = useRef<HTMLDivElement>(null);
   const followingLatestRef = useRef(true);
   const priorLastMessageIdRef = useRef<string | undefined>(undefined);
-  const visibleMessages = useMemo(
-    () => messages.slice(-MAX_VISIBLE_MESSAGES),
+  const projectedMessages = useMemo(
+    () => projectAdminAssistantMessages(messages),
     [messages],
+  );
+  const visibleMessages = useMemo(
+    () => projectedMessages.slice(-MAX_VISIBLE_MESSAGES),
+    [projectedMessages],
   );
 
   useEffect(() => {
@@ -46,7 +152,7 @@ export function AdminAssistantConversation({
   }, [threadId]);
 
   useEffect(() => {
-    const lastMessage = messages.at(-1);
+    const lastMessage = projectedMessages.at(-1);
     const newUserMessage =
       lastMessage?.role === "user" &&
       lastMessage.id !== priorLastMessageIdRef.current;
@@ -55,7 +161,7 @@ export function AdminAssistantConversation({
     if (followingLatestRef.current) {
       endRef.current?.scrollIntoView?.({ block: "nearest" });
     }
-  }, [messages, sending]);
+  }, [projectedMessages, sending]);
 
   return (
     <div
@@ -73,7 +179,7 @@ export function AdminAssistantConversation({
         followingLatestRef.current = distanceFromBottom <= 48;
       }}
     >
-      {messages.length === 0 ? (
+      {projectedMessages.length === 0 ? (
         <section
           className="flex min-h-full flex-col justify-center py-4"
           aria-labelledby="admin-assistant-empty-title"
@@ -113,7 +219,7 @@ export function AdminAssistantConversation({
         </section>
       ) : (
         <div className="space-y-4">
-          {messages.length > visibleMessages.length ? (
+          {projectedMessages.length > visibleMessages.length ? (
             <p className="rounded-md border border-border/70 bg-muted/20 px-2 py-1.5 text-center text-[10px] text-muted-foreground">
               Earlier messages remain in this durable thread.
             </p>
