@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   hash: vi.fn(),
   equal: vi.fn((left: string, right: string) => left === right),
   seed: vi.fn(),
-  permissions: vi.fn(),
+  freshPermissions: vi.fn(),
   storefrontDeployment: vi.fn(),
   assertStorefront: vi.fn(),
 }));
@@ -19,7 +19,7 @@ vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
   autoSeedRbacIfNeeded: mocks.seed,
 }));
 vi.mock("@scalius/core/auth/rbac/helpers", () => ({
-  getUserPermissions: mocks.permissions,
+  getFreshUserPermissionsFromD1: mocks.freshPermissions,
 }));
 vi.mock("@scalius/core/utils/transient-d1", () => ({
   retryTransientD1: (operation: () => unknown) => operation(),
@@ -98,7 +98,7 @@ describe("Flue command instance authority", () => {
       value.version === "admin-assistant-dashboard-session:v1"
         ? "d".repeat(64)
         : "permission_hash");
-    mocks.permissions.mockResolvedValue(new Set(["products.view"]));
+    mocks.freshPermissions.mockResolvedValue(new Set(["products.view"]));
     mocks.storefrontDeployment.mockResolvedValue({ deploymentBindingHash: "x".repeat(64) });
   });
 
@@ -113,16 +113,50 @@ describe("Flue command instance authority", () => {
       expectedSurface: "admin",
     });
     expect(mocks.seed).toHaveBeenCalledOnce();
-    expect(mocks.permissions).toHaveBeenCalledWith(
-      db,
-      "admin_1",
-      cache,
-      false,
-    );
+    expect(mocks.freshPermissions).toHaveBeenCalledWith(db, "admin_1");
+    expect(cache.get).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
     expect(mocks.hash).toHaveBeenCalledWith(expect.objectContaining({
       version: "admin-assistant-permission-snapshot:v1",
       actorId: "admin_1",
       permissions: ["products.view"],
+    }));
+  });
+
+  it("invalidates the thread after fresh D1 revokes a stale cached role grant", async () => {
+    const { context, db, cache } = testContext();
+    cache.get.mockResolvedValue(["products.view"]);
+    mocks.freshPermissions.mockResolvedValue(new Set(["dashboard.view"]));
+    mocks.hash.mockImplementation(async (value: {
+      version?: string;
+      permissions?: string[];
+    }) => value.version === "admin-assistant-dashboard-session:v1"
+      ? "d".repeat(64)
+      : value.permissions?.includes("products.view")
+        ? "permission_hash"
+        : "changed_permission_hash");
+
+    await expect(resolveAdminFlueCommandAuthority(context, INSTANCE_ID))
+      .rejects.toThrow("Admin permissions changed");
+
+    expect(mocks.freshPermissions).toHaveBeenCalledWith(db, "admin_1");
+    expect(cache.get).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it("retains the fresh super-admin registry in the permission snapshot hash", async () => {
+    const permissions = new Set(["taxes.view", "taxes.manage", "products.view"]);
+    mocks.freshPermissions.mockResolvedValue(permissions);
+    const { context } = testContext();
+
+    await expect(resolveAdminFlueCommandAuthority(context, INSTANCE_ID))
+      .resolves.toEqual({
+        session: expect.objectContaining({ id: "as_1" }),
+        permissions,
+      });
+    expect(mocks.hash).toHaveBeenCalledWith(expect.objectContaining({
+      version: "admin-assistant-permission-snapshot:v1",
+      permissions: ["products.view", "taxes.manage", "taxes.view"],
     }));
   });
 
