@@ -737,6 +737,24 @@ describe("deploy target wiring", () => {
       ok: true,
       target: "storefront-agent",
     });
+    const selectableTargets = [
+      "admin-agent",
+      "storefront-agent",
+      "api",
+      "admin",
+      "storefront",
+      "ops-monitor",
+      "admin-agent-flue",
+      "storefront-agent-flue",
+    ];
+    expect(parseOnlyTarget(["--only", "admin-agent-flue"], selectableTargets)).toEqual({
+      ok: true,
+      target: "admin-agent-flue",
+    });
+    expect(parseOnlyTarget(["--only", "storefront-agent-flue"], selectableTargets)).toEqual({
+      ok: true,
+      target: "storefront-agent-flue",
+    });
 
     expect(parseOnlyTarget(["--only", "unknown"])).toMatchObject({
       ok: false,
@@ -780,5 +798,32 @@ describe("deploy target wiring", () => {
     expect(storefrontCommand.cmd).toContain("exec wrangler deploy");
     expect(storefrontCommand.label).toBe("Deploy Storefront Agent Worker");
     expect(storefrontCommand.cwd).toMatch(/apps\/storefront-agent$/);
+  });
+
+  it("builds and deploys Flue canaries only from generated Wrangler configs", () => {
+    expect(getTypecheckCommandForTarget("admin-agent-flue")).toContain(
+      "--filter @scalius/shared --filter @scalius/admin-agent-flue typecheck",
+    );
+    expect(getTypecheckCommandForTarget("storefront-agent-flue")).toContain(
+      "--filter @scalius/shared --filter @scalius/storefront-agent-flue typecheck",
+    );
+    expect(getBuildCommandForTarget("admin-agent-flue")).toContain(
+      "--filter @scalius/admin-agent-flue build",
+    );
+    expect(getBuildCommandForTarget("storefront-agent-flue")).toContain(
+      "--filter @scalius/storefront-agent-flue build",
+    );
+
+    const adminCommand = getDeployCommandForTarget("admin-agent-flue");
+    expect(adminCommand.cmd).toContain("--strict --config dist/scalius_admin_agent_flue_canary/wrangler.json");
+    expect(adminCommand.label).toBe("Deploy Admin Flue Agent canary");
+    expect(adminCommand.cwd).toMatch(/apps\/admin-agent-flue$/);
+
+    const storefrontCommand = getDeployCommandForTarget("storefront-agent-flue");
+    expect(storefrontCommand.cmd).toContain(
+      "--strict --config dist/scalius_storefront_agent_flue_canary/wrangler.json",
+    );
+    expect(storefrontCommand.label).toBe("Deploy Storefront Flue Agent canary");
+    expect(storefrontCommand.cwd).toMatch(/apps\/storefront-agent-flue$/);
   });
 });
