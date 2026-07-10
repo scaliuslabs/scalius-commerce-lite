@@ -45,6 +45,8 @@ const ENCODED_UNSAFE_PATH_PATTERN = /%(?:2e|2f|5c)/i;
 const SAFE_QUERY_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*$/;
 const SENSITIVE_QUERY_NAME_PATTERN =
   /(?:auth|bearer|code|credential|customer|email|jwt|key|mobile|otp|pass|password|passwd|phone|proof|receipt|secret|session|sig|signature|token)/i;
+const SENSITIVE_PATH_SEGMENT_PATTERN =
+  /(?:\b(?:approval|chk|cst|otp|pk|secret|session|sk|tok|token)_[A-Za-z0-9_-]{6,}\b|\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?\b|\b[A-Fa-f0-9]{32,}\b|(?:^|[^\d])(?:88)?01[3-9]\d{8}(?!\d))/i;
 
 const BLOCKED_NAVIGATION_SEGMENTS = new Set([
   "account",
@@ -397,8 +399,7 @@ function sanitizeNavigationPath(value: unknown, origin: string): string | null {
     text.startsWith("//") ||
     text.includes("\\") ||
     RAW_PATH_TRAVERSAL_PATTERN.test(text) ||
-    ENCODED_UNSAFE_PATH_PATTERN.test(text) ||
-    hasSensitiveTargetText(text)
+    ENCODED_UNSAFE_PATH_PATTERN.test(text)
   ) {
     return null;
   }
@@ -425,6 +426,9 @@ function sanitizeNavigationPath(value: unknown, origin: string): string | null {
 
   const segments = url.pathname.split("/").filter(Boolean);
   if (segments.some((segment) => BLOCKED_NAVIGATION_SEGMENTS.has(segment.toLowerCase()))) {
+    return null;
+  }
+  if (segments.some((segment) => SENSITIVE_PATH_SEGMENT_PATTERN.test(segment))) {
     return null;
   }
   if (segments.some((segment) => !/^[A-Za-z0-9][A-Za-z0-9._~-]*$/.test(segment))) {
