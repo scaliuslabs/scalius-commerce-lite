@@ -23,6 +23,10 @@ describe("Flue thread admission primitives", () => {
       ASSISTANT_THREAD_SIGNING_KEY: SIGNING_KEY,
       JWT_SECRET: SIGNING_KEY,
     } as Env)).toThrow("Assistant thread admission is unavailable.");
+    expect(() => requireAssistantThreadSigningKey({
+      ASSISTANT_THREAD_SIGNING_KEY: `  ${SIGNING_KEY}  `,
+      JWT_SECRET: SIGNING_KEY,
+    } as Env)).toThrow("Assistant thread admission is unavailable.");
   });
 
   it("derives deterministic opaque identity and hidden authority credentials", async () => {
