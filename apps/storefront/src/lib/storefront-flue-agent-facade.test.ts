@@ -1,6 +1,8 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from "vitest";
+import { createStorefrontCanaryApp } from "../../../storefront-agent-flue/src/app";
+import { createThreadInstanceId } from "../../../storefront-agent-flue/src/thread-identity";
 
 import {
   proxyStorefrontFlueAgentFacade,
@@ -18,6 +20,7 @@ const ASSISTANT_COOKIE = `scalius_storefront_assistant=${CREDENTIAL}`;
 const SET_COOKIE = `${ASSISTANT_COOKIE}; Max-Age=28800; Path=/api/assistant/conversations/${THREAD_ID}; HttpOnly; SameSite=Lax; Secure`;
 const SERVICE_TOKEN = "storefront-flue-service-token-at-least-32-characters";
 const PUBLIC_PATH = `/api/assistant/conversations/${THREAD_ID}/flue/agents/shopping-assistant/${THREAD_ID}`;
+const READINESS_PATH = `/api/assistant/conversations/${THREAD_ID}/flue/readyz`;
 const PRIVATE_PATH = `http://storefront-flue-agent.internal/agents/shopping-assistant/${INSTANCE_ID}`;
 const NOW = 1_800_000_000_000;
 
@@ -50,6 +53,13 @@ function browserRequest(
   });
 }
 
+function readinessRequest(cookie: string | null = ASSISTANT_COOKIE): Request {
+  const request = browserRequest("?view=history", {}, cookie);
+  return new Request(`${ORIGIN}${READINESS_PATH}`, {
+    headers: request.headers,
+  });
+}
+
 function dependencies(
   overrides: Partial<StorefrontFlueAgentFacadeDependencies> = {},
 ): StorefrontFlueAgentFacadeDependencies {
@@ -75,6 +85,86 @@ function dependencies(
 }
 
 describe("Storefront Flue agent facade", () => {
+  it("proves the facade token and API-signed instance against Flue without model work", async () => {
+    const threadKey = "facade-readiness-thread-key-at-least-32-bytes";
+    const computerKey = "facade-readiness-computer-key-at-least-32-bytes";
+    const readinessApp = createStorefrontCanaryApp({
+      recordAuthorizationFailure: () => undefined,
+    });
+    const readinessEnv = {
+      CANARY_AUTH_TOKEN: SERVICE_TOKEN,
+      THREAD_ID_SIGNING_KEY: threadKey,
+      COMPUTER_TICKET_SIGNING_KEY: computerKey,
+      API: { fetch: async () => new Response(null, { status: 204 }) },
+    };
+    const signedInstance = await createThreadInstanceId(
+      "storefront",
+      {
+        tenantId: TENANT_ID,
+        principalId: PRINCIPAL_ID,
+        threadId: THREAD_ID,
+      },
+      threadKey,
+    );
+    const agent = {
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) =>
+        readinessApp.request(new Request(input, init), undefined, readinessEnv),
+    };
+    const authority = { ...AUTHORITY, instanceId: signedInstance };
+
+    const ready = await proxyStorefrontFlueAgentFacade(
+      readinessRequest(),
+      dependencies({
+        agent,
+        resolveAuthority: async () => ({ ok: true, authority }),
+      }),
+    );
+    expect(ready.status).toBe(200);
+    expect(ready.headers.get("cache-control")).toBe("no-store");
+    await expect(ready.json()).resolves.toEqual({
+      ok: true,
+      endToEnd: true,
+      readiness: "facade_authenticated",
+    });
+
+    const wrongToken = await proxyStorefrontFlueAgentFacade(
+      readinessRequest(),
+      dependencies({
+        agent,
+        serviceToken: "wrong-but-valid-length-storefront-service-token-value",
+        resolveAuthority: async () => ({ ok: true, authority }),
+      }),
+    );
+    expect(wrongToken.status).toBe(503);
+    await expect(wrongToken.json()).resolves.toMatchObject({
+      error: { code: "STOREFRONT_FLUE_NOT_READY" },
+    });
+
+    const wrongSignature = await createThreadInstanceId(
+      "storefront",
+      {
+        tenantId: TENANT_ID,
+        principalId: PRINCIPAL_ID,
+        threadId: THREAD_ID,
+      },
+      "wrong-but-valid-length-api-signing-key-value",
+    );
+    const wrongInstance = await proxyStorefrontFlueAgentFacade(
+      readinessRequest(),
+      dependencies({
+        agent,
+        resolveAuthority: async () => ({
+          ok: true,
+          authority: { ...AUTHORITY, instanceId: wrongSignature },
+        }),
+      }),
+    );
+    expect(wrongInstance.status).toBe(503);
+    await expect(wrongInstance.json()).resolves.toMatchObject({
+      error: { code: "STOREFRONT_FLUE_NOT_READY" },
+    });
+  });
+
   it("bootstraps the HttpOnly session, admits through API authority, and forwards only server-owned identity", async () => {
     const backendFetch = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -24,6 +24,7 @@ const flueMocks = vi.hoisted(() => ({
     pendingSubmissionId: string | null;
     sending: boolean;
     aborting: boolean;
+    canChangeConversation: boolean;
     state: {
       kind: "idle" | "connecting" | "connected" | "disconnected";
       message: string;
@@ -112,6 +113,7 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
       pendingSubmissionId: null,
       sending: false,
       aborting: false,
+      canChangeConversation: true,
       state: {
         kind: "connected",
         message: "Private shopping thread connected.",
@@ -236,6 +238,143 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
         STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY,
       ),
     ).toBe("open");
+  });
+
+  it("navigates a clear shopping question to its single authoritative match", async () => {
+    const issued = await issueScaliusComputerCommand({
+      surface: "storefront",
+      agentName: "shopping-assistant",
+      instanceId: `v1.${"i".repeat(43)}`,
+      program: "goto /products/everyday-shoes",
+      signingKey: COMPUTER_KEY,
+    });
+    flueMocks.snapshot.messages = [
+      textMessage("user_discovery", "user", "Do you sell shoes?"),
+      {
+        id: "assistant_discovery",
+        role: "assistant",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "scalius",
+            toolCallId: "scalius_discovery",
+            state: "output-available",
+            input: {
+              program: 'call catalog.search -- {"query":"shoes"}',
+            },
+            output: {
+              ok: true,
+              authoritative: true,
+              data: {
+                command: "call",
+                capability: { id: "catalog.search" },
+                result: {
+                  products: [
+                    {
+                      id: "product_1",
+                      name: "Everyday Shoes",
+                      route: "/products/everyday-shoes",
+                      availableForSale: true,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "computer_discovery",
+            state: "output-available",
+            input: { program: issued.program },
+            output: issued,
+          },
+        ],
+      },
+    ];
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await flushReact();
+
+    expect(navigate).toHaveBeenCalledWith("/products/everyday-shoes");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("navigates multiple catalog matches to the exact API-grounded search", async () => {
+    document
+      .querySelector<HTMLElement>("[data-assistant-page-slot]")
+      ?.insertAdjacentHTML(
+        "afterbegin",
+        '<button type="button" aria-label="Search products">Search store...</button>',
+      );
+    const issued = await issueScaliusComputerCommand({
+      surface: "storefront",
+      agentName: "shopping-assistant",
+      instanceId: `v1.${"i".repeat(43)}`,
+      program: "goto /search?q=gaming+accessories",
+      signingKey: COMPUTER_KEY,
+    });
+    flueMocks.snapshot.messages = [
+      textMessage(
+        "user_multi_discovery",
+        "user",
+        "Do you have gaming accessories?",
+      ),
+      {
+        id: "assistant_multi_discovery",
+        role: "assistant",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "scalius",
+            toolCallId: "scalius_multi_discovery",
+            state: "output-available",
+            input: {
+              program:
+                'call catalog.search -- {"query":"gaming accessories","limit":4}',
+            },
+            output: {
+              ok: true,
+              authoritative: true,
+              data: {
+                command: "call",
+                capability: { id: "catalog.search" },
+                result: {
+                  products: [
+                    {
+                      id: "gaming_mouse",
+                      name: "Gaming Mouse",
+                      route: "/products/gaming-mouse",
+                    },
+                    {
+                      id: "gaming_keyboard",
+                      name: "Gaming Keyboard",
+                      route: "/products/gaming-keyboard",
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "computer_multi_discovery",
+            state: "output-available",
+            input: { program: issued.program },
+            output: issued,
+          },
+        ],
+      },
+    ];
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await flushReact();
+
+    expect(navigate).toHaveBeenCalledWith("/search?q=gaming+accessories");
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("keeps the dock and launcher outside the computer observation boundary", async () => {
@@ -372,9 +511,165 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     await click(queryButton("Open storefront assistant"));
 
     expect(document.body.textContent).toContain("A concise catalog answer.");
-    expect(document.body.textContent).toContain("Catalog checked");
+    expect(document.body.textContent).not.toContain("Catalog checked");
     expect(document.body.textContent).not.toContain("MUST_NOT_RENDER");
     expect(document.body.querySelector("table")).toBeNull();
+  });
+
+  it("collapses separate tool-only messages into one final submission answer", async () => {
+    const submissionId = "submission_separate_messages";
+    flueMocks.snapshot.messages = [
+      {
+        id: "user_separate",
+        role: "user",
+        submissionId,
+        parts: [{ type: "text", text: "Show me shoes", state: "done" }],
+      },
+      {
+        id: "assistant_tool_started",
+        role: "assistant",
+        submissionId,
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "scalius",
+            toolCallId: "catalog_separate",
+            state: "input-available",
+            input: { program: 'call catalog.search -- {"query":"shoes"}' },
+          },
+        ],
+      },
+      {
+        id: "assistant_tool_completed",
+        role: "assistant",
+        submissionId,
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "observe_separate",
+            state: "output-available",
+            input: { program: "observe" },
+            output: { rawPage: "MUST_NOT_RENDER" },
+          },
+        ],
+      },
+      {
+        id: "assistant_catalog_result",
+        role: "assistant",
+        submissionId,
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "scalius",
+            toolCallId: "catalog_separate",
+            state: "output-available",
+            input: { program: 'call catalog.search -- {"query":"shoes"}' },
+            output: {
+              ok: true,
+              authoritative: true,
+              data: {
+                command: "call",
+                capability: { id: "catalog.search" },
+                result: {
+                  currency: { code: "BDT" },
+                  products: [
+                    {
+                      id: "shoe_1",
+                      name: "Everyday Shoes",
+                      route: "/products/everyday-shoes",
+                      price: 1_200,
+                      availableForSale: true,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        id: "assistant_final_answer",
+        role: "assistant",
+        submissionId,
+        parts: [
+          {
+            type: "text",
+            text: "I found one good match.",
+            state: "done",
+          },
+        ],
+      },
+    ];
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+
+    const conversation = document.querySelector(
+      '[aria-label="Storefront assistant conversation"]',
+    );
+    expect(conversation?.querySelectorAll("ol > li")).toHaveLength(2);
+    expect(
+      conversation?.querySelectorAll("[data-assistant-short-answer]"),
+    ).toHaveLength(1);
+    expect(conversation?.textContent).toContain("I found one good match.");
+    expect(conversation?.textContent).toContain("Everyday Shoes");
+    expect(conversation?.textContent).not.toContain("Catalog checked");
+    expect(conversation?.textContent).not.toContain("Checking the catalog");
+    expect(conversation?.textContent).not.toContain("MUST_NOT_RENDER");
+  });
+
+  it("keeps active and error progress when they are separate assistant messages", async () => {
+    flueMocks.snapshot.messages = [
+      {
+        id: "user_active",
+        role: "user",
+        submissionId: "submission_active",
+        parts: [{ type: "text", text: "Find a mug", state: "done" }],
+      },
+      {
+        id: "assistant_active",
+        role: "assistant",
+        submissionId: "submission_active",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "scalius",
+            toolCallId: "catalog_active",
+            state: "input-available",
+            input: { program: 'call catalog.search -- {"query":"mug"}' },
+          },
+        ],
+      },
+      {
+        id: "user_error",
+        role: "user",
+        submissionId: "submission_error",
+        parts: [{ type: "text", text: "Try the page", state: "done" }],
+      },
+      {
+        id: "assistant_error",
+        role: "assistant",
+        submissionId: "submission_error",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "computer_error",
+            state: "output-error",
+            input: { program: "observe" },
+            errorText: "private failure detail",
+          },
+        ],
+      },
+    ];
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+
+    expect(document.body.textContent).toContain("Checking the catalog");
+    expect(document.body.textContent).toContain("Page action needs attention");
+    expect(document.body.textContent).not.toContain("private failure detail");
   });
 
   it("does not yank an unpinned transcript and offers a jump-to-latest control", async () => {

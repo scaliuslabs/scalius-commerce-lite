@@ -9,6 +9,10 @@ import {
   type ScaliusCommandApiBinding,
 } from "@scalius/shared/assistant-command-client";
 import * as v from "valibot";
+import {
+  createStorefrontToolCallBudget,
+  type StorefrontToolCallBudget,
+} from "./tool-call-budget";
 
 const input = v.object({
   program: v.pipe(v.string(), v.maxLength(SCALIUS_COMMAND_LIMITS.programChars)),
@@ -42,13 +46,15 @@ export function createStorefrontScaliusTool(
   instanceId: string,
   api?: ScaliusCommandApiBinding,
   testOptions: Pick<RunScaliusCommandOptions, "timeoutMs"> = {},
+  callBudget: StorefrontToolCallBudget = createStorefrontToolCallBudget(),
 ) {
   return defineTool({
     name: "scalius",
     description: SCALIUS_COMMAND_TOOL_DESCRIPTION,
     input,
     output,
-    async run({ input: { program } }) {
+    async run({ input: { program }, signal }) {
+      callBudget.consume(signal);
       return runScaliusCommand({
         surface: "storefront",
         instanceId,

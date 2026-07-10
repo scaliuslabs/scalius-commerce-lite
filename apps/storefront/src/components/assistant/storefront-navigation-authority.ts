@@ -3,6 +3,7 @@ import {
   normalizeScaliusComputerRoute,
   parseScaliusComputerProgram,
 } from "@scalius/shared/assistant-computer";
+import { parseScaliusCommandProgram } from "@scalius/shared/assistant-command";
 
 import { resolveStorefrontAssistantNavigationTarget } from "@/lib/assistant-page-context.client";
 
@@ -20,6 +21,11 @@ export interface StorefrontNavigationAuthority {
   latestUserText: string;
   candidates: readonly StorefrontNavigationCandidate[];
 }
+
+type StorefrontNavigationIntent = {
+  destination: string;
+  mode: "direct" | "discovery";
+};
 
 /** Build a short-lived navigation capability from the latest explicit shopper
  * request plus routes proven by authoritative Scalius output or the visible
@@ -61,42 +67,59 @@ export function isAuthorizedStorefrontGoto(
   if (!authority) return false;
 
   const target = normalizeScaliusComputerRoute(command.route);
-  const destination = explicitNavigationDestination(authority.latestUserText);
-  if (!target || !destination) return false;
+  const intent = storefrontNavigationIntent(authority.latestUserText);
+  if (!target || !intent) return false;
+  const targetUrl = safeRouteUrl(target);
 
   const matchingRoutes = new Set<string>();
   for (const candidate of authority.candidates) {
+    if (
+      intent.mode === "discovery" &&
+      targetUrl?.pathname !== "/search" &&
+      candidate.source !== "scalius"
+    ) {
+      continue;
+    }
     if (!candidateProvesTarget(candidate.route, target)) continue;
-    if (!destinationMatchesCandidate(destination, target, candidate.label)) {
+    if (!destinationMatchesCandidate(intent, target, candidate.label)) {
       continue;
     }
     matchingRoutes.add(target);
   }
   if (matchingRoutes.size !== 1) return false;
 
+  // A results page is the non-arbitrary choice when several products match a
+  // clear shopper query. The query must be an exact projection of the latest
+  // request and the visible page must prove that this store owns /search.
+  if (targetUrl?.pathname === "/search") {
+    if (!isExactSearchDestination(target, intent)) return false;
+    return authority.candidates.some((candidate) => {
+      return (
+        candidate.source === "scalius" &&
+        isSameExactSearchRoute(candidate.route, target)
+      );
+    });
+  }
+
   // Ambiguous language must not silently select one of several proven routes.
   const semanticMatches = new Set(
     authority.candidates
+      .filter(
+        (candidate) =>
+          intent.mode !== "discovery" ||
+          (candidate.source === "scalius" &&
+            safeRouteUrl(candidate.route)?.pathname !== "/search"),
+      )
       .filter((candidate) =>
         destinationMatchesCandidate(
-          destination,
+          intent,
           candidate.route,
           candidate.label,
         ),
       )
       .map((candidate) => candidate.route),
   );
-  const targetUrl = safeRouteUrl(target);
-  const targetIsSearch = targetUrl?.pathname === "/search";
-  if (
-    semanticMatches.size > 1 &&
-    !(
-      targetIsSearch &&
-      [...semanticMatches].every(
-        (route) => safeRouteUrl(route)?.pathname === "/search",
-      )
-    )
-  ) {
+  if (semanticMatches.size > 1) {
     return false;
   }
   return true;
@@ -175,6 +198,8 @@ function collectScaliusCandidates(
     for (let partIndex = 0; partIndex < partLimit; partIndex += 1) {
       const part = message.parts[partIndex];
       if (!isAuthoritativeScaliusPart(part)) continue;
+      const searchCandidate = authoritativeCatalogSearchCandidate(part, origin);
+      if (searchCandidate) candidates.push(searchCandidate);
       collectRoutesFromValue(part.output, origin, candidates, 0, {
         count: 0,
       });
@@ -182,6 +207,57 @@ function collectScaliusCandidates(
     }
   }
   return candidates;
+}
+
+function authoritativeCatalogSearchCandidate(
+  part: Extract<FlueConversationPart, { type: "dynamic-tool" }> & {
+    output: Record<string, unknown>;
+  },
+  origin: string,
+): StorefrontNavigationCandidate | null {
+  if (
+    !isRecord(part.input) ||
+    Object.keys(part.input).length !== 1 ||
+    typeof part.input.program !== "string" ||
+    !isRecord(part.output.data) ||
+    part.output.data.command !== "call" ||
+    !isRecord(part.output.data.capability) ||
+    part.output.data.capability.id !== "catalog.search" ||
+    !isRecord(part.output.data.result) ||
+    !Array.isArray(part.output.data.result.products) ||
+    part.output.data.result.products.length <= 1
+  ) {
+    return null;
+  }
+  const parsed = parseScaliusCommandProgram(part.input.program);
+  if (
+    !parsed.ok ||
+    parsed.command.name !== "call" ||
+    parsed.command.capabilityId !== "catalog.search"
+  ) {
+    return null;
+  }
+  const rawQuery = parsed.command.arguments.query;
+  if (typeof rawQuery !== "string") return null;
+  const query = rawQuery.trim();
+  if (
+    !query ||
+    query.length > 120 ||
+    Array.from(query).some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 31 || code === 127;
+    })
+  ) {
+    return null;
+  }
+  const params = new URLSearchParams({ q: query });
+  const route = resolveStorefrontAssistantNavigationTarget(
+    `/search?${params.toString()}`,
+    origin,
+  );
+  return route
+    ? { route, label: `Search ${query}`, source: "scalius" }
+    : null;
 }
 
 function isAuthoritativeScaliusPart(
@@ -284,6 +360,17 @@ function collectVisibleCandidates(
   return candidates;
 }
 
+function storefrontNavigationIntent(
+  value: string,
+): StorefrontNavigationIntent | null {
+  const direct = explicitNavigationDestination(value);
+  if (direct) return { destination: direct, mode: "direct" };
+  const discovery = discoveryNavigationDestination(value);
+  return discovery
+    ? { destination: discovery, mode: "discovery" }
+    : null;
+}
+
 function explicitNavigationDestination(value: string): string | null {
   const text = normalizeWords(value).replace(/[?]+$/u, "").trim();
   if (!text) return null;
@@ -308,6 +395,45 @@ function explicitNavigationDestination(value: string): string | null {
   return null;
 }
 
+function discoveryNavigationDestination(value: string): string | null {
+  const text = normalizeWords(value).replace(/[?!.]+$/u, "").trim();
+  if (!text) return null;
+  const patterns = [
+    /^(?:do|does) (?:you|this store) (?:sell|have|carry|stock|offer) (.+)$/u,
+    /^(?:have|got) (?:you|this store) (?:got )?(.+)$/u,
+    /^(?:i am|i m|im) (?:looking|shopping|searching) for (.+)$/u,
+    /^(?:can|could|would) you (?:please )?(?:help me )?(?:find|show|recommend) (.+)$/u,
+    /^(?:help me )?(?:find|show|recommend) (.+)$/u,
+    /^which (.+) (?:do you recommend|would you recommend|are available|are in stock)$/u,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    const destination = cleanDiscoveryDestination(match?.[1] ?? "");
+    if (destination) return destination;
+  }
+  return null;
+}
+
+function cleanDiscoveryDestination(value: string): string | null {
+  const destination = value
+    .replace(/^(?:any|some|a|an|the)\s+/u, "")
+    .replace(/^me\s+/u, "")
+    .replace(/\s+(?:for sale|available|in stock|here|today)$/u, "")
+    .trim();
+  if (!destination || meaningfulWords(destination).length === 0) return null;
+  const generic = new Set([
+    "anything",
+    "everything",
+    "item",
+    "items",
+    "product",
+    "products",
+    "something",
+    "stuff",
+  ]);
+  return generic.has(destination) ? null : destination;
+}
+
 function candidateProvesTarget(candidate: string, target: string): boolean {
   if (candidate === target) return true;
   const candidateUrl = safeRouteUrl(candidate);
@@ -322,26 +448,77 @@ function candidateProvesTarget(candidate: string, target: string): boolean {
 }
 
 function destinationMatchesCandidate(
-  destination: string,
+  intent: StorefrontNavigationIntent,
   route: string,
   label: string,
 ): boolean {
-  const normalizedDestination = normalizeWords(destination);
+  const normalizedDestination = normalizeWords(intent.destination);
   if (!normalizedDestination) return false;
   const normalizedRoute = normalizeWords(route);
   if (normalizedRoute && normalizedDestination.includes(normalizedRoute)) {
     return true;
   }
-  const destinationWords = new Set(normalizedDestination.split(" "));
-  const labelWords = meaningfulWords(label);
-  const routeWords = meaningfulWords(routeLabel(route));
-  const queryWords = meaningfulWords(
+  const destinationWords = new Set(
+    canonicalMeaningfulWords(normalizedDestination),
+  );
+  const labelWords = canonicalMeaningfulWords(label);
+  const routeWords = canonicalMeaningfulWords(routeLabel(route));
+  const queryWords = canonicalMeaningfulWords(
     safeRouteUrl(route)?.searchParams.get("q") ?? "",
   );
   return [labelWords, queryWords, routeWords].some(
-    (words) =>
-      words.length > 0 && words.every((word) => destinationWords.has(word)),
+    (words) => {
+      if (words.length === 0) return false;
+      if (intent.mode === "direct") {
+        return words.every((word) => destinationWords.has(word));
+      }
+      const candidateWords = new Set(words);
+      return [...destinationWords].every((word) => candidateWords.has(word));
+    },
   );
+}
+
+function isExactSearchDestination(
+  route: string,
+  intent: StorefrontNavigationIntent,
+): boolean {
+  const url = safeRouteUrl(route);
+  if (!url || url.pathname !== "/search") return false;
+  const keys = [...url.searchParams.keys()];
+  if (keys.length !== 1 || keys[0] !== "q") return false;
+  const query = url.searchParams.get("q")?.trim() ?? "";
+  if (!query || query.length > 120) return false;
+  const queryWords = canonicalMeaningfulWords(query);
+  const destinationWords = canonicalMeaningfulWords(intent.destination);
+  return (
+    queryWords.length > 0 &&
+    queryWords.join("|") === destinationWords.join("|")
+  );
+}
+
+function isSameExactSearchRoute(left: string, right: string): boolean {
+  const leftUrl = safeRouteUrl(left);
+  const rightUrl = safeRouteUrl(right);
+  if (leftUrl?.pathname !== "/search" || rightUrl?.pathname !== "/search") {
+    return false;
+  }
+  const leftKeys = [...leftUrl.searchParams.keys()];
+  const rightKeys = [...rightUrl.searchParams.keys()];
+  return (
+    leftKeys.length === 1 &&
+    leftKeys[0] === "q" &&
+    rightKeys.length === 1 &&
+    rightKeys[0] === "q" &&
+    leftUrl.searchParams.get("q") === rightUrl.searchParams.get("q")
+  );
+}
+
+function canonicalMeaningfulWords(value: string): string[] {
+  return meaningfulWords(value)
+    .map((word) =>
+      word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word,
+    )
+    .sort();
 }
 
 function meaningfulWords(value: string): string[] {

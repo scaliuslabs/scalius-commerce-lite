@@ -38,7 +38,10 @@ vi.mock("./storefront-assistant-transcript", async (importOriginal) => ({
 }));
 
 import { FlueApiError } from "@flue/sdk";
-import { useStorefrontFlueAgent } from "./useStorefrontFlueAgent";
+import {
+  useStorefrontFlueAgent,
+  type StorefrontStoppedAdmissionReconciler,
+} from "./useStorefrontFlueAgent";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -126,7 +129,10 @@ describe("useStorefrontFlueAgent", () => {
     expect(sdkMocks.send).toHaveBeenCalledWith(
       "shopping-assistant",
       THREAD_ID,
-      { message: "Show me shoes" },
+      {
+        message: "Show me shoes",
+        signal: expect.any(AbortSignal),
+      },
     );
     expect(host.textContent).toContain("Show me shoes");
     expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
@@ -253,6 +259,194 @@ describe("useStorefrontFlueAgent", () => {
     expect(sdkMocks.abort).toHaveBeenCalledOnce();
     releaseAbort?.({ aborted: true });
     await act(async () => Promise.resolve());
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
+    expect(host.querySelector("[data-can-change]")?.textContent).toBe("false");
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-new]")?.click();
+      await Promise.resolve();
+    });
+    expect(claimMocks.rotate).not.toHaveBeenCalled();
+  });
+
+  it("keeps a never-settling admission blocked until the durable Stop barrier settles", async () => {
+    sdkMocks.send.mockReturnValueOnce(
+      new Promise(() => undefined),
+    );
+    const reconcile = vi.fn(async () => ({ status: "settled" as const }));
+    await act(async () => {
+      root.render(<Harness open reconciler={reconcile} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-send]")?.click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-abort]")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const sendSignal = sdkMocks.send.mock.calls[0]?.[2]?.signal;
+    expect(sendSignal).toBeInstanceOf(AbortSignal);
+    expect(sendSignal?.aborted).toBe(true);
+    expect(sdkMocks.abort).toHaveBeenCalledTimes(2);
+    expect(sdkMocks.abort).toHaveBeenNthCalledWith(
+      1,
+      "shopping-assistant",
+      THREAD_ID,
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(reconcile).toHaveBeenCalledWith({
+      threadId: THREAD_ID,
+      admissionStartedAt: expect.any(Number),
+      signal: expect.any(AbortSignal),
+    });
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("false");
+    expect(host.querySelector("[data-can-change]")?.textContent).toBe("true");
+  });
+
+  it("does not reopen send when client cancellation races a later server admission response", async () => {
+    let releaseSend:
+      | ((value: {
+          streamUrl: string;
+          offset: string;
+          submissionId: string;
+        }) => void)
+      | undefined;
+    sdkMocks.send.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseSend = resolve;
+      }),
+    );
+    let settleBarrier:
+      | ((value: { status: "settled" | "pending" }) => void)
+      | undefined;
+    const reconcile = vi.fn(
+      () =>
+        new Promise<{ status: "settled" | "pending" }>((resolve) => {
+          settleBarrier = resolve;
+        }),
+    );
+    await act(async () => {
+      root.render(<Harness open reconciler={reconcile} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-send]")?.click();
+      await Promise.resolve();
+      host.querySelector<HTMLButtonElement>("[data-abort]")?.click();
+      await Promise.resolve();
+    });
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
+    expect(host.querySelector("[data-can-change]")?.textContent).toBe("false");
+
+    releaseSend?.({
+      streamUrl: "https://store.test/stream-late",
+      offset: "offset-late",
+      submissionId: "submission_late",
+    });
+    await act(async () => Promise.resolve());
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
+    expect(claimMocks.rotate).not.toHaveBeenCalled();
+
+    settleBarrier?.({ status: "settled" });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("false");
+    expect(host.querySelector("[data-can-change]")?.textContent).toBe("true");
+  });
+
+  it("fails closed when no shared durable Stop reconciler is wired", async () => {
+    sdkMocks.send.mockReturnValueOnce(new Promise(() => undefined));
+    await act(async () => {
+      root.render(<Harness open />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-send]")?.click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-abort]")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(sdkMocks.abort).toHaveBeenCalledTimes(2);
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
+    expect(host.querySelector("[data-can-change]")?.textContent).toBe("false");
+  });
+
+  it("releases a stale pending projection when durable abort reports idle", async () => {
+    sdkMocks.abort.mockResolvedValueOnce({ aborted: false });
+    sdkMocks.snapshot = {
+      phase: "live",
+      offset: "offset-stale",
+      error: undefined,
+      conversation: {
+        conversationId: "default",
+        messages: [
+          {
+            id: "user_stale",
+            role: "user",
+            submissionId: "submission_stale",
+            parts: [{ type: "text", text: "Old request", state: "done" }],
+          },
+        ],
+        settlements: [],
+      },
+    };
+    await act(async () => {
+      root.render(<Harness open />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-abort]")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("false");
+    expect(host.querySelector("[data-can-change]")?.textContent).toBe("true");
+
+    await act(async () => sdkMocks.listener?.());
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("false");
+  });
+
+  it("clears sending only after the durable settlement when work was aborted", async () => {
+    sdkMocks.snapshot = {
+      phase: "live",
+      offset: "offset-pending",
+      error: undefined,
+      conversation: {
+        conversationId: "default",
+        messages: [
+          {
+            id: "user_pending",
+            role: "user",
+            submissionId: "submission_pending",
+            parts: [{ type: "text", text: "Keep working", state: "done" }],
+          },
+        ],
+        settlements: [],
+      },
+    };
+    await act(async () => {
+      root.render(<Harness open />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-abort]")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
     sdkMocks.snapshot = {
       ...sdkMocks.snapshot,
@@ -315,13 +509,23 @@ describe("useStorefrontFlueAgent", () => {
   });
 });
 
-function Harness({ open }: { open: boolean }) {
-  const agent = useStorefrontFlueAgent({ open });
+function Harness({
+  open,
+  reconciler,
+}: {
+  open: boolean;
+  reconciler?: StorefrontStoppedAdmissionReconciler;
+}) {
+  const agent = useStorefrontFlueAgent({
+    open,
+    reconcileStoppedAdmission: reconciler,
+  });
   return (
     <div>
       <span data-sending="">{String(agent.sending)}</span>
       <span data-state="">{agent.state.kind}</span>
       <span data-aborting="">{String(agent.aborting)}</span>
+      <span data-can-change="">{String(agent.canChangeConversation)}</span>
       <span data-recent="">
         {agent.recentThreads.map((thread) => thread.label).join("|")}
       </span>
@@ -346,7 +550,10 @@ function Harness({ open }: { open: boolean }) {
       <button data-new="" onClick={agent.newConversation}>
         New
       </button>
-      <button data-abort="" onClick={() => void agent.abort()}>
+      <button
+        data-abort=""
+        onClick={() => void agent.abort().catch(() => undefined)}
+      >
         Stop
       </button>
       {agent.recentThreads.map((thread) => (

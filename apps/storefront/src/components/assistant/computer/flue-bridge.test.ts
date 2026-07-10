@@ -497,6 +497,48 @@ describe("Storefront Flue computer coordinator", () => {
     });
     expect(postResult).toHaveBeenCalledOnce();
   });
+
+  it("aborts an in-flight continuation and never posts completion after Stop", async () => {
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+    });
+    let postSignal: AbortSignal | undefined;
+    const postResult = vi.fn(
+      (_payload, options?: { signal?: AbortSignal }) =>
+        new Promise<{ accepted: true; requestId: string }>((_resolve, reject) => {
+          postSignal = options?.signal;
+          options?.signal?.addEventListener(
+            "abort",
+            () => reject(options.signal?.reason),
+            { once: true },
+          );
+        }),
+    );
+    const phases: string[] = [];
+    const coordinator = new StorefrontFlueComputerCoordinator({
+      runtime,
+      postResult,
+      now: () => NOW + 1_000,
+      onPhase: (_requestId, phase) => phases.push(phase),
+    });
+    const issued = await command("observe", 17);
+    const consuming = coordinator.consume(source(issued));
+    await vi.waitFor(() => expect(postResult).toHaveBeenCalledOnce());
+
+    coordinator.cancelPending();
+
+    expect(postSignal?.aborted).toBe(true);
+    await expect(consuming).resolves.toEqual({
+      status: "cancelled",
+      requestId: issued.requestId,
+    });
+    expect(phases.at(-1)).toBe("cancelled");
+    await expect(coordinator.consume(source(issued))).resolves.toMatchObject({
+      status: "duplicate",
+      phase: "cancelled",
+    });
+  });
 });
 
 describe("Storefront Flue command parsing and same-origin result POST", () => {

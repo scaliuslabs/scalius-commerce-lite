@@ -554,6 +554,7 @@ export default function ProductShortcode({
             <Button
               variant="outline"
               size="lg"
+              data-scalius-computer-human-only=""
               disabled={isUnavailable}
               onClick={() => handleAddToCart(false)}
             >
@@ -561,6 +562,7 @@ export default function ProductShortcode({
             </Button>
             <Button
               size="lg"
+              data-scalius-computer-human-only=""
               disabled={isUnavailable}
               onClick={() => handleAddToCart(true)}
             >

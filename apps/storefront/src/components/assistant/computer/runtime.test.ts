@@ -75,6 +75,8 @@ describe("Storefront assistant computer runtime", () => {
     "/cdn-cgi/trace",
     "/checkout",
     "/checkout/payment",
+    "/buy",
+    "/buy/red-shoe",
     "/account",
     "/account/orders/order_1",
     "/order-success",
@@ -129,6 +131,8 @@ describe("Storefront assistant computer runtime", () => {
   });
 
   it.each([
+    "/cart",
+    "/buy/red-shoe",
     "/checkout",
     "/account",
     "/account/orders/order_1",
@@ -167,6 +171,117 @@ describe("Storefront assistant computer runtime", () => {
       binding: { ...runtime.binding, threadId: "wrong-thread" },
       program: "observe",
     })).resolves.toMatchObject({ ok: false, code: "INVALID_BINDING" });
+  });
+
+  it.each([
+    "Add to cart",
+    "Buy now",
+    "Quick buy",
+    "Open shopping cart",
+    "Checkout",
+    "Place order",
+    "Pay now",
+  ])("rejects unannotated commerce control %s in the real adapter", async (name) => {
+    document.body.innerHTML = `<main><button aria-label="${name}">${name}</button></main>`;
+    const button = document.querySelector<HTMLButtonElement>("button")!;
+    const clicked = vi.fn();
+    button.addEventListener("click", clicked);
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: "shop-commerce-thread",
+      tabId: "shop-commerce-tab",
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(/(@r\d+\.e\d+) button/u)?.[1];
+    expect(handle).toBeTruthy();
+
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${handle}`,
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(clicked).not.toHaveBeenCalled();
+  });
+
+  it("honors a commerce-surface human-only annotation for otherwise generic controls", async () => {
+    document.body.innerHTML = `
+      <main data-scalius-computer-human-only>
+        <button aria-label="Decrease quantity">−</button>
+      </main>`;
+    const button = document.querySelector<HTMLButtonElement>("button")!;
+    const clicked = vi.fn();
+    button.addEventListener("click", clicked);
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: "shop-annotated-cart-thread",
+      tabId: "shop-annotated-cart-tab",
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(/(@r\d+\.e\d+) button/u)?.[1];
+    expect(handle).toBeTruthy();
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${handle}`,
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(clicked).not.toHaveBeenCalled();
+  });
+
+  it("stops the remaining actions in an in-flight batch after cancellation", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button role="combobox" aria-label="Color"></button>
+        <select aria-label="Size">
+          <option value="small">Small</option>
+          <option value="large">Large</option>
+        </select>
+      </main>`;
+    const color = document.querySelector<HTMLButtonElement>("button")!;
+    color.addEventListener("click", () => {
+      const option = document.createElement("button");
+      option.setAttribute("role", "option");
+      option.textContent = "Red";
+      document.body.append(option);
+    });
+    const size = document.querySelector<HTMLSelectElement>("select")!;
+    const sizeChanged = vi.fn();
+    size.addEventListener("change", sizeChanged);
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: "shop-cancel-batch-thread",
+      tabId: "shop-cancel-batch-tab",
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const colorHandle = observed.output.match(
+      /(@r\d+\.e\d+) combobox "Color"/u,
+    )?.[1];
+    const sizeHandle = observed.output.match(
+      /(@r\d+\.e\d+) combobox "Size"/u,
+    )?.[1];
+    expect(colorHandle).toBeTruthy();
+    expect(sizeHandle).toBeTruthy();
+
+    const execution = runtime.execute({
+      binding: runtime.binding,
+      program: `select ${colorHandle} "Red"; select ${sizeHandle} "large"`,
+    });
+    runtime.cancelPending();
+
+    await expect(execution).resolves.toMatchObject({
+      ok: false,
+      code: "EXECUTION_FAILED",
+      retryable: false,
+    });
+    expect(size.value).toBe("small");
+    expect(sizeChanged).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -115,19 +115,6 @@ describe("Storefront navigation authority", () => {
         ]),
       ),
     ).toBe(false);
-    expect(
-      isAuthorizedStorefrontGoto(
-        "goto /products/shoes",
-        authority("Show me shoes", [
-          {
-            route: "/products/shoes",
-            label: "Shoes",
-            source: "scalius",
-          },
-        ]),
-      ),
-    ).toBe(false);
-
     const staleMessages: FlueConversationMessage[] = [
       textMessage("old_user", "user", "Open Everyday Shoes"),
       {
@@ -177,6 +164,294 @@ describe("Storefront navigation authority", () => {
     expect(stale.candidates).toEqual([]);
     expect(
       isAuthorizedStorefrontGoto("goto /products/everyday-shoes", stale),
+    ).toBe(false);
+  });
+
+  it("opens the single catalog match for a clear shopping-discovery question", () => {
+    const proof = authority("Do you sell shoes?", [
+      {
+        route: "/products/everyday-shoes",
+        label: "Everyday Shoes",
+        source: "scalius",
+      },
+      {
+        route: "/products/walking-shoes",
+        label: "Walking Shoes visible on this page",
+        source: "visible-page",
+      },
+      {
+        route: "/products/gaming-mouse",
+        label: "Gaming Mouse",
+        source: "visible-page",
+      },
+    ]);
+    expect(
+      isAuthorizedStorefrontGoto("goto /products/everyday-shoes", proof),
+    ).toBe(true);
+    expect(
+      isAuthorizedStorefrontGoto("goto /products/invented-shoes", proof),
+    ).toBe(false);
+  });
+
+  it("keeps two authoritative discovery matches ambiguous", () => {
+    const proof = authority("Do you sell shoes?", [
+      {
+        route: "/products/everyday-shoes",
+        label: "Everyday Shoes",
+        source: "scalius",
+      },
+      {
+        route: "/products/walking-shoes",
+        label: "Walking Shoes",
+        source: "scalius",
+      },
+    ]);
+    expect(
+      isAuthorizedStorefrontGoto("goto /products/everyday-shoes", proof),
+    ).toBe(false);
+  });
+
+  it("uses the exact authoritative search projection when several products match", () => {
+    const candidates: StorefrontNavigationAuthority["candidates"] = [
+      {
+        route: "/search?q=gaming+accessories",
+        label: "Search gaming accessories",
+        source: "scalius",
+      },
+      {
+        route: "/products/gaming-mouse",
+        label: "Gaming Mouse",
+        source: "scalius",
+      },
+      {
+        route: "/products/gaming-keyboard",
+        label: "Gaming Keyboard",
+        source: "scalius",
+      },
+    ];
+    const proof = authority("Do you have gaming accessories?", candidates);
+    expect(
+      isAuthorizedStorefrontGoto(
+        "goto /search?q=gaming%20accessories",
+        proof,
+      ),
+    ).toBe(true);
+    expect(
+      isAuthorizedStorefrontGoto("goto /search?q=phones", proof),
+    ).toBe(false);
+    expect(
+      isAuthorizedStorefrontGoto(
+        "goto /search?q=gaming%20accessories&utm_source=agent",
+        proof,
+      ),
+    ).toBe(false);
+  });
+
+  it("derives exact search authority from catalog.search on the real button-based home DOM", () => {
+    document.body.innerHTML = `
+      <header>
+        <button type="button" aria-label="Search products">Search store...</button>
+      </header>
+      <main>
+        <a href="/products/visible-shoe">Visible shoe card</a>
+      </main>`;
+    const messages: FlueConversationMessage[] = [
+      textMessage(
+        "user_home_search",
+        "user",
+        "Do you have gaming accessories?",
+      ),
+      {
+        id: "assistant_home_search",
+        role: "assistant",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "scalius",
+            toolCallId: "catalog_home_search",
+            state: "output-available",
+            input: {
+              program:
+                'call catalog.search -- {"query":"gaming accessories","limit":4}',
+            },
+            output: {
+              ok: true,
+              authoritative: true,
+              data: {
+                command: "call",
+                capability: { id: "catalog.search" },
+                result: {
+                  products: [
+                    {
+                      name: "Gaming Mouse",
+                      route: "/products/gaming-mouse",
+                    },
+                    {
+                      name: "Gaming Keyboard",
+                      route: "/products/gaming-keyboard",
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "computer_home_search",
+            state: "input-available",
+            input: { program: "goto /search?q=gaming+accessories" },
+          },
+        ],
+      },
+    ];
+    const proof = buildStorefrontNavigationAuthority({
+      messages,
+      messageIndex: 1,
+      partIndex: 1,
+      document,
+    });
+    expect(proof.candidates).toContainEqual({
+      route: "/search?q=gaming+accessories",
+      label: "Search gaming accessories",
+      source: "scalius",
+    });
+    expect(
+      isAuthorizedStorefrontGoto(
+        "goto /search?q=gaming%20accessories",
+        proof,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a search route not exactly proven by the authoritative query", () => {
+    document.body.innerHTML = `
+      <header>
+        <button type="button" aria-label="Search products">Search store...</button>
+      </header>
+      <main><a href="/products/visible-shoe">Visible shoe card</a></main>`;
+    const messages: FlueConversationMessage[] = [
+      textMessage(
+        "user_mismatched_search",
+        "user",
+        "Do you have gaming accessories?",
+      ),
+      {
+        id: "assistant_mismatched_search",
+        role: "assistant",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "scalius",
+            toolCallId: "catalog_mismatched_search",
+            state: "output-available",
+            input: {
+              program: 'call catalog.search -- {"query":"phones"}',
+            },
+            output: {
+              ok: true,
+              authoritative: true,
+              data: {
+                command: "call",
+                capability: { id: "catalog.search" },
+                result: { products: [] },
+              },
+            },
+          },
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "computer_mismatched_search",
+            state: "input-available",
+            input: { program: "goto /search?q=gaming+accessories" },
+          },
+        ],
+      },
+    ];
+    const proof = buildStorefrontNavigationAuthority({
+      messages,
+      messageIndex: 1,
+      partIndex: 1,
+      document,
+    });
+    expect(proof.candidates).not.toContainEqual(
+      expect.objectContaining({ route: "/search?q=phones" }),
+    );
+    expect(
+      isAuthorizedStorefrontGoto(
+        "goto /search?q=gaming%20accessories",
+        proof,
+      ),
+    ).toBe(false);
+  });
+
+  it("authorizes only the product route for one result and no route for zero results", () => {
+    const build = (products: unknown[]) => {
+      const messages: FlueConversationMessage[] = [
+        textMessage("user_cardinality", "user", "Do you sell Everyday Shoes?"),
+        {
+          id: "assistant_cardinality",
+          role: "assistant",
+          parts: [
+            {
+              type: "dynamic-tool",
+              toolName: "scalius",
+              toolCallId: `catalog_${products.length}`,
+              state: "output-available",
+              input: {
+                program:
+                  'call catalog.search -- {"query":"Everyday Shoes","limit":4}',
+              },
+              output: {
+                ok: true,
+                authoritative: true,
+                data: {
+                  command: "call",
+                  capability: { id: "catalog.search" },
+                  result: { products },
+                },
+              },
+            },
+          ],
+        },
+      ];
+      return buildStorefrontNavigationAuthority({
+        messages,
+        messageIndex: 1,
+        partIndex: 1,
+        document,
+      });
+    };
+    const one = build([
+      { name: "Everyday Shoes", route: "/products/everyday-shoes" },
+    ]);
+    expect(
+      isAuthorizedStorefrontGoto("goto /products/everyday-shoes", one),
+    ).toBe(true);
+    expect(
+      isAuthorizedStorefrontGoto("goto /search?q=Everyday+Shoes", one),
+    ).toBe(false);
+
+    const zero = build([]);
+    expect(zero.candidates).toEqual([]);
+    expect(
+      isAuthorizedStorefrontGoto("goto /search?q=Everyday+Shoes", zero),
+    ).toBe(false);
+  });
+
+  it("does not turn a generic catalog question into autonomous navigation", () => {
+    const candidates: StorefrontNavigationAuthority["candidates"] = [
+      {
+        route: "/search",
+        label: "Search products",
+        source: "visible-page",
+      },
+    ];
+    expect(
+      isAuthorizedStorefrontGoto(
+        "goto /search?q=products",
+        authority("What do you sell?", candidates),
+      ),
     ).toBe(false);
   });
 

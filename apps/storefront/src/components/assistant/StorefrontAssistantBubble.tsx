@@ -9,7 +9,10 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SyntheticEvent,
 } from "react";
-import type { FlueConversationMessage } from "@flue/sdk";
+import type {
+  FlueConversationMessage,
+  FlueConversationPart,
+} from "@flue/sdk";
 import {
   ArrowDown,
   Grip,
@@ -32,6 +35,7 @@ import {
   STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL,
   type StorefrontAssistantPageContextSnapshot,
 } from "@/lib/assistant-page-context";
+import { resolveStorefrontAssistantNavigationTarget } from "@/lib/assistant-page-context.client";
 import { cn } from "@scalius/shared/utils";
 
 import { StorefrontFlueMessageParts } from "./StorefrontFlueMessageParts";
@@ -165,6 +169,135 @@ function mergeRestoredFlueMessages(
   return [...restored.filter((message) => !liveIds.has(message.id)), ...live];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isGroundedCatalogPart(part: FlueConversationPart): boolean {
+  if (
+    part.type !== "dynamic-tool" ||
+    part.toolName !== "scalius" ||
+    part.state !== "output-available" ||
+    !isRecord(part.output) ||
+    part.output.ok !== true ||
+    part.output.authoritative !== true ||
+    !isRecord(part.output.data) ||
+    part.output.data.command !== "call" ||
+    !isRecord(part.output.data.capability)
+  ) {
+    return false;
+  }
+  return ["catalog.search", "catalog.list", "catalog.product"].includes(
+    String(part.output.data.capability.id),
+  );
+}
+
+/** Collapse Flue's potentially separate tool/answer messages into one visible
+ * assistant message per durable submission (or user turn when no submission
+ * id is available). Completed tool-only messages are internal transcript
+ * detail; only live/error progress and the final text/catalog result remain. */
+export function projectStorefrontAssistantMessages(
+  messages: readonly FlueConversationMessage[],
+): FlueConversationMessage[] {
+  const groups = new Map<
+    string,
+    { messages: FlueConversationMessage[]; lastIndex: number }
+  >();
+  const groupKeyByIndex = new Map<number, string>();
+  let turn = 0;
+
+  messages.forEach((message, index) => {
+    if (message.role === "user") {
+      turn += 1;
+      return;
+    }
+    const key = message.submissionId
+      ? `submission:${message.submissionId}`
+      : `turn:${turn}`;
+    const group = groups.get(key) ?? { messages: [], lastIndex: index };
+    group.messages.push(message);
+    group.lastIndex = index;
+    groups.set(key, group);
+    groupKeyByIndex.set(index, key);
+  });
+
+  const projectedByIndex = new Map<number, FlueConversationMessage>();
+  for (const group of groups.values()) {
+    const terminalToolCalls = new Set<string>();
+    for (const message of group.messages) {
+      for (const part of message.parts) {
+        if (
+          part.type === "dynamic-tool" &&
+          (part.state === "output-available" ||
+            part.state === "output-error")
+        ) {
+          terminalToolCalls.add(part.toolCallId);
+        }
+      }
+    }
+
+    const lastTextMessage = group.messages.findLast((message) =>
+      message.parts.some(
+        (part) => part.type === "text" && part.text.trim().length > 0,
+      ),
+    );
+    const catalogParts = group.messages.flatMap((message) =>
+      message.parts.filter(isGroundedCatalogPart),
+    );
+    const errorParts = group.messages
+      .flatMap((message) =>
+        message.parts.filter(
+          (part) =>
+            part.type === "dynamic-tool" && part.state === "output-error",
+        ),
+      )
+      .slice(-2);
+    const hasFinalContent = Boolean(lastTextMessage) || catalogParts.length > 0;
+    const activeParts = hasFinalContent
+      ? []
+      : group.messages
+          .flatMap((message) =>
+            message.parts.filter(
+              (part) =>
+                part.type === "dynamic-tool" &&
+                part.state === "input-available" &&
+                !terminalToolCalls.has(part.toolCallId),
+            ),
+          )
+          .slice(-2);
+    const textParts = lastTextMessage
+      ? lastTextMessage.parts.filter(
+          (part) => part.type === "text" && part.text.trim().length > 0,
+        )
+      : [];
+    const parts = [
+      ...textParts,
+      ...catalogParts,
+      ...errorParts,
+      ...activeParts,
+    ];
+    if (parts.length === 0) continue;
+
+    const source =
+      lastTextMessage ??
+      group.messages.findLast((message) =>
+        message.parts.some(isGroundedCatalogPart),
+      ) ??
+      group.messages.at(-1);
+    if (!source) continue;
+    projectedByIndex.set(group.lastIndex, { ...source, parts });
+  }
+
+  return messages.flatMap((message, index) => {
+    if (message.role === "user") return [message];
+    const key = groupKeyByIndex.get(index);
+    const group = key ? groups.get(key) : undefined;
+    if (!group || group.lastIndex !== index) return [];
+    const projected = projectedByIndex.get(index);
+    return projected ? [projected] : [];
+  });
+}
+
 function toSessionHandoffMessages(
   messages: readonly FlueConversationMessage[],
 ): StorefrontAssistantUiMessage[] {
@@ -185,7 +318,11 @@ function toSessionHandoffMessages(
 function computerOutcomeStatus(
   outcome: StorefrontFlueComputerConsumeResult,
 ): AssistantStatus | null {
-  if (outcome.status === "ignored" || outcome.status === "duplicate") {
+  if (
+    outcome.status === "ignored" ||
+    outcome.status === "duplicate" ||
+    outcome.status === "cancelled"
+  ) {
     return null;
   }
   if (outcome.status === "rejected") {
@@ -232,6 +369,10 @@ export default function StorefrontAssistantBubble() {
         ? flue.messages
         : mergeRestoredFlueMessages(restoredMessagesRef.current, flue.messages),
     [flue.historyReady, flue.messages],
+  );
+  const visibleMessages = useMemo(
+    () => projectStorefrontAssistantMessages(messages),
+    [messages],
   );
   const sending = flue.sending;
   const aborting = flue.aborting;
@@ -405,7 +546,7 @@ export default function StorefrontAssistantBubble() {
       forceFollowRef.current = false;
       scrollToLatest();
     }
-  }, [messages, scrollToLatest, sending]);
+  }, [scrollToLatest, sending, visibleMessages]);
 
   useEffect(() => {
     setStatus({
@@ -419,28 +560,53 @@ export default function StorefrontAssistantBubble() {
     });
   }, [flue.sending, flue.state]);
 
+  const persistOpenConversation = useCallback(() => {
+    writeStorefrontAssistantOpenState(true);
+    writeStorefrontAssistantSessionHandoff(
+      toSessionHandoffMessages(messagesRef.current),
+    );
+  }, []);
+
+  const canNavigateCatalogRoute = useCallback((route: string) => {
+    if (typeof window === "undefined") return false;
+    return (
+      resolveStorefrontAssistantNavigationTarget(
+        route,
+        window.location.origin,
+      ) === route && /^\/products\//u.test(route)
+    );
+  }, []);
+
+  const navigateFromCatalogResult = useCallback(
+    (route: string) => {
+      if (!canNavigateCatalogRoute(route)) return;
+      persistOpenConversation();
+      if (getAssistantBridge()?.navigate?.(route) !== true) {
+        setStatus({
+          kind: "error",
+          message: "That product page could not be opened.",
+        });
+      }
+    },
+    [canNavigateCatalogRoute, persistOpenConversation],
+  );
+
   useEffect(() => {
     if (!flue.threadId || typeof window === "undefined") {
       computerCoordinatorRef.current = null;
       return undefined;
     }
-    const persistForNavigation = () => {
-      writeStorefrontAssistantOpenState(true);
-      writeStorefrontAssistantSessionHandoff(
-        toSessionHandoffMessages(messagesRef.current),
-      );
-    };
     const runtime = createStorefrontAssistantComputerRuntime({
       threadId: flue.threadId,
       tabId: flue.threadId,
       navigate: (route) => {
-        persistForNavigation();
+        persistOpenConversation();
         if (getAssistantBridge()?.navigate?.(route) !== true) {
           throw new Error("Storefront navigation was rejected");
         }
       },
       refresh: () => {
-        persistForNavigation();
+        persistOpenConversation();
         window.location.reload();
       },
     });
@@ -466,7 +632,7 @@ export default function StorefrontAssistantBubble() {
         computerCoordinatorRef.current = null;
       }
     };
-  }, [flue.threadId]);
+  }, [flue.threadId, persistOpenConversation]);
 
   useEffect(() => {
     const coordinator = computerCoordinatorRef.current;
@@ -552,6 +718,9 @@ export default function StorefrontAssistantBubble() {
 
   async function handleAbort() {
     if (aborting) return;
+    // Close the browser execution generation synchronously. The durable stop
+    // can then await without allowing another batched action or continuation.
+    computerCoordinatorRef.current?.cancelPending();
     setStatus({
       kind: "working",
       message: "Recording a durable stop request…",
@@ -742,7 +911,7 @@ export default function StorefrontAssistantBubble() {
         </div>
       ) : null}
 
-      {messages.length === 0 ? (
+      {visibleMessages.length === 0 ? (
         <section className="mx-auto flex min-h-[16rem] max-w-lg flex-col justify-center py-4">
           <div className="rounded-xl border border-border bg-muted/30 p-4">
             <p className="text-sm font-semibold text-foreground">
@@ -772,7 +941,7 @@ export default function StorefrontAssistantBubble() {
         </section>
       ) : (
         <ol className="grid gap-4">
-          {messages.map((message) => (
+          {visibleMessages.map((message) => (
             <li
               key={message.id}
               className={cn(
@@ -794,7 +963,11 @@ export default function StorefrontAssistantBubble() {
                     <Sparkles className="size-3.5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 rounded-2xl rounded-tl-md border border-border bg-popover p-3 shadow-sm">
-                    <StorefrontFlueMessageParts parts={message.parts} />
+                    <StorefrontFlueMessageParts
+                      parts={message.parts}
+                      canNavigate={canNavigateCatalogRoute}
+                      onNavigate={navigateFromCatalogResult}
+                    />
                   </div>
                 </div>
               )}
@@ -814,7 +987,7 @@ export default function StorefrontAssistantBubble() {
           <span>Looking through the catalog…</span>
         </div>
       ) : null}
-      {!pinnedToBottom && messages.length > 0 ? (
+      {!pinnedToBottom && visibleMessages.length > 0 ? (
         <button
           type="button"
           className="sticky bottom-2 ml-auto mt-3 flex min-h-8 items-center gap-1.5 rounded-full border border-border bg-background/95 px-3 text-[11px] font-semibold text-foreground shadow-md backdrop-blur transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -902,14 +1075,14 @@ export default function StorefrontAssistantBubble() {
           <>
             <StorefrontConversationHistorySelect
               recentThreads={flue.recentThreads}
-              disabled={sending || aborting}
+              disabled={!flue.canChangeConversation}
               onSelect={handlePreviousConversation}
             />
             <button
               type="button"
               aria-label="New assistant conversation"
               title="New conversation"
-              disabled={sending || aborting}
+              disabled={!flue.canChangeConversation}
               onClick={handleNewConversation}
               className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45"
             >

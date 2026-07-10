@@ -2,6 +2,10 @@ import { defineTool } from "@flue/runtime";
 import { SCALIUS_COMPUTER_LIMITS } from "@scalius/shared/assistant-computer";
 import { issueScaliusComputerCommand } from "@scalius/shared/assistant-computer-handoff";
 import * as v from "valibot";
+import {
+  createStorefrontToolCallBudget,
+  type StorefrontToolCallBudget,
+} from "./tool-call-budget";
 
 const input = v.object({
   program: v.pipe(
@@ -28,6 +32,7 @@ export function createStorefrontComputerTool(
   instanceId: string,
   signingKey: string,
   testOptions: { now?: number; randomBytes?: Uint8Array } = {},
+  callBudget: StorefrontToolCallBudget = createStorefrontToolCallBudget(),
 ) {
   return defineTool({
     name: "computer",
@@ -35,7 +40,8 @@ export function createStorefrontComputerTool(
       "Inspect or control the shopper's active Storefront page with one compact program. Start with observe. The returned client_command is pending until a later UNTRUSTED_CLIENT_RESULT arrives.",
     input,
     output,
-    async run({ input: { program } }) {
+    async run({ input: { program }, signal }) {
+      callBudget.consume(signal);
       return issueScaliusComputerCommand({
         surface: "storefront",
         agentName: "shopping-assistant",

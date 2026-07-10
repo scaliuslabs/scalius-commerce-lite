@@ -61,7 +61,6 @@ describe("Storefront scalius tool", () => {
 
   it("rejects approval, raw transport, code, and secret-shaped programs before transport", async () => {
     const fetch = vi.fn(async () => jsonResponse({ success: true, data: {} }));
-    const tool = createStorefrontScaliusTool(INSTANCE_ID, { fetch });
     const programs = [
       "approve action_1",
       "POST /api/v1/orders",
@@ -71,7 +70,12 @@ describe("Storefront scalius tool", () => {
       'prepare checkout.update -- {"receiptProof":"proof"}',
     ];
     for (const program of programs) {
-      await expect(tool.run({ input: { program } })).resolves.toMatchObject({
+      // Each direct factory call represents a distinct Flue submission config.
+      const tool = createStorefrontScaliusTool(INSTANCE_ID, { fetch });
+      await expect(tool.run({
+        input: { program },
+        signal: new AbortController().signal,
+      })).resolves.toMatchObject({
         ok: false,
         authoritative: false,
         code: "invalid_program",

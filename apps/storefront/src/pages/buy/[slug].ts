@@ -283,7 +283,7 @@ export const GET: APIRoute = async ({ params, url }) => {
           @keyframes loading { 0% { transform: translateX(-100%); } 50% { transform: translateX(0%); } 100% { transform: translateX(100%); } }
         </style>
       </head>
-      <body>
+      <body data-scalius-computer-human-only>
         <div class="card">
           <img src="${escapeHtml(cartImageUrl)}" alt="${escapeHtml(cartItem.name)}" class="product-image">
           <p class="product-name">${escapeHtml(cartItem.name)}</p>
