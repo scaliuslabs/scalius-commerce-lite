@@ -26,7 +26,10 @@ import {
   filterVariantsBySelection,
   validateSelection,
   loadVariantsFromDOM,
+  resolveExactAvailableVariantSelection,
   resolveExactVariantSelection,
+  shouldShowStartingVariantPrice,
+  type VariantOptionAvailability,
   type VariantSelectionState,
   type Variant,
   type VariantIndex,
@@ -36,6 +39,7 @@ import {
   validateAddToCart,
   clampQuantity,
 } from "../lib/product-validation";
+import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import {
   trackProductAddToCart,
   extractProductDataFromDOM,
@@ -51,6 +55,7 @@ const state = {
   variantImageAxis: "option2" as "option1" | "option2",
   currentDisplayedImage: "",
   assistantSurface: null as StorefrontAssistantSurfaceRegistration | null,
+  unavailableRequestedVariant: null as Variant | null,
 };
 
 const cache = {
@@ -58,10 +63,16 @@ const cache = {
   mobileMainImage: null as HTMLImageElement | null,
   quantityInput: null as HTMLInputElement | null,
   actionsContainer: null as HTMLElement | null,
-  sizeButtons: [] as HTMLElement[],
-  colorButtons: [] as HTMLElement[],
-  sizeInputs: [] as HTMLInputElement[],
-  colorInputs: [] as HTMLInputElement[],
+  sizeButtons: [] as HTMLButtonElement[],
+  colorButtons: [] as HTMLButtonElement[],
+  variantAvailabilityStatus: null as HTMLElement | null,
+  unavailableQueryNotice: null as HTMLElement | null,
+  stockBadge: null as HTMLElement | null,
+  stockText: null as HTMLElement | null,
+  addToCartButton: null as HTMLButtonElement | null,
+  buyNowButton: null as HTMLButtonElement | null,
+  addToCartLabel: null as HTMLElement | null,
+  buyNowLabel: null as HTMLElement | null,
   thumbnails: [] as HTMLElement[],
   priceElements: [] as HTMLElement[],
   originalPriceElements: [] as HTMLElement[],
@@ -93,14 +104,30 @@ function init() {
   cache.quantityInput = document.getElementById("quantity") as HTMLInputElement;
   cache.actionsContainer = document.getElementById("product-actions");
 
-  cache.sizeButtons = Array.from(document.querySelectorAll(".size-btn"));
-  cache.colorButtons = Array.from(document.querySelectorAll(".color-btn"));
-  cache.sizeInputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>('input[name="size"]'),
+  cache.sizeButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(".size-btn"),
   );
-  cache.colorInputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>('input[name="color"]'),
+  cache.colorButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(".color-btn"),
   );
+  cache.variantAvailabilityStatus = document.getElementById(
+    "variant-availability-status",
+  );
+  cache.unavailableQueryNotice = document.getElementById(
+    "variant-unavailable-query-notice",
+  );
+  cache.stockBadge = document.getElementById("product-stock-badge");
+  cache.stockText = document.getElementById("product-stock-text");
+  cache.addToCartButton = document.querySelector<HTMLButtonElement>(
+    '[data-action="add-to-cart"]',
+  );
+  cache.buyNowButton = document.querySelector<HTMLButtonElement>(
+    '[data-action="buy-now"]',
+  );
+  cache.addToCartLabel = document.querySelector(
+    '[data-action-label="add-to-cart"]',
+  );
+  cache.buyNowLabel = document.querySelector('[data-action-label="buy-now"]');
   cache.thumbnails = Array.from(document.querySelectorAll(".thumbnail-btn"));
   cache.priceElements = Array.from(document.querySelectorAll(".product-price"));
   cache.originalPriceElements = Array.from(
@@ -116,7 +143,9 @@ function init() {
 
 // Keep controller state in sync with gallery/zoom changes
 function initImageStateSync() {
-  window.addEventListener("product-image-change", ((e: CustomEvent<ProductImageChangeDetail>) => {
+  window.addEventListener("product-image-change", ((
+    e: CustomEvent<ProductImageChangeDetail>,
+  ) => {
     const url = e.detail?.url;
     if (typeof url === "string" && url) {
       state.currentDisplayedImage = url;
@@ -136,8 +165,8 @@ function switchImage(url: string) {
   if (cache.mobileMainImage) {
     requestAnimationFrame(() => {
       if (cache.mobileMainImage) {
-        cache.mobileMainImage.removeAttribute('srcset');
-        cache.mobileMainImage.removeAttribute('sizes');
+        cache.mobileMainImage.removeAttribute("srcset");
+        cache.mobileMainImage.removeAttribute("sizes");
         cache.mobileMainImage.src = url;
       }
     });
@@ -183,10 +212,11 @@ function initVariantSystem() {
 
   state.productPricing = {
     basePrice: parseDecimal(cache.container?.dataset.productOriginalPrice),
-    discountType: parseDiscountType(cache.container?.dataset.productDiscountType),
+    discountType: parseDiscountType(
+      cache.container?.dataset.productDiscountType,
+    ),
     discountPercentage:
-      parseDecimal(cache.container?.dataset.productDiscountPercentage) ||
-      null,
+      parseDecimal(cache.container?.dataset.productDiscountPercentage) || null,
     discountAmount:
       parseDecimal(cache.container?.dataset.productDiscountAmount) || null,
     currencyDecimalPlaces: (() => {
@@ -204,25 +234,31 @@ function initVariantSystem() {
   const params = new URLSearchParams(window.location.search);
   const urlSize = params.get("size");
   const urlColor = params.get("color");
-  const querySelection = resolveExactVariantSelection(state.variants, {
+  const requestedQuerySelection = resolveExactVariantSelection(state.variants, {
     selectedSize: urlSize,
     selectedColor: urlColor,
   });
-
-  state.selection = querySelection
-    ? createSelectionState(state.variantIndex, querySelection)
-    : initialSelection;
-
-  cache.sizeInputs.forEach((input) => {
-    input.addEventListener("change", () => {
-      if (input.checked) handleVariantSelection("size", input.value);
-    });
+  const querySelection = resolveExactAvailableVariantSelection(state.variants, {
+    selectedSize: urlSize,
+    selectedColor: urlColor,
   });
-  cache.colorInputs.forEach((input) => {
-    input.addEventListener("change", () => {
-      if (input.checked) handleVariantSelection("color", input.value);
-    });
-  });
+  state.unavailableRequestedVariant =
+    requestedQuerySelection && !querySelection
+      ? requestedQuerySelection.variant
+      : null;
+
+  state.selection = state.unavailableRequestedVariant
+    ? createSelectionState(state.variantIndex, {})
+    : querySelection
+      ? createSelectionState(state.variantIndex, querySelection)
+      : initialSelection;
+
+  if ((urlSize || urlColor) && !querySelection) {
+    replaceVariantUrl(false);
+  }
+
+  bindVariantOptionButtons("size", cache.sizeButtons);
+  bindVariantOptionButtons("color", cache.colorButtons);
 
   refreshUI();
 }
@@ -231,33 +267,143 @@ function handleVariantSelection(
   type: "size" | "color",
   value: string,
   updateHistory = true,
+  mode: "select" | "toggle" = "toggle",
 ) {
   if (!state.selection || !state.variantIndex) return;
 
-  const actionType = type === "size" ? "SELECT_SIZE" : "SELECT_COLOR";
+  state.unavailableRequestedVariant = null;
+  const previousSelection = state.selection;
+  const availability =
+    type === "size"
+      ? previousSelection.sizeOptionAvailability.get(value)
+      : previousSelection.colorOptionAvailability.get(value);
+  const actionType =
+    type === "size"
+      ? mode === "toggle"
+        ? "TOGGLE_SIZE"
+        : "SELECT_SIZE"
+      : mode === "toggle"
+        ? "TOGGLE_COLOR"
+        : "SELECT_COLOR";
   state.selection = applyAction(
     state.selection,
     { type: actionType, value },
     state.variantIndex,
   );
 
+  announceVariantSelectionChange(
+    type,
+    value,
+    previousSelection,
+    state.selection,
+    availability,
+  );
+
   refreshUI();
 
-  if (updateHistory && typeof history !== "undefined") {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("size");
-    url.searchParams.delete("color");
-    if (state.selection.selectedSize)
-      url.searchParams.set("size", state.selection.selectedSize);
-    if (state.selection.selectedColor)
-      url.searchParams.set("color", state.selection.selectedColor);
-    history.replaceState(null, "", url.toString());
+  if (updateHistory) replaceVariantUrl(true);
+}
+
+function replaceVariantUrl(includeSelection: boolean): void {
+  if (typeof history === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.delete("size");
+  url.searchParams.delete("color");
+  if (includeSelection && state.selection?.selectedSize) {
+    url.searchParams.set("size", state.selection.selectedSize);
   }
+  if (includeSelection && state.selection?.selectedColor) {
+    url.searchParams.set("color", state.selection.selectedColor);
+  }
+  history.replaceState(null, "", url.toString());
+}
+
+function bindVariantOptionButtons(
+  axis: "size" | "color",
+  buttons: HTMLButtonElement[],
+): void {
+  buttons.forEach((button, index) => {
+    const value = axis === "size" ? button.dataset.size : button.dataset.color;
+    if (!value) return;
+
+    button.addEventListener("click", () => {
+      handleVariantSelection(axis, value);
+    });
+    button.addEventListener("keydown", (event) => {
+      if (event.repeat) return;
+
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleVariantSelection(axis, value);
+        return;
+      }
+
+      const direction =
+        event.key === "ArrowRight" || event.key === "ArrowDown"
+          ? 1
+          : event.key === "ArrowLeft" || event.key === "ArrowUp"
+            ? -1
+            : 0;
+      if (!direction || buttons.length < 2) return;
+
+      event.preventDefault();
+      for (let offset = 1; offset < buttons.length; offset += 1) {
+        const candidate =
+          buttons[
+            (index + direction * offset + buttons.length) % buttons.length
+          ];
+        if (!candidate || candidate.disabled) continue;
+        const candidateValue =
+          axis === "size" ? candidate.dataset.size : candidate.dataset.color;
+        if (!candidateValue) continue;
+        candidate.focus();
+        handleVariantSelection(axis, candidateValue, true, "select");
+        return;
+      }
+    });
+  });
+}
+
+function announceVariantSelectionChange(
+  axis: "size" | "color",
+  value: string,
+  previous: VariantSelectionState,
+  next: VariantSelectionState,
+  availability: VariantOptionAvailability | undefined,
+): void {
+  const status = cache.variantAvailabilityStatus;
+  if (!status) return;
+
+  const axisLabel = optionName(axis === "size" ? "option1" : "option2");
+  const opposingLabel = optionName(axis === "size" ? "option2" : "option1");
+  const wasSelected =
+    axis === "size"
+      ? previous.selectedSize === value
+      : previous.selectedColor === value;
+  const isSelected =
+    axis === "size"
+      ? next.selectedSize === value
+      : next.selectedColor === value;
+  const opposingWasCleared =
+    axis === "size"
+      ? Boolean(previous.selectedColor && !next.selectedColor)
+      : Boolean(previous.selectedSize && !next.selectedSize);
+
+  if (wasSelected && !isSelected) {
+    status.textContent = `${axisLabel} ${value} cleared.`;
+    return;
+  }
+  if (availability === "incompatible" && opposingWasCleared) {
+    status.textContent = `${axisLabel} ${value} selected. ${opposingLabel} selection cleared because that combination is unavailable.`;
+    return;
+  }
+  status.textContent = `${axisLabel} ${value} selected.`;
 }
 
 function refreshUI() {
   requestAnimationFrame(() => {
     updateVariantButtons();
+    updateStockAndActions();
     updatePriceDisplay();
 
     const selectedImageOption =
@@ -270,81 +416,174 @@ function refreshUI() {
   });
 }
 
+function updateStockAndActions(): void {
+  const exactVariant =
+    state.unavailableRequestedVariant ??
+    state.selection?.selectedVariant ??
+    null;
+  const hasPartialSelection = Boolean(
+    state.selection?.selectedSize || state.selection?.selectedColor,
+  );
+  const stockVariants = exactVariant
+    ? [exactVariant]
+    : hasPartialSelection && state.selection
+      ? filterVariantsBySelection(state.variants, state.selection)
+      : state.variants;
+  const stockSummary = getBuyerStockSummary(stockVariants);
+  const unavailable = !stockSummary.canPurchaseAny;
+
+  cache.unavailableQueryNotice?.classList.toggle(
+    "hidden",
+    !state.unavailableRequestedVariant,
+  );
+
+  if (cache.stockBadge) {
+    cache.stockBadge.classList.remove(
+      "text-primary",
+      "bg-primary/10",
+      "text-destructive",
+      "bg-destructive/10",
+    );
+    cache.stockBadge.classList.add(
+      stockSummary.tone === "available" ? "text-primary" : "text-destructive",
+      stockSummary.tone === "available" ? "bg-primary/10" : "bg-destructive/10",
+    );
+    cache.stockBadge.dataset.stockTone = stockSummary.tone;
+  }
+  if (cache.stockText) cache.stockText.textContent = stockSummary.text;
+
+  updatePurchaseButton(
+    cache.addToCartButton,
+    cache.addToCartLabel,
+    unavailable,
+    "Add to Cart",
+    "Add to cart",
+  );
+  updatePurchaseButton(
+    cache.buyNowButton,
+    cache.buyNowLabel,
+    unavailable,
+    "Buy Now",
+    "Buy now",
+  );
+}
+
+function updatePurchaseButton(
+  button: HTMLButtonElement | null,
+  label: HTMLElement | null,
+  unavailable: boolean,
+  availableText: string,
+  availableAriaLabel: string,
+): void {
+  if (!button) return;
+  button.disabled = unavailable;
+  button.setAttribute(
+    "aria-label",
+    unavailable ? "Product unavailable" : availableAriaLabel,
+  );
+  if (label) label.textContent = unavailable ? "Unavailable" : availableText;
+}
+
 function updateVariantButtons() {
   if (!state.selection) return;
 
-  const { selectedSize, selectedColor, availableSizes, availableColors } =
-    state.selection;
+  updateOptionButtonGroup(
+    "size",
+    cache.sizeButtons,
+    state.selection.selectedSize,
+    state.selection.sizeOptionAvailability,
+  );
+  updateOptionButtonGroup(
+    "color",
+    cache.colorButtons,
+    state.selection.selectedColor,
+    state.selection.colorOptionAvailability,
+  );
+}
 
-  for (let i = 0; i < cache.sizeButtons.length; i++) {
-    const el = cache.sizeButtons[i];
-    const val = el.dataset.size!;
-    const isSelected = selectedSize === val;
-    const isAvailable = availableSizes.has(val);
-    const input = cache.sizeInputs.find((candidate) => candidate.value === val);
-    if (input) {
-      input.checked = isSelected;
-      input.disabled = !isSelected && !isAvailable;
-    }
+const OPTION_STATE_CLASSES = [
+  "bg-black",
+  "text-white",
+  "border-black",
+  "bg-muted/50",
+  "bg-muted",
+  "text-muted-foreground",
+  "border-dashed",
+  "border-muted-foreground/40",
+  "border-muted-foreground",
+  "opacity-50",
+  "line-through",
+  "cursor-not-allowed",
+  "pointer-events-none",
+  "bg-white",
+  "text-gray-900",
+] as const;
 
-    if (isSelected) {
-      el.classList.add("bg-black", "text-white", "border-black");
-      el.classList.remove(
-        "bg-white",
-        "text-gray-900",
-        "opacity-50",
-        "line-through",
-        "pointer-events-none",
+function updateOptionButtonGroup(
+  axis: "size" | "color",
+  buttons: HTMLButtonElement[],
+  selectedValue: string | undefined,
+  availabilityByValue: Map<string, VariantOptionAvailability>,
+): void {
+  const axisLabel = optionName(axis === "size" ? "option1" : "option2");
+  const opposingLabel = optionName(axis === "size" ? "option2" : "option1");
+  const opposingValue =
+    axis === "size"
+      ? state.selection?.selectedColor
+      : state.selection?.selectedSize;
+
+  for (const button of buttons) {
+    const value = axis === "size" ? button.dataset.size : button.dataset.color;
+    if (!value) continue;
+
+    const isSelected = selectedValue === value;
+    const availability = availabilityByValue.get(value) ?? "sold_out";
+    const isSoldOut = availability === "sold_out";
+    const isIncompatible = availability === "incompatible";
+
+    button.disabled = isSoldOut;
+    button.setAttribute("aria-pressed", String(isSelected));
+    button.dataset.optionAvailability = availability;
+    button.classList.remove(...OPTION_STATE_CLASSES);
+    button.classList.add("bg-background", "text-foreground", "border-input");
+
+    let accessibleStatus = "";
+    if (isSoldOut) {
+      button.classList.add("opacity-50", "line-through", "cursor-not-allowed");
+      accessibleStatus = ". Out of stock.";
+    } else if (isSelected) {
+      button.classList.remove(
+        "bg-background",
+        "text-foreground",
+        "border-input",
       );
-    } else {
-      el.classList.remove("bg-black", "text-white", "border-black");
-      el.classList.add("bg-white", "text-gray-900");
-
-      if (isAvailable) {
-        el.classList.remove(
-          "opacity-50",
-          "line-through",
-          "pointer-events-none",
-        );
-      } else {
-        el.classList.add("opacity-50", "line-through", "pointer-events-none");
-      }
-    }
-  }
-
-  for (let i = 0; i < cache.colorButtons.length; i++) {
-    const el = cache.colorButtons[i];
-    const val = el.dataset.color!;
-    const isSelected = selectedColor === val;
-    const isAvailable = availableColors.has(val);
-    const input = cache.colorInputs.find((candidate) => candidate.value === val);
-    if (input) {
-      input.checked = isSelected;
-      input.disabled = !isSelected && !isAvailable;
-    }
-
-    if (isSelected) {
-      el.classList.add("bg-black", "text-white", "border-black");
-      el.classList.remove(
-        "bg-white",
-        "text-gray-900",
-        "opacity-50",
-        "line-through",
-        "pointer-events-none",
+      button.classList.add("bg-black", "text-white", "border-black");
+      accessibleStatus = ". Selected; activate again to clear.";
+    } else if (isIncompatible) {
+      button.classList.remove(
+        "bg-background",
+        "text-foreground",
+        "border-input",
       );
-    } else {
-      el.classList.remove("bg-black", "text-white", "border-black");
-      el.classList.add("bg-white", "text-gray-900");
+      button.classList.add(
+        "bg-muted",
+        "text-foreground",
+        "border-dashed",
+        "border-muted-foreground",
+      );
+      accessibleStatus = opposingValue
+        ? `. Not available with ${opposingLabel} ${opposingValue}; selecting it clears ${opposingLabel}.`
+        : ". Not available with the current selection.";
+    }
 
-      if (isAvailable) {
-        el.classList.remove(
-          "opacity-50",
-          "line-through",
-          "pointer-events-none",
-        );
-      } else {
-        el.classList.add("opacity-50", "line-through", "pointer-events-none");
-      }
+    button.setAttribute(
+      "aria-label",
+      `${axisLabel}: ${value}${accessibleStatus}`,
+    );
+    if (accessibleStatus) {
+      button.title = accessibleStatus.trim();
+    } else {
+      button.removeAttribute("title");
     }
   }
 }
@@ -353,7 +592,9 @@ function updateVariantImage() {
   if (!state.selection) return;
 
   const buttons =
-    state.variantImageAxis === "option1" ? cache.sizeButtons : cache.colorButtons;
+    state.variantImageAxis === "option1"
+      ? cache.sizeButtons
+      : cache.colorButtons;
   const selectedValue =
     state.variantImageAxis === "option1"
       ? state.selection.selectedSize
@@ -378,10 +619,11 @@ function updatePriceDisplay() {
 
   const hasCustomerOptions =
     state.variantIndex.options.hasSize || state.variantIndex.options.hasColor;
+  const exactDisplayVariant =
+    state.unavailableRequestedVariant ?? state.selection.selectedVariant;
   const showsStartingPrice =
-    hasCustomerOptions &&
     state.variants.length > 0 &&
-    !state.selection.selectedVariant;
+    shouldShowStartingVariantPrice(hasCustomerOptions, exactDisplayVariant);
 
   if (showsStartingPrice) {
     const matchingVariants = filterVariantsBySelection(state.variants, {
@@ -406,8 +648,8 @@ function updatePriceDisplay() {
   }
 
   let variantPricing: VariantPricing | null = null;
-  if (state.selection.selectedVariant) {
-    const v = state.selection.selectedVariant;
+  if (exactDisplayVariant) {
+    const v = exactDisplayVariant;
     variantPricing = {
       price: v.price,
       discountType: v.discountType,
@@ -456,8 +698,18 @@ function productAssistantAvailability(): StorefrontAssistantProductAvailability 
   if (!state.selection || !state.variantIndex || state.variants.length === 0) {
     return "unavailable";
   }
+  if (state.unavailableRequestedVariant) return "out_of_stock";
 
   const { options } = state.variantIndex;
+  const hasPartialSelection = Boolean(
+    state.selection.selectedSize || state.selection.selectedColor,
+  );
+  const candidateVariants = hasPartialSelection
+    ? filterVariantsBySelection(state.variants, state.selection)
+    : state.variants;
+  if (!getBuyerStockSummary(candidateVariants).canPurchaseAny) {
+    return "out_of_stock";
+  }
   const selectionComplete =
     (!options.hasSize || Boolean(state.selection.selectedSize)) &&
     (!options.hasColor || Boolean(state.selection.selectedColor));
@@ -473,19 +725,24 @@ function publishProductAssistantSurface(displayedPrice: number): void {
   if (!container || !state.selection || !state.variantIndex) return;
 
   const { options } = state.variantIndex;
+  const exactAssistantVariant =
+    state.unavailableRequestedVariant ?? state.selection.selectedVariant;
   const selectionComplete =
-    (!options.hasSize || Boolean(state.selection.selectedSize)) &&
-    (!options.hasColor || Boolean(state.selection.selectedColor));
+    Boolean(state.unavailableRequestedVariant) ||
+    ((!options.hasSize || Boolean(state.selection.selectedSize)) &&
+      (!options.hasColor || Boolean(state.selection.selectedColor)));
   const surface: StorefrontAssistantProductSurface = {
     kind: "product",
     productId: container.dataset.productId || "",
     ...(container.dataset.productSlug
       ? { slug: container.dataset.productSlug }
       : {}),
-    ...(selectionComplete && state.selection.selectedVariant?.id
-      ? { selectedVariantId: state.selection.selectedVariant.id }
+    ...(selectionComplete && exactAssistantVariant?.id
+      ? { selectedVariantId: exactAssistantVariant.id }
       : {}),
-    selectedOptions: buildSelectedCartOptions(),
+    selectedOptions: buildSelectedCartOptions(
+      state.unavailableRequestedVariant ?? undefined,
+    ),
     displayedPrice,
     availability: productAssistantAvailability(),
   };
@@ -499,23 +756,34 @@ function publishProductAssistantSurface(displayedPrice: number): void {
 
 function optionName(axis: "option1" | "option2"): string {
   const fallback = axis === "option1" ? "Option 1" : "Option 2";
-  return cache.actionsContainer?.dataset[
-    axis === "option1" ? "option1Label" : "option2Label"
-  ]?.trim() || fallback;
+  return (
+    cache.actionsContainer?.dataset[
+      axis === "option1" ? "option1Label" : "option2Label"
+    ]?.trim() || fallback
+  );
 }
 
-function selectedOption(name: string, label?: string | null): CartItemOption | null {
+function selectedOption(
+  name: string,
+  label?: string | null,
+): CartItemOption | null {
   const optionLabel = label?.trim();
   if (!optionLabel) return null;
   return { name, label: optionLabel };
 }
 
-function buildSelectedCartOptions(): CartItemOption[] {
+function buildSelectedCartOptions(variant?: Variant): CartItemOption[] {
   if (!state.selection) return [];
 
   return [
-    selectedOption(optionName("option1"), state.selection.selectedSize),
-    selectedOption(optionName("option2"), state.selection.selectedColor),
+    selectedOption(
+      optionName("option1"),
+      variant?.size ?? state.selection.selectedSize,
+    ),
+    selectedOption(
+      optionName("option2"),
+      variant?.color ?? state.selection.selectedColor,
+    ),
   ].filter((option): option is CartItemOption => Boolean(option));
 }
 
@@ -542,6 +810,14 @@ function handleAddToCart(redirect: boolean) {
     !state.variantIndex
   )
     return;
+
+  if (state.unavailableRequestedVariant) {
+    showToast(
+      "The requested option is out of stock. Choose another option.",
+      "error",
+    );
+    return;
+  }
 
   if (state.variants.length === 0) {
     showToast("This product is not available for checkout right now.", "error");
@@ -606,7 +882,10 @@ function handleAddToCart(redirect: boolean) {
       ...(options.length > 0 ? { options } : {}),
     });
     if (!added) {
-      showToast("This product option could not be added. Please refresh and try again.", "error");
+      showToast(
+        "This product option could not be added. Please refresh and try again.",
+        "error",
+      );
       return;
     }
 

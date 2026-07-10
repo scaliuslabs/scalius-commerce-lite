@@ -1,7 +1,12 @@
 // src/components/ProductShortcode.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import type { ProductPageData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,14 +26,23 @@ import {
 } from "@/components/product/lib/pricing-engine";
 import {
   filterVariantsBySelection,
+  getVariantOptionAvailabilityMap,
   resolveExactVariantSelection,
+  selectVariantOption,
+  shouldShowStartingVariantPrice,
+  toggleVariantOption,
+  type VariantOptionAvailability,
+  type VariantOptionAxis,
 } from "@/components/product/lib/variant-state-machine";
 import {
   getProductImageUrl,
   hasProductImage,
   PRODUCT_IMAGE_FALLBACK,
 } from "@/lib/product-media";
-import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
+import {
+  isVariantAvailable,
+  resolveBuyerVariants,
+} from "@/lib/product-sellable-variants";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 
 interface ProductShortcodeProps {
@@ -43,7 +57,9 @@ export default function ProductShortcode({
     () => resolveBuyerVariants(variants).variants,
     [variants],
   );
-  const isUnavailable = buyerVariants.length === 0;
+  const isUnavailable =
+    buyerVariants.length === 0 ||
+    !buyerVariants.some((variant) => isVariantAvailable(variant));
   const option1Label = product.variantOption1Label?.trim() || "Option 1";
   const option2Label = product.variantOption2Label?.trim() || "Option 2";
   const currencyCode = getCurrencyCode();
@@ -62,8 +78,6 @@ export default function ProductShortcode({
       precision: configuredDecimalPlaces,
     });
 
-  const [selectedSize, setSelectedSize] = useState<string | undefined>();
-  const [selectedColor, setSelectedColor] = useState<string | undefined>();
   const [quantity, setQuantity] = useState(1);
   const [currentImage, setCurrentImage] = useState(
     images.find((img) => hasProductImage(img.url) && img.isPrimary)?.url ||
@@ -80,15 +94,68 @@ export default function ProductShortcode({
     /<!--variant_images:(enabled|option1|option2)-->/,
   )?.[1];
   const isVariantImagesEnabled = Boolean(variantImageMarker);
-  const variantImageAxis = variantImageMarker === "option1" ? "option1" : "option2";
+  const variantImageAxis =
+    variantImageMarker === "option1" ? "option1" : "option2";
 
   const sizeOptions = useMemo(
-    () => [...new Set(buyerVariants.map((v) => v.size).filter(Boolean))],
+    () => [
+      ...new Set(
+        buyerVariants.flatMap((variant) => {
+          const value = variant.size?.trim();
+          return value ? [value] : [];
+        }),
+      ),
+    ],
     [buyerVariants],
   );
   const colorOptions = useMemo(
-    () => [...new Set(buyerVariants.map((v) => v.color).filter(Boolean))],
+    () => [
+      ...new Set(
+        buyerVariants.flatMap((variant) => {
+          const value = variant.color?.trim();
+          return value ? [value] : [];
+        }),
+      ),
+    ],
     [buyerVariants],
+  );
+  const globalSizeAvailability = useMemo(
+    () =>
+      getVariantOptionAvailabilityMap(buyerVariants, "size", sizeOptions, {}),
+    [buyerVariants, sizeOptions],
+  );
+  const globalColorAvailability = useMemo(
+    () =>
+      getVariantOptionAvailabilityMap(buyerVariants, "color", colorOptions, {}),
+    [buyerVariants, colorOptions],
+  );
+  const [selectedSize, setSelectedSize] = useState<string | undefined>(() =>
+    sizeOptions.length === 1 &&
+    globalSizeAvailability.get(sizeOptions[0] ?? "") !== "sold_out"
+      ? sizeOptions[0]
+      : undefined,
+  );
+  const [selectedColor, setSelectedColor] = useState<string | undefined>(() =>
+    colorOptions.length === 1 &&
+    globalColorAvailability.get(colorOptions[0] ?? "") !== "sold_out"
+      ? colorOptions[0]
+      : undefined,
+  );
+  const sizeOptionAvailability = useMemo(
+    () =>
+      getVariantOptionAvailabilityMap(buyerVariants, "size", sizeOptions, {
+        selectedSize,
+        selectedColor,
+      }),
+    [buyerVariants, selectedColor, selectedSize, sizeOptions],
+  );
+  const colorOptionAvailability = useMemo(
+    () =>
+      getVariantOptionAvailabilityMap(buyerVariants, "color", colorOptions, {
+        selectedSize,
+        selectedColor,
+      }),
+    [buyerVariants, colorOptions, selectedColor, selectedSize],
   );
 
   const exactSelection = resolveExactVariantSelection(buyerVariants, {
@@ -116,8 +183,10 @@ export default function ProductShortcode({
     pricePresentation.pricing.originalPrice,
     configuredDecimalPlaces,
   );
-  const showsStartingPrice =
-    (sizeOptions.length > 0 || colorOptions.length > 0) && !matchingVariant;
+  const showsStartingPrice = shouldShowStartingVariantPrice(
+    sizeOptions.length > 0 || colorOptions.length > 0,
+    matchingVariant,
+  );
   const hasDiscount = Boolean(
     matchingVariant && pricePresentation.pricing.hasDiscount,
   );
@@ -156,6 +225,79 @@ export default function ProductShortcode({
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const toggleOption = (axis: VariantOptionAxis, value: string) => {
+    const next = toggleVariantOption(
+      buyerVariants,
+      { selectedSize, selectedColor },
+      axis,
+      value,
+    );
+    setSelectedSize(next.selectedSize);
+    setSelectedColor(next.selectedColor);
+  };
+
+  const selectOption = (axis: VariantOptionAxis, value: string) => {
+    const next = selectVariantOption(
+      buyerVariants,
+      { selectedSize, selectedColor },
+      axis,
+      value,
+    );
+    setSelectedSize(next.selectedSize);
+    setSelectedColor(next.selectedColor);
+  };
+
+  const navigateOptionButtons = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    axis: VariantOptionAxis,
+  ) => {
+    const direction =
+      event.key === "ArrowRight" || event.key === "ArrowDown"
+        ? 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (!direction) return;
+
+    const buttons = Array.from(
+      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+        `[data-option-axis="${axis}"]`,
+      ) ?? [],
+    ).filter((button) => !button.disabled);
+    const currentIndex = buttons.indexOf(event.currentTarget);
+    if (currentIndex < 0 || buttons.length < 2) return;
+
+    event.preventDefault();
+    const next =
+      buttons[(currentIndex + direction + buttons.length) % buttons.length];
+    next?.focus();
+    const nextValue = next?.dataset.optionValue;
+    if (nextValue) selectOption(axis, nextValue);
+  };
+
+  const optionAriaLabel = (
+    axis: VariantOptionAxis,
+    value: string,
+    availability: VariantOptionAvailability,
+    selected: boolean,
+  ) => {
+    const axisLabel = axis === "size" ? option1Label : option2Label;
+    if (availability === "sold_out") {
+      return `${axisLabel}: ${value}. Out of stock.`;
+    }
+    if (selected) {
+      return `${axisLabel}: ${value}. Selected; activate again to clear.`;
+    }
+    if (availability === "incompatible") {
+      const opposingLabel = axis === "size" ? option2Label : option1Label;
+      const opposingValue = axis === "size" ? selectedColor : selectedSize;
+      return opposingValue
+        ? `${axisLabel}: ${value}. Not available with ${opposingLabel} ${opposingValue}; selecting it clears ${opposingLabel}.`
+        : `${axisLabel}: ${value}. Not available with the current selection.`;
+    }
+    return `${axisLabel}: ${value}`;
+  };
+
   const handleAddToCart = (redirectToCart: boolean) => {
     if (isUnavailable) {
       showToast("This product is not available right now.", "error");
@@ -172,6 +314,10 @@ export default function ProductShortcode({
       showToast("Selected combination is not available.", "error");
       return;
     }
+    if (!isVariantAvailable(matchingVariant)) {
+      showToast("Selected option is out of stock.", "error");
+      return;
+    }
 
     const options: CartItemOption[] = [
       selectedSize ? { name: option1Label, label: selectedSize } : null,
@@ -186,6 +332,9 @@ export default function ProductShortcode({
       image: currentImage || PRODUCT_IMAGE_FALLBACK,
       quantity,
       variantId: matchingVariant.id,
+      stock: matchingVariant.stock,
+      reservedStock: matchingVariant.reservedStock,
+      trackInventory: matchingVariant.trackInventory,
       size: selectedSize,
       color: selectedColor,
       ...(options.length > 0 ? { options } : {}),
@@ -193,7 +342,10 @@ export default function ProductShortcode({
     };
 
     if (!addToCart(itemToAdd)) {
-      showToast("This product option could not be added. Please refresh and try again.", "error");
+      showToast(
+        "This product option could not be added. Please refresh and try again.",
+        "error",
+      );
       return;
     }
     trackFbAddToCart({
@@ -238,30 +390,32 @@ export default function ProductShortcode({
           </div>
           {images.filter((img) => hasProductImage(img.url)).length > 1 && (
             <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
-              {images.filter((img) => hasProductImage(img.url)).map((img) => (
-                <button
-                  key={img.id}
-                  onClick={() => setCurrentImage(img.url)}
-                  className={cn(
-                    "shrink-0 w-16 h-16 sm:w-20 sm:h-20 overflow-hidden rounded-lg border-2 hover:border-primary transition-colors",
-                    currentImage === img.url
-                      ? "border-primary"
-                      : "border-gray-200",
-                  )}
-                >
-                  <img
-                    src={getProductImageUrl(img.url, {
-                      width: 120,
-                      height: 120,
-                      quality: 75,
-                      format: "auto",
-                      fit: "cover",
-                    })}
-                    alt={img.alt || product.name}
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-              ))}
+              {images
+                .filter((img) => hasProductImage(img.url))
+                .map((img) => (
+                  <button
+                    key={img.id}
+                    onClick={() => setCurrentImage(img.url)}
+                    className={cn(
+                      "shrink-0 w-16 h-16 sm:w-20 sm:h-20 overflow-hidden rounded-lg border-2 hover:border-primary transition-colors",
+                      currentImage === img.url
+                        ? "border-primary"
+                        : "border-gray-200",
+                    )}
+                  >
+                    <img
+                      src={getProductImageUrl(img.url, {
+                        width: 120,
+                        height: 120,
+                        quality: 75,
+                        format: "auto",
+                        fit: "cover",
+                      })}
+                      alt={img.alt || product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
             </div>
           )}
         </div>
@@ -287,15 +441,41 @@ export default function ProductShortcode({
                 {option1Label}
               </h4>
               <div className="flex flex-wrap gap-2">
-                {sizeOptions.map((size) => (
-                  <Button
-                    key={size}
-                    variant={selectedSize === size ? "default" : "outline"}
-                    onClick={() => setSelectedSize(size || undefined)}
-                  >
-                    {size}
-                  </Button>
-                ))}
+                {sizeOptions.map((size) => {
+                  const availability =
+                    sizeOptionAvailability.get(size) ?? "sold_out";
+                  const isSelected = selectedSize === size;
+                  return (
+                    <Button
+                      key={size}
+                      type="button"
+                      variant={isSelected ? "default" : "outline"}
+                      disabled={availability === "sold_out"}
+                      aria-pressed={isSelected}
+                      aria-label={optionAriaLabel(
+                        "size",
+                        size,
+                        availability,
+                        isSelected,
+                      )}
+                      data-option-availability={availability}
+                      data-option-axis="size"
+                      data-option-value={size}
+                      className={cn(
+                        availability === "incompatible" &&
+                          "border-dashed border-muted-foreground bg-muted text-foreground",
+                        availability === "sold_out" &&
+                          "cursor-not-allowed line-through opacity-50",
+                      )}
+                      onClick={() => toggleOption("size", size)}
+                      onKeyDown={(event) =>
+                        navigateOptionButtons(event, "size")
+                      }
+                    >
+                      {size}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -305,15 +485,41 @@ export default function ProductShortcode({
                 {option2Label}
               </h4>
               <div className="flex flex-wrap gap-2">
-                {colorOptions.map((color) => (
-                  <Button
-                    key={color}
-                    variant={selectedColor === color ? "default" : "outline"}
-                    onClick={() => setSelectedColor(color || undefined)}
-                  >
-                    {color}
-                  </Button>
-                ))}
+                {colorOptions.map((color) => {
+                  const availability =
+                    colorOptionAvailability.get(color) ?? "sold_out";
+                  const isSelected = selectedColor === color;
+                  return (
+                    <Button
+                      key={color}
+                      type="button"
+                      variant={isSelected ? "default" : "outline"}
+                      disabled={availability === "sold_out"}
+                      aria-pressed={isSelected}
+                      aria-label={optionAriaLabel(
+                        "color",
+                        color,
+                        availability,
+                        isSelected,
+                      )}
+                      data-option-availability={availability}
+                      data-option-axis="color"
+                      data-option-value={color}
+                      className={cn(
+                        availability === "incompatible" &&
+                          "border-dashed border-muted-foreground bg-muted text-foreground",
+                        availability === "sold_out" &&
+                          "cursor-not-allowed line-through opacity-50",
+                      )}
+                      onClick={() => toggleOption("color", color)}
+                      onKeyDown={(event) =>
+                        navigateOptionButtons(event, "color")
+                      }
+                    >
+                      {color}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -353,7 +559,11 @@ export default function ProductShortcode({
             >
               <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
             </Button>
-            <Button size="lg" disabled={isUnavailable} onClick={() => handleAddToCart(true)}>
+            <Button
+              size="lg"
+              disabled={isUnavailable}
+              onClick={() => handleAddToCart(true)}
+            >
               <Check className="mr-2 h-4 w-4" /> Buy Now
             </Button>
           </div>

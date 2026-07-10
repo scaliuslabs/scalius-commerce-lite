@@ -6,9 +6,12 @@ import {
   createInitialState,
   createVariantIndex,
   filterVariantsBySelection,
+  getVariantOptionAvailability,
   getSelectionStatus,
   parseVariantFromDOM,
+  resolveExactAvailableVariantSelection,
   resolveExactVariantSelection,
+  toggleVariantOption,
   validateSelection,
 } from "./variant-state-machine";
 
@@ -138,6 +141,61 @@ describe("variant selection validation", () => {
     expect(createInitialState(index).selectedVariant).toEqual(simpleSku);
   });
 
+  it("does not auto-select a sole sold-out or fully reserved option axis", () => {
+    const reserved = {
+      ...pricedVariant({
+        id: "var_42_red",
+        size: "42",
+        color: "Red",
+        price: 4_500,
+      }),
+      stock: 1,
+      reservedStock: 1,
+    };
+    const index = createVariantIndex([reserved]);
+    const initial = createInitialState(index);
+
+    expect(initial).toMatchObject({
+      selectedSize: undefined,
+      selectedColor: undefined,
+      selectedVariant: null,
+    });
+    expect(initial.sizeOptionAvailability.get("42")).toBe("sold_out");
+    expect(initial.colorOptionAvailability.get("Red")).toBe("sold_out");
+    expect(
+      resolveExactAvailableVariantSelection([reserved], {
+        selectedSize: "42",
+        selectedColor: "Red",
+      }),
+    ).toBeNull();
+  });
+
+  it("auto-selects a sole untracked option even when its numeric stock is zero", () => {
+    const untracked = {
+      ...pricedVariant({
+        id: "var_42_red",
+        size: "42",
+        color: "Red",
+        price: 4_500,
+      }),
+      stock: 0,
+      trackInventory: false,
+    };
+    const index = createVariantIndex([untracked]);
+
+    expect(createInitialState(index)).toMatchObject({
+      selectedSize: "42",
+      selectedColor: "Red",
+      selectedVariant: untracked,
+    });
+    expect(
+      resolveExactAvailableVariantSelection([untracked], {
+        selectedSize: "42",
+        selectedColor: "Red",
+      })?.variant,
+    ).toEqual(untracked);
+  });
+
   it("keeps SELECT actions idempotent for auto-selected single axes", () => {
     const red = pricedVariant({
       id: "var_42_red",
@@ -197,6 +255,32 @@ describe("variant selection validation", () => {
         selectedColor: "Green",
       }),
     ).toBeNull();
+
+    const simple = pricedVariant({
+      id: "var_default",
+      size: null,
+      color: null,
+      price: 4_500,
+    });
+    expect(
+      resolveExactVariantSelection([simple], { selectedSize: "42" }),
+    ).toBeNull();
+
+    const sizeOnly = pricedVariant({
+      id: "var_40",
+      size: "40",
+      color: null,
+      price: 4_500,
+    });
+    expect(
+      resolveExactVariantSelection([sizeOnly], {
+        selectedSize: "40",
+        selectedColor: "Red",
+      }),
+    ).toBeNull();
+    expect(
+      resolveExactVariantSelection([sizeOnly], { selectedSize: "40" })?.variant,
+    ).toEqual(sizeOnly);
   });
 
   it("scopes partial-selection candidates to every selected axis", () => {
@@ -249,11 +333,7 @@ describe("variant selection validation", () => {
     expect(state.availableSizes).toEqual(new Set(["40", "41"]));
     expect(state.availableColors).toEqual(new Set(["Red", "Green"]));
 
-    state = applyAction(
-      state,
-      { type: "SELECT_COLOR", value: "Green" },
-      index,
-    );
+    state = applyAction(state, { type: "SELECT_COLOR", value: "Green" }, index);
     expect(state.selectedVariant).toEqual(size41Green);
 
     state = applyAction(state, { type: "SELECT_COLOR", value: "Red" }, index);
@@ -262,5 +342,118 @@ describe("variant selection validation", () => {
       selectedColor: "Red",
       selectedVariant: null,
     });
+  });
+
+  it("distinguishes compatible, incompatible, and globally sold-out values", () => {
+    const variants = [
+      pricedVariant({
+        id: "var_40_red",
+        size: "40",
+        color: "Red",
+        price: 45_000,
+      }),
+      {
+        ...pricedVariant({
+          id: "var_40_blue",
+          size: "40",
+          color: "Blue",
+          price: 44_000,
+        }),
+        stock: 1,
+        reservedStock: 1,
+      },
+      pricedVariant({
+        id: "var_42_green",
+        size: "42",
+        color: "Green",
+        price: 4_500,
+      }),
+    ];
+
+    expect(
+      getVariantOptionAvailability(variants, "color", "Red", {
+        selectedSize: "40",
+      }),
+    ).toBe("available");
+    expect(
+      getVariantOptionAvailability(variants, "color", "Green", {
+        selectedSize: "40",
+      }),
+    ).toBe("incompatible");
+    expect(
+      getVariantOptionAvailability(variants, "color", "Blue", {
+        selectedSize: "40",
+      }),
+    ).toBe("sold_out");
+  });
+
+  it("recomputes compatibility after select, toggle-clear, and reset", () => {
+    const index = createVariantIndex([
+      pricedVariant({
+        id: "var_40_red",
+        size: "40",
+        color: "Red",
+        price: 45_000,
+      }),
+      pricedVariant({
+        id: "var_42_green",
+        size: "42",
+        color: "Green",
+        price: 4_500,
+      }),
+    ]);
+    let state = createInitialState(index);
+
+    state = applyAction(state, { type: "SELECT_SIZE", value: "40" }, index);
+    expect(state.colorOptionAvailability.get("Red")).toBe("available");
+    expect(state.colorOptionAvailability.get("Green")).toBe("incompatible");
+
+    state = applyAction(state, { type: "TOGGLE_SIZE", value: "40" }, index);
+    expect(state.selectedSize).toBeUndefined();
+    expect(state.colorOptionAvailability.get("Green")).toBe("available");
+
+    state = applyAction(state, { type: "SELECT_COLOR", value: "Red" }, index);
+    state = applyAction(state, { type: "RESET" }, index);
+    expect(state).toMatchObject({
+      selectedSize: undefined,
+      selectedColor: undefined,
+      selectedVariant: null,
+    });
+    expect(state.sizeOptionAvailability.get("42")).toBe("available");
+  });
+
+  it("toggles a selected value off and rejects globally sold-out selection", () => {
+    const available = pricedVariant({
+      id: "var_40_red",
+      size: "40",
+      color: "Red",
+      price: 45_000,
+    });
+    const soldOut = {
+      ...pricedVariant({
+        id: "var_42_green",
+        size: "42",
+        color: "Green",
+        price: 4_500,
+      }),
+      stock: 0,
+    };
+
+    expect(
+      toggleVariantOption(
+        [available, soldOut],
+        { selectedSize: "40", selectedColor: "Red" },
+        "size",
+        "40",
+      ),
+    ).toEqual({ selectedColor: "Red", clearedAxis: "size" });
+    expect(
+      toggleVariantOption(
+        [available, soldOut],
+        { selectedSize: "40", selectedColor: "Red" },
+        "size",
+        "42",
+      ),
+    ).toEqual({ selectedSize: "40", selectedColor: "Red" });
   });
 });

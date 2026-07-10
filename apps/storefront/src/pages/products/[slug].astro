@@ -102,11 +102,21 @@ const formatMetadataPrice = (price: number) =>
 const buyerVariantResolution = resolveBuyerVariants(variants);
 const buyerVariants = buyerVariantResolution.variants;
 const buyerStockSummary = getBuyerStockSummary(buyerVariants);
-const queryVariantSelection = resolveExactVariantSelection(buyerVariants, {
+const requestedQueryVariantSelection = resolveExactVariantSelection(buyerVariants, {
   selectedSize: Astro.url.searchParams.get("size"),
   selectedColor: Astro.url.searchParams.get("color"),
 });
-const selectedBuyerVariant = queryVariantSelection?.variant ?? null;
+const queryVariantSelection =
+  requestedQueryVariantSelection &&
+  isVariantAvailable(requestedQueryVariantSelection.variant)
+    ? requestedQueryVariantSelection
+    : null;
+const unavailableQueryVariantSelection =
+  requestedQueryVariantSelection &&
+  !isVariantAvailable(requestedQueryVariantSelection.variant)
+    ? requestedQueryVariantSelection
+    : null;
+const selectedBuyerVariant = requestedQueryVariantSelection?.variant ?? null;
 const buyerPricingVariants = selectedBuyerVariant
   ? [selectedBuyerVariant]
   : buyerVariants;
@@ -617,6 +627,7 @@ const productCategoryAnalytics = productCategory
           currencyDecimalPlaces={currencyDecimalPlaces}
           initialSelectedSize={queryVariantSelection?.selectedSize}
           initialSelectedColor={queryVariantSelection?.selectedColor}
+          initialUnavailableVariant={unavailableQueryVariantSelection?.variant}
           quickBuyNotice={quickBuyNotice}
         />
       </div>
