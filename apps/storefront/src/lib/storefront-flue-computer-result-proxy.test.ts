@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  proxyStorefrontFlueComputerCancellation,
   proxyStorefrontFlueComputerResult,
   resolveStorefrontFlueComputerAuthority,
   type StorefrontFlueComputerAuthority,
@@ -89,6 +90,29 @@ function request(
   );
 }
 
+function cancellationRequest() {
+  const body = resultBody();
+  return new Request(
+    `${ORIGIN}/api/assistant/conversations/${THREAD_ID}/computer/cancel`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: COOKIE,
+        Origin: ORIGIN,
+        "Sec-Fetch-Site": "same-origin",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        surface: body.surface,
+        threadId: body.threadId,
+        requestId: body.requestId,
+        ticket: body.ticket,
+        program: body.program,
+      }),
+    },
+  );
+}
+
 function dependencies(
   overrides: Partial<StorefrontFlueComputerProxyDependencies> = {},
 ): StorefrontFlueComputerProxyDependencies {
@@ -131,6 +155,33 @@ function authorityEnvelope(
 describe("Storefront Flue computer result proxy", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("forwards an exact signed cancellation and returns only first-winner acknowledgement", async () => {
+    const agentFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe(
+        `http://storefront-flue-agent.internal/computer/cancel/${INSTANCE_ID}`,
+      );
+      await expect(new Response(init?.body).json()).resolves.toEqual({
+        ticket: TICKET,
+        program: "observe",
+      });
+      return Response.json({
+        accepted: true,
+        status: "cancelled",
+        requestId: REQUEST_ID,
+      }, { status: 202 });
+    });
+    const response = await proxyStorefrontFlueComputerCancellation(
+      cancellationRequest(),
+      dependencies({ agent: { fetch: agentFetch } }),
+    );
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({
+      accepted: true,
+      status: "cancelled",
+      requestId: REQUEST_ID,
+    });
   });
 
   it("fails closed while API authority or the Flue binding is absent", async () => {

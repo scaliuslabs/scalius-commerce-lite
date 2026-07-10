@@ -56,7 +56,7 @@ function testContext(overrides: {
     batch: vi.fn(async () => [
       overrides.userRows ?? [{
         id: "admin_1",
-        isSuperAdmin: false,
+        isSuperAdmin: true,
         banned: false,
         banExpires: null,
         twoFactorEnabled: true,
@@ -121,6 +121,24 @@ describe("Flue command instance authority", () => {
       actorId: "admin_1",
       permissions: ["products.view"],
     }));
+  });
+
+  it("denies a bound Admin thread after the actor loses super-admin authority", async () => {
+    const { context } = testContext({
+      userRows: [{
+        id: "admin_1",
+        isSuperAdmin: false,
+        banned: false,
+        banExpires: null,
+        twoFactorEnabled: true,
+        mustChangePassword: false,
+        mustEnrollTwoFactor: false,
+      }],
+    });
+
+    await expect(resolveAdminFlueCommandAuthority(context, INSTANCE_ID))
+      .rejects.toThrow("Admin assistant access is unavailable.");
+    expect(mocks.freshPermissions).not.toHaveBeenCalled();
   });
 
   it("invalidates the thread after fresh D1 revokes a stale cached role grant", async () => {

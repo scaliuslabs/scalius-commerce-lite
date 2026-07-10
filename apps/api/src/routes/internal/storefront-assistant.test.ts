@@ -15,6 +15,17 @@ const mocks = vi.hoisted(() => ({
   resumeSession: vi.fn(),
   revokeSession: vi.fn(),
   executeCommand: vi.fn(),
+  resolveFlueAuthority: vi.fn(),
+  consumeHandoff: vi.fn(),
+  beginHandoff: vi.fn(),
+  confirmHandoff: vi.fn(),
+  uncertainHandoff: vi.fn(),
+  beginAdmission: vi.fn(),
+  finishAdmission: vi.fn(),
+  beginStop: vi.fn(),
+  readStop: vi.fn(),
+  finishStop: vi.fn(),
+  reconcileStop: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
@@ -28,8 +39,22 @@ vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
     consumeAssistantRateLimit: mocks.consumeRateLimit,
     resumeAssistantSession: mocks.resumeSession,
     revokeAssistantSession: mocks.revokeSession,
+    consumeAssistantComputerHandoff: mocks.consumeHandoff,
+    beginAssistantComputerHandoffDispatch: mocks.beginHandoff,
+    confirmAssistantComputerHandoffDispatch: mocks.confirmHandoff,
+    markAssistantComputerHandoffDispatchUncertain: mocks.uncertainHandoff,
+    beginAssistantAgentAdmission: mocks.beginAdmission,
+    finishAssistantAgentAdmission: mocks.finishAdmission,
+    recordAssistantComputerStopBarrier: mocks.beginStop,
+    readAssistantComputerStopBarrier: mocks.readStop,
+    finishAssistantComputerStopBarrier: mocks.finishStop,
+    reconcileAssistantAgentAdmissionAfterStop: mocks.reconcileStop,
   };
 });
+
+vi.mock("./flue-command-authority", () => ({
+  resolveStorefrontFlueCommandAuthority: mocks.resolveFlueAuthority,
+}));
 
 vi.mock("./flue-command-execution", () => ({
   executeStorefrontFlueCommand: mocks.executeCommand,
@@ -136,6 +161,11 @@ describe("internal Storefront assistant session authority", () => {
     mocks.executeCommand.mockResolvedValue({
       success: true,
       data: { command: "help", capabilities: [] },
+    });
+    mocks.resolveFlueAuthority.mockResolvedValue({
+      id: "assistant_session_storefront",
+      surface: "storefront",
+      actorType: "guest",
     });
 
     mocks.createSession.mockImplementation(async (
@@ -846,5 +876,98 @@ describe("internal Storefront assistant session authority", () => {
       expect(text).not.toContain(FLUE_SIGNING_KEY);
       expect(text).not.toContain(currentCredential!);
     }
+  });
+
+  it("binds Storefront admission, handoff, and Stop gates to API-owned instance authority", async () => {
+    const { app, env, db } = createTestApp();
+    const instanceId = `v1.${"i".repeat(43)}`;
+    const identity = {
+      instanceId,
+      requestId: "r".repeat(22),
+      programDigest: "p".repeat(43),
+    };
+    mocks.beginAdmission.mockResolvedValue({
+      status: "started",
+      admissionId: "a".repeat(22),
+      admissionClaimToken: "c".repeat(43),
+      generation: 1_800_000_000_001,
+    });
+    mocks.consumeHandoff.mockResolvedValue({
+      status: "claimed",
+      state: "dispatched",
+      requestId: identity.requestId,
+      dispatchClaimToken: "d".repeat(43),
+    });
+    mocks.beginStop.mockResolvedValue({
+      status: "pending",
+      stoppedThroughIssuedAtMs: 1_800_000_000_002,
+      pendingAdmissions: 1,
+      pendingDispatches: 0,
+      blockedDispatches: 0,
+    });
+    mocks.reconcileStop.mockResolvedValue({
+      status: "reconciled",
+      readiness: "ready",
+      stoppedThroughIssuedAtMs: 1_800_000_000_002,
+      blockedDispatches: 0,
+      pendingDispatches: 0,
+      pendingAdmissions: 0,
+    });
+
+    const admission = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueAdmissionBegin,
+      { instanceId },
+      { cookie: null },
+    );
+    expect(admission.status).toBe(200);
+    await expect(admission.json()).resolves.toMatchObject({
+      data: { status: "started", generation: 1_800_000_000_001 },
+    });
+    expect(mocks.beginAdmission).toHaveBeenCalledWith(db, {
+      sessionId: "assistant_session_storefront",
+      agentInstanceId: instanceId,
+    });
+
+    const consumed = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConsume,
+      {
+        ...identity,
+        state: "dispatched",
+        ticketIssuedAt: 1_800_000_000_000,
+        ticketExpiresAt: 1_800_000_100_000,
+      },
+      { cookie: null },
+    );
+    expect(consumed.status).toBe(200);
+
+    const stop = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueStopBegin,
+      { instanceId },
+      { cookie: null },
+    );
+    expect(stop.status).toBe(200);
+    await expect(stop.json()).resolves.toMatchObject({
+      data: { pendingAdmissions: 1, stoppedThroughIssuedAtMs: 1_800_000_000_002 },
+    });
+    const reconciled = await post(
+      app,
+      env,
+      STOREFRONT_ASSISTANT_AUTHORITY_PATHS.flueStopReconcile,
+      { instanceId, stoppedThroughIssuedAtMs: 1_800_000_000_002 },
+      { cookie: null },
+    );
+    expect(reconciled.status).toBe(200);
+    expect(mocks.reconcileStop).toHaveBeenCalledWith(db, {
+      sessionId: "assistant_session_storefront",
+      agentInstanceId: instanceId,
+      stoppedThroughIssuedAtMs: 1_800_000_000_002,
+    });
+    expect(mocks.resolveFlueAuthority).toHaveBeenCalledTimes(4);
   });
 });

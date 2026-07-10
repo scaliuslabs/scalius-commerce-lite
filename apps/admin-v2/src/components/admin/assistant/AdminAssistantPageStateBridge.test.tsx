@@ -121,6 +121,21 @@ describe("AdminAssistantPageStateBridge", () => {
     expect(JSON.stringify(snapshot)).not.toContain("chk_leak");
   });
 
+  it("publishes no page state when the super-admin surface is disabled", () => {
+    act(() => {
+      root.render(
+        <AdminAssistantPageStateBridge
+          enabled={false}
+          routePath="/admin/products"
+        />,
+      );
+    });
+
+    expect(animationFrameCallbacks).toHaveLength(0);
+    expect(window.__SCALIUS_ADMIN_ASSISTANT_PAGE_STATE__).toBeUndefined();
+    expect(events).toHaveLength(0);
+  });
+
   it("updates the global snapshot after registered surface and scroll changes", () => {
     act(() => {
       root.render(<AdminAssistantPageStateBridge routePath="/admin/orders" />);

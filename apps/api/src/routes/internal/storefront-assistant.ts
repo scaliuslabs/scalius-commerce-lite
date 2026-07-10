@@ -1,9 +1,19 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import {
   bindAssistantAgentInstance,
+  beginAssistantAgentAdmission,
+  beginAssistantComputerHandoffDispatch,
+  confirmAssistantComputerHandoffDispatch,
+  consumeAssistantComputerHandoff,
   createAssistantSession,
   createAssistantSessionCredential,
   consumeAssistantRateLimit,
+  finishAssistantAgentAdmission,
+  finishAssistantComputerStopBarrier,
+  markAssistantComputerHandoffDispatchUncertain,
+  readAssistantComputerStopBarrier,
+  reconcileAssistantAgentAdmissionAfterStop,
+  recordAssistantComputerStopBarrier,
   resumeAssistantSession,
   revokeAssistantSession,
 } from "@scalius/core/modules/assistant";
@@ -30,6 +40,11 @@ import {
   parseStorefrontAssistantJson,
   readStorefrontAssistantSessionCredential,
   storefrontAssistantSessionBoundSchema,
+  storefrontAssistantAdmissionFinishSchema,
+  storefrontAssistantAgentInstanceSchema,
+  storefrontAssistantComputerHandoffConfirmSchema,
+  storefrontAssistantComputerHandoffConsumeSchema,
+  storefrontAssistantStopReconcileSchema,
   storefrontAssistantSessionCreateSchema,
   storefrontAssistantFlueAdmitSchema,
   storefrontAssistantFlueCommandSchema,
@@ -51,6 +66,7 @@ import {
   executeStorefrontFlueCommand,
   failure as flueCommandFailure,
 } from "./flue-command-execution";
+import { resolveStorefrontFlueCommandAuthority } from "./flue-command-authority";
 
 const RANDOM_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -302,6 +318,166 @@ app.post("/flue/command", async (c) => {
     return c.json(flueCommandFailure(code, message, retryable), status);
   }
 });
+
+function hasInvalidFlueServiceHeaders(request: Request): boolean {
+  return request.headers.has("cookie") || hasCallerSuppliedFlueIdentity(request.headers);
+}
+
+app.post("/flue/computer-handoff/consume", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+  }
+  try {
+    const input = await parseStorefrontAssistantJson(c.req.raw, storefrontAssistantComputerHandoffConsumeSchema);
+    const session = await resolveStorefrontFlueCommandAuthority(c, input.instanceId);
+    const result = await consumeAssistantComputerHandoff(c.get("db"), {
+      sessionId: session.id,
+      agentInstanceId: input.instanceId,
+      requestId: input.requestId,
+      programDigest: input.programDigest,
+      state: input.state,
+      ticketIssuedAtMs: input.ticketIssuedAt,
+      ticketExpiresAt: input.ticketExpiresAt,
+    });
+    if (result.status === "conflict" || result.status === "stopped") {
+      return c.json(flueCommandFailure("handoff_terminal_conflict", "Computer handoff already reached a terminal state.", false), 409);
+    }
+    if (result.status === "uncertain") {
+      return c.json(flueCommandFailure("handoff_dispatch_uncertain", "Computer handoff dispatch state is uncertain.", false), 503);
+    }
+    return ok(c, result);
+  } catch (error) {
+    const [status, code, message, retryable] = storefrontCommandError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+for (const [path, operation] of [
+  ["/flue/computer-handoff/begin", "begin"],
+  ["/flue/computer-handoff/confirm", "confirm"],
+  ["/flue/computer-handoff/uncertain", "uncertain"],
+] as const) {
+  app.post(path, async (c) => {
+    if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+      return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+    }
+    try {
+      const input = await parseStorefrontAssistantJson(c.req.raw, storefrontAssistantComputerHandoffConfirmSchema);
+      const session = await resolveStorefrontFlueCommandAuthority(c, input.instanceId);
+      const handoff = {
+        sessionId: session.id,
+        agentInstanceId: input.instanceId,
+        requestId: input.requestId,
+        programDigest: input.programDigest,
+        dispatchClaimToken: input.dispatchClaimToken,
+      };
+      if (operation === "begin") {
+        const result = await beginAssistantComputerHandoffDispatch(c.get("db"), handoff);
+        if (result.status !== "started") {
+          return c.json(flueCommandFailure(
+            result.status === "blocked" ? "handoff_stopped" : "handoff_dispatch_uncertain",
+            result.status === "blocked" ? "Computer handoff was stopped." : "Computer handoff dispatch state is uncertain.",
+            false,
+          ), result.status === "blocked" ? 409 : 503);
+        }
+        return ok(c, result);
+      }
+      return ok(c, operation === "confirm"
+        ? await confirmAssistantComputerHandoffDispatch(c.get("db"), handoff)
+        : await markAssistantComputerHandoffDispatchUncertain(c.get("db"), handoff));
+    } catch (error) {
+      const [status, code, message, retryable] = storefrontCommandError(error);
+      return c.json(flueCommandFailure(code, message, retryable), status);
+    }
+  });
+}
+
+app.post("/flue/admission/begin", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+  }
+  try {
+    const input = await parseStorefrontAssistantJson(c.req.raw, storefrontAssistantAgentInstanceSchema);
+    const session = await resolveStorefrontFlueCommandAuthority(c, input.instanceId);
+    const result = await beginAssistantAgentAdmission(c.get("db"), {
+      sessionId: session.id,
+      agentInstanceId: input.instanceId,
+    });
+    if (result.status !== "started") {
+      return c.json(flueCommandFailure(
+        result.status === "stopping" ? "assistant_stopping" : "assistant_busy",
+        result.status === "stopping" ? "Assistant Stop is in progress." : "Assistant admission is already active.",
+        true,
+      ), 409);
+    }
+    return ok(c, result);
+  } catch (error) {
+    const [status, code, message, retryable] = storefrontCommandError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+app.post("/flue/admission/finish", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+  }
+  try {
+    const input = await parseStorefrontAssistantJson(c.req.raw, storefrontAssistantAdmissionFinishSchema);
+    const session = await resolveStorefrontFlueCommandAuthority(c, input.instanceId);
+    return ok(c, await finishAssistantAgentAdmission(c.get("db"), {
+      sessionId: session.id,
+      agentInstanceId: input.instanceId,
+      admissionId: input.admissionId,
+      admissionClaimToken: input.admissionClaimToken,
+    }));
+  } catch (error) {
+    const [status, code, message, retryable] = storefrontCommandError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+app.post("/flue/stop/reconcile", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+  }
+  try {
+    const input = await parseStorefrontAssistantJson(c.req.raw, storefrontAssistantStopReconcileSchema);
+    const session = await resolveStorefrontFlueCommandAuthority(c, input.instanceId);
+    return ok(c, await reconcileAssistantAgentAdmissionAfterStop(c.get("db"), {
+      sessionId: session.id,
+      agentInstanceId: input.instanceId,
+      stoppedThroughIssuedAtMs: input.stoppedThroughIssuedAtMs,
+    }));
+  } catch (error) {
+    const [status, code, message, retryable] = storefrontCommandError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+for (const [path, operation] of [
+  ["/flue/stop/begin", "begin"],
+  ["/flue/stop/status", "status"],
+  ["/flue/stop/finish", "finish"],
+] as const) {
+  app.post(path, async (c) => {
+    if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+      return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+    }
+    try {
+      const input = await parseStorefrontAssistantJson(c.req.raw, storefrontAssistantAgentInstanceSchema);
+      const session = await resolveStorefrontFlueCommandAuthority(c, input.instanceId);
+      const authority = { sessionId: session.id, agentInstanceId: input.instanceId };
+      return ok(c, operation === "begin"
+        ? await recordAssistantComputerStopBarrier(c.get("db"), authority)
+        : operation === "status"
+          ? await readAssistantComputerStopBarrier(c.get("db"), authority)
+          : await finishAssistantComputerStopBarrier(c.get("db"), authority));
+    } catch (error) {
+      const [status, code, message, retryable] = storefrontCommandError(error);
+      return c.json(flueCommandFailure(code, message, retryable), status);
+    }
+  });
+}
 
 app.all("*", (c) => c.json({ success: false, error: "not_found" }, 404));
 

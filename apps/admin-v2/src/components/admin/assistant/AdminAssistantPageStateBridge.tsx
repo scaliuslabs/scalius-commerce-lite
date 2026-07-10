@@ -15,14 +15,20 @@ const ROUTE_SETTLE_DELAYS_MS = [80, 250, 750] as const;
 interface AdminAssistantPageStateBridgeProps {
   routePath: string;
   scrollElementId?: string;
+  enabled?: boolean;
 }
 
 export function AdminAssistantPageStateBridge({
   routePath,
   scrollElementId = DEFAULT_ADMIN_SCROLL_ELEMENT_ID,
+  enabled = true,
 }: AdminAssistantPageStateBridgeProps) {
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!enabled) {
+      clearAdminAssistantPageState();
+      return;
+    }
 
     const scrollElement = document.getElementById(scrollElementId);
     let animationFrame: number | null = null;
@@ -73,7 +79,7 @@ export function AdminAssistantPageStateBridge({
         window.cancelAnimationFrame(animationFrame);
       }
     };
-  }, [routePath, scrollElementId]);
+  }, [enabled, routePath, scrollElementId]);
 
   useEffect(() => clearAdminAssistantPageState, []);
 

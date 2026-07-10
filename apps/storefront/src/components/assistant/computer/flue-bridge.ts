@@ -18,6 +18,7 @@ const TICKET_PATTERN = /^[A-Za-z0-9_-]{16,1600}\.[A-Za-z0-9_-]{43}$/u;
 const MAX_CLIENT_COMMAND_LIFETIME_MS = 125_000;
 const MAX_RESULT_REQUEST_BYTES = SCALIUS_COMPUTER_LIMITS.resultEnvelopeBytes;
 const MAX_RESULT_RESPONSE_BYTES = 4_096;
+const MAX_CANCELLATION_REQUEST_BYTES = SCALIUS_COMPUTER_LIMITS.resultEnvelopeBytes;
 const MAX_DEDUPE_STORAGE_BYTES = 32_768;
 
 export const STOREFRONT_FLUE_COMPUTER_DEDUPE_STORAGE_KEY =
@@ -106,10 +107,19 @@ export interface StorefrontFlueComputerResultPayload {
   result: ScaliusComputerResult;
 }
 
+export type StorefrontFlueComputerCancellationPayload = Omit<
+  StorefrontFlueComputerResultPayload,
+  "result"
+>;
+
 export interface StorefrontFlueComputerCoordinatorOptions {
   runtime: StorefrontAssistantComputerRuntime;
   postResult?: (
     payload: StorefrontFlueComputerResultPayload,
+    options?: { signal?: AbortSignal },
+  ) => Promise<{ accepted: true; requestId: string }>;
+  postCancellation?: (
+    payload: StorefrontFlueComputerCancellationPayload,
     options?: { signal?: AbortSignal },
   ) => Promise<{ accepted: true; requestId: string }>;
   now?: () => number;
@@ -150,6 +160,9 @@ export class StorefrontFlueComputerCoordinator {
   readonly #postResult: NonNullable<
     StorefrontFlueComputerCoordinatorOptions["postResult"]
   >;
+  readonly #postCancellation: NonNullable<
+    StorefrontFlueComputerCoordinatorOptions["postCancellation"]
+  >;
   readonly #now: () => number;
   readonly #onPhase?: StorefrontFlueComputerCoordinatorOptions["onPhase"];
   readonly #maxTrackedRequests: number;
@@ -167,6 +180,10 @@ export class StorefrontFlueComputerCoordinator {
       options.postResult ??
       ((payload, postOptions) =>
         postStorefrontFlueComputerResult(payload, fetch, postOptions));
+    this.#postCancellation =
+      options.postCancellation ??
+      ((payload, postOptions) =>
+        postStorefrontFlueComputerCancellation(payload, fetch, postOptions));
     this.#now = options.now ?? Date.now;
     this.#onPhase = options.onPhase;
     this.#maxTrackedRequests = Math.min(
@@ -188,6 +205,15 @@ export class StorefrontFlueComputerCoordinator {
         new DOMException("Storefront computer command stopped", "AbortError"),
       );
       this.#setPhase(active.command, active.fingerprint, "cancelled");
+      // The D1 handoff is first-winner authority. Delivery is intentionally
+      // one-shot: an ambiguous cancellation must never be retried.
+      void this.#postCancellation({
+        surface: "storefront",
+        threadId: this.#runtime.binding.threadId,
+        requestId: active.command.requestId,
+        ticket: active.command.ticket,
+        program: active.command.program,
+      }).catch(() => undefined);
     }
   }
 
@@ -563,6 +589,51 @@ export async function postStorefrontFlueComputerResult(
     responseBody.requestId !== payload.requestId
   ) {
     throw new Error("Storefront computer continuation was not accepted");
+  }
+  return { accepted: true, requestId: payload.requestId };
+}
+
+export async function postStorefrontFlueComputerCancellation(
+  payload: StorefrontFlueComputerCancellationPayload,
+  fetcher: typeof fetch = fetch,
+  options: { signal?: AbortSignal } = {},
+): Promise<{ accepted: true; requestId: string }> {
+  if (
+    payload.surface !== "storefront" ||
+    !THREAD_ID_PATTERN.test(payload.threadId) ||
+    !REQUEST_ID_PATTERN.test(payload.requestId)
+  ) {
+    throw new Error("Storefront computer cancellation binding is invalid");
+  }
+  const body = JSON.stringify(payload);
+  if (new TextEncoder().encode(body).byteLength > MAX_CANCELLATION_REQUEST_BYTES) {
+    throw new Error("Storefront computer cancellation is too large");
+  }
+  const endpoint = `/api/assistant/conversations/${payload.threadId}/computer/cancel`;
+  const response = await fetcher(endpoint, {
+    method: "POST",
+    credentials: "same-origin",
+    keepalive: true,
+    signal: options.signal,
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+  const responseBody = await readBoundedJsonResponse(
+    response,
+    MAX_RESULT_RESPONSE_BYTES,
+  );
+  if (
+    response.status !== 202 ||
+    !isRecord(responseBody) ||
+    !hasOnlyKeys(
+      responseBody,
+      new Set(["accepted", "status", "requestId"]),
+    ) ||
+    responseBody.accepted !== true ||
+    responseBody.status !== "cancelled" ||
+    responseBody.requestId !== payload.requestId
+  ) {
+    throw new Error("Storefront computer cancellation was not accepted");
   }
   return { accepted: true, requestId: payload.requestId };
 }

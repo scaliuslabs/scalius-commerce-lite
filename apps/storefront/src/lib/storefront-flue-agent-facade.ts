@@ -34,6 +34,12 @@ const MAX_UPDATES_QUERY_CHARACTERS = 512;
 const MIN_SERVICE_TOKEN_CHARACTERS = 32;
 const MAX_SERVICE_TOKEN_CHARACTERS = 512;
 const SUBMISSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+const ADMISSION_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;
+const CLAIM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const RUNTIME_BASE =
+  "http://api.internal/api/v1/internal/storefront-assistant/flue";
+const STOP_SETTLEMENT_TIMEOUT_MS = 4_000;
+const STOP_SETTLEMENT_POLL_MS = 50;
 
 const FORWARDED_RESPONSE_HEADERS = [
   "Content-Type",
@@ -218,6 +224,8 @@ export async function proxyStorefrontFlueAgentFacade(
   }
   if (
     !dependencies.agent ||
+    ((endpoint.kind === "send" || endpoint.kind === "abort") &&
+      !dependencies.backend) ||
     !isConfiguredServiceToken(dependencies.serviceToken)
   ) {
     return jsonError(
@@ -229,6 +237,39 @@ export async function proxyStorefrontFlueAgentFacade(
     );
   }
 
+  let admissionLease: AdmissionLease | null = null;
+  let abortThroughGeneration: number | null = null;
+  if (endpoint.kind === "send") {
+    admissionLease = await beginAdmission(
+      dependencies.backend!,
+      authority.instanceId,
+    );
+    if (!admissionLease) {
+      return jsonError(
+        409,
+        "STOREFRONT_FLUE_ADMISSION_BLOCKED",
+        "Assistant Stop is in progress",
+        {},
+        setCookie,
+      );
+    }
+  }
+  if (endpoint.kind === "abort") {
+    abortThroughGeneration = await beginStop(
+      dependencies.backend!,
+      authority.instanceId,
+    );
+    if (!abortThroughGeneration) {
+      return jsonError(
+        503,
+        "STOREFRONT_FLUE_STOP_UNCONFIRMED",
+        "Assistant work could not be safely stopped",
+        {},
+        setCookie,
+      );
+    }
+  }
+
   const target =
     endpoint.kind === "readiness"
       ? `${AGENT_ORIGIN}/readyz/agents/${AGENT_NAME}/${authority.instanceId}`
@@ -237,7 +278,13 @@ export async function proxyStorefrontFlueAgentFacade(
         }${endpoint.normalizedSearch}`;
   const init: RequestInit = {
     method: request.method,
-    headers: createAgentHeaders(authority, dependencies.serviceToken, endpoint),
+    headers: createAgentHeaders(
+      authority,
+      dependencies.serviceToken,
+      endpoint,
+      admissionLease?.generation,
+      abortThroughGeneration,
+    ),
     redirect: "manual",
     signal: request.signal,
   };
@@ -247,6 +294,13 @@ export async function proxyStorefrontFlueAgentFacade(
   try {
     agentResponse = await dependencies.agent.fetch(target, init);
   } catch {
+    if (admissionLease) {
+      await finishAdmission(
+        dependencies.backend!,
+        authority.instanceId,
+        admissionLease,
+      );
+    }
     return jsonError(
       502,
       "STOREFRONT_FLUE_PROXY_FAILED",
@@ -254,6 +308,24 @@ export async function proxyStorefrontFlueAgentFacade(
       {},
       setCookie,
     );
+  }
+
+  if (admissionLease) {
+    const finished = await finishAdmission(
+      dependencies.backend!,
+      authority.instanceId,
+      admissionLease,
+    );
+    if (!finished) {
+      await agentResponse.body?.cancel();
+      return jsonError(
+        503,
+        "STOREFRONT_FLUE_ADMISSION_UNSETTLED",
+        "Assistant admission could not be settled",
+        {},
+        setCookie,
+      );
+    }
   }
 
   if (agentResponse.status >= 300 && agentResponse.status < 400) {
@@ -293,7 +365,48 @@ export async function proxyStorefrontFlueAgentFacade(
     );
   }
   if (endpoint.kind === "abort") {
-    return sanitizeAbortResponse(agentResponse);
+    const sanitized = await sanitizeAbortResponse(agentResponse);
+    if (!sanitized.ok) return sanitized.response;
+    const reconciled = await callRuntimeGate(
+      dependencies.backend!,
+      "/stop/reconcile",
+      {
+        instanceId: authority.instanceId,
+        stoppedThroughIssuedAtMs: abortThroughGeneration,
+      },
+    );
+    if (!reconciled.ok) {
+      return jsonError(
+        503,
+        "STOREFRONT_FLUE_STOP_UNCONFIRMED",
+        "Assistant Stop could not be reconciled",
+      );
+    }
+    const settled = await awaitStopReadiness(
+      dependencies.backend!,
+      authority.instanceId,
+      request.signal,
+    );
+    if (!settled) {
+      return jsonError(
+        503,
+        "STOREFRONT_FLUE_STOP_UNCONFIRMED",
+        "Assistant Stop could not be reconciled",
+      );
+    }
+    const finished = await callRuntimeGate(
+      dependencies.backend!,
+      "/stop/finish",
+      { instanceId: authority.instanceId },
+    );
+    if (!finished.ok) {
+      return jsonError(
+        503,
+        "STOREFRONT_FLUE_STOP_UNCONFIRMED",
+        "Assistant Stop could not be confirmed",
+      );
+    }
+    return sanitized.response;
   }
   if (agentResponse.status !== 200) {
     await agentResponse.body?.cancel();
@@ -555,6 +668,8 @@ function createAgentHeaders(
   authority: StorefrontFlueComputerAuthority,
   serviceToken: string,
   endpoint: AgentEndpoint,
+  admissionGeneration?: number,
+  abortThroughGeneration?: number | null,
 ): Headers {
   const accept =
     endpoint.kind === "updates" &&
@@ -570,6 +685,15 @@ function createAgentHeaders(
   });
   if (endpoint.kind === "send") {
     headers.set("Content-Type", "application/json");
+    if (admissionGeneration) {
+      headers.set("X-Flue-Admission-Generation", String(admissionGeneration));
+    }
+  }
+  if (endpoint.kind === "abort" && abortThroughGeneration) {
+    headers.set(
+      "X-Flue-Abort-Through-Generation",
+      String(abortThroughGeneration),
+    );
   }
   return headers;
 }
@@ -655,14 +779,16 @@ function parseSendAdmission(value: unknown): AgentSendAdmission | null {
   };
 }
 
-async function sanitizeAbortResponse(response: Response): Promise<Response> {
+async function sanitizeAbortResponse(
+  response: Response,
+): Promise<{ ok: true; response: Response } | { ok: false; response: Response }> {
   if (response.status !== 200) {
     await response.body?.cancel();
-    return jsonError(
+    return { ok: false, response: jsonError(
       502,
       "STOREFRONT_FLUE_ABORT_INVALID",
       "Assistant abort returned an invalid response",
-    );
+    ) };
   }
   const value = await readBoundedResponseJsonValue(
     response,
@@ -673,16 +799,121 @@ async function sanitizeAbortResponse(response: Response): Promise<Response> {
     Object.keys(value).length !== 1 ||
     typeof value.aborted !== "boolean"
   ) {
-    return jsonError(
+    return { ok: false, response: jsonError(
       502,
       "STOREFRONT_FLUE_ABORT_INVALID",
       "Assistant abort returned an invalid response",
-    );
+    ) };
   }
-  return Response.json(
+  return { ok: true, response: Response.json(
     { aborted: value.aborted },
     { headers: { "Cache-Control": "no-store" } },
-  );
+  ) };
+}
+
+interface AdmissionLease {
+  admissionId: string;
+  admissionClaimToken: string;
+  generation: number;
+}
+
+async function beginAdmission(
+  api: Pick<Fetcher, "fetch">,
+  instanceId: string,
+): Promise<AdmissionLease | null> {
+  const result = await callRuntimeGate(api, "/admission/begin", { instanceId });
+  const data = result.data;
+  if (
+    !result.ok ||
+    !isRecord(data) ||
+    data.status !== "started" ||
+    typeof data.admissionId !== "string" ||
+    !ADMISSION_ID_PATTERN.test(data.admissionId) ||
+    typeof data.admissionClaimToken !== "string" ||
+    !CLAIM_TOKEN_PATTERN.test(data.admissionClaimToken) ||
+    typeof data.generation !== "number" ||
+    !Number.isSafeInteger(data.generation) ||
+    data.generation <= 0
+  ) return null;
+  return {
+    admissionId: data.admissionId,
+    admissionClaimToken: data.admissionClaimToken,
+    generation: data.generation,
+  };
+}
+
+async function finishAdmission(
+  api: Pick<Fetcher, "fetch">,
+  instanceId: string,
+  lease: AdmissionLease,
+): Promise<boolean> {
+  const result = await callRuntimeGate(api, "/admission/finish", {
+    instanceId,
+    admissionId: lease.admissionId,
+    admissionClaimToken: lease.admissionClaimToken,
+  });
+  return result.ok && isRecord(result.data) &&
+    (result.data.status === "finished" || result.data.status === "replayed");
+}
+
+async function beginStop(
+  api: Pick<Fetcher, "fetch">,
+  instanceId: string,
+): Promise<number | null> {
+  const result = await callRuntimeGate(api, "/stop/begin", { instanceId });
+  return stopCutoff(result);
+}
+
+async function awaitStopReadiness(
+  api: Pick<Fetcher, "fetch">,
+  instanceId: string,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const deadline = Date.now() + STOP_SETTLEMENT_TIMEOUT_MS;
+  let result: RuntimeGateResult = { ok: false };
+  while (Date.now() < deadline && !signal.aborted) {
+    result = await callRuntimeGate(api, "/stop/status", { instanceId });
+    if (isReadyStop(result)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, STOP_SETTLEMENT_POLL_MS));
+  }
+  return isReadyStop(result);
+}
+
+function stopCutoff(result: RuntimeGateResult): number | null {
+  const value = isRecord(result.data) ? result.data.stoppedThroughIssuedAtMs : null;
+  return result.ok && typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : null;
+}
+
+function isReadyStop(result: RuntimeGateResult): boolean {
+  return result.ok && isRecord(result.data) && result.data.status === "ready" &&
+    result.data.pendingAdmissions === 0 && result.data.pendingDispatches === 0;
+}
+
+interface RuntimeGateResult { ok: boolean; data?: unknown }
+
+async function callRuntimeGate(
+  api: Pick<Fetcher, "fetch">,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<RuntimeGateResult> {
+  try {
+    const response = await api.fetch(`${RUNTIME_BASE}${path}`, {
+      method: "POST",
+      redirect: "manual",
+      signal: AbortSignal.timeout(2_000),
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const value = await readBoundedResponseJsonValue(response, MAX_CONTROL_RESPONSE_BYTES);
+    if (!response.ok || !isRecord(value) || value.success !== true) return { ok: false };
+    return { ok: true, data: value.data };
+  } catch {
+    return { ok: false };
+  }
 }
 
 async function sanitizeReadinessProbe(

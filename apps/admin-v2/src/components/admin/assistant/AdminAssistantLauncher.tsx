@@ -18,6 +18,7 @@ import "@scalius/ui/assistant/styles.css";
 
 import { TooltipProvider } from "../../ui/tooltip";
 import { useIsMobile } from "../../../hooks/use-mobile";
+import { usePermissions } from "../../../contexts/PermissionContext";
 import { AdminAssistantBubble } from "./AdminAssistantBubble";
 import { useAdminAssistantLayout } from "./useAdminAssistantLayout";
 
@@ -36,6 +37,14 @@ const AdminAssistantPanel = lazy(() =>
 type AdminAssistantLauncherProps = PropsWithChildren;
 
 export function AdminAssistantLauncher({
+  children,
+}: AdminAssistantLauncherProps) {
+  const { isSuperAdmin } = usePermissions();
+  if (!isSuperAdmin) return children;
+  return <AuthorizedAdminAssistantLauncher>{children}</AuthorizedAdminAssistantLauncher>;
+}
+
+function AuthorizedAdminAssistantLauncher({
   children,
 }: AdminAssistantLauncherProps) {
   const layout = useAdminAssistantLayout();

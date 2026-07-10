@@ -57,6 +57,12 @@ interface AgentSendAdmission {
   submissionId: string;
 }
 
+interface AgentAdmissionLease {
+  admissionId: string;
+  admissionClaimToken: string;
+  generation: number;
+}
+
 export interface AdminFlueAgentFacadeDependencies {
   agent?: Pick<Fetcher, "fetch">;
   api?: Pick<Fetcher, "fetch">;
@@ -170,7 +176,8 @@ export async function proxyAdminFlueAgentFacade(
     );
   }
 
-  let admissionLease: { admissionId: string; admissionClaimToken: string } | null = null;
+  let admissionLease: AgentAdmissionLease | null = null;
+  let stopGeneration: number | null = null;
   if (endpoint.kind === "send") {
     admissionLease = await beginAdmission(dependencies.api!, authority.instanceId);
     if (!admissionLease) {
@@ -178,8 +185,8 @@ export async function proxyAdminFlueAgentFacade(
     }
   }
   if (endpoint.kind === "abort") {
-    const ready = await beginAndAwaitStop(dependencies.api!, authority.instanceId, request.signal);
-    if (!ready) {
+    stopGeneration = await beginStop(dependencies.api!, authority.instanceId);
+    if (!stopGeneration) {
       return jsonError(503, "ADMIN_FLUE_STOP_UNCONFIRMED", "Assistant work could not be safely stopped");
     }
   }
@@ -188,6 +195,7 @@ export async function proxyAdminFlueAgentFacade(
     authority,
     dependencies.serviceToken,
     endpoint,
+    admissionLease?.generation ?? stopGeneration,
   );
   const target = `${AGENT_ORIGIN}${AGENT_PATH_PREFIX}${authority.instanceId}${
     endpoint.kind === "abort" ? "/abort" : ""
@@ -242,11 +250,18 @@ export async function proxyAdminFlueAgentFacade(
   if (endpoint.kind === "abort") {
     const sanitized = await sanitizeAbortResponse(agentResponse);
     if (!sanitized.ok) return sanitized.response;
+    const reconciled = await reconcileStopAfterAbort(
+      dependencies.api!,
+      authority.instanceId,
+      stopGeneration!,
+    );
+    if (!reconciled) {
+      return jsonError(503, "ADMIN_FLUE_STOP_UNCONFIRMED", "Assistant Stop could not be reconciled");
+    }
     const settled = await awaitStopReadiness(
       dependencies.api!,
       authority.instanceId,
       request.signal,
-      true,
     );
     if (!settled) {
       return jsonError(503, "ADMIN_FLUE_STOP_UNCONFIRMED", "Assistant Stop could not be reconciled");
@@ -395,6 +410,7 @@ function createAgentHeaders(
   authority: AdminFlueComputerAuthority,
   serviceToken: string,
   endpoint: AgentEndpoint,
+  generation: number | null,
 ): Headers {
   const accept = endpoint.kind === "updates" &&
       endpoint.normalizedSearch.includes("live=sse")
@@ -407,7 +423,14 @@ function createAgentHeaders(
     "X-Scalius-Principal-Id": authority.principalId,
     "X-Scalius-Thread-Id": authority.threadId,
   });
-  if (endpoint.kind === "send") headers.set("Content-Type", "application/json");
+  if (endpoint.kind === "send") {
+    headers.set("Content-Type", "application/json");
+    if (generation) {
+      headers.set("X-Flue-Admission-Generation", String(generation));
+    }
+  } else if (endpoint.kind === "abort" && generation) {
+    headers.set("X-Flue-Abort-Through-Generation", String(generation));
+  }
   return headers;
 }
 
@@ -512,7 +535,7 @@ async function sanitizeAbortResponse(
 async function beginAdmission(
   api: Pick<Fetcher, "fetch">,
   instanceId: string,
-): Promise<{ admissionId: string; admissionClaimToken: string } | null> {
+): Promise<AgentAdmissionLease | null> {
   const result = await callRuntimeGate(api, "/admission/begin", { instanceId });
   const data = result.data;
   if (
@@ -522,56 +545,63 @@ async function beginAdmission(
     typeof data.admissionId !== "string" ||
     !ADMISSION_ID_PATTERN.test(data.admissionId) ||
     typeof data.admissionClaimToken !== "string" ||
-    !CLAIM_TOKEN_PATTERN.test(data.admissionClaimToken)
+    !CLAIM_TOKEN_PATTERN.test(data.admissionClaimToken) ||
+    typeof data.generation !== "number" ||
+    !Number.isSafeInteger(data.generation) ||
+    data.generation <= 0
   ) return null;
   return {
     admissionId: data.admissionId,
     admissionClaimToken: data.admissionClaimToken,
+    generation: data.generation,
   };
 }
 
 async function finishAdmission(
   api: Pick<Fetcher, "fetch">,
   instanceId: string,
-  lease: { admissionId: string; admissionClaimToken: string },
+  lease: AgentAdmissionLease,
 ): Promise<boolean> {
   const result = await callRuntimeGate(api, "/admission/finish", {
     instanceId,
-    ...lease,
+    admissionId: lease.admissionId,
+    admissionClaimToken: lease.admissionClaimToken,
   });
   return result.ok && isRecord(result.data) &&
     (result.data.status === "finished" || result.data.status === "replayed");
 }
 
-async function beginAndAwaitStop(
+async function beginStop(
   api: Pick<Fetcher, "fetch">,
   instanceId: string,
-  signal: AbortSignal,
-): Promise<boolean> {
+): Promise<number | null> {
   const result = await callRuntimeGate(api, "/stop/begin", { instanceId });
-  if (!result.ok) return false;
-  if (isPreAbortReady(result)) return true;
-  return awaitStopReadiness(api, instanceId, signal, false);
+  return result.ok ? readStopGeneration(result) : null;
 }
 
 async function awaitStopReadiness(
   api: Pick<Fetcher, "fetch">,
   instanceId: string,
   signal: AbortSignal,
-  includeDispatches: boolean,
-): Promise<boolean> {
+): Promise<RuntimeGateResult | null> {
   const deadline = Date.now() + STOP_SETTLEMENT_TIMEOUT_MS;
   let result: RuntimeGateResult = { ok: false };
   while (Date.now() < deadline && !signal.aborted) {
     result = await callRuntimeGate(api, "/stop/status", { instanceId });
-    if (includeDispatches ? isReadyStop(result) : isPreAbortReady(result)) return true;
+    if (isReadyStop(result)) return result;
     await new Promise((resolve) => setTimeout(resolve, STOP_SETTLEMENT_POLL_MS));
   }
-  return includeDispatches ? isReadyStop(result) : isPreAbortReady(result);
+  return isReadyStop(result) ? result : null;
 }
 
-function isPreAbortReady(result: RuntimeGateResult): boolean {
-  return result.ok && isRecord(result.data) && result.data.pendingAdmissions === 0;
+function readStopGeneration(result: RuntimeGateResult): number | null {
+  const data = result.data;
+  return isRecord(data) &&
+      typeof data.stoppedThroughIssuedAtMs === "number" &&
+      Number.isSafeInteger(data.stoppedThroughIssuedAtMs) &&
+      data.stoppedThroughIssuedAtMs > 0
+    ? data.stoppedThroughIssuedAtMs
+    : null;
 }
 
 function isReadyStop(result: RuntimeGateResult): boolean {
@@ -600,6 +630,24 @@ async function callRuntimeGate(
   } catch {
     return { ok: false };
   }
+}
+
+async function reconcileStopAfterAbort(
+  api: Pick<Fetcher, "fetch">,
+  instanceId: string,
+  stoppedThroughIssuedAtMs: number,
+): Promise<boolean> {
+  const result = await callRuntimeGate(api, "/stop/reconcile", {
+    instanceId,
+    stoppedThroughIssuedAtMs,
+  });
+  const data = result.data;
+  return result.ok && isRecord(data) &&
+    (data.status === "reconciled" || data.status === "replayed") &&
+    data.stoppedThroughIssuedAtMs === stoppedThroughIssuedAtMs &&
+    typeof data.pendingAdmissions === "number" &&
+    Number.isSafeInteger(data.pendingAdmissions) &&
+    data.pendingAdmissions === 0;
 }
 
 function streamingAgentResponse(

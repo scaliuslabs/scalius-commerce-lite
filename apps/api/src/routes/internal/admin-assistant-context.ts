@@ -43,6 +43,11 @@ export async function resolveAdminAssistantAuthorityContext(
       "An active dashboard session is required for assistant authority.",
     );
   }
+  if (user.isSuperAdmin !== true) {
+    throw new ForbiddenError(
+      "The Admin assistant is available only to the super admin.",
+    );
+  }
 
   const sortedPermissions = [...permissions].sort();
   if (sortedPermissions.length === 0) {

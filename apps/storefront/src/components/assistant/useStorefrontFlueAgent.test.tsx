@@ -291,7 +291,7 @@ describe("useStorefrontFlueAgent", () => {
     const sendSignal = sdkMocks.send.mock.calls[0]?.[2]?.signal;
     expect(sendSignal).toBeInstanceOf(AbortSignal);
     expect(sendSignal?.aborted).toBe(true);
-    expect(sdkMocks.abort).toHaveBeenCalledTimes(2);
+    expect(sdkMocks.abort).toHaveBeenCalledOnce();
     expect(sdkMocks.abort).toHaveBeenNthCalledWith(
       1,
       "shopping-assistant",
@@ -361,7 +361,7 @@ describe("useStorefrontFlueAgent", () => {
     expect(host.querySelector("[data-can-change]")?.textContent).toBe("true");
   });
 
-  it("fails closed when no shared durable Stop reconciler is wired", async () => {
+  it("trusts the same-origin abort facade as the durable Stop authority", async () => {
     sdkMocks.send.mockReturnValueOnce(new Promise(() => undefined));
     await act(async () => {
       root.render(<Harness open />);
@@ -377,9 +377,9 @@ describe("useStorefrontFlueAgent", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(sdkMocks.abort).toHaveBeenCalledTimes(2);
-    expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
-    expect(host.querySelector("[data-can-change]")?.textContent).toBe("false");
+    expect(sdkMocks.abort).toHaveBeenCalledOnce();
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("false");
+    expect(host.querySelector("[data-can-change]")?.textContent).toBe("true");
   });
 
   it("releases a stale pending projection when durable abort reports idle", async () => {

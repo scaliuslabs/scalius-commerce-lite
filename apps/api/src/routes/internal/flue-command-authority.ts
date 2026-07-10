@@ -58,6 +58,7 @@ export async function resolveAdminFlueCommandAuthority(
   const [userRows, sessionRows] = await retryTransientD1(() => db.batch([
     db.select({
       id: users.id,
+      isSuperAdmin: users.isSuperAdmin,
       banned: users.banned,
       banExpires: users.banExpires,
       twoFactorEnabled: users.twoFactorEnabled,
@@ -82,6 +83,7 @@ export async function resolveAdminFlueCommandAuthority(
   ])) as [
     Array<{
       id: string;
+      isSuperAdmin: boolean | null;
       banned: boolean | null;
       banExpires: Date | null;
       twoFactorEnabled: boolean | null;
@@ -92,6 +94,9 @@ export async function resolveAdminFlueCommandAuthority(
   ];
   const user = userRows[0];
   if (!user) throw new UnauthorizedError("Assistant session is unavailable.");
+  if (!truthy(user.isSuperAdmin)) {
+    throw new ForbiddenError("Admin assistant access is unavailable.");
+  }
 
   const matchedSession = await findDashboardSessionByHash(
     sessionRows,

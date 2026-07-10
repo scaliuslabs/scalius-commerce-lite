@@ -64,6 +64,34 @@ function dependencies(
   overrides: Partial<StorefrontFlueAgentFacadeDependencies> = {},
 ): StorefrontFlueAgentFacadeDependencies {
   return {
+    backend: {
+      fetch: vi.fn(async (input: RequestInfo | URL) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith("/admission/begin")) {
+          return Response.json({
+            success: true,
+            data: {
+              status: "started",
+              admissionId: "a".repeat(22),
+              admissionClaimToken: "c".repeat(43),
+              generation: 1_800_000_000_001,
+            },
+          });
+        }
+        if (path.endsWith("/stop/begin") || path.endsWith("/stop/status")) {
+          return Response.json({
+            success: true,
+            data: {
+              status: "ready",
+              stoppedThroughIssuedAtMs: 1_800_000_000_002,
+              pendingAdmissions: 0,
+              pendingDispatches: 0,
+            },
+          });
+        }
+        return Response.json({ success: true, data: { status: "finished" } });
+      }),
+    },
     agent: {
       fetch: vi.fn(async () =>
         Response.json({
@@ -261,6 +289,9 @@ describe("Storefront Flue agent facade", () => {
         expect(new Headers(init?.headers).get("content-type")).toBe(
           "application/json",
         );
+        expect(
+          new Headers(init?.headers).get("x-flue-admission-generation"),
+        ).toBe("1800000000001");
         await expect(new Response(init?.body).json()).resolves.toEqual({
           message: "Show me shoes",
         });
@@ -347,6 +378,102 @@ describe("Storefront Flue agent facade", () => {
     );
     expect(missing.status).toBe(401);
     expect(agentFetch).toHaveBeenCalledOnce();
+  });
+
+  it("fences a delayed prompt before one abort, then reconciles and unlocks", async () => {
+    const events: string[] = [];
+    let releasePrompt: ((response: Response) => void) | undefined;
+    const backend = {
+      fetch: vi.fn(async (input: RequestInfo | URL) => {
+        const path = new URL(String(input)).pathname;
+        events.push(path.split("/flue/")[1] ?? path);
+        if (path.endsWith("/admission/begin")) {
+          return Response.json({
+            success: true,
+            data: {
+              status: "started",
+              admissionId: "a".repeat(22),
+              admissionClaimToken: "c".repeat(43),
+              generation: 101,
+            },
+          });
+        }
+        if (path.endsWith("/stop/begin")) {
+          return Response.json({
+            success: true,
+            data: {
+              status: "pending",
+              stoppedThroughIssuedAtMs: 102,
+              pendingAdmissions: 1,
+              pendingDispatches: 0,
+            },
+          });
+        }
+        if (path.endsWith("/stop/status")) {
+          return Response.json({
+            success: true,
+            data: {
+              status: "ready",
+              stoppedThroughIssuedAtMs: 102,
+              pendingAdmissions: 0,
+              pendingDispatches: 0,
+            },
+          });
+        }
+        return Response.json({ success: true, data: { status: "finished" } });
+      }),
+    };
+    const agent = {
+      fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/abort")) {
+          events.push("agent-abort");
+          expect(
+            new Headers(init?.headers).get("x-flue-abort-through-generation"),
+          ).toBe("102");
+          return Response.json({ aborted: true });
+        }
+        events.push("agent-prompt");
+        expect(
+          new Headers(init?.headers).get("x-flue-admission-generation"),
+        ).toBe("101");
+        return await new Promise<Response>((resolve) => {
+          releasePrompt = resolve;
+        });
+      }),
+    };
+    const deps = dependencies({ backend, agent });
+    const delayedPrompt = proxyStorefrontFlueAgentFacade(
+      browserRequest("", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Show delayed products" }),
+      }),
+      deps,
+    );
+    await vi.waitFor(() => expect(releasePrompt).toBeTypeOf("function"));
+
+    const stopped = await proxyStorefrontFlueAgentFacade(
+      browserRequest("/abort", { method: "POST" }),
+      deps,
+    );
+    expect(stopped.status).toBe(200);
+    expect(events.indexOf("stop/begin")).toBeLessThan(
+      events.indexOf("agent-abort"),
+    );
+    expect(events.indexOf("agent-abort")).toBeLessThan(
+      events.indexOf("stop/reconcile"),
+    );
+
+    releasePrompt?.(Response.json({
+      streamUrl: PRIVATE_PATH,
+      offset: "late-offset",
+      submissionId: "late-submission",
+    }, { status: 202 }));
+    const delayedResponse = await delayedPrompt;
+    expect(delayedResponse.status).toBe(202);
+    expect(events).toContain("admission/finish");
+    expect(events.at(-1)).toBe("admission/finish");
   });
 
   it("retains a newly bootstrapped cookie when a new Flue instance is absent", async () => {

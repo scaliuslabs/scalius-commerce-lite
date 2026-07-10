@@ -25,12 +25,14 @@ export {
   finishAssistantAgentAdmission,
   finishAssistantComputerStopBarrier,
   readAssistantComputerStopBarrier,
+  reconcileAssistantAgentAdmissionAfterStop,
   recordAssistantComputerStopBarrier,
 } from "./assistant-computer-handoffs";
 export type {
   AssistantComputerHandoffState,
   AssistantComputerDispatchStatus,
   AssistantComputerStopBarrierResult,
+  AssistantAgentStopReconciliationResult,
   BeginAssistantAgentAdmissionResult,
   BeginAssistantComputerHandoffDispatchResult,
   CleanupAssistantComputerHandoffsResult,

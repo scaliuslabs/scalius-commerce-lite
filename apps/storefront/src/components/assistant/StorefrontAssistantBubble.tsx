@@ -718,15 +718,16 @@ export default function StorefrontAssistantBubble() {
 
   async function handleAbort() {
     if (aborting) return;
-    // Close the browser execution generation synchronously. The durable stop
-    // can then await without allowing another batched action or continuation.
+    // Initiate the D1 Stop barrier before closing browser execution. The API
+    // barrier is authoritative even if a local cancellation delivery races.
+    const durableStop = flue.abort();
     computerCoordinatorRef.current?.cancelPending();
     setStatus({
       kind: "working",
       message: "Recording a durable stop request…",
     });
     try {
-      const aborted = await flue.abort();
+      const aborted = await durableStop;
       setStatus({
         kind: aborted ? "success" : "idle",
         message: aborted
