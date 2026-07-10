@@ -31,6 +31,13 @@ const ADMIN_TASK_DESTINATIONS: readonly AdminTaskDestination[] = Object.freeze([
 
 const ADMIN_NAVIGATION_DESTINATIONS = buildAdminNavigationDestinations();
 
+/** Single application-owned route catalog shared by the intent gate and the
+ * browser runtime. Keeping the runtime on the sidebar-only subset would make
+ * an authorized create task fail at the final browser boundary. */
+export function isKnownAdminComputerDestination(pathname: string): boolean {
+  return ADMIN_NAVIGATION_DESTINATIONS.has(pathname);
+}
+
 /**
  * `goto` is the one computer verb that can move the merchant without first
  * observing a visible control. Treat the signed tool output as authenticity,
