@@ -66,6 +66,9 @@ describe("storefront Flue thread isolation", () => {
         "shopping-assistant",
         "storefront",
       ),
-    ).resolves.toEqual({ authorized: false });
+    ).resolves.toEqual({
+      authorized: false,
+      reason: "thread_identity_invalid",
+    });
   });
 });

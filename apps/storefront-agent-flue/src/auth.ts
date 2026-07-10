@@ -2,6 +2,8 @@ import type { AgentSurface, ThreadIdentity } from "./thread-identity";
 import { verifyThreadInstanceId } from "./thread-identity";
 
 const MINIMUM_SECRET_LENGTH = 32;
+const MAXIMUM_SERVICE_TOKEN_LENGTH = 512;
+const textEncoder = new TextEncoder();
 
 export interface CanaryAuthEnv {
   CANARY_AUTH_TOKEN: string;
@@ -11,10 +13,36 @@ export interface CanaryAuthEnv {
 
 export type AuthorizationResult =
   | { authorized: true; identity: ThreadIdentity }
-  | { authorized: false };
+  | {
+      authorized: false;
+      reason:
+        | "route_invalid"
+        | "configuration_unavailable"
+        | "service_token_invalid"
+        | "thread_identity_invalid";
+    };
+
+export function isStorefrontAgentAuthConfigured(
+  env: CanaryAuthEnv | undefined,
+): env is CanaryAuthEnv {
+  return Boolean(
+    env?.CANARY_AUTH_TOKEN &&
+      env.THREAD_ID_SIGNING_KEY &&
+      env.COMPUTER_TICKET_SIGNING_KEY &&
+      textEncoder.encode(env.CANARY_AUTH_TOKEN).byteLength >=
+        MINIMUM_SECRET_LENGTH &&
+      env.CANARY_AUTH_TOKEN.length <= MAXIMUM_SERVICE_TOKEN_LENGTH &&
+      textEncoder.encode(env.THREAD_ID_SIGNING_KEY).byteLength >=
+        MINIMUM_SECRET_LENGTH &&
+      textEncoder.encode(env.COMPUTER_TICKET_SIGNING_KEY).byteLength >=
+        MINIMUM_SECRET_LENGTH,
+  );
+}
 
 async function digest(value: string): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+  return new Uint8Array(
+    await crypto.subtle.digest("SHA-256", textEncoder.encode(value)),
+  );
 }
 
 async function secureEqual(left: string, right: string): Promise<boolean> {
@@ -50,7 +78,7 @@ export async function authorizeAgentRequest(
   surface: AgentSurface,
 ): Promise<AuthorizationResult> {
   const instanceId = parseAgentPath(request, expectedAgentName);
-  if (!instanceId) return { authorized: false };
+  if (!instanceId) return { authorized: false, reason: "route_invalid" };
   return authorizeThreadInstanceRequest(request, env, surface, instanceId);
 }
 
@@ -60,19 +88,16 @@ export async function authorizeThreadInstanceRequest(
   surface: AgentSurface,
   instanceId: string,
 ): Promise<AuthorizationResult> {
-  if (
-    !env?.CANARY_AUTH_TOKEN ||
-    !env.THREAD_ID_SIGNING_KEY ||
-    env.CANARY_AUTH_TOKEN.length < MINIMUM_SECRET_LENGTH ||
-    env.THREAD_ID_SIGNING_KEY.length < MINIMUM_SECRET_LENGTH
-  ) {
-    return { authorized: false };
+  if (!isStorefrontAgentAuthConfigured(env)) {
+    return { authorized: false, reason: "configuration_unavailable" };
   }
   const authorization = request.headers.get("authorization") ?? "";
-  if (!authorization.startsWith("Bearer ")) return { authorized: false };
+  if (!authorization.startsWith("Bearer ")) {
+    return { authorized: false, reason: "service_token_invalid" };
+  }
   const presentedToken = authorization.slice("Bearer ".length);
   if (!presentedToken || !(await secureEqual(presentedToken, env.CANARY_AUTH_TOKEN))) {
-    return { authorized: false };
+    return { authorized: false, reason: "service_token_invalid" };
   }
 
   const identity = {
@@ -81,7 +106,7 @@ export async function authorizeThreadInstanceRequest(
     threadId: request.headers.get("x-scalius-thread-id") ?? "",
   };
   if (!(await verifyThreadInstanceId(instanceId, surface, identity, env.THREAD_ID_SIGNING_KEY))) {
-    return { authorized: false };
+    return { authorized: false, reason: "thread_identity_invalid" };
   }
   return { authorized: true, identity };
 }

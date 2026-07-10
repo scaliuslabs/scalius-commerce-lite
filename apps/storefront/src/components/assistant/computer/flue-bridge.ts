@@ -40,6 +40,7 @@ const CLIENT_COMMAND_KEYS = new Set([
 export type StorefrontFlueComputerPhase =
   | "executing"
   | "posting_untrusted_result"
+  | "cancelled"
   | "continuation_accepted"
   | "continuation_failed";
 
@@ -64,6 +65,10 @@ export type StorefrontFlueComputerConsumeResult =
       status: "continuation_failed";
       requestId: string;
       result: ScaliusComputerResult;
+    }
+  | {
+      status: "cancelled";
+      requestId: string;
     }
   | {
       status: "continuation_accepted";
@@ -105,6 +110,7 @@ export interface StorefrontFlueComputerCoordinatorOptions {
   runtime: StorefrontAssistantComputerRuntime;
   postResult?: (
     payload: StorefrontFlueComputerResultPayload,
+    options?: { signal?: AbortSignal },
   ) => Promise<{ accepted: true; requestId: string }>;
   now?: () => number;
   onPhase?: (requestId: string, phase: StorefrontFlueComputerPhase) => void;
@@ -127,6 +133,13 @@ interface PersistedCommandMarker {
   phase: StorefrontFlueComputerPhase;
 }
 
+interface ActiveCommand {
+  abortController: AbortController;
+  command: ScaliusComputerClientCommand<"storefront">;
+  fingerprint: string;
+  generation: number;
+}
+
 /**
  * Executes one signed Flue browser command at most once in one active
  * Storefront tab. Flue stream replay is expected, so the opaque request marker
@@ -145,10 +158,15 @@ export class StorefrontFlueComputerCoordinator {
     "getItem" | "setItem" | "removeItem"
   > | null;
   readonly #tracked = new Map<string, TrackedCommand>();
+  readonly #active = new Map<string, ActiveCommand>();
+  #cancellationGeneration = 0;
 
   constructor(options: StorefrontFlueComputerCoordinatorOptions) {
     this.#runtime = options.runtime;
-    this.#postResult = options.postResult ?? postStorefrontFlueComputerResult;
+    this.#postResult =
+      options.postResult ??
+      ((payload, postOptions) =>
+        postStorefrontFlueComputerResult(payload, fetch, postOptions));
     this.#now = options.now ?? Date.now;
     this.#onPhase = options.onPhase;
     this.#maxTrackedRequests = Math.min(
@@ -159,6 +177,18 @@ export class StorefrontFlueComputerCoordinator {
       options.dedupeStorage === undefined
         ? resolveSessionStorage()
         : options.dedupeStorage;
+  }
+
+  /** Stop browser work synchronously before the durable agent abort awaits. */
+  cancelPending(): void {
+    this.#cancellationGeneration += 1;
+    this.#runtime.cancelPending();
+    for (const active of this.#active.values()) {
+      active.abortController.abort(
+        new DOMException("Storefront computer command stopped", "AbortError"),
+      );
+      this.#setPhase(active.command, active.fingerprint, "cancelled");
+    }
   }
 
   async consume(
@@ -233,53 +263,90 @@ export class StorefrontFlueComputerCoordinator {
       return { status: "rejected", reason: "dedupe_unavailable" };
     }
 
-    let result: ScaliusComputerResult;
-    try {
-      result = await this.#runtime.execute({
-        binding: this.#runtime.binding,
-        program: command.program,
-        authorizedNavigationRoutes,
-      });
-    } catch {
-      result = {
-        ok: false,
-        code: "EXECUTION_FAILED",
-        output:
-          "The Storefront page could not complete that command. Observe and try again.",
-        retryable: true,
-      };
-    }
+    const active: ActiveCommand = {
+      abortController: new AbortController(),
+      command,
+      fingerprint,
+      generation: this.#cancellationGeneration,
+    };
+    this.#active.set(command.requestId, active);
 
-    this.#setPhase(command, fingerprint, "posting_untrusted_result");
     try {
-      const admission = await this.#postResult({
-        surface: "storefront",
-        threadId: source.threadId,
-        requestId: command.requestId,
-        ticket: command.ticket,
-        program: command.program,
-        result,
-      });
-      if (admission.requestId !== command.requestId) {
-        throw new Error("Result admission mismatch");
+      let result: ScaliusComputerResult;
+      try {
+        result = await this.#runtime.execute({
+          binding: this.#runtime.binding,
+          program: command.program,
+          authorizedNavigationRoutes,
+        });
+      } catch {
+        result = {
+          ok: false,
+          code: "EXECUTION_FAILED",
+          output:
+            "The Storefront page could not complete that command. Observe and try again.",
+          retryable: true,
+        };
       }
-      this.#setPhase(command, fingerprint, "continuation_accepted");
-      return {
-        status: "continuation_accepted",
-        requestId: command.requestId,
-        result,
-        authoritative: false,
-      };
-    } catch {
-      // Delivery is uncertain. Never execute or post this requestId again;
-      // the Agent must issue a new signed command after expiry or failure.
-      this.#setPhase(command, fingerprint, "continuation_failed");
-      return {
-        status: "continuation_failed",
-        requestId: command.requestId,
-        result,
-      };
+
+      if (this.#isCancelled(active)) {
+        this.#setPhase(command, fingerprint, "cancelled");
+        return { status: "cancelled", requestId: command.requestId };
+      }
+
+      this.#setPhase(command, fingerprint, "posting_untrusted_result");
+      try {
+        const admission = await this.#postResult(
+          {
+            surface: "storefront",
+            threadId: source.threadId,
+            requestId: command.requestId,
+            ticket: command.ticket,
+            program: command.program,
+            result,
+          },
+          { signal: active.abortController.signal },
+        );
+        if (this.#isCancelled(active)) {
+          this.#setPhase(command, fingerprint, "cancelled");
+          return { status: "cancelled", requestId: command.requestId };
+        }
+        if (admission.requestId !== command.requestId) {
+          throw new Error("Result admission mismatch");
+        }
+        this.#setPhase(command, fingerprint, "continuation_accepted");
+        return {
+          status: "continuation_accepted",
+          requestId: command.requestId,
+          result,
+          authoritative: false,
+        };
+      } catch {
+        if (this.#isCancelled(active)) {
+          this.#setPhase(command, fingerprint, "cancelled");
+          return { status: "cancelled", requestId: command.requestId };
+        }
+        // Delivery is uncertain. Never execute or post this requestId again;
+        // the Agent must issue a new signed command after expiry or failure.
+        this.#setPhase(command, fingerprint, "continuation_failed");
+        return {
+          status: "continuation_failed",
+          requestId: command.requestId,
+          result,
+        };
+      }
+    } finally {
+      if (this.#active.get(command.requestId) === active) {
+        this.#active.delete(command.requestId);
+      }
     }
+  }
+
+  #isCancelled(active: ActiveCommand): boolean {
+    return (
+      active.abortController.signal.aborted ||
+      active.generation !== this.#cancellationGeneration
+    );
   }
 
   #setPhase(
@@ -457,6 +524,7 @@ export function parseStorefrontFlueComputerClientCommand(
 export async function postStorefrontFlueComputerResult(
   payload: StorefrontFlueComputerResultPayload,
   fetcher: typeof fetch = fetch,
+  options: { signal?: AbortSignal } = {},
 ): Promise<{ accepted: true; requestId: string }> {
   if (
     payload.surface !== "storefront" ||
@@ -474,6 +542,7 @@ export async function postStorefrontFlueComputerResult(
     method: "POST",
     credentials: "same-origin",
     keepalive: true,
+    signal: options.signal,
     headers: { "Content-Type": "application/json" },
     body,
   });
@@ -548,6 +617,7 @@ function isStorefrontFlueComputerPhase(
   return (
     value === "executing" ||
     value === "posting_untrusted_result" ||
+    value === "cancelled" ||
     value === "continuation_accepted" ||
     value === "continuation_failed"
   );

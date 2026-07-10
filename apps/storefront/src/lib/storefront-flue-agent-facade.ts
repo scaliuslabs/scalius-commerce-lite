@@ -25,6 +25,8 @@ const AGENT_ORIGIN = "http://storefront-flue-agent.internal";
 const AGENT_PATH_PREFIX = `/agents/${AGENT_NAME}/`;
 const PUBLIC_PATH_PATTERN =
   /^\/api\/assistant\/conversations\/(conv_[A-Za-z0-9_-]{22,64})\/flue\/agents\/shopping-assistant\/(conv_[A-Za-z0-9_-]{22,64})(\/abort)?$/u;
+const PUBLIC_READINESS_PATH_PATTERN =
+  /^\/api\/assistant\/conversations\/(conv_[A-Za-z0-9_-]{22,64})\/flue\/readyz$/u;
 const MAX_PROMPT_BODY_BYTES = 16 * 1024;
 const MAX_PROMPT_CHARACTERS = 2_000;
 const MAX_CONTROL_RESPONSE_BYTES = 8 * 1024;
@@ -50,7 +52,11 @@ type AgentEndpoint =
       threadId: string;
       normalizedSearch: string;
     }
-  | { kind: "abort"; threadId: string; normalizedSearch: "" };
+  | {
+      kind: "abort" | "readiness";
+      threadId: string;
+      normalizedSearch: "";
+    };
 
 interface AgentSendAdmission {
   streamUrl: string;
@@ -223,9 +229,12 @@ export async function proxyStorefrontFlueAgentFacade(
     );
   }
 
-  const target = `${AGENT_ORIGIN}${AGENT_PATH_PREFIX}${authority.instanceId}${
-    endpoint.kind === "abort" ? "/abort" : ""
-  }${endpoint.normalizedSearch}`;
+  const target =
+    endpoint.kind === "readiness"
+      ? `${AGENT_ORIGIN}/readyz/agents/${AGENT_NAME}/${authority.instanceId}`
+      : `${AGENT_ORIGIN}${AGENT_PATH_PREFIX}${authority.instanceId}${
+          endpoint.kind === "abort" ? "/abort" : ""
+        }${endpoint.normalizedSearch}`;
   const init: RequestInit = {
     method: request.method,
     headers: createAgentHeaders(authority, dependencies.serviceToken, endpoint),
@@ -257,8 +266,22 @@ export async function proxyStorefrontFlueAgentFacade(
       setCookie,
     );
   }
+  if (!agentResponse.ok && endpoint.kind === "readiness") {
+    await agentResponse.body?.cancel();
+    return jsonError(
+      503,
+      "STOREFRONT_FLUE_NOT_READY",
+      "Assistant service is not ready",
+      {},
+      setCookie,
+    );
+  }
   if (!agentResponse.ok) {
     return sanitizedAgentError(agentResponse, setCookie);
+  }
+
+  if (endpoint.kind === "readiness") {
+    return sanitizeReadinessProbe(agentResponse, setCookie);
   }
 
   if (endpoint.kind === "send") {
@@ -289,6 +312,23 @@ function matchAgentEndpoint(
   request: Request,
   url: URL,
 ): AgentEndpoint | Response | null {
+  const readinessMatch = PUBLIC_READINESS_PATH_PATTERN.exec(url.pathname);
+  if (readinessMatch) {
+    if (url.search) return null;
+    if (request.method !== "GET") {
+      return jsonError(
+        405,
+        "STOREFRONT_FLUE_METHOD_NOT_ALLOWED",
+        "Method not allowed",
+        { Allow: "GET" },
+      );
+    }
+    return {
+      kind: "readiness",
+      threadId: readinessMatch[1] ?? "",
+      normalizedSearch: "",
+    };
+  }
   const match = PUBLIC_PATH_PATTERN.exec(url.pathname);
   if (!match || match[1] !== match[2]) return null;
   const threadId = match[1] ?? "";
@@ -642,6 +682,35 @@ async function sanitizeAbortResponse(response: Response): Promise<Response> {
   return Response.json(
     { aborted: value.aborted },
     { headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+async function sanitizeReadinessProbe(
+  response: Response,
+  setCookie?: string,
+): Promise<Response> {
+  if (
+    response.status !== 204 ||
+    response.headers.get("x-scalius-readiness") !== "facade-authenticated"
+  ) {
+    await response.body?.cancel();
+    return jsonError(
+      502,
+      "STOREFRONT_FLUE_READINESS_INVALID",
+      "Assistant readiness response was invalid",
+      {},
+      setCookie,
+    );
+  }
+  const headers = new Headers({ "Cache-Control": "no-store" });
+  if (setCookie) headers.set("Set-Cookie", setCookie);
+  return Response.json(
+    {
+      ok: true,
+      endToEnd: true,
+      readiness: "facade_authenticated",
+    },
+    { status: 200, headers },
   );
 }
 

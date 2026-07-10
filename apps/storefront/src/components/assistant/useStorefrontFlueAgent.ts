@@ -20,6 +20,8 @@ const RECENT_THREADS_STORAGE_KEY =
   "scalius.storefront-assistant.recent-flue-threads.v1";
 const MAX_RECENT_THREADS = 5;
 const THREAD_ID_PATTERN = /^conv_[A-Za-z0-9_-]{22,64}$/u;
+const SEND_ADMISSION_DEADLINE_MS = 15_000;
+const ABORT_ADMISSION_DEADLINE_MS = 8_000;
 
 export type StorefrontFlueAgentState =
   | { kind: "idle"; message: string }
@@ -36,6 +38,24 @@ interface ActiveObservation {
 interface OptimisticMessage extends FlueConversationMessage {
   submissionId?: string;
 }
+
+interface AdmissionAttempt {
+  controller: AbortController;
+  optimisticId: string;
+  clearDeadline: () => void;
+  startedAt: number;
+  stopped: boolean;
+}
+
+export interface StorefrontStoppedAdmissionReconciliationRequest {
+  threadId: string;
+  admissionStartedAt: number;
+  signal: AbortSignal;
+}
+
+export type StorefrontStoppedAdmissionReconciler = (
+  request: StorefrontStoppedAdmissionReconciliationRequest,
+) => Promise<{ status: "settled" | "pending" }>;
 
 export interface StorefrontRecentThread {
   threadId: string;
@@ -97,11 +117,35 @@ function persistRecentThreads(threadIds: readonly string[]): string[] {
   return bounded;
 }
 
+function deadlineController(milliseconds: number, label: string): {
+  controller: AbortController;
+  clearDeadline: () => void;
+} {
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => {
+    controller.abort(new DOMException(`${label} timed out`, "TimeoutError"));
+  }, milliseconds);
+  return {
+    controller,
+    clearDeadline: () => globalThis.clearTimeout(timeout),
+  };
+}
+
 export function storefrontFlueBaseUrl(threadId: string): string {
   return `/api/assistant/conversations/${threadId}/flue`;
 }
 
-export function useStorefrontFlueAgent({ open }: { open: boolean }) {
+export function useStorefrontFlueAgent({
+  open,
+  reconcileStoppedAdmission,
+}: {
+  open: boolean;
+  /**
+   * Facade seam for the shared durable Stop barrier. Until Storefront wires
+   * that authority, a late prompt admission cannot be proven linearizable.
+   */
+  reconcileStoppedAdmission?: StorefrontStoppedAdmissionReconciler;
+}) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [snapshot, setSnapshot] =
     useState<AgentConversationObservationSnapshot>(INITIAL_SNAPSHOT);
@@ -120,6 +164,9 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
   const pendingSubmissionRef = useRef<string | null>(null);
   const busyRef = useRef(false);
   const abortPromiseRef = useRef<Promise<boolean> | null>(null);
+  const admissionAttemptRef = useRef<AdmissionAttempt | null>(null);
+  const abortRecordedSubmissionRef = useRef<string | null>(null);
+  const staleIdleSubmissionRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -132,6 +179,15 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
     return () => {
       mountedRef.current = false;
     };
+  }, []);
+
+  const clearPending = useCallback(() => {
+    pendingSubmissionRef.current = null;
+    busyRef.current = false;
+    abortRecordedSubmissionRef.current = null;
+    staleIdleSubmissionRef.current = null;
+    setPendingSubmissionId(null);
+    setAdmitting(false);
   }, []);
 
   const reconcilePending = useCallback(
@@ -147,6 +203,20 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
           !settledIds.has(message.submissionId),
       )?.submissionId;
       if (durablePending) {
+        if (staleIdleSubmissionRef.current === durablePending) {
+          pendingSubmissionRef.current = null;
+          busyRef.current = false;
+          setPendingSubmissionId(null);
+          setAdmitting(false);
+          return;
+        }
+        staleIdleSubmissionRef.current = null;
+        if (
+          abortRecordedSubmissionRef.current &&
+          abortRecordedSubmissionRef.current !== durablePending
+        ) {
+          abortRecordedSubmissionRef.current = null;
+        }
         pendingSubmissionRef.current = durablePending;
         busyRef.current = true;
         setPendingSubmissionId(durablePending);
@@ -156,12 +226,9 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
 
       const pendingId = pendingSubmissionRef.current;
       if (!pendingId || !settledIds.has(pendingId)) return;
-      pendingSubmissionRef.current = null;
-      busyRef.current = false;
-      setPendingSubmissionId(null);
-      setAdmitting(false);
+      clearPending();
     },
-    [],
+    [clearPending],
   );
 
   useEffect(() => {
@@ -193,7 +260,8 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
 
   const historyReady =
     snapshot.conversation !== undefined || snapshot.phase === "absent";
-  const sending = admitting || pendingSubmissionId !== null;
+  const sending = admitting || pendingSubmissionId !== null || aborting;
+  const canChangeConversation = !sending && !aborting;
 
   const messages = useMemo(() => {
     const canonical = snapshot.conversation?.messages ?? [];
@@ -262,6 +330,8 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
       }
 
       busyRef.current = true;
+      abortRecordedSubmissionRef.current = null;
+      staleIdleSubmissionRef.current = null;
       const optimisticId = createStorefrontConversationRequestId("message");
       setOptimisticMessages((current) => [
         ...current,
@@ -274,12 +344,35 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
       ]);
       setAdmitting(true);
 
+      const deadline = deadlineController(
+        SEND_ADMISSION_DEADLINE_MS,
+        "Assistant admission",
+      );
+      const attempt: AdmissionAttempt = {
+        ...deadline,
+        optimisticId,
+        startedAt: Date.now(),
+        stopped: false,
+      };
+      admissionAttemptRef.current = attempt;
+
       try {
         const admission = await active.client.agents.send(
           AGENT_NAME,
           active.threadId,
-          { message },
+          { message, signal: attempt.controller.signal },
         );
+        if (
+          attempt.controller.signal.aborted ||
+          admissionAttemptRef.current !== attempt
+        ) {
+          throw (
+            attempt.controller.signal.reason ??
+            new DOMException("Assistant admission was cancelled", "AbortError")
+          );
+        }
+        attempt.clearDeadline();
+        admissionAttemptRef.current = null;
         pendingSubmissionRef.current = admission.submissionId;
         setPendingSubmissionId(admission.submissionId);
         setAdmitting(false);
@@ -298,17 +391,19 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
         active.observation.refresh();
         return admission;
       } catch (error) {
+        attempt.clearDeadline();
+        const ownsAdmission = admissionAttemptRef.current === attempt;
         setOptimisticMessages((current) =>
           current.filter((entry) => entry.id !== optimisticId),
         );
-        pendingSubmissionRef.current = null;
-        busyRef.current = false;
-        setPendingSubmissionId(null);
-        setAdmitting(false);
+        if (ownsAdmission && !attempt.stopped) {
+          admissionAttemptRef.current = null;
+          clearPending();
+        }
         throw error;
       }
     },
-    [historyReady, reconcilePending, threadId],
+    [clearPending, historyReady, reconcilePending, threadId],
   );
 
   const abort = useCallback(async () => {
@@ -318,34 +413,95 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
       return false;
     const operation = (async () => {
       setAborting(true);
+      const admission = admissionAttemptRef.current;
+      if (admission) {
+        admission.stopped = true;
+        admission.controller.abort(
+          new DOMException("Assistant admission was stopped", "AbortError"),
+        );
+        admission.clearDeadline();
+        setOptimisticMessages((current) =>
+          current.filter((entry) => entry.id !== admission.optimisticId),
+        );
+      }
+      const deadline = deadlineController(
+        ABORT_ADMISSION_DEADLINE_MS,
+        "Assistant stop",
+      );
       try {
         const result = await active.client.agents.abort(
           AGENT_NAME,
           active.threadId,
+          { signal: deadline.controller.signal },
         );
+        if (admission) {
+          // Defense in depth only: catch a prompt that commits after the first
+          // Flue abort. This does not replace the shared durable Stop barrier.
+          await active.client.agents.abort(AGENT_NAME, active.threadId, {
+            signal: deadline.controller.signal,
+          });
+          const reconciliation = reconcileStoppedAdmission
+            ? await reconcileStoppedAdmission({
+                threadId: active.threadId,
+                admissionStartedAt: admission.startedAt,
+                signal: deadline.controller.signal,
+              })
+            : { status: "pending" as const };
+          if (reconciliation.status !== "settled") {
+            throw new Error(
+              "Storefront Stop barrier has not confirmed the late admission.",
+            );
+          }
+          if (admissionAttemptRef.current === admission) {
+            admissionAttemptRef.current = null;
+          }
+          clearPending();
+          active.observation.refresh();
+          return true;
+        }
+        const pendingId = pendingSubmissionRef.current;
+        if (result.aborted && pendingId) {
+          abortRecordedSubmissionRef.current = pendingId;
+        } else if (!result.aborted) {
+          // The durable runtime is authoritative that this instance is idle.
+          // Clear a stale local/history projection instead of trapping the UI.
+          staleIdleSubmissionRef.current = pendingId;
+          pendingSubmissionRef.current = null;
+          busyRef.current = false;
+          abortRecordedSubmissionRef.current = null;
+          setPendingSubmissionId(null);
+          setAdmitting(false);
+        }
+        active.observation.refresh();
         return result.aborted;
       } finally {
+        deadline.clearDeadline();
         setAborting(false);
         abortPromiseRef.current = null;
       }
     })();
     abortPromiseRef.current = operation;
     return operation;
-  }, [threadId]);
+  }, [clearPending, reconcileStoppedAdmission, threadId]);
 
   const resetThreadObservation = useCallback(() => {
+    const admission = admissionAttemptRef.current;
+    if (admission) {
+      admission.controller.abort(
+        new DOMException("Assistant thread changed", "AbortError"),
+      );
+      admission.clearDeadline();
+      admissionAttemptRef.current = null;
+    }
     activeRef.current?.observation.close();
     activeRef.current = null;
     setThreadId(null);
     setSnapshot(INITIAL_SNAPSHOT);
     setOptimisticMessages([]);
-    pendingSubmissionRef.current = null;
-    busyRef.current = false;
-    setPendingSubmissionId(null);
-    setAdmitting(false);
+    clearPending();
     setAborting(false);
     abortPromiseRef.current = null;
-  }, []);
+  }, [clearPending]);
 
   const claimSelectedThread = useCallback(() => {
     void claimStorefrontAssistantConversationId()
@@ -356,7 +512,7 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
   }, []);
 
   const newConversation = useCallback(() => {
-    if (sending || aborting) return false;
+    if (!canChangeConversation) return false;
     resetThreadObservation();
     if (threadId) {
       setRecentThreadIds(persistRecentThreads([threadId, ...recentThreadIds]));
@@ -368,16 +524,14 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
     claimSelectedThread,
     recentThreadIds,
     resetThreadObservation,
-    sending,
-    aborting,
+    canChangeConversation,
     threadId,
   ]);
 
   const resumeConversation = useCallback(
     (selectedThreadId: string) => {
       if (
-        sending ||
-        aborting ||
+        !canChangeConversation ||
         !THREAD_ID_PATTERN.test(selectedThreadId) ||
         !recentThreadIds.includes(selectedThreadId)
       ) {
@@ -397,11 +551,10 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
       return true;
     },
     [
-      aborting,
+      canChangeConversation,
       claimSelectedThread,
       recentThreadIds,
       resetThreadObservation,
-      sending,
       threadId,
     ],
   );
@@ -432,6 +585,7 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
     pendingSubmissionId,
     sending,
     aborting,
+    canChangeConversation,
     state,
     historyReady,
     sendMessage,
