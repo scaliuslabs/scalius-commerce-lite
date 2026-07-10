@@ -53,6 +53,7 @@ describe("storefront assistant page-context source boundaries", () => {
     expect(componentSource).not.toContain("JSON.stringify");
     expect(componentSource).not.toMatch(/set:html=\{JSON\.stringify/);
     expect(layoutSource).toContain("<StorefrontAssistantPageContext");
+    expect(layoutSource).toContain("title={assistantPageTitle ?? title}");
   });
 
   it("keeps the visible storefront assistant behind the same-origin chat proxy", () => {

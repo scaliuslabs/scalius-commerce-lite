@@ -141,7 +141,7 @@ function readBrowserSnapshot(): StorefrontAssistantPageContextSnapshot {
     path: window.location.pathname,
     route: seed?.page.route,
     canonicalUrl: readCanonicalFromDocument() ?? seed?.page.canonicalUrl,
-    title: document.title || seed?.page.title,
+    title: seed?.page.title || document.title,
     pageKind: seed?.page.kind,
     cart: cartStore.get(),
     surface: readRegisteredSurface() ?? seed?.surface,
