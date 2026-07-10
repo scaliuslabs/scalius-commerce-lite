@@ -89,6 +89,10 @@ interface Env {
   // are exchanged with BACKEND_API before this binding is called.
   STOREFRONT_AGENT: Fetcher;
 
+  // Route-less Flue Worker. API-owned admission resolves the exact opaque
+  // tenant/principal/thread/instance before this binding can be called.
+  STOREFRONT_FLUE_AGENT: Fetcher;
+
   // Secrets (set via `wrangler secret put`)
   API_TOKEN?: string;
   JWT_SECRET?: string;
