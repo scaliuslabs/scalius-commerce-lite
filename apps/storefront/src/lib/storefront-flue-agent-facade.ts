@@ -380,6 +380,8 @@ export async function proxyStorefrontFlueAgentFacade(
         503,
         "STOREFRONT_FLUE_STOP_UNCONFIRMED",
         "Assistant Stop could not be reconciled",
+        {},
+        setCookie,
       );
     }
     const settled = await awaitStopReadiness(
@@ -392,6 +394,8 @@ export async function proxyStorefrontFlueAgentFacade(
         503,
         "STOREFRONT_FLUE_STOP_UNCONFIRMED",
         "Assistant Stop could not be reconciled",
+        {},
+        setCookie,
       );
     }
     const finished = await callRuntimeGate(
@@ -404,6 +408,8 @@ export async function proxyStorefrontFlueAgentFacade(
         503,
         "STOREFRONT_FLUE_STOP_UNCONFIRMED",
         "Assistant Stop could not be confirmed",
+        {},
+        setCookie,
       );
     }
     return sanitized.response;
