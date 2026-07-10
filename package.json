@@ -18,6 +18,8 @@
     "deploy:ops-monitor": "node scripts/deploy.mjs --only ops-monitor",
     "deploy:admin-agent": "node scripts/deploy.mjs --only admin-agent",
     "deploy:storefront-agent": "node scripts/deploy.mjs --only storefront-agent",
+    "deploy:admin-agent-flue": "node scripts/deploy.mjs --only admin-agent-flue",
+    "deploy:storefront-agent-flue": "node scripts/deploy.mjs --only storefront-agent-flue",
     "ops:check": "node scripts/ops-check.mjs",
     "release:check": "node scripts/release-check.mjs",
     "typecheck": "node scripts/turbo-run.mjs typecheck",

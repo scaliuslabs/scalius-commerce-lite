@@ -10,6 +10,8 @@
  *   node scripts/deploy.mjs --only ops-monitor # typecheck + build/deploy ops monitor
  *   node scripts/deploy.mjs --only admin-agent # typecheck + build/deploy internal Admin Agent
  *   node scripts/deploy.mjs --only storefront-agent # typecheck + build/deploy public Storefront Agent
+ *   node scripts/deploy.mjs --only admin-agent-flue # build/deploy isolated Admin Flue canary
+ *   node scripts/deploy.mjs --only storefront-agent-flue # build/deploy isolated Storefront Flue canary
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
  *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
  *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
@@ -41,6 +43,8 @@ const adminV2Dir = resolve(root, "apps", "admin-v2");
 const opsMonitorDir = resolve(root, "apps", "ops-monitor");
 const adminAgentDir = resolve(root, "apps", "admin-agent");
 const storefrontAgentDir = resolve(root, "apps", "storefront-agent");
+const adminAgentFlueDir = resolve(root, "apps", "admin-agent-flue");
+const storefrontAgentFlueDir = resolve(root, "apps", "storefront-agent-flue");
 const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
@@ -54,6 +58,10 @@ const deployTargets = [
   "storefront",
   "ops-monitor",
 ];
+// Canary Workers are selectable explicitly but stay out of the coordinated
+// production rollout until the facades have atomically cut over to Flue.
+const canaryDeployTargets = ["admin-agent-flue", "storefront-agent-flue"];
+const selectableDeployTargets = [...deployTargets, ...canaryDeployTargets];
 const appDirsByTarget = {
   api: "apps/api",
   admin: "apps/admin-v2",
@@ -61,6 +69,8 @@ const appDirsByTarget = {
   "ops-monitor": "apps/ops-monitor",
   "admin-agent": "apps/admin-agent",
   "storefront-agent": "apps/storefront-agent",
+  "admin-agent-flue": "apps/admin-agent-flue",
+  "storefront-agent-flue": "apps/storefront-agent-flue",
 };
 const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
@@ -132,7 +142,7 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
 }
 
 function validateOnlyTarget() {
-  const result = parseOnlyTarget(args);
+  const result = parseOnlyTarget(args, selectableDeployTargets);
   if (result.ok) return result.target;
 
   console.error(result.message);
@@ -168,12 +178,28 @@ export function getBuildCommandForTarget(target) {
       return `${pnpm} --filter @scalius/admin-agent build`;
     case "storefront-agent":
       return `${pnpm} --filter @scalius/storefront-agent build`;
+    case "admin-agent-flue":
+      return `${pnpm} --filter @scalius/admin-agent-flue build`;
+    case "storefront-agent-flue":
+      return `${pnpm} --filter @scalius/storefront-agent-flue build`;
     default:
       throw new Error(`Unknown deploy target: ${target}`);
   }
 }
 
 export function getTypecheckCommandForTarget(target) {
+  if (target === "admin-agent-flue") {
+    return (
+      `${pnpm} --filter @scalius/shared ` +
+      `--filter @scalius/admin-agent-flue typecheck`
+    );
+  }
+  if (target === "storefront-agent-flue") {
+    return (
+      `${pnpm} --filter @scalius/shared ` +
+      `--filter @scalius/storefront-agent-flue typecheck`
+    );
+  }
   if (target === "admin-agent") {
     return (
       `${pnpm} --filter @scalius/agent-runtime ` +
@@ -219,6 +245,18 @@ export function getDeployCommandForTarget(target) {
         label: "Deploy Storefront Agent Worker",
         cwd: storefrontAgentDir,
       };
+    case "admin-agent-flue":
+      return {
+        cmd: `${pnpm} exec wrangler deploy --strict --config dist/scalius_admin_agent_flue_canary/wrangler.json`,
+        label: "Deploy Admin Flue Agent canary",
+        cwd: adminAgentFlueDir,
+      };
+    case "storefront-agent-flue":
+      return {
+        cmd: `${pnpm} exec wrangler deploy --strict --config dist/scalius_storefront_agent_flue_canary/wrangler.json`,
+        label: "Deploy Storefront Flue Agent canary",
+        cwd: storefrontAgentFlueDir,
+      };
     default:
       throw new Error(`Unknown deploy target: ${target}`);
   }
@@ -232,6 +270,8 @@ function buildTarget(target) {
     "ops-monitor": "Build Ops Monitor workspace",
     "admin-agent": "Build Admin Agent workspace",
     "storefront-agent": "Build Storefront Agent workspace",
+    "admin-agent-flue": "Build Admin Flue Agent canary workspace",
+    "storefront-agent-flue": "Build Storefront Flue Agent canary workspace",
   };
   run(getBuildCommandForTarget(target), labels[target]);
 }
@@ -658,9 +698,10 @@ export async function verifyAdminDeploy({
   return result;
 }
 
-function verifyLatestWorkerDeployment(cwd, label) {
+function verifyLatestWorkerDeployment(cwd, label, configPath = null) {
+  const configFlag = configPath ? ` --config ${shellQuote(configPath)}` : "";
   const deployments = runJson(
-    `${pnpm} exec wrangler deployments list --json`,
+    `${pnpm} exec wrangler deployments list --json${configFlag}`,
     `Verify latest ${label} deployment`,
     cwd,
   );
@@ -760,6 +801,20 @@ async function verifyPostDeployTarget(target, apiConfig) {
       storefrontUrl: apiConfig.vars?.STOREFRONT_URL,
     });
   }
+  if (target === "admin-agent-flue") {
+    verifyLatestWorkerDeployment(
+      adminAgentFlueDir,
+      "Admin Flue Agent canary",
+      "dist/scalius_admin_agent_flue_canary/wrangler.json",
+    );
+  }
+  if (target === "storefront-agent-flue") {
+    verifyLatestWorkerDeployment(
+      storefrontAgentFlueDir,
+      "Storefront Flue Agent canary",
+      "dist/scalius_storefront_agent_flue_canary/wrangler.json",
+    );
+  }
 }
 
 function checkDistEnvFiles(targets = deployTargets) {
@@ -835,6 +890,12 @@ export async function main() {
       checkDistEnvFiles([requestedTarget]);
 
       if (dryRun) {
+        if (requestedTarget === "admin-agent-flue" || requestedTarget === "storefront-agent-flue") {
+          run(
+            `${pnpm} --filter @scalius/${requestedTarget} deploy:dry-run`,
+            `Validate generated ${requestedTarget} Wrangler bundle`,
+          );
+        }
         console.log("\nDRY RUN: skipping D1 migrations and Worker deploy.");
         console.log(`\n✓ Deploy dry run complete (${requestedTarget}).`);
         return;
