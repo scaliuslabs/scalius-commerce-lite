@@ -9,12 +9,16 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SyntheticEvent,
 } from "react";
+import type { FlueConversationMessage } from "@flue/sdk";
 import {
   Grip,
+  History,
   Loader2,
   MessageCircle,
+  Plus,
   SendHorizontal,
   Sparkles,
+  Square,
 } from "lucide-react";
 
 import {
@@ -28,22 +32,15 @@ import {
   STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL,
   type StorefrontAssistantPageContextSnapshot,
 } from "@/lib/assistant-page-context";
-import { resolveStorefrontAssistantNavigationTarget } from "@/lib/assistant-page-context.client";
 import { cn } from "@scalius/shared/utils";
 
-import { AssistantMessageParts } from "./AssistantMessageParts";
+import { StorefrontFlueMessageParts } from "./StorefrontFlueMessageParts";
 import { ASSISTANT_LAUNCHER_SIZE } from "./assistant-geometry";
 import {
-  MAX_HISTORY_MESSAGES,
   MAX_MESSAGE_CHARS,
   cleanAssistantDisplayText,
-  createTextMessage,
-  messageToHistoryContent,
-  sendStorefrontAssistantMessage,
   type StorefrontAssistantUiMessage,
 } from "./storefront-assistant-chat";
-import { createStorefrontConversationRequestId } from
-  "./storefront-assistant-conversation";
 import {
   readStorefrontAssistantOpenState,
   writeStorefrontAssistantOpenState,
@@ -53,14 +50,11 @@ import {
   writeStorefrontAssistantSessionHandoff,
 } from "./storefront-assistant-session";
 import {
-  mergeStorefrontConversationEvents,
-  reconcileStorefrontPersistedMessage,
-  storefrontConversationContextMarker,
-} from "./storefront-assistant-transcript";
-import { getDirectlyConfirmedStorefrontNavigation } from
-  "./storefront-assistant-navigation";
-import { useStorefrontAssistantTranscript } from
-  "./useStorefrontAssistantTranscript";
+  StorefrontFlueComputerCoordinator,
+  type StorefrontFlueComputerConsumeResult,
+} from "./computer/flue-bridge";
+import { createStorefrontAssistantComputerRuntime } from "./computer/runtime";
+import { useStorefrontFlueAgent } from "./useStorefrontFlueAgent";
 import { useAssistantGeometry } from "./useAssistantGeometry";
 import "@scalius/ui/assistant/styles.css";
 import "./storefront-assistant.css";
@@ -161,13 +155,103 @@ function contextSummary(
   context: StorefrontAssistantPageContextSnapshot | null,
 ) {
   if (!context) return "Waiting for this page";
-  const privatePage = context.page.kind === "account" ||
-    context.page.kind === "checkout";
+  const privatePage =
+    context.page.kind === "account" || context.page.kind === "checkout";
   const page = privatePage
     ? `${context.page.kind} · private context protected`
     : context.page.title || context.page.kind;
   const count = context.cart.totalItems;
   return `${page} · ${count} ${count === 1 ? "cart item" : "cart items"}`;
+}
+
+function flueMessageText(message: FlueConversationMessage): string {
+  return cleanAssistantDisplayText(
+    message.parts
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join("\n\n"),
+    MAX_MESSAGE_CHARS,
+  );
+}
+
+function restoredToFlueMessages(
+  messages: readonly StorefrontAssistantUiMessage[],
+): FlueConversationMessage[] {
+  return messages.flatMap((message) => {
+    const text = cleanAssistantDisplayText(
+      message.parts
+        .flatMap((part) => (part.type === "text" ? [part.text] : []))
+        .join("\n\n"),
+      MAX_MESSAGE_CHARS,
+    );
+    return text
+      ? [
+          {
+            id: message.id,
+            role: message.role,
+            parts: [{ type: "text" as const, text, state: "done" as const }],
+          },
+        ]
+      : [];
+  });
+}
+
+function mergeRestoredFlueMessages(
+  restored: readonly FlueConversationMessage[],
+  live: readonly FlueConversationMessage[],
+): FlueConversationMessage[] {
+  const liveIds = new Set(live.map((message) => message.id));
+  return [...restored.filter((message) => !liveIds.has(message.id)), ...live];
+}
+
+function toSessionHandoffMessages(
+  messages: readonly FlueConversationMessage[],
+): StorefrontAssistantUiMessage[] {
+  return messages.flatMap((message) => {
+    const text = flueMessageText(message);
+    return text
+      ? [
+          {
+            id: message.id,
+            role: message.role,
+            parts: [{ type: "text" as const, text }],
+          },
+        ]
+      : [];
+  });
+}
+
+function computerOutcomeStatus(
+  outcome: StorefrontFlueComputerConsumeResult,
+): AssistantStatus | null {
+  if (outcome.status === "ignored" || outcome.status === "duplicate") {
+    return null;
+  }
+  if (outcome.status === "rejected") {
+    return {
+      kind: "error",
+      message: "A page command was rejected safely. Nothing changed.",
+    };
+  }
+  if (outcome.status === "continuation_failed") {
+    return {
+      kind: "error",
+      message:
+        "The page responded, but the assistant could not reconnect. Nothing will be repeated automatically.",
+    };
+  }
+  return outcome.result.ok
+    ? {
+        kind: "success",
+        message: outcome.result.changed
+          ? "The requested page action finished."
+          : "The page was checked.",
+      }
+    : {
+        kind: "error",
+        message:
+          "The requested page action could not finish. Nothing else was changed.",
+      };
 }
 
 export default function StorefrontAssistantBubble() {
@@ -177,10 +261,18 @@ export default function StorefrontAssistantBubble() {
   const [context, setContext] =
     useState<StorefrontAssistantPageContextSnapshot | null>(null);
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<StorefrontAssistantUiMessage[]>(
-    () => readStorefrontAssistantSessionHandoff(),
+  const restoredMessagesRef = useRef<FlueConversationMessage[]>(
+    restoredToFlueMessages(readStorefrontAssistantSessionHandoff()),
   );
-  const [sending, setSending] = useState(false);
+  const flue = useStorefrontFlueAgent({ open: isOpen });
+  const messages = useMemo(
+    () =>
+      flue.historyReady
+        ? flue.messages
+        : mergeRestoredFlueMessages(restoredMessagesRef.current, flue.messages),
+    [flue.historyReady, flue.messages],
+  );
+  const sending = flue.sending;
   const [status, setStatus] = useState<AssistantStatus>({
     kind: "idle",
     message: "Ready for public catalog questions.",
@@ -193,32 +285,9 @@ export default function StorefrontAssistantBubble() {
   const suppressLauncherClickRef = useRef(false);
   const wasOpenRef = useRef(false);
   const focusComposerOnOpenRef = useRef(false);
-  const requestAbortRef = useRef<AbortController | null>(null);
   const messagesRef = useRef(messages);
-
-  const updateMessages = useCallback((
-    update: (
-      current: StorefrontAssistantUiMessage[],
-    ) => StorefrontAssistantUiMessage[],
-  ) => {
-    const next = update(messagesRef.current);
-    messagesRef.current = next;
-    writeStorefrontAssistantSessionHandoff(next);
-    setMessages(next);
-  }, []);
-
-  const mergeTranscriptEvents = useCallback(
-    (events: Parameters<typeof mergeStorefrontConversationEvents>[1]) => {
-      updateMessages((current) =>
-        mergeStorefrontConversationEvents(current, events)
-      );
-    },
-    [updateMessages],
-  );
-  const transcript = useStorefrontAssistantTranscript({
-    open: isOpen,
-    onEvents: mergeTranscriptEvents,
-  });
+  const computerCoordinatorRef =
+    useRef<StorefrontFlueComputerCoordinator | null>(null);
 
   const refreshContext = useCallback(() => {
     const nextContext = readPublishedContext();
@@ -281,9 +350,7 @@ export default function StorefrontAssistantBubble() {
     if (!host || !page) return;
 
     const docked = layout.geometry.mode !== "floating";
-    host.dataset.mode = isOpen
-      ? docked ? "docked" : "floating"
-      : "collapsed";
+    host.dataset.mode = isOpen ? (docked ? "docked" : "floating") : "collapsed";
     host.dataset.side = layout.geometry.mode === "dock-left" ? "start" : "end";
     host.dataset.mobile = isMobile ? "true" : "false";
     host.style.setProperty(
@@ -321,31 +388,113 @@ export default function StorefrontAssistantBubble() {
     layout.panelRect.width,
   ]);
 
-  useEffect(() => () => {
-    const host = document.getElementById(LAYOUT_ID);
-    const page = host?.querySelector<HTMLElement>("[data-assistant-page-slot]");
-    if (host) host.dataset.mode = "collapsed";
-    if (page) {
-      page.inert = false;
-      page.removeAttribute("aria-hidden");
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      const host = document.getElementById(LAYOUT_ID);
+      const page = host?.querySelector<HTMLElement>(
+        "[data-assistant-page-slot]",
+      );
+      if (host) host.dataset.mode = "collapsed";
+      if (page) {
+        page.inert = false;
+        page.removeAttribute("aria-hidden");
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     messagesRef.current = messages;
-    writeStorefrontAssistantSessionHandoff(messages);
+    writeStorefrontAssistantSessionHandoff(toSessionHandoffMessages(messages));
   }, [messages]);
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ block: "nearest" });
   }, [messages, sending]);
 
-  useEffect(
-    () => () => {
-      requestAbortRef.current?.abort();
-    },
-    [],
-  );
+  useEffect(() => {
+    setStatus({
+      kind:
+        flue.state.kind === "disconnected"
+          ? "error"
+          : flue.sending
+            ? "working"
+            : "idle",
+      message: flue.state.message,
+    });
+  }, [flue.sending, flue.state]);
+
+  useEffect(() => {
+    if (!flue.threadId || typeof window === "undefined") {
+      computerCoordinatorRef.current = null;
+      return undefined;
+    }
+    const persistForNavigation = () => {
+      writeStorefrontAssistantOpenState(true);
+      writeStorefrontAssistantSessionHandoff(
+        toSessionHandoffMessages(messagesRef.current),
+      );
+    };
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: flue.threadId,
+      tabId: flue.threadId,
+      navigate: (route) => {
+        persistForNavigation();
+        if (getAssistantBridge()?.navigate?.(route) !== true) {
+          throw new Error("Storefront navigation was rejected");
+        }
+      },
+      refresh: () => {
+        persistForNavigation();
+        window.location.reload();
+      },
+    });
+    const coordinator = new StorefrontFlueComputerCoordinator({
+      runtime,
+      onPhase: (_requestId, phase) => {
+        if (phase === "executing") {
+          setStatus({
+            kind: "working",
+            message: "Using the active page…",
+          });
+        } else if (phase === "posting_untrusted_result") {
+          setStatus({
+            kind: "working",
+            message: "Returning the page result to the assistant…",
+          });
+        }
+      },
+    });
+    computerCoordinatorRef.current = coordinator;
+    return () => {
+      if (computerCoordinatorRef.current === coordinator) {
+        computerCoordinatorRef.current = null;
+      }
+    };
+  }, [flue.threadId]);
+
+  useEffect(() => {
+    const coordinator = computerCoordinatorRef.current;
+    const threadId = flue.threadId;
+    if (!coordinator || !threadId) return;
+    for (const message of messages) {
+      for (const part of message.parts) {
+        if (part.type !== "dynamic-tool" || part.toolName !== "computer") {
+          continue;
+        }
+        void coordinator
+          .consume({
+            threadId,
+            tabId: threadId,
+            part,
+          })
+          .then((outcome) => {
+            const nextStatus = computerOutcomeStatus(outcome);
+            if (nextStatus) setStatus(nextStatus);
+          });
+      }
+    }
+  }, [flue.threadId, messages]);
 
   const prompts = useMemo(() => suggestedPrompts(context), [context]);
   const launcherStyle = layout.ready
@@ -354,44 +503,6 @@ export default function StorefrontAssistantBubble() {
         top: `${layout.geometry.launcherY}px`,
       } satisfies CSSProperties)
     : undefined;
-
-  const resolveNavigation = useCallback((path: string): string | null => {
-    if (typeof window === "undefined") return null;
-    return resolveStorefrontAssistantNavigationTarget(
-      path,
-      window.location.origin,
-    );
-  }, []);
-
-  const canNavigate = useCallback(
-    (path: string) => resolveNavigation(path) !== null,
-    [resolveNavigation],
-  );
-
-  const handleNavigate = useCallback(
-    (path: string, label: string) => {
-      const target = resolveNavigation(path);
-      if (!target) {
-        setStatus({
-          kind: "error",
-          message:
-            "That destination is not available from the assistant. Nothing changed.",
-        });
-        return;
-      }
-
-      writeStorefrontAssistantOpenState(true);
-      writeStorefrontAssistantSessionHandoff(messagesRef.current);
-      const navigated = getAssistantBridge()?.navigate?.(target) === true;
-      setStatus({
-        kind: navigated ? "success" : "error",
-        message: navigated
-          ? `Opening ${label.replace(/^(?:Open|View|Browse|Search)\s+/i, "")}.`
-          : "Navigation is unavailable. Use the store menu or search instead.",
-      });
-    },
-    [resolveNavigation],
-  );
 
   const closePanel = useCallback(() => {
     focusComposerOnOpenRef.current = false;
@@ -402,107 +513,78 @@ export default function StorefrontAssistantBubble() {
   async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = cleanAssistantDisplayText(draft, MAX_MESSAGE_CHARS);
-    if (!message || sending || typeof window === "undefined") return;
+    if (
+      !message ||
+      sending ||
+      flue.state.kind === "disconnected" ||
+      typeof window === "undefined"
+    )
+      return;
 
-    const currentContext = refreshContext();
-    const contextMarker = storefrontConversationContextMarker(currentContext);
-    const userMessage = createTextMessage("user", message);
-    const history = messagesRef.current
-      .slice(-MAX_HISTORY_MESSAGES)
-      .map((entry) => ({
-        role: entry.role,
-        content: messageToHistoryContent(entry),
-      }))
-      .filter((entry) => entry.content.length > 0);
-
-    updateMessages((current) => [...current, userMessage]);
+    refreshContext();
     setDraft("");
-    setSending(true);
     setStatus({
       kind: "working",
-      message: "Looking through the public catalog.",
+      message: "Sending this request to the private shopping thread…",
     });
-    const controller = new AbortController();
-    requestAbortRef.current = controller;
 
     try {
-      const persistedUser = await transcript.appendMessage({
-        clientMessageId: createStorefrontConversationRequestId(),
-        role: "user",
-        content: message,
-        contextMarker,
+      await flue.sendMessage(message);
+      setStatus({
+        kind: "working",
+        message: "Request admitted. Working through the catalog and this page…",
       });
-      if (persistedUser) {
-        updateMessages((current) =>
-          reconcileStorefrontPersistedMessage(
-            current,
-            persistedUser,
-            userMessage.id,
-          )
-        );
-      }
-
-      const result = await sendStorefrontAssistantMessage({
-        message,
-        pageContext: currentContext,
-        history,
-        origin: window.location.origin,
-        ...(persistedUser
-          ? { conversationId: await transcript.getConversationId() }
-          : {}),
-        signal: controller.signal,
-      });
-      if (result.status === "ok") {
-        updateMessages((current) => [...current, result.message]);
-        if (result.transcriptEvent) {
-          updateMessages((current) =>
-            reconcileStorefrontPersistedMessage(
-              current,
-              result.transcriptEvent!,
-              result.message.id,
-            )
-          );
-        }
-        setStatus(result.transcriptPersisted
-          ? {
-              kind: "idle",
-              message: "Ready for public catalog questions.",
-            }
-          : {
-              kind: "success",
-              message:
-                "Answer ready. This reply is live-only because the private transcript was unavailable.",
-            });
-        const directlyConfirmedNavigation =
-          getDirectlyConfirmedStorefrontNavigation(
-            message,
-            result.message.parts,
-            window.location.origin,
-          );
-        if (directlyConfirmedNavigation) {
-          queueMicrotask(() =>
-            handleNavigate(
-              directlyConfirmedNavigation.path,
-              directlyConfirmedNavigation.label,
-            )
-          );
-        }
-      } else {
-        setStatus({ kind: result.status, message: result.message });
-      }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+    } catch {
       setStatus({
         kind: "error",
         message:
-          "The assistant could not connect. Nothing changed; you can keep browsing and check out manually.",
+          "The request was not admitted. Nothing changed; retry the connection or keep browsing manually.",
       });
-    } finally {
-      if (requestAbortRef.current === controller) {
-        requestAbortRef.current = null;
-      }
-      setSending(false);
     }
+  }
+
+  async function handleAbort() {
+    try {
+      const aborted = await flue.abort();
+      setStatus({
+        kind: aborted ? "success" : "idle",
+        message: aborted
+          ? "Stop requested. The durable thread will settle safely."
+          : "There was no active request to stop.",
+      });
+    } catch {
+      setStatus({
+        kind: "error",
+        message:
+          "The stop request could not be recorded. The current work may still finish.",
+      });
+    }
+  }
+
+  function handleNewConversation() {
+    if (!flue.newConversation()) return;
+    restoredMessagesRef.current = [];
+    messagesRef.current = [];
+    writeStorefrontAssistantSessionHandoff([]);
+    setDraft("");
+    setStatus({
+      kind: "success",
+      message:
+        "New private thread started. Recent durable history remains available.",
+    });
+    composerRef.current?.focus();
+  }
+
+  function handlePreviousConversation() {
+    if (!flue.resumePreviousConversation()) return;
+    restoredMessagesRef.current = [];
+    messagesRef.current = [];
+    writeStorefrontAssistantSessionHandoff([]);
+    setDraft("");
+    setStatus({
+      kind: "working",
+      message: "Reopening the previous durable thread…",
+    });
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -612,12 +694,10 @@ export default function StorefrontAssistantBubble() {
     });
   }
 
-  const dockMode: AssistantDockMode = layout.geometry.mode === "floating"
-    ? "floating"
-    : "docked";
-  const dockSide: AssistantDockSide = layout.geometry.mode === "dock-left"
-    ? "start"
-    : "end";
+  const dockMode: AssistantDockMode =
+    layout.geometry.mode === "floating" ? "floating" : "docked";
+  const dockSide: AssistantDockSide =
+    layout.geometry.mode === "dock-left" ? "start" : "end";
 
   const conversation = (
     <div
@@ -627,21 +707,21 @@ export default function StorefrontAssistantBubble() {
       aria-label="Storefront assistant conversation"
       className="sf-assistant-conversation min-h-full"
     >
-      <div
-        data-assistant-transcript-state={transcript.state.kind}
-        className="mb-3 flex min-h-8 items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground"
-      >
-        <span>{transcript.state.message}</span>
-        {transcript.state.kind === "disconnected" ? (
+      {flue.state.kind === "disconnected" ? (
+        <div
+          data-assistant-transcript-state={flue.state.kind}
+          className="mb-3 flex min-h-8 items-center justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-1.5 text-[11px] text-destructive"
+        >
+          <span>{flue.state.message}</span>
           <button
             type="button"
             className="shrink-0 font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={transcript.retry}
+            onClick={flue.retry}
           >
-            Retry transcript
+            Retry connection
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {messages.length === 0 ? (
         <section className="mx-auto flex min-h-[16rem] max-w-lg flex-col justify-center py-4">
@@ -655,7 +735,10 @@ export default function StorefrontAssistantBubble() {
               complete checkout.
             </p>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2" aria-label="Suggested questions">
+          <div
+            className="mt-3 flex flex-wrap gap-2"
+            aria-label="Suggested questions"
+          >
             {prompts.map((prompt) => (
               <button
                 key={prompt}
@@ -683,7 +766,7 @@ export default function StorefrontAssistantBubble() {
               {message.role === "user" ? (
                 <div className="rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm leading-6 text-primary-foreground shadow-sm">
                   <p className="whitespace-pre-wrap break-words">
-                    {messageToHistoryContent(message)}
+                    {flueMessageText(message)}
                   </p>
                 </div>
               ) : (
@@ -692,11 +775,7 @@ export default function StorefrontAssistantBubble() {
                     <Sparkles className="size-3.5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 rounded-2xl rounded-tl-md border border-border bg-popover p-3 shadow-sm">
-                    <AssistantMessageParts
-                      parts={message.parts}
-                      canNavigate={canNavigate}
-                      onNavigate={handleNavigate}
-                    />
+                    <StorefrontFlueMessageParts parts={message.parts} />
                   </div>
                 </div>
               )}
@@ -736,27 +815,36 @@ export default function StorefrontAssistantBubble() {
           onKeyDown={handleComposerKeyDown}
           placeholder="Ask about products or this page…"
           rows={2}
-          disabled={sending}
+          disabled={sending || flue.state.kind === "disconnected"}
           className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
         />
-        <button
-          type="submit"
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
-          disabled={sending || draft.trim().length === 0}
-          aria-label="Send storefront assistant message"
-        >
-          {sending ? (
-            <Loader2
-              className="size-4 animate-spin motion-reduce:animate-none"
-              aria-hidden="true"
-            />
-          ) : (
+        {sending ? (
+          <button
+            type="button"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label="Stop storefront assistant request"
+            onClick={() => void handleAbort()}
+          >
+            <Square className="size-3.5 fill-current" aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={
+              draft.trim().length === 0 ||
+              !flue.threadId ||
+              flue.state.kind === "disconnected"
+            }
+            aria-label="Send storefront assistant message"
+          >
             <SendHorizontal className="size-4" aria-hidden="true" />
-          )}
-        </button>
+          </button>
+        )}
       </div>
       <p className="mt-1.5 text-center text-[10px] leading-4 text-muted-foreground">
-        Don’t share passwords, one-time codes, payment details, or receipt links.
+        Don’t share passwords, one-time codes, payment details, or receipt
+        links.
       </p>
     </form>
   );
@@ -773,6 +861,32 @@ export default function StorefrontAssistantBubble() {
         status={sharedStatus(status.kind)}
         statusLabel={status.message}
         icon={<Sparkles aria-hidden="true" />}
+        headerActions={
+          <>
+            {flue.canResumePreviousConversation ? (
+              <button
+                type="button"
+                aria-label="Previous assistant conversation"
+                title="Previous conversation"
+                disabled={sending}
+                onClick={handlePreviousConversation}
+                className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <History className="size-4" aria-hidden="true" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              aria-label="New assistant conversation"
+              title="New conversation"
+              disabled={sending}
+              onClick={handleNewConversation}
+              className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+            </button>
+          </>
+        }
         context={<span>{contextSummary(context)}</span>}
         contextLabel="Current page"
         conversation={conversation}
@@ -785,7 +899,8 @@ export default function StorefrontAssistantBubble() {
         onModeChange={changePanelMode}
         onSideChange={dockMode === "docked" ? changeDockSide : undefined}
         onWidthChange={(width) =>
-          layout.setPanelSize(width, layout.geometry.panelHeight)}
+          layout.setPanelSize(width, layout.geometry.panelHeight)
+        }
       />
     );
   }
@@ -799,8 +914,8 @@ export default function StorefrontAssistantBubble() {
       style={launcherStyle}
     >
       <p id={LAUNCHER_HELP_ID} className="sr-only">
-        Drag to reposition. With the launcher focused, use arrow keys to move
-        it without dragging.
+        Drag to reposition. With the launcher focused, use arrow keys to move it
+        without dragging.
       </p>
       <button
         ref={launcherRef}

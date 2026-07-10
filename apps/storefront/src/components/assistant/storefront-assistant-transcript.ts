@@ -1,10 +1,7 @@
-import type { StorefrontAssistantPageContextSnapshot } from
-  "@/lib/assistant-page-context";
-import { splitStorefrontAssistantCatalogReferences } from
-  "@scalius/shared/storefront-assistant-references";
+import type { StorefrontAssistantPageContextSnapshot } from "@/lib/assistant-page-context";
+import { splitStorefrontAssistantCatalogReferences } from "@scalius/shared/storefront-assistant-references";
 
-import type { StorefrontAssistantUiMessage } from
-  "./storefront-assistant-chat";
+import type { StorefrontAssistantUiMessage } from "./storefront-assistant-chat";
 import {
   createStorefrontConversationId,
   isStorefrontConversationId,
@@ -89,6 +86,29 @@ export function rotateStorefrontAssistantConversationClaim(): void {
   replaceStorefrontAssistantConversationId();
 }
 
+/** Repoint this tab to one previously issued opaque thread id. Durable Flue
+ * history remains Agent-owned; this stores no transcript or authority data. */
+export function switchStorefrontAssistantConversationClaim(
+  conversationId: string,
+): boolean {
+  if (!isStorefrontConversationId(conversationId)) return false;
+  const storage = readSessionStorage();
+  if (!storage) return false;
+  try {
+    storage.setItem(
+      STOREFRONT_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      conversationId,
+    );
+    activeLockRelease?.();
+    activeLockRelease = null;
+    activeClaimConversationId = null;
+    claimPromise = null;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function claimConversationIdForThisTab(): Promise<string> {
   let conversationId = getOrCreateStorefrontAssistantConversationId();
   if (
@@ -126,23 +146,25 @@ function tryHoldConversationLock(conversationId: string): Promise<boolean> {
       settled = true;
       resolve(claimed);
     };
-    void navigator.locks.request(
-      `scalius.storefront-assistant:${conversationId}`,
-      { mode: "exclusive", ifAvailable: true },
-      async (lock) => {
-        if (!lock) {
-          settle(false);
-          return;
-        }
-        let release: () => void = () => {};
-        const held = new Promise<void>((releaseLock) => {
-          release = releaseLock;
-        });
-        activeLockRelease = release;
-        settle(true);
-        await held;
-      },
-    ).catch(() => settle(false));
+    void navigator.locks
+      .request(
+        `scalius.storefront-assistant:${conversationId}`,
+        { mode: "exclusive", ifAvailable: true },
+        async (lock) => {
+          if (!lock) {
+            settle(false);
+            return;
+          }
+          let release: () => void = () => {};
+          const held = new Promise<void>((releaseLock) => {
+            release = releaseLock;
+          });
+          activeLockRelease = release;
+          settle(true);
+          await held;
+        },
+      )
+      .catch(() => settle(false));
   });
 }
 
@@ -161,9 +183,7 @@ export function storefrontConversationContextMarker(
     .filter((value): value is string => typeof value === "string")
     .join(" ")
     .toLowerCase();
-  if (
-    SENSITIVE_CONTEXT_TERMS.some((term) => normalized.includes(term))
-  ) {
+  if (SENSITIVE_CONTEXT_TERMS.some((term) => normalized.includes(term))) {
     return "storefront:sensitive";
   }
 
@@ -192,8 +212,8 @@ export function mergeStorefrontConversationEvents(
   events: readonly StorefrontConversationMessageEvent[],
 ): StorefrontAssistantUiMessage[] {
   const next = [...current];
-  const ordered = [...events].sort((left, right) =>
-    left.sequence - right.sequence
+  const ordered = [...events].sort(
+    (left, right) => left.sequence - right.sequence,
   );
 
   for (const event of ordered) {
@@ -201,9 +221,10 @@ export function mergeStorefrontConversationEvents(
       (message) => message.id === event.message.id,
     );
     if (existingIndex >= 0) {
-      const split = event.message.role === "assistant"
-        ? splitStorefrontAssistantCatalogReferences(event.message.content)
-        : null;
+      const split =
+        event.message.role === "assistant"
+          ? splitStorefrontAssistantCatalogReferences(event.message.content)
+          : null;
       next[existingIndex] = {
         ...next[existingIndex]!,
         role: event.message.role,
@@ -223,11 +244,12 @@ export function mergeStorefrontConversationEvents(
     const firstLiveOnlyIndex = next.findIndex(
       (message) => message.transcriptSequence === undefined,
     );
-    const insertionIndex = higherSequenceIndex >= 0
-      ? higherSequenceIndex
-      : firstLiveOnlyIndex >= 0
-        ? firstLiveOnlyIndex
-        : next.length;
+    const insertionIndex =
+      higherSequenceIndex >= 0
+        ? higherSequenceIndex
+        : firstLiveOnlyIndex >= 0
+          ? firstLiveOnlyIndex
+          : next.length;
     next.splice(insertionIndex, 0, toUiMessage(event));
   }
   return next;
@@ -244,18 +266,19 @@ export function reconcileStorefrontPersistedMessage(
   const durableIndex = current.findIndex(
     (message) => message.id === event.message.id,
   );
-  const optimistic = optimisticIndex >= 0
-    ? current[optimisticIndex]
-    : undefined;
+  const optimistic =
+    optimisticIndex >= 0 ? current[optimisticIndex] : undefined;
   const durable = durableIndex >= 0 ? current[durableIndex] : undefined;
-  const split = event.message.role === "assistant"
-    ? splitStorefrontAssistantCatalogReferences(event.message.content)
-    : { content: event.message.content, productIds: [] };
-  const targetIndex = optimisticIndex >= 0
-    ? optimisticIndex
-    : durableIndex >= 0
-      ? durableIndex
-      : current.length;
+  const split =
+    event.message.role === "assistant"
+      ? splitStorefrontAssistantCatalogReferences(event.message.content)
+      : { content: event.message.content, productIds: [] };
+  const targetIndex =
+    optimisticIndex >= 0
+      ? optimisticIndex
+      : durableIndex >= 0
+        ? durableIndex
+        : current.length;
   const retained = current.filter(
     (message) =>
       message.id !== optimisticMessageId && message.id !== event.message.id,
@@ -264,8 +287,7 @@ export function reconcileStorefrontPersistedMessage(
     .slice(0, targetIndex)
     .filter(
       (message) =>
-        message.id !== optimisticMessageId &&
-        message.id !== event.message.id,
+        message.id !== optimisticMessageId && message.id !== event.message.id,
     ).length;
 
   retained.splice(insertionIndex, 0, {
@@ -287,9 +309,10 @@ export function reconcileStorefrontPersistedMessage(
 function toUiMessage(
   event: StorefrontConversationMessageEvent,
 ): StorefrontAssistantUiMessage {
-  const split = event.message.role === "assistant"
-    ? splitStorefrontAssistantCatalogReferences(event.message.content)
-    : { content: event.message.content, productIds: [] };
+  const split =
+    event.message.role === "assistant"
+      ? splitStorefrontAssistantCatalogReferences(event.message.content)
+      : { content: event.message.content, productIds: [] };
   return {
     id: event.message.id,
     role: event.message.role,

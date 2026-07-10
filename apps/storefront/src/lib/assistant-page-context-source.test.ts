@@ -56,7 +56,7 @@ describe("storefront assistant page-context source boundaries", () => {
     expect(layoutSource).toContain("title={assistantPageTitle ?? title}");
   });
 
-  it("keeps the visible storefront assistant behind the same-origin chat proxy", () => {
+  it("keeps the visible storefront assistant behind the same-origin Flue facade", () => {
     const bubbleSource = readFileSync(
       join(
         storefrontSrcRoot,
@@ -64,14 +64,15 @@ describe("storefront assistant page-context source boundaries", () => {
       ),
       "utf8",
     );
-    const chatSource = readFileSync(
-      join(
-        storefrontSrcRoot,
-        "components/assistant/storefront-assistant-chat.ts",
-      ),
+    const hookSource = readFileSync(
+      join(storefrontSrcRoot, "components/assistant/useStorefrontFlueAgent.ts"),
       "utf8",
     );
-    const assistantSource = `${bubbleSource}\n${chatSource}`;
+    const facadeSource = readFileSync(
+      join(storefrontSrcRoot, "lib/storefront-flue-agent-facade.ts"),
+      "utf8",
+    );
+    const assistantSource = `${bubbleSource}\n${hookSource}`;
     const layoutSource = readFileSync(
       join(storefrontSrcRoot, "layouts/Layout.astro"),
       "utf8",
@@ -79,19 +80,17 @@ describe("storefront assistant page-context source boundaries", () => {
 
     expect(bubbleSource).toContain("STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL");
     expect(bubbleSource).toContain("__SCALIUS_STOREFRONT_ASSISTANT__");
-    expect(chatSource).toContain('CHAT_ENDPOINT = "/api/assistant/chat"');
-    expect(chatSource).toContain(
-      "/api/assistant/conversations/${input.conversationId}/chat",
+    expect(bubbleSource).toContain("useStorefrontFlueAgent");
+    expect(bubbleSource).toContain("StorefrontFlueComputerCoordinator");
+    expect(bubbleSource).toContain("getAssistantBridge()?.navigate?.(route)");
+    expect(hookSource).toContain("createFlueClient");
+    expect(hookSource).toContain(
+      "/api/assistant/conversations/${threadId}/flue",
     );
-    expect(chatSource).toContain(
-      'request(conversationEndpoint, "same-origin")',
-    );
-    expect(chatSource).toContain('request(CHAT_ENDPOINT, "omit")');
-    expect(bubbleSource).toContain("navigate?.(target)");
-    expect(bubbleSource).toContain(
-      "resolveStorefrontAssistantNavigationTarget",
-    );
-    expect(bubbleSource).toContain("The assistant cannot checkout");
+    expect(facadeSource).toContain("resolveStorefrontFlueComputerAuthority");
+    expect(facadeSource).toContain("API-owned admission binds");
+    expect(bubbleSource).not.toContain("sendStorefrontAssistantMessage");
+    expect(bubbleSource).not.toContain("useStorefrontAssistantTranscript");
     expect(assistantSource).not.toMatch(/\bXMLHttpRequest\b/);
     expect(assistantSource).not.toMatch(/\bnavigator\.sendBeacon\b/);
     expect(assistantSource).not.toMatch(/\bindexedDB\b/);
@@ -101,7 +100,7 @@ describe("storefront assistant page-context source boundaries", () => {
     expect(assistantSource).not.toMatch(/\bcookieStore\b/);
     expect(assistantSource).not.toMatch(/from ["']@\/store\/cart["']/);
     expect(assistantSource).not.toMatch(/from ["']@\/lib\/api/);
-    expect(assistantSource).not.toMatch(
+    expect(bubbleSource).not.toMatch(
       /PUBLIC_API_BASE_URL|createApiUrl|cloudflare:workers/,
     );
     expect(assistantSource).not.toMatch(/\baddToCart\b/);
