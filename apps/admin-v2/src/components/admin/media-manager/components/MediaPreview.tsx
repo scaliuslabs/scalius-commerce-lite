@@ -75,6 +75,21 @@ export function MediaPreview({
               )}
               <span>{formatDate(file.createdAt)}</span>
             </div>
+            {file.sourceType === "ai_generated" && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                AI generated with {file.generationProvider || "unknown provider"}
+                {file.generationModel ? ` / ${file.generationModel}` : ""}. {" "}
+                {file.generationTotalTokens !== null &&
+                file.generationTotalTokens !== undefined
+                  ? `${file.generationTotalTokens.toLocaleString()} total tokens. `
+                  : "Usage not reported. "}
+                {file.generationCostStatus === "reported" &&
+                file.generationCostUsdMicros !== null &&
+                file.generationCostUsdMicros !== undefined
+                  ? `$${(file.generationCostUsdMicros / 1_000_000).toFixed(6)} USD.`
+                  : "Cost not reported by provider."}
+              </p>
+            )}
           </div>
           <div className="text-sm text-muted-foreground ml-4">
             {currentIndex + 1} / {files.length}

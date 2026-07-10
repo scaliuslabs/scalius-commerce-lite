@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { ok, created, noContent } from "../../utils/api-response";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 import {
     successEnvelope,
     paginatedEnvelope,
@@ -27,7 +27,14 @@ import {
     moveMediaSchema,
     createFolderSchema,
     updateFolderSchema
+    ,enforceGeneratedImageGenerationLimit
+    ,recordGeneratedImagePreview
+    ,saveGeneratedImagePreview
 } from "@scalius/core/modules/media";
+import { resolveAiModelProfile } from "@scalius/core/modules/ai";
+import { generateAiImage } from "../../modules/ai/image-runtime";
+import { loadAiRuntimeSettings } from "../../modules/ai/model-runtime";
+import { enforceAiRateLimit } from "./ai-rate-limit";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -55,6 +62,168 @@ const uploadResponseSchema = successEnvelope(
         partialSuccess: z.boolean().optional(),
     }),
 );
+
+const generateImageSchema = z
+    .object({
+        prompt: z.string().trim().min(1).max(4_000),
+        aspectRatio: z.enum(["auto", "1:1", "4:5", "3:2", "16:9"]).default("auto"),
+        seed: z.number().int().min(0).max(2_147_483_647).optional(),
+    })
+    .strict();
+
+function setOptionalNumberHeader(
+    headers: Headers,
+    name: string,
+    value: number | undefined,
+): void {
+    if (value !== undefined) headers.set(name, String(value));
+}
+
+// ── Generate image preview ──
+
+const generateImageRoute = createRoute({
+    method: "post",
+    path: "/image-generation/generate",
+    tags: ["Admin - Media"],
+    summary: "Generate one ephemeral AI image preview",
+    request: {
+        body: { content: { "application/json": { schema: generateImageSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Generated image bytes with bounded provenance headers",
+            content: {
+                "image/png": { schema: z.string().openapi({ format: "binary" }) },
+                "image/jpeg": { schema: z.string().openapi({ format: "binary" }) },
+                "image/webp": { schema: z.string().openapi({ format: "binary" }) },
+            },
+        },
+        ...errorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(generateImageRoute, (async (c: AdminRouteContext<typeof generateImageRoute>) => {
+    const db = c.get("db");
+    const user = c.get("user");
+    const payload = c.req.valid("json");
+
+    // Layered policy is intentional: the shared AI limiter bounds aggregate
+    // Admin AI traffic, while D1 independently caps costly image previews and
+    // creates the authority window used by the later verified save.
+    await enforceAiRateLimit(c);
+    await enforceGeneratedImageGenerationLimit(db, user.id);
+
+    const settings = await loadAiRuntimeSettings(c);
+    const profile = resolveAiModelProfile(settings, "imageGeneration");
+    const result = await generateAiImage({
+        provider: profile.provider,
+        modelId: profile.model,
+        settings,
+        env: c.env,
+        prompt: payload.prompt,
+        ...(payload.aspectRatio !== "auto"
+            ? { aspectRatio: payload.aspectRatio }
+            : {}),
+        ...(payload.seed !== undefined ? { seed: payload.seed } : {}),
+        abortSignal: c.req.raw.signal,
+    });
+    const authority = await recordGeneratedImagePreview(db, {
+        userId: user.id,
+        provider: profile.provider,
+        model: profile.model,
+        prompt: payload.prompt,
+        bytes: result.bytes,
+        mediaType: result.mediaType,
+        usage: result.usage,
+    });
+
+    const headers = new Headers({
+        "Cache-Control": "no-store, private",
+        "Content-Type": result.mediaType,
+        "Content-Length": String(result.bytes.byteLength),
+        "Content-Disposition": "inline",
+        "X-Scalius-Generation-Id": authority.id,
+        "X-Scalius-Generation-Provider": authority.provider,
+        "X-Scalius-Generation-Model": encodeURIComponent(authority.model),
+        "X-Scalius-Generation-Prompt-Hash": authority.promptHash,
+        "X-Scalius-Generation-Cost-Status": authority.cost.status,
+        "X-Scalius-Generation-Expires-At": authority.expiresAt.toISOString(),
+    });
+    setOptionalNumberHeader(
+        headers,
+        "X-Scalius-Generation-Input-Tokens",
+        authority.usage.inputTokens,
+    );
+    setOptionalNumberHeader(
+        headers,
+        "X-Scalius-Generation-Output-Tokens",
+        authority.usage.outputTokens,
+    );
+    setOptionalNumberHeader(
+        headers,
+        "X-Scalius-Generation-Total-Tokens",
+        authority.usage.totalTokens,
+    );
+
+    const body = result.bytes.slice().buffer;
+    return new Response(body, { status: 200, headers });
+}) as unknown as AdminRouteHandler<typeof generateImageRoute>);
+
+// ── Save generated image preview ──
+
+const saveGeneratedImageRoute = createRoute({
+    method: "post",
+    path: "/image-generation/save",
+    tags: ["Admin - Media"],
+    summary: "Verify and save a generated image preview to the media library",
+    responses: {
+        200: {
+            description: "Generated image saved to the media library",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({ file: mediaSchema })),
+                },
+            },
+        },
+        ...errorResponses,
+        409: {
+            description: "Generated preview is already being saved or consumed",
+            content: { "application/json": { schema: z.object({}).passthrough() } },
+        },
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(saveGeneratedImageRoute, (async (c: AdminRouteContext<typeof saveGeneratedImageRoute>) => {
+    const body = await c.req.parseBody({ all: true });
+    const file = body["file"];
+    const generationId = body["generationId"];
+    const altText = body["altText"];
+    const folderId = body["folderId"];
+
+    if (!(file instanceof File)) {
+        throw new ValidationError("Generated image file is required.");
+    }
+    if (typeof generationId !== "string") {
+        throw new ValidationError("Generated image preview ID is required.");
+    }
+    if (altText !== undefined && typeof altText !== "string") {
+        throw new ValidationError("Image alt text is invalid.");
+    }
+    if (folderId !== undefined && typeof folderId !== "string") {
+        throw new ValidationError("Media folder ID is invalid.");
+    }
+
+    const saved = await saveGeneratedImagePreview(c.get("db"), {
+        generationId,
+        userId: c.get("user").id,
+        file,
+        altText: altText ?? null,
+        folderId: folderId ?? null,
+    });
+    return ok(c, { file: saved });
+}) as unknown as AdminRouteHandler<typeof saveGeneratedImageRoute>);
 
 // ── List Media ──
 

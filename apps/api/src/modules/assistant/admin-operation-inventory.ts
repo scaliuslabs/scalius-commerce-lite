@@ -86,6 +86,8 @@ export const ADMIN_OPENAPI_PATH_INVENTORY = [
   ["/api/v1/admin/media/{id}", ["PUT", "PATCH", "DELETE"]],
   ["/api/v1/admin/media/folders", ["GET", "POST"]],
   ["/api/v1/admin/media/folders/{id}", ["PUT", "DELETE"]],
+  ["/api/v1/admin/media/image-generation/generate", ["POST"]],
+  ["/api/v1/admin/media/image-generation/save", ["POST"]],
   ["/api/v1/admin/media/move", ["POST"]],
   ["/api/v1/admin/media/upload", ["POST"]],
   ["/api/v1/admin/navigation", ["GET", "POST"]],
@@ -224,5 +226,5 @@ export const ADMIN_OPENAPI_PATH_INVENTORY = [
   ["/api/v1/admin/widgets/placement-targets", ["GET"]],
 ] as const satisfies readonly (readonly [string, readonly AdminHttpMethod[]])[];
 
-export const ADMIN_OPENAPI_PATH_COUNT = 218;
-export const ADMIN_OPENAPI_OPERATION_COUNT = 317;
+export const ADMIN_OPENAPI_PATH_COUNT = 220;
+export const ADMIN_OPENAPI_OPERATION_COUNT = 319;

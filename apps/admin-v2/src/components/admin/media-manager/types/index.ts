@@ -10,8 +10,38 @@ export interface MediaFile {
   width?: number | null;
   height?: number | null;
   folderId?: string | null;
+  sourceType?: "merchant_upload" | "ai_generated" | null;
+  generationId?: string | null;
+  generationProvider?: string | null;
+  generationModel?: string | null;
+  generationPromptHash?: string | null;
+  generationInputTokens?: number | null;
+  generationOutputTokens?: number | null;
+  generationTotalTokens?: number | null;
+  generationCostUsdMicros?: number | null;
+  generationCostStatus?: "reported" | "not_reported" | null;
+  generatedAt?: Date | null;
   createdAt: Date;
   updatedAt?: Date;
+}
+
+export interface GeneratedImagePreview {
+  generationId: string;
+  blob: Blob;
+  mediaType: "image/jpeg" | "image/png" | "image/webp";
+  provider: string;
+  model: string;
+  promptHash: string;
+  usage: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
+  cost: {
+    status: "reported" | "not_reported";
+    usdMicros?: number;
+  };
+  expiresAt: Date;
 }
 
 export interface MediaFolder {

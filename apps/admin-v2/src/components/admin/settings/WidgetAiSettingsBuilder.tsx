@@ -114,8 +114,8 @@ export const PROFILE_DEFINITIONS: Array<{
   {
     id: "imageGeneration",
     label: "Image generation",
-    badge: "Prerequisite only",
-    description: "For future generated image and media workflows.",
+    badge: "Available now",
+    description: "Generates bounded previews in the media library and saves verified provenance only after confirmation.",
   },
   {
     id: "voice",

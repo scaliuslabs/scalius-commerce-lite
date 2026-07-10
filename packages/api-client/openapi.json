@@ -47341,6 +47341,848 @@
         ]
       }
     },
+    "/api/v1/admin/media/image-generation/generate": {
+      "post": {
+        "tags": [
+          "Admin - Media"
+        ],
+        "summary": "Generate one ephemeral AI image preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "aspectRatio": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "1:1",
+                      "4:5",
+                      "3:2",
+                      "16:9"
+                    ],
+                    "default": "auto"
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  }
+                },
+                "required": [
+                  "prompt"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Generated image bytes with bounded provenance headers",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/media/image-generation/save": {
+      "post": {
+        "tags": [
+          "Admin - Media"
+        ],
+        "summary": "Verify and save a generated image preview to the media library",
+        "responses": {
+          "200": {
+            "description": "Generated image saved to the media library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "file": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "filename": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "size": {
+                              "type": "number"
+                            },
+                            "mimeType": {
+                              "type": "string"
+                            },
+                            "altText": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "width": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "height": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "folderId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "sourceType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "merchant_upload",
+                                "ai_generated",
+                                null
+                              ]
+                            },
+                            "generationId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationProvider": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationModel": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationPromptHash": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationInputTokens": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationOutputTokens": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationTotalTokens": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationCostUsdMicros": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationCostStatus": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "not_reported",
+                                null
+                              ]
+                            },
+                            "generatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "deletedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "filename",
+                            "url",
+                            "size",
+                            "mimeType",
+                            "folderId",
+                            "sourceType",
+                            "generationId",
+                            "generationProvider",
+                            "generationModel",
+                            "generationPromptHash",
+                            "generationInputTokens",
+                            "generationOutputTokens",
+                            "generationTotalTokens",
+                            "generationCostUsdMicros",
+                            "generationCostStatus",
+                            "createdAt",
+                            "updatedAt",
+                            "deletedAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "file"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Generated preview is already being saved or consumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/media": {
       "get": {
         "tags": [
@@ -47499,6 +48341,67 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "sourceType": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "merchant_upload",
+                                  "ai_generated",
+                                  null
+                                ]
+                              },
+                              "generationId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "generationProvider": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "generationModel": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "generationPromptHash": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "generationInputTokens": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "generationOutputTokens": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "generationTotalTokens": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "generationCostUsdMicros": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "generationCostStatus": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "reported",
+                                  "not_reported",
+                                  null
+                                ]
+                              },
+                              "generatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -47538,6 +48441,16 @@
                               "size",
                               "mimeType",
                               "folderId",
+                              "sourceType",
+                              "generationId",
+                              "generationProvider",
+                              "generationModel",
+                              "generationPromptHash",
+                              "generationInputTokens",
+                              "generationOutputTokens",
+                              "generationTotalTokens",
+                              "generationCostUsdMicros",
+                              "generationCostStatus",
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
@@ -48388,6 +49301,67 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "sourceType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "merchant_upload",
+                                "ai_generated",
+                                null
+                              ]
+                            },
+                            "generationId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationProvider": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationModel": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationPromptHash": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationInputTokens": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationOutputTokens": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationTotalTokens": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationCostUsdMicros": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationCostStatus": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "not_reported",
+                                null
+                              ]
+                            },
+                            "generatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
                             "createdAt": {
                               "anyOf": [
                                 {
@@ -48427,6 +49401,16 @@
                             "size",
                             "mimeType",
                             "folderId",
+                            "sourceType",
+                            "generationId",
+                            "generationProvider",
+                            "generationModel",
+                            "generationPromptHash",
+                            "generationInputTokens",
+                            "generationOutputTokens",
+                            "generationTotalTokens",
+                            "generationCostUsdMicros",
+                            "generationCostStatus",
                             "createdAt",
                             "updatedAt",
                             "deletedAt"
@@ -48781,6 +49765,67 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "sourceType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "merchant_upload",
+                                "ai_generated",
+                                null
+                              ]
+                            },
+                            "generationId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationProvider": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationModel": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationPromptHash": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "generationInputTokens": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationOutputTokens": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationTotalTokens": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationCostUsdMicros": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "generationCostStatus": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "not_reported",
+                                null
+                              ]
+                            },
+                            "generatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
                             "createdAt": {
                               "anyOf": [
                                 {
@@ -48820,6 +49865,16 @@
                             "size",
                             "mimeType",
                             "folderId",
+                            "sourceType",
+                            "generationId",
+                            "generationProvider",
+                            "generationModel",
+                            "generationPromptHash",
+                            "generationInputTokens",
+                            "generationOutputTokens",
+                            "generationTotalTokens",
+                            "generationCostUsdMicros",
+                            "generationCostStatus",
                             "createdAt",
                             "updatedAt",
                             "deletedAt"

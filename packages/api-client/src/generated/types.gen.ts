@@ -13997,6 +13997,241 @@ export type PostApiV1AdminDiscountsByIdRestoreResponses = {
 
 export type PostApiV1AdminDiscountsByIdRestoreResponse = PostApiV1AdminDiscountsByIdRestoreResponses[keyof PostApiV1AdminDiscountsByIdRestoreResponses];
 
+export type PostApiV1AdminMediaImageGenerationGenerateData = {
+    body?: {
+        prompt: string;
+        aspectRatio?: 'auto' | '1:1' | '4:5' | '3:2' | '16:9';
+        seed?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/media/image-generation/generate';
+};
+
+export type PostApiV1AdminMediaImageGenerationGenerateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminMediaImageGenerationGenerateError = PostApiV1AdminMediaImageGenerationGenerateErrors[keyof PostApiV1AdminMediaImageGenerationGenerateErrors];
+
+export type PostApiV1AdminMediaImageGenerationGenerateResponses = {
+    /**
+     * Generated image bytes with bounded provenance headers
+     */
+    200: Blob | File;
+};
+
+export type PostApiV1AdminMediaImageGenerationGenerateResponse = PostApiV1AdminMediaImageGenerationGenerateResponses[keyof PostApiV1AdminMediaImageGenerationGenerateResponses];
+
+export type PostApiV1AdminMediaImageGenerationSaveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/media/image-generation/save';
+};
+
+export type PostApiV1AdminMediaImageGenerationSaveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Generated preview is already being saved or consumed
+     */
+    409: {
+        [key: string]: unknown;
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminMediaImageGenerationSaveError = PostApiV1AdminMediaImageGenerationSaveErrors[keyof PostApiV1AdminMediaImageGenerationSaveErrors];
+
+export type PostApiV1AdminMediaImageGenerationSaveResponses = {
+    /**
+     * Generated image saved to the media library
+     */
+    200: {
+        success: true;
+        data: {
+            file: {
+                id: string;
+                filename: string;
+                url: string;
+                size: number;
+                mimeType: string;
+                altText?: string | null;
+                width?: number | null;
+                height?: number | null;
+                folderId: string | null;
+                sourceType: 'merchant_upload' | 'ai_generated' | null;
+                generationId: string | null;
+                generationProvider: string | null;
+                generationModel: string | null;
+                generationPromptHash: string | null;
+                generationInputTokens: number | null;
+                generationOutputTokens: number | null;
+                generationTotalTokens: number | null;
+                generationCostUsdMicros: number | null;
+                generationCostStatus: 'reported' | 'not_reported' | null;
+                generatedAt?: string | number | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminMediaImageGenerationSaveResponse = PostApiV1AdminMediaImageGenerationSaveResponses[keyof PostApiV1AdminMediaImageGenerationSaveResponses];
+
 export type GetApiV1AdminMediaData = {
     body?: never;
     path?: never;
@@ -14125,6 +14360,17 @@ export type GetApiV1AdminMediaResponses = {
                 width?: number | null;
                 height?: number | null;
                 folderId: string | null;
+                sourceType: 'merchant_upload' | 'ai_generated' | null;
+                generationId: string | null;
+                generationProvider: string | null;
+                generationModel: string | null;
+                generationPromptHash: string | null;
+                generationInputTokens: number | null;
+                generationOutputTokens: number | null;
+                generationTotalTokens: number | null;
+                generationCostUsdMicros: number | null;
+                generationCostStatus: 'reported' | 'not_reported' | null;
+                generatedAt?: string | number | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt: string | number | null;
@@ -14475,6 +14721,17 @@ export type PatchApiV1AdminMediaByIdResponses = {
                 width?: number | null;
                 height?: number | null;
                 folderId: string | null;
+                sourceType: 'merchant_upload' | 'ai_generated' | null;
+                generationId: string | null;
+                generationProvider: string | null;
+                generationModel: string | null;
+                generationPromptHash: string | null;
+                generationInputTokens: number | null;
+                generationOutputTokens: number | null;
+                generationTotalTokens: number | null;
+                generationCostUsdMicros: number | null;
+                generationCostStatus: 'reported' | 'not_reported' | null;
+                generatedAt?: string | number | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt: string | number | null;
@@ -14586,6 +14843,17 @@ export type PutApiV1AdminMediaByIdResponses = {
                 width?: number | null;
                 height?: number | null;
                 folderId: string | null;
+                sourceType: 'merchant_upload' | 'ai_generated' | null;
+                generationId: string | null;
+                generationProvider: string | null;
+                generationModel: string | null;
+                generationPromptHash: string | null;
+                generationInputTokens: number | null;
+                generationOutputTokens: number | null;
+                generationTotalTokens: number | null;
+                generationCostUsdMicros: number | null;
+                generationCostStatus: 'reported' | 'not_reported' | null;
+                generatedAt?: string | number | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt: string | number | null;

@@ -26,6 +26,7 @@ import {
   MediaPreview,
   MediaFilterBar,
   FolderBrowser,
+  GeneratedImagePanel,
 } from "./components";
 import { useMediaManager } from "./hooks/useMediaManager";
 import type { MediaManagerProps } from "./types";
@@ -181,6 +182,36 @@ export function MediaManager({
                       : "Uncategorized files -- Max 20 files, 10MB each"}
                 </DialogDescription>
               </div>
+
+              <GeneratedImagePanel
+                folderId={
+                  mm.currentFolderId === "all" ? null : mm.currentFolderId
+                }
+                saveActionLabel={
+                  onSelect ? "Save and add to product" : "Save to media library"
+                }
+                onSaved={async (file) => {
+                  if (onSelect) {
+                    onSelect({
+                      ...file,
+                      id: `temp_${file.id}`,
+                      createdAt: new Date(file.createdAt),
+                    });
+                    setDialogOpen(false);
+                    return;
+                  }
+                  const folderParam =
+                    mm.currentFolderId === "all"
+                      ? "all"
+                      : mm.currentFolderId === null
+                        ? "root"
+                        : mm.currentFolderId;
+                  await mm.loadFiles(1, {
+                    ...mm.filters,
+                    folderId: folderParam,
+                  });
+                }}
+              />
 
               {/* Compact Filter bar */}
               <div className="border-b px-4 py-2 bg-muted/30 shrink-0">

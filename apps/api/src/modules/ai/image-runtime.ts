@@ -13,6 +13,11 @@ import {
 const IMAGE_GENERATION_TIMEOUT_MS = 30_000;
 const IMAGE_GENERATION_MAX_BYTES = 10 * 1024 * 1024;
 const IMAGE_PROMPT_MAX_CHARS = 4_000;
+const IMAGE_GENERATION_MEDIA_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 export type GeneratedAiImage = {
   bytes: Uint8Array;
@@ -133,7 +138,7 @@ export async function generateAiImage(options: {
     const image = result.image;
     const bytes = image.uint8Array;
     if (
-      !image.mediaType.startsWith("image/") ||
+      !IMAGE_GENERATION_MEDIA_TYPES.has(image.mediaType) ||
       bytes.byteLength === 0 ||
       bytes.byteLength > IMAGE_GENERATION_MAX_BYTES
     ) {
@@ -154,4 +159,3 @@ export async function generateAiImage(options: {
     throw new AiImageGenerationError();
   }
 }
-
