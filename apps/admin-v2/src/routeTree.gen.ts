@@ -76,6 +76,7 @@ import { Route as AdminCustomersCustomerIdEditRouteImport } from './routes/admin
 import { Route as AdminCollectionsCollectionIdEditRouteImport } from './routes/admin/collections/$collectionId/edit'
 import { Route as AdminCategoriesCategoryIdEditRouteImport } from './routes/admin/categories/$categoryId/edit'
 import { Route as AdminAnalyticsAnalyticsIdEditRouteImport } from './routes/admin/analytics/$analyticsId/edit'
+import { Route as ApiAssistantFlueComputerResultsRouteImport } from './routes/api/assistant/flue/computer/results'
 
 const ScannerRoute = ScannerRouteImport.update({
   id: '/scanner',
@@ -427,6 +428,12 @@ const AdminAnalyticsAnalyticsIdEditRoute =
     path: '/analytics/$analyticsId/edit',
     getParentRoute: () => AdminRoute,
   } as any)
+const ApiAssistantFlueComputerResultsRoute =
+  ApiAssistantFlueComputerResultsRouteImport.update({
+    id: '/api/assistant/flue/computer/results',
+    path: '/api/assistant/flue/computer/results',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -496,6 +503,7 @@ export interface FileRoutesByFullPath {
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
+  '/api/assistant/flue/computer/results': typeof ApiAssistantFlueComputerResultsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -564,6 +572,7 @@ export interface FileRoutesByTo {
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId': typeof AdminProductsProductIdIndexRoute
+  '/api/assistant/flue/computer/results': typeof ApiAssistantFlueComputerResultsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -634,6 +643,7 @@ export interface FileRoutesById {
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
+  '/api/assistant/flue/computer/results': typeof ApiAssistantFlueComputerResultsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -705,6 +715,7 @@ export interface FileRouteTypes {
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
+    | '/api/assistant/flue/computer/results'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -773,6 +784,7 @@ export interface FileRouteTypes {
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId'
     | '/admin/products/$productId'
+    | '/api/assistant/flue/computer/results'
   id:
     | '__root__'
     | '/'
@@ -842,6 +854,7 @@ export interface FileRouteTypes {
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
+    | '/api/assistant/flue/computer/results'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -857,6 +870,7 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiAssistantConversationsSplatRoute: typeof ApiAssistantConversationsSplatRoute
   ApiV1AdminSplatRoute: typeof ApiV1AdminSplatRoute
+  ApiAssistantFlueComputerResultsRoute: typeof ApiAssistantFlueComputerResultsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1330,6 +1344,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAnalyticsAnalyticsIdEditRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/api/assistant/flue/computer/results': {
+      id: '/api/assistant/flue/computer/results'
+      path: '/api/assistant/flue/computer/results'
+      fullPath: '/api/assistant/flue/computer/results'
+      preLoaderRoute: typeof ApiAssistantFlueComputerResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1472,6 +1493,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiAssistantConversationsSplatRoute: ApiAssistantConversationsSplatRoute,
   ApiV1AdminSplatRoute: ApiV1AdminSplatRoute,
+  ApiAssistantFlueComputerResultsRoute: ApiAssistantFlueComputerResultsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
