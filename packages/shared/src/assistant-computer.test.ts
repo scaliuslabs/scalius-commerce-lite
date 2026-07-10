@@ -255,6 +255,47 @@ describe("Scalius browser computer adapter", () => {
     expect(clicked).toHaveBeenCalledOnce();
   });
 
+  it("selects an exact accessible option from a portalled custom combobox", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button role="combobox" aria-label="Product category" aria-expanded="false">Choose</button>
+      </main>`;
+    const trigger = document.querySelector<HTMLButtonElement>("[role='combobox']")!;
+    const selected = vi.fn();
+    trigger.addEventListener("click", () => {
+      if (document.querySelector("[role='option']")) {
+        document.querySelector("[role='listbox']")?.remove();
+        trigger.setAttribute("aria-expanded", "false");
+        return;
+      }
+      trigger.setAttribute("aria-expanded", "true");
+      const listbox = document.createElement("div");
+      listbox.setAttribute("role", "listbox");
+      listbox.innerHTML = `
+        <button role="option" data-value="shoes">Shoes</button>
+        <button role="option" data-value="shirts">Shirts</button>`;
+      listbox.querySelector("[data-value='shoes']")?.addEventListener("click", () => {
+        selected("shoes");
+        trigger.textContent = "Shoes";
+        listbox.remove();
+        trigger.setAttribute("aria-expanded", "false");
+      });
+      document.body.appendChild(listbox);
+    });
+
+    const { controller } = browserController();
+    const observed = await controller.execute({ binding, program: "observe" });
+    const result = await controller.execute({
+      binding,
+      program: `select ${handleFor(observed.output, "Product category")} "Shoes"`,
+    });
+
+    expect(result).toMatchObject({ ok: true, code: "EXECUTED" });
+    expect(selected).toHaveBeenCalledWith("shoes");
+    expect(trigger.textContent).toBe("Shoes");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("requires explicit safe registration for submit and still blocks sensitive forms", async () => {
     document.body.innerHTML = `
       <main>

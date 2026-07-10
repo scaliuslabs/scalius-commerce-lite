@@ -730,7 +730,9 @@ export function createScaliusBrowserComputerAdapter(
       truncated: candidates.length > targets.length || textCandidates.length > text.length,
     };
   };
-  const act = (action: ScaliusComputerAdapterAction): ScaliusComputerAdapterResult => {
+  const act = async (
+    action: ScaliusComputerAdapterAction,
+  ): Promise<ScaliusComputerAdapterResult> => {
     const element = elements.get(action.targetId);
     if (!element || element.isConnected === false) return { ok: false, code: "TARGET_GONE" };
     const target = inspectTarget(document, element, options.origin, action.targetId);
@@ -755,15 +757,44 @@ export function createScaliusBrowserComputerAdapter(
       return { ok: true };
     }
     if (action.name === "select") {
-      const options = arrayOfElements(element.options ?? []);
-      const matching = options.filter((option) =>
-        option.value === action.value || cleanText(option.textContent ?? "", 160) === action.value
-      );
+      if (elementName(element) === "select") {
+        const options = arrayOfElements(element.options ?? []);
+        const matching = matchingOptions(options, action.value);
+        const selected = matching[0];
+        if (matching.length !== 1 || !selected || optionDisabled(selected)) {
+          return { ok: false, code: "VALUE_NOT_FOUND" };
+        }
+        setElementValue(document, element, selected.value ?? action.value);
+        dispatch(document, element, "input");
+        dispatch(document, element, "change");
+        return { ok: true };
+      }
+
+      // Radix/shadcn and similar accessible selects expose a trigger with
+      // role=combobox and portal their choices as role=option. Operate that
+      // semantic contract directly so the model does not need framework- or
+      // selector-specific knowledge.
+      if (!element.click) return { ok: false, code: "EXECUTION_FAILED" };
+      element.focus?.();
+      element.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      const options = arrayOfElements(document.querySelectorAll("[role='option']"))
+        .filter((option) => !isExcluded(option) && !isHidden(option));
+      const matching = matchingOptions(options, action.value);
       const selected = matching[0];
-      if (matching.length !== 1 || !selected || selected.disabled) return { ok: false, code: "VALUE_NOT_FOUND" };
-      setElementValue(document, element, selected.value ?? action.value);
-      dispatch(document, element, "input");
-      dispatch(document, element, "change");
+      if (
+        matching.length !== 1 ||
+        !selected ||
+        optionDisabled(selected) ||
+        !selected.click
+      ) {
+        // Best-effort close leaves the visible page in the state it started.
+        element.click();
+        return { ok: false, code: "VALUE_NOT_FOUND" };
+      }
+      selected.focus?.();
+      selected.click();
       return { ok: true };
     }
     const form = elementName(element) === "form" ? element : element.form;
@@ -782,6 +813,22 @@ export function createScaliusBrowserComputerAdapter(
     allowsRoute: options.allowsRoute,
     isActive: options.isActive,
   };
+}
+
+function matchingOptions(
+  options: readonly ElementLike[],
+  requestedValue: string,
+): ElementLike[] {
+  return options.filter((option) =>
+    option.value === requestedValue ||
+    attribute(option, "data-value") === requestedValue ||
+    attribute(option, "aria-label") === requestedValue ||
+    cleanText(option.textContent ?? "", 160) === requestedValue
+  );
+}
+
+function optionDisabled(option: ElementLike): boolean {
+  return Boolean(option.disabled) || attribute(option, "aria-disabled") === "true";
 }
 function inspectTarget(
   document: DocumentLike,
