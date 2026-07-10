@@ -1,17 +1,35 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT } from "@scalius/shared/assistant-computer";
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ProductActionBar } from "../../product-form/ProductStickyHeader";
 
 import {
   createAdminAssistantComputerRuntime,
   isAllowedAdminComputerRoute,
 } from "./runtime";
 
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
+vi.mock("@tanstack/react-router", () => ({ Link: "a" }));
+
 describe("Admin assistant computer runtime", () => {
+  const mountedRoots: Root[] = [];
+
   beforeEach(() => {
     document.body.innerHTML = "";
     window.history.replaceState({}, "", "/admin/products?status=active");
+  });
+
+  afterEach(() => {
+    for (const root of mountedRoots.splice(0)) {
+      act(() => root.unmount());
+    }
   });
 
   it("pins the Admin thread/tab binding and delegates visible DOM actions", async () => {
@@ -61,6 +79,113 @@ describe("Admin assistant computer runtime", () => {
       program: "observe",
     })).resolves.toMatchObject({ ok: false, code: "INVALID_BINDING" });
   });
+
+  it.each([
+    { isEdit: false, actionLabel: "Create Product" },
+    { isEdit: true, actionLabel: "Save Product" },
+  ])(
+    "batches complex product fields and executes ordinary $actionLabel while destructive controls stay human-only",
+    async ({ isEdit, actionLabel }) => {
+      document.body.innerHTML = `
+        <main>
+          <h1>${isEdit ? "Edit product" : "Create product"}</h1>
+          <label for="product-name">Product name</label>
+          <input id="product-name" name="name" />
+          <div data-scalius-computer-rich-text="sanitized-html">
+            <div role="textbox" contenteditable="true" aria-label="Product description"></div>
+          </div>
+          <label for="product-status">Product status</label>
+          <select id="product-status">
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+          </select>
+          <button data-scalius-computer-human-only>Delete Product</button>
+          <div id="product-action-test-root"></div>
+        </main>`;
+
+      const richTextBridge = document.querySelector<HTMLElement>(
+        "[data-scalius-computer-rich-text]",
+      )!;
+      const acceptedRichText = vi.fn((event: Event) => event.preventDefault());
+      richTextBridge.addEventListener(
+        SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT,
+        acceptedRichText,
+      );
+      const save = vi.fn();
+      const deleteProduct = vi.fn();
+      document
+        .querySelector("button[data-scalius-computer-human-only]")!
+        .addEventListener("click", deleteProduct);
+
+      const root = createRoot(
+        document.getElementById("product-action-test-root")!,
+      );
+      mountedRoots.push(root);
+      await act(async () => {
+        root.render(
+          createElement(ProductActionBar, {
+            isEdit,
+            isSubmitting: false,
+            onSave: save,
+          }),
+        );
+      });
+
+      const runtime = createAdminAssistantComputerRuntime({
+        threadId: `admin-product-${isEdit ? "edit" : "create"}`,
+        tabId: "admin-product-tab",
+      });
+      const observed = await runtime.execute({
+        binding: runtime.binding,
+        program: "observe",
+      });
+      expect(observed.output).toContain(`button "${actionLabel}"`);
+      expect(observed.output).not.toContain(
+        `button "${actionLabel}" [human-only]`,
+      );
+      expect(observed.output).toContain(
+        'button "Delete Product" [human-only]',
+      );
+
+      const productName = "Stormproof Trail Shoe";
+      const richDescription =
+        "<h2>Built for monsoon trails</h2><p>Waterproof, grippy, and light.</p>";
+      const result = await runtime.execute({
+        binding: runtime.binding,
+        program: [
+          `fill ${handleFor(observed.output, "Product name")} ${JSON.stringify(productName)}`,
+          `fill ${handleFor(observed.output, "Product description")} ${JSON.stringify(richDescription)}`,
+          `select ${handleFor(observed.output, "Product status")} "Active"`,
+          `click ${handleFor(observed.output, actionLabel)}`,
+        ].join("; "),
+      });
+
+      expect(result).toMatchObject({ ok: true, code: "EXECUTED" });
+      expect(
+        document.querySelector<HTMLInputElement>('input[name="name"]')?.value,
+      ).toBe(productName);
+      expect(
+        document.querySelector<HTMLSelectElement>("#product-status")?.value,
+      ).toBe("active");
+      expect(acceptedRichText).toHaveBeenCalledOnce();
+      expect(
+        (acceptedRichText.mock.calls[0]?.[0] as CustomEvent<unknown>).detail,
+      ).toBe(richDescription);
+      expect(save).toHaveBeenCalledOnce();
+
+      const afterSave = await runtime.execute({
+        binding: runtime.binding,
+        program: "observe",
+      });
+      await expect(
+        runtime.execute({
+          binding: runtime.binding,
+          program: `click ${handleFor(afterSave.output, "Delete Product")}`,
+        }),
+      ).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+      expect(deleteProduct).not.toHaveBeenCalled();
+    },
+  );
 
   it("routes only inside the Admin tree through the injected router", async () => {
     const navigate = vi.fn();
@@ -172,3 +297,14 @@ describe("Admin assistant computer runtime", () => {
     })).resolves.toMatchObject({ ok: false, code: "INACTIVE_TAB" });
   });
 });
+
+function handleFor(output: string, accessibleName: string): string {
+  const line = output
+    .split("\n")
+    .find((candidate) => candidate.includes(`"${accessibleName}"`));
+  const handle = line?.match(/(@r\d+\.e\d+)/)?.[1];
+  if (!handle) {
+    throw new Error(`Missing computer handle for ${accessibleName}: ${output}`);
+  }
+  return handle;
+}
