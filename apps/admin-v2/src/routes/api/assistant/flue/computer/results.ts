@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { createAdminFlueAuthorityResolver } from "./-authority";
 import { proxyAdminFlueComputerResult } from "./-result-proxy";
 
 export const Route = createFileRoute("/api/assistant/flue/computer/results")({
@@ -12,12 +13,10 @@ export const Route = createFileRoute("/api/assistant/flue/computer/results")({
           ADMIN_FLUE_AUTH_TOKEN?: string;
         };
 
-        // Intentionally no authority resolver yet. The route remains fail-closed
-        // until API-owned tenant/principal/thread admission is wired atomically
-        // with the new Flue transcript transport.
         return proxyAdminFlueComputerResult(request, {
           agent: futureEnv.ADMIN_FLUE_AGENT,
           serviceToken: futureEnv.ADMIN_FLUE_AUTH_TOKEN,
+          resolveAuthority: createAdminFlueAuthorityResolver({ api: futureEnv.API }),
         });
       },
     },
