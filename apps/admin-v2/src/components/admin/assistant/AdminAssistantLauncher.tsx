@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import {
+  AssistantDockModalBoundary,
   AssistantDockLayout,
   type AssistantDockMode,
   type AssistantDockSide,
@@ -16,6 +17,7 @@ import {
 import "@scalius/ui/assistant/styles.css";
 
 import { TooltipProvider } from "../../ui/tooltip";
+import { useIsMobile } from "../../../hooks/use-mobile";
 import { AdminAssistantBubble } from "./AdminAssistantBubble";
 import { useAdminAssistantLayout } from "./useAdminAssistantLayout";
 
@@ -40,6 +42,7 @@ export function AdminAssistantLauncher({
   const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const mobile = useIsMobile();
   const layoutMode = layout.mode;
   const positionPanelFromBubble = layout.positionPanelFromBubble;
 
@@ -56,6 +59,10 @@ export function AdminAssistantLauncher({
     if (layoutMode === "floating") positionPanelFromBubble();
     handleOpenChange(true);
   }, [handleOpenChange, layoutMode, positionPanelFromBubble]);
+
+  const closeAssistant = useCallback(() => {
+    handleOpenChange(false);
+  }, [handleOpenChange]);
 
   useEffect(() => {
     if (!layout.mounted) return undefined;
@@ -80,27 +87,35 @@ export function AdminAssistantLauncher({
     layout.mode === "dock-left" ? "start" : "end";
 
   const panel = hasOpened ? (
-    <Suspense
-      fallback={
-        <div
-          role="status"
-          className="fixed bottom-4 right-4 z-[80] rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground shadow-lg"
-        >
-          Opening assistant…
-        </div>
-      }
+    <AssistantDockModalBoundary
+      active={open}
+      label="Admin assistant"
+      mobile={mobile}
+      returnFocusRef={triggerRef}
+      onRequestClose={closeAssistant}
     >
-      <AdminAssistantPanel
-        mode={layout.mode}
-        open={open}
-        position={layout.panelPosition}
-        size={layout.panelSize}
-        onModeChange={layout.setMode}
-        onOpenChange={handleOpenChange}
-        onPositionChange={layout.setPanelPosition}
-        onSizeChange={layout.setPanelSize}
-      />
-    </Suspense>
+      <Suspense
+        fallback={
+          <div
+            role="status"
+            className="fixed bottom-4 right-4 z-[80] rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground shadow-lg"
+          >
+            Opening assistant…
+          </div>
+        }
+      >
+        <AdminAssistantPanel
+          mode={layout.mode}
+          open={open}
+          position={layout.panelPosition}
+          size={layout.panelSize}
+          onModeChange={layout.setMode}
+          onOpenChange={handleOpenChange}
+          onPositionChange={layout.setPanelPosition}
+          onSizeChange={layout.setPanelSize}
+        />
+      </Suspense>
+    </AssistantDockModalBoundary>
   ) : null;
 
   return (
@@ -109,6 +124,7 @@ export function AdminAssistantLauncher({
         mode={structuralMode}
         side={structuralSide}
         width={layout.panelSize.width}
+        mobile={mobile}
         dock={panel}
         className="min-w-0 flex-1"
         data-admin-assistant-workspace=""

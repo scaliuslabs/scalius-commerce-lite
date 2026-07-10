@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AssistantDock,
   AssistantDockLayout,
+  AssistantDockModalBoundary,
   AssistantDockResizeHandle,
 } from "./assistant-dock";
 import {
@@ -174,6 +175,85 @@ describe("AssistantDock", () => {
     expect(
       host.querySelector("[data-assistant-page-slot]")?.hasAttribute("inert"),
     ).toBe(false);
+  });
+
+  it("adapts a host-owned panel into a complete mobile modal boundary", () => {
+    const onRequestClose = vi.fn();
+    const returnFocusRef = createRef<HTMLButtonElement>();
+    const renderBoundary = (active: boolean) => (
+      <AssistantDockLayout
+        mode={active ? "floating" : "closed"}
+        mobile
+        dock={
+          <AssistantDockModalBoundary
+            active={active}
+            label="Admin assistant"
+            mobile
+            returnFocusRef={returnFocusRef}
+            onRequestClose={onRequestClose}
+          >
+            <aside aria-label="Legacy assistant panel">
+              <button>First action</button>
+              <textarea aria-label="Message" />
+              <button>Last action</button>
+            </aside>
+          </AssistantDockModalBoundary>
+        }
+      >
+        <button ref={returnFocusRef}>Open assistant</button>
+      </AssistantDockLayout>
+    );
+
+    act(() => root.render(renderBoundary(false)));
+    act(() => returnFocusRef.current?.focus());
+    act(() => root.render(renderBoundary(true)));
+
+    const page = host.querySelector<HTMLElement>("[data-assistant-page-slot]");
+    const dialog = host.querySelector<HTMLElement>(
+      '[data-assistant-modal-boundary][role="dialog"]',
+    );
+    const buttons = dialog?.querySelectorAll<HTMLButtonElement>("button");
+    expect(page?.hasAttribute("inert")).toBe(true);
+    expect(dialog?.getAttribute("aria-label")).toBe("Admin assistant");
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    expect(document.activeElement).toBe(dialog);
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(document.documentElement.style.overflow).toBe("hidden");
+
+    const first = buttons?.[0];
+    const last = buttons?.[buttons.length - 1];
+    act(() => {
+      last?.focus();
+      last?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
+      );
+    });
+    expect(document.activeElement).toBe(first);
+
+    act(() => {
+      first?.focus();
+      first?.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Tab",
+          shiftKey: true,
+          bubbles: true,
+        }),
+      );
+    });
+    expect(document.activeElement).toBe(last);
+
+    act(() => {
+      dialog?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    expect(onRequestClose).toHaveBeenCalledOnce();
+
+    act(() => root.render(renderBoundary(false)));
+    expect(page?.hasAttribute("inert")).toBe(false);
+    expect(document.body.style.overflow).toBe("");
+    expect(document.documentElement.style.overflow).toBe("");
+    expect(document.activeElement).toBe(returnFocusRef.current);
   });
 
   it("collapses on Escape and exposes an accessible launcher", () => {
