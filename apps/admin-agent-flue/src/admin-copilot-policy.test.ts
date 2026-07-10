@@ -17,17 +17,23 @@ import {
 const EXPECTED_ENTRY_ROUTES = [
   "/admin",
   "/admin/products",
+  "/admin/products/new",
   "/admin/categories",
+  "/admin/categories/new",
   "/admin/attributes",
   "/admin/collections",
+  "/admin/collections/new",
   "/admin/inventory",
   "/admin/pages",
   "/admin/widgets",
   "/admin/media",
   "/admin/orders",
+  "/admin/orders/new",
   "/admin/abandoned-checkouts",
   "/admin/customers",
+  "/admin/customers/new",
   "/admin/discounts",
+  "/admin/discounts/new",
   "/admin/analytics",
   "/admin/settings",
   "/admin/settings/theme",
@@ -51,7 +57,8 @@ describe("Admin copilot runtime policy", () => {
       expect(parseScaliusComputerProgram(`goto ${route}`)).toMatchObject({ ok: true });
       expect(route).not.toMatch(/[?#]/u);
     }
-    expect(isKnownAdminEntryRoute("/admin/products/new")).toBe(false);
+    expect(isKnownAdminEntryRoute("/admin/products/new")).toBe(true);
+    expect(isKnownAdminEntryRoute("/admin/products/prod_private/edit")).toBe(false);
     expect(isKnownAdminEntryRoute("/admin/products?status=active")).toBe(false);
   });
 
@@ -59,6 +66,9 @@ describe("Admin copilot runtime policy", () => {
     const instructions = buildAdminCopilotInstructions();
     expect(instructions).toContain(
       "`Take me to Products page` => immediately call computer with `goto /admin/products`",
+    );
+    expect(instructions).toContain(
+      "`Create a test product with real images` => immediately call computer with `goto /admin/products/new`",
     );
     expect(instructions).toContain(
       "`Can you open Taxes?` => immediately call computer with `goto /admin/settings/taxes`",

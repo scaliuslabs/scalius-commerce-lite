@@ -41,13 +41,15 @@ it("issues exact catalog entry navigation without an observation round trip", as
   await expect(tool.run({
     input: { program: "goto /admin/settings/taxes" },
   })).resolves.toMatchObject({ program: "goto /admin/settings/taxes" });
+  await expect(tool.run({
+    input: { program: "goto /admin/products/new" },
+  })).resolves.toMatchObject({ program: "goto /admin/products/new" });
 });
 
 it("rejects arbitrary, dynamic, filtered, and off-origin navigation at the Worker tool boundary", async () => {
   const tool = createAdminComputerTool(INSTANCE_ID, SIGNING_KEY);
   for (const program of [
     "goto /admin/products/prod_private",
-    "goto /admin/products/new",
     "goto /admin/products?status=active",
     "goto /admin/not-a-real-page",
     "goto https://evil.example/admin/products",

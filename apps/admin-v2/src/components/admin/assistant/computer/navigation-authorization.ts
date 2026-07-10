@@ -10,13 +10,32 @@ interface AdminNavigationDestination {
   path: string;
 }
 
+interface AdminTaskDestination {
+  entity: RegExp;
+  label: string;
+  path: string;
+}
+
+const ADMIN_TASK_DESTINATIONS: readonly AdminTaskDestination[] = Object.freeze([
+  { entity: /\bproducts?\b/iu, label: "New product", path: "/admin/products/new" },
+  { entity: /\bcategor(?:y|ies)\b/iu, label: "New category", path: "/admin/categories/new" },
+  { entity: /\bcollections?\b/iu, label: "New collection", path: "/admin/collections/new" },
+  { entity: /\borders?\b/iu, label: "New order", path: "/admin/orders/new" },
+  { entity: /\bcustomers?\b/iu, label: "New customer", path: "/admin/customers/new" },
+  {
+    entity: /\b(?:discounts?|promotions?)\b/iu,
+    label: "New discount",
+    path: "/admin/discounts/new",
+  },
+]);
+
 const ADMIN_NAVIGATION_DESTINATIONS = buildAdminNavigationDestinations();
 
 /**
  * `goto` is the one computer verb that can move the merchant without first
  * observing a visible control. Treat the signed tool output as authenticity,
- * not consent: the latest preceding user turn must be a single explicit
- * navigation request for this exact catalog destination.
+ * not authority: the latest user turn must request this exact destination or
+ * explicitly request the fixed create-task whose route is app-owned.
  */
 export function isDirectAdminNavigationAuthorized(
   latestUserMessage: string | undefined,
@@ -45,16 +64,15 @@ export function isDirectAdminNavigationAuthorized(
   return getAuthorizedAdminNavigationRoutes(latestUserMessage).includes(route);
 }
 
-/** Resolve at most one catalog route from the latest direct user navigation
- * request. The browser runtime uses this same scope for goto and visible-link
- * clicks, so a model cannot bypass destination consent by switching verbs. */
+/** Resolve app-owned routes from the latest direct navigation or explicit
+ * create-task request. The same scope guards goto and visible-link clicks. */
 export function getAuthorizedAdminNavigationRoutes(
   latestUserMessage: string | undefined,
 ): string[] {
   if (!latestUserMessage) return [];
 
   const requested = directAdminNavigationDestination(latestUserMessage);
-  if (!requested) return [];
+  if (!requested) return explicitAdminTaskRoutes(latestUserMessage);
   if (/^(?:a|an|any|some)\b/iu.test(requested)) return [];
   const requestedTokens = canonicalDestinationTokens(requested);
   if (requestedTokens.length === 0) return [];
@@ -89,7 +107,31 @@ function buildAdminNavigationDestinations(): Map<
       }
     }
   }
+  for (const destination of ADMIN_TASK_DESTINATIONS) {
+    retainDestination(destinations, destination.path, destination.label);
+  }
   return destinations;
+}
+
+function explicitAdminTaskRoutes(message: string): string[] {
+  if (!isExplicitCreateTaskRequest(message)) return [];
+  const routes = ADMIN_TASK_DESTINATIONS
+    .filter(({ entity }) => entity.test(message))
+    .map(({ path }) => path);
+  return [...new Set(routes)].slice(0, 4);
+}
+
+function isExplicitCreateTaskRequest(value: string): boolean {
+  const message = value.trim();
+  if (!message) return false;
+  const action = "(?:create|add|make|build|set\\s+up)";
+  return new RegExp(
+    `^(?:please\\s+)?(?:(?:can|could|would|will)\\s+you\\s+(?:please\\s+)?)?(?:help\\s+me\\s+)?${action}\\b`,
+    "iu",
+  ).test(message) || new RegExp(
+    `^i\\s+(?:want|need|would\\s+like)\\s+you\\s+to\\s+${action}\\b`,
+    "iu",
+  ).test(message);
 }
 
 function retainDestination(
