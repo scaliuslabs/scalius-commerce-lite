@@ -20,10 +20,9 @@ function formatMoney(value: number, currency: string): string {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency,
-      maximumFractionDigits: 2,
     }).format(value);
   } catch {
-    return `${currency} ${value.toFixed(2)}`;
+    return `${currency} ${value.toString()}`;
   }
 }
 
@@ -47,7 +46,7 @@ export function AssistantProductCard({
   onNavigate,
 }: AssistantProductCardProps) {
   const navigationAllowed = canNavigate(product.path);
-  const currency = product.currency ?? "BDT";
+  const hasPrice = product.price !== undefined && Boolean(product.currency);
 
   return (
     <article
@@ -118,18 +117,20 @@ export function AssistantProductCard({
 
         <div className="flex items-end justify-between gap-2">
           <div className="min-w-0">
-            {product.price !== undefined ? (
+            {hasPrice ? (
               <p className="text-sm font-bold tabular-nums text-foreground">
-                {formatMoney(product.price, currency)}
+                {product.pricePresentation === "starting_at" ? "From " : ""}
+                {formatMoney(product.price!, product.currency!)}
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">Price unavailable</p>
             )}
             {product.compareAtPrice !== undefined &&
-            product.price !== undefined &&
-            product.compareAtPrice > product.price ? (
+            hasPrice &&
+            product.pricePresentation !== "starting_at" &&
+            product.compareAtPrice > product.price! ? (
               <p className="text-[11px] tabular-nums text-muted-foreground line-through">
-                {formatMoney(product.compareAtPrice, currency)}
+                {formatMoney(product.compareAtPrice, product.currency!)}
               </p>
             ) : null}
           </div>

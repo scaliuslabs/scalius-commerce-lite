@@ -43,6 +43,7 @@ describe("AssistantMessageParts", () => {
       price: 1_200,
       compareAtPrice: 1_500,
       currency: "BDT",
+      pricePresentation: "exact",
       availability: "in_stock",
       badges: ["Insulated"],
       rationale: "Keeps drinks warm for long commutes.",
@@ -163,5 +164,33 @@ describe("AssistantMessageParts", () => {
       "/products/travel-mug",
       "Open Travel Mug",
     );
+  });
+
+  it("renders three-decimal starting prices without inventing a currency", () => {
+    act(() => {
+      root.render(
+        <AssistantMessageParts
+          parts={[part({
+            type: "product_grid",
+            products: [{
+              id: "gid://scalius/product/prod_kwd",
+              title: "Kuwaiti product",
+              path: "/products/kuwaiti-product",
+              price: 1.234,
+              currency: "KWD",
+              pricePresentation: "starting_at",
+              availability: "in_stock",
+              badges: [],
+            }],
+          })]}
+          canNavigate={() => true}
+          onNavigate={vi.fn()}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain("From");
+    expect(host.textContent).toContain("1.234");
+    expect(host.textContent).not.toContain("BDT");
   });
 });

@@ -1,6 +1,8 @@
 // @vitest-environment node
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { splitStorefrontAssistantCatalogReferences } from
+  "@scalius/shared/storefront-assistant-references";
 
 const mocks = vi.hoisted(() => ({
   cfEnv: {} as {
@@ -584,6 +586,99 @@ describe("Storefront anonymous conversation facade", () => {
     expect(serialized).not.toContain("session_asst_");
     expect(backendFetch).toHaveBeenCalledTimes(2);
     expect(agentFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists only ordered public product GIDs from validated rich parts", async () => {
+    const productIds = [
+      "gid://scalius/product/prod_a",
+      "gid://scalius/product/prod_b",
+      "gid://scalius/product/prod_c",
+    ];
+    const backendFetch = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).endsWith("/session/resolve")
+        ? Response.json(identityEnvelope())
+        : Response.json({
+          success: true,
+          data: {
+            status: "ok",
+            message: {
+              role: "assistant",
+              content: "Here are three current matches.",
+              parts: [{
+                type: "product_grid",
+                products: productIds.map((id, index) => ({
+                  id,
+                  title: `Private-looking title ${index}`,
+                  path: `/products/product-${index}`,
+                  availability: "in_stock",
+                  badges: [],
+                })),
+              }],
+            },
+          },
+        })
+    );
+    const agentFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = await new Response(init?.body).json() as {
+        content: string;
+        contextMarker: string;
+      };
+      const split = splitStorefrontAssistantCatalogReferences(request.content);
+      expect(split).toEqual({
+        content: "Here are three current matches.",
+        productIds,
+      });
+      expect(request.content).not.toContain("Private-looking title");
+      expect(request.content).not.toContain("/products/product-");
+      return Response.json({
+        success: true,
+        protocolVersion: "2026-07-10",
+        surface: "storefront",
+        replayed: false,
+        event: {
+          eventId: "event_catalog_refs",
+          sequence: 2,
+          type: "message.appended",
+          occurredAt: 2,
+          message: {
+            id: "message_catalog_refs",
+            role: "assistant",
+            content: request.content,
+            contextMarker: request.contextMarker,
+            createdAt: 2,
+          },
+        },
+      }, { status: 201 });
+    });
+    mocks.cfEnv.BACKEND_API = { fetch: backendFetch };
+    mocks.cfEnv.STOREFRONT_AGENT = { fetch: agentFetch };
+
+    const response = await proxyToStorefrontConversation(browserRequest(
+      `/api/assistant/conversations/${CONVERSATION_ID}/chat`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: ASSISTANT_COOKIE,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientRequestId: "chat_catalog_refs",
+          message: "Show me products",
+          history: [],
+          pageContext: {
+            page: { path: "/search", kind: "search" },
+          },
+        }),
+      },
+    ));
+    const payload = await response.json() as {
+      transcriptEvent?: { message?: { content?: string } };
+    };
+
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    expect(splitStorefrontAssistantCatalogReferences(
+      payload.transcriptEvent?.message?.content ?? "",
+    ).productIds).toEqual(productIds);
   });
 
   it("returns the real one-shot answer when assistant transcript persistence fails", async () => {

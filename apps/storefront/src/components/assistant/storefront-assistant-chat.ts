@@ -2,6 +2,10 @@ import {
   assistantMessagePartSchema,
   type AssistantMessagePart,
 } from "@scalius/shared/assistant-contracts";
+import {
+  appendStorefrontAssistantCatalogReferences,
+  normalizeStorefrontAssistantCatalogProductIds,
+} from "@scalius/shared/storefront-assistant-references";
 
 import { resolveStorefrontAssistantNavigationTarget } from "@/lib/assistant-page-context.client";
 import type { StorefrontAssistantPageContextSnapshot } from "@/lib/assistant-page-context";
@@ -18,6 +22,7 @@ export type StorefrontAssistantUiMessage = {
   id: string;
   role: StorefrontAssistantMessageRole;
   parts: AssistantMessagePart[];
+  catalogReferences?: string[];
   transcriptSequence?: number;
 };
 
@@ -157,6 +162,14 @@ function responseMessageParts(
   return parts.slice(0, MAX_PARTS);
 }
 
+function catalogReferencesFromParts(parts: AssistantMessagePart[]): string[] {
+  return normalizeStorefrontAssistantCatalogProductIds(parts.flatMap((part) =>
+    part.type === "product_grid" || part.type === "comparison"
+      ? part.products.map((product) => product.id)
+      : []
+  ));
+}
+
 export function normalizeStorefrontAssistantChatResult(
   value: unknown,
   origin: string,
@@ -200,12 +213,14 @@ export function normalizeStorefrontAssistantChatResult(
   const transcriptEvent = parseStorefrontConversationMessageEvent(
     value.transcriptEvent,
   );
+  const catalogReferences = catalogReferencesFromParts(parts);
   return {
     status: "ok",
     message: {
       id: serverId || createMessageId("assistant"),
       role: "assistant",
       parts,
+      ...(catalogReferences.length > 0 ? { catalogReferences } : {}),
     },
     transcriptPersisted:
       value.transcriptPersisted === true && transcriptEvent?.message.role === "assistant",
@@ -235,10 +250,17 @@ function partText(part: AssistantMessagePart): string | null {
 export function messageToHistoryContent(
   message: StorefrontAssistantUiMessage,
 ): string {
-  return cleanAssistantDisplayText(
+  const content = cleanAssistantDisplayText(
     message.parts.map(partText).filter(Boolean).join("\n"),
     MAX_MESSAGE_CHARS,
   );
+  return message.role === "assistant"
+    ? appendStorefrontAssistantCatalogReferences(
+      content,
+      message.catalogReferences ?? catalogReferencesFromParts(message.parts),
+      MAX_MESSAGE_CHARS,
+    )
+    : content;
 }
 
 export async function sendStorefrontAssistantMessage(input: {

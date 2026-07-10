@@ -236,7 +236,7 @@ describe("StorefrontAssistantBubble", () => {
 
     renderBubble();
     await click(queryButton("Open storefront assistant"));
-    await typeAssistantMessage("Open rice");
+    await typeAssistantMessage("Where can I find rice?");
     await click(queryButton("Send storefront assistant message"));
     await flushReact();
 
@@ -254,6 +254,34 @@ describe("StorefrontAssistantBubble", () => {
 
     await click(queryButton("Open Rice"));
     expect(navigate).toHaveBeenCalledWith("/products/rice");
+  });
+
+  it("navigates once for an exact current-turn destination command", async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        status: "ok",
+        message: {
+          role: "assistant",
+          content: "Opening the catalog results.",
+          parts: [{
+            type: "navigation",
+            path: "/search?q=shoes",
+            label: "Search catalog",
+            requiresConfirmation: true,
+          }],
+        },
+      }),
+    );
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await typeAssistantMessage("Show me shoes");
+    await click(queryButton("Send storefront assistant message"));
+    await flushReact();
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith("/search?q=shoes");
+    expect(document.body.textContent).toContain("Opening catalog");
   });
 
   it("supports keyboard positioning, docking, sizing, mobile fullscreen, and focus return", async () => {
@@ -408,6 +436,7 @@ describe("StorefrontAssistantBubble", () => {
                     title: "Premium Rice",
                     path: "/products/rice",
                     price: 850,
+                    pricePresentation: "exact",
                     currency: "BDT",
                     availability: "in_stock",
                     badges: ["Popular"],

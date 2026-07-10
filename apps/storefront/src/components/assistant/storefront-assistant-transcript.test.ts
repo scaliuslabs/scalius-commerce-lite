@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { appendStorefrontAssistantCatalogReferences } from
+  "@scalius/shared/storefront-assistant-references";
 
 import { buildStorefrontAssistantPageContext } from
   "@/lib/assistant-page-context";
@@ -85,10 +87,16 @@ describe("Storefront transcript integration", () => {
   });
 
   it("hydrates in sequence, dedupes replay, and keeps rich parts live-only", () => {
+    const productId = "gid://scalius/product/prod_rice";
+    const durableAssistantContent = appendStorefrontAssistantCatalogReferences(
+      "Second",
+      [productId],
+      8_000,
+    );
     const hydrated = mergeStorefrontConversationEvents([], [
-      event(2, "assistant", "Second"),
+      event(2, "assistant", durableAssistantContent),
       event(1, "user", "First"),
-      event(2, "assistant", "Second"),
+      event(2, "assistant", durableAssistantContent),
     ]);
     expect(hydrated.map((message) => message.id)).toEqual([
       "durable_1",
@@ -98,6 +106,7 @@ describe("Storefront transcript integration", () => {
       1,
       2,
     ]);
+    expect(hydrated[1]?.catalogReferences).toEqual([productId]);
 
     const live: StorefrontAssistantUiMessage = {
       id: "live_message",
@@ -111,10 +120,11 @@ describe("Storefront transcript integration", () => {
           requiresConfirmation: true,
         },
       ],
+      catalogReferences: [productId],
     };
     const reconciled = reconcileStorefrontPersistedMessage(
       [live],
-      event(2, "assistant", "Second"),
+      event(2, "assistant", durableAssistantContent),
       live.id,
     );
     expect(reconciled).toHaveLength(1);
@@ -128,9 +138,10 @@ describe("Storefront transcript integration", () => {
     ]);
 
     const afterReload = mergeStorefrontConversationEvents([], [
-      event(2, "assistant", "Second"),
+      event(2, "assistant", durableAssistantContent),
     ]);
     expect(afterReload[0]?.parts).toEqual([{ type: "text", text: "Second" }]);
+    expect(afterReload[0]?.catalogReferences).toEqual([productId]);
   });
 
   it("recovers from denied sessionStorage without persisting authority", () => {

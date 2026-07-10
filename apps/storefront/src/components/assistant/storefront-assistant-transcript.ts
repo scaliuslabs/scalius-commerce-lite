@@ -1,5 +1,7 @@
 import type { StorefrontAssistantPageContextSnapshot } from
   "@/lib/assistant-page-context";
+import { splitStorefrontAssistantCatalogReferences } from
+  "@scalius/shared/storefront-assistant-references";
 
 import type { StorefrontAssistantUiMessage } from
   "./storefront-assistant-chat";
@@ -199,9 +201,15 @@ export function mergeStorefrontConversationEvents(
       (message) => message.id === event.message.id,
     );
     if (existingIndex >= 0) {
+      const split = event.message.role === "assistant"
+        ? splitStorefrontAssistantCatalogReferences(event.message.content)
+        : null;
       next[existingIndex] = {
         ...next[existingIndex]!,
         role: event.message.role,
+        ...(split?.productIds.length
+          ? { catalogReferences: split.productIds }
+          : {}),
         transcriptSequence: event.sequence,
       };
       continue;
@@ -240,6 +248,9 @@ export function reconcileStorefrontPersistedMessage(
     ? current[optimisticIndex]
     : undefined;
   const durable = durableIndex >= 0 ? current[durableIndex] : undefined;
+  const split = event.message.role === "assistant"
+    ? splitStorefrontAssistantCatalogReferences(event.message.content)
+    : { content: event.message.content, productIds: [] };
   const targetIndex = optimisticIndex >= 0
     ? optimisticIndex
     : durableIndex >= 0
@@ -262,7 +273,12 @@ export function reconcileStorefrontPersistedMessage(
     ...optimistic,
     id: event.message.id,
     role: event.message.role,
-    parts: optimistic?.parts ?? [{ type: "text", text: event.message.content }],
+    parts: optimistic?.parts ?? [{ type: "text", text: split.content }],
+    ...(split.productIds.length > 0
+      ? { catalogReferences: split.productIds }
+      : optimistic?.catalogReferences?.length
+        ? { catalogReferences: optimistic.catalogReferences }
+        : {}),
     transcriptSequence: event.sequence,
   });
   return retained;
@@ -271,10 +287,16 @@ export function reconcileStorefrontPersistedMessage(
 function toUiMessage(
   event: StorefrontConversationMessageEvent,
 ): StorefrontAssistantUiMessage {
+  const split = event.message.role === "assistant"
+    ? splitStorefrontAssistantCatalogReferences(event.message.content)
+    : { content: event.message.content, productIds: [] };
   return {
     id: event.message.id,
     role: event.message.role,
-    parts: [{ type: "text", text: event.message.content }],
+    parts: [{ type: "text", text: split.content }],
+    ...(split.productIds.length > 0
+      ? { catalogReferences: split.productIds }
+      : {}),
     transcriptSequence: event.sequence,
   };
 }

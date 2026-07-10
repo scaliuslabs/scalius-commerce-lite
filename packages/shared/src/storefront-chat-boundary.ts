@@ -2,6 +2,10 @@ export const STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER =
   "x-scalius-storefront-client-ip";
 export const STOREFRONT_CHAT_ANONYMOUS_RATE_LIMIT_BUCKET = "anonymous";
 export const STOREFRONT_CHAT_CLIENT_IP_MAX_LENGTH = 64;
+export const STOREFRONT_CHAT_FACADE_TIMEOUT_MS = 12_000;
+export const STOREFRONT_CHAT_API_TIMEOUT_MS = 9_000;
+export const STOREFRONT_CHAT_MCP_TIMEOUT_MS = 2_500;
+export const STOREFRONT_CHAT_MODEL_TIMEOUT_MS = 4_000;
 
 /**
  * Accept one canonical IP address only. This deliberately rejects proxy lists,

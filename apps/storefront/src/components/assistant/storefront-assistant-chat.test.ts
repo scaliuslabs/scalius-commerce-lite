@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { splitStorefrontAssistantCatalogReferences } from
+  "@scalius/shared/storefront-assistant-references";
 
 import {
   createTextMessage,
@@ -25,11 +27,12 @@ describe("storefront assistant chat normalization", () => {
               title: "Recommended",
               products: [
                 {
-                  id: "product_1",
+                  id: "gid://scalius/product/product_1",
                   title: "Travel Mug",
                   path: "/products/travel-mug",
                   price: 1200,
                   currency: "BDT",
+                  pricePresentation: "exact",
                   availability: "in_stock",
                   badges: ["Insulated"],
                 },
@@ -60,6 +63,12 @@ describe("storefront assistant chat normalization", () => {
       type: "navigation",
       path: "/products/travel-mug",
     });
+    expect(result.message.catalogReferences).toEqual([
+      "gid://scalius/product/product_1",
+    ]);
+    expect(splitStorefrontAssistantCatalogReferences(
+      messageToHistoryContent(result.message),
+    ).productIds).toEqual(["gid://scalius/product/product_1"]);
   });
 
   it("adapts legacy text and gives a truthful unavailable response", () => {

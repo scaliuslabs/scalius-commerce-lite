@@ -4,12 +4,17 @@ import {
   STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER,
   normalizeStorefrontChatClientIp,
 } from "@scalius/shared/storefront-chat-boundary";
+import {
+  appendStorefrontAssistantCatalogReferences,
+  normalizeStorefrontAssistantCatalogProductIds,
+} from "@scalius/shared/storefront-assistant-references";
 
 import {
   STOREFRONT_AGENT_CONVERSATION_ORIGIN,
   STOREFRONT_ASSISTANT_API_ORIGIN,
   STOREFRONT_ASSISTANT_AUTHORITY_PATHS,
   STOREFRONT_AUTHORITY_MAX_RESPONSE_BYTES,
+  STOREFRONT_CHAT_MAX_RESPONSE_BYTES,
   StorefrontConversationFacadeError,
   canonicalConversationBody,
   extractStorefrontAssistantCookie,
@@ -364,6 +369,25 @@ function chatAssistantText(payload: unknown): string | null {
     : null;
 }
 
+function chatAssistantCatalogProductIds(payload: unknown): string[] {
+  if (!isRecord(payload) || !isRecord(payload.message)) return [];
+  const parts = Array.isArray(payload.message.parts)
+    ? payload.message.parts
+    : [];
+  return normalizeStorefrontAssistantCatalogProductIds(parts.flatMap((part) => {
+    if (
+      !isRecord(part) ||
+      (part.type !== "product_grid" && part.type !== "comparison") ||
+      !Array.isArray(part.products)
+    ) {
+      return [];
+    }
+    return part.products.flatMap((product) =>
+      isRecord(product) ? [product.id] : []
+    );
+  }));
+}
+
 function canonicalAssistantEvent(
   payload: unknown,
   expectedMarker: string,
@@ -486,7 +510,7 @@ async function handleConversationChat(
   );
   const payload = await readBoundedResponseJson(
     response,
-    STOREFRONT_AUTHORITY_MAX_RESPONSE_BYTES,
+    STOREFRONT_CHAT_MAX_RESPONSE_BYTES,
   );
   if (!isRecord(payload)) {
     throw new StorefrontConversationFacadeError(
@@ -496,12 +520,19 @@ async function handleConversationChat(
     );
   }
   const content = response.ok ? chatAssistantText(payload) : null;
-  const transcriptEvent = content
+  const transcriptContent = content
+    ? appendStorefrontAssistantCatalogReferences(
+      content,
+      chatAssistantCatalogProductIds(payload),
+      8_000,
+    )
+    : null;
+  const transcriptEvent = transcriptContent
     ? await persistChatAssistantMessage(
       bindings.STOREFRONT_AGENT,
       authority.identity,
       canonicalBody,
-      content,
+      transcriptContent,
     )
     : null;
   return relayedChatResponse(

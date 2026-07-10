@@ -1,4 +1,6 @@
 import { ServiceUnavailableError } from "../utils/api-error";
+import { STOREFRONT_CHAT_MCP_TIMEOUT_MS } from
+  "@scalius/shared/storefront-chat-boundary";
 import {
   FORBIDDEN_CONTEXT_KEY_PATTERN,
   STOREFRONT_AGENT_MCP_PROTOCOL_VERSION,
@@ -23,8 +25,12 @@ import {
   cleanNavigationTargetText,
   hasCategoryIntent,
   resolveStorefrontNavigationTarget,
-  searchQueryFromMessages,
 } from "./storefront-chat-navigation";
+import {
+  classifyStorefrontChatIntent,
+  storefrontIntentPrefersCurrentProduct,
+  type StorefrontChatIntent,
+} from "./storefront-chat-intent";
 
 const STOREFRONT_AGENT_MCP_MAX_RESPONSE_BYTES = 512 * 1024;
 type JsonRpcId = string | number;
@@ -165,6 +171,7 @@ export async function parseJsonResponse(
 
 export async function initializeStorefrontAgentMcp(
   c: ApiContext,
+  signal: AbortSignal = c.req.raw.signal,
 ): Promise<StorefrontAgentMcpSession> {
   const agent = c.env.STOREFRONT_AGENT;
   if (!agent || typeof agent.fetch !== "function") {
@@ -185,7 +192,7 @@ export async function initializeStorefrontAgentMcp(
           clientInfo: { name: "scalius-api-storefront-chat", version: "0.1.0" },
         },
       }),
-      signal: c.req.raw.signal,
+      signal,
     });
     if (!response.ok) throw unavailableStorefrontToolsError();
 
@@ -212,7 +219,7 @@ export async function initializeStorefrontAgentMcp(
         jsonrpc: "2.0",
         method: "notifications/initialized",
       }),
-      signal: c.req.raw.signal,
+      signal,
     });
     if (initialized.status !== 202) {
       await initialized.body?.cancel().catch(() => undefined);
@@ -238,6 +245,7 @@ export async function callStorefrontAgentTool(
   toolName: StorefrontChatPublicTool,
   toolArguments: JsonRecord,
   id: string,
+  signal: AbortSignal = c.req.raw.signal,
 ): Promise<unknown | null> {
   if (!isAllowedStorefrontTool(toolName)) return null;
   const agent = c.env.STOREFRONT_AGENT;
@@ -256,7 +264,7 @@ export async function callStorefrontAgentTool(
           arguments: toolArguments,
         },
       }),
-      signal: c.req.raw.signal,
+      signal,
     });
     if (!response.ok) return null;
     return parseJsonResponse(response, id);
@@ -334,7 +342,8 @@ export function productIdentifierFromPageContext(
 ): string | null {
   if (pageContext?.page?.kind !== "product") return null;
   if (pageContext.surface?.kind === "product") {
-    return pageContext.surface.productId;
+    return pageContext.surface.selectedVariantId ??
+      pageContext.surface.productId;
   }
   const candidates = [pageContext.page.path, pageContext.page.route];
   for (const candidate of candidates) {
@@ -400,63 +409,142 @@ export async function collectStorefrontMcpContexts(
   c: ApiContext,
   payload: StorefrontChatPayload,
   session: StorefrontAgentMcpSession,
+  intent: StorefrontChatIntent = classifyStorefrontChatIntent(payload),
+  signal?: AbortSignal,
 ): Promise<StorefrontMcpContext[]> {
-  const contexts: StorefrontMcpContext[] = [];
-  const latestText = latestUserChatText(payload.messages);
+  const stageSignal = signal ?? AbortSignal.any([
+    c.req.raw.signal,
+    AbortSignal.timeout(STOREFRONT_CHAT_MCP_TIMEOUT_MS),
+  ]);
+  const latestText = intent.latestText || latestUserChatText(payload.messages);
+
+  type ToolPlan = {
+    tool: StorefrontChatPublicTool;
+    args: JsonRecord;
+    id: string;
+    expectedProductIds?: string[];
+  };
+  const plans: ToolPlan[] = [{
+    tool: "storefront_discovery_policy",
+    args: {},
+    id: "storefront-chat-discovery-policy",
+  }];
 
   async function addToolContext(
-    tool: StorefrontChatPublicTool,
-    args: JsonRecord,
-    id: string,
-  ): Promise<void> {
-    const body = await callStorefrontAgentTool(c, session, tool, args, id);
+    plan: ToolPlan,
+  ): Promise<StorefrontMcpContext | null> {
+    const body = await callStorefrontAgentTool(
+      c,
+      session,
+      plan.tool,
+      plan.args,
+      plan.id,
+      stageSignal,
+    );
     const structuredContent = readMcpStructuredContent(body);
-    if (!structuredContent) return;
-    const text = formatStorefrontToolContext(tool, structuredContent);
-    if (text) contexts.push({ tool, structuredContent, text });
+    if (!structuredContent) return null;
+    if (plan.expectedProductIds) {
+      const products = plan.tool === "catalog_product"
+        ? isJsonRecord(structuredContent.product)
+          ? [structuredContent.product]
+          : []
+        : Array.isArray(structuredContent.products)
+          ? structuredContent.products.filter(isJsonRecord)
+          : [];
+      const returnedIds = products.flatMap((product) =>
+        typeof product.id === "string" ? [product.id] : []
+      );
+      if (
+        returnedIds.length !== plan.expectedProductIds.length ||
+        new Set(returnedIds).size !== returnedIds.length ||
+        plan.expectedProductIds.some((id) => !returnedIds.includes(id))
+      ) {
+        return null;
+      }
+    }
+    const text = formatStorefrontToolContext(plan.tool, structuredContent);
+    return text ? { tool: plan.tool, structuredContent, text } : null;
   }
 
-  await addToolContext(
-    "storefront_discovery_policy",
-    {},
-    "storefront-chat-discovery-policy",
-  );
-
-  const productId = productIdentifierFromPageContext(payload.pageContext);
-  if (productId) {
-    await addToolContext(
-      "catalog_product",
-      { id: productId },
-      "storefront-chat-catalog-product",
-    );
+  const referencedProductIds = intent.referencedProductIds ?? [];
+  if (
+    !intent.unresolvedOrdinalReference &&
+    referencedProductIds.length === 1
+  ) {
+    plans.push({
+      tool: "catalog_product",
+      args: { id: referencedProductIds[0] },
+      id: "storefront-chat-referenced-product",
+      expectedProductIds: referencedProductIds,
+    });
+  } else if (
+    !intent.unresolvedOrdinalReference &&
+    referencedProductIds.length > 1
+  ) {
+    plans.push({
+      tool: "catalog_lookup",
+      args: { ids: referencedProductIds },
+      id: "storefront-chat-referenced-products",
+      expectedProductIds: referencedProductIds,
+    });
+  } else if (
+    !intent.unresolvedOrdinalReference &&
+    intent.kind !== "ordinal_product"
+  ) {
+    const productId = productIdentifierFromPageContext(payload.pageContext);
+    const selected = payload.pageContext?.surface?.kind === "product"
+      ? payload.pageContext.surface.selectedOptions.map((option) => ({
+          name: option.name,
+          label: option.label,
+        }))
+      : [];
+    if (productId) {
+      plans.push({
+        tool: "catalog_product",
+        args: {
+        id: productId,
+        ...(selected.length > 0 ? { selected } : {}),
+      },
+        id: "storefront-chat-catalog-product",
+      });
+    }
   }
 
   const visibleProductIds = visibleListingProductIds(payload.pageContext);
-  if (visibleProductIds.length > 0) {
-    await addToolContext(
-      "catalog_lookup",
-      { ids: visibleProductIds },
-      "storefront-chat-visible-products",
-    );
+  if (visibleProductIds.length > 0 && referencedProductIds.length === 0) {
+    plans.push({
+      tool: "catalog_lookup",
+      args: { ids: visibleProductIds },
+      id: "storefront-chat-visible-products",
+    });
   }
 
   if (hasCategoryIntent(latestText, payload.pageContext)) {
-    await addToolContext(
-      "catalog_categories",
-      { limit: 8 },
-      "storefront-chat-catalog-categories",
-    );
+    const categorySlug = payload.pageContext?.surface?.kind === "category"
+      ? payload.pageContext.surface.slug
+      : null;
+    plans.push({
+      tool: "catalog_categories",
+      args: categorySlug ? { limit: 1, slug: categorySlug } : { limit: 8 },
+      id: "storefront-chat-catalog-categories",
+    });
   }
 
-  const searchQuery =
-    searchQueryFromPageSurface(payload.pageContext) ??
-    searchQueryFromMessages(payload.messages);
+  const suppressSearch = referencedProductIds.length > 0 ||
+    intent.unresolvedOrdinalReference ||
+    storefrontIntentPrefersCurrentProduct(intent, payload) ||
+    ((intent.kind === "factual_comparison" ||
+      intent.kind === "recommendation_comparison") &&
+      visibleProductIds.length > 0);
+  const searchQuery = suppressSearch
+    ? null
+    : searchQueryFromPageSurface(payload.pageContext) ?? intent.searchQuery;
   if (searchQuery) {
-    await addToolContext(
-      "catalog_search",
-      { query: searchQuery, limit: 5 },
-      "storefront-chat-catalog-search",
-    );
+    plans.push({
+      tool: "catalog_search",
+      args: { query: searchQuery, limit: 5 },
+      id: "storefront-chat-catalog-search",
+    });
   }
 
   const cartItems = cartValidationItems(payload.pageContext);
@@ -464,12 +552,15 @@ export async function collectStorefrontMcpContexts(
     cartItems.length > 0 &&
     hasCartValidationIntent(latestText, payload.pageContext)
   ) {
-    await addToolContext(
-      "cart_validate",
-      { items: cartItems },
-      "storefront-chat-cart-validate",
-    );
+    plans.push({
+      tool: "cart_validate",
+      args: { items: cartItems },
+      id: "storefront-chat-cart-validate",
+    });
   }
+
+  const contexts = (await Promise.all(plans.map(addToolContext)))
+    .filter((context): context is StorefrontMcpContext => context !== null);
 
   if (contexts.length === 0) {
     throw unavailableStorefrontToolsError();

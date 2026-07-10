@@ -1,4 +1,6 @@
 import type { ModelMessage } from "ai";
+import { splitStorefrontAssistantCatalogReferences } from
+  "@scalius/shared/storefront-assistant-references";
 import {
   STOREFRONT_CHAT_MAX_CONTEXT_CHARS,
   compactStorefrontChatText,
@@ -18,6 +20,7 @@ export function formatStorefrontMcpContext(
       [
         "Verified public storefront context from read-only catalog/discovery/cart-validation tools:",
         text,
+        "These API-backed tool facts are authoritative. If visible page metadata disagrees, use the tool product title, price, options, and availability.",
         "Use this only for public buyer guidance. Do not expose private checkout, account, order, payment, recovery, or customer-session facts.",
       ].join("\n"),
       STOREFRONT_CHAT_MAX_CONTEXT_CHARS,
@@ -55,8 +58,8 @@ export function formatStorefrontSurfaceContext(
         ? `Selected variant ID: ${surface.selectedVariantId}`
         : null,
       options ? `Selected options: ${options}` : null,
-      `Displayed price: ${surface.displayedPrice}`,
-      `Buyer-safe availability: ${surface.availability}`,
+      `Visible page price snapshot (may be stale): ${surface.displayedPrice}`,
+      `Visible selection state: ${surface.availability}`,
     ].filter((line): line is string => Boolean(line));
   }
 
@@ -122,6 +125,8 @@ export function normalizeMessages(
 ): ModelMessage[] {
   return messages.map((message) => ({
     role: message.role,
-    content: message.content,
+    content: message.role === "assistant"
+      ? splitStorefrontAssistantCatalogReferences(message.content).content
+      : message.content,
   }));
 }

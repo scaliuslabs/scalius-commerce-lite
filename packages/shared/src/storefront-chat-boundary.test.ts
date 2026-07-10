@@ -1,12 +1,28 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  STOREFRONT_CHAT_API_TIMEOUT_MS,
   STOREFRONT_CHAT_CLIENT_IP_MAX_LENGTH,
+  STOREFRONT_CHAT_FACADE_TIMEOUT_MS,
+  STOREFRONT_CHAT_MCP_TIMEOUT_MS,
+  STOREFRONT_CHAT_MODEL_TIMEOUT_MS,
   normalizeStorefrontChatClientIp,
   storefrontChatRateLimitBucketFromIp,
 } from "./storefront-chat-boundary";
 
 describe("storefront chat service-binding identity", () => {
+  it("keeps inner work budgets safely below the storefront facade deadline", () => {
+    expect(STOREFRONT_CHAT_API_TIMEOUT_MS).toBeLessThan(
+      STOREFRONT_CHAT_FACADE_TIMEOUT_MS - 2_000,
+    );
+    expect(STOREFRONT_CHAT_MCP_TIMEOUT_MS).toBeLessThan(
+      STOREFRONT_CHAT_API_TIMEOUT_MS,
+    );
+    expect(STOREFRONT_CHAT_MODEL_TIMEOUT_MS).toBeLessThan(
+      STOREFRONT_CHAT_API_TIMEOUT_MS,
+    );
+  });
+
   it("canonicalizes single IPv4 and IPv6 addresses", () => {
     expect(normalizeStorefrontChatClientIp("203.0.113.40")).toBe(
       "203.0.113.40",
