@@ -1,15 +1,11 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { appendStorefrontAssistantCatalogReferences } from
-  "@scalius/shared/storefront-assistant-references";
+import { appendStorefrontAssistantCatalogReferences } from "@scalius/shared/storefront-assistant-references";
 
-import { buildStorefrontAssistantPageContext } from
-  "@/lib/assistant-page-context";
-import type { StorefrontAssistantUiMessage } from
-  "./storefront-assistant-chat";
-import type { StorefrontConversationMessageEvent } from
-  "./storefront-assistant-conversation";
+import { buildStorefrontAssistantPageContext } from "@/lib/assistant-page-context";
+import type { StorefrontAssistantUiMessage } from "./storefront-assistant-chat";
+import type { StorefrontConversationMessageEvent } from "./storefront-assistant-conversation";
 import {
   STOREFRONT_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
   claimStorefrontAssistantConversationId,
@@ -18,6 +14,7 @@ import {
   reconcileStorefrontPersistedMessage,
   rotateStorefrontAssistantConversationClaim,
   storefrontConversationContextMarker,
+  switchStorefrontAssistantConversationClaim,
 } from "./storefront-assistant-transcript";
 import { installMemoryBrowserStorage } from "./assistant-test-storage";
 
@@ -55,13 +52,19 @@ describe("Storefront transcript integration", () => {
     expect(first).toBe(second);
     expect(first).toMatch(/^conv_[A-Za-z0-9_-]{22}$/);
     expect(window.sessionStorage.length).toBe(1);
-    expect(window.sessionStorage.getItem(
-      STOREFRONT_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
-    )).toBe(first);
+    expect(
+      window.sessionStorage.getItem(
+        STOREFRONT_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      ),
+    ).toBe(first);
     expect(window.localStorage.length).toBe(0);
-    expect(JSON.stringify([...Array(window.sessionStorage.length).keys()].map(
-      (index) => window.sessionStorage.key(index),
-    ))).not.toMatch(/subject|credential|session_asst/i);
+    expect(
+      JSON.stringify(
+        [...Array(window.sessionStorage.length).keys()].map((index) =>
+          window.sessionStorage.key(index),
+        ),
+      ),
+    ).not.toMatch(/subject|credential|session_asst/i);
   });
 
   it("marks account, checkout, order, payment, receipt, and recovery pages sensitive", () => {
@@ -73,17 +76,21 @@ describe("Storefront transcript integration", () => {
       "/receipt",
       "/auth/login",
     ]) {
-      expect(storefrontConversationContextMarker(
-        buildStorefrontAssistantPageContext({ path, route: path }),
-      )).toBe("storefront:sensitive");
+      expect(
+        storefrontConversationContextMarker(
+          buildStorefrontAssistantPageContext({ path, route: path }),
+        ),
+      ).toBe("storefront:sensitive");
     }
-    expect(storefrontConversationContextMarker(
-      buildStorefrontAssistantPageContext({
-        path: "/products/rice",
-        route: "/products/[slug]",
-        pageKind: "product",
-      }),
-    )).toBe("storefront:product");
+    expect(
+      storefrontConversationContextMarker(
+        buildStorefrontAssistantPageContext({
+          path: "/products/rice",
+          route: "/products/[slug]",
+          pageKind: "product",
+        }),
+      ),
+    ).toBe("storefront:product");
   });
 
   it("hydrates in sequence, dedupes replay, and keeps rich parts live-only", () => {
@@ -93,18 +100,20 @@ describe("Storefront transcript integration", () => {
       [productId],
       8_000,
     );
-    const hydrated = mergeStorefrontConversationEvents([], [
-      event(2, "assistant", durableAssistantContent),
-      event(1, "user", "First"),
-      event(2, "assistant", durableAssistantContent),
-    ]);
+    const hydrated = mergeStorefrontConversationEvents(
+      [],
+      [
+        event(2, "assistant", durableAssistantContent),
+        event(1, "user", "First"),
+        event(2, "assistant", durableAssistantContent),
+      ],
+    );
     expect(hydrated.map((message) => message.id)).toEqual([
       "durable_1",
       "durable_2",
     ]);
     expect(hydrated.map((message) => message.transcriptSequence)).toEqual([
-      1,
-      2,
+      1, 2,
     ]);
     expect(hydrated[1]?.catalogReferences).toEqual([productId]);
 
@@ -137,19 +146,20 @@ describe("Storefront transcript integration", () => {
       "navigation",
     ]);
 
-    const afterReload = mergeStorefrontConversationEvents([], [
-      event(2, "assistant", durableAssistantContent),
-    ]);
+    const afterReload = mergeStorefrontConversationEvents(
+      [],
+      [event(2, "assistant", durableAssistantContent)],
+    );
     expect(afterReload[0]?.parts).toEqual([{ type: "text", text: "Second" }]);
     expect(afterReload[0]?.catalogReferences).toEqual([productId]);
   });
 
   it("recovers from denied sessionStorage without persisting authority", () => {
-    const getItem = vi.spyOn(window.sessionStorage, "getItem").mockImplementation(
-      () => {
+    const getItem = vi
+      .spyOn(window.sessionStorage, "getItem")
+      .mockImplementation(() => {
         throw new DOMException("denied");
-      },
-    );
+      });
     const first = getOrCreateStorefrontAssistantConversationId();
     const second = getOrCreateStorefrontAssistantConversationId();
     getItem.mockRestore();
@@ -165,6 +175,22 @@ describe("Storefront transcript integration", () => {
     expect(second).not.toMatch(/subject|credential|session_asst/i);
   });
 
+  it("can repoint the tab to bounded opaque durable history without storing transcript authority", () => {
+    const previous = "conv_zyxwvutsrqponmlkjihgfe";
+    expect(switchStorefrontAssistantConversationClaim(previous)).toBe(true);
+    expect(
+      window.sessionStorage.getItem(
+        STOREFRONT_ASSISTANT_CONVERSATION_ID_STORAGE_KEY,
+      ),
+    ).toBe(previous);
+    expect(switchStorefrontAssistantConversationClaim("not-a-thread")).toBe(
+      false,
+    );
+    expect(JSON.stringify(window.sessionStorage)).not.toMatch(
+      /session_asst|credential|subject/i,
+    );
+  });
+
   it("rotates a copied ID when an original collapsed tab holds its Web Lock", async () => {
     const copiedId = "conv_abcdefghijklmnopqrstuv";
     window.sessionStorage.setItem(
@@ -172,17 +198,19 @@ describe("Storefront transcript integration", () => {
       copiedId,
     );
     const originalLocks = Object.getOwnPropertyDescriptor(navigator, "locks");
-    const request = vi.fn((
-      name: string,
-      _options: LockOptions,
-      callback: (lock: Lock | null) => Promise<void> | void,
-    ) => {
-      const lock = name.endsWith(copiedId)
-        ? null
-        : ({ name, mode: "exclusive" } as Lock);
-      void callback(lock);
-      return Promise.resolve();
-    });
+    const request = vi.fn(
+      (
+        name: string,
+        _options: LockOptions,
+        callback: (lock: Lock | null) => Promise<void> | void,
+      ) => {
+        const lock = name.endsWith(copiedId)
+          ? null
+          : ({ name, mode: "exclusive" } as Lock);
+        void callback(lock);
+        return Promise.resolve();
+      },
+    );
     Object.defineProperty(navigator, "locks", {
       configurable: true,
       value: { request } as unknown as LockManager,
