@@ -42,6 +42,8 @@ import { ASSISTANT_GEOMETRY_STORAGE_KEY } from "./assistant-geometry";
 import { installMemoryBrowserStorage } from "./assistant-test-storage";
 import { STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY } from
   "./storefront-assistant-open-state";
+import { STOREFRONT_ASSISTANT_SESSION_HANDOFF_STORAGE_KEY } from
+  "./storefront-assistant-session";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -126,7 +128,7 @@ describe("StorefrontAssistantBubble", () => {
     } satisfies StorefrontAssistantBridge;
 
     host = document.createElement("div");
-    document.body.append(host);
+    appendAssistantHost(host);
     root = createRoot(host);
   });
 
@@ -138,7 +140,9 @@ describe("StorefrontAssistantBubble", () => {
     delete window.__SCALIUS_STOREFRONT_ASSISTANT__;
     window.localStorage.clear();
     window.sessionStorage.clear();
+    delete document.documentElement.dataset.storefrontAssistantHydrated;
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("posts bounded sanitized context to the per-tab same-origin proxy without exposing credentials", async () => {
@@ -282,9 +286,12 @@ describe("StorefrontAssistantBubble", () => {
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith("/search?q=shoes");
     expect(document.body.textContent).toContain("Opening catalog");
+    expect(window.sessionStorage.getItem(
+      STOREFRONT_ASSISTANT_SESSION_HANDOFF_STORAGE_KEY,
+    )).toContain("Show me shoes");
   });
 
-  it("supports keyboard positioning, docking, sizing, mobile fullscreen, and focus return", async () => {
+  it("supports keyboard positioning, structural docking, sizing, and focus return", async () => {
     renderBubble();
     await flushReact();
 
@@ -306,84 +313,111 @@ describe("StorefrontAssistantBubble", () => {
     const panel = document.querySelector<HTMLElement>(
       "#storefront-assistant-panel",
     );
-    expect(panel?.getAttribute("role")).toBe("dialog");
-    expect(panel?.getAttribute("aria-modal")).toBe("false");
+    expect(panel?.tagName).toBe("ASIDE");
+    expect(panel?.hasAttribute("aria-modal")).toBe(false);
     expect(document.activeElement).toBe(
       document.querySelector(
         'textarea[aria-label="Message storefront assistant"]',
       ),
     );
 
-    await click(queryButton("Dock panel left"));
-    expect(panel?.dataset.mode).toBe("dock-left");
-    expect(panel?.getAttribute("role")).toBe("complementary");
+    await click(queryButton("Dock on the right"));
+    expect(panel?.dataset.mode).toBe("docked");
+    expect(panel?.dataset.side).toBe("end");
     expect(panel?.hasAttribute("aria-modal")).toBe(false);
-    expect(document.body.dataset.storefrontAssistantDock).toBe("left");
+    const layoutHost = document.querySelector<HTMLElement>(
+      "#storefront-assistant-layout",
+    );
+    expect(layoutHost?.dataset.mode).toBe("docked");
+    expect(layoutHost?.dataset.side).toBe("end");
     expect(
-      document.body.style.getPropertyValue(
-        "--storefront-assistant-dock-width",
+      layoutHost?.style.getPropertyValue(
+        "--sc-assistant-dock-width",
       ),
     ).toBe("424px");
-    await click(queryButton("Make assistant wider"));
+    const resizeHandle = document.querySelector<HTMLElement>(
+      '[role="separator"][aria-label="Resize assistant"]',
+    );
+    await keyDown(resizeHandle, "ArrowLeft");
     const dockedGeometry = JSON.parse(
       window.localStorage.getItem(ASSISTANT_GEOMETRY_STORAGE_KEY) ?? "{}",
     ) as { mode: string; panelWidth: number };
-    expect(dockedGeometry.mode).toBe("dock-left");
+    expect(dockedGeometry.mode).toBe("dock-right");
     expect(dockedGeometry.panelWidth).toBeGreaterThan(424);
     expect(
-      document.body.style.getPropertyValue(
-        "--storefront-assistant-dock-width",
+      layoutHost?.style.getPropertyValue(
+        "--sc-assistant-dock-width",
       ),
     ).toBe(`${dockedGeometry.panelWidth}px`);
 
-    await click(queryButton("Dock panel right"));
-    expect(document.body.dataset.storefrontAssistantDock).toBe("right");
-    const rightDockWidth = JSON.parse(
+    await click(queryButton("Dock on the left"));
+    expect(layoutHost?.dataset.side).toBe("start");
+    const leftDockWidth = JSON.parse(
       window.localStorage.getItem(ASSISTANT_GEOMETRY_STORAGE_KEY) ?? "{}",
-    ) as { panelWidth: number; panelHeight: number };
+    ) as { mode: string; panelWidth: number };
+    expect(leftDockWidth.mode).toBe("dock-left");
     await keyDown(
-      queryButton(
-        "Resize assistant sidebar width. Use left and right arrow keys or the layout menu.",
+      document.querySelector<HTMLElement>(
+        '[role="separator"][aria-label="Resize assistant"]',
       ),
-      "ArrowLeft",
+      "ArrowRight",
     );
-    const widenedRightDock = JSON.parse(
+    const widenedLeftDock = JSON.parse(
       window.localStorage.getItem(ASSISTANT_GEOMETRY_STORAGE_KEY) ?? "{}",
-    ) as { panelWidth: number; panelHeight: number };
-    expect(widenedRightDock.panelWidth).toBeGreaterThan(
-      rightDockWidth.panelWidth,
+    ) as { panelWidth: number };
+    expect(widenedLeftDock.panelWidth).toBeGreaterThan(
+      leftDockWidth.panelWidth,
     );
-    await keyDown(
-      queryButton(
-        "Resize assistant sidebar width. Use left and right arrow keys or the layout menu.",
-      ),
-      "ArrowUp",
-    );
-    const verticalDockKey = JSON.parse(
-      window.localStorage.getItem(ASSISTANT_GEOMETRY_STORAGE_KEY) ?? "{}",
-    ) as { panelHeight: number };
-    expect(verticalDockKey.panelHeight).toBe(
-      widenedRightDock.panelHeight,
-    );
-
-    await click(queryButton("Open full screen"));
-    expect(panel?.dataset.mobileFullscreen).toBe("true");
 
     await keyDown(panel, "Escape");
     const restoredLauncher = queryButton("Open storefront assistant");
     expect(restoredLauncher).toBeTruthy();
     expect(document.activeElement).toBe(restoredLauncher);
-    expect(document.body.dataset.storefrontAssistantDock).toBeUndefined();
-    expect(
-      document.body.style.getPropertyValue(
-        "--storefront-assistant-dock-width",
-      ),
-    ).toBe("");
+    expect(layoutHost?.dataset.mode).toBe("collapsed");
   });
 
-  it("restores an open panel across a same-tab document remount without persisting messages", async () => {
+  it("uses an accessible modal sheet and makes the storefront inert on mobile", async () => {
+    vi.spyOn(window, "matchMedia").mockReturnValue({
+      matches: true,
+      media: "(max-width: 767px)",
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(() => true),
+    });
+
     renderBubble();
     await click(queryButton("Open storefront assistant"));
+    const panel = document.querySelector<HTMLElement>(
+      "#storefront-assistant-panel",
+    );
+    const page = document.querySelector<HTMLElement>(
+      "#storefront-assistant-layout [data-assistant-page-slot]",
+    );
+    expect(panel?.getAttribute("role")).toBe("dialog");
+    expect(panel?.getAttribute("aria-modal")).toBe("true");
+    expect(page?.hasAttribute("inert")).toBe(true);
+    expect(page?.getAttribute("aria-hidden")).toBe("true");
+    expect(document.body.style.overflow).toBe("hidden");
+
+    await keyDown(panel, "Escape");
+    expect(page?.hasAttribute("inert")).toBe(false);
+    expect(document.body.style.overflow).toBe("");
+    expect(queryButton("Open storefront assistant")).toBeTruthy();
+  });
+
+  it("restores a redacted conversation across a same-tab remount without persisting the draft", async () => {
+    fetchMock.mockResolvedValue(Response.json({
+      status: "ok",
+      message: { role: "assistant", content: "Rice is available today." },
+    }));
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await typeAssistantMessage("Find rice");
+    await click(queryButton("Send storefront assistant message"));
+    await flushReact();
     await typeAssistantMessage("Unsaved buyer question");
 
     expect(window.sessionStorage.getItem(
@@ -393,7 +427,7 @@ describe("StorefrontAssistantBubble", () => {
     act(() => root.unmount());
     host.remove();
     host = document.createElement("div");
-    document.body.append(host);
+    appendAssistantHost(host);
     const pageFocusTarget = document.createElement("button");
     pageFocusTarget.textContent = "Current page action";
     document.body.append(pageFocusTarget);
@@ -405,6 +439,8 @@ describe("StorefrontAssistantBubble", () => {
     expect(document.querySelector("#storefront-assistant-panel")).toBeTruthy();
     expect(queryButton("Open storefront assistant")).toBeNull();
     expect(document.activeElement).toBe(pageFocusTarget);
+    expect(document.body.textContent).toContain("Find rice");
+    expect(document.body.textContent).toContain("Rice is available today.");
     expect(document.body.textContent).not.toContain("Unsaved buyer question");
     expect(
       document.querySelector<HTMLTextAreaElement>(
@@ -412,7 +448,7 @@ describe("StorefrontAssistantBubble", () => {
       )?.value,
     ).toBe("");
 
-    await click(queryButton("Close storefront assistant"));
+    await click(queryButton("Collapse assistant"));
     expect(window.sessionStorage.getItem(
       STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY,
     )).toBeNull();
@@ -468,10 +504,10 @@ describe("StorefrontAssistantBubble", () => {
     expect(document.body.textContent).toContain(
       "Use the visible cart or checkout controls to continue manually.",
     );
-    expect(queryButton("View Premium Rice")).toBeTruthy();
+    expect(queryButtonText("View Premium Rice")).toBeTruthy();
     expect(queryButton("Continue manually")).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
-    await click(queryButton("View Premium Rice"));
+    await click(queryButtonText("View Premium Rice"));
     expect(navigate).toHaveBeenCalledWith("/products/rice");
   });
 
@@ -575,6 +611,31 @@ function queryButton(label: string): HTMLButtonElement | null {
   return document.querySelector<HTMLButtonElement>(
     `button[aria-label="${label}"]`,
   );
+}
+
+function queryButtonText(text: string): HTMLButtonElement | null {
+  return Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+    .find((button) => button.textContent?.includes(text)) ?? null;
+}
+
+function appendAssistantHost(host: HTMLDivElement) {
+  let layout = document.querySelector<HTMLElement>(
+    "#storefront-assistant-layout",
+  );
+  if (!layout) {
+    layout = document.createElement("div");
+    layout.id = "storefront-assistant-layout";
+    layout.dataset.mode = "collapsed";
+    layout.dataset.side = "end";
+    layout.dataset.mobile = "false";
+    const page = document.createElement("div");
+    page.dataset.assistantPageSlot = "";
+    const dock = document.createElement("div");
+    dock.dataset.assistantDockSlot = "";
+    layout.append(page, dock);
+    document.body.append(layout);
+  }
+  layout.querySelector<HTMLElement>("[data-assistant-dock-slot]")?.append(host);
 }
 
 async function click(element: HTMLElement | null) {

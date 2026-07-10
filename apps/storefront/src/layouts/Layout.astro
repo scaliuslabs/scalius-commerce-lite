@@ -5,6 +5,8 @@ import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
 import StorefrontAssistantBubble from "../components/assistant/StorefrontAssistantBubble";
 import StorefrontAssistantPageContext from "../components/assistant/StorefrontAssistantPageContext.astro";
+import { ASSISTANT_GEOMETRY_STORAGE_KEY } from "../components/assistant/assistant-geometry";
+import { STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY } from "../components/assistant/storefront-assistant-open-state";
 import { Toaster } from "@/components/ui/sonner";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import type { AnalyticsConfig } from "@/lib/api";
@@ -246,6 +248,24 @@ const runtimeGlobalsScript = [
   `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,
   `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(layoutData?.metaCapi?.browserEventsEnabled === true)};`,
 ].join("");
+const assistantPrehydrateScript = [
+  "(function(){try{",
+  `if(sessionStorage.getItem(${serializeJsonForInlineScript(STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY)})!=="open")return;`,
+  "var root=document.documentElement;",
+  "root.dataset.storefrontAssistantPreopen=\"true\";",
+  `var raw=localStorage.getItem(${serializeJsonForInlineScript(ASSISTANT_GEOMETRY_STORAGE_KEY)});`,
+  "if(!raw)return;",
+  "var value=JSON.parse(raw);",
+  "var mode=value&&value.mode;",
+  "if(mode!==\"floating\"&&mode!==\"dock-left\"&&mode!==\"dock-right\")return;",
+  "var width=Number(value.panelWidth);",
+  "var height=Number(value.panelHeight);",
+  "if(!Number.isFinite(width)||!Number.isFinite(height))return;",
+  "root.dataset.storefrontAssistantPreopenMode=mode;",
+  "root.style.setProperty(\"--sf-assistant-preopen-width\",Math.min(720,Math.max(340,width))+\"px\");",
+  "root.style.setProperty(\"--sf-assistant-preopen-height\",Math.min(840,Math.max(420,height))+\"px\");",
+  "}catch(_){}})();",
+].join("");
 ---
 
 <!doctype html>
@@ -265,6 +285,8 @@ const runtimeGlobalsScript = [
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
+    <!-- Keep an already-open assistant visually continuous while its island hydrates. -->
+    <script is:inline set:html={assistantPrehydrateScript} />
 
     <script is:inline>
       (function () {
@@ -441,26 +463,54 @@ const runtimeGlobalsScript = [
     <slot name="head" />
   </head>
   <body class="flex flex-col min-h-screen site-root">
-    {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
+    <div
+      id="storefront-assistant-layout"
+      class="sc-assistant-layout sf-assistant-layout-host"
+      data-assistant-dock-layout=""
+      data-mode="collapsed"
+      data-side="end"
+      data-mobile="false"
+    >
+      <div
+        class="sc-assistant-layout__page flex min-h-screen min-w-0 flex-col"
+        data-assistant-page-slot=""
+      >
+        {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
 
-    <div class="site-wrapper grow">
-      {
-        !hideHeader && (
-          <Header headerData={headerData} navigation={navigationData} />
-        )
-      }
-      <main class="w-full h-full mb-3">
-        <slot />
-      </main>
+        <div class="site-wrapper grow">
+          {
+            !hideHeader && (
+              <Header headerData={headerData} navigation={navigationData} />
+            )
+          }
+          <main class="w-full h-full mb-3">
+            <slot />
+          </main>
+        </div>
+
+        {!hideFooter && <Footer footerData={footerData} />}
+
+        <Toaster position="top-right" expand={false} richColors closeButton />
+
+        <CommandPalette client:idle />
+        <AuthModal client:idle />
+      </div>
+      <div
+        class="sc-assistant-layout__dock"
+        data-assistant-dock-slot=""
+      >
+        <div class="sf-assistant-prehydrate" aria-hidden="true">
+          <span class="sf-assistant-prehydrate__mark">
+            <span></span><span></span>
+          </span>
+          <span class="sf-assistant-prehydrate__copy">
+            <strong>Shopping assistant</strong>
+            <span>Restoring this conversation…</span>
+          </span>
+        </div>
+        <StorefrontAssistantBubble client:load />
+      </div>
     </div>
-
-    {!hideFooter && <Footer footerData={footerData} />}
-
-    <Toaster position="top-right" expand={false} richColors closeButton />
-
-    <CommandPalette client:idle />
-    <AuthModal client:idle />
-    <StorefrontAssistantBubble client:load />
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
   </body>
