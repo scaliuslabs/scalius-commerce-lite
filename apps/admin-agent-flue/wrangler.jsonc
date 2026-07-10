@@ -11,6 +11,12 @@
   "ai": {
     "binding": "AI"
   },
+  "services": [
+    {
+      "binding": "API",
+      "service": "scalius-api"
+    }
+  ],
   "migrations": [
     {
       "tag": "flue-admin-v1",

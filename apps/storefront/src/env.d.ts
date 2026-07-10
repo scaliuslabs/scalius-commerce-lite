@@ -97,6 +97,7 @@ interface Env {
   API_TOKEN?: string;
   JWT_SECRET?: string;
   PURGE_TOKEN?: string;
+  STOREFRONT_FLUE_AUTH_TOKEN?: string;
 
   // Variables (set in wrangler.jsonc vars)
   PUBLIC_API_URL?: string;

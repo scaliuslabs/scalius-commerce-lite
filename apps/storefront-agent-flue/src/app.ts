@@ -6,6 +6,7 @@ import {
 } from "@scalius/shared/assistant-computer-handoff";
 import { Hono } from "hono";
 import shoppingAssistant from "./agents/shopping-assistant";
+import type { StorefrontScaliusEnv } from "./scalius";
 import {
   authorizeAgentRequest,
   authorizeThreadInstanceRequest,
@@ -23,7 +24,7 @@ export interface StorefrontCanaryAppDependencies {
 }
 
 export function createStorefrontCanaryApp(dependencies: StorefrontCanaryAppDependencies = {}) {
-  const app = new Hono<{ Bindings: CanaryAuthEnv }>();
+  const app = new Hono<{ Bindings: CanaryAuthEnv & StorefrontScaliusEnv }>();
   const dispatchComputerResult = dependencies.dispatchComputerResult ??
     ((instanceId, continuation) => dispatch(shoppingAssistant, { id: instanceId, input: continuation }));
 

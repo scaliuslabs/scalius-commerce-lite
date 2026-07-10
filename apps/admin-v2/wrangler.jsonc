@@ -57,6 +57,10 @@
     {
       "binding": "ADMIN_AGENT",
       "service": "scalius-admin-agent"
+    },
+    {
+      "binding": "ADMIN_FLUE_AGENT",
+      "service": "scalius-admin-agent-flue-canary"
     }
   ],
   "vars": {
