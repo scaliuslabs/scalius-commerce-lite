@@ -1,5 +1,10 @@
 import { PaymentStatus, type PaymentStatusType } from "@scalius/database/schema";
-import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
+import {
+  orderMoneyEqual,
+  resolveOrderCurrencySnapshot,
+  roundOrderMoney,
+  type OrderCurrencySnapshotSource,
+} from "./order-currency";
 
 export interface ComputedOrderPaymentState {
   paidAmount: number;
@@ -11,12 +16,14 @@ export interface ComputePaymentStateInput {
   totalAmount: number;
   paidAmount: number | null | undefined;
   paymentStatus?: PaymentStatusType;
+  currency?: OrderCurrencySnapshotSource;
 }
 
 export function computeOrderPaymentState(input: ComputePaymentStateInput): ComputedOrderPaymentState {
-  const totalAmount = roundPrice(Math.max(0, Number(input.totalAmount ?? 0)));
-  const paidAmount = roundPrice(Math.max(0, Number(input.paidAmount ?? 0)));
-  const balanceDue = roundPrice(Math.max(0, totalAmount - paidAmount));
+  const currency = resolveOrderCurrencySnapshot(input.currency ?? {});
+  const totalAmount = roundOrderMoney(Math.max(0, Number(input.totalAmount ?? 0)), currency);
+  const paidAmount = roundOrderMoney(Math.max(0, Number(input.paidAmount ?? 0)), currency);
+  const balanceDue = roundOrderMoney(Math.max(0, totalAmount - paidAmount), currency);
 
   if (input.paymentStatus) {
     return { paidAmount, balanceDue, paymentStatus: input.paymentStatus };
@@ -26,7 +33,7 @@ export function computeOrderPaymentState(input: ComputePaymentStateInput): Compu
     return { paidAmount, balanceDue, paymentStatus: PaymentStatus.UNPAID };
   }
 
-  if (pricesEqual(balanceDue, 0) || paidAmount >= totalAmount) {
+  if (orderMoneyEqual(balanceDue, 0, currency) || paidAmount >= totalAmount) {
     return { paidAmount, balanceDue: 0, paymentStatus: PaymentStatus.PAID };
   }
 
@@ -37,10 +44,13 @@ export function computePaymentStateAfterPayment(input: {
   totalAmount: number;
   currentPaidAmount: number | null | undefined;
   paymentAmount: number;
+  currency?: OrderCurrencySnapshotSource;
 }): ComputedOrderPaymentState {
+  const currency = resolveOrderCurrencySnapshot(input.currency ?? {});
   return computeOrderPaymentState({
     totalAmount: input.totalAmount,
-    paidAmount: roundPrice(Number(input.currentPaidAmount ?? 0) + input.paymentAmount),
+    paidAmount: roundOrderMoney(Number(input.currentPaidAmount ?? 0) + input.paymentAmount, currency),
+    currency,
   });
 }
 
@@ -49,8 +59,13 @@ export function computePaymentStateAfterRefund(input: {
   currentPaidAmount: number | null | undefined;
   refundAmount: number;
   isFullRefund: boolean;
+  currency?: OrderCurrencySnapshotSource;
 }): ComputedOrderPaymentState {
-  const paidAmount = roundPrice(Math.max(0, Number(input.currentPaidAmount ?? 0) - input.refundAmount));
+  const currency = resolveOrderCurrencySnapshot(input.currency ?? {});
+  const paidAmount = roundOrderMoney(
+    Math.max(0, Number(input.currentPaidAmount ?? 0) - input.refundAmount),
+    currency,
+  );
 
   return computeOrderPaymentState({
     totalAmount: input.totalAmount,
@@ -58,6 +73,7 @@ export function computePaymentStateAfterRefund(input: {
     paymentStatus: input.isFullRefund || paidAmount <= 0
       ? PaymentStatus.REFUNDED
       : PaymentStatus.PARTIAL,
+    currency,
   });
 }
 
@@ -68,10 +84,12 @@ export function paymentStatesEqual(
     paymentStatus: string | null | undefined;
   },
   expected: ComputedOrderPaymentState,
+  currencySource: OrderCurrencySnapshotSource = {},
 ): boolean {
+  const currency = resolveOrderCurrencySnapshot(currencySource);
   return (
-    pricesEqual(roundPrice(Number(actual.paidAmount ?? 0)), expected.paidAmount) &&
-    pricesEqual(roundPrice(Number(actual.balanceDue ?? 0)), expected.balanceDue) &&
+    orderMoneyEqual(Number(actual.paidAmount ?? 0), expected.paidAmount, currency) &&
+    orderMoneyEqual(Number(actual.balanceDue ?? 0), expected.balanceDue, currency) &&
     actual.paymentStatus === expected.paymentStatus
   );
 }

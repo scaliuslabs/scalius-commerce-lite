@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { apiGet, apiPost } from "../api.server";
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -14,6 +15,17 @@ export interface CurrencySettingsPayload {
 
 export type UpdateCurrencySettingsInput = SettingsPayload;
 
+export function normalizeCurrencySettingsInput(
+  input: UpdateCurrencySettingsInput,
+): UpdateCurrencySettingsInput {
+  if (!("currencyCode" in input)) return input;
+  const currencyCode = normalizeSupportedCurrencyCode(input.currencyCode);
+  if (!currencyCode) {
+    throw new Error("Select a supported three-letter currency code.");
+  }
+  return { ...input, currencyCode };
+}
+
 export const getCurrencySettings = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<CurrencySettingsPayload>("/settings/currency");
@@ -21,7 +33,7 @@ export const getCurrencySettings = createServerFn({ method: "GET" }).handler(
 );
 
 export const updateCurrencySettings = createServerFn({ method: "POST" })
-  .validator((data: UpdateCurrencySettingsInput) => data)
+  .validator(normalizeCurrencySettingsInput)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/currency", data);
   });

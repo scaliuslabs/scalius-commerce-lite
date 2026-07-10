@@ -12,8 +12,15 @@
  * 5. Final price cannot be negative
  */
 
-import { formatPrice as sharedFormatPrice } from "@/lib/currency";
+import {
+  DEFAULT_CURRENCY,
+  formatPrice as sharedFormatPrice,
+} from "@/lib/currency";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
+import {
+  calculateDiscountedPriceAtPrecision,
+  roundPriceToPrecision,
+} from "@scalius/shared/price-utils";
 
 export type DiscountType = "percentage" | "flat" | null | undefined;
 
@@ -22,6 +29,7 @@ export interface ProductPricing {
   discountType: DiscountType;
   discountPercentage: number | null | undefined;
   discountAmount: number | null | undefined;
+  currencyDecimalPlaces?: number;
 }
 
 export interface VariantPricing {
@@ -53,6 +61,27 @@ export interface BuyerVariantPricePresentation {
   pricing: PriceCalculationResult;
 }
 
+function resolveCurrencyDecimalPlaces(explicit?: number): number {
+  if (
+    Number.isInteger(explicit) &&
+    explicit !== undefined &&
+    explicit >= 0 &&
+    explicit <= 6
+  ) {
+    return explicit;
+  }
+  const runtimePrecision =
+    typeof window !== "undefined"
+      ? window.__CURRENCY_DECIMAL_PLACES__
+      : undefined;
+  return Number.isInteger(runtimePrecision) &&
+    runtimePrecision !== undefined &&
+    runtimePrecision >= 0 &&
+    runtimePrecision <= 6
+    ? runtimePrecision
+    : DEFAULT_CURRENCY.decimalPlaces;
+}
+
 /**
  * Calculate discounted price based on discount type
  */
@@ -61,16 +90,15 @@ function applyDiscount(
   discountType: DiscountType,
   discountPercentage: number | null | undefined,
   discountAmount: number | null | undefined,
+  currencyDecimalPlaces?: number,
 ): number {
-  if (discountType === "flat" && discountAmount) {
-    return Math.max(0, Math.round(price - discountAmount));
-  }
-
-  if (discountType === "percentage" && discountPercentage) {
-    return Math.max(0, Math.round(price * (1 - discountPercentage / 100)));
-  }
-
-  return price;
+  return calculateDiscountedPriceAtPrecision(
+    price,
+    discountType,
+    discountPercentage,
+    discountAmount,
+    resolveCurrencyDecimalPlaces(currencyDecimalPlaces),
+  );
 }
 
 /**
@@ -119,9 +147,16 @@ export function calculateVariantPrice(
   // Determine base price
   const variantHasPrice =
     variantPricing.price !== null && variantPricing.price !== undefined;
-  const basePrice: number = variantHasPrice
+  const rawBasePrice: number = variantHasPrice
     ? variantPricing.price!
     : productPricing.basePrice;
+  const currencyDecimalPlaces = resolveCurrencyDecimalPlaces(
+    productPricing.currencyDecimalPlaces,
+  );
+  const basePrice = roundPriceToPrecision(
+    rawBasePrice,
+    currencyDecimalPlaces,
+  );
 
   // Determine which discount to apply
   const variantHasDiscount = hasValidDiscount(
@@ -138,10 +173,11 @@ export function calculateVariantPrice(
   if (variantHasDiscount) {
     // Use variant discount
     finalPrice = applyDiscount(
-      basePrice,
+      rawBasePrice,
       variantPricing.discountType,
       variantPricing.discountPercentage,
       variantPricing.discountAmount,
+      currencyDecimalPlaces,
     );
     appliedDiscountType = variantPricing.discountType;
     appliedDiscountPercentage = variantPricing.discountPercentage || 0;
@@ -149,10 +185,11 @@ export function calculateVariantPrice(
   } else {
     // Use product discount
     finalPrice = applyDiscount(
-      basePrice,
+      rawBasePrice,
       productPricing.discountType,
       productPricing.discountPercentage,
       productPricing.discountAmount,
+      currencyDecimalPlaces,
     );
     appliedDiscountType = productPricing.discountType;
     appliedDiscountPercentage = productPricing.discountPercentage || 0;
@@ -181,12 +218,19 @@ export function calculateVariantPrice(
 export function calculateProductPrice(
   productPricing: ProductPricing,
 ): PriceCalculationResult {
-  const basePrice = productPricing.basePrice;
+  const currencyDecimalPlaces = resolveCurrencyDecimalPlaces(
+    productPricing.currencyDecimalPlaces,
+  );
+  const basePrice = roundPriceToPrecision(
+    productPricing.basePrice,
+    currencyDecimalPlaces,
+  );
   const finalPrice = applyDiscount(
-    basePrice,
+    productPricing.basePrice,
     productPricing.discountType,
     productPricing.discountPercentage,
     productPricing.discountAmount,
+    currencyDecimalPlaces,
   );
 
   const savingsAmount = basePrice - finalPrice;
@@ -244,8 +288,18 @@ export function getBuyerVariantPricePresentation(
  * Format price for display using currency.js with correct ISO 4217 decimals.
  * Symbol is read from window globals (injected by Layout.astro).
  */
-export function formatPrice(price: number, currencySymbol?: string): string {
-  return sharedFormatPrice(price, currencySymbol ? { symbol: currencySymbol } : undefined);
+export function formatPrice(
+  price: number,
+  currencySymbol?: string,
+  currencyDecimalPlaces?: number,
+): string {
+  const runtimePrecision = resolveCurrencyDecimalPlaces(
+    currencyDecimalPlaces,
+  );
+  return sharedFormatPrice(price, {
+    ...(currencySymbol ? { symbol: currencySymbol } : {}),
+    ...(runtimePrecision !== undefined ? { precision: runtimePrecision } : {}),
+  });
 }
 
 /**
@@ -256,6 +310,7 @@ export function formatDiscountBadge(
   discountPercentage: number | null | undefined,
   discountAmount: number | null | undefined,
   currencySymbol?: string,
+  currencyDecimalPlaces?: number,
 ): string | null {
   if (
     discountType === "percentage" &&
@@ -266,7 +321,11 @@ export function formatDiscountBadge(
   }
 
   if (discountType === "flat" && discountAmount && discountAmount > 0) {
-    return `-${formatPrice(discountAmount, currencySymbol)}`;
+    return `-${formatPrice(
+      discountAmount,
+      currencySymbol,
+      currencyDecimalPlaces,
+    )}`;
   }
 
   return null;
@@ -308,12 +367,14 @@ export function getVariantDiscountedPrice(
   productDiscountType: DiscountType,
   productDiscountPercentage: number | null | undefined,
   productDiscountAmount: number | null | undefined,
+  currencyDecimalPlaces?: number,
 ): number {
   const productPricing: ProductPricing = {
     basePrice: productPrice,
     discountType: productDiscountType,
     discountPercentage: productDiscountPercentage,
     discountAmount: productDiscountAmount,
+    currencyDecimalPlaces,
   };
 
   const variantPricing: VariantPricing = {

@@ -4,7 +4,11 @@
 import type { Database } from "@scalius/database/client";
 import { siteSettings, settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
-import { getDecimalPlaces } from "@scalius/shared/currency";
+import {
+    DEFAULT_CURRENCY,
+    getDecimalPlaces,
+    normalizeSupportedCurrencyCode,
+} from "@scalius/shared/currency";
 import {
     getLegacyCustomerAuthMethodForPolicy,
     normalizeCustomerAuthMethod,
@@ -73,7 +77,12 @@ export async function getCheckoutConfig(
     ]);
 
     const currencyMap = Object.fromEntries(currencyRows.map((r) => [r.key, r.value]));
-    const localCurrencyCode = (currencyMap.currency_code ?? "bdt").toLowerCase();
+    const persistedCurrencyCode = normalizeSupportedCurrencyCode(currencyMap.currency_code);
+    const localCurrencyCode = persistedCurrencyCode ?? DEFAULT_CURRENCY.code;
+    const gatewayCurrencyCode = localCurrencyCode.toLowerCase();
+    const localCurrencySymbol = persistedCurrencyCode
+        ? currencyMap.currency_symbol ?? DEFAULT_CURRENCY.symbol
+        : DEFAULT_CURRENCY.symbol;
     const currencyDecimalPlaces = getDecimalPlaces(localCurrencyCode);
 
     const checkoutMode = siteSettingsRow?.checkoutMode ?? "all";
@@ -101,7 +110,7 @@ export async function getCheckoutConfig(
             allowedCountriesMode: allowedCountriesConfig.allowedCountriesMode,
             currency: {
                 code: localCurrencyCode,
-                symbol: currencyMap.currency_symbol ?? "\u09F3",
+                symbol: localCurrencySymbol,
                 decimalPlaces: currencyDecimalPlaces,
             },
             checkoutReadiness,
@@ -139,11 +148,17 @@ export async function getCheckoutConfig(
         if (!gw) continue;
         const gwSettings = settingsResults[i];
         if (!isPublicGatewaySettingsUsable(gw.id, gwSettings)) continue;
+        const advertisedCurrencies = gw.getCurrencies?.(gatewayCurrencyCode) ?? [gatewayCurrencyCode];
+        const currencies = Array.from(new Set(
+            advertisedCurrencies
+                .map(normalizeSupportedCurrencyCode)
+                .filter((code): code is NonNullable<typeof code> => Boolean(code)),
+        ));
 
         gateways.push({
             id: gw.id,
             name: gw.name,
-            currencies: gw.getCurrencies?.(localCurrencyCode) || [localCurrencyCode],
+            currencies: currencies.length > 0 ? currencies : [localCurrencyCode],
             ...(gw.getPublicConfig?.(gwSettings as Record<string, unknown>) || {}),
         });
     }
@@ -168,7 +183,7 @@ export async function getCheckoutConfig(
         allowedCountriesMode: allowedCountriesConfig.allowedCountriesMode,
         currency: {
             code: localCurrencyCode,
-            symbol: currencyMap.currency_symbol ?? "\u09F3",
+            symbol: localCurrencySymbol,
             decimalPlaces: currencyDecimalPlaces,
         },
         checkoutReadiness,

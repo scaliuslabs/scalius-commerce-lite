@@ -1019,10 +1019,19 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
 
     for (const update of updates) {
         const { id, stock, ...fieldsToUpdate } = update;
-        if (Object.keys(fieldsToUpdate).length === 0 && stock === undefined) continue;
+        const hasRequestedChanges = Object.keys(fieldsToUpdate).length > 0 || stock !== undefined;
         const currentVariant = currentVariantById.get(id);
         if (!currentVariant) {
+            if (!hasRequestedChanges) continue;
             throw new NotFoundError("Variant not found");
+        }
+
+        if (currentVariant.isDefault) {
+            if (!hasRequestedChanges) continue;
+            throw new ValidationError("The simple product SKU cannot be bulk edited from the generic option editor.");
+        }
+        if (!hasVariantOption(currentVariant)) {
+            throw new ValidationError("The simple product SKU cannot be bulk edited from the generic option editor.");
         }
 
         const nextSize = "size" in fieldsToUpdate
@@ -1031,13 +1040,12 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
         const nextColor = "color" in fieldsToUpdate
             ? normalizeVariantOption(fieldsToUpdate.color)
             : normalizeVariantOption(currentVariant.color);
-        if (currentVariant.isDefault || !hasVariantOption(currentVariant)) {
-            throw new ValidationError("The simple product SKU cannot be bulk edited from the generic option editor.");
-        }
         if (!hasVariantOption({ size: nextSize, color: nextColor })) {
             throw new ValidationError("Normal variants must include at least one customer option.");
         }
         nextOptionRows.push({ id, size: nextSize, color: nextColor });
+
+        if (!hasRequestedChanges) continue;
 
         const normalizedFieldsToUpdate = {
             ...fieldsToUpdate,

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { storefrontSourcePath } from "./test-source-paths";
-import { getBuyerVariantPricePresentation } from "@/components/product/lib/pricing-engine";
+import {
+  calculateVariantPrice,
+  formatPrice,
+  getBuyerVariantPricePresentation,
+} from "@/components/product/lib/pricing-engine";
 
 const PRODUCT_PAGE_SOURCE = storefrontSourcePath("pages/products/[slug].astro");
 const PRODUCT_SUMMARY_SOURCE = storefrontSourcePath(
@@ -9,6 +13,62 @@ const PRODUCT_SUMMARY_SOURCE = storefrontSourcePath(
 );
 
 describe("product detail page SKU boundaries", () => {
+  it("preserves fractional buyer prices at configured currency precision", () => {
+    const kwd = calculateVariantPrice(
+      {
+        basePrice: 1.234,
+        discountType: "percentage",
+        discountPercentage: 10,
+        discountAmount: 0,
+        currencyDecimalPlaces: 3,
+      },
+      {
+        price: 1.234,
+        discountType: null,
+        discountPercentage: 0,
+        discountAmount: 0,
+      },
+    );
+    const bdt = calculateVariantPrice(
+      {
+        basePrice: 10.4,
+        discountType: "flat",
+        discountPercentage: 0,
+        discountAmount: 10,
+        currencyDecimalPlaces: 2,
+      },
+      null,
+    );
+    const checkoutRoundingBoundary = calculateVariantPrice(
+      {
+        basePrice: 1.005,
+        discountType: "percentage",
+        discountPercentage: 10,
+        discountAmount: null,
+        currencyDecimalPlaces: 2,
+      },
+      null,
+    );
+    const defaultBdtPrecision = calculateVariantPrice(
+      {
+        basePrice: 10.4,
+        discountType: "flat",
+        discountPercentage: null,
+        discountAmount: 10,
+      },
+      null,
+    );
+
+    expect(kwd.finalPrice).toBe(1.111);
+    expect(bdt.finalPrice).toBe(0.4);
+    expect(checkoutRoundingBoundary).toMatchObject({
+      originalPrice: 1.01,
+      finalPrice: 0.9,
+    });
+    expect(defaultBdtPrecision.finalPrice).toBe(0.4);
+    expect(formatPrice(kwd.finalPrice, "د.ك", 3)).toBe("د.ك1.111");
+  });
+
   it("renders a truthful lowest-SKU starting price before option hydration", () => {
     const source = readFileSync(PRODUCT_SUMMARY_SOURCE, "utf8");
     const productPricing = {
@@ -57,7 +117,7 @@ describe("product detail page SKU boundaries", () => {
     expect(availableOnlyPresentation.pricing.finalPrice).toBe(41_040);
     expect(allSoldOutPresentation.pricing.finalPrice).toBe(4_050);
     expect(source).toContain(
-      "getBuyerVariantPricePresentation(\n  productPricing,\n  variants,",
+      "getBuyerVariantPricePresentation(\n  productPricing,\n  initialPricingVariants,",
     );
     expect(source).toContain(
       "const showsStartingPrice = initialPricePresentation.isStartingAt;",
@@ -78,16 +138,52 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain(
       "const buyerDisplayedPrice = buyerPricePresentation.pricing.finalPrice;",
     );
-    expect(source).toContain("price: buyerDisplayedPrice.toFixed(2)");
-    expect(source).toContain("ogPrice={buyerDisplayedPrice.toFixed(2)}");
+    expect(source).toContain("price: formatMetadataPrice(buyerDisplayedPrice)");
+    expect(source).toContain("ogPrice={formatMetadataPrice(buyerDisplayedPrice)}");
     expect(source).toContain(
       "data-product-price={String(buyerDisplayedPrice)}",
     );
     expect(source).toContain("discountedPrice: buyerDisplayedPrice");
+    expect(source).toContain("data-currency-decimal-places={String(currencyDecimalPlaces)}");
+    expect(source).not.toContain("price: buyerDisplayedPrice.toFixed(2)");
     expect(source).not.toContain("ogPrice={product.discountedPrice.toFixed(2)}");
     expect(source).not.toContain(
       "data-product-price={String(product.discountedPrice)}",
     );
+  });
+
+  it("resolves exact variant query state for SSR metadata and analytics", () => {
+    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
+
+    expect(source).toContain(
+      "const queryVariantSelection = resolveExactVariantSelection(buyerVariants",
+    );
+    expect(source).toContain(
+      'selectedSize: Astro.url.searchParams.get("size")',
+    );
+    expect(source).toContain(
+      'selectedColor: Astro.url.searchParams.get("color")',
+    );
+    expect(source).toContain(
+      "const selectedBuyerVariant = queryVariantSelection?.variant ?? null;",
+    );
+    expect(source).toContain("const fbViewVariants = selectedBuyerVariant");
+    expect(source).toContain("const primarySchemaVariant = selectedBuyerVariant");
+    expect(source).toContain("initialSelectedSize={queryVariantSelection?.selectedSize}");
+    expect(source).toContain("initialSelectedColor={queryVariantSelection?.selectedColor}");
+  });
+
+  it("binds option UI to accessible native radio state", () => {
+    const source = readFileSync(PRODUCT_SUMMARY_SOURCE, "utf8");
+
+    expect(source).toContain('type="radio"');
+    expect(source).toContain("checked={isSelected}");
+    expect(source).toContain("disabled={!isSelected && !isAvailable}");
+    expect(source).toContain("peer-checked:bg-black");
+    expect(source).toContain("peer-disabled:opacity-50");
+    expect(source).toContain('aria-live="polite"');
+    expect(source).not.toContain("!initialSelectedColor ||");
+    expect(source).not.toContain("!initialSelectedSize ||");
   });
 
   it("keeps assistant product context tied to the buyer-facing product name", () => {
@@ -121,6 +217,7 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain('"@type": "Product"');
     expect(source).toContain("mappedVariantSchemaProps(variant)");
     expect(source).toContain("shouldEmitProductGroupJsonLd");
+    expect(source).toContain("!selectedBuyerVariant");
   });
 
   it("maps ProductGroup variant labels and schema from merchant-defined option axes", () => {
@@ -175,7 +272,7 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain("settings: layoutData.seo?.returnPolicy");
     expect(source).toContain("hasMerchantReturnPolicy: merchantReturnPolicyJsonLd");
     expect(source).toContain("gtinJsonLdForVariant(variant.barcode, variant.barcodeType)");
-    expect(source).toContain("buyerVariants[0]?.barcode");
+    expect(source).toContain("primarySchemaVariant?.barcode");
     expect(source).not.toContain("priceValidUntil");
     expect(source).toContain("normalizeSavedProductCondition(product.productCondition)");
     expect(source).toContain("PRODUCT_CONDITION_SCHEMA_URLS[productCondition]");

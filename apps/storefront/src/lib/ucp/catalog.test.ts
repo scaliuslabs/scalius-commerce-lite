@@ -119,6 +119,39 @@ function productFixture(): Product {
   };
 }
 
+function categoryMatchedSimpleProduct(
+  id: string,
+  name: string,
+  slug: string,
+): Product {
+  const base = productFixture();
+  return {
+    ...base,
+    id,
+    name,
+    slug,
+    canonicalPath: null,
+    description: "Buyer-ready item",
+    imageUrl: `/images/${slug}.jpg`,
+    imageAlt: name,
+    hasVariants: false,
+    variants: [
+      {
+        ...base.variants![0]!,
+        id: `var_default_${id}`,
+        productId: id,
+        size: null,
+        color: null,
+        sku: `SIMPLE-${id}`,
+        stock: 0,
+        reservedStock: 0,
+        isDefault: true,
+        trackInventory: false,
+      },
+    ],
+  };
+}
+
 describe("UCP catalog mapping", () => {
   beforeEach(() => {
     mocks.getFeedProducts.mockReset();
@@ -197,6 +230,97 @@ describe("UCP catalog mapping", () => {
         },
       ],
     });
+  });
+
+  it("preserves fractional variant discounts in UCP minor units", async () => {
+    const product = productFixture();
+    product.price = 10.4;
+    product.discountType = "flat";
+    product.discountAmount = 10;
+    product.discountPercentage = null;
+    product.discountedPrice = 0.4;
+    product.variants![0]!.price = 10.4;
+    product.variants![0]!.discountType = null;
+    product.variants![0]!.discountAmount = null;
+    product.variants![0]!.discountPercentage = null;
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [product],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await searchCatalog({ query: "khaki" }, context);
+
+    expect(result.status).toBe(200);
+    expect(result.body.products[0].variants[0]).toMatchObject({
+      price: { amount: 40, currency: "BDT" },
+      list_price: { amount: 1040, currency: "BDT" },
+    });
+  });
+
+  it("discounts raw prices before currency rounding in UCP", async () => {
+    const product = productFixture();
+    product.price = 1.005;
+    product.discountType = "percentage";
+    product.discountPercentage = 10;
+    product.discountAmount = null;
+    product.discountedPrice = 0.9;
+    product.variants![0]!.price = 1.005;
+    product.variants![0]!.discountType = null;
+    product.variants![0]!.discountAmount = null;
+    product.variants![0]!.discountPercentage = null;
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [product],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await searchCatalog({ query: "khaki" }, context);
+
+    expect(result.status).toBe(200);
+    expect(result.body.products[0].variants[0]).toMatchObject({
+      price: { amount: 90, currency: "BDT" },
+      list_price: { amount: 101, currency: "BDT" },
+    });
+  });
+
+  it("returns category-matched simple products whose titles omit the query", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        categoryMatchedSimpleProduct(
+          "prod_runner",
+          "Classic Runner",
+          "classic-runner",
+        ),
+        categoryMatchedSimpleProduct(
+          "prod_loafer",
+          "Everyday Loafer",
+          "everyday-loafer",
+        ),
+        categoryMatchedSimpleProduct(
+          "prod_slip_on",
+          "Canvas Slip-On",
+          "canvas-slip-on",
+        ),
+      ],
+      pagination: { page: 1, limit: 10, total: 3, totalPages: 1 },
+    });
+
+    const result = await searchCatalog(
+      { query: "shoes", pagination: { limit: 10 } },
+      context,
+    );
+
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      page: 1,
+      limit: 10,
+      sort: "newest",
+      search: "shoes",
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.products.map((product) => product.title)).toEqual([
+      "Classic Runner",
+      "Everyday Loafer",
+      "Canvas Slip-On",
+    ]);
   });
 
   it("filters catalog products without a safe discovery image", async () => {

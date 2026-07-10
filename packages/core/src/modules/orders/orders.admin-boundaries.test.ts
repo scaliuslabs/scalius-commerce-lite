@@ -118,8 +118,8 @@ describe("admin order list boundaries", () => {
     expect(source).toContain("productDeletedAt: products.deletedAt");
     expect(source).toContain('"VARIANT_MISMATCH"');
     expect(source).toContain('"PRODUCT_UNAVAILABLE"');
-    expect(source).toContain("const trackedItems = await resolveAdminOrderItemInventory(db, data.items);");
-    expect(source).toContain("const trackedNewItems = await resolveAdminOrderItemInventory(db, data.items);");
+    expect(source).toContain("const trackedItems = await resolveAdminOrderItemInventory(db, money.normalizedItems);");
+    expect(source).toContain("const trackedNewItems = await resolveAdminOrderItemInventory(db, money.normalizedItems);");
     expect(source).not.toContain("loadVariantTrackingMap");
     expect(source).not.toContain("trackingByVariantId.get(item.variantId) ?? true");
   });

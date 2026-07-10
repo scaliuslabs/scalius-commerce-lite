@@ -226,6 +226,73 @@ describe("admin product SKU invariant boundaries", () => {
         expect(batchCalled).toBe(false);
     });
 
+    it("includes no-op requested rows in final bulk option-axis validation", async () => {
+        let selectCount = 0;
+        let batchCalled = false;
+        const db = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            where() {
+                                if (selectCount === 1) {
+                                    return Promise.resolve([
+                                        {
+                                            id: "var_a",
+                                            isDefault: false,
+                                            size: "M",
+                                            color: null,
+                                            stock: 5,
+                                            stockVersion: 1,
+                                        },
+                                        {
+                                            id: "var_b",
+                                            isDefault: false,
+                                            size: "L",
+                                            color: null,
+                                            stock: 5,
+                                            stockVersion: 1,
+                                        },
+                                    ]);
+                                }
+                                return Promise.resolve([]);
+                            },
+                        };
+                    },
+                };
+            },
+            update() {
+                return {
+                    set() {
+                        return {
+                            where() {
+                                return {
+                                    returning() {
+                                        return { id: "var_a" };
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+            batch: async () => {
+                batchCalled = true;
+                return [];
+            },
+        };
+
+        await expect(
+            bulkUpdateVariants(db as never, "prod_1", [
+                { id: "var_a", size: null, color: "Blue" },
+                { id: "var_b" },
+            ]),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(selectCount).toBe(1);
+        expect(batchCalled).toBe(false);
+    });
+
     it("repairs legacy default SKU option labels during product updates", async () => {
         let selectCount = 0;
         let batchCalled = false;

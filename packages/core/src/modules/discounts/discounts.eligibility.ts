@@ -14,6 +14,7 @@ import {
     DiscountValueType,
 } from "@scalius/database/schema";
 import { eq, sql, and, isNull, inArray } from "drizzle-orm";
+import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 
 // ─────────────────────────────────────────
@@ -303,31 +304,46 @@ export async function calculateDiscountAmount(
     cartItems: Array<{ id: string; price: number; quantity: number; variantId?: string }>,
     shippingCost: number = 0,
     precomputedProductIds?: Set<string>,
+    currencyCode?: string | null,
 ): Promise<number> {
+    const effectiveCurrencyCode = normalizeSupportedCurrencyCode(currencyCode) ?? DEFAULT_CURRENCY.code;
+
     if (discount.type === DiscountType.FREE_SHIPPING) {
-        return shippingCost;
+        return roundPrice(shippingCost, effectiveCurrencyCode);
     }
 
     if (discount.type === DiscountType.AMOUNT_OFF_ORDER) {
         if (discount.valueType === DiscountValueType.PERCENTAGE) {
-            const subTotal = roundPrice(total - shippingCost);
-            const calculatedDiscount = roundPrice((subTotal * discount.discountValue) / 100);
+            const subTotal = roundPrice(total - shippingCost, effectiveCurrencyCode);
+            const calculatedDiscount = roundPrice(
+                (subTotal * discount.discountValue) / 100,
+                effectiveCurrencyCode,
+            );
             return Math.min(subTotal, calculatedDiscount);
         } else if (discount.valueType === DiscountValueType.FIXED_AMOUNT) {
-            const subTotal = roundPrice(total - shippingCost);
-            return Math.min(subTotal, discount.discountValue);
+            const subTotal = roundPrice(total - shippingCost, effectiveCurrencyCode);
+            return Math.min(
+                subTotal,
+                roundPrice(discount.discountValue, effectiveCurrencyCode),
+            );
         }
     }
 
     if (discount.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
-        const subTotal = roundPrice(total - shippingCost);
+        const subTotal = roundPrice(total - shippingCost, effectiveCurrencyCode);
 
         if (!cartItems || cartItems.length === 0) {
             if (discount.valueType === DiscountValueType.PERCENTAGE) {
-                const calculatedDiscount = roundPrice((subTotal * discount.discountValue) / 100);
+                const calculatedDiscount = roundPrice(
+                    (subTotal * discount.discountValue) / 100,
+                    effectiveCurrencyCode,
+                );
                 return Math.min(subTotal, calculatedDiscount);
             } else if (discount.valueType === DiscountValueType.FIXED_AMOUNT) {
-                return Math.min(subTotal, discount.discountValue);
+                return Math.min(
+                    subTotal,
+                    roundPrice(discount.discountValue, effectiveCurrencyCode),
+                );
             }
             return 0;
         }
@@ -373,7 +389,7 @@ export async function calculateDiscountAmount(
                 applicableProductsTotal += item.price * item.quantity;
             }
         }
-        applicableProductsTotal = roundPrice(applicableProductsTotal);
+        applicableProductsTotal = roundPrice(applicableProductsTotal, effectiveCurrencyCode);
 
         // If products are specified but none match the cart, no discount applies.
         // Only fall back to subtotal when no product/collection restrictions exist.
@@ -385,10 +401,16 @@ export async function calculateDiscountAmount(
 
         if (discount.valueType === DiscountValueType.PERCENTAGE) {
             const calculatedDiscount =
-                roundPrice((applicableProductsTotal * discount.discountValue) / 100);
+                roundPrice(
+                    (applicableProductsTotal * discount.discountValue) / 100,
+                    effectiveCurrencyCode,
+                );
             return Math.min(applicableProductsTotal, calculatedDiscount);
         } else if (discount.valueType === DiscountValueType.FIXED_AMOUNT) {
-            return Math.min(applicableProductsTotal, discount.discountValue);
+            return Math.min(
+                applicableProductsTotal,
+                roundPrice(discount.discountValue, effectiveCurrencyCode),
+            );
         }
     }
 

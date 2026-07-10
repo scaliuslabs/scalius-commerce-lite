@@ -19291,7 +19291,7 @@ export type GetApiV1AdminSettingsCurrencyResponses = {
     200: {
         success: true;
         data: {
-            currencyCode: string;
+            currencyCode: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CHF' | 'CAD' | 'AUD' | 'NZD' | 'CNY' | 'HKD' | 'SGD' | 'SEK' | 'NOK' | 'DKK' | 'MXN' | 'BRL' | 'BDT' | 'INR' | 'PKR' | 'LKR' | 'NPR' | 'AFN' | 'BTN' | 'MVR' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'VND' | 'MMK' | 'KHR' | 'LAK' | 'BND' | 'KRW' | 'TWD' | 'MNT' | 'KPW' | 'MOP' | 'AED' | 'SAR' | 'QAR' | 'KWD' | 'BHD' | 'OMR' | 'JOD' | 'IQD' | 'IRR' | 'YER' | 'LBP' | 'SYP' | 'ILS' | 'KZT' | 'UZS' | 'KGS' | 'TJS' | 'TMT' | 'GEL' | 'AMD' | 'AZN' | 'TRY' | 'RUB' | 'UAH' | 'PLN' | 'CZK' | 'HUF' | 'RON' | 'BGN' | 'HRK' | 'RSD' | 'BAM' | 'MKD' | 'ALL' | 'MDL' | 'BYN' | 'ISK' | 'ARS' | 'CLP' | 'COP' | 'PEN' | 'UYU' | 'PYG' | 'BOB' | 'VES' | 'GYD' | 'SRD' | 'TTD' | 'JMD' | 'BBD' | 'BSD' | 'BZD' | 'CRC' | 'CUP' | 'DOP' | 'GTQ' | 'HNL' | 'HTG' | 'NIO' | 'PAB' | 'AWG' | 'ANG' | 'KYD' | 'BMD' | 'XCD' | 'FKP' | 'NGN' | 'GHS' | 'XOF' | 'GMD' | 'GNF' | 'SLL' | 'LRD' | 'CVE' | 'MRU' | 'KES' | 'TZS' | 'UGX' | 'RWF' | 'BIF' | 'ETB' | 'SOS' | 'ERN' | 'DJF' | 'SDG' | 'SSP' | 'SCR' | 'KMF' | 'MGA' | 'MUR' | 'XAF' | 'CDF' | 'ZAR' | 'BWP' | 'LSL' | 'SZL' | 'NAD' | 'MWK' | 'ZMW' | 'MZN' | 'AOA' | 'ZWL' | 'EGP' | 'DZD' | 'MAD' | 'TND' | 'LYD' | 'STN' | 'FJD' | 'PGK' | 'WST' | 'TOP' | 'VUV' | 'SBD' | 'XPF' | 'XDR' | 'XAG' | 'XAU';
             currencySymbol: string;
             usdExchangeRate: string;
         };
@@ -19302,7 +19302,7 @@ export type GetApiV1AdminSettingsCurrencyResponse = GetApiV1AdminSettingsCurrenc
 
 export type PostApiV1AdminSettingsCurrencyData = {
     body?: {
-        currencyCode?: string;
+        currencyCode?: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CHF' | 'CAD' | 'AUD' | 'NZD' | 'CNY' | 'HKD' | 'SGD' | 'SEK' | 'NOK' | 'DKK' | 'MXN' | 'BRL' | 'BDT' | 'INR' | 'PKR' | 'LKR' | 'NPR' | 'AFN' | 'BTN' | 'MVR' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'VND' | 'MMK' | 'KHR' | 'LAK' | 'BND' | 'KRW' | 'TWD' | 'MNT' | 'KPW' | 'MOP' | 'AED' | 'SAR' | 'QAR' | 'KWD' | 'BHD' | 'OMR' | 'JOD' | 'IQD' | 'IRR' | 'YER' | 'LBP' | 'SYP' | 'ILS' | 'KZT' | 'UZS' | 'KGS' | 'TJS' | 'TMT' | 'GEL' | 'AMD' | 'AZN' | 'TRY' | 'RUB' | 'UAH' | 'PLN' | 'CZK' | 'HUF' | 'RON' | 'BGN' | 'HRK' | 'RSD' | 'BAM' | 'MKD' | 'ALL' | 'MDL' | 'BYN' | 'ISK' | 'ARS' | 'CLP' | 'COP' | 'PEN' | 'UYU' | 'PYG' | 'BOB' | 'VES' | 'GYD' | 'SRD' | 'TTD' | 'JMD' | 'BBD' | 'BSD' | 'BZD' | 'CRC' | 'CUP' | 'DOP' | 'GTQ' | 'HNL' | 'HTG' | 'NIO' | 'PAB' | 'AWG' | 'ANG' | 'KYD' | 'BMD' | 'XCD' | 'FKP' | 'NGN' | 'GHS' | 'XOF' | 'GMD' | 'GNF' | 'SLL' | 'LRD' | 'CVE' | 'MRU' | 'KES' | 'TZS' | 'UGX' | 'RWF' | 'BIF' | 'ETB' | 'SOS' | 'ERN' | 'DJF' | 'SDG' | 'SSP' | 'SCR' | 'KMF' | 'MGA' | 'MUR' | 'XAF' | 'CDF' | 'ZAR' | 'BWP' | 'LSL' | 'SZL' | 'NAD' | 'MWK' | 'ZMW' | 'MZN' | 'AOA' | 'ZWL' | 'EGP' | 'DZD' | 'MAD' | 'TND' | 'LYD' | 'STN' | 'FJD' | 'PGK' | 'WST' | 'TOP' | 'VUV' | 'SBD' | 'XPF' | 'XDR' | 'XAG' | 'XAU';
         currencySymbol?: string;
         usdExchangeRate?: string;
     };
@@ -20513,14 +20513,14 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsResponses = {
                 skippedRows: number;
             };
             reasons: Array<{
-                reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
+                reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'inconsistent_option_axes' | 'no_buyer_sku' | 'non_positive_price' | 'missing_image' | 'unavailable_excluded';
                 products: number;
                 rows: number;
                 samples: Array<{
                     id: string;
                     name: string;
                     slug: string;
-                    reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'no_buyer_sku' | 'missing_image' | 'unavailable_excluded';
+                    reason: 'feed_disabled' | 'storefront_url_unavailable' | 'product_feed_excluded' | 'inactive_deleted_unpublished' | 'inconsistent_option_axes' | 'no_buyer_sku' | 'non_positive_price' | 'missing_image' | 'unavailable_excluded';
                 }>;
             }>;
         };

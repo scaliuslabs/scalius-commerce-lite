@@ -31,6 +31,7 @@ import {
   getBuyerVariantPricePresentation,
   getVariantDiscountedPrice,
 } from "@/components/product/lib/pricing-engine";
+import { resolveExactVariantSelection } from "@/components/product/lib/variant-state-machine";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
@@ -45,6 +46,11 @@ import {
   PRODUCT_CONDITION_SCHEMA_URLS,
 } from "@scalius/shared/product-condition";
 import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
+import {
+  DEFAULT_CURRENCY,
+  getDecimalPlaces,
+} from "@scalius/shared/currency";
+import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 
 const { slug } = Astro.params;
 if (!slug) {
@@ -79,25 +85,53 @@ if (!layoutData) {
 
 const { product, category, images, variants, relatedProducts } = productData;
 const productWidgets = fetchedProductWidgets ?? [];
+const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
+const configuredCurrencyDecimalPlaces = layoutData.currency?.decimalPlaces;
+const currencyDecimalPlaces =
+  typeof configuredCurrencyDecimalPlaces === "number" &&
+  Number.isInteger(configuredCurrencyDecimalPlaces) &&
+  configuredCurrencyDecimalPlaces >= 0 &&
+  configuredCurrencyDecimalPlaces <= 6
+    ? configuredCurrencyDecimalPlaces
+    : getDecimalPlaces(currencyCode);
+const formatMetadataPrice = (price: number) =>
+  roundPriceToPrecision(price, currencyDecimalPlaces).toFixed(
+    currencyDecimalPlaces,
+  );
 const buyerVariantResolution = resolveBuyerVariants(variants);
 const buyerVariants = buyerVariantResolution.variants;
 const buyerStockSummary = getBuyerStockSummary(buyerVariants);
+const queryVariantSelection = resolveExactVariantSelection(buyerVariants, {
+  selectedSize: Astro.url.searchParams.get("size"),
+  selectedColor: Astro.url.searchParams.get("color"),
+});
+const selectedBuyerVariant = queryVariantSelection?.variant ?? null;
+const buyerPricingVariants = selectedBuyerVariant
+  ? [selectedBuyerVariant]
+  : buyerVariants;
 const buyerPricePresentation = getBuyerVariantPricePresentation(
   {
     basePrice: product.price,
     discountType: product.discountType,
     discountPercentage: product.discountPercentage,
     discountAmount: product.discountAmount,
+    currencyDecimalPlaces,
   },
-  buyerVariants,
+  buyerPricingVariants,
 );
 const buyerDisplayedPrice = buyerPricePresentation.pricing.finalPrice;
-const fbViewVariants = buyerPricePresentation.isStartingAt
-  ? []
-  : buyerVariants.slice(0, 1).map((variant) => ({
+const fbViewVariants = selectedBuyerVariant
+  ? [selectedBuyerVariant].map((variant) => ({
       ...variant,
       price: buyerDisplayedPrice,
-    }));
+    }))
+  : buyerPricePresentation.isStartingAt
+    ? []
+    : buyerVariants.slice(0, 1).map((variant) => ({
+        ...variant,
+        price: buyerDisplayedPrice,
+      }));
 
 const variantImageMarker = product.metaDescription?.match(
   /<!--variant_images:(enabled|option1|option2)-->/,
@@ -140,8 +174,6 @@ const colorOptions = Array.from(colorOrderMap.entries())
 
 const pageTitle = product.metaTitle || product.name;
 const pageDescription = cleanMetaDescription;
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const quickBuyNoticeByError: Record<string, string> = {
   product_unavailable: "This item is not available right now.",
   variant_required: "Please choose an available option before buying.",
@@ -156,7 +188,6 @@ const quickBuyNoticeByError: Record<string, string> = {
 const quickBuyNotice = quickBuyNoticeByError[Astro.url.searchParams.get("error") ?? ""] ?? null;
 
 // --- SEO: per SEO-01, SEO-02, OG-01, OG-05 ---
-const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const canonicalUrl = buildResourceCanonicalSeoUrl(
   "product",
@@ -216,7 +247,7 @@ const productConditionSchemaUrl = productCondition
   : null;
 
 // Primary SKU
-const primarySku = buyerVariants[0]?.sku || product.id;
+const primarySku = selectedBuyerVariant?.sku || buyerVariants[0]?.sku || product.id;
 
 function normalizedVariantOption(value: string | null | undefined): string | null {
   const normalized = value?.trim();
@@ -326,6 +357,7 @@ function getVariantSchemaPrice(variant: typeof buyerVariants[number]): number {
     product.discountType,
     product.discountPercentage,
     product.discountAmount,
+    currencyDecimalPlaces,
   );
 }
 
@@ -339,6 +371,7 @@ const productGroupVariesBy = [
 ].filter((value, index, values) => values.indexOf(value) === index);
 const shouldEmitProductGroupJsonLd =
   discoverySettings.structuredData.productGroups &&
+  !selectedBuyerVariant &&
   buyerVariantResolution.mode === "optioned" &&
   buyerVariants.length > 0;
 
@@ -371,6 +404,17 @@ function withOfferCommerceDetails<T extends Record<string, unknown>>(offer: T): 
   } as T;
 }
 
+const primarySchemaVariant = selectedBuyerVariant ?? buyerVariants[0] ?? null;
+const primarySchemaUrl = selectedBuyerVariant
+  ? buildVariantProductUrl(selectedBuyerVariant) ?? canonicalUrl
+  : canonicalUrl;
+const primarySchemaName = selectedBuyerVariant
+  ? getVariantSchemaName(selectedBuyerVariant)
+  : product.name;
+const primarySchemaAvailability = selectedBuyerVariant
+  ? isVariantAvailable(selectedBuyerVariant)
+  : buyerStockSummary.canPurchaseAny;
+
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
 const productJsonLd = discoverySettings.structuredData.products && !product.noIndex && canonicalUrl
   ? serializeJsonForInlineScript(
@@ -401,7 +445,7 @@ const productJsonLd = discoverySettings.structuredData.products && !product.noIn
                   "@type": "Offer",
                   url: buildVariantProductUrl(variant) ?? canonicalUrl,
                   priceCurrency: currencyCode,
-                  price: variantPrice.toFixed(2),
+                  price: formatMetadataPrice(variantPrice),
                   ...(productConditionSchemaUrl ? { itemCondition: productConditionSchemaUrl } : {}),
                   availability: isVariantAvailable(variant)
                     ? "https://schema.org/InStock"
@@ -413,23 +457,26 @@ const productJsonLd = discoverySettings.structuredData.products && !product.noIn
         : {
             "@context": "https://schema.org",
             "@type": "Product",
-            name: product.name,
-            url: canonicalUrl,
+            name: primarySchemaName,
+            url: primarySchemaUrl,
             description: (product.description || product.name).replace(/<[^>]+>/g, ""),
             ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
             sku: primarySku,
             ...gtinJsonLdForVariant(
-              buyerVariants[0]?.barcode,
-              buyerVariants[0]?.barcodeType,
+              primarySchemaVariant?.barcode,
+              primarySchemaVariant?.barcodeType,
             ),
+            ...(selectedBuyerVariant
+              ? mappedVariantSchemaProps(selectedBuyerVariant)
+              : {}),
             ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
             offers: withOfferCommerceDetails({
               "@type": "Offer",
-              url: canonicalUrl,
+              url: primarySchemaUrl,
               priceCurrency: currencyCode,
-              price: buyerDisplayedPrice.toFixed(2),
+              price: formatMetadataPrice(buyerDisplayedPrice),
               ...(productConditionSchemaUrl ? { itemCondition: productConditionSchemaUrl } : {}),
-              availability: buyerStockSummary.canPurchaseAny
+              availability: primarySchemaAvailability
                 ? "https://schema.org/InStock"
                 : "https://schema.org/OutOfStock",
             }),
@@ -482,7 +529,7 @@ const productCategoryAnalytics = productCategory
   canonicalUrl={canonicalUrl ?? undefined}
   ogImage={ogImageUrl ?? undefined}
   ogType="product"
-  ogPrice={buyerDisplayedPrice.toFixed(2)}
+  ogPrice={formatMetadataPrice(buyerDisplayedPrice)}
   ogCurrency={currencyCode}
   noindex={product.noIndex === true}
   assistantPageTitle={product.name}
@@ -521,6 +568,7 @@ const productCategoryAnalytics = productCategory
     data-product-discount-type={product.discountType || ""}
     data-product-discount-percentage={String(product.discountPercentage || 0)}
     data-product-discount-amount={String(product.discountAmount || 0)}
+    data-currency-decimal-places={String(currencyDecimalPlaces)}
     data-product-free-delivery={product.freeDelivery.toString()}
     data-product-has-variants={product.hasVariants.toString()}
     data-fb-product-details={JSON.stringify({
@@ -566,6 +614,9 @@ const productCategoryAnalytics = productCategory
           isVariantSpecificImagesEnabled={isVariantSpecificImagesEnabled}
           variantImageAxis={variantImageAxis}
           currencySymbol={currencySymbol}
+          currencyDecimalPlaces={currencyDecimalPlaces}
+          initialSelectedSize={queryVariantSelection?.selectedSize}
+          initialSelectedColor={queryVariantSelection?.selectedColor}
           quickBuyNotice={quickBuyNotice}
         />
       </div>

@@ -24,6 +24,7 @@ import {
     bulkVariantSchema,
 } from "./products.types";
 import { normalizeDefaultSkuOptions } from "./products.public-eligibility";
+import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
 
 function normalizeOptionValue(value: string | null | undefined): string | null {
     const normalized = value?.trim();
@@ -34,7 +35,6 @@ function hasCustomerOption(value: { size?: string | null; color?: string | null 
     return Boolean(normalizeOptionValue(value.size) || normalizeOptionValue(value.color));
 }
 
-type VariantOptionAxis = "size" | "color" | "size_color";
 const ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT = [
     OrderStatus.COMPLETED,
     OrderStatus.CANCELLED,
@@ -43,24 +43,8 @@ const ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT = [
     OrderStatus.PARTIALLY_REFUNDED,
 ];
 
-function getVariantOptionAxis(value: { size?: string | null; color?: string | null }): VariantOptionAxis | null {
-    const hasSize = Boolean(normalizeOptionValue(value.size));
-    const hasColor = Boolean(normalizeOptionValue(value.color));
-
-    if (hasSize && hasColor) return "size_color";
-    if (hasSize) return "size";
-    if (hasColor) return "color";
-    return null;
-}
-
 export function assertConsistentVariantOptionAxes(variants: Array<{ size?: string | null; color?: string | null }>) {
-    const axes = new Set<VariantOptionAxis>();
-    for (const variant of variants) {
-        const axis = getVariantOptionAxis(variant);
-        if (axis) axes.add(axis);
-    }
-
-    if (axes.size > 1) {
+    if (classifyProductVariantOptionAxes(variants) === "mixed") {
         throw new ValidationError("Use the same option fields for every SKU on this product: Option 1 only, Option 2 only, or both options on every SKU.");
     }
 }

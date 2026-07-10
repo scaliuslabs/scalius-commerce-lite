@@ -15,6 +15,7 @@ import {
 import {
     PRODUCT_CONDITION_VALUES,
 } from "@scalius/shared/product-condition";
+import { MAX_PRODUCT_PRICE } from "./products.types";
 
 const canonicalPathSchema = z
     .string()
@@ -63,7 +64,7 @@ const productAdditionalInfoSchema = z.array(
 const productBaseSchema = z.object({
     name: z.string().min(3).max(100),
     description: z.string().min(10).nullable(),
-    price: z.number().min(0).max(1000000000000),
+    price: z.number().min(0).max(MAX_PRODUCT_PRICE),
     categoryId: z.string().min(1),
     isActive: z.boolean(),
     discountType: z.enum(["percentage", "flat"]).optional(),

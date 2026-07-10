@@ -12,6 +12,25 @@ function getFunctionBody(source: string, functionName: string): string {
 }
 
 describe("storefront product query boundaries", () => {
+    it("sorts percentage-discounted prices at stored precision", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+        const helperStart = source.indexOf("function getStorefrontProductOrderBy");
+        const helperEnd = source.indexOf(
+            "\nfunction buildAttributeProductSubquery",
+            helperStart,
+        );
+        const sortHelper = source.slice(helperStart, helperEnd);
+
+        expect(helperStart).toBeGreaterThan(-1);
+        expect(sortHelper).toContain(
+            "${products.price} * (1 - ${products.discountPercentage} / 100.0)",
+        );
+        expect(sortHelper).not.toContain("ROUND(");
+    });
+
     it("requires buyer-resolvable SKUs before products enter public catalog reads", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
@@ -150,18 +169,25 @@ describe("storefront product query boundaries", () => {
         expect(source).toContain("function buildCategoryLookupCondition(category: string): SQL");
         expect(source).toContain("eq(categories.slug, category)");
         expect(source).toContain("buildCategoryLookupCondition(category)");
-        expect(lookupHelper).toContain("inArray(products.id, lookupTokens)");
-        expect(lookupHelper).toContain("inArray(products.slug, lookupTokens)");
-        expect(lookupHelper).toContain("FROM \"product_variants\"");
-        expect(lookupHelper).toContain("inArray(productVariants.id, lookupTokens)");
-        expect(lookupHelper).toContain("inArray(productVariants.sku, lookupTokens)");
+        expect(lookupHelper).toContain("FROM json_each(${JSON.stringify(lookupTokens)})");
+        expect(lookupHelper).toContain("SELECT value FROM public_lookup");
+        expect(lookupHelper).toContain("lookup_product.slug = public_lookup.value");
+        expect(lookupHelper).toContain("FROM \"product_variants\" AS lookup_variant");
+        expect(lookupHelper).toContain("lookup_variant.id = public_lookup.value");
+        expect(lookupHelper).toContain("lookup_variant.sku = public_lookup.value");
+        expect(lookupHelper).toContain("lookup_variant.deleted_at IS NULL");
         expect(listBody).toContain("const conditions = buildStorefrontProductConditions(params);");
         expect(listBody).not.toContain("includeLookupHandles");
         expect(listBody).not.toContain("includeVariantLookups");
         expect(feedBody).toContain("const conditions = buildStorefrontProductConditions(params, {");
         expect(feedBody).toContain("includeLookupHandles: true");
         expect(feedBody).toContain("includeVariantLookups: true");
+        expect(feedBody).toContain("includeCategorySearchMatches: true");
         expect(feedBody).toContain("conditions.push(eq(products.excludeFromProductFeed, false));");
+        expect(source).toContain("function buildFeedCategorySearchCondition");
+        expect(source).toContain('MATCH ${`name : (${sanitized})`}');
+        expect(source).toContain("eq(categories.slug, normalizedSlug)");
+        expect(source).toContain("MAX_PUBLIC_CATEGORY_SEARCH_SLUG_LENGTH");
     });
 
     it("keeps feed page rows/count and enrichment bulked by page product IDs", () => {
@@ -221,7 +247,7 @@ describe("storefront product query boundaries", () => {
         expect(variantHelper).toContain("colorSortOrder: productVariants.colorSortOrder");
         expect(variantHelper).toContain("sizeSortOrder: productVariants.sizeSortOrder");
         expect(variantHelper).toContain("deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`");
-        expect(variantHelper).toContain("inArray(productVariants.productId, productIds)");
+        expect(variantHelper).toContain("inArray(productVariants.productId, productIdChunk)");
         expect(variantHelper).toContain("isNull(productVariants.deletedAt)");
         expect(variantHelper).toContain("normalizeDefaultSkuOptions({");
         expect(variantHelper).not.toContain("createdAt");
@@ -259,7 +285,10 @@ describe("storefront product query boundaries", () => {
             attributeHelperIndex,
         );
         const categoryHelperIndex = source.indexOf("export async function getStorefrontCategoryProducts");
-        const invalidListingSearchIndex = source.indexOf("conditions.push(cond ?? sql`0 = 1`);");
+        const listingSearchConditionsIndex = source.indexOf(
+            'const searchConditions = [ftsMatch("products_fts", "products", search)];',
+            conditionsHelperIndex,
+        );
         const invalidLookupSearchIndex = source.indexOf("conditions.push(searchCondition ?? sql`0 = 1`);");
         const newestSortIndex = source.indexOf(
             "return desc(products.createdAt);",
@@ -290,7 +319,10 @@ describe("storefront product query boundaries", () => {
         expect(multiFilterGroupIndex).toBeGreaterThan(singleFilterAliasIndex);
         expect(attributeInnerJoinIndex).toBeGreaterThan(attributeHelperIndex);
         expect(attributeLeftJoinIndex).toBe(-1);
-        expect(invalidListingSearchIndex).toBeGreaterThan(conditionsHelperIndex);
+        expect(listingSearchConditionsIndex).toBeGreaterThan(conditionsHelperIndex);
+        expect(source.indexOf("?? sql`0 = 1`,", listingSearchConditionsIndex)).toBeGreaterThan(
+            listingSearchConditionsIndex,
+        );
         expect(invalidLookupSearchIndex).toBeGreaterThan(categoryHelperIndex);
         expect(categoryHelperIndex).toBeGreaterThan(attributeHelperIndex);
         expect(categoryConditionsIndex).toBeGreaterThan(categoryHelperIndex);
@@ -298,5 +330,22 @@ describe("storefront product query boundaries", () => {
         expect(categoryAttributeIndex).toBeGreaterThan(categoryHelperIndex);
         expect(guardedDiscountSortIndex).toBeGreaterThan(sortHelperIndex);
         expect(newestSortIndex).toBeGreaterThan(sortHelperIndex);
+    });
+
+    it("sorts by raw effective prices without whole-unit SQL rounding", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+        const sortStart = source.indexOf("function getStorefrontProductOrderBy");
+        const sortEnd = source.indexOf("\nfunction buildAttributeProductSubquery", sortStart);
+        const sortBody = source.slice(sortStart, sortEnd);
+
+        expect(sortStart).toBeGreaterThan(-1);
+        expect(sortEnd).toBeGreaterThan(sortStart);
+        expect(sortBody).toContain(
+            "products.price} * (1 - ${products.discountPercentage} / 100.0)",
+        );
+        expect(sortBody).not.toContain("ROUND(");
     });
 });

@@ -695,6 +695,39 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
   });
 
+  it("compares a duplicate KWD COD collection at the order's immutable precision", async () => {
+    const { db } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.DELIVERED,
+        version: 4,
+        totalAmount: 1.235,
+        paidAmount: 1.235,
+        balanceDue: 0,
+        inventoryAction: "deducted",
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+      },
+      selectedPayment: {
+        id: "pay_kwd",
+        amount: 1.235,
+        currency: "KWD",
+        paymentMethod: PaymentMethod.COD,
+        status: PaymentRecordStatus.SUCCEEDED,
+      },
+      selectedCodTracking: { id: "cod_kwd", codStatus: CodStatus.COLLECTED },
+      updateResults: [],
+    });
+
+    await expect(processCodAction(db as never, "order_1", {
+      action: "collected",
+      collectedBy: "Courier A",
+      collectedAmount: 1.2346,
+    })).resolves.toEqual({ message: "COD collection recorded" });
+
+    expect(mocks.validateCODCollectionDetails).not.toHaveBeenCalled();
+    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
+  });
+
   it("retries COD collection inventory reconciliation when the order is already delivered", async () => {
     const { db, updates } = createDbMock({
       selectedOrder: {

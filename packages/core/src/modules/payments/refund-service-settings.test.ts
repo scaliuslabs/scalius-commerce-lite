@@ -60,28 +60,42 @@ function createDbMock(gateway: Gateway) {
     version: 3,
     shipmentClaimId: null,
     shipmentClaimExpiresAt: null,
+    currencyCode: "BDT",
+    currencyDecimalPlaces: 2,
   };
   const payment = {
     id: "payment_1",
     orderId: "order_1",
     amount: 100,
+    currency: "BDT",
     paymentMethod: gateway,
     paymentType: "full",
     status: "succeeded",
     stripeChargeId: "ch_1",
     sslcommerzBankTranId: "bank_1",
     polarCheckoutId: "polar_order_1",
-    metadata: null,
+    metadata: gateway === "polar"
+      ? JSON.stringify({
+          originalCurrency: "bdt",
+          gatewayCurrency: "usd",
+          exchangeRate: "110",
+          originalAmount: "100",
+          gatewayAmount: 0.91,
+        })
+      : null,
   };
   const refundAttempt = {
     id: "rfa_refund_order_1_3_1",
     orderId: "order_1",
     refundPaymentId: "refund_order_1_3_1",
     providerRefundId: "refund_1",
+    amount: 10,
+    currency: "BDT",
   };
   const refundPayment = {
     paymentType: "refund",
     status: PaymentRecordStatus.REFUNDED,
+    currency: "BDT",
     get amount() {
       return Number(insertValues[0]?.amount ?? 10);
     },
@@ -123,9 +137,7 @@ function createDbMock(gateway: Gateway) {
               ? null
               : paymentSelectCall === 2
                 ? [payment]
-                : paymentSelectCall === 3
-                  ? []
-                  : [payment, refundPayment];
+                : [payment, refundPayment];
           }
           return chain;
         }),
@@ -208,6 +220,11 @@ describe("refund gateway settings freshness", () => {
       type: gateway,
       settings: expect.objectContaining({ enabled: true }),
     }));
+    if (gateway === "polar") {
+      expect(mocks.providerCreateRefund).toHaveBeenCalledWith(expect.objectContaining({
+        amount: 9,
+      }));
+    }
   });
 
   it("marks the local refund claim failed when a fresh settings read fails before provider dispatch", async () => {

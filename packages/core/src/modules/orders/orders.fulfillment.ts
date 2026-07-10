@@ -31,8 +31,14 @@ import {
 
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
-import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
 import { normalizeOrderStatus } from "@scalius/shared/order-state";
+import {
+    assertOrderPaymentCurrency,
+    orderMoneyEqual,
+    resolveOrderCurrencySnapshot,
+    roundOrderMoney,
+    type OrderCurrencySnapshot,
+} from "../payments/order-currency";
 import { validateTransition } from "./order-state-machine";
 import type { OrderShipmentReconciliationResult, StatusUpdateResult } from "./orders.types";
 import type { OrderNotificationType } from "../notifications/notification-types";
@@ -137,9 +143,17 @@ async function clearShipmentClaim(db: Database, orderId: string, claimId: string
         ));
 }
 
-async function getRecordedCodCollection(db: Database, orderId: string): Promise<{ amount: number } | null> {
+async function getRecordedCodCollection(
+    db: Database,
+    orderId: string,
+    currency: OrderCurrencySnapshot,
+): Promise<{ amount: number } | null> {
     const payment = await db
-        .select({ id: orderPayments.id, amount: orderPayments.amount })
+        .select({
+            id: orderPayments.id,
+            amount: orderPayments.amount,
+            currency: orderPayments.currency,
+        })
         .from(orderPayments)
         .where(and(
             eq(orderPayments.orderId, orderId),
@@ -149,6 +163,7 @@ async function getRecordedCodCollection(db: Database, orderId: string): Promise<
         .get();
 
     if (!payment) return null;
+    assertOrderPaymentCurrency(payment.currency, currency, "Recorded COD payment");
 
     const tracking = await db
         .select({ id: codTracking.id })
@@ -161,11 +176,15 @@ async function getRecordedCodCollection(db: Database, orderId: string): Promise<
 
     if (!tracking) return null;
     const amount = Number(payment.amount);
-    return Number.isFinite(amount) ? { amount: roundPrice(amount) } : null;
+    return Number.isFinite(amount) ? { amount: roundOrderMoney(amount, currency) } : null;
 }
 
-async function hasRecordedCodCollection(db: Database, orderId: string): Promise<boolean> {
-    return Boolean(await getRecordedCodCollection(db, orderId));
+async function hasRecordedCodCollection(
+    db: Database,
+    orderId: string,
+    currency: OrderCurrencySnapshot,
+): Promise<boolean> {
+    return Boolean(await getRecordedCodCollection(db, orderId, currency));
 }
 
 async function holdShipmentClaimForReconciliation(db: Database, orderId: string, claimId: string): Promise<void> {
@@ -587,18 +606,21 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
         totalAmount: orders.totalAmount,
         paidAmount: orders.paidAmount,
         balanceDue: orders.balanceDue,
+        currencyCode: orders.currencyCode,
+        currencyDecimalPlaces: orders.currencyDecimalPlaces,
         inventoryAction: orders.inventoryAction,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
+    const currency = resolveOrderCurrencySnapshot(order);
     assertNoActiveShipmentClaim(order);
     await assertNoActiveRefundAttempt(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
 
     switch (body.action) {
         case "collected": {
-            const existingCodCollection = await getRecordedCodCollection(db, orderId);
+            const existingCodCollection = await getRecordedCodCollection(db, orderId, currency);
             const collection = existingCodCollection
                 ? null
                 : validateCODCollectionDetails(order, {
@@ -608,12 +630,12 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
 
             if (existingCodCollection) {
                 const requestedAmount = typeof body.collectedAmount === "number"
-                    ? roundPrice(body.collectedAmount)
+                    ? roundOrderMoney(body.collectedAmount, currency)
                     : Number.NaN;
                 if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
                     throw new ValidationError("COD collected amount must be a positive finite number.");
                 }
-                if (!pricesEqual(existingCodCollection.amount, requestedAmount)) {
+                if (!orderMoneyEqual(existingCodCollection.amount, requestedAmount, currency)) {
                     throw new ValidationError("COD collection was already recorded with a different amount.", {
                         recordedAmount: existingCodCollection.amount,
                         collectedAmount: requestedAmount,
@@ -919,6 +941,8 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         paymentStatus: orders.paymentStatus,
         paidAmount: orders.paidAmount,
         balanceDue: orders.balanceDue,
+        currencyCode: orders.currencyCode,
+        currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
@@ -941,7 +965,8 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     const isCod = existingOrder.paymentMethod === PaymentMethod.COD;
     const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
     if (isCod && isDeliveredOrCompleted) {
-        const hasCodCollection = await hasRecordedCodCollection(db, orderId);
+        const currency = resolveOrderCurrencySnapshot(existingOrder);
+        const hasCodCollection = await hasRecordedCodCollection(db, orderId, currency);
         if (
             !hasCodCollection ||
             existingOrder.paymentStatus !== PaymentStatus.PAID ||

@@ -4,6 +4,9 @@ import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 import { listInvalidStorefrontThemeColorEntries } from "@scalius/shared/storefront-theme";
 import {
+  SUPPORTED_CURRENCY_CODES,
+} from "@scalius/shared/currency";
+import {
   SEO_RETURN_POLICY_CATEGORIES,
   SEO_RETURN_POLICY_FEES,
   SEO_RETURN_POLICY_METHODS,
@@ -82,8 +85,15 @@ async function deleteLegacyCurrencyGatewayCache(kv?: KVNamespace | null): Promis
 // CURRENCY
 // ─────────────────────────────────────────
 
+const supportedCurrencyCodeSchema = z.preprocess(
+  (value) => typeof value === "string" ? value.trim().toUpperCase() : value,
+  z.enum(SUPPORTED_CURRENCY_CODES, {
+    error: "Select a supported three-letter currency code.",
+  }),
+);
+
 const currencySettingsSchema = z.object({
-  currencyCode: z.string(),
+  currencyCode: z.enum(SUPPORTED_CURRENCY_CODES),
   currencySymbol: z.string(),
   usdExchangeRate: z.string(),
 });
@@ -111,7 +121,7 @@ app.openapi(getCurrencyRoute, async (c) => {
 });
 
 const saveCurrencySchema = z.object({
-  currencyCode: z.string().optional(),
+  currencyCode: supportedCurrencyCodeSchema.optional(),
   currencySymbol: z.string().optional(),
   usdExchangeRate: z.string().optional(),
 });
@@ -611,11 +621,15 @@ const getSeoFeedDiagnosticsRoute = createRoute({
 app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
   const db = c.get("db");
   const query = c.req.valid("query");
-  const seo = await getSeoSettings(db);
+  const [seo, currency] = await Promise.all([
+    getSeoSettings(db),
+    getCurrencySettings(db),
+  ]);
   const diagnostics = await getProductFeedDiagnostics(db, seo.discovery.feeds, {
     scanLimit: query.scanLimit,
     sampleLimitPerReason: query.sampleLimit,
     storefrontBaseUrl: c.env.STOREFRONT_URL,
+    currencyCode: currency.currencyCode,
   });
   return ok(c, diagnostics);
 });

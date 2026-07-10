@@ -1,4 +1,5 @@
 import type { ProductVariant } from "@/lib/api/types";
+import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
 
 type BuyerVariant = Pick<
   ProductVariant,
@@ -48,11 +49,25 @@ export function resolveBuyerVariants<TVariant extends BuyerVariant>(
   variants: readonly TVariant[],
 ): BuyerVariantResolution<TVariant> {
   const activeVariants = variants.filter(isActivePersistedVariant);
+  const activeNonDefaultVariants = activeVariants.filter(
+    (variant) => !variant.isDefault,
+  );
   const optionVariants = activeVariants.filter(
     (variant) => !variant.isDefault && hasCustomerOption(variant),
   );
 
   if (optionVariants.length > 0) {
+    if (
+      classifyProductVariantOptionAxes(activeNonDefaultVariants) === "mixed" ||
+      activeNonDefaultVariants.some((variant) => !hasCustomerOption(variant))
+    ) {
+      return {
+        mode: "ambiguous",
+        variants: [],
+        hasCustomerOptions: true,
+      };
+    }
+
     return {
       mode: "optioned",
       variants: optionVariants,

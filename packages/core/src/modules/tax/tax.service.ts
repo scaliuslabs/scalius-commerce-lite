@@ -6,6 +6,8 @@ import { calculateTaxQuote } from "./calculator";
 import { buildStorefrontDiscountAllocation, type StorefrontDiscountType } from "./discount-allocation";
 import { toMinorUnits } from "./money";
 import type { TaxDestination, TaxQuote, TaxQuoteLineInput, TaxSettingsDefinition } from "./types";
+import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { ValidationError } from "@scalius/core/errors";
 
 const DISABLED_TAX_SETTINGS: TaxSettingsDefinition = {
     enabled: false,
@@ -33,14 +35,33 @@ export interface StorefrontTaxQuoteInput {
     discountAmount: number;
     discountType: StorefrontDiscountType | null;
     applicableProductIds?: readonly string[];
+    currency?: { code: string; decimalPlaces: number };
 }
 
 export async function calculateStorefrontTaxQuote(
     db: Database,
     input: StorefrontTaxQuoteInput,
 ): Promise<TaxQuote> {
+    const suppliedCurrencyCode = normalizeSupportedCurrencyCode(input.currency?.code);
+    if (
+        input.currency &&
+        (
+            !suppliedCurrencyCode ||
+            input.currency.decimalPlaces !== getDecimalPlaces(suppliedCurrencyCode)
+        )
+    ) {
+        throw new ValidationError("Checkout currency authority is invalid. Please retry checkout.");
+    }
+    const currencyRead = input.currency && suppliedCurrencyCode
+        ? Promise.resolve({
+            code: suppliedCurrencyCode,
+            decimalPlaces: input.currency.decimalPlaces,
+            symbol: suppliedCurrencyCode,
+            usdExchangeRate: 1,
+        })
+        : getCurrencyConfig(db);
     const [currency, settingsRow, classRows, rateRows] = await Promise.all([
-        getCurrencyConfig(db),
+        currencyRead,
         db.select().from(taxSettings).where(eq(taxSettings.id, "default")).get(),
         db.select({
             id: taxClasses.id,

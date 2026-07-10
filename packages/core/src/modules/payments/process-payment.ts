@@ -17,9 +17,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { ProcessPaymentParams, PaymentGateway } from "./types";
-import { getCurrencyConfig } from "../settings/settings.service";
 import { validateTransition } from "../orders/order-state-machine";
-import { roundPrice, pricesEqual } from "@scalius/shared/price-utils";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../orders/shipment-claim";
 import { buildMetaPurchaseOutboxClaimInsert } from "../../integrations/meta/purchase-outbox";
 import {
@@ -28,6 +26,14 @@ import {
   PAYMENT_BLOCKED_PAYMENT_STATUSES,
 } from "./payable-order";
 import { computePaymentStateAfterPayment } from "./payment-state";
+import {
+  assertOrderPaymentCurrency,
+  orderMoneyEqual,
+  resolveOrderCurrencySnapshot,
+  roundOrderMoney,
+  type OrderCurrencySnapshot,
+  type OrderCurrencySnapshotSource,
+} from "./order-currency";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -37,24 +43,32 @@ function isConstraintError(error: unknown): boolean {
   return /constraint|unique|primary key/i.test(message);
 }
 
-function paymentRecordMatchesAmount(recordedAmount: number, incomingAmount: number): boolean {
-  return pricesEqual(roundPrice(recordedAmount), roundPrice(incomingAmount));
+function paymentRecordMatchesAmount(
+  recordedAmount: number,
+  incomingAmount: number,
+  currency: OrderCurrencySnapshot,
+): boolean {
+  return orderMoneyEqual(recordedAmount, incomingAmount, currency);
 }
 
-function failedAttemptCanBePromoted(record: { amount: number; status: string }, incomingAmount: number): boolean {
+function failedAttemptCanBePromoted(
+  record: { amount: number; status: string },
+  incomingAmount: number,
+  currency: OrderCurrencySnapshot,
+): boolean {
   if (record.status === PaymentRecordStatus.FAILED) return true;
-  return paymentRecordMatchesAmount(record.amount, incomingAmount);
+  return paymentRecordMatchesAmount(record.amount, incomingAmount, currency);
 }
 
 function computedBalanceDue(order: {
   totalAmount: number;
   paidAmount: number | null;
   balanceDue: number | null;
-}): number {
-  const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
+}, currency: OrderCurrencySnapshot): number {
+  const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
   const storedBalance = Number(order.balanceDue);
-  if (Number.isFinite(storedBalance)) return roundPrice(storedBalance);
-  return roundPrice(Math.max(0, order.totalAmount - paidAmount));
+  if (Number.isFinite(storedBalance)) return roundOrderMoney(storedBalance, currency);
+  return roundOrderMoney(Math.max(0, order.totalAmount - paidAmount), currency);
 }
 
 function isMetaPurchaseEligibleAfterPayment(input: {
@@ -116,12 +130,13 @@ function validateFullPaymentState(
     paymentStatus: string;
   },
   incomingAmount: number,
+  currency: OrderCurrencySnapshot,
 ): string | null {
-  const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
+  const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
   if (paidAmount > 0 || order.paymentStatus === PaymentStatus.PARTIAL) {
     return "Order has an outstanding balance; use a balance payment";
   }
-  if (!pricesEqual(roundPrice(incomingAmount), roundPrice(order.totalAmount))) {
+  if (!orderMoneyEqual(incomingAmount, order.totalAmount, currency)) {
     return "Full payment amount must match the order total";
   }
   return null;
@@ -137,8 +152,9 @@ async function validateDepositPaymentState(
     paymentStatus: string;
   },
   incomingAmount: number,
+  currency: OrderCurrencySnapshot,
 ): Promise<string | null> {
-  const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
+  const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
   if (paidAmount > 0 || order.paymentStatus === PaymentStatus.PARTIAL) {
     return "Order already has a partial payment; use a balance payment";
   }
@@ -165,12 +181,15 @@ async function validateDepositPaymentState(
   if (plan.status !== PaymentPlanStatus.PENDING) {
     return "Deposit payment plan is not ready";
   }
-  if (!pricesEqual(roundPrice(incomingAmount), roundPrice(plan.depositAmount))) {
+  if (!orderMoneyEqual(incomingAmount, plan.depositAmount, currency)) {
     return "Deposit payment amount must match the pending payment plan";
   }
 
-  const expectedBalance = roundPrice(Math.max(0, order.totalAmount - roundPrice(incomingAmount)));
-  if (!pricesEqual(roundPrice(plan.balanceDue), expectedBalance)) {
+  const expectedBalance = roundOrderMoney(
+    Math.max(0, order.totalAmount - roundOrderMoney(incomingAmount, currency)),
+    currency,
+  );
+  if (!orderMoneyEqual(plan.balanceDue, expectedBalance, currency)) {
     return "Deposit payment plan balance does not match the order total";
   }
 
@@ -187,8 +206,9 @@ async function validateBalancePaymentState(
     paymentStatus: string;
   },
   incomingAmount: number,
+  currency: OrderCurrencySnapshot,
 ): Promise<string | null> {
-  const paidAmount = roundPrice(Number(order.paidAmount ?? 0));
+  const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
   if (order.paymentStatus !== PaymentStatus.PARTIAL || paidAmount <= 0) {
     return "No partial payment has been recorded for this order";
   }
@@ -212,19 +232,19 @@ async function validateBalancePaymentState(
     return "Deposit payment must be confirmed before balance payment";
   }
 
-  const balanceDue = roundPrice(Number(plan.balanceDue ?? order.balanceDue ?? 0));
+  const balanceDue = roundOrderMoney(Number(plan.balanceDue ?? order.balanceDue ?? 0), currency);
   if (!Number.isFinite(balanceDue) || balanceDue <= 0) {
     return "No balance due";
   }
-  const orderBalanceDue = computedBalanceDue(order);
-  if (!pricesEqual(balanceDue, orderBalanceDue)) {
+  const orderBalanceDue = computedBalanceDue(order, currency);
+  if (!orderMoneyEqual(balanceDue, orderBalanceDue, currency)) {
     return "Payment plan balance does not match the order balance";
   }
-  const computedOutstanding = roundPrice(Math.max(0, order.totalAmount - paidAmount));
-  if (!pricesEqual(balanceDue, computedOutstanding)) {
+  const computedOutstanding = roundOrderMoney(Math.max(0, order.totalAmount - paidAmount), currency);
+  if (!orderMoneyEqual(balanceDue, computedOutstanding, currency)) {
     return "Payment plan balance does not match the order payment state";
   }
-  if (!pricesEqual(balanceDue, roundPrice(incomingAmount))) {
+  if (!orderMoneyEqual(balanceDue, incomingAmount, currency)) {
     return "Balance payment amount must match the outstanding balance";
   }
 
@@ -239,18 +259,19 @@ async function validateIncomingPaymentState(
     paidAmount: number | null;
     balanceDue: number | null;
     paymentStatus: string;
-  },
+  } & OrderCurrencySnapshotSource,
   paymentType: string,
   incomingAmount: number,
 ): Promise<string | null> {
+  const currency = resolveOrderCurrencySnapshot(order);
   if (paymentType === "full") {
-    return validateFullPaymentState(order, incomingAmount);
+    return validateFullPaymentState(order, incomingAmount, currency);
   }
   if (paymentType === "deposit") {
-    return validateDepositPaymentState(db, order, incomingAmount);
+    return validateDepositPaymentState(db, order, incomingAmount, currency);
   }
   if (paymentType === "balance") {
-    return validateBalancePaymentState(db, order, incomingAmount);
+    return validateBalancePaymentState(db, order, incomingAmount, currency);
   }
   return "Unsupported payment type";
 }
@@ -272,14 +293,32 @@ export async function processPaymentConfirmed(
   try {
     const shipmentClaim = await db
       .select({
+        id: orders.id,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        currencyCode: orders.currencyCode,
+        currencyDecimalPlaces: orders.currencyDecimalPlaces,
       })
       .from(orders)
       .where(eq(orders.id, params.orderId))
       .get();
+    if (!shipmentClaim) {
+      return { success: false, error: `Order ${params.orderId} not found` };
+    }
     if (shipmentClaim && hasActiveShipmentClaim(shipmentClaim)) {
       return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE };
+    }
+    const currency = resolveOrderCurrencySnapshot(shipmentClaim);
+    const incomingAmount = roundOrderMoney(params.amount, currency);
+    if (
+      (params.paymentGateway === "stripe" || params.paymentGateway === "sslcommerz") &&
+      params.metadata?.currency != null
+    ) {
+      assertOrderPaymentCurrency(
+        params.metadata.currency,
+        currency,
+        `${params.paymentGateway} provider payment`,
+      );
     }
 
     // ── 0. Claim or resume the gateway payment record ──
@@ -289,7 +328,12 @@ export async function processPaymentConfirmed(
     let paymentId: string | undefined;
     if (params.stripePaymentIntentId) {
       const existing = await db
-        .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
+        .select({
+          id: orderPayments.id,
+          amount: orderPayments.amount,
+          status: orderPayments.status,
+          currency: orderPayments.currency,
+        })
         .from(orderPayments)
         .where(and(
           eq(orderPayments.orderId, params.orderId),
@@ -297,7 +341,8 @@ export async function processPaymentConfirmed(
         ))
         .get();
       if (existing) {
-        if (!failedAttemptCanBePromoted(existing, params.amount)) {
+        assertOrderPaymentCurrency(existing.currency, currency, "Existing Stripe payment");
+        if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
           return { success: false, error: "Existing Stripe payment amount does not match webhook amount" };
         }
         if (existing.status === PaymentRecordStatus.SUCCEEDED) return { success: true };
@@ -309,7 +354,12 @@ export async function processPaymentConfirmed(
         ? eq(orderPayments.sslcommerzValId, params.sslcommerzValId)
         : eq(orderPayments.sslcommerzTranId, params.sslcommerzTranId!);
       const existing = await db
-        .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
+        .select({
+          id: orderPayments.id,
+          amount: orderPayments.amount,
+          status: orderPayments.status,
+          currency: orderPayments.currency,
+        })
         .from(orderPayments)
         .where(and(
           eq(orderPayments.orderId, params.orderId),
@@ -317,7 +367,8 @@ export async function processPaymentConfirmed(
         ))
         .get();
       if (existing) {
-        if (!failedAttemptCanBePromoted(existing, params.amount)) {
+        assertOrderPaymentCurrency(existing.currency, currency, "Existing SSLCommerz payment");
+        if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
           return { success: false, error: "Existing SSLCommerz payment amount does not match webhook amount" };
         }
         if (existing.status === PaymentRecordStatus.SUCCEEDED) return { success: true };
@@ -326,7 +377,12 @@ export async function processPaymentConfirmed(
     }
     if (!paymentId && params.polarCheckoutId) {
       const existing = await db
-        .select({ id: orderPayments.id, amount: orderPayments.amount, status: orderPayments.status })
+        .select({
+          id: orderPayments.id,
+          amount: orderPayments.amount,
+          status: orderPayments.status,
+          currency: orderPayments.currency,
+        })
         .from(orderPayments)
         .where(and(
           eq(orderPayments.orderId, params.orderId),
@@ -334,7 +390,8 @@ export async function processPaymentConfirmed(
         ))
         .get();
       if (existing) {
-        if (!failedAttemptCanBePromoted(existing, params.amount)) {
+        assertOrderPaymentCurrency(existing.currency, currency, "Existing Polar payment");
+        if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
           return { success: false, error: "Existing Polar payment amount does not match webhook amount" };
         }
         if (existing.status === PaymentRecordStatus.SUCCEEDED) return { success: true };
@@ -353,6 +410,8 @@ export async function processPaymentConfirmed(
         inventoryPool: orders.inventoryPool,
         version: orders.version,
         deletedAt: orders.deletedAt,
+        currencyCode: orders.currencyCode,
+        currencyDecimalPlaces: orders.currencyDecimalPlaces,
       })
       .from(orders)
       .where(eq(orders.id, params.orderId))
@@ -371,21 +430,20 @@ export async function processPaymentConfirmed(
       db,
       initialOrder,
       params.paymentType,
-      params.amount,
+      incomingAmount,
     );
     if (initialPaymentStateError) {
       return { success: false, error: initialPaymentStateError, retryable: false };
     }
 
-    const currencyConfig = await getCurrencyConfig(db);
     if (!paymentId) {
       paymentId = crypto.randomUUID();
       try {
         await db.insert(orderPayments).values({
           id: paymentId,
           orderId: params.orderId,
-          amount: params.amount,
-          currency: currencyConfig.code,
+          amount: incomingAmount,
+          currency: currency.code,
           paymentMethod: params.paymentGateway,
           paymentType: params.paymentType,
           status: PaymentRecordStatus.PENDING,
@@ -421,6 +479,8 @@ export async function processPaymentConfirmed(
             inventoryPool: orders.inventoryPool,
             version: orders.version,
             deletedAt: orders.deletedAt,
+            currencyCode: orders.currencyCode,
+            currencyDecimalPlaces: orders.currencyDecimalPlaces,
           })
           .from(orders)
           .where(eq(orders.id, params.orderId))
@@ -439,7 +499,7 @@ export async function processPaymentConfirmed(
           db,
           order,
           params.paymentType,
-          params.amount,
+          incomingAmount,
         );
         if (paymentStateError) {
           return { success: false, error: paymentStateError, retryable: false };
@@ -449,11 +509,12 @@ export async function processPaymentConfirmed(
       const nextPaymentState = computePaymentStateAfterPayment({
         totalAmount: order.totalAmount,
         currentPaidAmount: order.paidAmount,
-        paymentAmount: params.amount,
+        paymentAmount: incomingAmount,
+        currency,
       });
       const newPaidAmount = nextPaymentState.paidAmount;
       const newBalanceDue = nextPaymentState.balanceDue;
-      const isFullyPaid = pricesEqual(newBalanceDue, 0);
+      const isFullyPaid = orderMoneyEqual(newBalanceDue, 0, currency);
       const newPaymentStatus = nextPaymentState.paymentStatus;
       const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
       const paymentPlanReadyPredicate = params.paymentType === "deposit"
@@ -461,15 +522,15 @@ export async function processPaymentConfirmed(
             SELECT 1 FROM payment_plans
             WHERE order_id = ${params.orderId}
               AND status = ${PaymentPlanStatus.PENDING}
-              AND round(deposit_amount, 2) = round(${params.amount}, 2)
-              AND round(balance_due, 2) = round(${newBalanceDue}, 2)
+              AND round(deposit_amount, ${currency.decimalPlaces}) = round(${incomingAmount}, ${currency.decimalPlaces})
+              AND round(balance_due, ${currency.decimalPlaces}) = round(${newBalanceDue}, ${currency.decimalPlaces})
           )`
         : params.paymentType === "balance"
           ? sql`EXISTS (
               SELECT 1 FROM payment_plans
               WHERE order_id = ${params.orderId}
                 AND status = ${PaymentPlanStatus.DEPOSIT_PAID}
-                AND round(balance_due, 2) = round(${params.amount}, 2)
+                AND round(balance_due, ${currency.decimalPlaces}) = round(${incomingAmount}, ${currency.decimalPlaces})
             )`
           : sql`1 = 1`;
 
@@ -501,8 +562,8 @@ export async function processPaymentConfirmed(
           )`,
         )).returning({ id: orders.id }),
         db.update(orderPayments).set({
-          amount: params.amount,
-          currency: currencyConfig.code,
+          amount: incomingAmount,
+          currency: currency.code,
           paymentMethod: params.paymentGateway,
           paymentType: params.paymentType,
           status: PaymentRecordStatus.SUCCEEDED,
@@ -678,6 +739,8 @@ export async function processPaymentFailed(
         paymentStatus: orders.paymentStatus,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        currencyCode: orders.currencyCode,
+        currencyDecimalPlaces: orders.currencyDecimalPlaces,
       })
       .from(orders)
       .where(eq(orders.id, orderId))
@@ -685,14 +748,14 @@ export async function processPaymentFailed(
 
     if (!order) return;
     assertNoActiveShipmentClaim(order);
+    const currency = resolveOrderCurrencySnapshot(order);
 
-    const currencyConfig = await getCurrencyConfig(db);
     try {
       await db.insert(orderPayments).values({
         id: crypto.randomUUID(),
         orderId,
         amount: 0,
-        currency: currencyConfig.code,
+        currency: currency.code,
         paymentMethod: gateway,
         paymentType: "full",
         status: PaymentRecordStatus.FAILED,

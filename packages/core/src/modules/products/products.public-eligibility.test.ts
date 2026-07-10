@@ -15,6 +15,7 @@ describe("public product SKU eligibility", () => {
         const query = dialect.sqlToQuery(publicProductHasBuyerResolvableSku());
 
         expect(query.sql).toContain("buyer_option_sku");
+        expect(query.sql).toContain("buyer_option_shape_sku");
         expect(query.sql).toContain("buyer_active_sku");
         expect(query.sql).toContain("buyer_simple_sku");
         expect(query.sql).toContain("product_id");
@@ -24,6 +25,9 @@ describe("public product SKU eligibility", () => {
         expect(query.sql).toContain("is_default");
         expect(query.sql).toContain("buyer_simple_sku.is_default");
         expect(query.sql).toContain("count(*)");
+        expect(query.sql).toContain("min(CASE");
+        expect(query.sql).toContain("max(CASE");
+        expect(query.sql).not.toContain("count(DISTINCT");
     });
 
     it("treats is_default as the simple-SKU authority even if old option labels drifted", () => {
@@ -42,6 +46,7 @@ describe("public product SKU eligibility", () => {
 
         expect(conditions).toHaveLength(3);
         expect(query.sql).toContain("buyer_option_sku");
+        expect(query.sql).toContain("buyer_option_shape_sku");
         expect(query.sql).toContain("buyer_simple_sku");
     });
 
@@ -64,6 +69,7 @@ describe("public product SKU eligibility", () => {
         const query = dialect.sqlToQuery(publicProductHasAvailableBuyerSku());
 
         expect(query.sql).toContain("buyer_available_option_sku");
+        expect(query.sql).toContain("buyer_available_option_shape_sku");
         expect(query.sql).toContain("buyer_available_simple_sku");
         expect(query.sql).toContain("track_inventory");
         expect(query.sql).toContain("stock");

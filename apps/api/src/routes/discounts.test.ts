@@ -56,7 +56,7 @@ describe("public discount routes", () => {
       combineWithOrderDiscounts: false,
       combineWithShippingDiscounts: true,
     };
-    mocks.getCurrencyConfig.mockResolvedValue({ symbol: "৳" });
+    mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", symbol: "৳" });
     mocks.isDiscountValid.mockResolvedValue({
       valid: true,
       discount,
@@ -92,6 +92,7 @@ describe("public discount routes", () => {
       cartItems,
       80,
       ["prod_1"],
+      "BDT",
     );
     await expect(response.json()).resolves.toMatchObject({
       success: true,

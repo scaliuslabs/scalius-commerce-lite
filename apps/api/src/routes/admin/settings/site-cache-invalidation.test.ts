@@ -65,7 +65,9 @@ vi.mock("@scalius/core/modules/products", () => ({
     "storefront_url_unavailable",
     "product_feed_excluded",
     "inactive_deleted_unpublished",
+    "inconsistent_option_axes",
     "no_buyer_sku",
+    "non_positive_price",
     "missing_image",
     "unavailable_excluded",
   ],
@@ -88,6 +90,11 @@ function createTestApp() {
   mocks.getKv.mockReturnValue(kv);
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+  mocks.getCurrencySettings.mockResolvedValue({
+    currencyCode: "BDT",
+    currencySymbol: "Tk",
+    usdExchangeRate: "1",
+  });
   mocks.saveCurrencySettings.mockResolvedValue(undefined);
   mocks.saveHeaderConfig.mockResolvedValue(undefined);
   mocks.saveFooterConfig.mockResolvedValue(undefined);
@@ -396,6 +403,7 @@ describe("site settings cache invalidation", () => {
         scanLimit: 25,
         sampleLimitPerReason: 2,
         storefrontBaseUrl: "https://storefront.example.com",
+        currencyCode: "BDT",
       },
     );
   });
@@ -535,6 +543,39 @@ describe("site settings cache invalidation", () => {
 
     warn.mockRestore();
   });
+
+  it("normalizes a supported lowercase currency code before saving", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(app, env, "POST", "/currency", {
+      currencyCode: " usd ",
+      currencySymbol: "$",
+      usdExchangeRate: "1",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.saveCurrencySettings).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ currencyCode: "USD" }),
+    );
+  });
+
+  it.each(["", "US", "USDT", "ZZZ", "12A"])(
+    "rejects unsupported currency code %s before saving or invalidating",
+    async (currencyCode) => {
+      const { app, env } = createTestApp();
+
+      const response = await requestJson(app, env, "POST", "/currency", {
+        currencyCode,
+        currencySymbol: "$",
+        usdExchangeRate: "1",
+      });
+
+      expect(response.status).toBe(400);
+      expect(mocks.saveCurrencySettings).not.toHaveBeenCalled();
+      expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects unsafe theme colors before saving or invalidating cache", async () => {
     const { app, env } = createTestApp();

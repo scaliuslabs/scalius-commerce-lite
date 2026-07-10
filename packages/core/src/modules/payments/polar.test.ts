@@ -307,6 +307,50 @@ describe("Polar webhook refund processing", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
+  it("preserves KWD precision when mapping a cumulative provider refund to local money", async () => {
+    const { db, updates, paymentInserts } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 1.234,
+        balanceDue: 0,
+        paymentStatus: PaymentStatus.PAID,
+        totalAmount: 1.234,
+        status: OrderStatus.DELIVERED,
+        version: 3,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+      },
+      payments: [polarPayment({ amount: 1.234, currency: "KWD" })],
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
+      amountRefunded: 333,
+      totalAmount: 1_000,
+      currency: "usd",
+      polarStatus: "partially_refunded",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      notification: {
+        data: { localRefundAmount: 0.411 },
+      },
+    });
+    expect(updates[0]).toMatchObject({
+      paidAmount: 0.823,
+      balanceDue: 0.411,
+      paymentStatus: PaymentStatus.PARTIAL,
+    });
+    expect(paymentInserts[0]).toMatchObject({
+      amount: 0.411,
+      currency: "KWD",
+      paymentType: "refund",
+      status: PaymentRecordStatus.PENDING,
+    });
+  });
+
   it("applies only the delta when Polar sends a larger cumulative partial refund", async () => {
     const { db, updates, paymentInserts } = createDbMock({
       order: {
@@ -358,6 +402,131 @@ describe("Polar webhook refund processing", () => {
       paymentType: "refund",
       status: PaymentRecordStatus.PENDING,
     });
+  });
+
+  it("preserves KWD precision when applying only a later cumulative refund delta", async () => {
+    const { db, updates, paymentInserts } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 0.823,
+        balanceDue: 0.411,
+        paymentStatus: PaymentStatus.PARTIAL,
+        totalAmount: 1.234,
+        status: OrderStatus.PARTIALLY_REFUNDED,
+        version: 4,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+      },
+      payments: [
+        polarPayment({ amount: 1.234, currency: "KWD" }),
+        polarRefundPayment({ amount: 0.411, currency: "KWD" }),
+      ],
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
+      amountRefunded: 667,
+      totalAmount: 1_000,
+      currency: "usd",
+      polarStatus: "partially_refunded",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      notification: {
+        data: { localRefundAmount: 0.412 },
+      },
+    });
+    expect(updates[0]).toMatchObject({
+      paidAmount: 0.411,
+      balanceDue: 0.823,
+      paymentStatus: PaymentStatus.PARTIAL,
+    });
+    expect(paymentInserts[0]).toMatchObject({
+      amount: 0.412,
+      currency: "KWD",
+      paymentType: "refund",
+      status: PaymentRecordStatus.PENDING,
+    });
+  });
+
+  it("rounds local Polar refund facts to JPY zero-decimal precision", async () => {
+    const { db, updates, paymentInserts } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 101,
+        balanceDue: 0,
+        paymentStatus: PaymentStatus.PAID,
+        totalAmount: 101,
+        status: OrderStatus.DELIVERED,
+        version: 3,
+        currencyCode: "JPY",
+        currencyDecimalPlaces: 0,
+      },
+      payments: [polarPayment({ amount: 101, currency: "JPY" })],
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
+      amountRefunded: 2_560,
+      totalAmount: 10_000,
+      currency: "usd",
+      polarStatus: "partially_refunded",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      notification: {
+        data: { localRefundAmount: 26 },
+      },
+    });
+    expect(updates[0]).toMatchObject({
+      paidAmount: 75,
+      balanceDue: 26,
+      paymentStatus: PaymentStatus.PARTIAL,
+    });
+    expect(paymentInserts[0]).toMatchObject({
+      amount: 26,
+      currency: "JPY",
+      paymentType: "refund",
+      status: PaymentRecordStatus.PENDING,
+    });
+  });
+
+  it("fails closed before mutation when the Polar ledger currency differs from the order snapshot", async () => {
+    const { db, updates, paymentInserts, paymentUpdates } = createDbMock({
+      order: {
+        id: "order_1",
+        paidAmount: 1.234,
+        balanceDue: 0,
+        paymentStatus: PaymentStatus.PAID,
+        totalAmount: 1.234,
+        status: OrderStatus.DELIVERED,
+        version: 3,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+      },
+      payments: [polarPayment({ amount: 1.234, currency: "BDT" })],
+    });
+
+    const result = await processPolarWebhookRefund(db as never, {
+      orderId: "order_1",
+      polarCheckoutId: "polar_order_1",
+      amountRefunded: 333,
+      totalAmount: 1_000,
+      currency: "usd",
+      polarStatus: "partially_refunded",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Polar order payment currency does not match the immutable order currency. Repair the payment ledger before continuing.",
+    });
+    expect(updates).toHaveLength(0);
+    expect(paymentInserts).toHaveLength(0);
+    expect(paymentUpdates).toHaveLength(0);
   });
 
   it("treats a fully refunded Polar deposit as a partial order refund", async () => {

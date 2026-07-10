@@ -32,10 +32,15 @@ import { normalizeSavedProductCondition } from "@scalius/shared/product-conditio
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
 import {
+  calculateCatalogFeedDiscountedAmount,
+  formatCatalogFeedAmount,
+  isCatalogFeedSalePrice,
+  isPositiveCatalogFeedAmount,
+} from "@scalius/shared/catalog-feed-money";
+import {
   isVariantAvailable,
   resolveBuyerVariants,
 } from "@/lib/product-sellable-variants";
-import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
 
 export const prerender = false;
 
@@ -129,19 +134,18 @@ function toPlainFeedDescription(text: string | null | undefined): string {
 }
 
 /**
- * Formats price for Facebook feed (number + space + currency).
- * Uses ISO 4217 decimal places per currency (e.g., JPY=0, BDT/USD=2, BHD=3).
+ * Formats catalog-feed money as number + space + currency.
+ * Google accepts at most two fractional digits, even for currencies whose
+ * normal cash precision is higher.
  */
-function formatFeedPrice(price: number, currencyCode: string): string {
-  const decimals =
-    currencyCode === "JPY" || currencyCode === "KRW" || currencyCode === "VND"
-      ? 0
-      : currencyCode === "BHD" ||
-          currencyCode === "KWD" ||
-          currencyCode === "OMR"
-        ? 3
-        : 2; // Most currencies use 2 decimals
-  return `${price.toFixed(decimals)} ${currencyCode}`;
+function formatFeedPrice(
+  price: number,
+  currencyCode: string,
+): string | null {
+  const formattedAmount = formatCatalogFeedAmount(price, currencyCode);
+  return formattedAmount === null
+    ? null
+    : `${formattedAmount} ${currencyCode}`;
 }
 
 /**
@@ -257,7 +261,11 @@ function getPrimaryImageLink(product: Product, baseUrl: string): string | null {
   });
 }
 
-function toFeedProductRow(product: Product, baseUrl: string): FeedProductRow | null {
+function toFeedProductRow(
+  product: Product,
+  baseUrl: string,
+  currencyCode: string,
+): FeedProductRow | null {
   if (product.isActive === false) {
     return null;
   }
@@ -267,13 +275,15 @@ function toFeedProductRow(product: Product, baseUrl: string): FeedProductRow | n
     return null;
   }
 
-  return { kind: "product", product, imageLink };
+  const feedItem: FeedProductRow = { kind: "product", product, imageLink };
+  return hasPositiveFeedPricing(feedItem, currencyCode) ? feedItem : null;
 }
 
 function toFeedVariantRow(
   product: Product,
   variant: ProductVariant,
   baseUrl: string,
+  currencyCode: string,
 ): FeedVariantRow | null {
   if (product.isActive === false) {
     return null;
@@ -284,7 +294,13 @@ function toFeedVariantRow(
     return null;
   }
 
-  return { kind: "variant", product, variant, imageLink };
+  const feedItem: FeedVariantRow = {
+    kind: "variant",
+    product,
+    variant,
+    imageLink,
+  };
+  return hasPositiveFeedPricing(feedItem, currencyCode) ? feedItem : null;
 }
 
 function shouldIncludeProductRow(
@@ -311,6 +327,7 @@ function shouldIncludeVariantRow(
 function toFeedItems(
   products: Product[],
   baseUrl: string,
+  currencyCode: string,
   feedsPolicy: SeoDiscoverySettings["feeds"],
   variantStrategy = getFeedVariantStrategy(feedsPolicy),
 ): FeedItem[] {
@@ -320,7 +337,7 @@ function toFeedItems(
         return [];
       }
 
-      const feedProduct = toFeedProductRow(product, baseUrl);
+      const feedProduct = toFeedProductRow(product, baseUrl, currencyCode);
       return feedProduct ? [feedProduct] : [];
     }
 
@@ -331,7 +348,12 @@ function toFeedItems(
           return [];
         }
 
-        const feedVariant = toFeedVariantRow(product, variant, baseUrl);
+        const feedVariant = toFeedVariantRow(
+          product,
+          variant,
+          baseUrl,
+          currencyCode,
+        );
         return feedVariant ? [feedVariant] : [];
       });
     }
@@ -344,7 +366,7 @@ function toFeedItems(
       return [];
     }
 
-    const feedProduct = toFeedProductRow(product, baseUrl);
+    const feedProduct = toFeedProductRow(product, baseUrl, currencyCode);
     return feedProduct ? [feedProduct] : [];
   });
 }
@@ -463,32 +485,40 @@ function getFeedItemGtin(feedItem: FeedItem): string | null {
   return getSupportedVariantGtin(buyerVariantResolution.variants[0]!);
 }
 
-function getFeedItemPricing(feedItem: FeedItem): {
+function getFeedItemPricing(feedItem: FeedItem, currencyCode: string): {
   basePrice: number;
   feedPrice: number;
 } {
   const { product } = feedItem;
-  if (feedItem.kind === "variant") {
-    const basePrice = feedItem.variant.price ?? product.price;
-    return {
-      basePrice,
-      feedPrice: getVariantDiscountedPrice(
-        feedItem.variant.price,
-        product.price,
-        feedItem.variant.discountType,
-        feedItem.variant.discountPercentage,
-        feedItem.variant.discountAmount,
-        product.discountType,
-        product.discountPercentage,
-        product.discountAmount,
-      ),
-    };
-  }
+  const variant = feedItem.kind === "variant" ? feedItem.variant : null;
+  const basePrice = variant?.price ?? product.price;
+  const variantHasDiscount =
+    (variant?.discountType === "percentage" &&
+      (variant.discountPercentage ?? 0) > 0) ||
+    (variant?.discountType === "flat" && (variant.discountAmount ?? 0) > 0);
+  const discount = variantHasDiscount && variant ? variant : product;
 
   return {
-    basePrice: product.price,
-    feedPrice: product.discountedPrice ?? product.price,
+    basePrice,
+    feedPrice: calculateCatalogFeedDiscountedAmount(
+      basePrice,
+      discount.discountType,
+      discount.discountPercentage,
+      discount.discountAmount,
+      currencyCode,
+    ),
   };
+}
+
+function hasPositiveFeedPricing(
+  feedItem: FeedItem,
+  currencyCode: string,
+): boolean {
+  const { basePrice, feedPrice } = getFeedItemPricing(feedItem, currencyCode);
+  return (
+    isPositiveCatalogFeedAmount(basePrice, currencyCode) &&
+    isPositiveCatalogFeedAmount(feedPrice, currencyCode)
+  );
 }
 
 /**
@@ -506,9 +536,12 @@ function generateProductItem(
     getFeedItemAvailability(feedItem),
     format,
   );
-  const { basePrice, feedPrice } = getFeedItemPricing(feedItem);
+  const { basePrice, feedPrice } = getFeedItemPricing(feedItem, currencyCode);
   const formattedBasePrice = formatFeedPrice(basePrice, currencyCode);
   const formattedFeedPrice = formatFeedPrice(feedPrice, currencyCode);
+  if (formattedBasePrice === null || formattedFeedPrice === null) {
+    return "";
+  }
 
   // Get category mappings
   const categorySlug = product.category?.slug || "";
@@ -553,7 +586,7 @@ function generateProductItem(
   // Optional fields
 
   // Sale price if there's a discount
-  if (feedPrice < basePrice && formattedFeedPrice !== formattedBasePrice) {
+  if (isCatalogFeedSalePrice(basePrice, feedPrice, currencyCode)) {
     item += `    <g:sale_price>${formattedFeedPrice}</g:sale_price>\n`;
   }
 
@@ -631,10 +664,12 @@ function generateProductItem(
 
   // Free shipping overlay
   if (product.freeDelivery) {
+    const freeShippingPrice = formatFeedPrice(0, currencyCode);
+    if (freeShippingPrice === null) return "";
     item += `    <g:shipping>\n`;
     item += `      <g:country>BD</g:country>\n`;
     item += `      <g:service>Standard</g:service>\n`;
-    item += `      <g:price>0.00 ${currencyCode}</g:price>\n`;
+    item += `      <g:price>${freeShippingPrice}</g:price>\n`;
     item += `    </g:shipping>\n`;
   }
 
@@ -703,12 +738,14 @@ async function readFeedItemWindow({
   page,
   limit,
   baseUrl,
+  currencyCode,
   feedsPolicy,
   feedVariantStrategy,
 }: {
   page: number;
   limit: number;
   baseUrl: string;
+  currencyCode: string;
   feedsPolicy: SeoDiscoverySettings["feeds"];
   feedVariantStrategy: ReturnType<typeof getFeedVariantStrategy>;
 }): Promise<FeedItemWindowResult> {
@@ -725,7 +762,13 @@ async function readFeedItemWindow({
   }
 
   appendFeedItemsForWindow(
-    toFeedItems(firstResponse.data, baseUrl, feedsPolicy, feedVariantStrategy),
+    toFeedItems(
+      firstResponse.data,
+      baseUrl,
+      currencyCode,
+      feedsPolicy,
+      feedVariantStrategy,
+    ),
     state,
     targetStart,
     targetEnd,
@@ -759,7 +802,13 @@ async function readFeedItemWindow({
       }
 
       appendFeedItemsForWindow(
-        toFeedItems(response.data, baseUrl, feedsPolicy, feedVariantStrategy),
+        toFeedItems(
+          response.data,
+          baseUrl,
+          currencyCode,
+          feedsPolicy,
+          feedVariantStrategy,
+        ),
         state,
         targetStart,
         targetEnd,
@@ -841,6 +890,7 @@ export function createCatalogFeedGet(format: FeedFormat): APIRoute {
         page,
         limit,
         baseUrl,
+        currencyCode,
         feedsPolicy,
         feedVariantStrategy,
       });

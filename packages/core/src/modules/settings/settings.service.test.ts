@@ -34,9 +34,92 @@ vi.mock("../payments/gateway-settings", () => ({
 
 import {
     getAdminNotificationChannels,
+    getCurrencyConfig,
     getNotificationChannels,
     updateNotificationChannels,
 } from "./settings.service";
+
+function createCurrencyConfigDb(values: Record<string, string>) {
+    return {
+        select: vi.fn(() => ({
+            from: vi.fn(() => ({
+                where: vi.fn(() => ({
+                    all: vi.fn(async () => Object.entries(values).map(([key, value]) => ({
+                        key,
+                        value,
+                    }))),
+                })),
+            })),
+        })),
+    };
+}
+
+describe("buyer currency config", () => {
+    it("normalizes a supported persisted code and derives its precision", async () => {
+        const db = createCurrencyConfigDb({
+            currency_code: " jpy ",
+            currency_symbol: "¥",
+            usd_exchange_rate: "150",
+        });
+
+        await expect(getCurrencyConfig(db as never)).resolves.toEqual({
+            code: "JPY",
+            symbol: "¥",
+            usdExchangeRate: 150,
+            decimalPlaces: 0,
+        });
+    });
+
+    it("fails closed to BDT when the persisted code is unsupported", async () => {
+        const db = createCurrencyConfigDb({
+            currency_code: "USDT",
+            currency_symbol: "₿",
+            usd_exchange_rate: "999",
+        });
+
+        await expect(getCurrencyConfig(db as never)).resolves.toEqual({
+            code: "BDT",
+            symbol: "৳",
+            usdExchangeRate: 1,
+            decimalPlaces: 2,
+        });
+    });
+
+    it("ignores an invalid cached config and reloads a valid DB value", async () => {
+        const db = createCurrencyConfigDb({
+            currency_code: "USD",
+            currency_symbol: "$",
+            usd_exchange_rate: "1",
+        });
+        const kv = {
+            get: vi.fn(async () => JSON.stringify({
+                code: "USDT",
+                symbol: "₿",
+                usdExchangeRate: 1,
+                decimalPlaces: 2,
+            })),
+            put: vi.fn(async () => undefined),
+        };
+
+        await expect(getCurrencyConfig(db as never, kv as never)).resolves.toEqual({
+            code: "USD",
+            symbol: "$",
+            usdExchangeRate: 1,
+            decimalPlaces: 2,
+        });
+        expect(db.select).toHaveBeenCalledOnce();
+        expect(kv.put).toHaveBeenCalledWith(
+            "gw:currency",
+            JSON.stringify({
+                code: "USD",
+                symbol: "$",
+                usdExchangeRate: 1,
+                decimalPlaces: 2,
+            }),
+            { expirationTtl: 300 },
+        );
+    });
+});
 
 function createSettingsDb(rowValue?: string) {
     return {

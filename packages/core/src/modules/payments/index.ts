@@ -88,6 +88,17 @@ export { initCODTracking, recordCODCollection, recordCODFailure, markCODReturned
 // --- Payment processing ---
 export { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory, recordWebhookEvent } from "./process-payment";
 export {
+  assertOrderPaymentCurrency,
+  createOrderCurrencySnapshot,
+  orderMoneyEqual,
+  resolveOrderCurrencySnapshot,
+  roundOrderMoney,
+} from "./order-currency";
+export type {
+  OrderCurrencySnapshot,
+  OrderCurrencySnapshotSource,
+} from "./order-currency";
+export {
   computeOrderPaymentState,
   computePaymentStateAfterPayment,
   computePaymentStateAfterRefund,

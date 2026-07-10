@@ -84,6 +84,7 @@ app.openapi(validateDiscountRoute, async (c) => {
       cartItems,
       shippingCost || 0,
       validationResult.applicableProductIds,
+      currencyConfig.code,
     );
 
     const enhancedDiscount = {
@@ -109,7 +110,7 @@ app.openapi(validateDiscountRoute, async (c) => {
     return ok(c, {
       valid: true,
       discount: enhancedDiscount,
-      discountAmount: roundPrice(discountAmount)
+      discountAmount: roundPrice(discountAmount, currencyConfig.code)
     });
   }
 

@@ -13,6 +13,10 @@ import { Loader2, Save, Info, Search, Check } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@scalius/shared/utils";
+import {
+  normalizeSupportedCurrencyCode,
+  type SupportedCurrencyCode,
+} from "@scalius/shared/currency";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
@@ -22,7 +26,7 @@ import {
 } from "@/lib/api-functions/currency";
 
 interface CurrencyEntry {
-  code: string;
+  code: SupportedCurrencyCode;
   symbol: string;
   name: string;
   decimalPlaces: number;
@@ -251,7 +255,7 @@ export default function CurrencySettingsBuilder() {
     return () => document.removeEventListener("mousedown", handler);
   }, [pickerOpen]);
 
-  const handleCurrencySelect = (code: string) => {
+  const handleCurrencySelect = (code: SupportedCurrencyCode) => {
     const currency = currencyMap.get(code);
     if (currency) {
       setValues((prev) => ({ ...prev, currencyCode: code, currencySymbol: currency.symbol }));
@@ -273,7 +277,10 @@ export default function CurrencySettingsBuilder() {
     );
   }, [search]);
 
-  const selectedCurrency = currencyMap.get(values.currencyCode);
+  const selectedCurrencyCode = normalizeSupportedCurrencyCode(values.currencyCode);
+  const selectedCurrency = selectedCurrencyCode
+    ? currencyMap.get(selectedCurrencyCode)
+    : undefined;
 
   if (isLoading) {
     return (

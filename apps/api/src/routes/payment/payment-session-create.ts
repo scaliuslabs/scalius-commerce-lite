@@ -1,7 +1,14 @@
 import type { Context } from "hono";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { orderPayments, orders, PaymentMethod, PaymentRecordStatus, PaymentStatus } from "@scalius/database/schema";
+import {
+  orderPayments,
+  orders,
+  PaymentMethod,
+  PaymentRecordStatus,
+  PaymentStatus,
+  settings,
+} from "@scalius/database/schema";
 import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
 import {
   buildSSLCommerzTranId,
@@ -19,8 +26,11 @@ import {
   type PaymentSessionAttemptProcessingResult,
 } from "@scalius/core/modules/payments/payment-session-attempts";
 import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
-import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
-import { getDecimalPlaces } from "@scalius/shared/currency";
+import {
+  resolveOrderCurrencySnapshot,
+  type OrderCurrencySnapshot,
+} from "@scalius/core/modules/payments/order-currency";
+import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import type { PaymentSessionPolicy, PaymentSessionType } from "./payment-session-policy";
 import { assertGatewaySelectedForCheckout, loadCheckoutGatewaySettings } from "./payment-method-allowlist";
@@ -152,43 +162,35 @@ type PaymentSessionOrderRow = {
   shipmentClaimExpiresAt: Date | null;
 };
 
+type PaymentSessionOrderCurrencyFields = Pick<
+  PaymentSessionOrderRow,
+  "currencyCode" | "currencyDecimalPlaces" | "totalAmountMinor"
+>;
+
 function resolveAuthoritativeOrderCurrency(
-  order: PaymentSessionOrderRow,
-  current: { code: string; decimalPlaces?: number },
-): { code: string; decimalPlaces: number; legacy: boolean } {
-  const currentCode = current.code.trim().toUpperCase();
-  const currentDecimalPlaces = current.decimalPlaces ?? getDecimalPlaces(currentCode);
-  const storedFields = [order.currencyCode, order.currencyDecimalPlaces, order.totalAmountMinor];
-  const isLegacy = storedFields.every((value) => value === null);
-  if (isLegacy) {
-    return { code: currentCode, decimalPlaces: currentDecimalPlaces, legacy: true };
-  }
-  if (
-    !order.currencyCode ||
-    !Number.isInteger(order.currencyDecimalPlaces) ||
-    order.currencyDecimalPlaces! < 0 ||
-    order.currencyDecimalPlaces! > 3 ||
-    !Number.isSafeInteger(order.totalAmountMinor)
-  ) {
+  order: PaymentSessionOrderCurrencyFields,
+): OrderCurrencySnapshot {
+  const currency = resolveOrderCurrencySnapshot(order);
+  if (currency.legacyFallback && order.totalAmountMinor != null) {
     throw new ValidationError("Order currency snapshot is incomplete. Payment cannot be started safely.");
   }
-  const storedCode = order.currencyCode.trim().toUpperCase();
-  if (storedCode !== currentCode || order.currencyDecimalPlaces !== currentDecimalPlaces) {
-    throw new ValidationError(
-      "Store currency changed after this order was created. Review the order before starting payment.",
-    );
+  if (
+    !currency.legacyFallback &&
+    (!Number.isSafeInteger(order.totalAmountMinor) || Number(order.totalAmountMinor) <= 0)
+  ) {
+    throw new ValidationError("Order payment amount snapshot is incomplete. Payment cannot be started safely.");
   }
-  return { code: storedCode, decimalPlaces: order.currencyDecimalPlaces, legacy: false };
+  return currency;
 }
 
 function resolveAuthoritativeProviderMinorAmount(
   policy: PaymentSessionPolicy,
-  currency: { decimalPlaces: number; legacy: boolean },
+  currency: OrderCurrencySnapshot,
 ): number {
   if (Number.isSafeInteger(policy.chargeAmountMinor) && policy.chargeAmountMinor! > 0) {
     return policy.chargeAmountMinor!;
   }
-  if (!currency.legacy) {
+  if (!currency.legacyFallback) {
     throw new ValidationError("Order payment amount snapshot is incomplete. Payment cannot be started safely.");
   }
   const amountMinor = Math.round(policy.chargeAmount * 10 ** currency.decimalPlaces);
@@ -216,6 +218,9 @@ export type CustomerPaymentSessionRecoveryOrder = Pick<
   PaymentSessionOrderRow,
   | "id"
   | "totalAmount"
+  | "totalAmountMinor"
+  | "currencyCode"
+  | "currencyDecimalPlaces"
   | "status"
   | "paymentMethod"
   | "paymentStatus"
@@ -239,6 +244,42 @@ const ONLINE_GATEWAY_METHODS = new Set<string>([
   PaymentMethod.POLAR,
 ]);
 
+async function loadCurrentCurrencyPolicySnapshot(db: Database): Promise<{
+  code: string;
+  usdExchangeRate: number | null;
+}> {
+  const rows = await db
+    .select({ key: settings.key, value: settings.value })
+    .from(settings)
+    .where(eq(settings.category, "currency"))
+    .all();
+  const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  const code = normalizeSupportedCurrencyCode(values.currency_code);
+  if (!code) {
+    throw new ValidationError(
+      "Current store currency settings are incomplete. Save the currency settings before applying them to an order payment.",
+    );
+  }
+  const rawRate = values.usd_exchange_rate;
+  const parsedRate = rawRate == null ? Number.NaN : Number(rawRate);
+  return {
+    code,
+    usdExchangeRate: Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : null,
+  };
+}
+
+function createCurrentCurrencyReader(db: Database) {
+  let configPromise: ReturnType<typeof loadCurrentCurrencyPolicySnapshot> | undefined;
+  const get = () => {
+    configPromise ??= loadCurrentCurrencyPolicySnapshot(db);
+    return configPromise;
+  };
+  return {
+    get,
+    getCode: async () => (await get()).code,
+  };
+}
+
 export async function createStripePaymentSession(
   c: PaymentRouteContext,
   input: CreatePaymentSessionInput,
@@ -255,13 +296,15 @@ async function createStripePaymentSessionForOrder(
 ): Promise<(CreatedCustomerPaymentSession & { gateway: "stripe" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
   assertOrderCanReachGatewayReadinessCheck(order, PaymentMethod.STRIPE, "Stripe");
+  const orderCurrency = resolveAuthoritativeOrderCurrency(order);
+  const currentCurrency = createCurrentCurrencyReader(db);
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, "stripe");
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
-  }, checkoutFlowSettings);
+  }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
 
   const stripe = await loadCheckoutGatewaySettings(
     db,
@@ -269,12 +312,10 @@ async function createStripePaymentSessionForOrder(
     encryptionKey,
     "stripe",
   );
-  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.STRIPE, "Stripe");
-  await ensurePendingPaymentPlanForSession(db, order, policy);
-  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const orderCurrency = resolveAuthoritativeOrderCurrency(order, currencyConfig);
   const currency = orderCurrency.code.toLowerCase();
   const amountInSmallestUnit = resolveAuthoritativeProviderMinorAmount(policy, orderCurrency);
+  await ensurePendingPaymentPlanForSession(db, order, policy);
+  await ensureOrderCanUseGateway(db, order, PaymentMethod.STRIPE, "Stripe");
   const attemptIdentity = await buildPaymentSessionAttemptIdentity({
     orderId: input.orderId,
     gateway: "stripe",
@@ -403,6 +444,11 @@ export async function resolveCustomerPaymentSessionRecovery(
 
   try {
     assertOrderCanUseGateway(order, gateway, gatewayLabel(gateway));
+    const orderCurrency = resolveAuthoritativeOrderCurrency(order);
+    const currentCurrency = createCurrentCurrencyReader(db);
+    if (gateway === "sslcommerz" && orderCurrency.code !== "BDT") {
+      throw new ValidationError("SSLCommerz checkout requires the order currency to be BDT.");
+    }
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, gateway);
     const policy = await resolvePaymentSessionPolicy(
@@ -410,6 +456,8 @@ export async function resolveCustomerPaymentSessionRecovery(
       order,
       shouldRequestBalancePayment(order) ? { paymentType: "balance" } : {},
       checkoutFlowSettings,
+      orderCurrency,
+      currentCurrency.getCode,
     );
     await loadCheckoutGatewaySettings(db, c.env.CACHE, encryptionKey, gateway);
 
@@ -441,13 +489,18 @@ async function createSSLCommerzPaymentSessionForOrder(
 ): Promise<(CreatedCustomerPaymentSession & { gateway: "sslcommerz" }) | PaymentSessionProcessingResponse> {
   const db = c.get("db");
   assertOrderCanReachGatewayReadinessCheck(order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
+  const orderCurrency = resolveAuthoritativeOrderCurrency(order);
+  const currentCurrency = createCurrentCurrencyReader(db);
+  if (orderCurrency.code !== "BDT") {
+    throw new ValidationError("SSLCommerz checkout requires the order currency to be BDT.");
+  }
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, "sslcommerz");
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
-  }, checkoutFlowSettings);
+  }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
   const sslcommerzAmountIssue = getSSLCommerzBdtAmountLimitIssue(policy.chargeAmount);
   if (sslcommerzAmountIssue) {
     throw new ValidationError(sslcommerzAmountIssue);
@@ -459,10 +512,6 @@ async function createSSLCommerzPaymentSessionForOrder(
     encryptionKey,
     "sslcommerz",
   );
-  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
-  await ensurePendingPaymentPlanForSession(db, order, policy);
-  const currencyConfig = await getCurrencyConfig(db, c.env.CACHE);
-  const orderCurrency = resolveAuthoritativeOrderCurrency(order, currencyConfig);
   const currency = orderCurrency.code;
 
   const origin = getTrustedApiOrigin(c.env, c.req.url);
@@ -475,6 +524,8 @@ async function createSSLCommerzPaymentSessionForOrder(
   const failUrl = buildCallbackUrl(apiBase, "/payment/sslcommerz/fail", callbackParams);
   const cancelUrl = buildCallbackUrl(apiBase, "/payment/sslcommerz/cancel", callbackParams);
   const ipnUrl = `${apiBase}/webhooks/sslcommerz`;
+  await ensurePendingPaymentPlanForSession(db, order, policy);
+  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.SSLCOMMERZ, "SSLCommerz");
 
   const attemptIdentity = await buildPaymentSessionAttemptIdentity({
     orderId: input.orderId,
@@ -596,23 +647,21 @@ async function createPolarPaymentSessionForOrder(
   const db = c.get("db");
   const kv = c.env.CACHE;
   assertOrderCanReachGatewayReadinessCheck(order, PaymentMethod.POLAR, "Polar");
+  const orderCurrency = resolveAuthoritativeOrderCurrency(order);
+  const currentCurrency = createCurrentCurrencyReader(db);
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, "polar");
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
-  }, checkoutFlowSettings);
+  }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
   const polarSettings = await loadCheckoutGatewaySettings(
     db,
     kv,
     encryptionKey,
     "polar",
   );
-  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.POLAR, "Polar");
-  await ensurePendingPaymentPlanForSession(db, order, policy);
-  const currencyConfig = await getCurrencyConfig(db, kv);
-  const orderCurrency = resolveAuthoritativeOrderCurrency(order, currencyConfig);
   let currency = orderCurrency.code.toLowerCase();
   let paymentAmount = policy.chargeAmount;
   const originalLocalAmount = paymentAmount;
@@ -620,11 +669,16 @@ async function createPolarPaymentSessionForOrder(
   let exchangeRate = 1;
 
   if (!POLAR_SUPPORTED_CURRENCIES.has(currency)) {
+    const currencyConfig = await currentCurrency.get();
+    if (currencyConfig.code !== orderCurrency.code) {
+      throw new ValidationError(
+        "The configured USD exchange rate belongs to a different currency than this order. Repair the order currency or use another payment gateway.",
+      );
+    }
     const rate = currencyConfig.usdExchangeRate;
-    if (!rate || rate <= 0) {
-      throw new ApiError(400, "CURRENCY_ERROR",
-        `Currency "${currency.toUpperCase()}" is not supported by Polar and no USD exchange rate is configured. ` +
-        "Please set a USD exchange rate in Settings > Currency."
+    if (rate == null) {
+      throw new ValidationError(
+        "This order currency is not supported by Polar and no explicit USD exchange rate is saved. Save a valid rate or use another payment gateway.",
       );
     }
     console.log(`[Polar] Converting ${currency.toUpperCase()} -> USD at rate ${rate} for order ${input.orderId}`);
@@ -639,6 +693,9 @@ async function createPolarPaymentSessionForOrder(
     decimals === orderCurrency.decimalPlaces
       ? resolveAuthoritativeProviderMinorAmount(policy, orderCurrency)
       : Math.round(paymentAmount * Math.pow(10, decimals));
+  if (!Number.isSafeInteger(amountInCents) || amountInCents <= 0) {
+    throw new ValidationError("Payment amount must be greater than zero");
+  }
   const baseUrl = getTrustedApiOrigin(c.env, c.req.url);
   const callbackParams = {
     order_id: input.orderId,
@@ -646,6 +703,8 @@ async function createPolarPaymentSessionForOrder(
   };
   const successUrl = buildCallbackUrl(baseUrl, "/api/v1/payment/polar/success", callbackParams);
   const cancelUrl = buildCallbackUrl(baseUrl, "/api/v1/payment/polar/cancel", callbackParams);
+  await ensurePendingPaymentPlanForSession(db, order, policy);
+  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.POLAR, "Polar");
 
   const attemptIdentity = await buildPaymentSessionAttemptIdentity({
     orderId: input.orderId,

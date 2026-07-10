@@ -21,6 +21,7 @@ function createDb(
     readiness: {
         activeShippingRows?: Array<{ id: string }>;
         activeHierarchyRows?: Array<{ id: string }>;
+        currencyRows?: Array<{ key: string; value: string }>;
     } = {},
 ) {
     const select = vi.fn()
@@ -39,7 +40,7 @@ function createDb(
         .mockReturnValueOnce({
             from: () => ({
                 where: () => ({
-                    all: () => Promise.resolve([
+                    all: () => Promise.resolve(readiness.currencyRows ?? [
                         { key: "currency_code", value: "bdt" },
                         { key: "currency_symbol", value: "৳" },
                     ]),
@@ -118,6 +119,37 @@ describe("getCheckoutConfig", () => {
         );
         expect(config.unavailable).toBe(false);
         expect(config.checkoutReadiness.ready).toBe(true);
+        expect(config.currency).toEqual({
+            code: "BDT",
+            symbol: "৳",
+            decimalPlaces: 2,
+        });
+    });
+
+    it("fails closed when persisted checkout currency is unsupported", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+
+        const config = await getCheckoutConfig(createDb({}, undefined, {
+            currencyRows: [
+                { key: "currency_code", value: "USDT" },
+                { key: "currency_symbol", value: "₿" },
+            ],
+        }) as never);
+
+        expect(config.currency).toEqual({
+            code: "BDT",
+            symbol: "৳",
+            decimalPlaces: 2,
+        });
+        expect(config.gateways).toEqual([
+            expect.objectContaining({
+                id: "cod",
+                currencies: ["BDT"],
+            }),
+        ]);
     });
 
     it("publishes the active default only when it survives public gateway readiness", async () => {

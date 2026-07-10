@@ -5,8 +5,10 @@ import {
   applyAction,
   createInitialState,
   createVariantIndex,
+  filterVariantsBySelection,
   getSelectionStatus,
   parseVariantFromDOM,
+  resolveExactVariantSelection,
   validateSelection,
 } from "./variant-state-machine";
 
@@ -54,6 +56,23 @@ describe("variant DOM fallback parsing", () => {
     element.dataset.variantId = "var_legacy";
 
     expect(parseVariantFromDOM(element).trackInventory).toBeUndefined();
+  });
+
+  it("preserves fractional prices and discounts from fallback DOM data", () => {
+    const element = document.createElement("button");
+    element.dataset.variantPrice = "1.234";
+    element.dataset.variantDiscountedPrice = "1.111";
+    element.dataset.variantDiscount = "0.123";
+    element.dataset.variantDiscountPercentage = "10.5";
+    element.dataset.variantDiscountAmount = "0.005";
+
+    expect(parseVariantFromDOM(element)).toMatchObject({
+      price: 1.234,
+      discountedPrice: 1.111,
+      discount: 0.123,
+      discountPercentage: 10.5,
+      discountAmount: 0.005,
+    });
   });
 });
 
@@ -117,5 +136,131 @@ describe("variant selection validation", () => {
     const index = createVariantIndex([simpleSku]);
 
     expect(createInitialState(index).selectedVariant).toEqual(simpleSku);
+  });
+
+  it("keeps SELECT actions idempotent for auto-selected single axes", () => {
+    const red = pricedVariant({
+      id: "var_42_red",
+      size: "42",
+      color: "Red",
+      price: 4_500,
+    });
+    const green = pricedVariant({
+      id: "var_42_green",
+      size: "42",
+      color: "Green",
+      price: 4_000,
+    });
+    const index = createVariantIndex([red, green]);
+    const initial = createInitialState(index);
+
+    expect(initial.selectedSize).toBe("42");
+    const hydratedSize = applyAction(
+      initial,
+      { type: "SELECT_SIZE", value: "42" },
+      index,
+    );
+    expect(hydratedSize.selectedSize).toBe("42");
+  });
+
+  it("resolves only complete valid query selections", () => {
+    const red = pricedVariant({
+      id: "var_42_red",
+      size: "42",
+      color: "Red",
+      price: 4_500,
+    });
+    const green = pricedVariant({
+      id: "var_42_green",
+      size: "42",
+      color: "Green",
+      price: 4_000,
+    });
+    const variants = [red, green];
+
+    expect(
+      resolveExactVariantSelection(variants, {
+        selectedSize: "42",
+        selectedColor: "Green",
+      }),
+    ).toEqual({
+      variant: green,
+      selectedSize: "42",
+      selectedColor: "Green",
+    });
+    expect(
+      resolveExactVariantSelection(variants, { selectedSize: "42" }),
+    ).toBeNull();
+    expect(
+      resolveExactVariantSelection(variants, {
+        selectedSize: "99",
+        selectedColor: "Green",
+      }),
+    ).toBeNull();
+  });
+
+  it("scopes partial-selection candidates to every selected axis", () => {
+    const size40 = pricedVariant({
+      id: "var_40_red",
+      size: "40",
+      color: "Red",
+      price: 45_600,
+    });
+    const size42 = pricedVariant({
+      id: "var_42_green",
+      size: "42",
+      color: "Green",
+      price: 4_500,
+    });
+
+    expect(
+      filterVariantsBySelection([size40, size42], {
+        selectedSize: "40",
+      }),
+    ).toEqual([size40]);
+  });
+
+  it("switches between disjoint available combinations without radio deadlock", () => {
+    const size40Red = pricedVariant({
+      id: "var_40_red",
+      size: "40",
+      color: "Red",
+      price: 45_000,
+    });
+    const size41Green = pricedVariant({
+      id: "var_41_green",
+      size: "41",
+      color: "Green",
+      price: 4_500,
+    });
+    const index = createVariantIndex([size40Red, size41Green]);
+    let state = createInitialState(index);
+
+    state = applyAction(state, { type: "SELECT_SIZE", value: "40" }, index);
+    state = applyAction(state, { type: "SELECT_COLOR", value: "Red" }, index);
+    expect(state.selectedVariant).toEqual(size40Red);
+
+    state = applyAction(state, { type: "SELECT_SIZE", value: "41" }, index);
+    expect(state).toMatchObject({
+      selectedSize: "41",
+      selectedColor: undefined,
+      selectedVariant: null,
+    });
+    expect(state.availableSizes).toEqual(new Set(["40", "41"]));
+    expect(state.availableColors).toEqual(new Set(["Red", "Green"]));
+
+    state = applyAction(
+      state,
+      { type: "SELECT_COLOR", value: "Green" },
+      index,
+    );
+    expect(state.selectedVariant).toEqual(size41Green);
+
+    state = applyAction(state, { type: "SELECT_COLOR", value: "Red" }, index);
+    expect(state).toMatchObject({
+      selectedSize: undefined,
+      selectedColor: "Red",
+      selectedVariant: null,
+    });
   });
 });

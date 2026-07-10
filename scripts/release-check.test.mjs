@@ -1603,7 +1603,12 @@ function sitemapIndexXml(locs) {
   ].join("");
 }
 
-function feedXml({ availability = "in_stock", price = "10.00 BDT", salePrice } = {}) {
+function feedXml({
+  availability = "in_stock",
+  price = "10.00 BDT",
+  salePrice,
+  shippingPrice,
+} = {}) {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel>',
@@ -1614,6 +1619,12 @@ function feedXml({ availability = "in_stock", price = "10.00 BDT", salePrice } =
     `<g:availability>${availability}</g:availability>`,
     `<g:price>${price}</g:price>`,
     ...(salePrice === undefined ? [] : [`<g:sale_price>${salePrice}</g:sale_price>`]),
+    ...(shippingPrice === undefined
+      ? []
+      : [
+          "<g:shipping><g:country>BD</g:country>",
+          `<g:price>${shippingPrice}</g:price></g:shipping>`,
+        ]),
     "</item>",
     "</channel></rss>",
   ].join("");
@@ -1866,11 +1877,26 @@ describe("release-check local evaluators", () => {
       ok: true,
       checkedRows: 3,
       blockers: [],
+      duplicateIds: [],
     });
 
     expect(evaluateRemediationTracker(trackerWithOpenBlocker())).toMatchObject({
       ok: false,
       blockers: [{ id: "PAY-001", severity: "P1", status: "In Progress" }],
+    });
+  });
+
+  it("fails duplicate remediation tracker IDs", () => {
+    const duplicateTracker = [
+      verifiedTracker(),
+      "| SEC-001 | P2 | Verified | API | Duplicate. | Tests. |",
+    ].join("\n");
+
+    expect(evaluateRemediationTracker(duplicateTracker)).toMatchObject({
+      ok: false,
+      checkedRows: 4,
+      blockers: [],
+      duplicateIds: ["SEC-001"],
     });
   });
 
@@ -4024,6 +4050,14 @@ describe("release-check discovery evaluators", () => {
       salePriceCount: 1,
     });
     expect(evaluateProductFeedXml(feedXml({
+      price: "12.00 BDT",
+      shippingPrice: "0.00 BDT",
+    }), { storefrontOrigin })).toMatchObject({
+      ok: true,
+      priceCount: 1,
+      salePriceCount: 0,
+    });
+    expect(evaluateProductFeedXml(feedXml({
       price: "10.00 BDT",
       salePrice: "10.00 BDT",
     }), { storefrontOrigin })).toMatchObject({
@@ -4036,6 +4070,31 @@ describe("release-check discovery evaluators", () => {
     }), { storefrontOrigin })).toMatchObject({
       ok: false,
       errors: ["feed item 1 sale_price currency must match price currency."],
+    });
+    expect(evaluateProductFeedXml(feedXml({
+      price: "0.00 BDT",
+    }), { storefrontOrigin })).toMatchObject({
+      ok: false,
+      errors: [
+        "feed item 1 price must be a positive amount plus ISO currency.",
+      ],
+    });
+    expect(evaluateProductFeedXml(feedXml({
+      price: "10.00 BDT",
+      salePrice: "0.00 BDT",
+    }), { storefrontOrigin })).toMatchObject({
+      ok: false,
+      errors: [
+        "feed item 1 sale_price must be a positive amount plus ISO currency.",
+      ],
+    });
+    expect(evaluateProductFeedXml(feedXml({
+      price: "1.234 KWD",
+    }), { storefrontOrigin })).toMatchObject({
+      ok: false,
+      errors: [
+        "feed item 1 price must be a positive amount plus ISO currency.",
+      ],
     });
 
     expect(evaluateProductFeedXml(emptyFeedXml(), {

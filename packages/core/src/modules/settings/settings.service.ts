@@ -5,7 +5,10 @@
 import { siteSettings, settings } from "@scalius/database/schema";
 import { eq, and } from "drizzle-orm";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
-import { getDecimalPlaces } from "@scalius/shared/currency";
+import {
+    getDecimalPlaces,
+    normalizeSupportedCurrencyCode,
+} from "@scalius/shared/currency";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
@@ -35,6 +38,25 @@ const DEFAULT_CURRENCY: CurrencyConfig = {
     usdExchangeRate: 1,
     decimalPlaces: 2,
 };
+
+function normalizeCurrencyConfig(value: unknown): CurrencyConfig | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const candidate = value as Record<string, unknown>;
+    const code = normalizeSupportedCurrencyCode(candidate.code);
+    const symbol = typeof candidate.symbol === "string" ? candidate.symbol.trim() : "";
+    const usdExchangeRate = typeof candidate.usdExchangeRate === "number"
+        ? candidate.usdExchangeRate
+        : Number(candidate.usdExchangeRate);
+    if (!code || !symbol || !Number.isFinite(usdExchangeRate) || usdExchangeRate <= 0) {
+        return null;
+    }
+    return {
+        code,
+        symbol,
+        usdExchangeRate,
+        decimalPlaces: getDecimalPlaces(code),
+    };
+}
 
 // ─────────────────────────────────────────
 // Storefront URL
@@ -107,7 +129,10 @@ export async function getCurrencyConfig(
     if (kv) {
         try {
             const cached = await kv.get("gw:currency");
-            if (cached) return JSON.parse(cached);
+            if (cached) {
+                const normalized = normalizeCurrencyConfig(JSON.parse(cached));
+                if (normalized) return normalized;
+            }
         } catch (e: unknown) {
             console.warn("[Settings] KV read failed for currency:", e instanceof Error ? e.message : e);
         }
@@ -121,15 +146,12 @@ export async function getCurrencyConfig(
             .all();
 
         const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-        const code = map.currency_code ?? DEFAULT_CURRENCY.code;
-        const config: CurrencyConfig = {
+        const code = normalizeSupportedCurrencyCode(map.currency_code ?? DEFAULT_CURRENCY.code);
+        const config = normalizeCurrencyConfig({
             code,
             symbol: map.currency_symbol ?? DEFAULT_CURRENCY.symbol,
-            usdExchangeRate: map.usd_exchange_rate
-                ? parseFloat(map.usd_exchange_rate)
-                : DEFAULT_CURRENCY.usdExchangeRate,
-            decimalPlaces: getDecimalPlaces(code),
-        };
+            usdExchangeRate: map.usd_exchange_rate ?? DEFAULT_CURRENCY.usdExchangeRate,
+        }) ?? DEFAULT_CURRENCY;
 
         if (kv) {
             try {

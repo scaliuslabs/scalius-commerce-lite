@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   getStripeSettings: vi.fn(),
   getSSLCommerzSettings: vi.fn(),
   getPolarSettings: vi.fn(),
-  getCurrencyConfig: vi.fn(),
+  currentCurrencyReads: vi.fn(),
   assertNoActivePaymentSessionAttempt: vi.fn(),
   buildPaymentSessionAttemptIdentity: vi.fn(),
   claimPaymentSessionAttempt: vi.fn(),
@@ -46,10 +46,6 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal
   getPolarSettings: mocks.getPolarSettings,
 }));
 
-vi.mock("@scalius/core/modules/settings/settings.service", () => ({
-  getCurrencyConfig: mocks.getCurrencyConfig,
-}));
-
 vi.mock("@scalius/core/modules/payments/payment-session-attempts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/payments/payment-session-attempts")>()),
   assertNoActivePaymentSessionAttempt: mocks.assertNoActivePaymentSessionAttempt,
@@ -62,7 +58,10 @@ vi.mock("@scalius/core/modules/payments/payment-session-attempts", async (import
 import { polarPaymentRoutes } from "./polar-routes";
 import { sslcommerzPaymentRoutes } from "./sslcommerz-routes";
 import { stripePaymentRoutes } from "./stripe-routes";
-import { createCustomerAccountPaymentSession } from "./payment-session-create";
+import {
+  createCustomerAccountPaymentSession,
+  resolveCustomerPaymentSessionRecovery,
+} from "./payment-session-create";
 import { PAYMENT_SESSION_PROVIDER_REQUEST_TIMEOUT_MS } from "./payment-provider-deadline";
 import {
   OrderStatus,
@@ -75,6 +74,7 @@ import {
   orderReceipts as orderReceiptsTable,
   paymentSessionAttempts as paymentSessionAttemptsTable,
   paymentPlans as paymentPlansTable,
+  settings as settingsTable,
   siteSettings as siteSettingsTable,
 } from "@scalius/database/schema";
 
@@ -109,7 +109,10 @@ interface DbMockOptions {
   checkoutMode?: "guest_cod_only" | "gateways_only" | "all";
   partialPaymentEnabled?: boolean;
   partialPaymentAmount?: number;
-  paymentPlan?: { depositAmount?: number; balanceDue: number; status: string } | null;
+  paymentPlan?: { totalAmount?: number; depositAmount?: number; balanceDue: number; status: string } | null;
+  paymentPlanInsertConflict?: boolean;
+  currentCurrencyCode?: string | null;
+  explicitUsdExchangeRate?: string | null;
   paymentRows?: Array<{ paymentMethod: string; status: string }>;
   paymentSessionAttemptRows?: Array<{ orderId: string }>;
   receiptOrderId?: string | null;
@@ -148,9 +151,12 @@ function createDbMock(options: string | DbMockOptions = "stripe") {
     values: vi.fn((values: unknown) => {
       insertedValues.push(values);
       return {
-      onConflictDoNothing: vi.fn(async () => {
-        if (opts.insertError) throw opts.insertError;
-      }),
+      onConflictDoNothing: vi.fn(() => ({
+        returning: vi.fn(async () => {
+          if (opts.insertError) throw opts.insertError;
+          return opts.paymentPlanInsertConflict ? [] : [{ id: "payment_plan_1" }];
+        }),
+      })),
       onConflictDoUpdate: vi.fn(async () => {
         if (opts.insertError) throw opts.insertError;
       }),
@@ -184,11 +190,24 @@ function createDbMock(options: string | DbMockOptions = "stripe") {
             };
           }
           if (selectedTable === paymentPlansTable) {
-            return opts.paymentPlan ?? null;
+            return opts.paymentPlan
+              ? { totalAmount: currentOrder.totalAmount, ...opts.paymentPlan }
+              : null;
           }
           return currentOrder;
         }),
         all: vi.fn(async () => {
+          if (selectedTable === settingsTable) {
+            mocks.currentCurrencyReads();
+            const rows: Array<{ key: string; value: string }> = [];
+            if (opts.currentCurrencyCode !== null) {
+              rows.push({ key: "currency_code", value: opts.currentCurrencyCode ?? "BDT" });
+            }
+            if (opts.explicitUsdExchangeRate !== null) {
+              rows.push({ key: "usd_exchange_rate", value: opts.explicitUsdExchangeRate ?? "110" });
+            }
+            return rows;
+          }
           if (selectedTable === orderPaymentsTable) {
             return opts.paymentRows ?? [];
           }
@@ -286,7 +305,6 @@ function deferred<T = void>(): {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", usdExchangeRate: 110 });
   mocks.getActivePaymentMethods.mockResolvedValue({
     enabledMethods: ["stripe", "sslcommerz", "polar", "cod"],
     defaultMethod: "cod",
@@ -712,7 +730,7 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
     expect(settings).not.toHaveBeenCalled();
     expect(gateway).not.toHaveBeenCalled();
   });
@@ -796,7 +814,7 @@ describe("payment session receipt-token proof", () => {
     expect(response.status).toBe(503);
     expect(settings).toHaveBeenCalledTimes(1);
     expect(db.__insertedValues).toHaveLength(0);
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.currentCurrencyReads).toHaveBeenCalledTimes(1);
     expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
     expect(gateway).not.toHaveBeenCalled();
   });
@@ -957,10 +975,192 @@ describe("payment session receipt-token proof", () => {
     }));
   });
 
-  it("fails closed before provider work when the current currency differs from the order snapshot", async () => {
-    mocks.getCurrencyConfig.mockResolvedValueOnce({ code: "USD", usdExchangeRate: 1 });
+  it.each([
+    {
+      label: "JPY",
+      order: {
+        totalAmount: 100.49,
+        totalAmountMinor: 100,
+        currencyCode: "JPY",
+        currencyDecimalPlaces: 0,
+        balanceDue: 100,
+      },
+      expectedAmount: 100,
+      expectedCurrency: "jpy",
+    },
+    {
+      label: "KWD",
+      order: {
+        totalAmount: 1.2346,
+        totalAmountMinor: 1_235,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+        balanceDue: 1.235,
+      },
+      expectedAmount: 1_235,
+      expectedCurrency: "kwd",
+    },
+  ])("uses the immutable $label precision for full Stripe sessions", async ({
+    order,
+    expectedAmount,
+    expectedCurrency,
+  }) => {
     const { app, kv } = createTestApp("valid", {
       paymentMethod: "stripe",
+      order,
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
+      amount: expectedAmount,
+      currency: expectedCurrency,
+    }));
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
+  });
+
+  it("uses KWD precision for deposit policy and persisted payment-plan amounts", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      currentCurrencyCode: "KWD",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 0.6174,
+      order: {
+        totalAmount: 1.2346,
+        totalAmountMinor: 1_235,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+        balanceDue: 1.235,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+          paymentType: "deposit",
+          depositAmount: 0.617,
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
+      amount: 617,
+      currency: "kwd",
+      paymentType: "deposit",
+    }));
+    expect(db.__insertedValues).toContainEqual(expect.objectContaining({
+      orderId: "order_1",
+      totalAmount: 1.235,
+      depositAmount: 0.617,
+      balanceDue: 0.618,
+    }));
+  });
+
+  it("uses a saved KWD payment plan after current partial-payment settings change currency", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      currentCurrencyCode: "USD",
+      partialPaymentEnabled: false,
+      partialPaymentAmount: 999,
+      order: {
+        totalAmount: 1.2346,
+        totalAmountMinor: 1_235,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+        balanceDue: 1.235,
+      },
+      paymentPlan: {
+        totalAmount: 1.235,
+        depositAmount: 0.617,
+        balanceDue: 0.618,
+        status: PaymentPlanStatus.PENDING,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
+      amount: 617,
+      currency: "kwd",
+      paymentType: "deposit",
+    }));
+    expect(db.__insertedValues).toHaveLength(0);
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: "inferred partial payment", partialPaymentAmount: 0.617, paymentType: undefined },
+    { label: "deposit larger than the historical total", partialPaymentAmount: 5, paymentType: "deposit" },
+  ])("fails closed for a no-plan KWD $label configured in current USD", async ({
+    partialPaymentAmount,
+    paymentType,
+  }) => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      currentCurrencyCode: "USD",
+      partialPaymentEnabled: true,
+      partialPaymentAmount,
+      order: {
+        totalAmount: 1.2346,
+        totalAmountMinor: 1_235,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+        balanceDue: 1.235,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "chk_valid",
+          ...(paymentType ? { paymentType } : {}),
+        }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining("different currency") },
+    });
+    expect(mocks.currentCurrencyReads).toHaveBeenCalledTimes(1);
+    expect(db.__insertedValues).toHaveLength(0);
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("preserves a saved order currency after the merchant changes current settings", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      currentCurrencyCode: "USD",
       order: {
         totalAmount: 40.02,
         totalAmountMinor: 4_002,
@@ -980,12 +1180,72 @@ describe("payment session receipt-token proof", () => {
       envFor(kv),
     );
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({
-      error: { message: expect.stringContaining("Store currency changed") },
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
+      amount: 4_002,
+      currency: "bdt",
+    }));
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
+  });
+
+  it("uses BDT for truly legacy-null order snapshots regardless of current settings", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "stripe",
+      currentCurrencyCode: "USD",
+      order: {
+        totalAmount: 125,
+        totalAmountMinor: null,
+        currencyCode: null,
+        currencyDecimalPlaces: null,
+        balanceDue: 125,
+      },
     });
-    expect(mocks.buildPaymentSessionAttemptIdentity).not.toHaveBeenCalled();
-    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
+      amount: 12_500,
+      currency: "bdt",
+    }));
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
+  });
+
+  it("keeps customer recovery eligible in the immutable order currency after settings change", async () => {
+    const db = createDbMock({
+      paymentMethod: "stripe",
+      currentCurrencyCode: "USD",
+      order: {
+        totalAmount: 1.2346,
+        totalAmountMinor: 1_235,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+        balanceDue: 1.235,
+      },
+    });
+    const kv = createKvMock("valid");
+    const context = createPaymentRouteContext(db, kv);
+
+    const result = await resolveCustomerPaymentSessionRecovery(context, {
+      orderId: "order_1",
+      expectedCustomerId: "customer_1",
+    });
+
+    expect(result).toMatchObject({
+      eligible: true,
+      gateway: "stripe",
+      paymentType: "full",
+      amountDue: 1.235,
+    });
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
   });
 
   it("fails before provider calls when a pending deposit payment plan cannot be persisted", async () => {
@@ -1004,16 +1264,52 @@ describe("payment session receipt-token proof", () => {
         body: JSON.stringify({
           orderId: "order_1",
           receiptToken: "chk_valid",
+          paymentType: "deposit",
         }),
       },
       envFor(kv),
     );
 
     expect(response.status).toBe(500);
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.currentCurrencyReads).toHaveBeenCalledTimes(1);
     expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
     expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
     expect(mocks.markPaymentSessionAttemptCreated).not.toHaveBeenCalled();
+  });
+
+  it("does not switch gateways or call a provider when a concurrent payment plan wins", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 50,
+      paymentPlanInsertConflict: true,
+      order: {
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+        balanceDue: 125,
+      },
+      paymentRows: [
+        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.FAILED },
+      ],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/stripe/intent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining("created concurrently") },
+    });
+    expect(db.__updateSetValues).toHaveLength(0);
+    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
   });
 
   it("creates SSLCommerz deposit sessions from configured amount and currency", async () => {
@@ -1295,7 +1591,7 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
     expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
     expect(mocks.initSSLCommerzSession).not.toHaveBeenCalled();
   });
@@ -1325,13 +1621,14 @@ describe("payment session receipt-token proof", () => {
         body: JSON.stringify({
           orderId: "order_1",
           receiptToken: "chk_valid",
+          paymentType: "deposit",
         }),
       },
       envFor(kv),
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
     expect(mocks.getStripeSettings).not.toHaveBeenCalled();
     expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
   });
@@ -1395,6 +1692,145 @@ describe("payment session receipt-token proof", () => {
     };
     expectNoReceiptProofInUrl(polarRequest.successUrl ?? null);
     expectNoReceiptProofInUrl(polarRequest.cancelUrl ?? null);
+  });
+
+  it("fails an invalid Polar conversion without switching the order gateway", async () => {
+    const { app, db, kv } = createTestApp("valid", {
+      paymentMethod: "sslcommerz",
+      currentCurrencyCode: "USD",
+      order: {
+        totalAmount: 125,
+        totalAmountMinor: 12_500,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
+        balanceDue: 125,
+        paymentStatus: PaymentStatus.FAILED,
+        paidAmount: 0,
+      },
+      paymentRows: [
+        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.FAILED },
+      ],
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining("different currency") },
+    });
+    expect(mocks.currentCurrencyReads).toHaveBeenCalledTimes(1);
+    expect(db.__updateSetValues).toHaveLength(0);
+    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
+    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+  });
+
+  it("rejects Polar conversion when the USD rate is only the fresh-store default", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "polar",
+      explicitUsdExchangeRate: null,
+      order: {
+        totalAmount: 125,
+        totalAmountMinor: 12_500,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
+        balanceDue: 125,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining("no explicit USD exchange rate") },
+    });
+    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
+    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+  });
+
+  it("allows an explicitly saved parity rate for an unsupported historical currency", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "polar",
+      currentCurrencyCode: "BMD",
+      explicitUsdExchangeRate: "1",
+      order: {
+        totalAmount: 125,
+        totalAmountMinor: 12_500,
+        currencyCode: "BMD",
+        currencyDecimalPlaces: 2,
+        balanceDue: 125,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ productId: "polar_product" }),
+      expect.objectContaining({
+        amount: 12_500,
+        currency: "usd",
+        paymentType: "full",
+      }),
+    );
+  });
+
+  it("creates a supported historical JPY Polar session without reading the current exchange rate", async () => {
+    const { app, kv } = createTestApp("valid", {
+      paymentMethod: "polar",
+      currentCurrencyCode: "USD",
+      order: {
+        totalAmount: 125.4,
+        totalAmountMinor: 125,
+        currencyCode: "JPY",
+        currencyDecimalPlaces: 0,
+        balanceDue: 125,
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/payment/polar/session",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ productId: "polar_product" }),
+      expect.objectContaining({
+        amount: 125,
+        currency: "jpy",
+        paymentType: "full",
+      }),
+    );
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
   });
 
   it("switches a failed unpaid SSLCommerz order to Polar after target readiness passes", async () => {
@@ -2248,7 +2684,7 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(503);
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
     expect(settings).not.toHaveBeenCalled();
     expect(gateway).not.toHaveBeenCalled();
   });
@@ -2302,7 +2738,7 @@ describe("payment session receipt-token proof", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.currentCurrencyReads).toHaveBeenCalledTimes(1);
     expect(settings).not.toHaveBeenCalled();
     expect(gateway).not.toHaveBeenCalled();
   });

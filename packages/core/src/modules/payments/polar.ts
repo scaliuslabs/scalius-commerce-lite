@@ -34,8 +34,14 @@ import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import { canTransitionTo } from "../orders/order-state-machine";
 import { hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../orders/shipment-claim";
-import { pricesEqual, roundPrice } from "@scalius/shared/price-utils";
 import { computeOrderPaymentState } from "./payment-state";
+import {
+    assertOrderPaymentCurrency,
+    orderMoneyEqual,
+    resolveOrderCurrencySnapshot,
+    roundOrderMoney,
+    type OrderCurrencySnapshot,
+} from "./order-currency";
 
 // ---------------------------------------------------------------------------
 // Client factory (one instance per set of credentials)
@@ -468,15 +474,18 @@ function computeLedgerPaymentState(params: {
     totalAmount: number;
     payments: Array<Pick<OrderPayment, "paymentType" | "status" | "amount">>;
     pendingRefundAmount?: number;
+    currency: OrderCurrencySnapshot;
 }) {
-    const capturedAmount = roundPrice(params.payments
+    const capturedAmount = roundOrderMoney(params.payments
         .filter(isCapturedPaymentRow)
-        .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0));
-    const refundedAmount = roundPrice(params.payments
+        .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0), params.currency);
+    const refundedAmount = roundOrderMoney(params.payments
         .filter(isRefundedPaymentRow)
-        .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0) + (params.pendingRefundAmount ?? 0));
-    const paidAmount = roundPrice(Math.max(0, capturedAmount - refundedAmount));
-    const isFullRefund = capturedAmount > 0 && (pricesEqual(paidAmount, 0) || refundedAmount >= capturedAmount);
+        .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0) + (params.pendingRefundAmount ?? 0), params.currency);
+    const paidAmount = roundOrderMoney(Math.max(0, capturedAmount - refundedAmount), params.currency);
+    const isFullRefund = capturedAmount > 0 && (
+        orderMoneyEqual(paidAmount, 0, params.currency) || refundedAmount >= capturedAmount
+    );
 
     if (isFullRefund) {
         return {
@@ -484,7 +493,7 @@ function computeLedgerPaymentState(params: {
             refundedAmount,
             isFullRefund,
             paidAmount: 0,
-            balanceDue: roundPrice(params.totalAmount),
+            balanceDue: roundOrderMoney(params.totalAmount, params.currency),
             paymentStatus: PaymentStatus.REFUNDED,
         };
     }
@@ -497,6 +506,7 @@ function computeLedgerPaymentState(params: {
             totalAmount: params.totalAmount,
             paidAmount,
             paymentStatus: paidAmount < capturedAmount ? PaymentStatus.PARTIAL : undefined,
+            currency: params.currency,
         }),
     };
 }
@@ -592,6 +602,8 @@ export async function processPolarWebhookRefund(
                 version: orders.version,
                 shipmentClaimId: orders.shipmentClaimId,
                 shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+                currencyCode: orders.currencyCode,
+                currencyDecimalPlaces: orders.currencyDecimalPlaces,
             })
             .from(orders)
             .where(eq(orders.id, params.orderId))
@@ -600,6 +612,7 @@ export async function processPolarWebhookRefund(
         if (!order) {
             return { success: false, error: `Order ${params.orderId} not found` };
         }
+        const currency = resolveOrderCurrencySnapshot(order);
         if (hasActiveShipmentClaim(order)) {
             return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE };
         }
@@ -617,6 +630,9 @@ export async function processPolarWebhookRefund(
             })
             .from(orderPayments)
             .where(eq(orderPayments.orderId, params.orderId));
+        for (const payment of paymentRows) {
+            assertOrderPaymentCurrency(payment.currency, currency, "Polar order payment");
+        }
 
         const sourcePayment = paymentRows.find((payment) =>
             payment.paymentMethod === "polar" &&
@@ -630,25 +646,32 @@ export async function processPolarWebhookRefund(
             return { success: false, error: `Polar payment ${params.polarCheckoutId} is not confirmed yet` };
         }
 
-        const sourceRefundedAmount = roundPrice(paymentRows
+        const sourceRefundedAmount = roundOrderMoney(paymentRows
             .filter((payment) => isRefundForSourcePayment(payment, sourcePayment.id))
-            .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0));
-        const sourcePaymentAmount = roundPrice(Number(sourcePayment.amount ?? 0));
+            .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0), currency);
+        const sourcePaymentAmount = roundOrderMoney(Number(sourcePayment.amount ?? 0), currency);
         const isSourceFullyRefunded = params.polarStatus === "refunded";
         let sourceTargetRefundedAmount: number;
         if (isSourceFullyRefunded) {
             sourceTargetRefundedAmount = sourcePaymentAmount;
         } else if (params.totalAmount > 0) {
-            sourceTargetRefundedAmount = roundPrice(sourcePaymentAmount * (params.amountRefunded / params.totalAmount));
+            sourceTargetRefundedAmount = roundOrderMoney(
+                sourcePaymentAmount * (params.amountRefunded / params.totalAmount),
+                currency,
+            );
         } else {
             return { success: false, error: "Polar partial refund webhook did not include the original total amount" };
         }
         sourceTargetRefundedAmount = Math.min(sourcePaymentAmount, Math.max(0, sourceTargetRefundedAmount));
-        const localRefundAmount = roundPrice(Math.max(0, sourceTargetRefundedAmount - sourceRefundedAmount));
+        const localRefundAmount = roundOrderMoney(
+            Math.max(0, sourceTargetRefundedAmount - sourceRefundedAmount),
+            currency,
+        );
         const paymentState = computeLedgerPaymentState({
             totalAmount: order.totalAmount,
             payments: paymentRows,
             pendingRefundAmount: localRefundAmount,
+            currency,
         });
         const isFullRefund = paymentState.isFullRefund;
         const nextOrderStatus = getOrderStatusAfterWebhookRefund(order.status, isFullRefund);
@@ -696,7 +719,7 @@ export async function processPolarWebhookRefund(
         }
         if (localRefundAmount > 0) {
             if (existingRefundPayment) {
-                if (!pricesEqual(Number(existingRefundPayment.amount ?? 0), localRefundAmount)) {
+                if (!orderMoneyEqual(Number(existingRefundPayment.amount ?? 0), localRefundAmount, currency)) {
                     return { success: false, error: "Existing Polar external refund row amount does not match the webhook refund target" };
                 }
             } else {

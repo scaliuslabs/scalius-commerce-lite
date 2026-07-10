@@ -16,11 +16,12 @@ import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/
 import { getSSLCommerzBdtAmountLimitIssue } from "@scalius/core/modules/payments/sslcommerz";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { addPrices, roundPrice } from "@scalius/shared/price-utils";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { roundPrice } from "@scalius/shared/price-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
 import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@scalius/core/modules/payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
-import { getAllowedCountries } from "@scalius/core/modules/settings/site-settings.service";
+import { getAllowedCountries, getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
 import {
   deleteOrderPaymentRecoveryChallenge,
   createReceiptOrderSupportRequest,
@@ -1155,8 +1156,10 @@ const cartValidationRoute = createRoute({
 app.openapi(cartValidationRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
+  const currency = await getCurrencySettings(db);
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
+    currencyCode: currency.currencyCode,
   });
   if (!result.valid || !data.city || !data.zone) {
     return ok(c, result);
@@ -1169,6 +1172,7 @@ app.openapi(cartValidationRoute, async (c) => {
       zone: data.zone,
       area: data.area,
       shippingMethodId: data.shippingMethodId,
+      currencyCode: currency.currencyCode,
     },
     result,
   );
@@ -1187,8 +1191,12 @@ async function resolveAuthoritativeTaxQuote(
   cartValidation: TaxQuoteCartValidationResult,
   delivery: TaxQuoteDeliveryResult,
   destination: { city: string; zone: string; area?: string | null },
+  currencyCode: string,
 ): Promise<TaxQuote> {
-  const totalBeforeDiscount = addPrices(cartValidation.subtotal, delivery.shippingCharge);
+  const totalBeforeDiscount = roundPrice(
+    cartValidation.subtotal + delivery.shippingCharge,
+    currencyCode,
+  );
   const normalizedDiscountCode = input.discountCode?.trim().toUpperCase();
   let discountAmount = 0;
   let discountType: StorefrontDiscountType | null = null;
@@ -1237,6 +1245,7 @@ async function resolveAuthoritativeTaxQuote(
       discountItems,
       delivery.shippingCharge,
       validation.applicableProductIds,
+      currencyCode,
     );
   }
 
@@ -1258,9 +1267,13 @@ async function resolveAuthoritativeTaxQuote(
       taxClassId: item.taxClassId,
     })),
     shippingAmount: delivery.shippingCharge,
-    discountAmount: roundPrice(Number(discountAmount)),
+    discountAmount: roundPrice(Number(discountAmount), currencyCode),
     discountType,
     applicableProductIds,
+    currency: {
+      code: currencyCode,
+      decimalPlaces: getDecimalPlaces(currencyCode),
+    },
   });
 }
 
@@ -1291,8 +1304,10 @@ async function taxQuoteFingerprint(quote: TaxQuote): Promise<string> {
 app.openapi(taxQuoteRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
+  const currency = await getCurrencySettings(db);
   const cartValidation = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
+    currencyCode: currency.currencyCode,
   });
   if (!cartValidation.valid) {
     throw new ValidationError("Some items in your cart need attention.", {
@@ -1304,6 +1319,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     zone: data.zone,
     area: data.area,
     shippingMethodId: data.shippingMethodId,
+    currencyCode: currency.currencyCode,
   }, cartValidation);
   const quote = await resolveAuthoritativeTaxQuote(
     db,
@@ -1311,6 +1327,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     cartValidation,
     delivery,
     data,
+    currency.currencyCode,
   );
   const toAmount = (minor: number) => fromMinorUnits(minor, quote.decimalPlaces);
   return ok(c, {
@@ -1407,6 +1424,7 @@ async function resolveCheckoutTotalForPrecommit(
   data: CreateOrderInput,
   cartValidation: CheckoutCartValidationResult,
   deliveryPreflight: CheckoutDeliveryPreflightResult,
+  currencyCode: string,
 ): Promise<number> {
   const quote = await resolveAuthoritativeTaxQuote(
     db,
@@ -1414,6 +1432,7 @@ async function resolveCheckoutTotalForPrecommit(
     cartValidation,
     deliveryPreflight,
     data,
+    currencyCode,
   );
   return fromMinorUnits(quote.totalMinor, quote.decimalPlaces);
 }
@@ -1422,8 +1441,8 @@ function resolveSSLCommerzPrecommitChargeAmount(
   totalAmount: number,
   checkoutSettings: CheckoutSettingsSnapshot,
 ): number {
-  const checkoutTotal = roundPrice(Number(totalAmount));
-  const configuredDeposit = roundPrice(Number(checkoutSettings.partialPaymentAmount));
+  const checkoutTotal = roundPrice(Number(totalAmount), "BDT");
+  const configuredDeposit = roundPrice(Number(checkoutSettings.partialPaymentAmount), "BDT");
   if (
     checkoutSettings.partialPaymentEnabled &&
     Number.isFinite(configuredDeposit) &&
@@ -1442,14 +1461,19 @@ async function assertSSLCommerzPrecommitReadiness(
   checkoutSettings: CheckoutSettingsSnapshot,
   cartValidation: CheckoutCartValidationResult,
   deliveryPreflight: CheckoutDeliveryPreflightResult,
+  currencyCode: string,
 ): Promise<void> {
   if (data.paymentMethod !== PaymentMethod.SSLCOMMERZ) return;
+  if (currencyCode !== "BDT") {
+    throw new ValidationError("SSLCommerz checkout requires the store currency to be BDT.");
+  }
 
   const totalAmount = await resolveCheckoutTotalForPrecommit(
     db,
     data,
     cartValidation,
     deliveryPreflight,
+    currencyCode,
   );
   const chargeAmount = resolveSSLCommerzPrecommitChargeAmount(totalAmount, checkoutSettings);
   const amountIssue = getSSLCommerzBdtAmountLimitIssue(chargeAmount);
@@ -1558,6 +1582,7 @@ app.openapi(createOrderRoute, async (c) => {
       }, 202);
     }
 
+    const currency = await getCurrencySettings(db);
     const cartValidation = await validateStorefrontCartItems(
       db,
       data.items.map((item) => ({
@@ -1569,7 +1594,10 @@ app.openapi(createOrderRoute, async (c) => {
         productName: item.productName,
         variantLabel: item.variantLabel,
       })),
-      { inventoryPool: data.inventoryPool },
+      {
+        inventoryPool: data.inventoryPool,
+        currencyCode: currency.currencyCode,
+      },
     );
     if (!cartValidation.valid) {
       throw new ValidationError("Some items in your cart need attention.", {
@@ -1584,6 +1612,7 @@ app.openapi(createOrderRoute, async (c) => {
         zone: data.zone,
         area: data.area,
         shippingMethodId: data.shippingMethodId,
+        currencyCode: currency.currencyCode,
       },
       cartValidation,
     );
@@ -1603,6 +1632,7 @@ app.openapi(createOrderRoute, async (c) => {
       checkoutSettings,
       cartValidation,
       deliveryPreflight,
+      currency.currencyCode,
     );
 
     // Rate limit new or reclaimable order attempts without punishing legitimate shared-IP buyers.
@@ -1666,6 +1696,7 @@ app.openapi(createOrderRoute, async (c) => {
         items as CartItem[],
         shippingCost,
         applicableProductIds,
+        currency.currencyCode,
       ),
       {
         orderId: checkoutAttempt.orderId,
@@ -1674,6 +1705,10 @@ app.openapi(createOrderRoute, async (c) => {
       cartValidation,
       deliveryPreflight,
       checkoutCustomerIdentity ?? undefined,
+      {
+        code: currency.currencyCode,
+        decimalPlaces: getDecimalPlaces(currency.currencyCode),
+      },
     );
 
     const executionCtx = getOptionalExecutionContext(c);

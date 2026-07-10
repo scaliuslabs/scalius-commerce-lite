@@ -89,7 +89,7 @@ export function extractProductDataFromDOM(
     return null;
   }
 
-  const price = parseInt(priceStr, 10);
+  const price = Number.parseFloat(priceStr);
 
   if (isNaN(price)) {
     console.error("Invalid product price");

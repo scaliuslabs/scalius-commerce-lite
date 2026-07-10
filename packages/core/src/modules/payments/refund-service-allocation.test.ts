@@ -49,6 +49,7 @@ type PaymentRow = {
   id: string;
   orderId: string;
   amount: number;
+  currency: string;
   paymentMethod: "stripe" | "sslcommerz" | "polar" | "cod";
   paymentType: "full" | "deposit" | "balance" | "refund";
   status: string;
@@ -70,6 +71,8 @@ type OrderRow = {
   version: number;
   shipmentClaimId: string | null;
   shipmentClaimExpiresAt: number | null;
+  currencyCode?: string | null;
+  currencyDecimalPlaces?: number | null;
 };
 
 const order: OrderRow = {
@@ -91,6 +94,7 @@ function stripePayment(overrides: Partial<PaymentRow>): PaymentRow {
     id: "pay_stripe",
     orderId: "order_1",
     amount: 100,
+    currency: "BDT",
     paymentMethod: "stripe",
     paymentType: "full",
     status: PaymentRecordStatus.SUCCEEDED,
@@ -107,6 +111,7 @@ function sslPayment(overrides: Partial<PaymentRow>): PaymentRow {
     id: "pay_ssl",
     orderId: "order_1",
     amount: 100,
+    currency: "BDT",
     paymentMethod: "sslcommerz",
     paymentType: "full",
     status: PaymentRecordStatus.SUCCEEDED,
@@ -123,6 +128,7 @@ function refundRow(overrides: Partial<PaymentRow>): PaymentRow {
     id: "refund_1",
     orderId: "order_1",
     amount: 10,
+    currency: "BDT",
     paymentMethod: "stripe",
     paymentType: "refund",
     status: PaymentRecordStatus.REFUNDED,
@@ -192,6 +198,7 @@ function createDbMock({
       paymentType: "refund",
       status: PaymentRecordStatus.REFUNDED,
       amount: values.amount,
+      currency: values.currency,
     })),
   ];
 
@@ -232,8 +239,7 @@ function createDbMock({
           if (table === orderPayments) {
             orderPaymentSelectCount += 1;
             if (orderPaymentSelectCount === 1) return chainFor(pendingRefund);
-            if (orderPaymentSelectCount === 2) return chainFor(payments);
-            if (orderPaymentSelectCount === 3) return chainFor(refunds);
+            if (orderPaymentSelectCount === 2) return chainFor([...payments, ...refunds]);
             return chainFor(finalizerPaymentRows());
           }
           return chainFor([]);
@@ -374,6 +380,47 @@ describe("refund allocation", () => {
     }));
   });
 
+  it("rounds a KWD refund, allocation, and reconciled payment state at three decimals", async () => {
+    const db = createDbMock({
+      orderOverrides: {
+        totalAmount: 2.469,
+        paidAmount: 2.469,
+        balanceDue: 0,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+      },
+      payments: [stripePayment({
+        id: "pay_kwd",
+        amount: 2.469,
+        currency: "KWD",
+        stripeChargeId: "ch_kwd",
+      })],
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      amount: 1.2346,
+      reason: "customer_request",
+      gateway: "stripe",
+    })).resolves.toMatchObject({
+      success: true,
+      amount: 1.235,
+      isFullRefund: false,
+      refundNotification: { amount: 1.235 },
+    });
+
+    expect(mocks.providerCreateRefund).toHaveBeenCalledWith(expect.objectContaining({
+      transactionId: "ch_kwd",
+      amount: 1_235,
+    }));
+    expect(db.insertValues[0]).toMatchObject({ amount: 1.235, currency: "KWD" });
+    expect(db.updateValues).toContainEqual(expect.objectContaining({
+      paidAmount: 1.234,
+      balanceDue: 1.235,
+      paymentStatus: PaymentStatus.PARTIAL,
+    }));
+  });
+
   it("reduces source payment capacity by previous refunded rows before allocating", async () => {
     const db = createDbMock({
       payments: [
@@ -450,6 +497,34 @@ describe("refund allocation", () => {
 
     expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
     expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a corrupt non-selected ledger row before claiming or dispatching a refund", async () => {
+    const db = createDbMock({
+      payments: [
+        stripePayment({ id: "pay_stripe", amount: 100, stripeChargeId: "ch_stripe" }),
+        sslPayment({
+          id: "pay_failed_wrong_currency",
+          amount: 1,
+          currency: "USD",
+          status: PaymentRecordStatus.FAILED,
+          sslcommerzBankTranId: "bank_failed",
+        }),
+      ],
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      amount: 40,
+      reason: "customer_request",
+      gateway: "stripe",
+    })).rejects.toThrow("currency does not match");
+
+    expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(db.insertValues).toHaveLength(0);
+    expect(db.refundAttemptInsertValues).toHaveLength(0);
+    expect(db.updateValues).toHaveLength(0);
   });
 
   it("keeps unresolved provider allocations pending when a later provider outcome is unknown", async () => {
@@ -554,6 +629,34 @@ describe("refund allocation", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
     expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
     expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("preflights every ledger currency before repairing refunded-order inventory", async () => {
+    const db = createDbMock({
+      orderOverrides: {
+        paymentStatus: PaymentStatus.REFUNDED,
+        status: OrderStatus.CANCELLED,
+        inventoryAction: "reserved",
+      },
+      payments: [
+        stripePayment({
+          id: "pay_wrong_currency",
+          currency: "USD",
+          stripeChargeId: "ch_wrong_currency",
+        }),
+      ],
+    });
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      reason: "repair",
+      gateway: "stripe",
+    })).rejects.toThrow("currency does not match");
+
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(db.updateValues).toHaveLength(0);
   });
 
   it("blocks a new refund while hosted payment setup is active", async () => {

@@ -183,6 +183,42 @@ describe("validateCODCollectionDetails", () => {
       ),
     ).toThrow(ValidationError);
   });
+
+  it.each([
+    {
+      currencyCode: "JPY",
+      decimalPlaces: 0,
+      totalAmount: 100.49,
+      collectedAmount: 100,
+      expectedAmount: 100,
+    },
+    {
+      currencyCode: "KWD",
+      decimalPlaces: 3,
+      totalAmount: 1.2346,
+      collectedAmount: 1.235,
+      expectedAmount: 1.235,
+    },
+  ])(
+    "validates $currencyCode COD collection at the immutable order precision",
+    ({ currencyCode, decimalPlaces, totalAmount, collectedAmount, expectedAmount }) => {
+      expect(validateCODCollectionDetails({
+        totalAmount,
+        paidAmount: 0,
+        balanceDue: totalAmount,
+        currencyCode,
+        currencyDecimalPlaces: decimalPlaces,
+      }, {
+        collectedBy: "Courier A",
+        collectedAmount,
+      })).toMatchObject({
+        collectedAmount: expectedAmount,
+        expectedAmount,
+        newPaidAmount: expectedAmount,
+        newBalanceDue: 0,
+      });
+    },
+  );
 });
 
 describe("recordCODCollection", () => {
@@ -228,6 +264,54 @@ describe("recordCODCollection", () => {
     })).rejects.toThrow("collected tracking is missing");
 
     expect(batches).toHaveLength(0);
+  });
+
+  it("records KWD COD money and ledger currency from the immutable order snapshot", async () => {
+    const { db, batches } = createCodDbMock({
+      selectedOrder: {
+        id: "order_kwd",
+        totalAmount: 1.235,
+        paidAmount: 0,
+        balanceDue: 1.235,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+      },
+      selectedTracking: { id: "cod_kwd" },
+    });
+
+    await expect(recordCODCollection(db as never, {
+      orderId: "order_kwd",
+      collectedBy: "Courier A",
+      collectedAmount: 1.2346,
+    })).resolves.toEqual({ success: true });
+
+    expect(batches[0]).toContainEqual(expect.objectContaining({
+      orderId: "order_kwd",
+      amount: 1.235,
+      currency: "KWD",
+      paymentMethod: "cod",
+    }));
+  });
+
+  it("fails a duplicate COD replay whose ledger currency differs from the order snapshot", async () => {
+    const { db } = createCodDbMock({
+      selectedOrder: {
+        id: "order_kwd",
+        totalAmount: 1.235,
+        paidAmount: 1.235,
+        balanceDue: 0,
+        currencyCode: "KWD",
+        currencyDecimalPlaces: 3,
+      },
+      selectedPayment: { id: "pay_wrong", amount: 1.235, currency: "BDT" },
+      selectedTracking: { id: "cod_kwd" },
+    });
+
+    await expect(recordCODCollection(db as never, {
+      orderId: "order_kwd",
+      collectedBy: "Courier A",
+      collectedAmount: 1.235,
+    })).rejects.toThrow("currency does not match");
   });
 });
 

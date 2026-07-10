@@ -58,4 +58,31 @@ describe("payment-state helpers", () => {
       paymentStatus: PaymentStatus.REFUNDED,
     });
   });
+
+  it("uses JPY zero-decimal precision for partial payments", () => {
+    expect(computePaymentStateAfterPayment({
+      totalAmount: 101.4,
+      currentPaidAmount: 0,
+      paymentAmount: 50.6,
+      currency: { currencyCode: "JPY", currencyDecimalPlaces: 0 },
+    })).toEqual({
+      paidAmount: 51,
+      balanceDue: 50,
+      paymentStatus: PaymentStatus.PARTIAL,
+    });
+  });
+
+  it("uses KWD three-decimal precision for refunds", () => {
+    expect(computePaymentStateAfterRefund({
+      totalAmount: 2.469,
+      currentPaidAmount: 2.469,
+      refundAmount: 1.2346,
+      isFullRefund: false,
+      currency: { currencyCode: "KWD", currencyDecimalPlaces: 3 },
+    })).toEqual({
+      paidAmount: 1.234,
+      balanceDue: 1.235,
+      paymentStatus: PaymentStatus.PARTIAL,
+    });
+  });
 });

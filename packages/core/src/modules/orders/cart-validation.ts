@@ -1,6 +1,8 @@
 import type { Database } from "@scalius/database/client";
 import { products, productVariants } from "@scalius/database/schema";
+import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
+import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 export type StorefrontCartIssueCode =
@@ -118,8 +120,8 @@ interface VariantRow {
     taxClassId: string | null;
 }
 
-function variantLabel(variant: Pick<VariantRow, "size" | "color"> | undefined): string | null {
-    if (!variant) return null;
+function variantLabel(variant: Pick<VariantRow, "isDefault" | "size" | "color"> | undefined): string | null {
+    if (!variant || variant.isDefault) return null;
     const parts = [variant.size, variant.color].filter((value): value is string => Boolean(value));
     return parts.length > 0 ? parts.join(" / ") : null;
 }
@@ -128,8 +130,8 @@ function hasCustomerOption(variant: Pick<VariantRow, "size" | "color">): boolean
     return Boolean(variant.size?.trim() || variant.color?.trim());
 }
 
-function isSimpleDefaultSku(variant: Pick<VariantRow, "isDefault" | "size" | "color">): boolean {
-    return variant.isDefault === true && !hasCustomerOption(variant);
+function isSimpleDefaultSku(variant: Pick<VariantRow, "isDefault">): boolean {
+    return variant.isDefault === true;
 }
 
 function isPersistedVariantId(value: unknown): value is string {
@@ -141,10 +143,15 @@ function displayProductName(item: StorefrontCartValidationItem, product?: Produc
 }
 
 function displayVariantLabel(item: StorefrontCartValidationItem, variant?: VariantRow): string | null {
+    if (variant?.isDefault) return null;
     return variantLabel(variant) ?? item.variantLabel ?? null;
 }
 
-function calculateUnitPrice(product: ProductRow, variant: VariantRow | null): number {
+function calculateUnitPrice(
+    product: ProductRow,
+    variant: VariantRow | null,
+    currencyCode: string,
+): number {
     let unitPrice = variant?.price ?? product.price;
     const variantHasDiscount =
         variant &&
@@ -165,7 +172,7 @@ function calculateUnitPrice(product: ProductRow, variant: VariantRow | null): nu
         unitPrice = Math.max(0, unitPrice - (product.discountAmount ?? 0));
     }
 
-    return roundPrice(unitPrice);
+    return roundPrice(unitPrice, currencyCode);
 }
 
 function availableForVariant(variant: VariantRow, pool: InventoryPool): number {
@@ -206,8 +213,12 @@ function addIssue(
 export async function validateStorefrontCartItems(
     db: Database,
     items: StorefrontCartValidationItem[],
-    options: { inventoryPool?: string | null } = {},
+    options: { inventoryPool?: string | null; currencyCode?: string | null } = {},
 ): Promise<StorefrontCartValidationResult> {
+    // API callers pass the normalized merchant setting. Direct Core callers
+    // intentionally retain the historical BDT checkout authority fallback.
+    const currencyCode = normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code;
+
     if (items.length === 0) {
         return markTrustedStorefrontCartValidationResult({
             valid: true,
@@ -330,9 +341,17 @@ export async function validateStorefrontCartItems(
         }
 
         const productVariantsForProduct = variantsByProduct.get(product.id) ?? [];
-        const hasCustomerOptions = productVariantsForProduct.some((variant) =>
-            !variant.isDefault && hasCustomerOption(variant)
+        const nonDefaultVariants = productVariantsForProduct.filter((variant) =>
+            !variant.isDefault
         );
+        const optionTopology = classifyProductVariantOptionAxes(nonDefaultVariants);
+        const hasCustomerOptions = optionTopology !== "none";
+        const hasInvalidNoOptionSku = nonDefaultVariants.some(
+            (variant) => !hasCustomerOption(variant)
+        );
+        const hasConsistentCustomerOptions = optionTopology !== "none" &&
+            optionTopology !== "mixed" &&
+            !hasInvalidNoOptionSku;
         const requestedVariant = variantMap.get(item.variantId);
         const requestedVariantLabel = displayVariantLabel(item, requestedVariant);
 
@@ -358,16 +377,17 @@ export async function validateStorefrontCartItems(
             return;
         }
 
-        const buyerResolvableVariants = hasCustomerOptions
-            ? productVariantsForProduct.filter((variant) => !variant.isDefault && hasCustomerOption(variant))
+        const buyerResolvableVariants = hasConsistentCustomerOptions
+            ? nonDefaultVariants.filter(hasCustomerOption)
             : productVariantsForProduct.length === 1 && isSimpleDefaultSku(productVariantsForProduct[0]!)
                 ? productVariantsForProduct
                 : [];
         if (!buyerResolvableVariants.some((variant) => variant.id === requestedVariant.id)) {
+            const hasInvalidOptionTopology = optionTopology === "mixed" || hasInvalidNoOptionSku;
             addIssue(issues, item, index, {
-                code: hasCustomerOptions ? "VARIANT_REQUIRED" : "PRODUCT_UNAVAILABLE",
-                action: hasCustomerOptions ? "select_variant" : "remove",
-                message: hasCustomerOptions
+                code: hasCustomerOptions && !hasInvalidOptionTopology ? "VARIANT_REQUIRED" : "PRODUCT_UNAVAILABLE",
+                action: hasCustomerOptions && !hasInvalidOptionTopology ? "select_variant" : "remove",
+                message: hasCustomerOptions && !hasInvalidOptionTopology
                     ? `${product.name} needs an option selection before checkout.`
                     : `${product.name} is not available for checkout right now.`,
                 productName: product.name,
@@ -392,8 +412,10 @@ export async function validateStorefrontCartItems(
             return;
         }
 
-        const unitPrice = calculateUnitPrice(product, variant);
-        const submittedPrice = typeof item.price === "number" ? roundPrice(item.price) : undefined;
+        const unitPrice = calculateUnitPrice(product, variant, currencyCode);
+        const submittedPrice = typeof item.price === "number"
+            ? roundPrice(item.price, currencyCode)
+            : undefined;
         if (submittedPrice !== undefined && submittedPrice !== unitPrice) {
             addIssue(issues, item, index, {
                 code: "PRICE_CHANGED",
@@ -407,7 +429,8 @@ export async function validateStorefrontCartItems(
             return;
         }
 
-        subtotal += roundPrice(unitPrice * item.quantity);
+        const lineTotal = roundPrice(unitPrice * item.quantity, currencyCode);
+        subtotal = roundPrice(subtotal + lineTotal, currencyCode);
         hasFreeDeliveryProduct ||= product.freeDelivery === true;
         validatedItems.push({
             index,
@@ -429,7 +452,7 @@ export async function validateStorefrontCartItems(
         valid: issues.length === 0,
         issues,
         items: validatedItems,
-        subtotal: roundPrice(subtotal),
+        subtotal: roundPrice(subtotal, currencyCode),
         hasFreeDeliveryProduct,
     });
 }

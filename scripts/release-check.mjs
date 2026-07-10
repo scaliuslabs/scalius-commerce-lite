@@ -1088,6 +1088,8 @@ export function evaluateDiscoveryCacheHeaders(headers, { label = "discovery resp
 export function evaluateRemediationTracker(markdown) {
   const blockers = [];
   const rows = [];
+  const seenIds = new Set();
+  const duplicateIds = [];
 
   for (const line of markdown.split(/\r?\n/)) {
     const match = line.match(/^\|\s*([^|]+?)\s*\|\s*(P[0-9])\s*\|\s*([^|]+?)\s*\|/);
@@ -1101,6 +1103,11 @@ export function evaluateRemediationTracker(markdown) {
       status: status.trim(),
     };
     rows.push(row);
+    if (seenIds.has(row.id)) {
+      if (!duplicateIds.includes(row.id)) duplicateIds.push(row.id);
+    } else {
+      seenIds.add(row.id);
+    }
     if ((row.severity === "P0" || row.severity === "P1") &&
       !closedTrackerStatuses.has(normalizeTrackerStatus(row.status))) {
       blockers.push(row);
@@ -1108,9 +1115,10 @@ export function evaluateRemediationTracker(markdown) {
   }
 
   return {
-    ok: blockers.length === 0,
+    ok: blockers.length === 0 && duplicateIds.length === 0,
     checkedRows: rows.length,
     blockers,
+    duplicateIds,
   };
 }
 
@@ -1228,11 +1236,61 @@ export function evaluateSitemapIndexPolicy(locs, { policy, storefrontOrigin } = 
   };
 }
 
+function extractDirectChildTagValues(xml, parentTagName, childTagNames) {
+  const escapedParent = parentTagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parentStart = new RegExp(`<${escapedParent}\\b[^>]*>`, "i").exec(xml);
+  if (!parentStart) return [];
+
+  const targetNames = new Set(childTagNames.map((name) => name.toLowerCase()));
+  const tokenPattern =
+    /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<\/?([A-Za-z_][\w:.-]*)\b[^>]*>/g;
+  tokenPattern.lastIndex = parentStart.index + parentStart[0].length;
+  const stack = [
+    {
+      name: parentTagName.toLowerCase(),
+      contentStart: tokenPattern.lastIndex,
+      capture: false,
+    },
+  ];
+  const values = [];
+  let match;
+
+  while ((match = tokenPattern.exec(xml)) !== null) {
+    const rawName = match[1];
+    if (!rawName) continue;
+
+    const token = match[0];
+    const name = rawName.toLowerCase();
+    if (token.startsWith("</")) {
+      const opening = stack.pop();
+      if (!opening || opening.name !== name) return values;
+      if (opening.capture) {
+        values.push(decodeXml(xml.slice(opening.contentStart, match.index).trim()));
+      }
+      if (stack.length === 0) break;
+      continue;
+    }
+
+    const capture = stack.length === 1 && targetNames.has(name);
+    if (/\/\s*>$/.test(token)) {
+      if (capture) values.push("");
+      continue;
+    }
+    stack.push({
+      name,
+      contentStart: match.index + token.length,
+      capture,
+    });
+  }
+
+  return values;
+}
+
 function parseFeedMoney(value) {
   const match = String(value ?? "").trim().match(/^(\d+(?:\.\d{1,2})?)\s+([A-Z]{3})$/);
   if (!match) return null;
   const amount = Number(match[1]);
-  if (!Number.isFinite(amount) || amount < 0) return null;
+  if (!Number.isFinite(amount) || amount <= 0) return null;
   return { amount, currency: match[2] };
 }
 
@@ -1271,14 +1329,16 @@ export function evaluateProductFeedXml(
       ...extractTagValues(item, "availability"),
       ...extractTagValues(item, "g:availability"),
     ].filter(Boolean);
-    const itemPrices = [
-      ...extractTagValues(item, "price"),
-      ...extractTagValues(item, "g:price"),
-    ].filter(Boolean);
-    const itemSalePrices = [
-      ...extractTagValues(item, "sale_price"),
-      ...extractTagValues(item, "g:sale_price"),
-    ].filter(Boolean);
+    const itemPrices = extractDirectChildTagValues(
+      item,
+      "item",
+      ["price", "g:price"],
+    ).filter(Boolean);
+    const itemSalePrices = extractDirectChildTagValues(
+      item,
+      "item",
+      ["sale_price", "g:sale_price"],
+    ).filter(Boolean);
 
     links.push(...itemLinks);
     imageLinks.push(...itemImageLinks);
@@ -1304,13 +1364,13 @@ export function evaluateProductFeedXml(
 
     const parsedPrice = itemPrices.length === 1 ? parseFeedMoney(itemPrices[0]) : null;
     if (itemPrices.length === 1 && !parsedPrice) {
-      errors.push(`feed item ${itemNumber} price must be a non-negative amount plus ISO currency.`);
+      errors.push(`feed item ${itemNumber} price must be a positive amount plus ISO currency.`);
     }
     const parsedSalePrice = itemSalePrices.length === 1
       ? parseFeedMoney(itemSalePrices[0])
       : null;
     if (itemSalePrices.length === 1 && !parsedSalePrice) {
-      errors.push(`feed item ${itemNumber} sale_price must be a non-negative amount plus ISO currency.`);
+      errors.push(`feed item ${itemNumber} sale_price must be a positive amount plus ISO currency.`);
     }
     if (parsedPrice && parsedSalePrice) {
       if (parsedPrice.currency !== parsedSalePrice.currency) {
@@ -5094,10 +5154,17 @@ async function checkTracker({ rootDir, readFileImpl, logger }) {
   const trackerPath = resolve(rootDir, "audit/REMEDIATION_TRACKER.md");
   const evaluation = evaluateRemediationTracker(readFileImpl(trackerPath, "utf8"));
   if (!evaluation.ok) {
-    throw new Error(
-      "Open P0/P1 tracker blockers: " +
-      evaluation.blockers.map((item) => `${item.id} ${item.severity} ${item.status}`).join("; "),
-    );
+    const errors = [];
+    if (evaluation.duplicateIds.length > 0) {
+      errors.push(`Duplicate remediation tracker IDs: ${evaluation.duplicateIds.join(", ")}`);
+    }
+    if (evaluation.blockers.length > 0) {
+      errors.push(
+        "Open P0/P1 tracker blockers: " +
+        evaluation.blockers.map((item) => `${item.id} ${item.severity} ${item.status}`).join("; "),
+      );
+    }
+    throw new Error(errors.join(". "));
   }
 
   logger?.log(`PASS tracker: ${evaluation.checkedRows} rows checked; no open P0/P1 blockers.`);
