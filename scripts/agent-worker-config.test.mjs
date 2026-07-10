@@ -55,12 +55,13 @@ describe("dedicated Agent Worker manifests", () => {
     expect(adminConfig.name).not.toBe(storefrontConfig.name);
   });
 
-  it("gives each Worker only the API service binding and surface-safe variables", () => {
+  it("gives each Worker only its least-privilege service bindings and surface-safe variables", () => {
     expect(adminConfig.services).toEqual([
       { binding: "API", service: "scalius-api" },
     ]);
     expect(storefrontConfig.services).toEqual([
       { binding: "API", service: "scalius-api" },
+      { binding: "STOREFRONT", service: "scalius-storefront" },
     ]);
     expect(Object.keys(adminConfig.vars).sort()).toEqual([
       "AGENT_NAME",

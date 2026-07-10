@@ -201,7 +201,7 @@ const STOREFRONT_CHAT_SMOKE_BODY = Object.freeze({
   messages: Object.freeze([
     Object.freeze({
       role: "user",
-      content: "Can you suggest one safe public catalog page to browse?",
+      content: "Do you sell any release-check-catalog-probe products?",
     }),
   ]),
   pageContext: Object.freeze({

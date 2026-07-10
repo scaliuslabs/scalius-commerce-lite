@@ -3753,7 +3753,10 @@ describe("release-check local evaluators", () => {
       expect(headers.has("cookie")).toBe(false);
       expect(headers.has("authorization")).toBe(false);
       expect(JSON.parse(init.body)).toMatchObject({
-        messages: [{ role: "user" }],
+        messages: [{
+          role: "user",
+          content: "Do you sell any release-check-catalog-probe products?",
+        }],
         pageContext: { source: "storefront" },
       });
       return textResponse("Not Found", 404);

@@ -828,6 +828,71 @@ describe("storefront chat route", () => {
     ]));
   });
 
+  it("fails a catalog request closed when its required MCP tool returns an application error", async () => {
+    const base = createAgentFetch();
+    const fetch = vi.fn(async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const params = body.params as { name?: string } | undefined;
+      if (params?.name === "catalog_search") {
+        return mcpEventResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            isError: true,
+            structuredContent: {
+              ucp: { status: "error", version: "2026-04-08" },
+              messages: [{ code: "temporarily_unavailable" }],
+            },
+          },
+        });
+      }
+      return base.fetch(input, init);
+    });
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Do you sell any shoes?" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(503);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message:
+          "Storefront assistant catalog tools are temporarily unavailable.",
+      },
+    });
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("maps a model timeout to a truthful no-store service-unavailable response", async () => {
+    const { fetch } = createAgentFetch();
+    mocks.generateText.mockRejectedValueOnce(
+      new DOMException("The operation timed out", "TimeoutError"),
+    );
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Hello there" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(503);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        message: "Storefront assistant model is temporarily unavailable.",
+      },
+    });
+  });
+
   it("answers current product facts from MCP when visible metadata is stale", async () => {
     const fetch = createAuthoritativeCatalogFetch();
     const { app, env } = createTestApp({

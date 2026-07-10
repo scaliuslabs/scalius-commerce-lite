@@ -187,8 +187,12 @@ app.post("/chat", async (c) => {
         searchQuery,
         intent,
       });
-    } catch (error) {
-      if (!assistantResponse.hasCatalogFacts) throw error;
+    } catch {
+      if (!assistantResponse.hasCatalogFacts) {
+        throw new ServiceUnavailableError(
+          "Storefront assistant model is temporarily unavailable.",
+        );
+      }
     }
   }
   const hasCatalogParts = assistantResponse.parts.some(

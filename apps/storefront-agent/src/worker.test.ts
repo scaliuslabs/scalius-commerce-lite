@@ -130,6 +130,7 @@ function testEnv(
 ): Env {
   return {
     API: { fetch } as Fetcher,
+    STOREFRONT: { fetch: vi.fn() } as unknown as Fetcher,
     STOREFRONT_CONVERSATIONS: {
       getByName: () => ({ fetch: conversationFetch }),
     } as unknown as Env["STOREFRONT_CONVERSATIONS"],
