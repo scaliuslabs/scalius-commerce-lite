@@ -1,7 +1,12 @@
 import { defineTool } from "@flue/runtime";
-import { SCALIUS_COMPUTER_LIMITS } from "@scalius/shared/assistant-computer";
+import {
+  normalizeScaliusComputerRoute,
+  parseScaliusComputerProgram,
+  SCALIUS_COMPUTER_LIMITS,
+} from "@scalius/shared/assistant-computer";
 import { issueScaliusComputerCommand } from "@scalius/shared/assistant-computer-handoff";
 import * as v from "valibot";
+import { isKnownAdminEntryRoute } from "./admin-copilot-policy";
 
 const input = v.object({
   program: v.pipe(
@@ -32,10 +37,18 @@ export function createAdminComputerTool(
   return defineTool({
     name: "computer",
     description:
-      "Inspect or control the merchant's active Admin page with one compact program. Start with observe. The returned client_command is pending until a later UNTRUSTED_CLIENT_RESULT arrives.",
+      "Control the active Admin page with one compact program. For the latest direct request for one known entry page, use goto immediately without observing first. For page questions or element actions, observe first and use fresh handles. The returned object is a private pending UI handoff: never quote it or call computer again before its continuation.",
     input,
     output,
     async run({ input: { program } }) {
+      const parsed = parseScaliusComputerProgram(program);
+      const command = parsed.ok ? parsed.commands[0] : undefined;
+      if (command?.name === "goto") {
+        const route = normalizeScaliusComputerRoute(command.route);
+        if (!route || !isKnownAdminEntryRoute(route)) {
+          throw new Error("Admin navigation is not an allowed entry page");
+        }
+      }
       return issueScaliusComputerCommand({
         surface: "admin",
         agentName: "admin-copilot",
