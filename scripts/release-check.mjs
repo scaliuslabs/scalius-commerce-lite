@@ -198,12 +198,8 @@ const AGENT_CART_VALIDATION_TOOL_SMOKE = Object.freeze({
   }),
 });
 const STOREFRONT_CHAT_SMOKE_BODY = Object.freeze({
-  messages: Object.freeze([
-    Object.freeze({
-      role: "user",
-      content: "Do you sell any release-check-catalog-probe products?",
-    }),
-  ]),
+  message: "Do you sell any release-check-catalog-probe products?",
+  history: Object.freeze([]),
   pageContext: Object.freeze({
     version: 1,
     source: "storefront",
