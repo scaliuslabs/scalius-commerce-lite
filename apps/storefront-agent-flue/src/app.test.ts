@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import app from "./app";
+import { issueScaliusComputerCommand } from "@scalius/shared/assistant-computer-handoff";
+import app, { createStorefrontCanaryApp } from "./app";
+import { createThreadInstanceId } from "./thread-identity";
+
+const AUTH_TOKEN = "storefront-app-test-auth-token-at-least-32-bytes";
+const THREAD_KEY = "storefront-app-test-thread-key-at-least-32-bytes";
+const COMPUTER_KEY = "storefront-app-test-computer-key-at-least-32-bytes";
+const IDENTITY = { tenantId: "store_a", principalId: "buyer_1", threadId: "thread_1" };
 
 describe("storefront Flue canary app", () => {
   it("serves a no-store health response without exposing agent routes", async () => {
@@ -26,5 +33,69 @@ describe("storefront Flue canary app", () => {
     expect(absent.status).toBe(404);
     expect(absent.headers.get("cache-control")).toBe("no-store");
     expect(partiallyConfigured.status).toBe(404);
+  });
+
+  it("queues only an exact signed browser result on the same Storefront thread", async () => {
+    const instanceId = await createThreadInstanceId("storefront", IDENTITY, THREAD_KEY);
+    const command = await issueScaliusComputerCommand({
+      surface: "storefront",
+      agentName: "shopping-assistant",
+      instanceId,
+      program: "goto /products",
+      signingKey: COMPUTER_KEY,
+    });
+    const dispatched: unknown[] = [];
+    const testApp = createStorefrontCanaryApp({
+      dispatchComputerResult: async (id, continuation) => {
+        dispatched.push({ id, continuation });
+        return { dispatchId: "dispatch_storefront_1", acceptedAt: new Date().toISOString() };
+      },
+    });
+    const headers = {
+      Authorization: `Bearer ${AUTH_TOKEN}`,
+      "X-Scalius-Tenant-Id": IDENTITY.tenantId,
+      "X-Scalius-Principal-Id": IDENTITY.principalId,
+      "X-Scalius-Thread-Id": IDENTITY.threadId,
+      "Content-Type": "application/json",
+    };
+    const env = {
+      CANARY_AUTH_TOKEN: AUTH_TOKEN,
+      THREAD_ID_SIGNING_KEY: THREAD_KEY,
+      COMPUTER_TICKET_SIGNING_KEY: COMPUTER_KEY,
+    };
+    const response = await testApp.request(`/computer/results/${instanceId}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        ticket: command.ticket,
+        program: command.program,
+        result: { ok: true, code: "NAVIGATED", output: "Opened /products", changed: true },
+      }),
+    }, env);
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      accepted: true,
+      authoritative: false,
+      status: "queued_for_agent_interpretation",
+      requestId: command.requestId,
+    });
+    expect(dispatched).toEqual([
+      expect.objectContaining({
+        id: instanceId,
+        continuation: expect.objectContaining({
+          type: "UNTRUSTED_CLIENT_RESULT",
+          surface: "storefront",
+          requestId: command.requestId,
+        }),
+      }),
+    ]);
+
+    const crossThread = await testApp.request(`/computer/results/${instanceId}`, {
+      method: "POST",
+      headers: { ...headers, "X-Scalius-Principal-Id": "buyer_2" },
+      body: JSON.stringify({ ticket: command.ticket, program: command.program, result: { ok: false, code: "BUSY", output: "busy", retryable: true } }),
+    }, env);
+    expect(crossThread.status).toBe(404);
+    expect(dispatched).toHaveLength(1);
   });
 });

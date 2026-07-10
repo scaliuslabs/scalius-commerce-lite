@@ -6,6 +6,7 @@ const MINIMUM_SECRET_LENGTH = 32;
 export interface CanaryAuthEnv {
   CANARY_AUTH_TOKEN: string;
   THREAD_ID_SIGNING_KEY: string;
+  COMPUTER_TICKET_SIGNING_KEY: string;
 }
 
 export type AuthorizationResult =
@@ -48,6 +49,17 @@ export async function authorizeAgentRequest(
   expectedAgentName: string,
   surface: AgentSurface,
 ): Promise<AuthorizationResult> {
+  const instanceId = parseAgentPath(request, expectedAgentName);
+  if (!instanceId) return { authorized: false };
+  return authorizeThreadInstanceRequest(request, env, surface, instanceId);
+}
+
+export async function authorizeThreadInstanceRequest(
+  request: Request,
+  env: CanaryAuthEnv | undefined,
+  surface: AgentSurface,
+  instanceId: string,
+): Promise<AuthorizationResult> {
   if (
     !env?.CANARY_AUTH_TOKEN ||
     !env.THREAD_ID_SIGNING_KEY ||
@@ -63,8 +75,6 @@ export async function authorizeAgentRequest(
     return { authorized: false };
   }
 
-  const instanceId = parseAgentPath(request, expectedAgentName);
-  if (!instanceId) return { authorized: false };
   const identity = {
     tenantId: request.headers.get("x-scalius-tenant-id") ?? "",
     principalId: request.headers.get("x-scalius-principal-id") ?? "",

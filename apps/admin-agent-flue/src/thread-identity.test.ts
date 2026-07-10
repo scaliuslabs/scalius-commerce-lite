@@ -50,7 +50,7 @@ describe("admin Flue thread isolation", () => {
     await expect(
       authorizeAgentRequest(
         request,
-        { CANARY_AUTH_TOKEN: AUTH_TOKEN, THREAD_ID_SIGNING_KEY: SIGNING_KEY },
+        { CANARY_AUTH_TOKEN: AUTH_TOKEN, THREAD_ID_SIGNING_KEY: SIGNING_KEY, COMPUTER_TICKET_SIGNING_KEY: SIGNING_KEY },
         "admin-copilot",
         "admin",
       ),
@@ -62,7 +62,7 @@ describe("admin Flue thread isolation", () => {
     await expect(
       authorizeAgentRequest(
         wrongTenant,
-        { CANARY_AUTH_TOKEN: AUTH_TOKEN, THREAD_ID_SIGNING_KEY: SIGNING_KEY },
+        { CANARY_AUTH_TOKEN: AUTH_TOKEN, THREAD_ID_SIGNING_KEY: SIGNING_KEY, COMPUTER_TICKET_SIGNING_KEY: SIGNING_KEY },
         "admin-copilot",
         "admin",
       ),
