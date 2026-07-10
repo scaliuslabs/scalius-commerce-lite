@@ -66,7 +66,7 @@ export interface VariantIndex {
   inStockSizesByColor: Map<string, Set<string>>;
   inStockColorsBySize: Map<string, Set<string>>;
   /**
-   * Fast variant lookups that preserve "first match" behavior.
+   * Fast variant lookups for complete one-axis and two-axis selections.
    */
   variantsBySize: Map<string, Variant[]>;
   variantsByColor: Map<string, Variant[]>;
@@ -183,23 +183,29 @@ function findMatchingVariant(
   selectedSize: string | undefined,
   selectedColor: string | undefined,
 ): Variant | null {
-  // Fast path: exact combination
-  if (selectedSize && selectedColor) {
+  const { hasSize, hasColor } = index.options;
+
+  // A missing required axis is a partial selection, never an exact SKU.
+  if ((hasSize && !selectedSize) || (hasColor && !selectedColor)) {
+    return null;
+  }
+
+  if (hasSize && hasColor && selectedSize && selectedColor) {
     return (
       index.variantBySizeColor.get(`${selectedSize}||${selectedColor}`) || null
     );
   }
 
-  // Preserve "first match" behavior for partial selections
-  if (selectedSize && !selectedColor) {
+  if (hasSize && selectedSize) {
     return index.variantsBySize.get(selectedSize)?.[0] || null;
   }
 
-  if (selectedColor && !selectedSize) {
+  if (hasColor && selectedColor) {
     return index.variantsByColor.get(selectedColor)?.[0] || null;
   }
 
-  return index.variants[0] || null;
+  // A valid simple product has exactly one hidden/default persisted SKU.
+  return index.variants.length === 1 ? index.variants[0] || null : null;
 }
 
 /**

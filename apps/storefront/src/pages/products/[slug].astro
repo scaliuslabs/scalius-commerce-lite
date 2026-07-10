@@ -27,7 +27,10 @@ import {
   isVariantAvailable,
   resolveBuyerVariants,
 } from "@/lib/product-sellable-variants";
-import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
+import {
+  getBuyerVariantPricePresentation,
+  getVariantDiscountedPrice,
+} from "@/components/product/lib/pricing-engine";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
@@ -79,6 +82,22 @@ const productWidgets = fetchedProductWidgets ?? [];
 const buyerVariantResolution = resolveBuyerVariants(variants);
 const buyerVariants = buyerVariantResolution.variants;
 const buyerStockSummary = getBuyerStockSummary(buyerVariants);
+const buyerPricePresentation = getBuyerVariantPricePresentation(
+  {
+    basePrice: product.price,
+    discountType: product.discountType,
+    discountPercentage: product.discountPercentage,
+    discountAmount: product.discountAmount,
+  },
+  buyerVariants,
+);
+const buyerDisplayedPrice = buyerPricePresentation.pricing.finalPrice;
+const fbViewVariants = buyerPricePresentation.isStartingAt
+  ? []
+  : buyerVariants.slice(0, 1).map((variant) => ({
+      ...variant,
+      price: buyerDisplayedPrice,
+    }));
 
 const variantImageMarker = product.metaDescription?.match(
   /<!--variant_images:(enabled|option1|option2)-->/,
@@ -90,7 +109,6 @@ const cleanMetaDescription =
     ?.replace(/<!--variant_images:(?:enabled|option1|option2)-->/g, "")
     .trim() || "";
 
-const discountedPrice = product.discountedPrice;
 const productCategory = category ?? null;
 const productCategoryUrl = productCategory
   ? buildResourceCanonicalSeoUrl(
@@ -409,7 +427,7 @@ const productJsonLd = discoverySettings.structuredData.products && !product.noIn
               "@type": "Offer",
               url: canonicalUrl,
               priceCurrency: currencyCode,
-              price: product.discountedPrice.toFixed(2),
+              price: buyerDisplayedPrice.toFixed(2),
               ...(productConditionSchemaUrl ? { itemCondition: productConditionSchemaUrl } : {}),
               availability: buyerStockSummary.canPurchaseAny
                 ? "https://schema.org/InStock"
@@ -464,7 +482,7 @@ const productCategoryAnalytics = productCategory
   canonicalUrl={canonicalUrl ?? undefined}
   ogImage={ogImageUrl ?? undefined}
   ogType="product"
-  ogPrice={product.discountedPrice.toFixed(2)}
+  ogPrice={buyerDisplayedPrice.toFixed(2)}
   ogCurrency={currencyCode}
   noindex={product.noIndex === true}
   assistantPageTitle={product.name}
@@ -497,7 +515,7 @@ const productCategoryAnalytics = productCategory
     data-product-id={product.id}
     data-product-slug={product.slug}
     data-product-name={product.name}
-    data-product-price={String(discountedPrice)}
+    data-product-price={String(buyerDisplayedPrice)}
     data-product-original-price={String(product.price)}
     data-product-image={serializedProductImageUrl}
     data-product-discount-type={product.discountType || ""}
@@ -509,10 +527,10 @@ const productCategoryAnalytics = productCategory
       id: product.id,
       slug: product.slug,
       name: product.name,
-      discountedPrice: discountedPrice,
+      discountedPrice: buyerDisplayedPrice,
     })}
     data-fb-category-details={JSON.stringify(productCategoryAnalytics)}
-    data-fb-variants-details={JSON.stringify(buyerVariants.slice(0, 1))}
+    data-fb-variants-details={JSON.stringify(fbViewVariants)}
   >
     <WidgetPlacementZone
       widgets={productWidgets}
@@ -630,11 +648,20 @@ const productCategoryAnalytics = productCategory
             content_type: "product",
             currency: window.__CURRENCY_CODE__ || "BDT",
             value: product.discountedPrice,
-            contents: variants.map((v: ProductVariant) => ({
-              id: v.id && v.id !== "default" ? v.id : product.id,
-              quantity: 1,
-              item_price: v.price || product.discountedPrice,
-            })),
+            contents:
+              variants.length > 0
+                ? variants.map((v: ProductVariant) => ({
+                    id: v.id && v.id !== "default" ? v.id : product.id,
+                    quantity: 1,
+                    item_price: v.price || product.discountedPrice,
+                  }))
+                : [
+                    {
+                      id: product.id,
+                      quantity: 1,
+                      item_price: product.discountedPrice,
+                    },
+                  ],
           });
         });
       };
