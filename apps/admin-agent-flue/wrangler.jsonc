@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "scalius-admin-agent-flue-canary",
-  "compatibility_date": "2026-07-09",
+  "compatibility_date": "2026-07-10",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "observability": {
