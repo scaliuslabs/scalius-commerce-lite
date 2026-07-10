@@ -1,5 +1,8 @@
 import type { Database } from "@scalius/database/client";
-import { assistantComputerHandoffs } from "@scalius/database/schema";
+import {
+  assistantComputerHandoffs,
+  assistantComputerStopBarriers,
+} from "@scalius/database/schema";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { describe, expect, it } from "vitest";
 
@@ -8,6 +11,7 @@ import {
   cleanupExpiredAssistantComputerHandoffs,
   confirmAssistantComputerHandoffDispatch,
   consumeAssistantComputerHandoff,
+  readAssistantComputerStopBarrier,
 } from "./assistant-computer-handoffs";
 
 const NOW = new Date("2026-07-11T10:00:00.000Z");
@@ -29,6 +33,7 @@ function input(
     requestId: REQUEST_ID,
     programDigest: PROGRAM_DIGEST,
     state,
+    ticketIssuedAtMs: NOW.getTime(),
     ticketExpiresAt: TICKET_EXPIRES_AT,
     now: NOW,
     ...overrides,
@@ -224,5 +229,86 @@ describe("assistant computer handoff ledger", () => {
     } as unknown as Database;
     await expect(consumeAssistantComputerHandoff(db, input("cancelled")))
       .rejects.toBeInstanceOf(ServiceUnavailableError);
+  });
+
+  it("never treats an expired admission lease as Stop readiness", async () => {
+    const barrier: typeof assistantComputerStopBarriers.$inferSelect = {
+      sessionId: SESSION_ID,
+      agentInstanceId: INSTANCE_ID,
+      stoppedThroughIssuedAtMs: NOW.getTime(),
+      stopping: true,
+      activeAdmissionId: "a".repeat(22),
+      activeAdmissionClaimHash: "b".repeat(64),
+      activeAdmissionExpiresAt: new Date(NOW.getTime() - 60_000),
+      lastStopCompletedAt: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    };
+    const db = {
+      update: () => ({
+        set: () => ({ where: () => ({ returning: async () => [] }) }),
+      }),
+      select: (projection?: unknown) => ({
+        from: (table: unknown) => ({
+          where: () => table === assistantComputerStopBarriers
+            ? { limit: async () => [structuredClone(barrier)] }
+            : projection
+              ? Promise.resolve([{ count: 0 }])
+              : { limit: async () => [] },
+        }),
+      }),
+    } as unknown as Database;
+
+    await expect(readAssistantComputerStopBarrier(db, {
+      sessionId: SESSION_ID,
+      agentInstanceId: INSTANCE_ID,
+      now: NOW,
+    })).resolves.toMatchObject({
+      status: "pending",
+      pendingAdmissions: 1,
+      pendingDispatches: 0,
+    });
+  });
+
+  it("terminalizes a receipt-known uncertain dispatch during Stop reconciliation", async () => {
+    const barrier: typeof assistantComputerStopBarriers.$inferSelect = {
+      sessionId: SESSION_ID,
+      agentInstanceId: INSTANCE_ID,
+      stoppedThroughIssuedAtMs: NOW.getTime(),
+      stopping: true,
+      activeAdmissionId: null,
+      activeAdmissionClaimHash: null,
+      activeAdmissionExpiresAt: null,
+      lastStopCompletedAt: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    };
+    const db = {
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning: async () => [{ requestId: REQUEST_ID }] }),
+        }),
+      }),
+      select: (projection?: unknown) => ({
+        from: (table: unknown) => ({
+          where: () => table === assistantComputerStopBarriers
+            ? { limit: async () => [structuredClone(barrier)] }
+            : projection
+              ? Promise.resolve([{ count: 0 }])
+              : { limit: async () => [] },
+        }),
+      }),
+    } as unknown as Database;
+
+    await expect(readAssistantComputerStopBarrier(db, {
+      sessionId: SESSION_ID,
+      agentInstanceId: INSTANCE_ID,
+      now: NOW,
+    })).resolves.toMatchObject({
+      status: "ready",
+      blockedDispatches: 1,
+      pendingAdmissions: 0,
+      pendingDispatches: 0,
+    });
   });
 });

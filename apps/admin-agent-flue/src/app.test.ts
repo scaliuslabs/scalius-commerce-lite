@@ -103,6 +103,7 @@ describe("admin Flue canary app", () => {
           instanceId,
           requestId: command.requestId,
           state: "dispatched",
+          ticketIssuedAt: expect.any(Number),
           ticketExpiresAt: Date.parse(command.expiresAt),
         });
         return Response.json({
@@ -114,6 +115,12 @@ describe("admin Flue canary app", () => {
             dispatchClaimToken: CLAIM_TOKEN,
           },
         });
+      }
+      if (String(input).endsWith("/begin")) {
+        return Response.json({ success: true, data: {
+          status: "started",
+          requestId: command.requestId,
+        } });
       }
       expect(String(input)).toMatch(/\/confirm$/u);
       expect(body).toMatchObject({
@@ -131,6 +138,11 @@ describe("admin Flue canary app", () => {
       });
     });
     const testApp = createAdminCanaryApp({
+      beginAgentAdmission: async () => ({
+        admissionId: "a".repeat(22),
+        admissionClaimToken: "b".repeat(43),
+      }),
+      finishAgentAdmission: async () => true,
       dispatchComputerResult: async (id, continuation) => {
         dispatched.push({ id, continuation });
         return { dispatchId: "dispatch_admin_1", acceptedAt: new Date().toISOString() };
@@ -150,7 +162,7 @@ describe("admin Flue canary app", () => {
       status: "queued_for_agent_interpretation",
       requestId: command.requestId,
     });
-    expect(apiFetch).toHaveBeenCalledTimes(2);
+    expect(apiFetch).toHaveBeenCalledTimes(3);
     expect(dispatched).toEqual([
       expect.objectContaining({
         id: instanceId,
@@ -186,6 +198,11 @@ describe("admin Flue canary app", () => {
       dispatchComputerResult,
       consumeComputerHandoff,
       confirmComputerHandoff,
+      beginComputerHandoff: vi.fn(async () => true),
+      beginAgentAdmission: async () => ({
+        admissionId: "a".repeat(22), admissionClaimToken: "b".repeat(43),
+      }),
+      finishAgentAdmission: async () => true,
     });
     const request = () => testApp.request(`/computer/cancel/${instanceId}`, {
       method: "POST",
@@ -255,6 +272,11 @@ describe("admin Flue canary app", () => {
       dispatchComputerResult,
       consumeComputerHandoff,
       confirmComputerHandoff,
+      beginComputerHandoff: vi.fn(async () => true),
+      beginAgentAdmission: async () => ({
+        admissionId: "a".repeat(22), admissionClaimToken: "b".repeat(43),
+      }),
+      finishAgentAdmission: async () => true,
     });
     const result = () => testApp.request(`/computer/results/${instanceId}`, {
       method: "POST",
@@ -295,6 +317,12 @@ describe("admin Flue canary app", () => {
       consumeComputerHandoff,
       dispatchComputerResult: dispatchFailure,
       confirmComputerHandoff: vi.fn(async () => true),
+      beginComputerHandoff: vi.fn(async () => true),
+      failComputerHandoff: vi.fn(async () => true),
+      beginAgentAdmission: async () => ({
+        admissionId: "a".repeat(22), admissionClaimToken: "b".repeat(43),
+      }),
+      finishAgentAdmission: async () => true,
     });
     const send = (target = failedApp) => target.request(`/computer/results/${instanceId}`, {
       method: "POST",
@@ -311,15 +339,26 @@ describe("admin Flue canary app", () => {
       acceptedAt: new Date().toISOString(),
     }));
     const confirmFailure = vi.fn(async () => false);
+    const failAfterReceipt = vi.fn(async () => true);
+    const markUncertain = vi.fn(async () => true);
     const unconfirmedApp = createAdminCanaryApp({
       consumeComputerHandoff,
       dispatchComputerResult: dispatchSuccess,
       confirmComputerHandoff: confirmFailure,
+      beginComputerHandoff: vi.fn(async () => true),
+      failComputerHandoff: failAfterReceipt,
+      markComputerHandoffUncertain: markUncertain,
+      beginAgentAdmission: async () => ({
+        admissionId: "a".repeat(22), admissionClaimToken: "b".repeat(43),
+      }),
+      finishAgentAdmission: async () => true,
     });
     expect((await send(unconfirmedApp)).status).toBe(503);
     expect((await send(unconfirmedApp)).status).toBe(503);
     expect(dispatchSuccess).toHaveBeenCalledOnce();
     expect(confirmFailure).toHaveBeenCalledOnce();
+    expect(markUncertain).toHaveBeenCalledOnce();
+    expect(failAfterReceipt).not.toHaveBeenCalled();
   });
 
   it("fails signed handoffs closed when durable API authority is unavailable", async () => {

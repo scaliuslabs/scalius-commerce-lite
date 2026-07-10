@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   saveGeneratedImagePreview: vi.fn(),
   resolveAiModelProfile: vi.fn(),
   generateAiImage: vi.fn(),
+  supportedAiImageAspectRatios: vi.fn(),
   loadAiRuntimeSettings: vi.fn(),
   enforceAiRateLimit: vi.fn(),
 }));
@@ -34,7 +35,9 @@ vi.mock("@scalius/core/modules/ai", async (importOriginal) => ({
 }));
 
 vi.mock("../../modules/ai/image-runtime", () => ({
+  AI_IMAGE_ASPECT_RATIOS: ["auto", "1:1", "2:3", "4:5", "3:2", "16:9"],
   generateAiImage: mocks.generateAiImage,
+  supportedAiImageAspectRatios: mocks.supportedAiImageAspectRatios,
 }));
 
 vi.mock("../../modules/ai/model-runtime", () => ({
@@ -95,6 +98,7 @@ describe("Admin generated media routes", () => {
       mediaType: "image/png",
       usage: { inputTokens: 3, outputTokens: 7, totalTokens: 10 },
     });
+    mocks.supportedAiImageAspectRatios.mockReturnValue(["auto", "1:1"]);
     mocks.recordGeneratedImagePreview.mockResolvedValue({
       id: "aig_abcdefghijklmnop",
       provider: "cloudflare",
@@ -155,6 +159,23 @@ describe("Admin generated media routes", () => {
         prompt,
         aspectRatio: "1:1",
       }),
+    );
+  });
+
+  it("returns only controls supported by the configured image model", async () => {
+    const response = await testApp().request(
+      "/api/v1/admin/media/image-generation/capabilities",
+      { method: "GET" },
+      {} as Env,
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      data: { aspectRatios: ["auto", "1:1"] },
+    });
+    expect(mocks.supportedAiImageAspectRatios).toHaveBeenCalledWith(
+      "cloudflare",
+      "@cf/black-forest-labs/flux-2-dev",
     );
   });
 

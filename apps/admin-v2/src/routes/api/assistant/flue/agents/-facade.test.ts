@@ -56,6 +56,26 @@ function dependencies(
       fetch: agentFetch as unknown as Pick<Fetcher, "fetch">["fetch"],
     },
     serviceToken: SERVICE_TOKEN,
+    api: {
+      fetch: vi.fn(async (input: RequestInfo | URL) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith("/admission/begin")) {
+          return Response.json({ success: true, data: {
+            status: "started",
+            admissionId: "a".repeat(22),
+            admissionClaimToken: "b".repeat(43),
+          } });
+        }
+        if (path.endsWith("/stop/begin") || path.endsWith("/stop/status")) {
+          return Response.json({ success: true, data: {
+            status: "ready",
+            pendingAdmissions: 0,
+            pendingDispatches: 0,
+          } });
+        }
+        return Response.json({ success: true, data: { status: "finished" } });
+      }) as unknown as Pick<Fetcher, "fetch">["fetch"],
+    },
     resolveAuthority: vi.fn(async () => ({
       ok: true as const,
       authority: AUTHORITY,
@@ -279,6 +299,69 @@ describe("Admin same-origin Flue agent facade", () => {
     expect(response.headers.has("set-cookie")).toBe(false);
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({ aborted: true });
+  });
+
+  it("waits for a late prompt admission to settle before the one final abort", async () => {
+    const order: string[] = [];
+    let activeAdmission = false;
+    let releaseSend!: () => void;
+    let markSendStarted!: () => void;
+    const sendStarted = new Promise<void>((resolve) => { markSendStarted = resolve; });
+    const sendRelease = new Promise<void>((resolve) => { releaseSend = resolve; });
+    const apiFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname;
+      if (path.endsWith("/admission/begin")) {
+        activeAdmission = true;
+        return Response.json({ success: true, data: {
+          status: "started",
+          admissionId: "a".repeat(22),
+          admissionClaimToken: "b".repeat(43),
+        } });
+      }
+      if (path.endsWith("/admission/finish")) {
+        activeAdmission = false;
+        order.push("admission-finished");
+        return Response.json({ success: true, data: { status: "finished" } });
+      }
+      if (path.endsWith("/stop/begin") || path.endsWith("/stop/status")) {
+        return Response.json({ success: true, data: {
+          status: activeAdmission ? "pending" : "ready",
+          pendingAdmissions: activeAdmission ? 1 : 0,
+          pendingDispatches: 0,
+        } });
+      }
+      return Response.json({ success: true, data: { status: "finished" } });
+    });
+    const agentFetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/abort")) {
+        order.push("flue-abort");
+        return Response.json({ aborted: true });
+      }
+      markSendStarted();
+      await sendRelease;
+      order.push("send-admitted");
+      return sendAdmission();
+    });
+    const deps = dependencies(agentFetch, {
+      api: { fetch: apiFetch as unknown as Pick<Fetcher, "fetch">["fetch"] },
+    });
+
+    const sending = proxyAdminFlueAgentFacade(promptRequest(), deps);
+    await sendStarted;
+    const stopping = proxyAdminFlueAgentFacade(
+      browserRequest(`${PUBLIC_PATH}/abort`, { method: "POST" }),
+      deps,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    expect(order).not.toContain("flue-abort");
+    releaseSend();
+
+    const [sendResponse, stopResponse] = await Promise.all([sending, stopping]);
+    expect(sendResponse.status).toBe(202);
+    expect(stopResponse.status).toBe(200);
+    expect(order).toEqual(["send-admitted", "admission-finished", "flue-abort"]);
+    expect(agentFetch.mock.calls.filter(([input]) => String(input).endsWith("/abort")))
+      .toHaveLength(1);
   });
 
   it.each([

@@ -21,9 +21,20 @@ const HANDOFF_CONSUME_URL =
   "http://api.internal/api/v1/internal/admin-assistant/flue/computer-handoff/consume";
 const HANDOFF_CONFIRM_URL =
   "http://api.internal/api/v1/internal/admin-assistant/flue/computer-handoff/confirm";
+const HANDOFF_BEGIN_URL =
+  "http://api.internal/api/v1/internal/admin-assistant/flue/computer-handoff/begin";
+const HANDOFF_FAIL_URL =
+  "http://api.internal/api/v1/internal/admin-assistant/flue/computer-handoff/fail";
+const HANDOFF_UNCERTAIN_URL =
+  "http://api.internal/api/v1/internal/admin-assistant/flue/computer-handoff/uncertain";
+const ADMISSION_BEGIN_URL =
+  "http://api.internal/api/v1/internal/admin-assistant/flue/admission/begin";
+const ADMISSION_FINISH_URL =
+  "http://api.internal/api/v1/internal/admin-assistant/flue/admission/finish";
 const MAX_AUTHORITY_RESPONSE_BYTES = 4_096;
 const AUTHORITY_TIMEOUT_MS = 5_000;
 const CLAIM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const ADMISSION_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;
 
 type HandoffTerminalState = "cancelled" | "dispatched";
 
@@ -70,6 +81,22 @@ export interface AdminCanaryAppDependencies {
   confirmComputerHandoff?: (
     input: ConfirmComputerHandoffInput,
   ) => Promise<boolean>;
+  beginComputerHandoff?: (
+    input: ConfirmComputerHandoffInput,
+  ) => Promise<boolean>;
+  failComputerHandoff?: (
+    input: ConfirmComputerHandoffInput,
+  ) => Promise<boolean>;
+  markComputerHandoffUncertain?: (
+    input: ConfirmComputerHandoffInput,
+  ) => Promise<boolean>;
+  beginAgentAdmission?: (
+    instanceId: string,
+  ) => Promise<{ admissionId: string; admissionClaimToken: string } | "blocked" | null>;
+  finishAgentAdmission?: (
+    instanceId: string,
+    lease: { admissionId: string; admissionClaimToken: string },
+  ) => Promise<boolean>;
 }
 
 export function createAdminCanaryApp(dependencies: AdminCanaryAppDependencies = {}) {
@@ -101,49 +128,98 @@ export function createAdminCanaryApp(dependencies: AdminCanaryAppDependencies = 
       const status = admission.code === "OVERSIZE" ? 413 : 400;
       return c.json({ error: "Computer result was rejected", code: admission.code }, status);
     }
-    const consumed = await consumeComputerHandoff(
+    const deliveryLease = await beginAgentAdmission(
       c.env.API,
-      { handoff: admission.handoff, state: "dispatched" },
-      dependencies.consumeComputerHandoff,
+      instanceId,
+      dependencies.beginAgentAdmission,
     );
-    if (!consumed.ok) {
-      return consumed.reason === "conflict"
-        ? c.json({ error: "Computer result was cancelled" }, 409)
-        : c.json({ error: "Computer handoff state is unavailable" }, 503);
+    if (deliveryLease === "blocked") {
+      return c.json({ error: "Computer result was stopped before admission" }, 409);
     }
-    if (consumed.status === "replayed") {
-      return c.json({
-        accepted: true,
-        authoritative: false,
-        status: "queued_for_agent_interpretation",
-        requestId: admission.continuation.requestId,
-      }, 202);
-    }
-    if (consumed.state !== "dispatched") {
-      return c.json({ error: "Computer handoff state is unavailable" }, 503);
+    if (!deliveryLease) {
+      return c.json({ error: "Computer admission authority is unavailable" }, 503);
     }
     try {
-      const receipt = await dispatchComputerResult(instanceId, admission.continuation);
-      const confirmed = await confirmComputerHandoff(
+      const consumed = await consumeComputerHandoff(
         c.env.API,
-        {
-          handoff: admission.handoff,
-          dispatchClaimToken: consumed.dispatchClaimToken,
-        },
-        dependencies.confirmComputerHandoff,
+        { handoff: admission.handoff, state: "dispatched" },
+        dependencies.consumeComputerHandoff,
       );
-      if (!confirmed) {
+      if (!consumed.ok) {
+        return consumed.reason === "conflict"
+          ? c.json({ error: "Computer result was cancelled" }, 409)
+          : c.json({ error: "Computer handoff state is unavailable" }, 503);
+      }
+      if (consumed.status === "replayed") {
+        return c.json({
+          accepted: true,
+          authoritative: false,
+          status: "queued_for_agent_interpretation",
+          requestId: admission.continuation.requestId,
+        }, 202);
+      }
+      if (consumed.state !== "dispatched") {
         return c.json({ error: "Computer handoff state is unavailable" }, 503);
       }
-      return c.json({
-        accepted: true,
-        authoritative: false,
-        status: "queued_for_agent_interpretation",
-        requestId: admission.continuation.requestId,
-        dispatchId: receipt.dispatchId,
-      }, 202);
-    } catch {
-      return c.json({ error: "Computer result could not be queued" }, 503);
+      const dispatchClaim = {
+        handoff: admission.handoff,
+        dispatchClaimToken: consumed.dispatchClaimToken,
+      };
+      const begun = await transitionComputerHandoff(
+        c.env.API,
+        dispatchClaim,
+        HANDOFF_BEGIN_URL,
+        "started",
+        dependencies.beginComputerHandoff,
+      );
+      if (!begun) {
+        return c.json({ error: "Computer result was stopped before dispatch" }, 409);
+      }
+      let dispatchReturned = false;
+      let terminalized = false;
+      try {
+        const receipt = await dispatchComputerResult(instanceId, admission.continuation);
+        dispatchReturned = true;
+        const confirmed = await transitionComputerHandoff(
+          c.env.API,
+          dispatchClaim,
+          HANDOFF_CONFIRM_URL,
+          "confirmed",
+          dependencies.confirmComputerHandoff,
+        );
+        if (!confirmed) {
+          return c.json({ error: "Computer handoff state is unavailable" }, 503);
+        }
+        terminalized = true;
+        return c.json({
+          accepted: true,
+          authoritative: false,
+          status: "queued_for_agent_interpretation",
+          requestId: admission.continuation.requestId,
+          dispatchId: receipt.dispatchId,
+        }, 202);
+      } catch {
+        return c.json({ error: "Computer result could not be queued" }, 503);
+      } finally {
+        if (!terminalized) {
+          await transitionComputerHandoff(
+            c.env.API,
+            dispatchClaim,
+            dispatchReturned ? HANDOFF_UNCERTAIN_URL : HANDOFF_FAIL_URL,
+            dispatchReturned ? "uncertain" : "failed",
+            dispatchReturned
+              ? dependencies.markComputerHandoffUncertain
+              : dependencies.failComputerHandoff,
+          );
+        }
+      }
+    } finally {
+      await finishAgentAdmission(
+        c.env.API,
+        instanceId,
+        deliveryLease,
+        dependencies.finishAgentAdmission,
+      );
     }
   });
 
@@ -231,6 +307,7 @@ async function consumeComputerHandoff(
         requestId: input.handoff.requestId,
         programDigest: input.handoff.programDigest,
         state: input.state,
+        ticketIssuedAt: input.handoff.issuedAt,
         ticketExpiresAt: input.handoff.expiresAt,
       }),
     });
@@ -253,10 +330,12 @@ async function consumeComputerHandoff(
   return parseConsumeEnvelope(value, input);
 }
 
-async function confirmComputerHandoff(
+async function transitionComputerHandoff(
   api: AdminScaliusEnv["API"],
   input: ConfirmComputerHandoffInput,
-  override?: AdminCanaryAppDependencies["confirmComputerHandoff"],
+  url: string,
+  expectedStatus: "started" | "confirmed" | "failed" | "uncertain",
+  override?: (input: ConfirmComputerHandoffInput) => Promise<boolean>,
 ): Promise<boolean> {
   if (override) {
     try {
@@ -268,7 +347,7 @@ async function confirmComputerHandoff(
   if (!api || !CLAIM_TOKEN_PATTERN.test(input.dispatchClaimToken)) return false;
   let response: Response;
   try {
-    response = await api.fetch(HANDOFF_CONFIRM_URL, {
+    response = await api.fetch(url, {
       method: "POST",
       redirect: "manual",
       signal: AbortSignal.timeout(AUTHORITY_TIMEOUT_MS),
@@ -292,11 +371,71 @@ async function confirmComputerHandoff(
     return false;
   }
   const data = value.data;
-  return isRecord(data) &&
-    hasOnlyKeys(data, ["status", "state", "requestId"]) &&
-    (data.status === "confirmed" || data.status === "replayed") &&
-    data.state === "dispatched" &&
-    data.requestId === input.handoff.requestId;
+  if (!isRecord(data) || data.requestId !== input.handoff.requestId) return false;
+  if (expectedStatus === "started") {
+    return hasOnlyKeys(data, ["status", "requestId"]) && data.status === "started";
+  }
+  return hasOnlyKeys(data, ["status", "state", "requestId"]) &&
+    (data.status === expectedStatus || data.status === "replayed") &&
+    data.state === "dispatched";
+}
+
+async function beginAgentAdmission(
+  api: AdminScaliusEnv["API"],
+  instanceId: string,
+  override?: AdminCanaryAppDependencies["beginAgentAdmission"],
+): Promise<{ admissionId: string; admissionClaimToken: string } | "blocked" | null> {
+  if (override) return override(instanceId);
+  const result = await callAdmissionAuthority(api, ADMISSION_BEGIN_URL, { instanceId });
+  if (result?.status === 409) return "blocked";
+  const data = result?.data;
+  if (!isRecord(data) || data.status !== "started" ||
+      typeof data.admissionId !== "string" || !ADMISSION_ID_PATTERN.test(data.admissionId) ||
+      typeof data.admissionClaimToken !== "string" || !CLAIM_TOKEN_PATTERN.test(data.admissionClaimToken)) {
+    return null;
+  }
+  return { admissionId: data.admissionId, admissionClaimToken: data.admissionClaimToken };
+}
+
+async function finishAgentAdmission(
+  api: AdminScaliusEnv["API"],
+  instanceId: string,
+  lease: { admissionId: string; admissionClaimToken: string },
+  override?: AdminCanaryAppDependencies["finishAgentAdmission"],
+): Promise<boolean> {
+  if (override) return override(instanceId, lease);
+  const data = (await callAdmissionAuthority(
+    api,
+    ADMISSION_FINISH_URL,
+    { instanceId, ...lease },
+  ))?.data;
+  return isRecord(data) && (data.status === "finished" || data.status === "replayed");
+}
+
+async function callAdmissionAuthority(
+  api: AdminScaliusEnv["API"],
+  url: string,
+  body: Record<string, unknown>,
+): Promise<{ status: number; data: unknown } | null> {
+  if (!api) return null;
+  try {
+    const response = await api.fetch(url, {
+      method: "POST",
+      redirect: "manual",
+      signal: AbortSignal.timeout(AUTHORITY_TIMEOUT_MS),
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const value = await readBoundedJson(response, MAX_AUTHORITY_RESPONSE_BYTES);
+    return {
+      status: response.status,
+      data: response.ok && isRecord(value) && hasOnlyKeys(value, ["success", "data"]) && value.success === true
+        ? value.data
+        : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function parseConsumeEnvelope(

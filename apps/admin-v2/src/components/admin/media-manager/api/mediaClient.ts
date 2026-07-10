@@ -78,6 +78,28 @@ function toMediaFolder(folder: MediaFolderDto): MediaFolder {
 }
 
 export class MediaApiClient {
+  static async getImageGenerationCapabilities(): Promise<{
+    aspectRatios: Array<"auto" | "1:1" | "2:3" | "4:5" | "3:2" | "16:9">;
+  }> {
+    const response = await fetch(
+      "/api/v1/admin/media/image-generation/capabilities",
+      { headers: { Accept: "application/json" } },
+    );
+    const rawData = await response.json() as Record<string, unknown>;
+    if (!response.ok) {
+      throw new Error(extractApiError(rawData, "Image controls are unavailable."));
+    }
+    const payload = unwrapEnvelope<{ aspectRatios?: unknown }>(rawData);
+    const allowed = new Set(["auto", "1:1", "2:3", "4:5", "3:2", "16:9"]);
+    if (!Array.isArray(payload.aspectRatios) ||
+        payload.aspectRatios.some((value) => typeof value !== "string" || !allowed.has(value))) {
+      throw new Error("Image controls returned an invalid response.");
+    }
+    return { aspectRatios: payload.aspectRatios as Array<
+      "auto" | "1:1" | "2:3" | "4:5" | "3:2" | "16:9"
+    > };
+  }
+
   static async generateImagePreview(input: {
     prompt: string;
     aspectRatio: "auto" | "1:1" | "2:3" | "4:5" | "3:2" | "16:9";

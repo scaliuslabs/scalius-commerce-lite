@@ -37,7 +37,11 @@ import {
 } from "@scalius/core/modules/media";
 import { resolveAiModelProfile } from "@scalius/core/modules/ai";
 import { consumeAssistantRateLimit } from "@scalius/core/modules/assistant";
-import { generateAiImage } from "../../modules/ai/image-runtime";
+import {
+    AI_IMAGE_ASPECT_RATIOS,
+    generateAiImage,
+    supportedAiImageAspectRatios,
+} from "../../modules/ai/image-runtime";
 import { loadAiRuntimeSettings } from "../../modules/ai/model-runtime";
 import { enforceAiRateLimit } from "./ai-rate-limit";
 
@@ -75,6 +79,30 @@ const generateImageSchema = z
         seed: z.number().int().min(0).max(2_147_483_647).optional(),
     })
     .strict();
+
+const imageGenerationCapabilitiesRoute = createRoute({
+    method: "get",
+    path: "/image-generation/capabilities",
+    tags: ["Admin - Media"],
+    summary: "Read supported controls for the configured image model",
+    responses: {
+        200: {
+            description: "Configured image-model capabilities",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                aspectRatios: z.array(z.enum(AI_IMAGE_ASPECT_RATIOS)),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(imageGenerationCapabilitiesRoute, async (c) => {
+    const settings = await loadAiRuntimeSettings(c);
+    const profile = resolveAiModelProfile(settings, "imageGeneration");
+    return ok(c, {
+        aspectRatios: [...supportedAiImageAspectRatios(profile.provider, profile.model)],
+    });
+});
 
 const generatedImageSaveMultipartSchema = z.object({
     file: z.file().openapi({ type: "string", format: "binary" }),

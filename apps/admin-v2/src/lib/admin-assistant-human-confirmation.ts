@@ -101,6 +101,15 @@ export function cancelAdminAssistantHumanAction(
   publish({ actionId, phase: "cancelled" });
 }
 
+/** Cancels every in-flight human-confirmed browser operation before Stop. */
+export function cancelAllAdminAssistantHumanActions(): void {
+  const operations = [...activeOperations.entries()];
+  activeOperations.clear();
+  for (const [operationId, actionId] of operations) {
+    publish({ actionId, operationId, phase: "finished", outcome: "cancelled" });
+  }
+}
+
 export function subscribeAdminAssistantHumanConfirmation(
   listener: ConfirmationListener,
 ): () => void {

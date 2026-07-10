@@ -695,4 +695,20 @@ describe("provider-neutral image runtime", () => {
       message: "Image generation is temporarily unavailable.",
     });
   });
+
+  it("publishes only aspect ratios the configured model can actually accept", async () => {
+    const { supportedAiImageAspectRatios } = await import("./image-runtime");
+    expect(supportedAiImageAspectRatios(
+      "cloudflare",
+      "openai/gpt-image-1.5",
+    )).toEqual(["auto", "1:1"]);
+    expect(supportedAiImageAspectRatios(
+      "cloudflare",
+      "openai/gpt-image-2",
+    )).toEqual(["auto", "1:1", "2:3", "3:2"]);
+    expect(supportedAiImageAspectRatios(
+      "cloudflare",
+      "@cf/black-forest-labs/flux-1-schnell",
+    )).toEqual(["auto"]);
+  });
 });

@@ -28,6 +28,19 @@ export const ADMIN_ASSISTANT_AUTHORITY_PATHS = Object.freeze({
     `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/consume`,
   flueComputerHandoffConfirm:
     `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/confirm`,
+  flueComputerHandoffBegin:
+    `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/begin`,
+  flueComputerHandoffFail:
+    `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/fail`,
+  flueComputerHandoffUncertain:
+    `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/computer-handoff/uncertain`,
+  flueAdmissionBegin:
+    `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admission/begin`,
+  flueAdmissionFinish:
+    `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/admission/finish`,
+  flueStopBegin: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/begin`,
+  flueStopStatus: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/status`,
+  flueStopFinish: `${ADMIN_ASSISTANT_AUTHORITY_BASE_PATH}/flue/stop/finish`,
 } as const);
 
 const authorityPathSet = new Set<string>(
@@ -70,12 +83,23 @@ const computerHandoffIdentitySchema = z.object({
 export const adminAssistantComputerHandoffConsumeSchema =
   computerHandoffIdentitySchema.extend({
     state: z.enum(["cancelled", "dispatched"]),
+    ticketIssuedAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     ticketExpiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   }).strict();
 
 export const adminAssistantComputerHandoffConfirmSchema =
   computerHandoffIdentitySchema.extend({
     dispatchClaimToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+  }).strict();
+
+export const adminAssistantAgentInstanceSchema = z.object({
+  instanceId: z.string().regex(/^v1\.[A-Za-z0-9_-]{43}$/u),
+}).strict();
+
+export const adminAssistantAdmissionFinishSchema =
+  adminAssistantAgentInstanceSchema.extend({
+    admissionId: z.string().regex(/^[A-Za-z0-9_-]{22}$/u),
+    admissionClaimToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
   }).strict();
 
 export const adminAssistantWorkflowCreateSchema = z.object({

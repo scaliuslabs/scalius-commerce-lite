@@ -19,6 +19,10 @@ describe("GeneratedImagePanel confirmation lifecycle", () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      success: true,
+      data: { aspectRatios: ["auto"] },
+    })));
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -28,6 +32,7 @@ describe("GeneratedImagePanel confirmation lifecycle", () => {
     act(() => root.unmount());
     host.remove();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("cancels disappeared actions and rotates the per-open random nonce", async () => {

@@ -12,6 +12,7 @@ async function handleAdminFlueAgentRequest(request: Request): Promise<Response> 
 
   return proxyAdminFlueAgentFacade(request, {
     agent: futureEnv.ADMIN_FLUE_AGENT,
+    api: futureEnv.API,
     serviceToken: futureEnv.ADMIN_FLUE_AUTH_TOKEN,
     resolveAuthority: createAdminFlueAuthorityResolver({ api: futureEnv.API }),
   });

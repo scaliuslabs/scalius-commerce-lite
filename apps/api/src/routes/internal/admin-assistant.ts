@@ -1,11 +1,19 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import {
   bindAssistantAgentInstance,
+  beginAssistantAgentAdmission,
+  beginAssistantComputerHandoffDispatch,
   confirmAssistantComputerHandoffDispatch,
   consumeAssistantComputerHandoff,
   createAssistantSession,
   createAssistantWorkflow,
+  failAssistantComputerHandoffDispatch,
+  finishAssistantAgentAdmission,
+  finishAssistantComputerStopBarrier,
   listAssistantEvents,
+  markAssistantComputerHandoffDispatchUncertain,
+  readAssistantComputerStopBarrier,
+  recordAssistantComputerStopBarrier,
   revokeAssistantSession,
 } from "@scalius/core/modules/assistant";
 import {
@@ -23,6 +31,8 @@ import {
   ADMIN_ASSISTANT_AUTHORITY_PATHS,
   adminAssistantCapabilityDescribeSchema,
   adminAssistantCapabilitySearchSchema,
+  adminAssistantAdmissionFinishSchema,
+  adminAssistantAgentInstanceSchema,
   adminAssistantComputerHandoffConfirmSchema,
   adminAssistantComputerHandoffConsumeSchema,
   adminAssistantEmptyBodySchema,
@@ -67,6 +77,14 @@ const ADMIN_ASSISTANT_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const FLUE_SERVICE_HANDOFF_PATHS = new Set<string>([
   ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConsume,
   ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffConfirm,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffBegin,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffFail,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueComputerHandoffUncertain,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmissionBegin,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueAdmissionFinish,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueStopBegin,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueStopStatus,
+  ADMIN_ASSISTANT_AUTHORITY_PATHS.flueStopFinish,
 ]);
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -261,6 +279,7 @@ app.post("/flue/computer-handoff/consume", async (c) => {
       requestId: input.requestId,
       programDigest: input.programDigest,
       state: input.state,
+      ticketIssuedAtMs: input.ticketIssuedAt,
       ticketExpiresAt: input.ticketExpiresAt,
     });
     if (result.status === "conflict") {
@@ -277,12 +296,166 @@ app.post("/flue/computer-handoff/consume", async (c) => {
         false,
       ), 503);
     }
+    if (result.status === "stopped") {
+      return c.json(flueCommandFailure(
+        "handoff_stopped",
+        "Computer handoff was stopped.",
+        false,
+      ), 409);
+    }
     return ok(c, result);
   } catch (error) {
     const [status, code, message, retryable] = handoffError(error);
     return c.json(flueCommandFailure(code, message, retryable), status);
   }
 });
+
+app.post("/flue/computer-handoff/begin", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+  }
+  try {
+    const input = await parseAdminAssistantJson(c.req.raw, adminAssistantComputerHandoffConfirmSchema);
+    const authority = await resolveAdminFlueCommandAuthority(c, input.instanceId);
+    const result = await beginAssistantComputerHandoffDispatch(c.get("db"), {
+      sessionId: authority.session.id,
+      agentInstanceId: input.instanceId,
+      requestId: input.requestId,
+      programDigest: input.programDigest,
+      dispatchClaimToken: input.dispatchClaimToken,
+    });
+    if (result.status !== "started") {
+      return c.json(flueCommandFailure(
+        result.status === "blocked" ? "handoff_stopped" : "handoff_dispatch_uncertain",
+        result.status === "blocked" ? "Computer handoff was stopped." : "Computer handoff dispatch state is uncertain.",
+        false,
+      ), result.status === "blocked" ? 409 : 503);
+    }
+    return ok(c, result);
+  } catch (error) {
+    const [status, code, message, retryable] = handoffError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+app.post("/flue/computer-handoff/fail", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+  }
+  try {
+    const input = await parseAdminAssistantJson(c.req.raw, adminAssistantComputerHandoffConfirmSchema);
+    const authority = await resolveAdminFlueCommandAuthority(c, input.instanceId);
+    return ok(c, await failAssistantComputerHandoffDispatch(c.get("db"), {
+      sessionId: authority.session.id,
+      agentInstanceId: input.instanceId,
+      requestId: input.requestId,
+      programDigest: input.programDigest,
+      dispatchClaimToken: input.dispatchClaimToken,
+    }));
+  } catch (error) {
+    const [status, code, message, retryable] = handoffError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+app.post("/flue/computer-handoff/uncertain", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+  }
+  try {
+    const input = await parseAdminAssistantJson(c.req.raw, adminAssistantComputerHandoffConfirmSchema);
+    const authority = await resolveAdminFlueCommandAuthority(c, input.instanceId);
+    return ok(c, await markAssistantComputerHandoffDispatchUncertain(c.get("db"), {
+      sessionId: authority.session.id,
+      agentInstanceId: input.instanceId,
+      requestId: input.requestId,
+      programDigest: input.programDigest,
+      dispatchClaimToken: input.dispatchClaimToken,
+    }));
+  } catch (error) {
+    const [status, code, message, retryable] = handoffError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+app.post("/flue/admission/begin", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+  }
+  try {
+    const input = await parseAdminAssistantJson(c.req.raw, adminAssistantAgentInstanceSchema);
+    const authority = await resolveAdminFlueCommandAuthority(c, input.instanceId);
+    const result = await beginAssistantAgentAdmission(c.get("db"), {
+      sessionId: authority.session.id,
+      agentInstanceId: input.instanceId,
+    });
+    if (result.status !== "started") {
+      return c.json(flueCommandFailure(
+        result.status === "stopping" ? "assistant_stopping" : "assistant_busy",
+        result.status === "stopping" ? "Assistant Stop is in progress." : "Assistant admission is already active.",
+        true,
+      ), 409);
+    }
+    return ok(c, result);
+  } catch (error) {
+    const [status, code, message, retryable] = handoffError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+app.post("/flue/admission/finish", async (c) => {
+  if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+    return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+  }
+  try {
+    const input = await parseAdminAssistantJson(c.req.raw, adminAssistantAdmissionFinishSchema);
+    const authority = await resolveAdminFlueCommandAuthority(c, input.instanceId);
+    return ok(c, await finishAssistantAgentAdmission(c.get("db"), {
+      sessionId: authority.session.id,
+      agentInstanceId: input.instanceId,
+      admissionId: input.admissionId,
+      admissionClaimToken: input.admissionClaimToken,
+    }));
+  } catch (error) {
+    const [status, code, message, retryable] = handoffError(error);
+    return c.json(flueCommandFailure(code, message, retryable), status);
+  }
+});
+
+for (const [path, operation] of [
+  ["/flue/stop/begin", "begin"],
+  ["/flue/stop/status", "status"],
+  ["/flue/stop/finish", "finish"],
+] as const) {
+  app.post(path, async (c) => {
+    if (hasInvalidFlueServiceHeaders(c.req.raw)) {
+      return c.json(flueCommandFailure("invalid_request", "Scalius request headers are invalid.", false), 400);
+    }
+    try {
+      const input = await parseAdminAssistantJson(c.req.raw, adminAssistantAgentInstanceSchema);
+      const authority = await resolveAdminFlueCommandAuthority(c, input.instanceId);
+      if (operation === "begin") {
+        return ok(c, await recordAssistantComputerStopBarrier(c.get("db"), {
+          sessionId: authority.session.id,
+          agentInstanceId: input.instanceId,
+        }));
+      }
+      if (operation === "status") {
+        return ok(c, await readAssistantComputerStopBarrier(c.get("db"), {
+          sessionId: authority.session.id,
+          agentInstanceId: input.instanceId,
+        }));
+      }
+      return ok(c, await finishAssistantComputerStopBarrier(c.get("db"), {
+        sessionId: authority.session.id,
+        agentInstanceId: input.instanceId,
+      }));
+    } catch (error) {
+      const [status, code, message, retryable] = handoffError(error);
+      return c.json(flueCommandFailure(code, message, retryable), status);
+    }
+  });
+}
 
 app.post("/flue/computer-handoff/confirm", async (c) => {
   if (hasInvalidFlueServiceHeaders(c.req.raw)) {

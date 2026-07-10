@@ -19,6 +19,7 @@ import {
   claimAdminAssistantHumanAction,
   createAdminAssistantHumanActionInstanceId,
   finishAdminAssistantHumanAction,
+  subscribeAdminAssistantHumanConfirmation,
   type AdminAssistantHumanActionOperation,
   type AdminAssistantHumanActionScope,
 } from "~/lib/admin-assistant-human-confirmation";
@@ -65,6 +66,9 @@ export function GeneratedImagePanel({
   const [prompt, setPrompt] = useState("");
   const [altText, setAltText] = useState("");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("auto");
+  const [supportedAspectRatios, setSupportedAspectRatios] = useState<
+    ReadonlySet<AspectRatio>
+  >(() => new Set(["auto"]));
   const [preview, setPreview] = useState<GeneratedImagePreview | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -111,6 +115,40 @@ export function GeneratedImagePanel({
       abortRef.current?.abort();
     };
   }, [generateConfirmationId, saveConfirmationId]);
+
+  useEffect(() => subscribeAdminAssistantHumanConfirmation((event) => {
+    const active = activeGenerateOperationRef.current;
+    if (
+      active &&
+      event.phase === "finished" &&
+      event.outcome === "cancelled" &&
+      event.actionId === active.actionId &&
+      event.operationId === active.operationId
+    ) {
+      abortRef.current?.abort();
+      activeGenerateOperationRef.current = null;
+    }
+  }), []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let current = true;
+    void MediaApiClient.getImageGenerationCapabilities().then(
+      ({ aspectRatios }) => {
+        if (!current) return;
+        const supported = new Set<AspectRatio>(aspectRatios);
+        setSupportedAspectRatios(supported);
+        setAspectRatio((selected) => supported.has(selected) ? selected : "auto");
+      },
+      () => {
+        if (current) {
+          setSupportedAspectRatios(new Set(["auto"]));
+          setAspectRatio("auto");
+        }
+      },
+    );
+    return () => { current = false; };
+  }, [open]);
 
   const discardPreview = () => {
     if (preview && saveConfirmationId) {
@@ -184,20 +222,13 @@ export function GeneratedImagePanel({
 
     setIsSaving(true);
     setError(null);
+    let saved: MediaFile;
     try {
-      const saved = await MediaApiClient.saveGeneratedImage({
+      saved = await MediaApiClient.saveGeneratedImage({
         preview,
         altText,
         folderId,
       });
-      await onSaved(saved);
-      finishAdminAssistantHumanAction(operation, "succeeded");
-      toast.success("Generated image saved", {
-        description: "The verified image is now in your media library.",
-      });
-      setPreview(null);
-      setPrompt("");
-      setAltText("");
     } catch (caught) {
       finishAdminAssistantHumanAction(operation, "failed");
       setError(
@@ -205,6 +236,26 @@ export function GeneratedImagePanel({
           ? caught.message
           : "Saving the generated image failed. Please try again.",
       );
+      if (activeSaveOperationRef.current === operation) {
+        activeSaveOperationRef.current = null;
+      }
+      setIsSaving(false);
+      return;
+    }
+
+    finishAdminAssistantHumanAction(operation, "succeeded");
+    toast.success("Generated image saved", {
+      description: "The verified image is now in your media library.",
+    });
+    setPreview(null);
+    setPrompt("");
+    setAltText("");
+    try {
+      await onSaved(saved);
+    } catch {
+      toast.warning("Image saved; the media view could not refresh", {
+        description: "Reload the media library to see the saved image.",
+      });
     } finally {
       if (activeSaveOperationRef.current === operation) {
         activeSaveOperationRef.current = null;
@@ -290,7 +341,9 @@ export function GeneratedImagePanel({
                     setAspectRatio(event.target.value as AspectRatio)
                   }
                 >
-                  {ASPECT_RATIOS.map((ratio) => (
+                  {ASPECT_RATIOS.filter((ratio) =>
+                    supportedAspectRatios.has(ratio.value)
+                  ).map((ratio) => (
                     <option key={ratio.value} value={ratio.value}>
                       {ratio.label}
                     </option>

@@ -18,12 +18,12 @@ function operation(key: string): AdminCommandDescriptor {
 
 describe("Admin command registry", () => {
   it("classifies every frozen operation once with bounded policy metadata", () => {
-    expect(ADMIN_COMMAND_REGISTRY).toHaveLength(319);
-    expect(new Set(ADMIN_COMMAND_REGISTRY.map((descriptor) => descriptor.id)).size).toBe(319);
-    expect(new Set(ADMIN_COMMAND_REGISTRY.map((descriptor) => descriptor.operationKey)).size).toBe(319);
+    expect(ADMIN_COMMAND_REGISTRY).toHaveLength(320);
+    expect(new Set(ADMIN_COMMAND_REGISTRY.map((descriptor) => descriptor.id)).size).toBe(320);
+    expect(new Set(ADMIN_COMMAND_REGISTRY.map((descriptor) => descriptor.operationKey)).size).toBe(320);
     expect(ADMIN_COMMAND_REGISTRY.every((descriptor) => descriptor.execution.enabled === false)).toBe(true);
     expect(auditAdminCommandRegistry()).toEqual([]);
-    expect(ADMIN_COMMAND_POLICY_DIGEST).toBe("admin-command-v1-319-d3de721e");
+    expect(ADMIN_COMMAND_POLICY_DIGEST).toBe("admin-command-v1-320-517d4abb");
   });
 
   it("keeps reads eligible but execution-disabled in this policy-only slice", () => {

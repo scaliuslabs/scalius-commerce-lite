@@ -16,11 +16,23 @@ export {
 export {
   ASSISTANT_COMPUTER_HANDOFF_AUDIT_RETENTION_SECONDS,
   cleanupExpiredAssistantComputerHandoffs,
+  beginAssistantAgentAdmission,
+  beginAssistantComputerHandoffDispatch,
   confirmAssistantComputerHandoffDispatch,
   consumeAssistantComputerHandoff,
+  failAssistantComputerHandoffDispatch,
+  markAssistantComputerHandoffDispatchUncertain,
+  finishAssistantAgentAdmission,
+  finishAssistantComputerStopBarrier,
+  readAssistantComputerStopBarrier,
+  recordAssistantComputerStopBarrier,
 } from "./assistant-computer-handoffs";
 export type {
   AssistantComputerHandoffState,
+  AssistantComputerDispatchStatus,
+  AssistantComputerStopBarrierResult,
+  BeginAssistantAgentAdmissionResult,
+  BeginAssistantComputerHandoffDispatchResult,
   CleanupAssistantComputerHandoffsResult,
   ConsumeAssistantComputerHandoffResult,
 } from "./assistant-computer-handoffs";

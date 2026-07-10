@@ -20,6 +20,14 @@ const mocks = vi.hoisted(() => ({
   executeCommand: vi.fn(),
   consumeHandoff: vi.fn(),
   confirmHandoff: vi.fn(),
+  beginHandoff: vi.fn(),
+  failHandoff: vi.fn(),
+  uncertainHandoff: vi.fn(),
+  beginAdmission: vi.fn(),
+  finishAdmission: vi.fn(),
+  recordStop: vi.fn(),
+  readStop: vi.fn(),
+  finishStop: vi.fn(),
   resolveFlueAuthority: vi.fn(),
 }));
 
@@ -44,6 +52,14 @@ vi.mock("@scalius/core/modules/assistant", async (importOriginal) => {
     listAssistantEvents: mocks.listEvents,
     consumeAssistantComputerHandoff: mocks.consumeHandoff,
     confirmAssistantComputerHandoffDispatch: mocks.confirmHandoff,
+    beginAssistantComputerHandoffDispatch: mocks.beginHandoff,
+    failAssistantComputerHandoffDispatch: mocks.failHandoff,
+    markAssistantComputerHandoffDispatchUncertain: mocks.uncertainHandoff,
+    beginAssistantAgentAdmission: mocks.beginAdmission,
+    finishAssistantAgentAdmission: mocks.finishAdmission,
+    recordAssistantComputerStopBarrier: mocks.recordStop,
+    readAssistantComputerStopBarrier: mocks.readStop,
+    finishAssistantComputerStopBarrier: mocks.finishStop,
   };
 });
 
@@ -229,6 +245,35 @@ describe("internal Admin assistant authority boundary", () => {
       state: "dispatched",
       requestId: input.requestId,
     }));
+    mocks.beginHandoff.mockImplementation(async (_db, input) => ({
+      status: "started",
+      requestId: input.requestId,
+    }));
+    mocks.failHandoff.mockImplementation(async (_db, input) => ({
+      status: "failed",
+      state: "dispatched",
+      requestId: input.requestId,
+    }));
+    mocks.uncertainHandoff.mockImplementation(async (_db, input) => ({
+      status: "uncertain",
+      state: "dispatched",
+      requestId: input.requestId,
+    }));
+    mocks.beginAdmission.mockResolvedValue({
+      status: "started",
+      admissionId: "a".repeat(22),
+      admissionClaimToken: "b".repeat(43),
+    });
+    mocks.finishAdmission.mockResolvedValue({ status: "finished" });
+    mocks.recordStop.mockResolvedValue({
+      status: "ready", stoppedThroughIssuedAtMs: Date.now(), blockedDispatches: 0,
+      pendingDispatches: 0, pendingAdmissions: 0,
+    });
+    mocks.readStop.mockResolvedValue({
+      status: "ready", stoppedThroughIssuedAtMs: Date.now(), blockedDispatches: 0,
+      pendingDispatches: 0, pendingAdmissions: 0,
+    });
+    mocks.finishStop.mockResolvedValue({ status: "finished" });
 
     mocks.createSession.mockImplementation(async (
       _db: unknown,
@@ -470,6 +515,7 @@ describe("internal Admin assistant authority boundary", () => {
     const requestId = "abcdefghijklmnopqrstuv";
     const programDigest = "p".repeat(43);
     const ticketExpiresAt = Date.now() + 120_000;
+    const ticketIssuedAt = ticketExpiresAt - 120_000;
     const consumed = await post(
       app,
       env,
@@ -479,6 +525,7 @@ describe("internal Admin assistant authority boundary", () => {
         requestId,
         programDigest,
         state: "dispatched",
+        ticketIssuedAt,
         ticketExpiresAt,
       },
       { "Content-Type": "application/json" },
@@ -504,6 +551,7 @@ describe("internal Admin assistant authority boundary", () => {
       requestId,
       programDigest,
       state: "dispatched",
+      ticketIssuedAtMs: ticketIssuedAt,
       ticketExpiresAt,
     });
 
@@ -540,6 +588,7 @@ describe("internal Admin assistant authority boundary", () => {
       requestId: "abcdefghijklmnopqrstuv",
       programDigest: "p".repeat(43),
       state: "cancelled",
+      ticketIssuedAt: Date.now(),
       ticketExpiresAt: Date.now() + 120_000,
     };
     mocks.consumeHandoff.mockResolvedValueOnce({
