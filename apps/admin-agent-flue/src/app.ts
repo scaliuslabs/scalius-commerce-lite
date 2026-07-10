@@ -6,6 +6,7 @@ import {
 } from "@scalius/shared/assistant-computer-handoff";
 import { Hono } from "hono";
 import adminCopilot from "./agents/admin-copilot";
+import type { AdminScaliusEnv } from "./scalius";
 import {
   authorizeAgentRequest,
   authorizeThreadInstanceRequest,
@@ -23,7 +24,7 @@ export interface AdminCanaryAppDependencies {
 }
 
 export function createAdminCanaryApp(dependencies: AdminCanaryAppDependencies = {}) {
-  const app = new Hono<{ Bindings: CanaryAuthEnv }>();
+  const app = new Hono<{ Bindings: CanaryAuthEnv & AdminScaliusEnv }>();
   const dispatchComputerResult = dependencies.dispatchComputerResult ??
     ((instanceId, continuation) => dispatch(adminCopilot, { id: instanceId, input: continuation }));
 

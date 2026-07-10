@@ -34,6 +34,7 @@ const apps = [
       "JWT_SECRET",
       "FIREBASE_SERVICE_ACCOUNT_CRED_JSON",
       "CREDENTIAL_ENCRYPTION_KEY",
+      "ADMIN_FLUE_AUTH_TOKEN",
       "PURGE_TOKEN",
       "PROJECT_CACHE_PREFIX",
     ],
@@ -42,7 +43,12 @@ const apps = [
     name: "storefront",
     configs: ["apps/storefront/wrangler.jsonc"],
     envFiles: ["apps/storefront/src/env.d.ts"],
-    extraEnv: ["API_TOKEN", "JWT_SECRET", "PURGE_TOKEN"],
+    extraEnv: [
+      "API_TOKEN",
+      "JWT_SECRET",
+      "PURGE_TOKEN",
+      "STOREFRONT_FLUE_AUTH_TOKEN",
+    ],
   },
   {
     name: "ops-monitor",
