@@ -27,7 +27,8 @@ export interface FlueAgentEnvelope extends ThreadIdentity {
 
 function configuredSecret(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  return value.trim() ? value : null;
+  const normalized = value.trim();
+  return normalized || null;
 }
 
 /**
