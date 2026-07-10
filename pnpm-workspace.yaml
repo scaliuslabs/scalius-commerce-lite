@@ -47,6 +47,7 @@ overrides:
 
 allowBuilds:
   '@firebase/util': true
+  '@google/genai': false
   '@mongodb-js/zstd': false
   core-js: false
   core-js-pure: false
