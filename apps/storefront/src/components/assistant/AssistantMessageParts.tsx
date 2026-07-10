@@ -1,4 +1,12 @@
 import {
+  AssistantDisclosure,
+  AssistantFeaturedResult,
+  AssistantResultList,
+  AssistantShortAnswer,
+  AssistantToolProgress,
+  type AssistantResult,
+} from "@scalius/ui/assistant";
+import {
   AlertTriangle,
   ArrowRight,
   BookOpenText,
@@ -15,14 +23,98 @@ import {
 import type { AssistantMessagePart } from "@scalius/shared/assistant-contracts";
 import { cn } from "@scalius/shared/utils";
 
-import { AssistantComparison } from "./AssistantComparison";
-import { AssistantProductCard } from "./AssistantProductCard";
-
 type AssistantMessagePartsProps = {
   parts: AssistantMessagePart[];
   canNavigate: (path: string) => boolean;
   onNavigate: (path: string, label: string) => void;
 };
+
+type AssistantProduct = Extract<
+  AssistantMessagePart,
+  { type: "product_grid" }
+>["products"][number];
+
+function formatMoney(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+    }).format(value);
+  } catch {
+    return `${currency} ${value.toString()}`;
+  }
+}
+
+function availabilityLabel(value: AssistantProduct["availability"]): string {
+  switch (value) {
+    case "in_stock":
+      return "In stock";
+    case "out_of_stock":
+      return "Out of stock";
+    case "limited":
+      return "Limited stock";
+    case "unknown":
+      return "Availability unknown";
+  }
+}
+
+function productMeta(product: AssistantProduct): string {
+  const availability = availabilityLabel(product.availability);
+  if (product.price === undefined || !product.currency) return availability;
+  const price = formatMoney(product.price, product.currency);
+  return `${product.pricePresentation === "starting_at" ? "From " : ""}${price} · ${availability}`;
+}
+
+function productDescription(product: AssistantProduct): string | undefined {
+  const highlights = product.badges.slice(0, 2).join(" · ");
+  return product.rationale || highlights || undefined;
+}
+
+function productResult(
+  product: AssistantProduct,
+  canNavigate: (path: string) => boolean,
+  onNavigate: (path: string, label: string) => void,
+): AssistantResult {
+  const label = `View ${product.title}`;
+  return {
+    id: product.id,
+    title: product.title,
+    description: productDescription(product),
+    meta: productMeta(product),
+    badge: product.badges[0],
+    ...(product.imageUrl
+      ? { image: { src: product.imageUrl, alt: product.title } }
+      : {}),
+    ...(canNavigate(product.path)
+      ? {
+          action: {
+            label,
+            onSelect: () => onNavigate(product.path, label),
+          },
+        }
+      : {}),
+  };
+}
+
+function comparisonValue(
+  comparison: Extract<AssistantMessagePart, { type: "comparison" }>,
+  productId: string,
+): string {
+  return comparison.rows
+    .slice(0, 2)
+    .map((row) => {
+      const cell = row.cells.find((candidate) =>
+        candidate.productId === productId
+      );
+      const value = cell?.status === "unknown"
+        ? "Not provided"
+        : cell?.status === "not_applicable"
+          ? "Not applicable"
+          : cell?.value || "Not provided";
+      return `${row.label}: ${value}`;
+    })
+    .join(" · ");
+}
 
 type NavigateButtonProps = {
   path: string;
@@ -100,9 +192,16 @@ function renderPart(
   switch (part.type) {
     case "text":
       return (
-        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
-          {part.text}
-        </p>
+        <AssistantShortAnswer
+          summary={part.text}
+          details={part.text.length > 420
+            ? (
+                <p className="whitespace-pre-wrap break-words">
+                  {part.text}
+                </p>
+              )
+            : undefined}
+        />
       );
 
     case "source":
@@ -139,78 +238,111 @@ function renderPart(
       );
 
     case "product_grid":
-      return (
-        <section className="grid gap-2.5">
-          {part.title ? (
+      {
+        const results = part.products.map((product) =>
+          productResult(product, canNavigate, onNavigate)
+        );
+        return (
+          <section className="grid gap-2" aria-label={part.title ?? "Products"}>
+            {part.title ? (
+              <h3 className="text-sm font-semibold text-foreground">
+                {part.title}
+              </h3>
+            ) : null}
+            {results.length === 1
+              ? <AssistantFeaturedResult result={results[0]!} />
+              : (
+                  <AssistantResultList
+                    items={results}
+                    label={part.title ?? "Products"}
+                    maximumVisible={3}
+                  />
+                )}
+          </section>
+        );
+      }
+
+    case "comparison":
+      {
+        const results = part.products.map((product) => ({
+          ...productResult(product, canNavigate, onNavigate),
+          description: comparisonValue(part, product.id) ||
+            productDescription(product),
+        }));
+        const visibleProducts = part.products.slice(0, 3);
+        return (
+          <section className="grid gap-2" aria-label={part.title}>
             <h3 className="text-sm font-semibold text-foreground">
               {part.title}
             </h3>
-          ) : null}
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-2.5">
-            {part.products.map((product) => (
-              <AssistantProductCard
-                key={product.id}
-                product={product}
-                canNavigate={canNavigate}
-                onNavigate={onNavigate}
-              />
-            ))}
-          </div>
-        </section>
-      );
-
-    case "comparison":
-      return (
-        <AssistantComparison
-          comparison={part}
-          canNavigate={canNavigate}
-          onNavigate={onNavigate}
-        />
-      );
+            <AssistantResultList
+              items={results}
+              label={`${part.title} products`}
+              maximumVisible={3}
+            />
+            <AssistantDisclosure summary="Comparison details">
+              <dl className="grid gap-3">
+                {part.rows.slice(0, 8).map((row) => (
+                  <div key={row.label} className="grid gap-1">
+                    <dt className="font-semibold text-foreground">
+                      {row.label}
+                    </dt>
+                    {visibleProducts.map((product) => {
+                      const cell = row.cells.find((candidate) =>
+                        candidate.productId === product.id
+                      );
+                      return (
+                        <dd key={product.id} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+                          <span className="truncate">{product.title}</span>
+                          <span className="break-words text-foreground">
+                            {cell?.status === "unknown"
+                              ? "Not provided"
+                              : cell?.status === "not_applicable"
+                                ? "Not applicable"
+                                : cell?.value || "Not provided"}
+                          </span>
+                        </dd>
+                      );
+                    })}
+                  </div>
+                ))}
+                {part.rows.length > 8 || part.products.length > 3 ? (
+                  <p>
+                    Additional comparison detail was condensed. Narrow the
+                    request to inspect a specific product or attribute.
+                  </p>
+                ) : null}
+              </dl>
+            </AssistantDisclosure>
+          </section>
+        );
+      }
 
     case "table":
       return (
-        <section className="grid gap-2">
-          <h3 className="text-sm font-semibold text-foreground">
-            {part.title}
-          </h3>
-          <div className="overflow-x-auto rounded-xl border border-border/90">
-            <table className="w-full min-w-[28rem] border-collapse text-left text-xs">
-              <thead className="bg-muted/60">
-                <tr>
-                  {part.columns.map((column) => (
-                    <th
-                      key={column.key}
-                      scope="col"
-                      className="px-3 py-2 font-semibold"
-                    >
-                      {column.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/70">
-                {part.rows.map((row) => (
-                  <tr key={row.id}>
-                    {part.columns.map((column) => (
-                      <td
-                        key={column.key}
-                        className="px-3 py-2 text-muted-foreground"
-                      >
+        <AssistantShortAnswer
+          summary={`${part.title}. ${part.rows.length} ${part.rows.length === 1 ? "result" : "results"}.`}
+          details={
+            <dl className="grid gap-3">
+              {part.rows.slice(0, 8).map((row) => (
+                <div key={row.id} className="grid gap-1 border-b border-border pb-2 last:border-0">
+                  {part.columns.slice(0, 6).map((column) => (
+                    <div key={column.key} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+                      <dt>{column.label}</dt>
+                      <dd className="break-words text-foreground">
                         {String(row.cells[column.key] ?? "—")}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {part.truncated ? (
-            <p className="text-xs text-muted-foreground">
-              Only the first results are shown.
-            </p>
-          ) : null}
-        </section>
+                      </dd>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {part.rows.length > 8 || part.columns.length > 6 || part.truncated
+                ? <p>Additional rows were condensed. Refine the request for a narrower answer.</p>
+                : null}
+            </dl>
+          }
+          label={part.title}
+        />
       );
 
     case "chart":
@@ -235,7 +367,7 @@ function renderPart(
             {part.title}
           </h3>
           <dl className="mt-2 grid gap-2">
-            {part.fields.map((field) => (
+            {part.fields.slice(0, 3).map((field) => (
               <div
                 key={field.field}
                 className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2 text-xs"
@@ -247,6 +379,20 @@ function renderPart(
               </div>
             ))}
           </dl>
+          {part.fields.length > 3 ? (
+            <AssistantDisclosure summary={`${part.fields.length - 3} more fields`}>
+              <dl className="grid gap-2">
+                {part.fields.slice(3).map((field) => (
+                  <div key={field.field} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+                    <dt>{field.label}</dt>
+                    <dd className="break-words font-medium text-foreground">
+                      {field.sensitive ? "Hidden for privacy" : field.displayValue}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </AssistantDisclosure>
+          ) : null}
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
             Review and enter these details through the page form. The assistant
             has not submitted anything.
@@ -261,7 +407,7 @@ function renderPart(
             {part.title}
           </h3>
           <ul className="mt-2 grid gap-2">
-            {part.changes.map((change) => (
+            {part.changes.slice(0, 3).map((change) => (
               <li key={`${change.field}-${change.after}`} className="text-xs">
                 <p className="font-medium text-foreground">{change.field}</p>
                 <p className="break-words text-muted-foreground">
@@ -270,6 +416,20 @@ function renderPart(
               </li>
             ))}
           </ul>
+          {part.changes.length > 3 ? (
+            <AssistantDisclosure summary={`${part.changes.length - 3} more changes`}>
+              <ul className="grid gap-2">
+                {part.changes.slice(3).map((change) => (
+                  <li key={`${change.field}-${change.after}`}>
+                    <p className="font-medium text-foreground">{change.field}</p>
+                    <p className="break-words">
+                      {change.before ?? "Not set"} → {change.after ?? "Not set"}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </AssistantDisclosure>
+          ) : null}
         </section>
       );
 
@@ -303,35 +463,26 @@ function renderPart(
       );
 
     case "progress": {
-      const percent =
-        part.completed !== undefined && part.total !== undefined
-          ? Math.min(100, Math.round((part.completed / part.total) * 100))
-          : null;
+      const stepStatus = part.status === "succeeded"
+        ? "complete"
+        : part.status === "failed" || part.status === "cancelled"
+          ? "failed"
+          : part.status === "running" || part.status === "retrying" ||
+              part.status === "compensating"
+            ? "running"
+            : "queued";
+      const count = part.completed !== undefined && part.total !== undefined
+        ? ` (${part.completed} of ${part.total})`
+        : "";
       return (
-        <section className="rounded-xl border border-border/90 bg-muted/30 p-3">
-          <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="font-medium text-foreground">{part.label}</span>
-            <span className="capitalize text-muted-foreground">
-              {part.status.replaceAll("_", " ")}
-            </span>
-          </div>
-          <div
-            role="progressbar"
-            aria-label={part.label}
-            aria-valuemin={percent === null ? undefined : 0}
-            aria-valuemax={percent === null ? undefined : 100}
-            aria-valuenow={percent ?? undefined}
-            className="mt-2 h-1.5 overflow-hidden rounded-full bg-border"
-          >
-            <div
-              className={cn(
-                "h-full rounded-full bg-primary transition-[width] motion-reduce:transition-none",
-                percent === null && "w-1/2 animate-pulse",
-              )}
-              style={percent === null ? undefined : { width: `${percent}%` }}
-            />
-          </div>
-        </section>
+        <AssistantToolProgress
+          label={part.label}
+          steps={[{
+            id: part.workflowId,
+            label: `${part.label}${count}`,
+            status: stepStatus,
+          }]}
+        />
       );
     }
 

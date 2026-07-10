@@ -139,11 +139,9 @@ describe("AssistantMessageParts", () => {
     expect(document.body.textContent).toContain("Travel Mug");
     expect(document.body.textContent).toContain("Quick comparison");
     expect(document.body.textContent).toContain("Hot drinks");
-    expect(
-      document
-        .querySelector('[role="progressbar"]')
-        ?.getAttribute("aria-valuenow"),
-    ).toBe("50");
+    expect(document.querySelector(
+      "[data-assistant-tool-progress]",
+    )?.textContent).toContain("1 of 2");
     expect(document.body.textContent).toContain(
       "Use the visible cart or checkout controls to continue manually.",
     );
@@ -192,5 +190,53 @@ describe("AssistantMessageParts", () => {
     expect(host.textContent).toContain("From");
     expect(host.textContent).toContain("1.234");
     expect(host.textContent).not.toContain("BDT");
+  });
+
+  it("bounds product and comparison results without rendering grids or tables", () => {
+    const products = Array.from({ length: 8 }, (_, index) => ({
+      id: `gid://scalius/product/product_${index}`,
+      title: `Product ${index + 1}`,
+      path: `/products/product-${index + 1}`,
+      price: 100 + index,
+      currency: "BDT",
+      pricePresentation: "exact" as const,
+      availability: "in_stock" as const,
+      badges: [],
+    }));
+    act(() => {
+      root.render(
+        <AssistantMessageParts
+          parts={[
+            part({ type: "product_grid", title: "Eight matches", products }),
+            part({
+              type: "comparison",
+              title: "Six-way comparison",
+              products: products.slice(0, 6),
+              rows: Array.from({ length: 12 }, (_, index) => ({
+                label: `Detail ${index + 1}`,
+                cells: products.slice(0, 6).map((product) => ({
+                  productId: product.id,
+                  value: `Value ${index + 1}`,
+                })),
+              })),
+            }),
+          ]}
+          canNavigate={() => true}
+          onNavigate={vi.fn()}
+        />,
+      );
+    });
+
+    const resultLists = host.querySelectorAll("[data-assistant-result-list]");
+    expect(resultLists).toHaveLength(2);
+    resultLists.forEach((list) => {
+      expect(list.querySelectorAll("[data-assistant-result-row]").length)
+        .toBeLessThanOrEqual(3);
+    });
+    expect(host.querySelector("table")).toBeNull();
+    expect(host.querySelectorAll("[data-assistant-disclosure]").length)
+      .toBeGreaterThan(0);
+    expect(host.textContent).toContain("5 more results");
+    expect(host.textContent).toContain("3 more results");
   });
 });
