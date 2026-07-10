@@ -153,6 +153,99 @@ export interface AssistantDockProps extends Omit<
   mobile?: boolean;
 }
 
+export interface AssistantDockModalBoundaryProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "children"
+> {
+  children: ReactNode;
+  active: boolean;
+  label: string;
+  initialFocusRef?: RefObject<HTMLElement | null>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  onRequestClose: () => void;
+  /** Override layout-provided responsive detection when rendered standalone. */
+  mobile?: boolean;
+}
+
+/**
+ * Adds the mobile dialog contract around a host-owned assistant panel without
+ * changing its desktop layout. This also covers lazy-loading fallbacks, so a
+ * mobile page is never inert while the dialog surface is missing.
+ */
+export function AssistantDockModalBoundary({
+  children,
+  active,
+  label,
+  initialFocusRef,
+  returnFocusRef,
+  onRequestClose,
+  mobile,
+  className,
+  onKeyDown,
+  ...props
+}: AssistantDockModalBoundaryProps) {
+  const environment = useContext(AssistantDockEnvironment);
+  const resolvedMobile = useAssistantMobilePresentation(
+    mobile ?? environment.mobile,
+  );
+  const modal = resolvedMobile && active;
+  const boundaryRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!modal) return undefined;
+
+    const focusBeforeOpen =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const returnFocusTarget = returnFocusRef?.current ?? focusBeforeOpen;
+    const bodyOverflow = document.body.style.overflow;
+    const documentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    (initialFocusRef?.current ?? boundaryRef.current)?.focus({
+      preventScroll: true,
+    });
+
+    return () => {
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = documentOverflow;
+      returnFocusTarget?.focus({
+        preventScroll: true,
+      });
+    };
+  }, [initialFocusRef, modal, returnFocusRef]);
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    onKeyDown?.(event);
+    if (event.defaultPrevented || !modal) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onRequestClose();
+      return;
+    }
+    if (event.key === "Tab") containTabFocus(event, boundaryRef);
+  }
+
+  return (
+    <div
+      {...props}
+      ref={boundaryRef}
+      className={classNames("sc-assistant-modal-boundary", className)}
+      aria-label={modal ? label : undefined}
+      aria-modal={modal || undefined}
+      data-assistant-modal-boundary=""
+      data-mobile={resolvedMobile ? "true" : "false"}
+      onKeyDown={handleKeyDown}
+      role={modal ? "dialog" : undefined}
+      tabIndex={modal ? -1 : undefined}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function AssistantDock({
   id,
   mode,
@@ -437,7 +530,7 @@ function containTabFocus(
   if (event.shiftKey && (active === first || active === shell)) {
     event.preventDefault();
     last.focus({ preventScroll: true });
-  } else if (!event.shiftKey && active === last) {
+  } else if (!event.shiftKey && (active === last || active === shell)) {
     event.preventDefault();
     first.focus({ preventScroll: true });
   }

@@ -56,6 +56,9 @@ describe("AdminAssistantLauncher", () => {
 
   beforeEach(() => {
     document.body.innerHTML = "";
+    document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+    setViewportWidth(1024);
     window.sessionStorage.clear();
     delete window[ADMIN_ASSISTANT_PAGE_STATE_GLOBAL];
     resetAdminAssistantPageActionsForTest();
@@ -162,7 +165,9 @@ describe("AdminAssistantLauncher", () => {
     );
     expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
     expect(getAssistantWorkspace()?.dataset.side).toBe("start");
-    expect(getAssistantPanel()?.parentElement).toBe(getAssistantDockSlot());
+    expect(getAssistantPanel()?.closest("[data-assistant-dock-slot]")).toBe(
+      getAssistantDockSlot(),
+    );
     expect(getAssistantDockSlot()?.hidden).toBe(false);
     expect(
       queryButton("Dock assistant left")?.getAttribute("aria-pressed"),
@@ -174,7 +179,9 @@ describe("AdminAssistantLauncher", () => {
     );
     expect(getAssistantWorkspace()?.dataset.mode).toBe("docked");
     expect(getAssistantWorkspace()?.dataset.side).toBe("end");
-    expect(getAssistantPanel()?.parentElement).toBe(getAssistantDockSlot());
+    expect(getAssistantPanel()?.closest("[data-assistant-dock-slot]")).toBe(
+      getAssistantDockSlot(),
+    );
 
     await click(queryButton("Use floating assistant"));
     expect(getAssistantPanel()?.getAttribute("data-assistant-mode")).toBe(
@@ -231,6 +238,54 @@ describe("AdminAssistantLauncher", () => {
 
     await keyDown(panel, "Escape");
     expect(getAssistantPanel()).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("uses a complete mobile dialog boundary and never leaves an inert page behind", async () => {
+    setViewportWidth(390);
+    renderLauncher(<button>Page action</button>);
+
+    const trigger = queryButton("Open admin assistant");
+    trigger?.focus();
+    await click(trigger);
+    await nextMacrotask();
+
+    const workspace = getAssistantWorkspace();
+    const page = document.querySelector<HTMLElement>(
+      "[data-assistant-page-slot]",
+    );
+    const dialog = document.querySelector<HTMLElement>(
+      '[data-assistant-modal-boundary][role="dialog"]',
+    );
+    expect(workspace?.dataset.mobile).toBe("true");
+    expect(page?.hasAttribute("inert")).toBe(true);
+    expect(page?.getAttribute("aria-hidden")).toBe("true");
+    expect(dialog?.getAttribute("aria-label")).toBe("Admin assistant");
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    expect(dialog?.contains(getAssistantPanel())).toBe(true);
+    expect(dialog?.contains(document.activeElement)).toBe(true);
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(document.documentElement.style.overflow).toBe("hidden");
+
+    await click(queryButton("Minimize admin assistant"));
+    await nextMacrotask();
+    expect(
+      document.querySelector('[data-assistant-modal-boundary][role="dialog"]'),
+    ).toBeNull();
+    expect(page?.hasAttribute("inert")).toBe(false);
+    expect(page?.hasAttribute("aria-hidden")).toBe(false);
+    expect(document.body.style.overflow).toBe("");
+    expect(document.documentElement.style.overflow).toBe("");
+    expect(document.activeElement).toBe(trigger);
+
+    await click(trigger);
+    const reopenedDialog = document.querySelector<HTMLElement>(
+      '[data-assistant-modal-boundary][role="dialog"]',
+    );
+    expect(page?.hasAttribute("inert")).toBe(Boolean(reopenedDialog));
+    await keyDown(reopenedDialog, "Escape");
+    await nextMacrotask();
+    expect(page?.hasAttribute("inert")).toBe(false);
     expect(document.activeElement).toBe(trigger);
   });
 
@@ -848,6 +903,20 @@ async function flushReact() {
       await Promise.resolve();
     });
   }
+}
+
+async function nextMacrotask() {
+  await act(async () => {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  });
+  await flushReact();
+}
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: width,
+  });
 }
 
 interface ConversationAppendInput {
