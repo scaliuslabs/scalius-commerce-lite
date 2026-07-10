@@ -1,6 +1,7 @@
 import {
   createScaliusBrowserComputerAdapter,
   normalizeScaliusComputerRoute,
+  parseScaliusComputerProgram,
   ScaliusComputerController,
   type ScaliusComputerBinding,
   type ScaliusComputerRequest,
@@ -49,20 +50,48 @@ export function createStorefrontAssistantComputerRuntime(
   const controller = new ScaliusComputerController({ binding, adapter });
   return {
     binding,
-    execute: (request) => controller.execute(request),
+    execute: (request) => {
+      if (!bindingMatches(binding, request.binding)) return controller.execute(request);
+      const parsed = parseScaliusComputerProgram(request.program);
+      const command = parsed.ok ? parsed.commands[0]?.name : undefined;
+      if (
+        command && command !== "goto" && command !== "help" && command !== "refresh" &&
+        isSensitiveStorefrontComputerRoute(currentRoute(pageWindow.location))
+      ) {
+        return Promise.resolve({
+          ok: false,
+          code: "HUMAN_REQUIRED",
+          output: "This buyer page is private. Use the page directly; computer access is unavailable here.",
+          retryable: false,
+        });
+      }
+      return controller.execute(request);
+    },
   };
 }
 
 export function isAllowedStorefrontComputerRoute(route: string): boolean {
   const normalized = normalizeScaliusComputerRoute(route);
   if (!normalized) return false;
-  const pathname = decodeURIComponent(
-    new URL(normalized, "https://storefront.invalid").pathname,
-  );
+  const parsed = new URL(normalized, "https://storefront.invalid");
+  if (hasSensitiveQueryKey(parsed)) return false;
+  const pathname = decodeURIComponent(parsed.pathname);
   const firstSegment = pathname.split("/").filter(Boolean)[0]?.toLowerCase() ?? "";
   return firstSegment !== "admin" && firstSegment !== "api" &&
     firstSegment !== ".well-known" && firstSegment !== "cdn-cgi" &&
     !firstSegment.startsWith("_");
+}
+
+export function isSensitiveStorefrontComputerRoute(route: string): boolean {
+  const normalized = normalizeScaliusComputerRoute(route);
+  if (!normalized) return true;
+  const parsed = new URL(normalized, "https://storefront.invalid");
+  if (hasSensitiveQueryKey(parsed)) return true;
+  const pathname = decodeURIComponent(parsed.pathname).toLowerCase();
+  return pathname === "/checkout" || pathname.startsWith("/checkout/") ||
+    pathname === "/account" || pathname.startsWith("/account/") ||
+    pathname === "/order-success" || pathname.startsWith("/order-success/") ||
+    pathname === "/payment-recovery" || pathname.startsWith("/payment-recovery/");
 }
 
 function resolveDocument(provided?: Document): Document {
@@ -75,4 +104,18 @@ function resolveDocument(provided?: Document): Document {
 
 function currentRoute(location: Location): string {
   return `${location.pathname}${location.search}${location.hash}`;
+}
+
+function hasSensitiveQueryKey(url: URL): boolean {
+  return [...url.searchParams.keys()].some((key) =>
+    /(?:token|proof|receipt|otp|code|password|secret)/i.test(key)
+  );
+}
+
+function bindingMatches(
+  expected: Readonly<ScaliusComputerBinding>,
+  actual: ScaliusComputerBinding,
+): boolean {
+  return expected.surface === actual.surface && expected.threadId === actual.threadId &&
+    expected.tabId === actual.tabId;
 }
