@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 import {
   createAdminAssistantComputerRuntime,
@@ -129,6 +130,34 @@ describe("Admin assistant computer runtime", () => {
 
   it("fails closed for malformed encoded paths instead of throwing", () => {
     expect(isAllowedAdminComputerRoute("/admin/products/%E0%A4%A")).toBe(false);
+  });
+
+  it("applies the current merchant's page permissions at the browser boundary", () => {
+    const productViewer = {
+      isSuperAdmin: false,
+      permissions: new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    };
+    expect(
+      isAllowedAdminComputerRoute("/admin/products", productViewer),
+    ).toBe(true);
+    expect(
+      isAllowedAdminComputerRoute("/admin/products/new", productViewer),
+    ).toBe(false);
+    expect(
+      isAllowedAdminComputerRoute("/admin/settings/taxes", productViewer),
+    ).toBe(false);
+    expect(
+      isAllowedAdminComputerRoute("/admin/products/new", {
+        isSuperAdmin: false,
+        permissions: new Set([PERMISSIONS.PRODUCTS_CREATE]),
+      }),
+    ).toBe(true);
+    expect(
+      isAllowedAdminComputerRoute("/admin/settings/taxes", {
+        isSuperAdmin: true,
+        permissions: new Set(),
+      }),
+    ).toBe(true);
   });
 
   it("fails closed when the bound tab is not active", async () => {

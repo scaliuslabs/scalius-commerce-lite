@@ -12,6 +12,7 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 
 import { cn } from "@scalius/shared/utils";
+import { usePermissions } from "~/contexts/PermissionContext";
 import {
   ADMIN_ASSISTANT_HUMAN_ACTIONS,
   subscribeAdminAssistantHumanConfirmation,
@@ -65,6 +66,7 @@ export function AdminAssistantPanel({
   onSizeChange,
 }: AdminAssistantPanelProps) {
   const navigate = useNavigate();
+  const { permissions, isSuperAdmin } = usePermissions();
   const pageState = useAdminAssistantPageState();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const openRef = useRef(open);
@@ -95,6 +97,7 @@ export function AdminAssistantPanel({
     return createAdminAssistantComputerRuntime({
       threadId: transcript.threadId,
       tabId,
+      access: { permissions, isSuperAdmin },
       navigate: async (route) => {
         await navigate({ to: route as string });
       },
@@ -103,7 +106,14 @@ export function AdminAssistantPanel({
         openRef.current &&
         document.visibilityState !== "hidden",
     });
-  }, [computerRuntimeGuard, navigate, tabId, transcript.threadId]);
+  }, [
+    computerRuntimeGuard,
+    isSuperAdmin,
+    navigate,
+    permissions,
+    tabId,
+    transcript.threadId,
+  ]);
   const computerCoordinator = useMemo(
     () =>
       computerRuntime
