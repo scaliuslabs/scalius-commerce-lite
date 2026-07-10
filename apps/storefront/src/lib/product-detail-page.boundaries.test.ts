@@ -1,10 +1,95 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { storefrontSourcePath } from "./test-source-paths";
+import { getBuyerVariantPricePresentation } from "@/components/product/lib/pricing-engine";
 
 const PRODUCT_PAGE_SOURCE = storefrontSourcePath("pages/products/[slug].astro");
+const PRODUCT_SUMMARY_SOURCE = storefrontSourcePath(
+  "components/product/ProductSummary.astro",
+);
 
 describe("product detail page SKU boundaries", () => {
+  it("renders a truthful lowest-SKU starting price before option hydration", () => {
+    const source = readFileSync(PRODUCT_SUMMARY_SOURCE, "utf8");
+    const productPricing = {
+      basePrice: 45_600,
+      discountType: "percentage" as const,
+      discountPercentage: 10,
+      discountAmount: 0,
+    };
+    const variants = [
+      {
+        price: 45_600,
+        discountType: null,
+        discountPercentage: 0,
+        discountAmount: 0,
+        stock: 5,
+        reservedStock: 0,
+        trackInventory: true,
+      },
+      {
+        price: 4_500,
+        discountType: null,
+        discountPercentage: 0,
+        discountAmount: 0,
+        stock: 5,
+        reservedStock: 0,
+        trackInventory: true,
+      },
+    ];
+    const presentation = getBuyerVariantPricePresentation(
+      productPricing,
+      variants,
+    );
+    const availableOnlyPresentation = getBuyerVariantPricePresentation(
+      productPricing,
+      [variants[0]!, { ...variants[1]!, stock: 0 }],
+    );
+    const allSoldOutPresentation = getBuyerVariantPricePresentation(
+      productPricing,
+      variants.map((variant) => ({ ...variant, stock: 0 })),
+    );
+
+    expect(presentation).toMatchObject({
+      isStartingAt: true,
+      pricing: { finalPrice: 4_050 },
+    });
+    expect(availableOnlyPresentation.pricing.finalPrice).toBe(41_040);
+    expect(allSoldOutPresentation.pricing.finalPrice).toBe(4_050);
+    expect(source).toContain(
+      "getBuyerVariantPricePresentation(\n  productPricing,\n  variants,",
+    );
+    expect(source).toContain(
+      "const showsStartingPrice = initialPricePresentation.isStartingAt;",
+    );
+    expect(source).toContain(
+      '`${showsStartingPrice ? "From " : ""}${formatPrice(initialDisplayedPrice)}`',
+    );
+    expect(source).toContain("{ hidden: !initialExactPricing?.hasDiscount }");
+    expect(source).toContain("{ hidden: !discountBadgeText }");
+  });
+
+  it("uses the shared buyer price for product metadata and initial analytics", () => {
+    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
+
+    expect(source).toContain(
+      "const buyerPricePresentation = getBuyerVariantPricePresentation(",
+    );
+    expect(source).toContain(
+      "const buyerDisplayedPrice = buyerPricePresentation.pricing.finalPrice;",
+    );
+    expect(source).toContain("price: buyerDisplayedPrice.toFixed(2)");
+    expect(source).toContain("ogPrice={buyerDisplayedPrice.toFixed(2)}");
+    expect(source).toContain(
+      "data-product-price={String(buyerDisplayedPrice)}",
+    );
+    expect(source).toContain("discountedPrice: buyerDisplayedPrice");
+    expect(source).not.toContain("ogPrice={product.discountedPrice.toFixed(2)}");
+    expect(source).not.toContain(
+      "data-product-price={String(product.discountedPrice)}",
+    );
+  });
+
   it("keeps assistant product context tied to the buyer-facing product name", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 

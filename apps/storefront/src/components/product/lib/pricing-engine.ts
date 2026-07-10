@@ -13,6 +13,7 @@
  */
 
 import { formatPrice as sharedFormatPrice } from "@/lib/currency";
+import { isVariantAvailable } from "@/lib/product-sellable-variants";
 
 export type DiscountType = "percentage" | "flat" | null | undefined;
 
@@ -30,6 +31,12 @@ export interface VariantPricing {
   discountAmount: number | null | undefined;
 }
 
+export interface BuyerVariantPricing extends VariantPricing {
+  stock: number;
+  reservedStock?: number;
+  trackInventory?: boolean;
+}
+
 export interface PriceCalculationResult {
   originalPrice: number;
   finalPrice: number;
@@ -39,6 +46,11 @@ export interface PriceCalculationResult {
   hasDiscount: boolean;
   savingsAmount: number;
   savingsPercentage: number;
+}
+
+export interface BuyerVariantPricePresentation {
+  isStartingAt: boolean;
+  pricing: PriceCalculationResult;
 }
 
 /**
@@ -191,6 +203,41 @@ export function calculateProductPrice(
     savingsAmount,
     savingsPercentage,
   };
+}
+
+/**
+ * Resolve the truthful price shown before an exact optioned SKU is selected.
+ * Prefer buyer-actionable variants whenever any are available. If every SKU is
+ * sold out, retain a truthful catalog price by falling back to all buyer SKUs.
+ */
+export function getBuyerVariantPricePresentation(
+  productPricing: ProductPricing,
+  variants: BuyerVariantPricing[],
+): BuyerVariantPricePresentation {
+  if (variants.length === 0) {
+    return {
+      isStartingAt: false,
+      pricing: calculateProductPrice(productPricing),
+    };
+  }
+
+  if (variants.length === 1) {
+    return {
+      isStartingAt: false,
+      pricing: calculateVariantPrice(productPricing, variants[0] ?? null),
+    };
+  }
+
+  const availableVariants = variants.filter(isVariantAvailable);
+  const candidates =
+    availableVariants.length > 0 ? availableVariants : variants;
+  const pricing = candidates
+    .map((variant) => calculateVariantPrice(productPricing, variant))
+    .reduce((lowest, current) =>
+      current.finalPrice < lowest.finalPrice ? current : lowest,
+    );
+
+  return { isStartingAt: true, pricing };
 }
 
 /**

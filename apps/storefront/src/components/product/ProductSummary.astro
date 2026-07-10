@@ -3,8 +3,10 @@ import { Check, Circle, Minus, Plus, ShoppingCart, Truck } from "lucide-react";
 import ProductDetails from "./ProductDetails.astro";
 import type { Product, ProductVariant } from "@/lib/api";
 import {
+  getBuyerVariantPricePresentation,
   getVariantDiscountedPrice,
   formatDiscountBadge,
+  type ProductPricing,
 } from "./lib/pricing-engine";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -45,18 +47,35 @@ const stockStatus = buyerStockSummary.tone === "available"
   ? { text: buyerStockSummary.text, color: "text-primary", bg: "bg-primary/10" }
   : { text: buyerStockSummary.text, color: "text-destructive", bg: "bg-destructive/10" };
 
-const basePrice = product.price;
-const discountedPrice = product.discountedPrice;
-
-const hasDiscount = discountedPrice < basePrice;
 const option1Label = product.variantOption1Label?.trim() || "Option 1";
 const option2Label = product.variantOption2Label?.trim() || "Option 2";
 
-const discountBadgeText = formatDiscountBadge(
-  product.discountType,
-  product.discountPercentage,
-  product.discountAmount
+const productPricing: ProductPricing = {
+  basePrice: product.price,
+  discountType: product.discountType,
+  discountPercentage: product.discountPercentage,
+  discountAmount: product.discountAmount,
+};
+const initialPricePresentation = getBuyerVariantPricePresentation(
+  productPricing,
+  variants,
 );
+const showsStartingPrice = initialPricePresentation.isStartingAt;
+const initialExactPricing = showsStartingPrice
+  ? null
+  : initialPricePresentation.pricing;
+const initialDisplayedPrice = initialPricePresentation.pricing.finalPrice;
+const initialPriceText = `${showsStartingPrice ? "From " : ""}${formatPrice(initialDisplayedPrice)}`;
+const initialCompareAtText = initialExactPricing
+  ? formatPrice(initialExactPricing.originalPrice)
+  : "";
+const discountBadgeText = initialExactPricing
+  ? formatDiscountBadge(
+      initialExactPricing.discountType,
+      initialExactPricing.discountPercentage,
+      initialExactPricing.discountAmount,
+    )
+  : null;
 
 const productVariantsJson = serializeJsonForInlineScript(
   variants.map((variant) => {
@@ -125,22 +144,24 @@ const productVariantsJson = serializeJsonForInlineScript(
         <p
           class="text-lg lg:text-3xl font-bold text-primary product-price whitespace-nowrap"
         >
-          {formatPrice(discountedPrice)}
+          {initialPriceText}
         </p>
-        {
-          hasDiscount && (
-            <p class="text-[10px] sm:text-xs text-muted-foreground line-through product-original-price whitespace-nowrap">
-              {formatPrice(basePrice)}
-            </p>
-          )
-        }
-        {
-          discountBadgeText && (
-            <span class="discount-badge text-[10px] sm:text-xs font-semibold text-primary whitespace-nowrap">
-              {discountBadgeText}
-            </span>
-          )
-        }
+        <p
+          class:list={[
+            "text-[10px] sm:text-xs text-muted-foreground line-through product-original-price whitespace-nowrap",
+            { hidden: !initialExactPricing?.hasDiscount },
+          ]}
+        >
+          {initialCompareAtText}
+        </p>
+        <span
+          class:list={[
+            "discount-badge text-[10px] sm:text-xs font-semibold text-primary whitespace-nowrap",
+            { hidden: !discountBadgeText },
+          ]}
+        >
+          {discountBadgeText ?? ""}
+        </span>
         <div
           class={`flex items-center px-1.5 lg:px-2 py-0.5 rounded-full border ${stockStatus.color} ${stockStatus.bg} text-[10px] lg:text-xs shadow-sm whitespace-nowrap shrink-0`}
         >

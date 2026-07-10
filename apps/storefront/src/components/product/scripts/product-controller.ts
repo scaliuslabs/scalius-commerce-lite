@@ -13,6 +13,7 @@ import {
   calculateVariantPrice,
   formatPrice,
   formatDiscountBadge,
+  getBuyerVariantPricePresentation,
   type ProductPricing,
   type VariantPricing,
   type DiscountType,
@@ -333,7 +334,32 @@ function updateVariantImage() {
 }
 
 function updatePriceDisplay() {
-  if (!state.productPricing || !state.selection) return;
+  if (!state.productPricing || !state.selection || !state.variantIndex) return;
+
+  const hasCustomerOptions =
+    state.variantIndex.options.hasSize || state.variantIndex.options.hasColor;
+  const showsStartingPrice =
+    hasCustomerOptions &&
+    state.variants.length > 0 &&
+    !state.selection.selectedVariant;
+
+  if (showsStartingPrice) {
+    const startingPrice = getBuyerVariantPricePresentation(
+      state.productPricing,
+      state.variants,
+    ).pricing.finalPrice;
+    const formattedStartingPrice = `From ${formatPrice(startingPrice)}`;
+
+    cache.priceElements.forEach((el) => {
+      if (el.textContent !== formattedStartingPrice) {
+        el.textContent = formattedStartingPrice;
+      }
+    });
+    cache.originalPriceElements.forEach((el) => el.classList.add("hidden"));
+    cache.discountBadge?.classList.add("hidden");
+    publishProductAssistantSurface(startingPrice);
+    return;
+  }
 
   let variantPricing: VariantPricing | null = null;
   if (state.selection.selectedVariant) {
