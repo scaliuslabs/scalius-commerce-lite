@@ -101,7 +101,11 @@ export function AdminAssistantPanelHeader({
                 <History className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent
+              align="end"
+              className="w-56"
+              data-scalius-computer-exclude=""
+            >
               <DropdownMenuLabel>Durable conversations</DropdownMenuLabel>
               {[...conversationHistoryIds]
                 .reverse()

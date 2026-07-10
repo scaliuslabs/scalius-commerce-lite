@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { isDirectAdminNavigationAuthorized } from "./navigation-authorization";
+import {
+  getAuthorizedAdminNavigationRoutes,
+  isDirectAdminNavigationAuthorized,
+} from "./navigation-authorization";
 
 describe("Admin direct navigation authorization", () => {
   it.each([
@@ -30,5 +33,18 @@ describe("Admin direct navigation authorization", () => {
     expect(isDirectAdminNavigationAuthorized("Explain this page", "refresh")).toBe(
       true,
     );
+  });
+
+  it("resolves one shared route scope for direct goto and visible-link clicks", () => {
+    expect(getAuthorizedAdminNavigationRoutes("Take me to products page")).toEqual([
+      "/admin/products",
+    ]);
+    expect(getAuthorizedAdminNavigationRoutes("How many products do we have?")).toEqual(
+      [],
+    );
+    expect(getAuthorizedAdminNavigationRoutes("Take me to products or orders")).toEqual(
+      [],
+    );
+    expect(getAuthorizedAdminNavigationRoutes("Take me to a product")).toEqual([]);
   });
 });

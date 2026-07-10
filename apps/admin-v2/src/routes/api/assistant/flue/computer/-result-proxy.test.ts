@@ -207,7 +207,7 @@ describe("Admin Flue computer result proxy", () => {
 
     const oversized = dependencies();
     const oversizedResponse = await proxyAdminFlueComputerResult(
-      request(undefined, { rawBody: JSON.stringify({ padding: "x".repeat(21_000) }) }),
+      request(undefined, { rawBody: JSON.stringify({ padding: "x".repeat(50_000) }) }),
       oversized,
     );
     expect(oversizedResponse.status).toBe(413);

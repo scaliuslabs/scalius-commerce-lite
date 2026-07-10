@@ -254,10 +254,11 @@ describe("Storefront Flue computer coordinator", () => {
   });
 
   it("rejects a signed goto unless latest explicit intent and route provenance agree", async () => {
+    const navigate = vi.fn();
     const runtime = createStorefrontAssistantComputerRuntime({
       threadId: THREAD_ID,
       tabId: TAB_ID,
-      navigate: vi.fn(),
+      navigate,
     });
     const execute = vi.spyOn(runtime, "execute");
     const postResult = vi.fn(async (payload) => ({
@@ -276,7 +277,8 @@ describe("Storefront Flue computer coordinator", () => {
       result: { ok: false, code: "ROUTE_BLOCKED", retryable: false },
     });
     expect(postResult).toHaveBeenCalledOnce();
-    expect(execute).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(navigate).not.toHaveBeenCalled();
 
     const otherIssued = await command("goto /products/everyday-shoes", 13);
     await expect(
@@ -298,7 +300,82 @@ describe("Storefront Flue computer coordinator", () => {
       status: "continuation_accepted",
       result: { ok: false, code: "ROUTE_BLOCKED", retryable: false },
     });
-    expect(execute).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("binds a visible link click to exact latest intent and route provenance", async () => {
+    document.body.innerHTML = `
+      <main>
+        <a href="/products/everyday-shoes">Everyday Shoes</a>
+        <a href="/products/other-shoes">Other Shoes</a>
+      </main>`;
+    const clicked = vi.fn((event: Event) => event.preventDefault());
+    for (const link of document.querySelectorAll("a")) {
+      link.addEventListener("click", clicked);
+    }
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+    });
+    const coordinator = new StorefrontFlueComputerCoordinator({
+      runtime,
+      postResult: async (payload) => ({
+        accepted: true,
+        requestId: payload.requestId,
+      }),
+      now: () => NOW + 1_000,
+    });
+    const observed = await coordinator.consume(
+      source(await command("observe", 14)),
+    );
+    if (observed.status !== "continuation_accepted") {
+      throw new Error("observe failed");
+    }
+    const handle = observed.result.output.match(
+      /(@r\d+\.e\d+) link "Everyday Shoes"/u,
+    )?.[1];
+    expect(handle).toBeTruthy();
+
+    const unrelated = await coordinator.consume(
+      source(await command(`click ${handle}`, 15), {
+        navigationAuthority: {
+          latestUserText: "What is its price?",
+          candidates: [
+            {
+              route: "/products/everyday-shoes",
+              label: "Everyday Shoes",
+              source: "visible-page",
+            },
+          ],
+        },
+      }),
+    );
+    expect(unrelated).toMatchObject({
+      status: "continuation_accepted",
+      result: { ok: false, code: "ROUTE_BLOCKED" },
+    });
+    expect(clicked).not.toHaveBeenCalled();
+
+    const exact = await coordinator.consume(
+      source(await command(`click ${handle}`, 16), {
+        navigationAuthority: {
+          latestUserText: "Take me to Everyday Shoes",
+          candidates: [
+            {
+              route: "/products/everyday-shoes",
+              label: "Everyday Shoes",
+              source: "visible-page",
+            },
+          ],
+        },
+      }),
+    );
+    expect(exact).toMatchObject({
+      status: "continuation_accepted",
+      result: { ok: true, code: "EXECUTED" },
+    });
+    expect(clicked).toHaveBeenCalledOnce();
   });
 
   it("fails closed before page work when refresh-safe dedupe storage is unavailable", async () => {

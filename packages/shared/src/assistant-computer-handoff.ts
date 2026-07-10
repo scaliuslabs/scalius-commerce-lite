@@ -1,5 +1,6 @@
 import {
   parseScaliusComputerProgram,
+  SCALIUS_COMPUTER_LIMITS,
   type ScaliusComputerResult,
   type ScaliusComputerSurface,
 } from "./assistant-computer";
@@ -8,8 +9,8 @@ const PROTOCOL_VERSION = 1 as const;
 const MINIMUM_SIGNING_KEY_LENGTH = 32;
 const MAX_TICKET_TTL_MS = 120_000;
 const MAX_CLOCK_SKEW_MS = 5_000;
-const MAX_RESULT_BODY_BYTES = 20_000;
-const MAX_RESULT_OUTPUT_CHARS = 12_000;
+const MAX_RESULT_BODY_BYTES = SCALIUS_COMPUTER_LIMITS.resultEnvelopeBytes;
+const MAX_RESULT_OUTPUT_CHARS = SCALIUS_COMPUTER_LIMITS.resultOutputChars;
 const AGENT_NAME_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
 const INSTANCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/u;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;

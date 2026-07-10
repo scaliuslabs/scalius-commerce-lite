@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   buildStorefrontNavigationAuthority,
+  getAuthorizedStorefrontNavigationRoutes,
   isAuthorizedStorefrontGoto,
   type StorefrontNavigationAuthority,
 } from "./storefront-navigation-authority";
@@ -82,6 +83,12 @@ describe("Storefront navigation authority", () => {
     expect(
       isAuthorizedStorefrontGoto("goto /products/everyday-shoes", proof),
     ).toBe(true);
+    expect(
+      getAuthorizedStorefrontNavigationRoutes(
+        "click @r1.e1",
+        proof,
+      ),
+    ).toEqual(["/products/everyday-shoes"]);
   });
 
   it("rejects invented, ambiguous, stale, and non-navigation destinations", () => {
@@ -208,5 +215,35 @@ describe("Storefront navigation authority", () => {
     expect(isAuthorizedStorefrontGoto("goto /categories/rice", proof)).toBe(
       true,
     );
+    expect(
+      getAuthorizedStorefrontNavigationRoutes("click @r1.e1", proof),
+    ).toEqual(["/categories/rice"]);
+  });
+
+  it("does not grant a link-click route for unrelated or ambiguous intent", () => {
+    const candidates: StorefrontNavigationAuthority["candidates"] = [
+      {
+        route: "/products/shoes",
+        label: "Shoes",
+        source: "scalius",
+      },
+      {
+        route: "/categories/shoes",
+        label: "Shoes",
+        source: "visible-page",
+      },
+    ];
+    expect(
+      getAuthorizedStorefrontNavigationRoutes(
+        "click @r1.e1",
+        authority("What shoes do you sell?", candidates),
+      ),
+    ).toEqual([]);
+    expect(
+      getAuthorizedStorefrontNavigationRoutes(
+        "click @r1.e1",
+        authority("Take me to shoes", candidates),
+      ),
+    ).toEqual([]);
   });
 });

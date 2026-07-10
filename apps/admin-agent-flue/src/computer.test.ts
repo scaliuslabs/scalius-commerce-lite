@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { SCALIUS_COMPUTER_LIMITS } from "@scalius/shared/assistant-computer";
 import { createAdminComputerTool } from "./computer";
 
 const INSTANCE_ID = `v1.${"a".repeat(43)}`;
@@ -28,7 +29,19 @@ it("rejects invalid and oversized programs before handoff", async () => {
   await expect(tool.run({ input: { program: "javascript alert(1)" } })).rejects.toThrow(
     "Invalid computer program",
   );
-  await expect(tool.run({ input: { program: "x".repeat(4_097) } })).rejects.toThrow(
+  await expect(tool.run({
+    input: { program: "x".repeat(SCALIUS_COMPUTER_LIMITS.programChars + 1) },
+  })).rejects.toThrow(
     "Invalid computer program",
   );
+});
+
+it("hands off one boundary-sized rich description", async () => {
+  const tool = createAdminComputerTool(INSTANCE_ID, SIGNING_KEY);
+  const value = `<p>${"x".repeat(3_993)}</p>`;
+  const program = `fill @r1.e1 ${JSON.stringify(value)}`;
+  await expect(tool.run({ input: { program } })).resolves.toMatchObject({
+    program,
+    surface: "admin",
+  });
 });

@@ -297,7 +297,7 @@ describe("Storefront Flue computer result proxy", () => {
     const oversized = dependencies();
     const oversizedResponse = await proxyStorefrontFlueComputerResult(
       request(undefined, {
-        rawBody: JSON.stringify({ padding: "x".repeat(21_000) }),
+        rawBody: JSON.stringify({ padding: "x".repeat(50_000) }),
       }),
       oversized,
     );

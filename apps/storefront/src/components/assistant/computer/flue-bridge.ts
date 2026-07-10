@@ -1,12 +1,13 @@
 import {
   parseScaliusComputerProgram,
+  SCALIUS_COMPUTER_LIMITS,
   type ScaliusComputerResult,
 } from "@scalius/shared/assistant-computer";
 import type { ScaliusComputerClientCommand } from "@scalius/shared/assistant-computer-handoff";
 
 import type { StorefrontAssistantComputerRuntime } from "./runtime";
 import {
-  isAuthorizedStorefrontGoto,
+  getAuthorizedStorefrontNavigationRoutes,
   type StorefrontNavigationAuthority,
 } from "../storefront-navigation-authority";
 
@@ -15,7 +16,7 @@ const THREAD_ID_PATTERN = /^conv_[A-Za-z0-9_-]{22,64}$/u;
 const TAB_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/u;
 const TICKET_PATTERN = /^[A-Za-z0-9_-]{16,1600}\.[A-Za-z0-9_-]{43}$/u;
 const MAX_CLIENT_COMMAND_LIFETIME_MS = 125_000;
-const MAX_RESULT_REQUEST_BYTES = 20_000;
+const MAX_RESULT_REQUEST_BYTES = SCALIUS_COMPUTER_LIMITS.resultEnvelopeBytes;
 const MAX_RESULT_RESPONSE_BYTES = 4_096;
 const MAX_DEDUPE_STORAGE_BYTES = 32_768;
 
@@ -186,7 +187,7 @@ export class StorefrontFlueComputerCoordinator {
     if (!isMatchingComputerInput(source.part.input, command.program)) {
       return { status: "rejected", reason: "invalid_client_command" };
     }
-    const navigationAuthorized = isAuthorizedStorefrontGoto(
+    const authorizedNavigationRoutes = getAuthorizedStorefrontNavigationRoutes(
       command.program,
       source.navigationAuthority,
     );
@@ -233,29 +234,20 @@ export class StorefrontFlueComputerCoordinator {
     }
 
     let result: ScaliusComputerResult;
-    if (!navigationAuthorized) {
+    try {
+      result = await this.#runtime.execute({
+        binding: this.#runtime.binding,
+        program: command.program,
+        authorizedNavigationRoutes,
+      });
+    } catch {
       result = {
         ok: false,
-        code: "ROUTE_BLOCKED",
+        code: "EXECUTION_FAILED",
         output:
-          "Navigation requires one exact shopper-requested route proven by Scalius or the visible page.",
-        retryable: false,
+          "The Storefront page could not complete that command. Observe and try again.",
+        retryable: true,
       };
-    } else {
-      try {
-        result = await this.#runtime.execute({
-          binding: this.#runtime.binding,
-          program: command.program,
-        });
-      } catch {
-        result = {
-          ok: false,
-          code: "EXECUTION_FAILED",
-          output:
-            "The Storefront page could not complete that command. Observe and try again.",
-          retryable: true,
-        };
-      }
     }
 
     this.#setPhase(command, fingerprint, "posting_untrusted_result");

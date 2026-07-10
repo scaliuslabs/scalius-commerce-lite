@@ -6,6 +6,7 @@ import {
   createScaliusBrowserComputerAdapter,
   normalizeScaliusComputerRoute,
   parseScaliusComputerProgram,
+  SCALIUS_COMPUTER_LIMITS,
   SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT,
   ScaliusComputerController,
   type ScaliusComputerBinding,
@@ -68,6 +69,26 @@ describe("Scalius computer protocol", () => {
     "goto https://evil.example",
   ])("rejects unsupported or ambiguous program %s", (program) => {
     expect(parseScaliusComputerProgram(program).ok).toBe(false);
+  });
+
+  it("accepts one 4,000-character rich value inside the bounded program envelope", () => {
+    const richValue = `<p>${"x".repeat(3_993)}</p>`;
+    expect(richValue).toHaveLength(SCALIUS_COMPUTER_LIMITS.valueChars);
+    expect(
+      parseScaliusComputerProgram(
+        `fill @r1.e1 ${JSON.stringify(richValue)}`,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      parseScaliusComputerProgram(
+        `fill @r1.e1 ${JSON.stringify(`${richValue}x`)}`,
+      ),
+    ).toMatchObject({ ok: false });
+    expect(
+      parseScaliusComputerProgram(
+        "x".repeat(SCALIUS_COMPUTER_LIMITS.programChars + 1),
+      ),
+    ).toMatchObject({ ok: false });
   });
 
   it("accepts only path-shaped same-origin routes", () => {
@@ -133,16 +154,64 @@ describe("Scalius computer protocol", () => {
   it("keeps navigation surface-controlled and invalidates old page handles", async () => {
     const page = adapter();
     const controller = new ScaliusComputerController({ binding, adapter: page });
-    await expect(controller.execute({ binding, program: 'goto "/products/shoes"' })).resolves.toMatchObject({
+    await expect(controller.execute({
+      binding,
+      program: 'goto "/products/shoes"',
+      authorizedNavigationRoutes: ["/products/shoes"],
+    })).resolves.toMatchObject({
       ok: true,
       code: "NAVIGATED",
     });
     expect(page.goto).toHaveBeenCalledWith("/products/shoes");
 
-    await expect(controller.execute({ binding, program: 'goto "/admin"' })).resolves.toMatchObject({
+    await expect(controller.execute({
+      binding,
+      program: 'goto "/admin"',
+      authorizedNavigationRoutes: ["/admin"],
+    })).resolves.toMatchObject({
       ok: false,
       code: "ROUTE_BLOCKED",
     });
+
+    await expect(controller.execute({
+      binding,
+      program: 'goto "/products/shoes"',
+    })).resolves.toMatchObject({
+      ok: false,
+      code: "ROUTE_BLOCKED",
+    });
+  });
+
+  it("binds a visible link click to one trusted exact route", async () => {
+    const page = adapter({
+      capture: vi.fn(() => ({
+        ...snapshot(),
+        targets: [
+          {
+            id: "products-link",
+            role: "link",
+            name: "Products",
+            actions: ["click"] as const,
+            route: "/products",
+          },
+        ],
+      })),
+    });
+    const controller = new ScaliusComputerController({ binding, adapter: page });
+    await controller.execute({ binding, program: "observe" });
+
+    await expect(controller.execute({
+      binding,
+      program: "click @r1.e1",
+    })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
+    expect(page.act).not.toHaveBeenCalled();
+
+    await expect(controller.execute({
+      binding,
+      program: "click @r1.e1",
+      authorizedNavigationRoutes: ["/products"],
+    })).resolves.toMatchObject({ ok: true, code: "EXECUTED" });
+    expect(page.act).toHaveBeenCalledOnce();
   });
 });
 
@@ -393,12 +462,20 @@ describe("Scalius browser computer adapter", () => {
       code: "STALE_CONTEXT",
     });
     expect(clicked).not.toHaveBeenCalled();
-    await expect(controller.execute({ binding, program: 'goto "/search?q=boots"' })).resolves.toMatchObject({
+    await expect(controller.execute({
+      binding,
+      program: 'goto "/search?q=boots"',
+      authorizedNavigationRoutes: ["/search?q=boots"],
+    })).resolves.toMatchObject({
       ok: true,
       code: "NAVIGATED",
     });
     expect(goto).toHaveBeenCalledWith("/search?q=boots");
-    await expect(controller.execute({ binding, program: 'goto "/admin"' })).resolves.toMatchObject({
+    await expect(controller.execute({
+      binding,
+      program: 'goto "/admin"',
+      authorizedNavigationRoutes: ["/admin"],
+    })).resolves.toMatchObject({
       ok: false,
       code: "ROUTE_BLOCKED",
     });
