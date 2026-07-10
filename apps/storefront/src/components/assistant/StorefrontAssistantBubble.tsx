@@ -11,8 +11,8 @@ import {
 } from "react";
 import type { FlueConversationMessage } from "@flue/sdk";
 import {
+  ArrowDown,
   Grip,
-  History,
   Loader2,
   MessageCircle,
   Plus,
@@ -35,6 +35,11 @@ import {
 import { cn } from "@scalius/shared/utils";
 
 import { StorefrontFlueMessageParts } from "./StorefrontFlueMessageParts";
+import {
+  StorefrontConversationHistorySelect,
+  storefrontAssistantContextSummary,
+  storefrontAssistantSuggestedPrompts,
+} from "./StorefrontAssistantChrome";
 import { ASSISTANT_LAUNCHER_SIZE } from "./assistant-geometry";
 import {
   MAX_MESSAGE_CHARS,
@@ -54,6 +59,7 @@ import {
   type StorefrontFlueComputerConsumeResult,
 } from "./computer/flue-bridge";
 import { createStorefrontAssistantComputerRuntime } from "./computer/runtime";
+import { buildStorefrontNavigationAuthority } from "./storefront-navigation-authority";
 import { useStorefrontFlueAgent } from "./useStorefrontFlueAgent";
 import { useAssistantGeometry } from "./useAssistantGeometry";
 import "@scalius/ui/assistant/styles.css";
@@ -85,6 +91,7 @@ const LAUNCHER_HELP_ID = "storefront-assistant-launcher-help";
 const DRAG_THRESHOLD = 6;
 const KEYBOARD_MOVE_STEP = 32;
 const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
+const PINNED_BOTTOM_THRESHOLD = 48;
 
 function getAssistantBridge(): StorefrontAssistantBridge | null {
   if (typeof window === "undefined") return null;
@@ -106,39 +113,6 @@ function readPublishedContext(): StorefrontAssistantPageContextSnapshot | null {
   );
 }
 
-function suggestedPrompts(
-  context: StorefrontAssistantPageContextSnapshot | null,
-): string[] {
-  switch (context?.page.kind) {
-    case "product":
-      return [
-        "What am I looking at?",
-        "What are its key details?",
-        "Is this available?",
-      ];
-    case "category":
-    case "collection":
-    case "search":
-      return [
-        "Help me choose",
-        "Compare the best options",
-        "What is in stock?",
-      ];
-    case "cart":
-      return [
-        "Review my cart",
-        "Check item availability",
-        "Explain any cart issues",
-      ];
-    default:
-      return [
-        "How can you help me shop?",
-        "How do I search the catalog?",
-        "What can I ask about a product?",
-      ];
-  }
-}
-
 function launcherMovementMessage(deltaX: number, deltaY: number): string {
   if (deltaX < 0) return "Assistant launcher moved left.";
   if (deltaX > 0) return "Assistant launcher moved right.";
@@ -149,19 +123,6 @@ function launcherMovementMessage(deltaX: number, deltaY: number): string {
 function sharedStatus(kind: AssistantStatus["kind"]): AssistantDockStatus {
   if (kind === "disabled") return "offline";
   return kind;
-}
-
-function contextSummary(
-  context: StorefrontAssistantPageContextSnapshot | null,
-) {
-  if (!context) return "Waiting for this page";
-  const privatePage =
-    context.page.kind === "account" || context.page.kind === "checkout";
-  const page = privatePage
-    ? `${context.page.kind} · private context protected`
-    : context.page.title || context.page.kind;
-  const count = context.cart.totalItems;
-  return `${page} · ${count} ${count === 1 ? "cart item" : "cart items"}`;
 }
 
 function flueMessageText(message: FlueConversationMessage): string {
@@ -273,6 +234,7 @@ export default function StorefrontAssistantBubble() {
     [flue.historyReady, flue.messages],
   );
   const sending = flue.sending;
+  const aborting = flue.aborting;
   const [status, setStatus] = useState<AssistantStatus>({
     kind: "idle",
     message: "Ready for public catalog questions.",
@@ -280,12 +242,16 @@ export default function StorefrontAssistantBubble() {
   const [launcherAnnouncement, setLauncherAnnouncement] = useState("");
   const launcherRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const conversationLogRef = useRef<HTMLDivElement>(null);
   const conversationEndRef = useRef<HTMLDivElement>(null);
   const launcherDragRef = useRef<LauncherDragState | null>(null);
   const suppressLauncherClickRef = useRef(false);
   const wasOpenRef = useRef(false);
   const focusComposerOnOpenRef = useRef(false);
   const messagesRef = useRef(messages);
+  const pinnedToBottomRef = useRef(true);
+  const forceFollowRef = useRef(false);
+  const [pinnedToBottom, setPinnedToBottom] = useState(true);
   const computerCoordinatorRef =
     useRef<StorefrontFlueComputerCoordinator | null>(null);
 
@@ -408,9 +374,38 @@ export default function StorefrontAssistantBubble() {
     writeStorefrontAssistantSessionHandoff(toSessionHandoffMessages(messages));
   }, [messages]);
 
-  useEffect(() => {
+  const scrollToLatest = useCallback((force = false) => {
+    if (force) {
+      pinnedToBottomRef.current = true;
+      setPinnedToBottom(true);
+    }
     conversationEndRef.current?.scrollIntoView({ block: "nearest" });
-  }, [messages, sending]);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const viewport = conversationLogRef.current?.closest<HTMLElement>(
+      "[data-assistant-conversation]",
+    );
+    if (!viewport) return undefined;
+    const updatePinned = () => {
+      const distance =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      const next = distance <= PINNED_BOTTOM_THRESHOLD;
+      pinnedToBottomRef.current = next;
+      setPinnedToBottom(next);
+    };
+    updatePinned();
+    viewport.addEventListener("scroll", updatePinned, { passive: true });
+    return () => viewport.removeEventListener("scroll", updatePinned);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (forceFollowRef.current || pinnedToBottomRef.current) {
+      forceFollowRef.current = false;
+      scrollToLatest();
+    }
+  }, [messages, scrollToLatest, sending]);
 
   useEffect(() => {
     setStatus({
@@ -477,8 +472,8 @@ export default function StorefrontAssistantBubble() {
     const coordinator = computerCoordinatorRef.current;
     const threadId = flue.threadId;
     if (!coordinator || !threadId) return;
-    for (const message of messages) {
-      for (const part of message.parts) {
+    for (const [messageIndex, message] of messages.entries()) {
+      for (const [partIndex, part] of message.parts.entries()) {
         if (part.type !== "dynamic-tool" || part.toolName !== "computer") {
           continue;
         }
@@ -486,6 +481,12 @@ export default function StorefrontAssistantBubble() {
           .consume({
             threadId,
             tabId: threadId,
+            navigationAuthority: buildStorefrontNavigationAuthority({
+              messages,
+              messageIndex,
+              partIndex,
+              document,
+            }),
             part,
           })
           .then((outcome) => {
@@ -496,7 +497,10 @@ export default function StorefrontAssistantBubble() {
     }
   }, [flue.threadId, messages]);
 
-  const prompts = useMemo(() => suggestedPrompts(context), [context]);
+  const prompts = useMemo(
+    () => storefrontAssistantSuggestedPrompts(context),
+    [context],
+  );
   const launcherStyle = layout.ready
     ? ({
         left: `${layout.geometry.launcherX}px`,
@@ -516,12 +520,15 @@ export default function StorefrontAssistantBubble() {
     if (
       !message ||
       sending ||
+      !flue.historyReady ||
       flue.state.kind === "disconnected" ||
       typeof window === "undefined"
     )
       return;
 
     refreshContext();
+    forceFollowRef.current = true;
+    scrollToLatest(true);
     setDraft("");
     setStatus({
       kind: "working",
@@ -544,6 +551,11 @@ export default function StorefrontAssistantBubble() {
   }
 
   async function handleAbort() {
+    if (aborting) return;
+    setStatus({
+      kind: "working",
+      message: "Recording a durable stop request…",
+    });
     try {
       const aborted = await flue.abort();
       setStatus({
@@ -567,6 +579,9 @@ export default function StorefrontAssistantBubble() {
     messagesRef.current = [];
     writeStorefrontAssistantSessionHandoff([]);
     setDraft("");
+    forceFollowRef.current = true;
+    setPinnedToBottom(true);
+    pinnedToBottomRef.current = true;
     setStatus({
       kind: "success",
       message:
@@ -575,12 +590,15 @@ export default function StorefrontAssistantBubble() {
     composerRef.current?.focus();
   }
 
-  function handlePreviousConversation() {
-    if (!flue.resumePreviousConversation()) return;
+  function handlePreviousConversation(threadId: string) {
+    if (!flue.resumeConversation(threadId)) return;
     restoredMessagesRef.current = [];
     messagesRef.current = [];
     writeStorefrontAssistantSessionHandoff([]);
     setDraft("");
+    forceFollowRef.current = true;
+    setPinnedToBottom(true);
+    pinnedToBottomRef.current = true;
     setStatus({
       kind: "working",
       message: "Reopening the previous durable thread…",
@@ -701,6 +719,7 @@ export default function StorefrontAssistantBubble() {
 
   const conversation = (
     <div
+      ref={conversationLogRef}
       role="log"
       aria-live="polite"
       aria-relevant="additions text"
@@ -795,6 +814,16 @@ export default function StorefrontAssistantBubble() {
           <span>Looking through the catalog…</span>
         </div>
       ) : null}
+      {!pinnedToBottom && messages.length > 0 ? (
+        <button
+          type="button"
+          className="sticky bottom-2 ml-auto mt-3 flex min-h-8 items-center gap-1.5 rounded-full border border-border bg-background/95 px-3 text-[11px] font-semibold text-foreground shadow-md backdrop-blur transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => scrollToLatest(true)}
+        >
+          <ArrowDown className="size-3.5" aria-hidden="true" />
+          Jump to latest
+        </button>
+      ) : null}
       <div ref={conversationEndRef} aria-hidden="true" />
     </div>
   );
@@ -815,14 +844,21 @@ export default function StorefrontAssistantBubble() {
           onKeyDown={handleComposerKeyDown}
           placeholder="Ask about products or this page…"
           rows={2}
-          disabled={sending || flue.state.kind === "disconnected"}
+          disabled={
+            sending || !flue.historyReady || flue.state.kind === "disconnected"
+          }
           className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
         />
         {sending ? (
           <button
             type="button"
             className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label="Stop storefront assistant request"
+            aria-label={
+              aborting
+                ? "Recording storefront assistant stop request"
+                : "Stop storefront assistant request"
+            }
+            disabled={aborting}
             onClick={() => void handleAbort()}
           >
             <Square className="size-3.5 fill-current" aria-hidden="true" />
@@ -834,6 +870,7 @@ export default function StorefrontAssistantBubble() {
             disabled={
               draft.trim().length === 0 ||
               !flue.threadId ||
+              !flue.historyReady ||
               flue.state.kind === "disconnected"
             }
             aria-label="Send storefront assistant message"
@@ -863,23 +900,16 @@ export default function StorefrontAssistantBubble() {
         icon={<Sparkles aria-hidden="true" />}
         headerActions={
           <>
-            {flue.canResumePreviousConversation ? (
-              <button
-                type="button"
-                aria-label="Previous assistant conversation"
-                title="Previous conversation"
-                disabled={sending}
-                onClick={handlePreviousConversation}
-                className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <History className="size-4" aria-hidden="true" />
-              </button>
-            ) : null}
+            <StorefrontConversationHistorySelect
+              recentThreads={flue.recentThreads}
+              disabled={sending || aborting}
+              onSelect={handlePreviousConversation}
+            />
             <button
               type="button"
               aria-label="New assistant conversation"
               title="New conversation"
-              disabled={sending}
+              disabled={sending || aborting}
               onClick={handleNewConversation}
               className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -887,7 +917,7 @@ export default function StorefrontAssistantBubble() {
             </button>
           </>
         }
-        context={<span>{contextSummary(context)}</span>}
+        context={<span>{storefrontAssistantContextSummary(context)}</span>}
         contextLabel="Current page"
         conversation={conversation}
         composer={composer}
@@ -901,12 +931,14 @@ export default function StorefrontAssistantBubble() {
         onWidthChange={(width) =>
           layout.setPanelSize(width, layout.geometry.panelHeight)
         }
+        data-scalius-computer-exclude=""
       />
     );
   }
 
   return (
     <div
+      data-scalius-computer-exclude=""
       className={cn(
         "sf-assistant-launcher-shell fixed z-[90]",
         !layout.ready && "bottom-4 right-4 sm:bottom-6 sm:right-6",

@@ -23,6 +23,7 @@ const flueMocks = vi.hoisted(() => ({
     messages: FlueConversationMessage[];
     pendingSubmissionId: string | null;
     sending: boolean;
+    aborting: boolean;
     state: {
       kind: "idle" | "connecting" | "connected" | "disconnected";
       message: string;
@@ -32,6 +33,8 @@ const flueMocks = vi.hoisted(() => ({
     abort: Mock;
     newConversation: Mock;
     canResumePreviousConversation: boolean;
+    recentThreads: Array<{ threadId: string; label: string }>;
+    resumeConversation: Mock;
     resumePreviousConversation: Mock;
     retry: Mock;
   },
@@ -108,6 +111,7 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
       messages: [],
       pendingSubmissionId: null,
       sending: false,
+      aborting: false,
       state: {
         kind: "connected",
         message: "Private shopping thread connected.",
@@ -117,6 +121,8 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
       abort: vi.fn(async () => true),
       newConversation: vi.fn(() => true),
       canResumePreviousConversation: false,
+      recentThreads: [],
+      resumeConversation: vi.fn(() => true),
       resumePreviousConversation: vi.fn(() => true),
       retry: vi.fn(),
     };
@@ -168,14 +174,38 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
       surface: "storefront",
       agentName: "shopping-assistant",
       instanceId: `v1.${"i".repeat(43)}`,
-      program: "goto /search?q=shoes",
+      program: "goto /products/everyday-shoes",
       signingKey: COMPUTER_KEY,
     });
     flueMocks.snapshot.messages = [
+      textMessage(
+        "user_navigation",
+        "user",
+        "Please take me to Everyday Shoes",
+      ),
       {
         id: "assistant_navigation",
         role: "assistant",
         parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "scalius",
+            toolCallId: "scalius_call_navigation",
+            state: "output-available",
+            input: {
+              program: 'call catalog.product {"slug":"everyday-shoes"}',
+            },
+            output: {
+              ok: true,
+              authoritative: true,
+              data: {
+                product: {
+                  name: "Everyday Shoes",
+                  route: "/products/everyday-shoes",
+                },
+              },
+            },
+          },
           {
             type: "dynamic-tool",
             toolName: "computer",
@@ -192,7 +222,7 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     await click(queryButton("Open storefront assistant"));
     await flushReact();
 
-    expect(navigate).toHaveBeenCalledWith("/search?q=shoes");
+    expect(navigate).toHaveBeenCalledWith("/products/everyday-shoes");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       `/api/assistant/conversations/${THREAD_ID}/computer/results`,
@@ -206,6 +236,60 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
         STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY,
       ),
     ).toBe("open");
+  });
+
+  it("keeps the dock and launcher outside the computer observation boundary", async () => {
+    document
+      .querySelector<HTMLElement>("[data-assistant-page-slot]")
+      ?.insertAdjacentHTML(
+        "beforeend",
+        '<button data-scalius-computer-action="allow">Browse products</button>',
+      );
+    const issued = await issueScaliusComputerCommand({
+      surface: "storefront",
+      agentName: "shopping-assistant",
+      instanceId: `v1.${"i".repeat(43)}`,
+      program: "observe",
+      signingKey: COMPUTER_KEY,
+    });
+    flueMocks.snapshot.messages = [
+      {
+        id: "assistant_observe",
+        role: "assistant",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "computer_call_observe",
+            state: "output-available",
+            input: { program: issued.program },
+            output: issued,
+          },
+        ],
+      },
+    ];
+
+    renderBubble();
+    expect(
+      queryButton("Open storefront assistant")?.closest(
+        "[data-scalius-computer-exclude]",
+      ),
+    ).toBeTruthy();
+    await click(queryButton("Open storefront assistant"));
+    await flushReact();
+
+    expect(
+      document
+        .querySelector("#storefront-assistant-panel")
+        ?.hasAttribute("data-scalius-computer-exclude"),
+    ).toBe(true);
+    const posted = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      result: { output: string };
+    };
+    expect(posted.result.output).toContain("Browse products");
+    expect(posted.result.output).not.toContain("New assistant conversation");
+    expect(posted.result.output).not.toContain("Message storefront assistant");
+    expect(posted.result.output).not.toContain("Collapse assistant");
   });
 
   it("blocks computer observation on private buyer pages and returns a human-required result", async () => {
@@ -293,6 +377,39 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     expect(document.body.querySelector("table")).toBeNull();
   });
 
+  it("does not yank an unpinned transcript and offers a jump-to-latest control", async () => {
+    flueMocks.snapshot.messages = [
+      textMessage("assistant_scroll_1", "assistant", "First answer"),
+    ];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView");
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await flushReact();
+    const viewport = document.querySelector<HTMLElement>(
+      "[data-assistant-conversation]",
+    );
+    expect(viewport).toBeTruthy();
+    Object.defineProperties(viewport!, {
+      scrollHeight: { configurable: true, value: 1_000 },
+      clientHeight: { configurable: true, value: 200 },
+      scrollTop: { configurable: true, value: 100, writable: true },
+    });
+    await act(async () => {
+      viewport?.dispatchEvent(new Event("scroll"));
+    });
+    const beforeUpdate = scrollIntoView.mock.calls.length;
+
+    flueMocks.snapshot.messages = [
+      ...flueMocks.snapshot.messages,
+      textMessage("assistant_scroll_2", "assistant", "Streaming update"),
+    ];
+    renderBubble();
+    await flushReact();
+    expect(scrollIntoView).toHaveBeenCalledTimes(beforeUpdate);
+    await click(queryButtonText("Jump to latest"));
+    expect(scrollIntoView.mock.calls.length).toBeGreaterThan(beforeUpdate);
+  });
+
   it("restores the redacted handoff while durable history reconnects after a full navigation", async () => {
     flueMocks.snapshot.messages = [
       textMessage("user_1", "user", "Find rice"),
@@ -365,14 +482,32 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     );
   });
 
-  it("reopens the previous durable thread from a visible compact action", async () => {
+  it("exposes every bounded recent thread through one compact accessible control", async () => {
+    const oldestThread = "conv_zyxwvutsrqponmlkjihgfe";
     flueMocks.snapshot.canResumePreviousConversation = true;
+    flueMocks.snapshot.recentThreads = [
+      {
+        threadId: "conv_bcdefghijklmnopqrstuvw",
+        label: "Previous thread",
+      },
+      { threadId: oldestThread, label: "2 threads back" },
+    ];
     renderBubble();
     await click(queryButton("Open storefront assistant"));
-    await click(queryButton("Previous assistant conversation"));
+    const history = document.querySelector<HTMLSelectElement>(
+      'select[aria-label="Assistant conversation history"]',
+    );
+    expect(history).toBeTruthy();
     expect(
-      flueMocks.snapshot.resumePreviousConversation,
-    ).toHaveBeenCalledOnce();
+      Array.from(history?.options ?? []).map((option) => option.text),
+    ).toEqual(["Recent threads", "Previous thread", "2 threads back"]);
+    await act(async () => {
+      if (history) history.value = oldestThread;
+      history?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(flueMocks.snapshot.resumeConversation).toHaveBeenCalledWith(
+      oldestThread,
+    );
     expect(document.body.textContent).toContain(
       "Reopening the previous durable thread",
     );

@@ -37,6 +37,11 @@ interface OptimisticMessage extends FlueConversationMessage {
   submissionId?: string;
 }
 
+export interface StorefrontRecentThread {
+  threadId: string;
+  label: string;
+}
+
 const INITIAL_SNAPSHOT: AgentConversationObservationSnapshot = {
   conversation: undefined,
   offset: undefined,
@@ -106,12 +111,15 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
   const [pendingSubmissionId, setPendingSubmissionId] = useState<string | null>(
     null,
   );
-  const [sending, setSending] = useState(false);
+  const [admitting, setAdmitting] = useState(false);
+  const [aborting, setAborting] = useState(false);
   const [reconnectToken, setReconnectToken] = useState(0);
   const [recentThreadIds, setRecentThreadIds] =
     useState<string[]>(readRecentThreads);
   const activeRef = useRef<ActiveObservation | null>(null);
   const pendingSubmissionRef = useRef<string | null>(null);
+  const busyRef = useRef(false);
+  const abortPromiseRef = useRef<Promise<boolean> | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -126,17 +134,32 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
     };
   }, []);
 
-  const settlePending = useCallback(
+  const reconcilePending = useCallback(
     (nextSnapshot: AgentConversationObservationSnapshot) => {
-      const pendingId = pendingSubmissionRef.current;
-      if (!pendingId) return;
-      const settlement = nextSnapshot.conversation?.settlements.find(
-        (candidate) => candidate.submissionId === pendingId,
+      const conversation = nextSnapshot.conversation;
+      if (!conversation) return;
+      const settledIds = new Set(
+        conversation.settlements.map((settlement) => settlement.submissionId),
       );
-      if (!settlement) return;
+      const durablePending = conversation.messages.findLast(
+        (message) =>
+          typeof message.submissionId === "string" &&
+          !settledIds.has(message.submissionId),
+      )?.submissionId;
+      if (durablePending) {
+        pendingSubmissionRef.current = durablePending;
+        busyRef.current = true;
+        setPendingSubmissionId(durablePending);
+        setAdmitting(false);
+        return;
+      }
+
+      const pendingId = pendingSubmissionRef.current;
+      if (!pendingId || !settledIds.has(pendingId)) return;
       pendingSubmissionRef.current = null;
+      busyRef.current = false;
       setPendingSubmissionId(null);
-      setSending(false);
+      setAdmitting(false);
     },
     [],
   );
@@ -156,7 +179,7 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
     const publish = () => {
       const next = observation.getSnapshot();
       setSnapshot(next);
-      settlePending(next);
+      reconcilePending(next);
     };
     const unsubscribe = observation.subscribe(publish);
     publish();
@@ -166,7 +189,11 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
       observation.close();
       if (activeRef.current === active) activeRef.current = null;
     };
-  }, [open, reconnectToken, settlePending, threadId]);
+  }, [open, reconnectToken, reconcilePending, threadId]);
+
+  const historyReady =
+    snapshot.conversation !== undefined || snapshot.phase === "absent";
+  const sending = admitting || pendingSubmissionId !== null;
 
   const messages = useMemo(() => {
     const canonical = snapshot.conversation?.messages ?? [];
@@ -187,6 +214,19 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
 
   const state = useMemo<StorefrontFlueAgentState>(() => {
     if (!open) return INITIAL_STATE;
+    if (snapshot.phase === "error") {
+      return {
+        kind: "disconnected",
+        message:
+          "Shopping help is disconnected. Retry before sending another request.",
+      };
+    }
+    if (sending) {
+      return {
+        kind: "connected",
+        message: "Working through the catalog and this page…",
+      };
+    }
     if (
       !threadId ||
       snapshot.phase === "loading" ||
@@ -197,23 +237,10 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
         message: "Restoring this tab’s private shopping thread…",
       };
     }
-    if (snapshot.phase === "error") {
-      return {
-        kind: "disconnected",
-        message:
-          "Shopping help is disconnected. Retry before sending another request.",
-      };
-    }
     if (snapshot.phase === "absent") {
       return {
         kind: "connected",
         message: "A new private shopping thread is ready.",
-      };
-    }
-    if (sending) {
-      return {
-        kind: "connected",
-        message: "Working through the catalog and this page…",
       };
     }
     return {
@@ -225,10 +252,16 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
   const sendMessage = useCallback(
     async (message: string) => {
       const active = activeRef.current;
-      if (!active || active.threadId !== threadId || sending) {
+      if (
+        !active ||
+        active.threadId !== threadId ||
+        !historyReady ||
+        busyRef.current
+      ) {
         throw new Error("Shopping assistant connection is not ready");
       }
 
+      busyRef.current = true;
       const optimisticId = createStorefrontConversationRequestId("message");
       setOptimisticMessages((current) => [
         ...current,
@@ -239,7 +272,7 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
           metadata: { timestamp: new Date().toISOString() },
         },
       ]);
-      setSending(true);
+      setAdmitting(true);
 
       try {
         const admission = await active.client.agents.send(
@@ -249,6 +282,7 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
         );
         pendingSubmissionRef.current = admission.submissionId;
         setPendingSubmissionId(admission.submissionId);
+        setAdmitting(false);
         setOptimisticMessages((current) =>
           current.map((entry) =>
             entry.id === optimisticId
@@ -257,33 +291,46 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
           ),
         );
         const currentSnapshot = active.observation.getSnapshot();
-        settlePending(currentSnapshot);
-        if (
-          currentSnapshot.phase === "absent" ||
-          currentSnapshot.phase === "error"
-        ) {
-          active.observation.refresh();
-        }
+        reconcilePending(currentSnapshot);
+        // Admission creates the durable instance. Always rehydrate from that
+        // authoritative point so an earlier in-flight 404 cannot strand the UI
+        // in an absent/sending state.
+        active.observation.refresh();
         return admission;
       } catch (error) {
         setOptimisticMessages((current) =>
           current.filter((entry) => entry.id !== optimisticId),
         );
-        setSending(false);
+        pendingSubmissionRef.current = null;
+        busyRef.current = false;
+        setPendingSubmissionId(null);
+        setAdmitting(false);
         throw error;
       }
     },
-    [sending, settlePending, threadId],
+    [historyReady, reconcilePending, threadId],
   );
 
   const abort = useCallback(async () => {
+    if (abortPromiseRef.current) return abortPromiseRef.current;
     const active = activeRef.current;
-    if (!active || active.threadId !== threadId) return false;
-    const result = await active.client.agents.abort(
-      AGENT_NAME,
-      active.threadId,
-    );
-    return result.aborted;
+    if (!active || active.threadId !== threadId || !busyRef.current)
+      return false;
+    const operation = (async () => {
+      setAborting(true);
+      try {
+        const result = await active.client.agents.abort(
+          AGENT_NAME,
+          active.threadId,
+        );
+        return result.aborted;
+      } finally {
+        setAborting(false);
+        abortPromiseRef.current = null;
+      }
+    })();
+    abortPromiseRef.current = operation;
+    return operation;
   }, [threadId]);
 
   const resetThreadObservation = useCallback(() => {
@@ -293,8 +340,11 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
     setSnapshot(INITIAL_SNAPSHOT);
     setOptimisticMessages([]);
     pendingSubmissionRef.current = null;
+    busyRef.current = false;
     setPendingSubmissionId(null);
-    setSending(false);
+    setAdmitting(false);
+    setAborting(false);
+    abortPromiseRef.current = null;
   }, []);
 
   const claimSelectedThread = useCallback(() => {
@@ -306,7 +356,7 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
   }, []);
 
   const newConversation = useCallback(() => {
-    if (sending) return false;
+    if (sending || aborting) return false;
     resetThreadObservation();
     if (threadId) {
       setRecentThreadIds(persistRecentThreads([threadId, ...recentThreadIds]));
@@ -319,31 +369,47 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
     recentThreadIds,
     resetThreadObservation,
     sending,
+    aborting,
     threadId,
   ]);
 
-  const resumePreviousConversation = useCallback(() => {
-    if (sending) return false;
-    const previousThreadId = recentThreadIds[0];
-    if (!previousThreadId) return false;
-    const nextRecent = persistRecentThreads([
-      ...(threadId ? [threadId] : []),
-      ...recentThreadIds.slice(1),
-    ]);
-    if (!switchStorefrontAssistantConversationClaim(previousThreadId)) {
-      return false;
-    }
-    resetThreadObservation();
-    setRecentThreadIds(nextRecent);
-    claimSelectedThread();
-    return true;
-  }, [
-    claimSelectedThread,
-    recentThreadIds,
-    resetThreadObservation,
-    sending,
-    threadId,
-  ]);
+  const resumeConversation = useCallback(
+    (selectedThreadId: string) => {
+      if (
+        sending ||
+        aborting ||
+        !THREAD_ID_PATTERN.test(selectedThreadId) ||
+        !recentThreadIds.includes(selectedThreadId)
+      ) {
+        return false;
+      }
+      if (!switchStorefrontAssistantConversationClaim(selectedThreadId))
+        return false;
+      const nextRecent = persistRecentThreads([
+        ...(threadId ? [threadId] : []),
+        ...recentThreadIds.filter(
+          (candidate) => candidate !== selectedThreadId,
+        ),
+      ]);
+      resetThreadObservation();
+      setRecentThreadIds(nextRecent);
+      claimSelectedThread();
+      return true;
+    },
+    [
+      aborting,
+      claimSelectedThread,
+      recentThreadIds,
+      resetThreadObservation,
+      sending,
+      threadId,
+    ],
+  );
+
+  const resumePreviousConversation = useCallback(
+    () => (recentThreadIds[0] ? resumeConversation(recentThreadIds[0]) : false),
+    [recentThreadIds, resumeConversation],
+  );
 
   const retry = useCallback(() => {
     const error = snapshot.error;
@@ -365,13 +431,20 @@ export function useStorefrontFlueAgent({ open }: { open: boolean }) {
     messages,
     pendingSubmissionId,
     sending,
+    aborting,
     state,
-    historyReady:
-      snapshot.conversation !== undefined || snapshot.phase === "absent",
+    historyReady,
     sendMessage,
     abort,
     newConversation,
     canResumePreviousConversation: recentThreadIds.length > 0,
+    recentThreads: recentThreadIds.map(
+      (recentThreadId, index): StorefrontRecentThread => ({
+        threadId: recentThreadId,
+        label: index === 0 ? "Previous thread" : `${index + 1} threads back`,
+      }),
+    ),
+    resumeConversation,
     resumePreviousConversation,
     retry,
   };

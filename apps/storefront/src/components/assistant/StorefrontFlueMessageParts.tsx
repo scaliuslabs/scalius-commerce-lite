@@ -3,7 +3,7 @@ import {
   AssistantShortAnswer,
   AssistantToolProgress,
 } from "@scalius/ui/assistant";
-import { AlertCircle, ImageIcon } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 const MAX_VISIBLE_TOOL_ROWS = 3;
 const MAX_VISIBLE_TEXT_CHARACTERS = 4_000;
@@ -45,22 +45,6 @@ function toolLabel(
       : "Step finished";
 }
 
-function safeFileUrl(value: string | undefined): string | null {
-  if (!value || typeof window === "undefined") return null;
-  try {
-    const url = new URL(value, window.location.origin);
-    if (
-      url.origin !== window.location.origin ||
-      (url.protocol !== "http:" && url.protocol !== "https:")
-    ) {
-      return null;
-    }
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
 export function StorefrontFlueMessageParts({
   parts,
 }: {
@@ -89,9 +73,6 @@ export function StorefrontFlueMessageParts({
     parts.filter((part) => part.type === "dynamic-tool").length -
       toolParts.length,
   );
-  const file = parts.find((part) => part.type === "file");
-  const fileUrl = file?.type === "file" ? safeFileUrl(file.url) : null;
-
   return (
     <div className="grid gap-2.5">
       {text ? (
@@ -105,25 +86,6 @@ export function StorefrontFlueMessageParts({
             ) : undefined
           }
         />
-      ) : null}
-
-      {file?.type === "file" ? (
-        <section className="rounded-xl border border-border bg-muted/25 p-2.5">
-          {fileUrl && file.mediaType.startsWith("image/") ? (
-            <img
-              src={fileUrl}
-              alt={file.filename || "Assistant image"}
-              className="max-h-44 w-full rounded-lg object-contain"
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <ImageIcon className="size-4 shrink-0" aria-hidden="true" />
-              <span>{file.filename || "Assistant attachment"}</span>
-            </div>
-          )}
-        </section>
       ) : null}
 
       {toolParts.length > 0 ? (
@@ -149,7 +111,7 @@ export function StorefrontFlueMessageParts({
         </p>
       ) : null}
 
-      {!text && !file && toolParts.length === 0 ? (
+      {!text && toolParts.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           This assistant message had no displayable content.
         </p>

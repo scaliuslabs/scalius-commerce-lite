@@ -32,13 +32,11 @@ declare global {
 let installed = false;
 let publishQueued = false;
 let pageSeed: StorefrontAssistantPageContextSnapshot | null = null;
-let registeredSurface:
-  | {
-      token: symbol;
-      path: string;
-      surface: StorefrontAssistantSurfaceContext;
-    }
-  | null = null;
+let registeredSurface: {
+  token: symbol;
+  path: string;
+  surface: StorefrontAssistantSurfaceContext;
+} | null = null;
 
 export type StorefrontAssistantSurfaceRegistration = {
   update: (surface: StorefrontAssistantSurfaceContext) => boolean;
@@ -395,6 +393,7 @@ function isAllowedBuyerNavigationUrl(url: URL): boolean {
   if (url.hash || url.username || url.password) return false;
 
   const pathname = url.pathname;
+  if (pathname === "/") return url.search === "";
   if (pathname === "/cart") return url.search === "";
   if (pathname === "/search") {
     return isSafeSearchQuery(url.search, url.searchParams);

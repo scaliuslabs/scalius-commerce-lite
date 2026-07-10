@@ -12,6 +12,7 @@ import {
   type StorefrontFlueDynamicToolPart,
 } from "./flue-bridge";
 import { createStorefrontAssistantComputerRuntime } from "./runtime";
+import type { StorefrontNavigationAuthority } from "../storefront-navigation-authority";
 
 const NOW = 1_800_000_000_000;
 const SIGNING_KEY = "storefront-flue-ui-bridge-test-key-at-least-32-bytes";
@@ -53,11 +54,13 @@ function source(
     tabId: string;
     input: unknown;
     output: unknown;
+    navigationAuthority: StorefrontNavigationAuthority;
   }> = {},
 ) {
   return {
     threadId: overrides.threadId ?? THREAD_ID,
     tabId: overrides.tabId ?? TAB_ID,
+    navigationAuthority: overrides.navigationAuthority,
     part: toolPart(
       overrides.output ?? issued,
       overrides.input ?? { program: issued.program },
@@ -246,6 +249,54 @@ describe("Storefront Flue computer coordinator", () => {
     ).resolves.toEqual({
       status: "rejected",
       reason: "invalid_client_command",
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects a signed goto unless latest explicit intent and route provenance agree", async () => {
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: THREAD_ID,
+      tabId: TAB_ID,
+      navigate: vi.fn(),
+    });
+    const execute = vi.spyOn(runtime, "execute");
+    const postResult = vi.fn(async (payload) => ({
+      accepted: true as const,
+      requestId: payload.requestId,
+    }));
+    const coordinator = new StorefrontFlueComputerCoordinator({
+      runtime,
+      postResult,
+      now: () => NOW + 1_000,
+    });
+    const issued = await command("goto /products/everyday-shoes", 12);
+
+    await expect(coordinator.consume(source(issued))).resolves.toMatchObject({
+      status: "continuation_accepted",
+      result: { ok: false, code: "ROUTE_BLOCKED", retryable: false },
+    });
+    expect(postResult).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+
+    const otherIssued = await command("goto /products/everyday-shoes", 13);
+    await expect(
+      coordinator.consume(
+        source(otherIssued, {
+          navigationAuthority: {
+            latestUserText: "What is the price?",
+            candidates: [
+              {
+                route: "/products/everyday-shoes",
+                label: "Everyday Shoes",
+                source: "scalius",
+              },
+            ],
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: "continuation_accepted",
+      result: { ok: false, code: "ROUTE_BLOCKED", retryable: false },
     });
     expect(execute).not.toHaveBeenCalled();
   });

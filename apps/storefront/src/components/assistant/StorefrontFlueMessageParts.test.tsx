@@ -50,7 +50,7 @@ describe("StorefrontFlueMessageParts", () => {
     act(() => root.unmount());
   });
 
-  it("allows one same-origin image and rejects off-origin attachment URLs", () => {
+  it("does not expose unsupported attachment URLs or filenames", () => {
     window.history.replaceState(null, "", "/products/rice");
     const host = document.createElement("div");
     document.body.append(host);
@@ -77,9 +77,8 @@ describe("StorefrontFlueMessageParts", () => {
         />,
       ),
     );
-    const images = host.querySelectorAll("img");
-    expect(images).toHaveLength(1);
-    expect(images[0]?.src).toContain("/api/assistant/image/1");
+    expect(host.querySelector("img")).toBeNull();
+    expect(host.textContent).not.toContain("shoe.png");
     expect(host.textContent).not.toContain("off-origin.png");
     act(() => root.unmount());
   });

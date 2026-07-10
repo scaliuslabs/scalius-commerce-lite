@@ -5,6 +5,10 @@ import {
 import type { ScaliusComputerClientCommand } from "@scalius/shared/assistant-computer-handoff";
 
 import type { StorefrontAssistantComputerRuntime } from "./runtime";
+import {
+  isAuthorizedStorefrontGoto,
+  type StorefrontNavigationAuthority,
+} from "../storefront-navigation-authority";
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/u;
 const THREAD_ID_PATTERN = /^conv_[A-Za-z0-9_-]{22,64}$/u;
@@ -82,6 +86,8 @@ export interface StorefrontFlueComputerPartSource {
   threadId: string;
   /** The opaque tab identity used to construct the page runtime. */
   tabId: string;
+  /** Latest-user intent plus short-lived Scalius/visible-page route proof. */
+  navigationAuthority?: StorefrontNavigationAuthority;
   part: unknown;
 }
 
@@ -180,6 +186,10 @@ export class StorefrontFlueComputerCoordinator {
     if (!isMatchingComputerInput(source.part.input, command.program)) {
       return { status: "rejected", reason: "invalid_client_command" };
     }
+    const navigationAuthorized = isAuthorizedStorefrontGoto(
+      command.program,
+      source.navigationAuthority,
+    );
 
     const fingerprint = `${command.ticket}\n${command.program}`;
     const existing = this.#tracked.get(command.requestId);
@@ -223,19 +233,29 @@ export class StorefrontFlueComputerCoordinator {
     }
 
     let result: ScaliusComputerResult;
-    try {
-      result = await this.#runtime.execute({
-        binding: this.#runtime.binding,
-        program: command.program,
-      });
-    } catch {
+    if (!navigationAuthorized) {
       result = {
         ok: false,
-        code: "EXECUTION_FAILED",
+        code: "ROUTE_BLOCKED",
         output:
-          "The Storefront page could not complete that command. Observe and try again.",
-        retryable: true,
+          "Navigation requires one exact shopper-requested route proven by Scalius or the visible page.",
+        retryable: false,
       };
+    } else {
+      try {
+        result = await this.#runtime.execute({
+          binding: this.#runtime.binding,
+          program: command.program,
+        });
+      } catch {
+        result = {
+          ok: false,
+          code: "EXECUTION_FAILED",
+          output:
+            "The Storefront page could not complete that command. Observe and try again.",
+          retryable: true,
+        };
+      }
     }
 
     this.#setPhase(command, fingerprint, "posting_untrusted_result");
