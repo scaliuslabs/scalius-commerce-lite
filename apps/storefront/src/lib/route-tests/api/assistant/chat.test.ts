@@ -452,7 +452,8 @@ describe("storefront assistant chat proxy", () => {
                   {
                     id: "gid://scalius/product/prod_shoes",
                     title: "Khaki Shoes",
-                    path: "/products/khaki-shoes",
+                    path:
+                      "/products/khaki-high-top-casual-shoes-for-men",
                     imageUrl:
                       "https://cdn.example.test/shoes.jpg?token=private-token-value",
                     price: 41_040,
@@ -465,6 +466,13 @@ describe("storefront assistant chat proxy", () => {
                     id: "gid://scalius/product/prod_unsafe",
                     title: "Unsafe Shoes",
                     path: "https://evil.example.test/products/unsafe",
+                    availability: "in_stock",
+                    badges: [],
+                  },
+                  {
+                    id: "gid://scalius/product/prod_secret",
+                    title: "Secret Path",
+                    path: "/products/shoes-chk_private_receipt",
                     availability: "in_stock",
                     badges: [],
                   },
@@ -494,13 +502,14 @@ describe("storefront assistant chat proxy", () => {
     expect(grid?.products).toEqual([expect.objectContaining({
       id: "gid://scalius/product/prod_shoes",
       title: "Khaki Shoes",
-      path: "/products/khaki-shoes",
+      path: "/products/khaki-high-top-casual-shoes-for-men",
       price: 41_040,
       currency: "BDT",
     })]);
     expect(grid?.products?.[0]).not.toHaveProperty("imageUrl");
     expect(JSON.stringify(body)).not.toContain("private-token-value");
     expect(JSON.stringify(body)).not.toContain("evil.example.test");
+    expect(JSON.stringify(body)).not.toContain("chk_private_receipt");
   });
 
   it("rejects duplicate comparison cells and orders valid cells by product", async () => {
