@@ -20,6 +20,7 @@ const sdkMocks = vi.hoisted(() => ({
 const claimMocks = vi.hoisted(() => ({
   claim: vi.fn(async () => THREAD_ID),
   rotate: vi.fn(),
+  switch: vi.fn(() => true),
 }));
 
 vi.mock("@flue/sdk", async (importOriginal) => ({
@@ -33,6 +34,7 @@ vi.mock("./storefront-assistant-transcript", async (importOriginal) => ({
   >()),
   claimStorefrontAssistantConversationId: claimMocks.claim,
   rotateStorefrontAssistantConversationClaim: claimMocks.rotate,
+  switchStorefrontAssistantConversationClaim: claimMocks.switch,
 }));
 
 import { FlueApiError } from "@flue/sdk";
@@ -82,6 +84,7 @@ describe("useStorefrontFlueAgent", () => {
     });
     claimMocks.claim.mockReset().mockResolvedValue(THREAD_ID);
     claimMocks.rotate.mockReset();
+    claimMocks.switch.mockReset().mockReturnValue(true);
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -127,6 +130,7 @@ describe("useStorefrontFlueAgent", () => {
     );
     expect(host.textContent).toContain("Show me shoes");
     expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
+    expect(sdkMocks.refresh).toHaveBeenCalledOnce();
 
     sdkMocks.snapshot = {
       phase: "live",
@@ -191,6 +195,78 @@ describe("useStorefrontFlueAgent", () => {
     expect(host.querySelector("[data-sending]")?.textContent).toBe("false");
   });
 
+  it("does not send until the initial cookie authority history is resolved", async () => {
+    sdkMocks.snapshot = {
+      conversation: undefined,
+      offset: undefined,
+      phase: "loading",
+      error: undefined,
+    };
+    await act(async () => {
+      root.render(<Harness open />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-send]")?.click();
+      await Promise.resolve();
+    });
+    expect(sdkMocks.send).not.toHaveBeenCalled();
+    expect(host.textContent).not.toContain("Show me shoes");
+  });
+
+  it("rehydrates an unsettled durable submission and serializes stop", async () => {
+    let releaseAbort: ((value: { aborted: boolean }) => void) | undefined;
+    sdkMocks.abort.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseAbort = resolve;
+      }),
+    );
+    sdkMocks.snapshot = {
+      phase: "live",
+      offset: "offset-pending",
+      error: undefined,
+      conversation: {
+        conversationId: "default",
+        messages: [
+          {
+            id: "user_pending",
+            role: "user",
+            submissionId: "submission_pending",
+            parts: [{ type: "text", text: "Keep working", state: "done" }],
+          },
+        ],
+        settlements: [],
+      },
+    };
+    await act(async () => {
+      root.render(<Harness open />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-abort]")?.click();
+      host.querySelector<HTMLButtonElement>("[data-abort]")?.click();
+      await Promise.resolve();
+    });
+    expect(sdkMocks.abort).toHaveBeenCalledOnce();
+    releaseAbort?.({ aborted: true });
+    await act(async () => Promise.resolve());
+
+    sdkMocks.snapshot = {
+      ...sdkMocks.snapshot,
+      conversation: {
+        ...sdkMocks.snapshot.conversation!,
+        settlements: [
+          { submissionId: "submission_pending", outcome: "aborted" },
+        ],
+      },
+    };
+    await act(async () => sdkMocks.listener?.());
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("false");
+  });
+
   it("keeps a bounded opaque pointer when starting a new durable thread", async () => {
     window.sessionStorage.clear();
     await act(async () => {
@@ -210,6 +286,33 @@ describe("useStorefrontFlueAgent", () => {
       ).join(" "),
     ).toContain(THREAD_ID);
   });
+
+  it("can resume any retained opaque thread instead of toggling only two", async () => {
+    const retained = [
+      "conv_bcdefghijklmnopqrstuvw",
+      "conv_cdefghijklmnopqrstuvwx",
+      "conv_defghijklmnopqrstuvwxy",
+    ];
+    window.sessionStorage.setItem(
+      "scalius.storefront-assistant.recent-flue-threads.v1",
+      JSON.stringify(retained),
+    );
+    await act(async () => {
+      root.render(<Harness open />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.querySelector("[data-recent]")?.textContent).toContain(
+      "3 threads back",
+    );
+    await act(async () => {
+      host
+        .querySelector<HTMLButtonElement>(`[data-resume="${retained[2]}"]`)
+        ?.click();
+      await Promise.resolve();
+    });
+    expect(claimMocks.switch).toHaveBeenCalledWith(retained[2]);
+  });
 });
 
 function Harness({ open }: { open: boolean }) {
@@ -218,6 +321,10 @@ function Harness({ open }: { open: boolean }) {
     <div>
       <span data-sending="">{String(agent.sending)}</span>
       <span data-state="">{agent.state.kind}</span>
+      <span data-aborting="">{String(agent.aborting)}</span>
+      <span data-recent="">
+        {agent.recentThreads.map((thread) => thread.label).join("|")}
+      </span>
       {agent.messages.map((message) => (
         <span key={message.id}>
           {message.parts
@@ -239,6 +346,18 @@ function Harness({ open }: { open: boolean }) {
       <button data-new="" onClick={agent.newConversation}>
         New
       </button>
+      <button data-abort="" onClick={() => void agent.abort()}>
+        Stop
+      </button>
+      {agent.recentThreads.map((thread) => (
+        <button
+          key={thread.threadId}
+          data-resume={thread.threadId}
+          onClick={() => agent.resumeConversation(thread.threadId)}
+        >
+          {thread.label}
+        </button>
+      ))}
       <span data-previous="">
         {String(agent.canResumePreviousConversation)}
       </span>

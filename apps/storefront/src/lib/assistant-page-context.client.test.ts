@@ -196,9 +196,9 @@ describe("publishStorefrontAssistantPageContext", () => {
     document.dispatchEvent(new Event("astro:page-load"));
     await Promise.resolve();
 
-    expect(
-      window[STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL]?.page.title,
-    ).toBe("Khaki High-Top Casual Shoes For Mens");
+    expect(window[STOREFRONT_ASSISTANT_PAGE_CONTEXT_GLOBAL]?.page.title).toBe(
+      "Khaki High-Top Casual Shoes For Mens",
+    );
   });
 
   it("exposes a frozen public assistant bridge with a sanitized context getter", () => {
@@ -275,11 +275,13 @@ describe("publishStorefrontAssistantPageContext", () => {
   });
 
   it("allows only safe same-origin buyer navigation targets", () => {
+    window.history.replaceState(null, "", "/products/current");
     installStorefrontAssistantPageContextBridge();
     const bridge = window[STOREFRONT_ASSISTANT_BRIDGE_GLOBAL];
     const origin = window.location.origin;
 
     const allowedTargets = [
+      "/",
       "/products/widget",
       `${origin}/categories/rice`,
       "/collections/front-page",
@@ -293,6 +295,7 @@ describe("publishStorefrontAssistantPageContext", () => {
     }
 
     expect(locationAssignMock.mock.calls.map(([target]) => target)).toEqual([
+      "/",
       "/products/widget",
       "/categories/rice",
       "/collections/front-page",
