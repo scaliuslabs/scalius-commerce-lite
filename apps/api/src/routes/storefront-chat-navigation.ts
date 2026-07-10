@@ -13,6 +13,7 @@ import {
   compactStorefrontChatText,
   isJsonRecord,
   latestUserChatText,
+  type JsonRecord,
   type StorefrontChatAssistantText,
   type StorefrontChatMessage,
   type StorefrontChatPayload,
@@ -20,27 +21,36 @@ import {
   type StorefrontMcpContext,
   type StorefrontNavigateAction,
 } from "./storefront-chat-contract";
+import type { StorefrontChatIntent } from "./storefront-chat-intent";
 
 const BUYER_QUERY_STOP_WORDS = new Set([
   "a",
   "about",
+  "am",
   "an",
   "and",
   "any",
   "are",
+  "at",
   "available",
   "availability",
   "browse",
   "can",
   "catalog",
+  "cart",
+  "categories",
+  "category",
   "check",
   "choose",
   "compare",
+  "collection",
+  "collections",
   "could",
   "do",
   "does",
   "find",
   "for",
+  "go",
   "got",
   "have",
   "help",
@@ -50,30 +60,40 @@ const BUYER_QUERY_STOP_WORDS = new Set([
   "in",
   "is",
   "it",
+  "jump",
   "look",
   "looking",
   "me",
   "my",
+  "navigate",
   "need",
   "of",
+  "open",
+  "page",
   "please",
   "product",
   "products",
   "recommend",
   "search",
+  "send",
   "sell",
   "sells",
   "show",
   "shop",
   "shopping",
   "some",
+  "store",
+  "storefront",
   "stock",
+  "take",
   "tell",
   "the",
   "there",
   "this",
   "to",
   "want",
+  "visit",
+  "view",
   "what",
   "where",
   "which",
@@ -425,6 +445,99 @@ export function firstSafeNavigationFromContexts(
   return null;
 }
 
+function catalogProductsFromContext(context: StorefrontMcpContext): JsonRecord[] {
+  if (context.tool === "catalog_product") {
+    return isJsonRecord(context.structuredContent.product)
+      ? [context.structuredContent.product]
+      : [];
+  }
+  return Array.isArray(context.structuredContent.products)
+    ? context.structuredContent.products.filter(
+        (product): product is JsonRecord => isJsonRecord(product),
+      )
+    : [];
+}
+
+function firstCatalogProductNavigation(
+  contexts: StorefrontMcpContext[],
+  origin: string | null,
+  tools: StorefrontChatPublicTool[],
+): StorefrontNavigateAction | null {
+  const allowedTools = new Set(tools);
+  for (const context of contexts) {
+    if (!allowedTools.has(context.tool)) continue;
+    for (const product of catalogProductsFromContext(context)) {
+      const title = compactStorefrontChatText(product.title, 100);
+      const handle = cleanNavigationTargetText(product.handle, 160);
+      const candidates = [
+        product.url,
+        product.path,
+        ...(handle ? [`/products/${handle}`] : []),
+      ];
+      for (const candidate of candidates) {
+        const path = resolveStorefrontNavigationTarget(candidate, origin);
+        if (!path?.startsWith("/products/")) continue;
+        return {
+          type: "navigate",
+          path,
+          label: title ? `View ${title}` : "View product",
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function categoryNavigationFromContexts(
+  contexts: StorefrontMcpContext[],
+  origin: string | null,
+  query: string | null,
+): StorefrontNavigateAction | null {
+  const queryTokens = (query ?? "")
+    .toLocaleLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 1);
+  const candidates = contexts.flatMap((context) => {
+    if (context.tool !== "catalog_categories") return [];
+    const catalog = isJsonRecord(context.structuredContent.catalogCategories)
+      ? context.structuredContent.catalogCategories
+      : null;
+    return Array.isArray(catalog?.categories)
+      ? catalog.categories.filter(
+          (category): category is JsonRecord => isJsonRecord(category),
+        )
+      : [];
+  });
+  const matching = queryTokens.length === 0
+    ? candidates
+    : candidates.filter((category) => {
+        const value = [category.name, category.slug]
+          .filter((part): part is string => typeof part === "string")
+          .join(" ")
+          .toLocaleLowerCase();
+        return queryTokens.every((token) => value.includes(token));
+      });
+  for (const category of matching) {
+    const name = compactStorefrontChatText(category.name, 100);
+    const slug = cleanNavigationTargetText(category.slug, 160);
+    const targets = [
+      category.path,
+      category.url,
+      ...(slug ? [`/categories/${slug}`] : []),
+    ];
+    for (const target of targets) {
+      const path = resolveStorefrontNavigationTarget(target, origin);
+      if (!path?.startsWith("/categories/")) continue;
+      return {
+        type: "navigate",
+        path,
+        label: name ? `Browse ${name}` : "Browse category",
+      };
+    }
+  }
+  return null;
+}
+
 export function createSearchNavigationAction(
   messages: StorefrontChatMessage[],
 ): StorefrontNavigateAction | null {
@@ -441,6 +554,7 @@ export function createStorefrontNavigationActions(
   payload: StorefrontChatPayload,
   contexts: StorefrontMcpContext[],
   origin: string | null,
+  intent?: StorefrontChatIntent,
 ): StorefrontNavigateAction[] {
   const latest = latestUserChatText(payload.messages);
   if (
@@ -452,36 +566,67 @@ export function createStorefrontNavigationActions(
   }
 
   const actions: StorefrontNavigateAction[] = [];
-  const productPath = firstSafeNavigationFromContexts(
-    contexts,
-    origin,
-    "/products",
-    ["catalog_search", "catalog_lookup", "catalog_product"],
+  const referencedProductIntent = Boolean(
+    intent?.referencedProductIds?.length,
   );
-  if (productPath) {
-    actions.push({
-      type: "navigate",
-      path: productPath,
-      label: "View product",
-    });
-  }
-
-  const categoryPath = firstSafeNavigationFromContexts(
-    contexts,
-    origin,
-    "/categories",
-    ["catalog_categories"],
-  );
-  if (categoryPath && hasCategoryIntent(latest, payload.pageContext)) {
-    actions.push({
-      type: "navigate",
-      path: categoryPath,
-      label: "Browse category",
-    });
-  }
-
   const searchAction = createSearchNavigationAction(payload.messages);
-  if (searchAction && /\b(?:search|find|look|show|browse)\b/i.test(latest)) {
+  const searchQuery = searchQueryFromMessages(payload.messages);
+  const categoryIntent = hasCategoryIntent(latest, payload.pageContext);
+  const categoryAction = categoryIntent
+    ? categoryNavigationFromContexts(contexts, origin, searchQuery)
+    : null;
+  const explicitCategoryDestination = /\bcategor(?:y|ies)\b/i.test(latest);
+  const explicitSearchDestination = Boolean(
+    searchAction &&
+    !explicitCategoryDestination &&
+    /\b(?:browse|find|search|show)\b/i.test(latest),
+  );
+  if (categoryAction && explicitCategoryDestination && !referencedProductIntent) {
+    actions.push(categoryAction);
+  }
+  if (
+    searchAction &&
+    explicitSearchDestination &&
+    !referencedProductIntent
+  ) {
+    actions.push(searchAction);
+  }
+
+  const searchHasProducts = contexts.some(
+    (context) =>
+      context.tool === "catalog_search" &&
+      catalogProductsFromContext(context).length > 0,
+  );
+  const productAction = firstCatalogProductNavigation(
+    contexts,
+    origin,
+    searchHasProducts
+      ? ["catalog_search"]
+      : ["catalog_lookup", "catalog_product"],
+  );
+  if (
+    productAction &&
+    !explicitCategoryDestination &&
+    (!explicitSearchDestination || referencedProductIntent)
+  ) {
+    actions.push(productAction);
+  }
+
+  if (
+    categoryAction &&
+    !explicitCategoryDestination &&
+    !explicitSearchDestination &&
+    !referencedProductIntent
+  ) {
+    actions.push(categoryAction);
+  }
+
+  if (
+    searchAction &&
+    !referencedProductIntent &&
+    !actions.some((action) => action.path === searchAction.path) &&
+    /\b(?:search|find|look|show|browse)\b/i.test(latest)
+  ) {
     actions.push(searchAction);
   }
 

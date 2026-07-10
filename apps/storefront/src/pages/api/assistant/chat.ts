@@ -6,7 +6,16 @@ import {
   redactAssistantSensitiveText,
 } from "@scalius/shared/assistant-redaction";
 import {
+  appendStorefrontAssistantCatalogReferences,
+  splitStorefrontAssistantCatalogReferences,
+} from "@scalius/shared/storefront-assistant-references";
+import {
+  assistantMessagePartSchema,
+  type AssistantMessagePart,
+} from "@scalius/shared/assistant-contracts";
+import {
   STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER,
+  STOREFRONT_CHAT_FACADE_TIMEOUT_MS,
   normalizeStorefrontChatClientIp,
 } from "@scalius/shared/storefront-chat-boundary";
 
@@ -17,11 +26,14 @@ import {
   type StorefrontAssistantPageKind,
 } from "@/lib/assistant-page-context";
 import type { CartStateSnapshot, VariantCartItem } from "@/store/cart";
+import {
+  STOREFRONT_CHAT_MAX_RESPONSE_BYTES,
+  readBoundedResponseJson,
+} from "@/lib/storefront-assistant-facade-contract";
 
 export const prerender = false;
 
 const STOREFRONT_CHAT_API_PATH = "/api/v1/storefront/chat";
-const STOREFRONT_CHAT_TIMEOUT_MS = 12_000;
 const MAX_MESSAGE_CHARS = 2_000;
 const MAX_HISTORY_MESSAGES = 6;
 const MAX_RESPONSE_CHARS = 4_000;
@@ -67,7 +79,11 @@ type StorefrontAssistantChatResult =
       profile?: "storefrontChat";
       provider?: string;
       model?: string;
-      message: { role: "assistant"; content: string };
+      message: {
+        role: "assistant";
+        content: string;
+        parts?: AssistantMessagePart[];
+      };
       actions?: StorefrontAssistantChatAction[];
       usage?: Record<string, number | undefined> | null;
     }
@@ -133,10 +149,23 @@ function normalizeHistory(value: unknown): NormalizedChatInput["history"] {
   return value
     .filter((item) => isRecord(item) && (item.role === "user" || item.role === "assistant"))
     .slice(-MAX_HISTORY_MESSAGES)
-    .map((item) => ({
-      role: item.role as ChatRole,
-      content: cleanText(item.content, MAX_MESSAGE_CHARS),
-    }))
+    .map((item) => {
+      const role = item.role as ChatRole;
+      if (typeof item.content !== "string") {
+        return { role, content: "" };
+      }
+      const split = splitStorefrontAssistantCatalogReferences(item.content);
+      const content = cleanText(split.content, MAX_MESSAGE_CHARS);
+      if (role === "user") return { role, content };
+      return {
+        role,
+        content: appendStorefrontAssistantCatalogReferences(
+          content,
+          split.productIds,
+          MAX_MESSAGE_CHARS,
+        ),
+      };
+    })
     .filter((item) => item.content.length > 0);
 }
 
@@ -246,8 +275,11 @@ function normalizePageContext(value: unknown): StorefrontAssistantPageContextSna
 
 function normalizeChatInput(payload: unknown): NormalizedChatInput {
   const record = isRecord(payload) ? payload : {};
+  const message = typeof record.message === "string"
+    ? splitStorefrontAssistantCatalogReferences(record.message).content
+    : record.message;
   return {
-    message: cleanText(record.message, MAX_MESSAGE_CHARS),
+    message: cleanText(message, MAX_MESSAGE_CHARS),
     history: normalizeHistory(record.history),
     pageContext: normalizePageContext(record.pageContext),
   };
@@ -432,6 +464,199 @@ function normalizeActions(value: unknown, origin: string): StorefrontAssistantCh
   return actions.length > 0 ? actions : undefined;
 }
 
+type StorefrontProductPart = Extract<
+  AssistantMessagePart,
+  { type: "product_grid" }
+>["products"][number];
+
+function sanitizeRichImageUrl(value: string | undefined): string | undefined {
+  if (!value || value.length > 1_000 || containsAssistantSensitiveText(value)) {
+    return undefined;
+  }
+  try {
+    const url = new URL(value);
+    if (
+      (url.protocol !== "https:" && url.protocol !== "http:") ||
+      url.username ||
+      url.password ||
+      url.hash
+    ) {
+      return undefined;
+    }
+    for (const [name, queryValue] of url.searchParams) {
+      if (
+        SENSITIVE_QUERY_NAME_PATTERN.test(name) ||
+        containsAssistantSensitiveText(queryValue)
+      ) {
+        return undefined;
+      }
+    }
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function sanitizeRichProduct(
+  product: StorefrontProductPart,
+  origin: string,
+): StorefrontProductPart | null {
+  const path = sanitizeNavigationPath(product.path, origin);
+  const title = cleanText(product.title, 240);
+  if (!path?.startsWith("/products/") || !title) return null;
+  const imageUrl = sanitizeRichImageUrl(product.imageUrl);
+  const { imageUrl: _unsafeImageUrl, ...safeProduct } = product;
+  return {
+    ...safeProduct,
+    title,
+    path,
+    ...(imageUrl ? { imageUrl } : {}),
+    badges: product.badges
+      .map((badge) => cleanText(badge, 60))
+      .filter(Boolean)
+      .slice(0, 6),
+    ...(product.rationale
+      ? { rationale: cleanText(product.rationale, 500) || undefined }
+      : {}),
+  };
+}
+
+function sanitizeRichPart(
+  value: unknown,
+  origin: string,
+): AssistantMessagePart | null {
+  if (
+    isRecord(value) &&
+    value.type === "product_grid" &&
+    Array.isArray(value.products)
+  ) {
+    const products = value.products.slice(0, 12).flatMap((candidate) => {
+      const productPart = assistantMessagePartSchema.safeParse({
+        type: "product_grid",
+        products: [candidate],
+      });
+      if (!productPart.success || productPart.data.type !== "product_grid") {
+        return [];
+      }
+      const product = sanitizeRichProduct(
+        productPart.data.products[0]!,
+        origin,
+      );
+      return product ? [product] : [];
+    });
+    const title = cleanText(value.title, 160);
+    return products.length > 0
+      ? {
+          type: "product_grid",
+          ...(title ? { title } : {}),
+          products,
+        }
+      : null;
+  }
+
+  const parsed = assistantMessagePartSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const part = parsed.data;
+
+  if (part.type === "text") {
+    const text = cleanAssistantResponseText(part.text);
+    return text ? { type: "text", text } : null;
+  }
+  if (part.type === "product_grid") {
+    const products = part.products
+      .map((product) => sanitizeRichProduct(product, origin))
+      .filter((product): product is StorefrontProductPart => product !== null);
+    return products.length > 0
+      ? {
+          type: "product_grid",
+          ...(part.title ? { title: cleanText(part.title, 160) } : {}),
+          products,
+        }
+      : null;
+  }
+  if (part.type === "comparison") {
+    const products = part.products
+      .map((product) => sanitizeRichProduct(product, origin))
+      .filter((product): product is StorefrontProductPart => product !== null);
+    if (products.length < 2) return null;
+    const productIds = new Set(products.map((product) => product.id));
+    const rows = part.rows.flatMap((row) => {
+      const label = cleanText(row.label, 120);
+      const cellsByProductId = new Map<
+        string,
+        (typeof row.cells)[number]
+      >();
+      for (const cell of row.cells) {
+        if (
+          !productIds.has(cell.productId) ||
+          cellsByProductId.has(cell.productId)
+        ) {
+          return [];
+        }
+        cellsByProductId.set(cell.productId, cell);
+      }
+      if (!label || cellsByProductId.size !== products.length) return [];
+      const cells = products.map((product) => {
+        const cell = cellsByProductId.get(product.id)!;
+        return {
+          ...cell,
+          value: cell.value === null
+            ? null
+            : cleanText(cell.value, 500) || null,
+        };
+      });
+      return [{ label, cells }];
+    });
+    return rows.length > 0
+      ? {
+          type: "comparison",
+          title: cleanText(part.title, 160) || "Catalog comparison",
+          products,
+          rows,
+        }
+      : null;
+  }
+  if (part.type === "navigation") {
+    const path = sanitizeNavigationPath(part.path, origin);
+    const label = cleanText(part.label, 120);
+    return path && label
+      ? { type: "navigation", path, label, requiresConfirmation: true }
+      : null;
+  }
+  if (part.type === "source") {
+    const label = cleanText(part.label, 240);
+    const path = part.path ? sanitizeNavigationPath(part.path, origin) : null;
+    if (!label || (part.path && !path)) return null;
+    return {
+      type: "source",
+      sourceId: part.sourceId,
+      label,
+      ...(part.description
+        ? { description: cleanText(part.description, 600) || undefined }
+        : {}),
+      ...(path ? { path } : {}),
+    };
+  }
+  if (part.type === "error") {
+    const message = cleanAssistantResponseText(part.message);
+    return message ? { ...part, message } : null;
+  }
+
+  return null;
+}
+
+function normalizeRichParts(
+  value: unknown,
+  origin: string,
+): AssistantMessagePart[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const parts = value
+    .slice(0, 40)
+    .map((part) => sanitizeRichPart(part, origin))
+    .filter((part): part is AssistantMessagePart => part !== null);
+  return parts.length > 0 ? parts : undefined;
+}
+
 function normalizeUsage(value: unknown): Record<string, number | undefined> | null {
   if (!isRecord(value)) return null;
   const usage: Record<string, number | undefined> = {};
@@ -471,12 +696,21 @@ function normalizeUpstreamResult(value: unknown, origin: string): StorefrontAssi
   }
 
   const actions = normalizeActions(record.actions, origin);
+  const messageRecord = isRecord(record.message) ? record.message : null;
+  const parts = normalizeRichParts(
+    messageRecord?.parts ?? record.parts,
+    origin,
+  );
   return {
     status: "ok",
     ...(record.profile === "storefrontChat" ? { profile: "storefrontChat" as const } : {}),
     ...(typeof record.provider === "string" ? { provider: cleanText(record.provider, 80) } : {}),
     ...(typeof record.model === "string" ? { model: cleanText(record.model, 160) } : {}),
-    message: { role: "assistant", content },
+    message: {
+      role: "assistant",
+      content,
+      ...(parts ? { parts } : {}),
+    },
     usage: normalizeUsage(record.usage),
     ...(actions ? { actions } : {}),
   };
@@ -568,10 +802,13 @@ export async function handleStorefrontAssistantChat(
       headers: upstreamHeaders,
       body: JSON.stringify(createUpstreamPayload(input)),
       cache: "no-store",
-      signal: AbortSignal.timeout(STOREFRONT_CHAT_TIMEOUT_MS),
+      signal: AbortSignal.timeout(STOREFRONT_CHAT_FACADE_TIMEOUT_MS),
     });
 
-    const body = await response.json().catch(() => null);
+    const body = await readBoundedResponseJson(
+      response,
+      STOREFRONT_CHAT_MAX_RESPONSE_BYTES,
+    ).catch(() => null);
     if (!response.ok) {
       const disabled = disabledForStatus(response.status, body);
       return jsonResponse(

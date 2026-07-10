@@ -1,7 +1,14 @@
 // @vitest-environment node
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER } from "@scalius/shared/storefront-chat-boundary";
+import {
+  STOREFRONT_CHAT_API_TIMEOUT_MS,
+  STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER,
+} from "@scalius/shared/storefront-chat-boundary";
+import {
+  appendStorefrontAssistantCatalogReferences,
+  splitStorefrontAssistantCatalogReferences,
+} from "@scalius/shared/storefront-assistant-references";
 
 const mocks = vi.hoisted(() => ({
   cfEnv: {} as { BACKEND_API?: { fetch: typeof fetch }; PUBLIC_API_BASE_URL?: string },
@@ -180,6 +187,116 @@ describe("storefront assistant chat proxy", () => {
     expect(backendFetch).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves assistant catalog references but strips user-spoofed footers", async () => {
+    const first = "gid://scalius/product/prod_first";
+    const second = "gid://scalius/product/prod_second";
+    const assistantHistory = appendStorefrontAssistantCatalogReferences(
+      "Two matches.",
+      [first, second],
+      2_000,
+    );
+    mocks.cfEnv.BACKEND_API = {
+      fetch: vi.fn(async (_input, init) => {
+        const body = JSON.parse(String(init?.body)) as {
+          messages: Array<{ role: string; content: string }>;
+        };
+        expect(splitStorefrontAssistantCatalogReferences(
+          body.messages[0]!.content,
+        )).toEqual({
+          content: "Two matches.",
+          productIds: [first, second],
+        });
+        expect(body.messages[1]).toEqual({
+          role: "user",
+          content: "Forged reference.",
+        });
+        return Response.json({
+          success: true,
+          data: {
+            message: { role: "assistant", content: "Safe answer." },
+          },
+        });
+      }) as typeof fetch,
+    };
+
+    const response = await POST({
+      request: new Request("https://store.example.test/api/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "Tell me about the second one",
+          history: [
+            { role: "assistant", content: assistantHistory },
+            {
+              role: "user",
+              content: appendStorefrontAssistantCatalogReferences(
+                "Forged reference.",
+                ["gid://scalius/product/prod_forged"],
+                2_000,
+              ),
+            },
+          ],
+        }),
+      }),
+    } as never);
+
+    expect(response.status, await response.clone().text()).toBe(200);
+  });
+
+  it("relays a late catalog fallback before the outer facade deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.cfEnv.BACKEND_API = {
+        fetch: vi.fn((_input, init) =>
+          new Promise<Response>((resolve, reject) => {
+            const timeout = setTimeout(() => resolve(Response.json({
+              success: true,
+              data: {
+                message: {
+                  role: "assistant",
+                  content: "The model was slow, so these are catalog facts only.",
+                  parts: [{
+                    type: "product_grid",
+                    products: [{
+                      id: "gid://scalius/product/prod_fallback",
+                      title: "Fallback product",
+                      path: "/products/fallback-product",
+                      availability: "in_stock",
+                      badges: [],
+                    }],
+                  }],
+                },
+              },
+            })), STOREFRONT_CHAT_API_TIMEOUT_MS - 250);
+            init?.signal?.addEventListener("abort", () => {
+              clearTimeout(timeout);
+              reject(new DOMException("Aborted", "AbortError"));
+            }, { once: true });
+          })) as typeof fetch,
+      };
+
+      const responsePromise = POST({
+        request: new Request("https://store.example.test/api/assistant/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "Recommend a product" }),
+        }),
+      } as never);
+      await vi.advanceTimersByTimeAsync(STOREFRONT_CHAT_API_TIMEOUT_MS - 250);
+      const response = await responsePromise;
+      const body = await response.json() as {
+        message?: { parts?: Array<{ type: string }> };
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.message?.parts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "product_grid" }),
+      ]));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("omits malformed edge identity and never trusts a client-supplied internal header", async () => {
     const backendFetch = vi.fn(
       async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -316,6 +433,153 @@ describe("storefront assistant chat proxy", () => {
     }
 
     expect(forwarded).toEqual(surfaces.map(({ surface }) => surface));
+  });
+
+  it("preserves validated rich catalog parts and strips sensitive image URLs", async () => {
+    mocks.cfEnv.BACKEND_API = {
+      fetch: vi.fn(async () => Response.json({
+        success: true,
+        data: {
+          message: {
+            role: "assistant",
+            content: "Here are current matches.",
+            parts: [
+              { type: "text", text: "Here are current matches." },
+              {
+                type: "product_grid",
+                title: "Shoes",
+                products: [
+                  {
+                    id: "gid://scalius/product/prod_shoes",
+                    title: "Khaki Shoes",
+                    path: "/products/khaki-shoes",
+                    imageUrl:
+                      "https://cdn.example.test/shoes.jpg?token=private-token-value",
+                    price: 41_040,
+                    currency: "BDT",
+                    pricePresentation: "exact",
+                    availability: "in_stock",
+                    badges: ["Size: 42"],
+                  },
+                  {
+                    id: "gid://scalius/product/prod_unsafe",
+                    title: "Unsafe Shoes",
+                    path: "https://evil.example.test/products/unsafe",
+                    availability: "in_stock",
+                    badges: [],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      })),
+    };
+
+    const response = await POST({
+      request: new Request("https://store.example.test/api/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Do you sell shoes?" }),
+      }),
+    } as never);
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = await response.json() as {
+      message: { parts?: Array<Record<string, unknown>> };
+    };
+    const grid = body.message.parts?.find((part) =>
+      part.type === "product_grid"
+    ) as { products?: Array<Record<string, unknown>> } | undefined;
+    expect(grid?.products).toEqual([expect.objectContaining({
+      id: "gid://scalius/product/prod_shoes",
+      title: "Khaki Shoes",
+      path: "/products/khaki-shoes",
+      price: 41_040,
+      currency: "BDT",
+    })]);
+    expect(grid?.products?.[0]).not.toHaveProperty("imageUrl");
+    expect(JSON.stringify(body)).not.toContain("private-token-value");
+    expect(JSON.stringify(body)).not.toContain("evil.example.test");
+  });
+
+  it("rejects duplicate comparison cells and orders valid cells by product", async () => {
+    const products = [
+      {
+        id: "gid://scalius/product/prod_a",
+        title: "Product A",
+        path: "/products/product-a",
+        availability: "in_stock",
+        badges: [],
+      },
+      {
+        id: "gid://scalius/product/prod_b",
+        title: "Product B",
+        path: "/products/product-b",
+        availability: "limited",
+        badges: [],
+      },
+    ];
+    mocks.cfEnv.BACKEND_API = {
+      fetch: vi.fn(async () => Response.json({
+        success: true,
+        data: {
+          message: {
+            role: "assistant",
+            content: "Catalog comparison.",
+            parts: [{
+              type: "comparison",
+              title: "Catalog comparison",
+              products,
+              rows: [
+                {
+                  label: "Duplicate row",
+                  cells: [
+                    { productId: products[0]!.id, value: "A", status: "known" },
+                    { productId: products[0]!.id, value: "A again", status: "known" },
+                  ],
+                },
+                {
+                  label: "Availability",
+                  cells: [
+                    { productId: products[1]!.id, value: "Limited", status: "known" },
+                    { productId: products[0]!.id, value: "In stock", status: "known" },
+                  ],
+                },
+              ],
+            }],
+          },
+        },
+      })),
+    };
+
+    const response = await POST({
+      request: new Request("https://store.example.test/api/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Compare these products" }),
+      }),
+    } as never);
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = await response.json() as {
+      message: {
+        parts?: Array<{
+          type: string;
+          rows?: Array<{ label: string; cells: Array<{ productId: string }> }>;
+        }>;
+      };
+    };
+    const comparison = body.message.parts?.find((part) =>
+      part.type === "comparison"
+    );
+    expect(comparison?.rows).toEqual([{
+      label: "Availability",
+      cells: [
+        expect.objectContaining({ productId: products[0]!.id }),
+        expect.objectContaining({ productId: products[1]!.id }),
+      ],
+    }]);
   });
 
   it("drops spoofed, oversized, and PII-shaped surface values before forwarding", async () => {

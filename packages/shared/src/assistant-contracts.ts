@@ -176,11 +176,44 @@ const assistantProductCardSchema = z.object({
   price: z.number().finite().nonnegative().optional(),
   compareAtPrice: z.number().finite().nonnegative().optional(),
   currency: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
+  pricePresentation: z.enum(["exact", "starting_at"]).optional(),
   availability: z.enum(["in_stock", "out_of_stock", "limited", "unknown"]),
   selectedVariantId: resourceReference.optional(),
   badges: z.array(boundedText(60)).max(6).default([]),
   rationale: boundedText(500).optional(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (
+    (value.price !== undefined || value.compareAtPrice !== undefined) &&
+    value.currency === undefined
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["currency"],
+      message: "Currency is required when a product card includes money",
+    });
+  }
+  if (
+    (value.price === undefined) !== (value.pricePresentation === undefined)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["pricePresentation"],
+      message: "Price and price presentation must be provided together",
+    });
+  }
+  if (
+    value.compareAtPrice !== undefined &&
+    (value.price === undefined ||
+      value.pricePresentation !== "exact" ||
+      value.compareAtPrice <= value.price)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["compareAtPrice"],
+      message: "Compare-at price requires one exact paired product price",
+    });
+  }
+});
 
 const assistantComparisonCellSchema = z.object({
   productId: resourceReference,

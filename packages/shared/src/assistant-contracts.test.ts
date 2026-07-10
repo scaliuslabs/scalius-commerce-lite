@@ -148,6 +148,58 @@ describe("assistant contracts", () => {
     }).type).toBe("product_grid");
   });
 
+  it("requires truthful paired money semantics on product cards", () => {
+    const product = {
+      id: "gid://scalius/product/prod_1",
+      title: "Example product",
+      path: "/products/example",
+      availability: "in_stock",
+      badges: [],
+    };
+    expect(assistantMessagePartSchema.safeParse({
+      type: "product_grid",
+      products: [{
+        ...product,
+        price: 1.234,
+        pricePresentation: "exact",
+      }],
+    }).success).toBe(false);
+    expect(assistantMessagePartSchema.safeParse({
+      type: "product_grid",
+      products: [{ ...product, pricePresentation: "exact" }],
+    }).success).toBe(false);
+    expect(assistantMessagePartSchema.safeParse({
+      type: "product_grid",
+      products: [{
+        ...product,
+        price: 1.234,
+        compareAtPrice: 1.5,
+        currency: "KWD",
+        pricePresentation: "starting_at",
+      }],
+    }).success).toBe(false);
+    expect(assistantMessagePartSchema.safeParse({
+      type: "product_grid",
+      products: [{
+        ...product,
+        price: 1.234,
+        compareAtPrice: 1.5,
+        currency: "KWD",
+        pricePresentation: "exact",
+      }],
+    }).success).toBe(true);
+    expect(assistantMessagePartSchema.safeParse({
+      type: "product_grid",
+      products: [{
+        ...product,
+        price: 1.5,
+        compareAtPrice: 1.5,
+        currency: "KWD",
+        pricePresentation: "exact",
+      }],
+    }).success).toBe(false);
+  });
+
   it("bounds prepare and execute requests with replay identifiers", () => {
     const prepared = assistantPrepareRequestSchema.parse({
       protocolVersion: ASSISTANT_PROTOCOL_VERSION,

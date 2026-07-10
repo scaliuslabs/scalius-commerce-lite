@@ -6,9 +6,13 @@ import {
 } from "@scalius/core/modules/ai";
 import { RateLimitError } from "@scalius/core/errors";
 import {
+  STOREFRONT_CHAT_API_TIMEOUT_MS,
   STOREFRONT_CHAT_ANONYMOUS_RATE_LIMIT_BUCKET,
   STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER,
+  STOREFRONT_CHAT_MODEL_TIMEOUT_MS,
 } from "@scalius/shared/storefront-chat-boundary";
+import { appendStorefrontAssistantCatalogReferences } from
+  "@scalius/shared/storefront-assistant-references";
 import type { LanguageModel } from "ai";
 
 import { errorResponseFromError } from "../utils/api-response";
@@ -57,9 +61,15 @@ vi.mock("ai", () => ({
   Output: { object: vi.fn() },
 }));
 
-import { storefrontChatRoutes } from "./storefront-chat";
+import {
+  awaitStorefrontChatWork,
+  storefrontChatRoutes,
+} from "./storefront-chat";
 import { parseJsonResponse } from "./storefront-chat-mcp";
-import { searchQueryFromMessages } from "./storefront-chat-navigation";
+import {
+  createStorefrontNavigationActions,
+  searchQueryFromMessages,
+} from "./storefront-chat-navigation";
 
 function runtimeSettings(
   overrides: {
@@ -299,6 +309,127 @@ function createAgentFetch() {
   return { fetch, calls };
 }
 
+function authoritativeShoeProduct() {
+  return {
+    id: "gid://scalius/product/prod_khaki",
+    title: "Khaki High-Top Casual Shoes For Mens",
+    url:
+      "https://storefront.example.test/products/khaki-high-top-casual-shoes-for-men",
+    handle: "khaki-high-top-casual-shoes-for-men",
+    price_range: {
+      min: { amount: 4_104_000, currency: "BDT" },
+      max: { amount: 4_104_000, currency: "BDT" },
+    },
+    options: [
+      { name: "Size", values: [{ label: "42" }] },
+      { name: "Color", values: [{ label: "Khaki" }] },
+    ],
+    variants: [{
+      id: "gid://scalius/product-variant/var_khaki_42",
+      title: "Khaki shoes - Size: 42 / Color: Khaki",
+      price: { amount: 4_104_000, currency: "BDT" },
+      availability: { available: true, status: "in_stock" },
+      options: [
+        { name: "Size", label: "42" },
+        { name: "Color", label: "Khaki" },
+      ],
+      metadata: { variant_id: "var_khaki_42", available_quantity: 4 },
+    }],
+    media: [{
+      type: "image",
+      url: "https://cdn.example.test/khaki-shoes.jpg",
+    }],
+    metadata: { product_id: "prod_khaki", available_for_sale: true },
+  };
+}
+
+function createAuthoritativeCatalogFetch() {
+  const base = createAgentFetch();
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    const params = body.params as { name?: string } | undefined;
+    if (params?.name === "catalog_search") {
+      return mcpEventResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          structuredContent: {
+            ucp: { status: "success", version: "2026-04-08" },
+            products: [authoritativeShoeProduct()],
+            pagination: { total_count: 1 },
+          },
+        },
+      });
+    }
+    if (params?.name === "catalog_product") {
+      return mcpEventResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          structuredContent: {
+            ucp: { status: "success", version: "2026-04-08" },
+            product: authoritativeShoeProduct(),
+          },
+        },
+      });
+    }
+    return base.fetch(input, init);
+  });
+  return fetch;
+}
+
+function referencedProduct(id: string, title: string, handle: string) {
+  const base = authoritativeShoeProduct();
+  return {
+    ...base,
+    id,
+    title,
+    handle,
+    url: `https://storefront.example.test/products/${handle}`,
+    metadata: { product_id: id.split("/").at(-1), available_for_sale: true },
+  };
+}
+
+function createReferencedCatalogFetch(products: Record<string, unknown>[]) {
+  const base = createAgentFetch();
+  const byId = new Map(products.map((product) => [String(product.id), product]));
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    const params = body.params as {
+      name?: string;
+      arguments?: { id?: string; ids?: string[] };
+    } | undefined;
+    if (params?.name === "catalog_product") {
+      return mcpEventResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          structuredContent: {
+            ucp: { status: "success", version: "2026-04-08" },
+            product: byId.get(params.arguments?.id ?? "") ?? null,
+          },
+        },
+      });
+    }
+    if (params?.name === "catalog_lookup") {
+      return mcpEventResponse({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          structuredContent: {
+            ucp: { status: "success", version: "2026-04-08" },
+            products: (params.arguments?.ids ?? []).flatMap((id) => {
+              const product = byId.get(id);
+              return product ? [product] : [];
+            }),
+          },
+        },
+      });
+    }
+    return base.fetch(input, init);
+  });
+}
+
 describe("storefront chat route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -315,6 +446,52 @@ describe("storefront chat route", () => {
       text: "Khaki Shoes are a good match. Use /checkout?token=sk_secret or https://evil.example.test/admin to continue.",
       totalUsage: { inputTokens: 20, outputTokens: 16, totalTokens: 36 },
     });
+  });
+
+  it("bounds pre-model work with the API deadline signal", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const pending = awaitStorefrontChatWork(
+        new Promise<never>(() => {}),
+        controller.signal,
+      );
+      const rejection = expect(pending).rejects.toThrow(
+        "Storefront assistant request timed out",
+      );
+      setTimeout(() => controller.abort(), STOREFRONT_CHAT_API_TIMEOUT_MS);
+      await vi.advanceTimersByTimeAsync(STOREFRONT_CHAT_API_TIMEOUT_MS);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns the API deadline when settings prework never resolves", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.getWidgetAiRuntimeSettings.mockImplementationOnce(
+        () => new Promise<never>(() => {}),
+      );
+      const { fetch } = createAgentFetch();
+      const { app, env } = createTestApp({
+        STOREFRONT_AGENT: { fetch } as Fetcher,
+      });
+      const responsePromise = postChat(app, env, {
+        messages: [{ role: "user", content: "Find shoes" }],
+      });
+      const assertion = responsePromise.then(async (response) => {
+        expect(response.status, await response.clone().text()).toBe(503);
+        expect(response.headers.get("cache-control")).toContain("no-store");
+      });
+
+      await vi.advanceTimersByTimeAsync(STOREFRONT_CHAT_API_TIMEOUT_MS);
+      await assertion;
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mocks.generateText).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("selects the bounded SSE JSON-RPC response matching the request id", async () => {
@@ -362,6 +539,82 @@ describe("storefront chat route", () => {
     expect(searchQueryFromMessages([
       { role: "user", content: "How can you help me shop?" },
     ])).toBeNull();
+  });
+
+  it("derives one authoritative category action for an exact category command", () => {
+    const messages = [{
+      role: "user" as const,
+      content: "Take me to shoes category",
+    }];
+    expect(searchQueryFromMessages(messages)).toBe("shoes");
+    expect(createStorefrontNavigationActions(
+      { messages },
+      [{
+        tool: "catalog_categories",
+        text: "verified categories",
+        structuredContent: {
+          catalogCategories: {
+            categories: [
+              {
+                id: "cat_food",
+                name: "Food",
+                slug: "food",
+                path: "/categories/food",
+              },
+              {
+                id: "cat_shoes",
+                name: "Shoes",
+                slug: "shoes",
+                path: "/categories/shoes",
+              },
+            ],
+          },
+        },
+      }],
+      "https://storefront.example.test",
+    )).toEqual([{
+      type: "navigate",
+      path: "/categories/shoes",
+      label: "Browse Shoes",
+    }]);
+
+    expect(createStorefrontNavigationActions(
+      {
+        messages: [{ role: "user", content: "Show me shoes" }],
+      },
+      [
+        {
+          tool: "catalog_search",
+          text: "verified products",
+          structuredContent: {
+            products: [{
+              id: "gid://scalius/product/prod_shoes",
+              title: "Khaki Shoes",
+              url: "https://storefront.example.test/products/khaki-shoes",
+            }],
+          },
+        },
+        {
+          tool: "catalog_categories",
+          text: "verified categories",
+          structuredContent: {
+            catalogCategories: {
+              categories: [{
+                id: "cat_shoes",
+                name: "Shoes",
+                slug: "shoes",
+                path: "/categories/shoes",
+              }],
+            },
+          },
+        },
+      ],
+      "https://storefront.example.test",
+    )).toEqual([{
+      type: "navigate",
+      path: "/search?q=shoes",
+      label: "Search catalog",
+    }]);
   });
 
   it("rejects an oversized MCP response before parsing", async () => {
@@ -550,6 +803,258 @@ describe("storefront chat route", () => {
     expect(mocks.generateText).not.toHaveBeenCalled();
   });
 
+  it("answers authoritative catalog search without waiting on the model", async () => {
+    const fetch = createAuthoritativeCatalogFetch();
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Do you sell any shoes?" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    const body = await response.json() as {
+      data: {
+        message: { content: string; parts: Array<Record<string, unknown>> };
+      };
+    };
+    expect(body.data.message.content).toContain(
+      "Khaki High-Top Casual Shoes For Mens",
+    );
+    expect(body.data.message.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "product_grid" }),
+    ]));
+  });
+
+  it("answers current product facts from MCP when visible metadata is stale", async () => {
+    const fetch = createAuthoritativeCatalogFetch();
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "What am I looking at?" }],
+      pageContext: {
+        version: 1,
+        contextVersion: 2,
+        source: "storefront",
+        page: {
+          path: "/products/khaki-high-top-casual-shoes-for-men",
+          title: "mhgvhgv",
+          kind: "product",
+        },
+        surface: {
+          kind: "product",
+          productId: "prod_khaki",
+          selectedOptions: [],
+          displayedPrice: 1,
+          availability: "selection_required",
+        },
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    const serialized = JSON.stringify(await response.json());
+    expect(serialized).toContain("Khaki High-Top Casual Shoes For Mens");
+    expect(serialized).toContain("41,040.00");
+    expect(serialized).toContain("Choose Size and Color");
+    expect(serialized).not.toContain("mhgvhgv");
+  });
+
+  it("searches a named product target without option-axis terms and returns its options", async () => {
+    const base = createAgentFetch();
+    const runner = {
+      ...authoritativeShoeProduct(),
+      id: "gid://scalius/product/prod_runner",
+      title: "Running Shoes",
+      handle: "running-shoes",
+      url: "https://storefront.example.test/products/running-shoes",
+      options: [
+        {
+          name: "Size",
+          values: [{ label: "40" }, { label: "41" }],
+        },
+        {
+          name: "Color",
+          values: [{ label: "Red" }, { label: "Blue" }],
+        },
+      ],
+      metadata: { product_id: "prod_runner", available_for_sale: true },
+    };
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const params = body.params as { name?: string } | undefined;
+      if (params?.name === "catalog_search") {
+        return mcpEventResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            structuredContent: {
+              ucp: { status: "success", version: "2026-04-08" },
+              products: [runner],
+              pagination: { total_count: 1 },
+            },
+          },
+        });
+      }
+      return base.fetch(input, init);
+    });
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+
+    const response = await postChat(app, env, {
+      messages: [{
+        role: "user",
+        content: "What colors are available in running shoes?",
+      }],
+      pageContext: {
+        page: { path: "/products/khaki-shoes", kind: "product" },
+        surface: {
+          kind: "product",
+          productId: "prod_khaki",
+          selectedOptions: [],
+          displayedPrice: 1,
+          availability: "selection_required",
+        },
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    const searchCall = fetch.mock.calls.flatMap(([, init]) => {
+      const body = JSON.parse(String(init?.body)) as {
+        params?: { name?: string; arguments?: Record<string, unknown> };
+      };
+      return body.params?.name === "catalog_search" ? [body.params] : [];
+    });
+    expect(searchCall).toEqual([{
+      name: "catalog_search",
+      arguments: { query: "running shoes", limit: 5 },
+    }]);
+    const serialized = JSON.stringify(await response.json());
+    expect(serialized).toContain("Running Shoes");
+    expect(serialized).toContain("Color: Red, Blue");
+    expect(serialized).not.toContain("Size: 40, 41");
+    expect(serialized).not.toContain("colors running shoes");
+  });
+
+  it("falls back to catalog facts when recommendation generation fails", async () => {
+    const fetch = createAuthoritativeCatalogFetch();
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+    mocks.generateText.mockRejectedValueOnce(new Error("provider unavailable"));
+
+    const response = await postChat(app, env, {
+      messages: [{ role: "user", content: "Recommend shoes for travel" }],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.generateText).toHaveBeenCalledTimes(1);
+    const serialized = JSON.stringify(await response.json());
+    expect(serialized).toContain("Khaki High-Top Casual Shoes For Mens");
+    expect(serialized).toContain("product_grid");
+    expect(serialized).not.toContain("provider unavailable");
+    expect(mocks.generateText).toHaveBeenCalledWith(expect.objectContaining({
+      timeout: { totalMs: STOREFRONT_CHAT_MODEL_TIMEOUT_MS },
+    }));
+  });
+
+  it("resolves the same second catalog reference before and after replay", async () => {
+    const firstId = "gid://scalius/product/prod_first";
+    const secondId = "gid://scalius/product/prod_second";
+    const fetch = createReferencedCatalogFetch([
+      referencedProduct(firstId, "First Shoes", "first-shoes"),
+      referencedProduct(secondId, "Second Shoes", "second-shoes"),
+    ]);
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+    const assistantHistory = appendStorefrontAssistantCatalogReferences(
+      "I found two current matches.",
+      [firstId, secondId],
+      2_000,
+    );
+    const requestBody = {
+      messages: [
+        { role: "assistant", content: assistantHistory },
+        { role: "user", content: "Tell me about the second one" },
+      ],
+      pageContext: {
+        page: { path: "/products/unrelated", kind: "product" },
+        surface: {
+          kind: "product",
+          productId: "prod_unrelated",
+          selectedOptions: [{ name: "Size", label: "M" }],
+          displayedPrice: 1,
+          availability: "in_stock",
+        },
+      },
+    };
+
+    for (const source of ["live history", "replayed history"]) {
+      const response = await postChat(app, env, requestBody);
+      expect(response.status, `${source}: ${await response.clone().text()}`)
+        .toBe(200);
+      const serialized = JSON.stringify(await response.json());
+      expect(serialized, source).toContain("Second Shoes");
+      expect(serialized, source).not.toContain("First Shoes");
+    }
+
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    const toolCalls = fetch.mock.calls.flatMap(([, init]) => {
+      const body = JSON.parse(String(init?.body)) as {
+        params?: { name?: string; arguments?: Record<string, unknown> };
+      };
+      return body.params?.name ? [body.params] : [];
+    });
+    expect(toolCalls.filter((call) => call.name === "catalog_product"))
+      .toEqual([
+        { name: "catalog_product", arguments: { id: secondId } },
+        { name: "catalog_product", arguments: { id: secondId } },
+      ]);
+    expect(toolCalls.some((call) => call.name === "catalog_search")).toBe(false);
+  });
+
+  it("fails a removed multi-ordinal reference closed without model or navigation", async () => {
+    const firstId = "gid://scalius/product/prod_first";
+    const secondId = "gid://scalius/product/prod_second";
+    const removedId = "gid://scalius/product/prod_removed";
+    const fetch = createReferencedCatalogFetch([
+      referencedProduct(firstId, "First Shoes", "first-shoes"),
+      referencedProduct(secondId, "Second Shoes", "second-shoes"),
+    ]);
+    const { app, env } = createTestApp({
+      STOREFRONT_AGENT: { fetch } as Fetcher,
+    });
+    const assistantHistory = appendStorefrontAssistantCatalogReferences(
+      "I found three current matches.",
+      [firstId, secondId, removedId],
+      2_000,
+    );
+
+    const response = await postChat(app, env, {
+      messages: [
+        { role: "assistant", content: assistantHistory },
+        { role: "user", content: "Compare first and third" },
+      ],
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    const body = await response.json() as {
+      data: { message: { content: string }; actions?: unknown };
+    };
+    expect(body.data.message.content).toContain(
+      "can’t resolve every referenced item",
+    );
+    expect(body.data.actions).toBeUndefined();
+  });
+
   it("calls only public Agent MCP tools without cookies/auth and returns safe click-confirmed navigation", async () => {
     const { fetch, calls } = createAgentFetch();
     const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
@@ -693,7 +1198,11 @@ describe("storefront chat route", () => {
       provider: "openai",
       model: "gpt-4.1-mini",
       usage: { inputTokens: 20, outputTokens: 16, totalTokens: 36 },
-      actions: [{ type: "navigate", path: "/products/khaki-shoes", label: "View product" }],
+      actions: [{
+        type: "navigate",
+        path: "/search?q=khaki+shoes",
+        label: "Search catalog",
+      }],
     });
     expect(body.data.message.content).toContain("Khaki Shoes are a good match");
     expect(body.data.message.content).toContain("[unsupported navigation target]");
@@ -772,7 +1281,7 @@ describe("storefront chat route", () => {
     expect(downstream).not.toContain("prod_private_surface");
   });
 
-  it("uses registered product surface identity for MCP lookup and model context", async () => {
+  it("uses registered product surface identity for authoritative MCP lookup", async () => {
     const { fetch, calls } = createAgentFetch();
     const { app, env } = createTestApp({ STOREFRONT_AGENT: { fetch } as Fetcher });
 
@@ -802,16 +1311,18 @@ describe("storefront chat route", () => {
         "catalog_product",
     );
     expect(productCall?.body).toMatchObject({
-      params: { name: "catalog_product", arguments: { id: "prod_rice" } },
+      params: {
+        name: "catalog_product",
+        arguments: {
+          id: "var_2kg",
+          selected: [{ name: "Weight", label: "2KG" }],
+        },
+      },
     });
-    const prompt = JSON.stringify(
-      (mocks.generateText.mock.calls[0]?.[0] as { messages?: unknown })?.messages,
-    );
-    expect(prompt).toContain("Product ID: prod_rice");
-    expect(prompt).toContain("Selected variant ID: var_2kg");
-    expect(prompt).toContain("Selected options: Weight: 2KG");
-    expect(prompt).toContain("Displayed price: 850");
-    expect(prompt).toContain("Buyer-safe availability: in_stock");
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    const serialized = JSON.stringify(await response.json());
+    expect(serialized).toContain("Premium Rice");
+    expect(serialized).toContain("Weight: 2KG");
   });
 
   it("uses bounded search surface query and listing facts for MCP and model context", async () => {
@@ -955,12 +1466,12 @@ describe("storefront chat route", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.generateText).not.toHaveBeenCalled();
     const downstream = JSON.stringify({
       calls: calls.map((call) => call.body),
-      prompt: (mocks.generateText.mock.calls[0]?.[0] as { messages?: unknown })
-        ?.messages,
+      response: await response.json(),
     });
-    expect(downstream).toContain("Product ID: prod_rice");
+    expect(downstream).toContain("prod_rice");
     expect(downstream).toContain("Weight: 2KG");
     expect(downstream).not.toContain("buyer@example.test");
     expect(downstream).not.toContain("01711111111");

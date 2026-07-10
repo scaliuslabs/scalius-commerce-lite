@@ -56,6 +56,8 @@ import {
   reconcileStorefrontPersistedMessage,
   storefrontConversationContextMarker,
 } from "./storefront-assistant-transcript";
+import { getDirectlyConfirmedStorefrontNavigation } from
+  "./storefront-assistant-navigation";
 import { useStorefrontAssistantTranscript } from
   "./useStorefrontAssistantTranscript";
 import { useAssistantGeometry } from "./useAssistantGeometry";
@@ -322,7 +324,7 @@ export default function StorefrontAssistantBubble() {
   );
 
   const handleNavigate = useCallback(
-    (path: string, label: string) => {
+    (path: string, label: string, directlyConfirmed = false) => {
       const target = resolveNavigation(path);
       if (!target) {
         setStatus({
@@ -337,7 +339,9 @@ export default function StorefrontAssistantBubble() {
       setStatus({
         kind: navigated ? "success" : "error",
         message: navigated
-          ? `${label} requested. Review the destination before continuing.`
+          ? directlyConfirmed
+            ? `Opening ${label.replace(/^(?:Open|View|Browse|Search)\s+/i, "")}.`
+            : `${label} requested. Review the destination before continuing.`
           : "Navigation is unavailable. Use the store menu or search instead.",
       });
     },
@@ -425,6 +429,21 @@ export default function StorefrontAssistantBubble() {
               message:
                 "Answer ready. This reply is live-only because the private transcript was unavailable.",
             });
+        const directlyConfirmedNavigation =
+          getDirectlyConfirmedStorefrontNavigation(
+            message,
+            result.message.parts,
+            window.location.origin,
+          );
+        if (directlyConfirmedNavigation) {
+          queueMicrotask(() =>
+            handleNavigate(
+              directlyConfirmedNavigation.path,
+              directlyConfirmedNavigation.label,
+              true,
+            )
+          );
+        }
       } else {
         setStatus({ kind: result.status, message: result.message });
       }

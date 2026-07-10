@@ -5,6 +5,10 @@ import {
   redactAssistantSensitiveText,
 } from "@scalius/shared/assistant-redaction";
 import {
+  appendStorefrontAssistantCatalogReferences,
+  splitStorefrontAssistantCatalogReferences,
+} from "@scalius/shared/storefront-assistant-references";
+import {
   STOREFRONT_CHAT_ANONYMOUS_RATE_LIMIT_BUCKET,
   STOREFRONT_CHAT_FORWARDED_CLIENT_IP_HEADER,
   storefrontChatRateLimitBucketFromIp,
@@ -273,6 +277,7 @@ export const SENSITIVE_STOREFRONT_PAGE_KINDS = new Set(["account", "checkout"]);
 export const STOREFRONT_CHAT_SYSTEM_PROMPT = [
   "You are the Scalius Commerce storefront catalog assistant for public buyers.",
   "Use only the verified public catalog, discovery, page, and cart-validation context in this request plus the conversation. If context is missing, say you cannot verify it.",
+  "API-backed MCP catalog facts override visible page metadata when they disagree; never repeat a stale page title or browser display price as catalog truth.",
   "This endpoint cannot mutate carts, start checkout, access accounts, inspect orders, recover payments, read customer sessions, take payment, contact support, or use admin APIs.",
   "Never ask for or repeat phone numbers, email addresses, OTPs, credentials, payment proofs, receipt proofs, session tokens, or order identifiers.",
   "For checkout, account, order, payment, recovery, admin, or support requests, refuse briefly and point the buyer to visible storefront controls without inventing private status.",
@@ -663,13 +668,23 @@ export function sanitizeStorefrontChatPayload(
   }
 
   const messages = payload.messages.map((message) => {
+    const split = splitStorefrontAssistantCatalogReferences(message.content);
     const content = compactStorefrontChatText(
-      message.content,
+      split.content,
       STOREFRONT_CHAT_MAX_MESSAGE_CHARS,
     );
     if (!content)
       throw new ValidationError("Storefront chat messages must contain text.");
-    return { role: message.role, content };
+    return {
+      role: message.role,
+      content: message.role === "assistant"
+        ? appendStorefrontAssistantCatalogReferences(
+          content,
+          split.productIds,
+          STOREFRONT_CHAT_MAX_MESSAGE_CHARS,
+        )
+        : content,
+    };
   });
 
   return {
