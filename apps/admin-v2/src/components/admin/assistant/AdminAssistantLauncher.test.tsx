@@ -8,6 +8,7 @@ import type {
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 const THREAD_ID = "conv_abcdefghijklmnopqrstuv";
 
@@ -510,6 +511,52 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     ).toContain(requestId);
   });
 
+  it("rejects a catalog-known page before navigation when RBAC denies it", async () => {
+    renderLauncher(undefined, {
+      isSuperAdmin: false,
+      permissions: ["products.view"],
+    });
+    await click(queryButton("Open admin assistant"));
+    const requestId = "p".repeat(22);
+    const program = "goto /admin/settings/taxes";
+
+    await emitSnapshot(
+      liveSnapshot([
+        message("user-taxes", "user", [
+          { type: "text", text: "Open the taxes page", state: "done" },
+        ]),
+        message("assistant-taxes", "assistant", [
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "tool-computer-taxes",
+            state: "output-available",
+            input: { program },
+            output: {
+              type: "client_command",
+              capability: "computer",
+              protocolVersion: 1,
+              status: "awaiting_client_execution",
+              authoritative: false,
+              replayPolicy: "client_dedupe_request_id_until_expiry",
+              surface: "admin",
+              requestId,
+              program,
+              expiresAt: new Date(Date.now() + 120_000).toISOString(),
+              ticket: `${"t".repeat(16)}.${"s".repeat(43)}`,
+            },
+          },
+        ]),
+      ]),
+    );
+
+    await vi.waitFor(() => expect(computerResultFetch).toHaveBeenCalledOnce());
+    expect(routerMocks.navigate).not.toHaveBeenCalled();
+    expect(
+      JSON.parse(String(computerResultFetch.mock.calls[0]?.[1]?.body)),
+    ).toMatchObject({ result: { ok: false, code: "ROUTE_BLOCKED" } });
+  });
+
   it("blocks New and history switching until a settled replay page command finishes", async () => {
     const continuation = deferred<Response>();
     computerResultFetch.mockReturnValueOnce(continuation.promise);
@@ -793,9 +840,18 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(document.querySelectorAll("ol li")).toHaveLength(2);
   });
 
-  function renderLauncher(children?: ReactNode) {
+  function renderLauncher(
+    children?: ReactNode,
+    access: { isSuperAdmin?: boolean; permissions?: string[] } = {
+      isSuperAdmin: true,
+    },
+  ) {
     act(() => {
-      root.render(<AdminAssistantLauncher>{children}</AdminAssistantLauncher>);
+      root.render(
+        <PermissionProvider {...access}>
+          <AdminAssistantLauncher>{children}</AdminAssistantLauncher>
+        </PermissionProvider>,
+      );
     });
   }
 });

@@ -6,6 +6,10 @@ import {
   type ScaliusComputerRequest,
   type ScaliusComputerResult,
 } from "@scalius/shared/assistant-computer";
+import {
+  canAccessAdminPath,
+  type AdminAccessContext,
+} from "~/lib/admin-access";
 import { isKnownAdminComputerDestination } from "./navigation-authorization";
 
 export interface AdminAssistantComputerRuntimeOptions {
@@ -15,6 +19,7 @@ export interface AdminAssistantComputerRuntimeOptions {
   navigate?: (route: string) => void | Promise<void>;
   refresh?: () => void | Promise<void>;
   isActive?: () => boolean;
+  access?: AdminAccessContext;
 }
 
 export interface AdminAssistantComputerRuntime {
@@ -41,7 +46,7 @@ export function createAdminAssistantComputerRuntime(
     currentRoute: () => currentRoute(pageWindow.location),
     goto: options.navigate ?? ((route) => pageWindow.location.assign(route)),
     refresh: options.refresh ?? (() => pageWindow.location.reload()),
-    allowsRoute: isAllowedAdminComputerRoute,
+    allowsRoute: (route) => isAllowedAdminComputerRoute(route, options.access),
     isActive: options.isActive ?? (() => pageDocument.visibilityState !== "hidden"),
     textMode: "headings",
     maxTargets: 60,
@@ -54,12 +59,17 @@ export function createAdminAssistantComputerRuntime(
   };
 }
 
-export function isAllowedAdminComputerRoute(route: string): boolean {
+export function isAllowedAdminComputerRoute(
+  route: string,
+  access?: AdminAccessContext,
+): boolean {
   const normalized = normalizeScaliusComputerRoute(route);
   if (!normalized) return false;
   const url = new URL(normalized, "https://admin.invalid");
   try {
-    return isKnownAdminComputerDestination(decodeURIComponent(url.pathname));
+    const pathname = decodeURIComponent(url.pathname);
+    return isKnownAdminComputerDestination(pathname) &&
+      (!access || canAccessAdminPath(pathname, access));
   } catch {
     return false;
   }
