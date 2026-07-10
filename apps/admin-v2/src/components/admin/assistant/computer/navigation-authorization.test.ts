@@ -16,6 +16,16 @@ describe("Admin direct navigation authorization", () => {
   });
 
   it.each([
+    ["Create a test product with real images", "goto /admin/products/new"],
+    ["Can you please add a category?", "goto /admin/categories/new"],
+    ["I want you to create a promotion", "goto /admin/discounts/new"],
+    ["Please create an order and a customer", "goto /admin/orders/new"],
+    ["Please create an order and a customer", "goto /admin/customers/new"],
+  ])("authorizes fixed routes implied by explicit create tasks", (message, program) => {
+    expect(isDirectAdminNavigationAuthorized(message, program)).toBe(true);
+  });
+
+  it.each([
     [undefined, "goto /admin/products"],
     ["How many products do we have?", "goto /admin/products"],
     ["Take me to orders", "goto /admin/products"],
@@ -24,6 +34,9 @@ describe("Admin direct navigation authorization", () => {
     ["Take me to orders", "goto /admin/orders?status=pending"],
     ["Take me to products", "goto /admin/products#top"],
     ["Take me to a product", "goto /admin/products/prod_private"],
+    ["How do I create a product?", "goto /admin/products/new"],
+    ["Could a product be created automatically?", "goto /admin/products/new"],
+    ["Create a product", "goto /admin/orders/new"],
   ])("rejects absent, ambiguous, unrelated, or non-catalog navigation", (message, program) => {
     expect(isDirectAdminNavigationAuthorized(message, program)).toBe(false);
   });
@@ -46,5 +59,10 @@ describe("Admin direct navigation authorization", () => {
       [],
     );
     expect(getAuthorizedAdminNavigationRoutes("Take me to a product")).toEqual([]);
+    expect(getAuthorizedAdminNavigationRoutes("Create a product with real images")).toEqual([
+      "/admin/products/new",
+    ]);
+    expect(getAuthorizedAdminNavigationRoutes("Please create an order and a customer"))
+      .toEqual(["/admin/orders/new", "/admin/customers/new"]);
   });
 });
