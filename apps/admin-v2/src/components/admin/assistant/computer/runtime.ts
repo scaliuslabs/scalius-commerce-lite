@@ -6,6 +6,16 @@ import {
   type ScaliusComputerRequest,
   type ScaliusComputerResult,
 } from "@scalius/shared/assistant-computer";
+import { allNavSections } from "../../layout/AdminNav";
+
+const ADMIN_ASSISTANT_NAVIGATION_PATHS = new Set(
+  allNavSections.flatMap((section) =>
+    section.items.flatMap((item) => [
+      item.href,
+      ...(item.subItems?.map((subItem) => subItem.href) ?? []),
+    ])
+  ),
+);
 
 export interface AdminAssistantComputerRuntimeOptions {
   threadId: string;
@@ -56,10 +66,9 @@ export function createAdminAssistantComputerRuntime(
 export function isAllowedAdminComputerRoute(route: string): boolean {
   const normalized = normalizeScaliusComputerRoute(route);
   if (!normalized) return false;
-  const pathname = decodeURIComponent(
-    new URL(normalized, "https://admin.invalid").pathname,
-  );
-  return pathname === "/admin" || pathname.startsWith("/admin/");
+  const url = new URL(normalized, "https://admin.invalid");
+  const pathname = decodeURIComponent(url.pathname);
+  return ADMIN_ASSISTANT_NAVIGATION_PATHS.has(pathname);
 }
 
 function resolveDocument(provided?: Document): Document {

@@ -73,6 +73,18 @@ describe("Admin assistant computer runtime", () => {
     })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
     await expect(runtime.execute({
       binding: runtime.binding,
+      program: 'goto "/admin/settings/taxes"',
+    })).resolves.toMatchObject({ ok: true, code: "NAVIGATED" });
+    await expect(runtime.execute({
+      binding: runtime.binding,
+      program: 'goto "/admin/products/prod_private"',
+    })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
+    await expect(runtime.execute({
+      binding: runtime.binding,
+      program: 'goto "/admin/not-a-catalog-route"',
+    })).resolves.toMatchObject({ ok: false, code: "ROUTE_BLOCKED" });
+    await expect(runtime.execute({
+      binding: runtime.binding,
       program: "refresh",
     })).resolves.toMatchObject({ ok: true, code: "REFRESHED" });
     expect(refresh).toHaveBeenCalledOnce();
