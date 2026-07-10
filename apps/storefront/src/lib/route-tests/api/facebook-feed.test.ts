@@ -36,6 +36,35 @@ function context(url = "https://storefront.example.test/api/facebook-feed.xml") 
   return { url: new URL(url) } as never;
 }
 
+function feedItemById(body: string, id: string): string {
+  const item = (body.match(/<item>[\s\S]*?<\/item>/g) ?? []).find((candidate) =>
+    candidate.includes(`<g:id>${id}</g:id>`)
+  );
+  expect(item, `Expected feed item ${id}`).toBeDefined();
+  return item!;
+}
+
+function expectFeedPriceInvariant(body: string): void {
+  const items = body.match(/<item>[\s\S]*?<\/item>/g) ?? [];
+  expect(items.length).toBeGreaterThan(0);
+
+  for (const item of items) {
+    const price = item.match(
+      /<g:price>(\d+(?:\.\d+)?) ([A-Z]{3})<\/g:price>/,
+    );
+    const salePrice = item.match(
+      /<g:sale_price>(\d+(?:\.\d+)?) ([A-Z]{3})<\/g:sale_price>/,
+    );
+    expect(price, "Every feed item must have one base price").not.toBeNull();
+    expect(item.match(/<g:price>/g)).toHaveLength(1);
+    expect(item.match(/<g:sale_price>/g)?.length ?? 0).toBeLessThanOrEqual(1);
+    if (salePrice) {
+      expect(salePrice[2]).toBe(price![2]);
+      expect(Number(salePrice[1])).toBeLessThan(Number(price![1]));
+    }
+  }
+}
+
 describe("Facebook product feed route", () => {
   beforeEach(() => {
     mocks.getFeedProducts.mockReset();
@@ -355,8 +384,15 @@ describe("Facebook product feed route", () => {
     expect(body).toContain(
       "<g:link>https://storefront.example.test/products/linen-shirt?size=M&amp;color=Red</g:link>",
     );
-    expect(body).toContain("<g:price>900.00 BDT</g:price>");
-    expect(body).toContain("<g:sale_price>900.00 BDT</g:sale_price>");
+    const discountedVariant = feedItemById(body, "SKU-RED-M");
+    expect(discountedVariant).toContain("<g:price>1000.00 BDT</g:price>");
+    expect(discountedVariant).toContain(
+      "<g:sale_price>900.00 BDT</g:sale_price>",
+    );
+    const undiscountedVariant = feedItemById(body, "SKU-BLUE-L");
+    expect(undiscountedVariant).toContain("<g:price>1100.00 BDT</g:price>");
+    expect(undiscountedVariant).not.toContain("<g:sale_price>");
+    expectFeedPriceInvariant(body);
     expect(body).toContain("<g:gtin>012345678905</g:gtin>");
     expect(body).toContain("<g:availability>in stock</g:availability>");
     expect(body).toContain("<g:availability>out of stock</g:availability>");
@@ -631,7 +667,9 @@ describe("Facebook product feed route", () => {
     expect(body.match(/<item>/g)).toHaveLength(1);
     expect(body).toContain("<g:id>prod_shirt</g:id>");
     expect(body).toContain("<g:item_group_id>prod_shirt</g:item_group_id>");
-    expect(body).toContain("<g:price>1100.00 BDT</g:price>");
+    expect(body).toContain("<g:price>1200.00 BDT</g:price>");
+    expect(body).toContain("<g:sale_price>1100.00 BDT</g:sale_price>");
+    expectFeedPriceInvariant(body);
     expect(body).not.toContain("SKU-RED-M");
   });
 
@@ -822,9 +860,77 @@ describe("Facebook product feed route", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("<g:price>0.00 BDT</g:price>");
+    expect(body).toContain("<g:price>1200.00 BDT</g:price>");
     expect(body).toContain("<g:sale_price>0.00 BDT</g:sale_price>");
-    expect(body).not.toContain("<g:price>1200.00 BDT</g:price>");
+    expect(body).not.toContain("<g:price>0.00 BDT</g:price>");
+    expectFeedPriceInvariant(body);
+  });
+
+  it("keeps base/sale pricing invariant across Google and Meta feeds", async () => {
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [
+        {
+          id: "prod_discounted",
+          slug: "discounted-product",
+          name: "Discounted Product",
+          description: "Catalog sale item",
+          price: 1500,
+          discountedPrice: 1250,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/discounted.jpg",
+        },
+        {
+          id: "prod_regular",
+          slug: "regular-product",
+          name: "Regular Product",
+          description: "Catalog regular-price item",
+          price: 800,
+          discountedPrice: 800,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/regular.jpg",
+        },
+        {
+          id: "prod_rounded_equal",
+          slug: "rounded-equal-product",
+          name: "Rounded Equal Product",
+          description: "Discount below feed currency precision",
+          price: 1.004,
+          discountedPrice: 1.003,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/rounded-equal.jpg",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 3, totalPages: 1 },
+    });
+
+    const metaResponse = await GET(context());
+    const googleResponse = await GOOGLE_FEED_GET(
+      context("https://storefront.example.test/api/product-feed.xml"),
+    );
+    const metaBody = await metaResponse.text();
+    const googleBody = await googleResponse.text();
+
+    expect(metaResponse.status).toBe(200);
+    expect(googleResponse.status).toBe(200);
+    for (const body of [metaBody, googleBody]) {
+      const discounted = feedItemById(body, "prod_discounted");
+      expect(discounted).toContain("<g:price>1500.00 BDT</g:price>");
+      expect(discounted).toContain(
+        "<g:sale_price>1250.00 BDT</g:sale_price>",
+      );
+      const regular = feedItemById(body, "prod_regular");
+      expect(regular).toContain("<g:price>800.00 BDT</g:price>");
+      expect(regular).not.toContain("<g:sale_price>");
+      const roundedEqual = feedItemById(body, "prod_rounded_equal");
+      expect(roundedEqual).toContain("<g:price>1.00 BDT</g:price>");
+      expect(roundedEqual).not.toContain("<g:sale_price>");
+      expectFeedPriceInvariant(body);
+    }
+    expect(metaBody).toContain("<g:availability>in stock</g:availability>");
+    expect(googleBody).toContain("<g:availability>in_stock</g:availability>");
   });
 
   it("flattens rich-text product descriptions into safe catalog text", async () => {
