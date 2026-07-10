@@ -245,7 +245,7 @@ export function createStorefrontCanaryApp(dependencies: StorefrontCanaryAppDepen
         const receipt = await dispatchComputerResult(
           instanceId,
           admission.continuation,
-          admission.handoff.issuedAt,
+          deliveryLease.generation,
         );
         const confirmed = await transitionComputerHandoff(
           c.env.API,

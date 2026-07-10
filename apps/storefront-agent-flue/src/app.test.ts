@@ -6,6 +6,7 @@ import { createThreadInstanceId } from "./thread-identity";
 const AUTH_TOKEN = "storefront-app-test-auth-token-at-least-32-bytes";
 const THREAD_KEY = "storefront-app-test-thread-key-at-least-32-bytes";
 const COMPUTER_KEY = "storefront-app-test-computer-key-at-least-32-bytes";
+const ADMISSION_GENERATION = 1_800_000_000_123;
 const IDENTITY = { tenantId: "store_a", principalId: "buyer_1", threadId: "thread_1" };
 
 describe("storefront Flue canary app", () => {
@@ -136,7 +137,7 @@ describe("storefront Flue canary app", () => {
       beginAgentAdmission: async () => ({
         admissionId: "a".repeat(22),
         admissionClaimToken: "l".repeat(43),
-        generation: Date.now(),
+        generation: ADMISSION_GENERATION,
       }),
       finishAgentAdmission: async () => true,
       consumeComputerHandoff: async ({ handoff, state }) => ({
@@ -189,7 +190,7 @@ describe("storefront Flue canary app", () => {
           surface: "storefront",
           requestId: command.requestId,
         }),
-        generation: expect.any(Number),
+        generation: ADMISSION_GENERATION,
       }),
     ]);
 
