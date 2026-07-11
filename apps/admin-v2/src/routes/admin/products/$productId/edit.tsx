@@ -1,6 +1,6 @@
-import { lazy, Suspense } from "react";
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { lazy, Suspense, useCallback, useState } from "react";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { productQueryOptions } from "~/lib/api-query-options/products";
@@ -11,6 +11,7 @@ import {
   DEFAULT_PRODUCT_OPTION_LABELS,
   DEFAULT_PRODUCT_OPTION_SCHEMA,
   DEFAULT_PRODUCT_CONDITION,
+  type ProductFormValues,
   type Category,
 } from "~/components/admin/product-form/types";
 import type {
@@ -20,6 +21,9 @@ import type {
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
+import type { ProductRevisionConflict } from "~/lib/admin-api-error";
+import { getServerFnError } from "~/lib/api-helpers";
+import { ProductRevisionConflictDialog } from "~/components/admin/product-form/ProductRevisionConflictDialog";
 
 const VariantManager = lazy(() =>
   import("~/components/admin/product-form/variants/VariantManager").then((module) => ({
@@ -27,19 +31,48 @@ const VariantManager = lazy(() =>
   })),
 );
 
+function formatEditorVariants(product: ProductDetail): LocalProductVariant[] {
+  return (product.variants || [])
+    .filter((variant: ProductVariant) => !variant.deletedAt)
+    .map((variant: ProductVariant) => ({
+      id: variant.id,
+      size: variant.size,
+      color: variant.color,
+      weight: variant.weight,
+      sku: variant.sku || "",
+      price: variant.price ?? 0,
+      stock: variant.stock,
+      reservedStock: variant.reservedStock,
+      isDefault: variant.isDefault,
+      trackInventory: variant.trackInventory,
+      barcode: variant.barcode || null,
+      barcodeType: (variant.barcodeType || null) as LocalProductVariant["barcodeType"],
+      discountType: (variant.discountType || "percentage") as
+        | "percentage"
+        | "flat",
+      discountPercentage: variant.discountPercentage || 0,
+      discountAmount: variant.discountAmount || 0,
+      createdAt: new Date(variant.createdAt),
+      updatedAt: new Date(variant.updatedAt),
+      deletedAt: variant.deletedAt ? new Date(variant.deletedAt) : null,
+    }));
+}
+
 export const Route = createFileRoute("/admin/products/$productId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
     const [productResult] = await Promise.all([
       queryClient
-        .ensureQueryData({
+        .fetchQuery({
           ...productQueryOptions(params.productId),
-          staleTime: Infinity,
+          staleTime: 0,
         })
         .catch(nullForAdminApiNotFound),
       queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
       queryClient.ensureQueryData(seoSettingsQueryOptions()).catch(() => null),
     ]);
-    if (!productResult) throw redirect({ to: "/admin/products" });
+    if (!productResult || (productResult as ProductDetail).deletedAt) {
+      throw redirect({ to: "/admin/products" });
+    }
   },
   head: () => ({
     meta: [{ title: `Edit Product | Scalius Admin` }],
@@ -57,52 +90,154 @@ function EditProductPage() {
   const product = productResult as ProductDetail;
   const allCategories = categoryData.categories as Category[];
 
+  return (
+    <ProductEditor
+      key={productId}
+      productId={productId}
+      initialProduct={product}
+      categories={allCategories}
+      isHydrated={isHydrated}
+    />
+  );
+}
+
+function ProductEditor({
+  productId,
+  initialProduct,
+  categories,
+  isHydrated,
+}: {
+  productId: string;
+  initialProduct: ProductDetail;
+  categories: Category[];
+  isHydrated: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [editorSnapshot, setEditorSnapshot] = useState(initialProduct);
+  const [editorVariants, setEditorVariants] = useState<LocalProductVariant[]>(
+    () => formatEditorVariants(initialProduct),
+  );
+  const [currentAggregateRevision, setCurrentAggregateRevision] = useState(
+    initialProduct.aggregateRevision,
+  );
+  const [formGeneration, setFormGeneration] = useState(0);
+  const [revisionConflict, setRevisionConflict] =
+    useState<ProductRevisionConflict | null>(null);
+  const [isConflictOpen, setIsConflictOpen] = useState(false);
+  const [isReloadingLatest, setIsReloadingLatest] = useState(false);
+  const [reloadLatestError, setReloadLatestError] = useState<string | null>(null);
+
+  const handleAggregateRevisionChange = useCallback((revision: number) => {
+    setCurrentAggregateRevision((current) => Math.max(current, revision));
+  }, []);
+
+  const handleRevisionConflict = useCallback(
+    (conflict: ProductRevisionConflict) => {
+      setRevisionConflict(conflict);
+      setReloadLatestError(null);
+      setIsConflictOpen(true);
+    },
+    [],
+  );
+
+  const reloadLatest = useCallback(async () => {
+    setIsReloadingLatest(true);
+    setReloadLatestError(null);
+    try {
+      const latest = (await queryClient.fetchQuery({
+        ...productQueryOptions(productId),
+        staleTime: 0,
+      })) as ProductDetail;
+      if (latest.deletedAt) {
+        void navigate({ to: "/admin/products" });
+        return;
+      }
+      setEditorSnapshot(latest);
+      setEditorVariants(formatEditorVariants(latest));
+      setCurrentAggregateRevision(latest.aggregateRevision);
+      setFormGeneration((generation) => generation + 1);
+      setRevisionConflict(null);
+      setIsConflictOpen(false);
+      requestAnimationFrame(() => {
+        document.getElementById("product-form-heading")?.focus();
+      });
+    } catch (error) {
+      setReloadLatestError(
+        getServerFnError(
+          error,
+          "The latest product could not be loaded. Your draft is still here.",
+        ),
+      );
+    } finally {
+      setIsReloadingLatest(false);
+    }
+  }, [navigate, productId, queryClient]);
+
+  const handleProductSaved = useCallback(
+    (values: ProductFormValues, aggregateRevision: number) => {
+      setEditorSnapshot((current) => ({
+        ...current,
+        name: values.name,
+        slug: values.slug,
+        variantOption1Label: values.variantOption1Label,
+        variantOption2Label: values.variantOption2Label,
+        variantOption1Schema: values.variantOption1Schema,
+        variantOption2Schema: values.variantOption2Schema,
+        aggregateRevision,
+      }));
+      setCurrentAggregateRevision(aggregateRevision);
+    },
+    [],
+  );
+
   const defaultValues = {
-    id: product.id,
-    name: product.name,
-    description: product.description,
-    price: product.price,
-    categoryId: product.categoryId,
-    slug: product.slug,
-    metaTitle: product.metaTitle,
-    metaDescription: product.metaDescription,
-    canonicalPath: product.canonicalPath,
-    noIndex: product.noIndex,
-    excludeFromSitemap: product.excludeFromSitemap,
-    excludeFromProductFeed: product.excludeFromProductFeed,
-    productCondition: product.productCondition ?? DEFAULT_PRODUCT_CONDITION,
+    id: editorSnapshot.id,
+    name: editorSnapshot.name,
+    description: editorSnapshot.description,
+    price: editorSnapshot.price,
+    categoryId: editorSnapshot.categoryId,
+    slug: editorSnapshot.slug,
+    metaTitle: editorSnapshot.metaTitle,
+    metaDescription: editorSnapshot.metaDescription,
+    canonicalPath: editorSnapshot.canonicalPath,
+    noIndex: editorSnapshot.noIndex,
+    excludeFromSitemap: editorSnapshot.excludeFromSitemap,
+    excludeFromProductFeed: editorSnapshot.excludeFromProductFeed,
+    productCondition:
+      editorSnapshot.productCondition ?? DEFAULT_PRODUCT_CONDITION,
     variantOption1Label:
-      product.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
+      editorSnapshot.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
     variantOption2Label:
-      product.variantOption2Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option2,
+      editorSnapshot.variantOption2Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option2,
     variantOption1Schema:
-      product.variantOption1Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
+      editorSnapshot.variantOption1Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
     variantOption2Schema:
-      product.variantOption2Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
-    variantImagesEnabled: product.variantImagesEnabled,
-    variantImageAxis: product.variantImageAxis,
-    variantImageMappings: product.variantImageMappings.map((mapping) => ({
+      editorSnapshot.variantOption2Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+    variantImagesEnabled: editorSnapshot.variantImagesEnabled,
+    variantImageAxis: editorSnapshot.variantImageAxis,
+    variantImageMappings: editorSnapshot.variantImageMappings.map((mapping) => ({
       imageId: mapping.imageId,
       variantId: mapping.variantId,
       optionAxis: mapping.optionAxis,
       optionValue: mapping.optionValue,
       sortOrder: mapping.sortOrder,
     })),
-    isActive: product.isActive,
-    discountType: (product.discountType || "percentage") as "percentage" | "flat",
-    discountPercentage: product.discountPercentage || 0,
-    discountAmount: product.discountAmount || 0,
-    freeDelivery: product.freeDelivery,
+    isActive: editorSnapshot.isActive,
+    discountType: (editorSnapshot.discountType || "percentage") as "percentage" | "flat",
+    discountPercentage: editorSnapshot.discountPercentage || 0,
+    discountAmount: editorSnapshot.discountAmount || 0,
+    freeDelivery: editorSnapshot.freeDelivery,
     slugEdited: true,
-    images: (product.images || []).map((img: ProductImageDetail) => ({
+    images: (editorSnapshot.images || []).map((img: ProductImageDetail) => ({
       id: img.id,
       url: img.url,
       filename: img.alt ?? img.altText ?? img.url.split("/").pop() ?? "",
       size: 0,
       createdAt: new Date(img.createdAt),
     })),
-    attributes: product.attributes || [],
-    additionalInfo: (product.additionalInfo || []).map((item) => ({
+    attributes: editorSnapshot.attributes || [],
+    additionalInfo: (editorSnapshot.additionalInfo || []).map((item) => ({
       id: item.id,
       title: item.title,
       content: item.content,
@@ -110,28 +245,6 @@ function EditProductPage() {
     })),
   };
 
-  const formattedVariants: LocalProductVariant[] = (product.variants || [])
-    .filter((v: ProductVariant) => !v.deletedAt)
-    .map((v: ProductVariant) => ({
-      id: v.id,
-      size: v.size,
-      color: v.color,
-      weight: v.weight,
-      sku: v.sku || "",
-      price: v.price ?? 0,
-      stock: v.stock,
-      reservedStock: v.reservedStock,
-      isDefault: v.isDefault,
-      trackInventory: v.trackInventory,
-      barcode: v.barcode || null,
-      barcodeType: (v.barcodeType || null) as LocalProductVariant["barcodeType"],
-      discountType: (v.discountType || "percentage") as "percentage" | "flat",
-      discountPercentage: v.discountPercentage || 0,
-      discountAmount: v.discountAmount || 0,
-      createdAt: new Date(v.createdAt),
-      updatedAt: new Date(v.updatedAt),
-      deletedAt: v.deletedAt ? new Date(v.deletedAt) : null,
-    }));
   const variantOptionLabels: VariantOptionLabels = {
     option1: defaultValues.variantOption1Label,
     option2: defaultValues.variantOption2Label,
@@ -140,26 +253,53 @@ function EditProductPage() {
   return (
     <div className="container max-w-7xl space-y-6 py-4 pb-8">
       <ProductForm
-        categories={allCategories}
+        key={formGeneration}
+        categories={categories}
         defaultValues={defaultValues}
         isEdit={true}
+        aggregateRevision={currentAggregateRevision}
+        editorVariants={editorVariants}
+        revisionConflict={revisionConflict}
+        onAggregateRevisionChange={handleAggregateRevisionChange}
+        onRevisionConflict={handleRevisionConflict}
+        onOpenRevisionConflict={() => setIsConflictOpen(true)}
+        onProductSaved={handleProductSaved}
       />
 
       <div className="mt-6" id="variant-section">
         {isHydrated ? (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <VariantManager
-              productId={product.id}
-              productSlug={product.slug}
-              productName={product.name}
-              variants={formattedVariants}
+              key={`option-editor-${formGeneration}`}
+              productId={editorSnapshot.id}
+              productSlug={editorSnapshot.slug}
+              productName={editorSnapshot.name}
+              variants={editorVariants}
+              onVariantsChange={setEditorVariants}
               optionLabels={variantOptionLabels}
+              aggregateRevision={currentAggregateRevision}
+              revisionConflict={revisionConflict}
+              onAggregateRevisionChange={handleAggregateRevisionChange}
+              onRevisionConflict={handleRevisionConflict}
+              onOpenRevisionConflict={() => setIsConflictOpen(true)}
             />
           </Suspense>
         ) : (
           <LoadingFallback height="h-48" />
         )}
       </div>
+      <ProductRevisionConflictDialog
+        open={isConflictOpen}
+        conflict={revisionConflict}
+        isReloading={isReloadingLatest}
+        reloadError={reloadLatestError}
+        onOpenChange={setIsConflictOpen}
+        onKeepDraft={() => setIsConflictOpen(false)}
+        onReloadLatest={reloadLatest}
+        onProductUnavailable={() => {
+          void navigate({ to: "/admin/products" });
+        }}
+      />
     </div>
   );
 }

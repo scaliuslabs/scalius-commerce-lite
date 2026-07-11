@@ -9,6 +9,34 @@ import { nanoid } from "nanoid";
 import type { CreateCategoryInput, UpdateCategoryInput } from "./categories.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
+import type { BatchItem } from "drizzle-orm/batch";
+
+type SQLiteBatchItem = BatchItem<"sqlite">;
+
+function categoryProductRevisionBump(
+    db: Database,
+    categoryIds: string[],
+): SQLiteBatchItem {
+    return db.update(products)
+        .set({
+            aggregateRevision: sql`${products.aggregateRevision} + 1`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(inArray(products.categoryId, categoryIds));
+}
+
+function categoryDeleteUsageGuard(
+    db: Database,
+    categoryIds: string[],
+): SQLiteBatchItem {
+    return db.run(sql`
+        SELECT CASE WHEN NOT EXISTS (
+            SELECT 1 FROM ${products}
+            WHERE ${inArray(products.categoryId, categoryIds)}
+              AND ${products.deletedAt} IS NULL
+        ) THEN 1 ELSE json_extract('CATEGORY_DELETE_IN_USE', '$') END
+    `);
+}
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -330,7 +358,10 @@ export async function bulkDeleteCategories(
             .where(isNull(collections.deletedAt))
             .all();
 
-        const statements = [];
+        const statements: SQLiteBatchItem[] = [
+            categoryDeleteUsageGuard(db, uniqueCategoryIds),
+            categoryProductRevisionBump(db, uniqueCategoryIds),
+        ];
         for (const collection of affectedCollections) {
             try {
                 const config = JSON.parse(collection.config);
@@ -359,7 +390,23 @@ export async function bulkDeleteCategories(
         statements.push(
             db.delete(categories).where(inArray(categories.id, uniqueCategoryIds)),
         );
-        await safeBatch(db, statements as never);
+        try {
+            await safeBatch(db, statements as never);
+        } catch (error) {
+            if (
+                error instanceof Error &&
+                /CATEGORY_DELETE_IN_USE|malformed json/i.test(error.message)
+            ) {
+                throw new ValidationError(
+                    "Cannot delete categories while active products are still assigned to them.",
+                    {
+                        suggestion:
+                            "Move the products to another category or permanently delete them first.",
+                    },
+                );
+            }
+            throw error;
+        }
     } else {
         await db
             .update(categories)

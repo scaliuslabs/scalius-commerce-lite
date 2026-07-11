@@ -40,7 +40,7 @@ describe("admin product mutation OpenAPI responses", () => {
         const spec = buildAdminProductsSpec();
 
         expectResponses(spec, "/api/v1/admin/products/bulk-delete", "post", [
-            "204",
+            "200",
             "400",
             "401",
             "403",
@@ -53,14 +53,6 @@ describe("admin product mutation OpenAPI responses", () => {
             "409",
         ]);
         expectResponses(spec, "/api/v1/admin/products/{id}/variants/{variantId}", "put", [
-            "200",
-            "400",
-            "401",
-            "403",
-            "404",
-            "409",
-        ]);
-        expectResponses(spec, "/api/v1/admin/products/{id}/variants/bulk-update", "post", [
             "200",
             "400",
             "401",

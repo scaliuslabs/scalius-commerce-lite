@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createProductSchema } from "./products.validation";
+import { createProductSchema, updateProductSchema } from "./products.validation";
+import {
+    bulkCreateVariantsSchema,
+    bulkDeleteVariantsSchema,
+    createVariantSchema,
+    updateSortOrderSchema,
+    updateVariantSchema,
+    variantEditPlanSchema,
+} from "./products.types";
 import {
     DEFAULT_PRODUCT_OPTION_LABELS,
     DEFAULT_PRODUCT_OPTION_SCHEMA,
@@ -68,5 +76,21 @@ describe("product validation", () => {
                 productCondition: "open-box",
             }).success,
         ).toBe(false);
+    });
+
+    it("requires an authoritative aggregate revision on every editor mutation", () => {
+        expect(updateProductSchema.safeParse({ ...productInput, id: "prod_1" }).success).toBe(false);
+        expect(createVariantSchema.safeParse({}).success).toBe(false);
+        expect(updateVariantSchema.safeParse({}).success).toBe(false);
+        expect(bulkCreateVariantsSchema.safeParse({ variants: [] }).success).toBe(false);
+        expect(bulkDeleteVariantsSchema.safeParse({ variantIds: ["var_1"] }).success).toBe(false);
+        expect(variantEditPlanSchema.safeParse({ creates: [], updates: [{ id: "var_1", price: 1 }] }).success).toBe(false);
+        expect(updateSortOrderSchema.safeParse({ colors: [], sizes: [] }).success).toBe(false);
+
+        expect(updateProductSchema.safeParse({
+            ...productInput,
+            id: "prod_1",
+            expectedAggregateRevision: 3,
+        }).success).toBe(true);
     });
 });

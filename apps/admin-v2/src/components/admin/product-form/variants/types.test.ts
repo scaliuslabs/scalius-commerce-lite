@@ -33,4 +33,25 @@ describe("variant form schemas", () => {
       });
     }
   });
+
+  it("rejects incomplete and invalid barcode identities before save", () => {
+    const missingType = variantFormSchema.safeParse({
+      ...baseValues,
+      barcode: "5901234123457",
+    });
+    expect(missingType.success).toBe(false);
+
+    const badChecksum = variantFormSchema.safeParse({
+      ...baseValues,
+      barcode: "5901234123458",
+      barcodeType: "ean13",
+    });
+    expect(badChecksum.success).toBe(false);
+
+    expect(variantFormSchema.safeParse({
+      ...baseValues,
+      barcode: " 5901234123457 ",
+      barcodeType: "ean13",
+    }).success).toBe(true);
+  });
 });

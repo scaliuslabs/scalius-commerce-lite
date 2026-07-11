@@ -128,6 +128,7 @@ export const createProductSchema = productBaseSchema;
 /** Schema for updating an existing product (PUT /api/products/[id]) */
 export const updateProductSchema = productBaseSchema.extend({
     id: z.string(),
+    expectedAggregateRevision: z.number().int().min(1),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;

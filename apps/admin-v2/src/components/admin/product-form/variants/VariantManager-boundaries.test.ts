@@ -78,6 +78,54 @@ describe("VariantManager product mode boundaries", () => {
     expect(operationsSource).toContain("updated: result.updated.map(toProductVariant)");
   });
 
+  it("shares the aggregate revision across option mutations and explicit reload", () => {
+    const managerSource = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
+    const operationsSource = readFileSync(
+      new URL("./hooks/useVariantOperations.ts", import.meta.url),
+      "utf8",
+    );
+    const sortSource = readFileSync(VARIANT_SORT_MODAL_SOURCE, "utf8");
+
+    expect(managerSource).toContain("aggregateRevision: number");
+    expect(managerSource).toContain("onAggregateRevisionChange");
+    expect(operationsSource).toContain(
+      "expectedAggregateRevision: aggregateRevision",
+    );
+    expect(operationsSource).toContain(
+      "onAggregateRevisionChange(result.aggregateRevision)",
+    );
+    expect(operationsSource).toContain("reportRevisionConflict(error)");
+    expect(operationsSource).toContain(
+      "if (reportRevisionConflict(error)) throw error",
+    );
+    expect(sortSource).toContain(
+      "expectedAggregateRevision: aggregateRevision",
+    );
+    expect(sortSource).toContain("onRevisionConflict(conflict)");
+  });
+
+  it("duplicates an option into an unsaved identity-safe draft", () => {
+    const managerSource = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
+    const operationsSource = readFileSync(
+      new URL("./hooks/useVariantOperations.ts", import.meta.url),
+      "utf8",
+    );
+    const duplicateDraftSource = readFileSync(
+      new URL("./utils/duplicateVariantDraft.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(managerSource).toContain("const handleDuplicate = (id: string)");
+    expect(managerSource).toContain("buildDuplicateVariantDraft(source)");
+    expect(managerSource).toContain("setNewVariantDefaults");
+    expect(managerSource).toContain("setIsAdding(true)");
+    expect(duplicateDraftSource).toContain('sku: ""');
+    expect(duplicateDraftSource).toContain("barcode: null");
+    expect(duplicateDraftSource).toContain("stock: 0");
+    expect(operationsSource).not.toContain("useDuplicateProductVariant");
+    expect(operationsSource).not.toContain("duplicateMutation");
+  });
+
   it("routes one protected no-option SKU to the simple inventory panel", () => {
     const source = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
 
@@ -241,7 +289,7 @@ describe("VariantManager product mode boundaries", () => {
     expect(source).toContain('sku: ""');
     expect(source).toContain("price: variant.price");
     expect(source).toContain("trackInventory: true");
-    expect(source).toContain("addVariantDefaults={isFirstOptionSetup ? addVariantDefaults : undefined}");
+    expect(source).toContain("(isFirstOptionSetup ? addVariantDefaults : undefined)");
     expect(rowSource).toContain("defaultValues={addVariantDefaults}");
   });
 

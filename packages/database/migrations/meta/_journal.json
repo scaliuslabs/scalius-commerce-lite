@@ -36,6 +36,13 @@
       "when": 1783806916938,
       "tag": "0004_validate_inventory_ledger_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1783809522476,
+      "tag": "0005_deep_morg",
+      "breakpoints": true
     }
   ]
 }

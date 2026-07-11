@@ -149,7 +149,8 @@ function ProductsPage() {
   const bulkDeleteMut = useBulkDeleteProducts();
 
   // ── Dialogs ───────────────────────────────────────────────────
-  const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [productToDelete, setProductToDelete] =
+    useState<ProductListItem | null>(null);
   const [isConfirmBulkDeleteOpen, setIsConfirmBulkDeleteOpen] = useState(false);
 
   // ── Navigation helpers ────────────────────────────────────────
@@ -209,22 +210,27 @@ function ProductsPage() {
   );
 
   const handleDelete = useCallback(
-    (id: string) => {
-      if (productActions.canDelete) setProductToDelete(id);
+    (product: ProductListItem) => {
+      if (productActions.canDelete) setProductToDelete(product);
     },
     [productActions.canDelete],
   );
 
   const handleRestore = useCallback(
-    (id: string) => {
-      if (productActions.canRestore) restoreMut.mutate(id);
+    (product: ProductListItem) => {
+      if (productActions.canRestore) {
+        restoreMut.mutate({
+          id: product.id,
+          expectedAggregateRevision: product.aggregateRevision,
+        });
+      }
     },
     [restoreMut, productActions.canRestore],
   );
 
   const handlePermanentDelete = useCallback(
-    (id: string) => {
-      if (productActions.canPermanentDelete) setProductToDelete(id);
+    (product: ProductListItem) => {
+      if (productActions.canPermanentDelete) setProductToDelete(product);
     },
     [productActions.canPermanentDelete],
   );
@@ -288,14 +294,17 @@ function ProductsPage() {
 
   const handleConfirmSingleDelete = useCallback(() => {
     if (!productToDelete) return;
-    const id = productToDelete;
+    const claim = {
+      id: productToDelete.id,
+      expectedAggregateRevision: productToDelete.aggregateRevision,
+    };
     setProductToDelete(null);
     if (showTrashed) {
       if (!productActions.canPermanentDelete) return;
-      permanentDeleteMut.mutate(id);
+      permanentDeleteMut.mutate(claim);
     } else {
       if (!productActions.canDelete) return;
-      deleteMut.mutate(id);
+      deleteMut.mutate(claim);
     }
   }, [
     productToDelete,
@@ -315,13 +324,23 @@ function ProductsPage() {
   const confirmBulkDelete = useCallback(() => {
     if (!productActions.canBulkDelete || selectedIds.length === 0) return;
     setIsConfirmBulkDeleteOpen(false);
+    const selectedProducts = table
+      .getSelectedRowModel()
+      .rows.map((row) => row.original);
     bulkDeleteMut.mutate(
-      { productIds: selectedIds, permanent: showTrashed },
+      {
+        products: selectedProducts.map((product) => ({
+          id: product.id,
+          expectedAggregateRevision: product.aggregateRevision,
+        })),
+        permanent: showTrashed,
+      },
       { onSuccess: () => clearSelection() },
     );
   }, [
     productActions.canBulkDelete,
     selectedIds,
+    table,
     showTrashed,
     bulkDeleteMut,
     clearSelection,

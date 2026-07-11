@@ -13,7 +13,7 @@ import {
 
 interface ProductDeleteDialogProps {
   showTrashed: boolean;
-  productToDelete: string | null;
+  productToDelete: { id: string } | null;
   isBulkDeleteOpen: boolean;
   selectedCount: number;
   isActionLoading: boolean;

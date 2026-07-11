@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { DEFAULT_PRODUCT_OPTION_LABELS } from "@scalius/shared/product-options";
+import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
 
 // --- Core Types ---
 
@@ -78,6 +79,14 @@ export const variantFormSchema = z.object({
     .min(0, "Discount cannot be negative.")
     .nullable(),
 }).superRefine((data, ctx) => {
+  const barcodeError = getBarcodeValidationError(data.barcode, data.barcodeType);
+  if (barcodeError) {
+    ctx.addIssue({
+      code: "custom",
+      message: barcodeError,
+      path: [data.barcode ? "barcode" : "barcodeType"],
+    });
+  }
   if (data.discountType === "percentage" && (data.discountPercentage ?? 0) > 100) {
     ctx.addIssue({
       code: "custom",

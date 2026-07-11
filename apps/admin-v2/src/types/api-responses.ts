@@ -91,6 +91,7 @@ export interface Product {
   variantOption2Schema: "size" | "color" | "material" | "pattern" | "none";
   variantImagesEnabled: boolean;
   variantImageAxis: "option1" | "option2";
+  aggregateRevision: number;
   createdAt: Date | string | number;
   updatedAt: Date | string | number;
   deletedAt: Date | string | number | null;
@@ -203,6 +204,7 @@ export interface ProductDetail extends Product {
 
 export interface ProductListItem {
   id: string;
+  aggregateRevision: number;
   name: string;
   slug: string;
   price: number;

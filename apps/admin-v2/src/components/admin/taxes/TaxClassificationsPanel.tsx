@@ -52,13 +52,17 @@ export function TaxClassificationsPanel({
         id: input.item.id,
         taxClassId: input.taxClassId,
         expectedVersion: input.item.version,
+        expectedAggregateRevision: input.item.aggregateRevision,
       } });
     },
     onSuccess: async () => {
       toast.success("Tax classification updated");
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.taxClassifications(),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.settings.taxClassifications(),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.all }),
+      ]);
     },
     onError: (error) => toast.error(getServerFnError(error, "Classification changed in another tab.")),
     onSettled: () => setSavingId(null),

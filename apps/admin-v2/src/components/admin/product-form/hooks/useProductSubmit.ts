@@ -11,6 +11,10 @@ import { formatFormValuesForSubmission, type VariantImageAxis } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
 import { createProduct, updateProduct } from "~/lib/api-functions/products";
 import { getServerFnError } from "~/lib/api-helpers";
+import {
+  readProductRevisionConflict,
+  type ProductRevisionConflict,
+} from "~/lib/admin-api-error";
 
 interface UseProductSubmitOptions {
   isEdit: boolean;
@@ -19,6 +23,12 @@ interface UseProductSubmitOptions {
   variantImageAxis: VariantImageAxis;
   variantImageMappings: ProductVariantImageMappingFormValue[];
   form: UseFormReturn<ProductFormValues>;
+  aggregateRevision?: number;
+  revisionConflict?: ProductRevisionConflict | null;
+  onAggregateRevisionChange?: (revision: number) => void;
+  onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
+  onOpenRevisionConflict?: () => void;
+  onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
   onSuccess?: () => void;
 }
 
@@ -37,6 +47,12 @@ export function useProductSubmit({
   variantImageAxis,
   variantImageMappings,
   form,
+  aggregateRevision,
+  revisionConflict = null,
+  onAggregateRevisionChange,
+  onRevisionConflict,
+  onOpenRevisionConflict,
+  onProductSaved,
   onSuccess,
 }: UseProductSubmitOptions): UseProductSubmitReturn {
   const navigate = useNavigate();
@@ -55,11 +71,20 @@ export function useProductSubmit({
       if (isEdit) {
         const entityId = productId || values.id;
         if (!entityId) throw new Error("Product ID is required for update");
-        return updateProduct({ data: { ...formattedValues, id: entityId } });
+        if (!aggregateRevision) {
+          throw new Error("Product revision is required for update");
+        }
+        return updateProduct({
+          data: {
+            ...formattedValues,
+            id: entityId,
+            expectedAggregateRevision: aggregateRevision,
+          },
+        });
       }
       return createProduct({ data: formattedValues });
     },
-    onSuccess: (result) => {
+    onSuccess: (result, values) => {
       toast.success("Success", {
         description: isEdit
           ? "Product updated successfully."
@@ -69,6 +94,8 @@ export function useProductSubmit({
       // Reset form dirty state after successful save
       if (isEdit) {
         form.reset(form.getValues());
+        onAggregateRevisionChange?.(result.aggregateRevision);
+        onProductSaved?.(values, result.aggregateRevision);
       }
 
       // Invalidate product queries so lists/details refetch
@@ -93,6 +120,11 @@ export function useProductSubmit({
       }
     },
     onError: (error: unknown) => {
+      const conflict = readProductRevisionConflict(error);
+      if (conflict) {
+        onRevisionConflict?.(conflict);
+        return;
+      }
       const errorMessage = getServerFnError(error, "Failed to save product");
       if (errorMessage.includes("slug already exists")) {
         form.setError("slug", {
@@ -111,6 +143,10 @@ export function useProductSubmit({
   });
 
   const handleSubmit = async (values: ProductFormValues) => {
+    if (revisionConflict) {
+      onOpenRevisionConflict?.();
+      return false;
+    }
     try {
       await mutation.mutateAsync(values);
       return true;

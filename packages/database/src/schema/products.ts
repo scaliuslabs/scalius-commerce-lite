@@ -31,6 +31,7 @@ export const products = sqliteTable(
         variantOption2Schema: text("variant_option_2_schema", { enum: ["size", "color", "material", "pattern", "none"] }).notNull().default("color"),
         variantImagesEnabled: integer("variant_images_enabled", { mode: "boolean" }).notNull().default(false),
         variantImageAxis: text("variant_image_axis", { enum: ["option1", "option2"] }).notNull().default("option2"),
+        aggregateRevision: integer("aggregate_revision").notNull().default(1),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),

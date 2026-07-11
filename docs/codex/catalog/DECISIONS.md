@@ -14,6 +14,10 @@ Last reviewed: 2026-07-12
 8. Use one buyer-catalog price/availability projection across listing, search, category, collection, related, feed diagnostics, UCP, and cards.
 9. Operational failure is not not-found. Preserve typed 404/403/409/503 semantics through API clients, loaders, and UI.
 10. Every admin mutation control is gated by the same capability used by its API route.
+11. Product composition uses mandatory aggregate CAS; operational inventory traffic remains on SKU stock-version/ledger CAS.
+12. Never preserve persisted exact-duplicate or duplicate bulk-writer APIs. Option duplication creates a local draft; mixed option updates use one atomic edit plan.
+13. SKU deletion always soft-retires the identity. Permanent product deletion is trash-only and transactionally guards order, discount, and inventory history.
+14. An editor owns one stable product/SKU snapshot. Background query refresh may update caches but only explicit Reload latest can replace a merchant draft.
 
 ## Implementation order
 
@@ -48,7 +52,15 @@ Last reviewed: 2026-07-12
 - Catalog collection membership/rules separated from merchandising modules.
 - Currency-aware catalog money representation and optional audited conversion workflow.
 
-### Batch 5 — buyer projection and admin workflow polish
+### Batch 5 — product aggregate safety and editor recovery
+
+- Mandatory product aggregate CAS across product, option, sort, tax classification, and relevant cascade writes.
+- Typed draft-preserving conflict UX and explicit reload/terminal-deletion recovery.
+- Normalized barcode pairing/checksum/duplicate validation and bounded duplicate-safe lookup.
+- Remove persisted duplicate and redundant bulk-update endpoints; standardize on atomic edit plan.
+- Always-soft SKU retirement and in-transaction lifecycle/reservation/order/history guards.
+
+### Batch 6 — buyer projection and admin workflow polish
 
 - Shared SKU-aware pricing/availability projection for every catalog surface.
 - Facet counts/multi-select and dynamic price bounds.

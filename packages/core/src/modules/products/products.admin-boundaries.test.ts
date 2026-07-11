@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "@scalius/core/errors";
-import { bulkUpdateVariants, restoreProduct, updateProduct } from "./products.admin";
+import { restoreProduct, updateProduct } from "./products.admin";
 
 const productUpdate = {
     id: "prod_1",
@@ -28,6 +28,7 @@ const productUpdate = {
     images: [],
     attributes: [],
     additionalInfo: [],
+    expectedAggregateRevision: 1,
 };
 
 describe("admin product SKU invariant boundaries", () => {
@@ -35,6 +36,7 @@ describe("admin product SKU invariant boundaries", () => {
         let selectCount = 0;
         let batchCalled = false;
         const db = {
+            run() { return { kind: "guard" }; },
             select() {
                 selectCount++;
                 return {
@@ -70,7 +72,11 @@ describe("admin product SKU invariant boundaries", () => {
                     set() {
                         return {
                             where() {
-                                return {};
+                                return {
+                                    returning() {
+                                        return { statement: "update" };
+                                    },
+                                };
                             },
                         };
                     },
@@ -83,9 +89,11 @@ describe("admin product SKU invariant boundaries", () => {
                     },
                 };
             },
-            batch: async () => {
+            batch: async (statements: unknown[]) => {
                 batchCalled = true;
-                return [];
+                return statements.map((_, index) =>
+                    index === 1 ? [{ aggregateRevision: 2 }] : []
+                );
             },
         };
 
@@ -99,6 +107,7 @@ describe("admin product SKU invariant boundaries", () => {
         let selectCount = 0;
         let batchCalled = false;
         const db = {
+            run() { return { kind: "guard" }; },
             select() {
                 selectCount++;
                 return {
@@ -140,7 +149,11 @@ describe("admin product SKU invariant boundaries", () => {
                     set() {
                         return {
                             where() {
-                                return {};
+                                return {
+                                    returning() {
+                                        return { statement: "update" };
+                                    },
+                                };
                             },
                         };
                     },
@@ -165,141 +178,12 @@ describe("admin product SKU invariant boundaries", () => {
         expect(batchCalled).toBe(false);
     });
 
-    it("fails bulk variant updates that would mix option axes", async () => {
-        let selectCount = 0;
-        let batchCalled = false;
-        const db = {
-            select() {
-                selectCount++;
-                return {
-                    from() {
-                        return {
-                            where() {
-                                if (selectCount === 1) {
-                                    return Promise.resolve([
-                                        {
-                                            id: "var_color",
-                                            isDefault: false,
-                                            size: null,
-                                            color: "Blue",
-                                            stock: 5,
-                                            stockVersion: 1,
-                                        },
-                                    ]);
-                                }
-                                return Promise.resolve([
-                                    {
-                                        id: "var_size",
-                                        size: "M",
-                                        color: null,
-                                    },
-                                ]);
-                            },
-                        };
-                    },
-                };
-            },
-            update() {
-                return {
-                    set() {
-                        return {
-                            where() {
-                                return {
-                                    returning() {
-                                        return { id: "var_color" };
-                                    },
-                                };
-                            },
-                        };
-                    },
-                };
-            },
-            batch: async () => {
-                batchCalled = true;
-                return [];
-            },
-        };
-
-        await expect(
-            bulkUpdateVariants(db as never, "prod_1", [
-                { id: "var_color", size: "L", color: "Blue" },
-            ]),
-        ).rejects.toBeInstanceOf(ValidationError);
-        expect(batchCalled).toBe(false);
-    });
-
-    it("includes no-op requested rows in final bulk option-axis validation", async () => {
-        let selectCount = 0;
-        let batchCalled = false;
-        const db = {
-            select() {
-                selectCount++;
-                return {
-                    from() {
-                        return {
-                            where() {
-                                if (selectCount === 1) {
-                                    return Promise.resolve([
-                                        {
-                                            id: "var_a",
-                                            isDefault: false,
-                                            size: "M",
-                                            color: null,
-                                            stock: 5,
-                                            stockVersion: 1,
-                                        },
-                                        {
-                                            id: "var_b",
-                                            isDefault: false,
-                                            size: "L",
-                                            color: null,
-                                            stock: 5,
-                                            stockVersion: 1,
-                                        },
-                                    ]);
-                                }
-                                return Promise.resolve([]);
-                            },
-                        };
-                    },
-                };
-            },
-            update() {
-                return {
-                    set() {
-                        return {
-                            where() {
-                                return {
-                                    returning() {
-                                        return { id: "var_a" };
-                                    },
-                                };
-                            },
-                        };
-                    },
-                };
-            },
-            batch: async () => {
-                batchCalled = true;
-                return [];
-            },
-        };
-
-        await expect(
-            bulkUpdateVariants(db as never, "prod_1", [
-                { id: "var_a", size: null, color: "Blue" },
-                { id: "var_b" },
-            ]),
-        ).rejects.toBeInstanceOf(ValidationError);
-        expect(selectCount).toBe(1);
-        expect(batchCalled).toBe(false);
-    });
-
     it("repairs legacy default SKU option labels during product updates", async () => {
         let selectCount = 0;
         let batchCalled = false;
         const updateSets: Array<Record<string, unknown>> = [];
         const db = {
+            run() { return { kind: "guard" }; },
             select() {
                 selectCount++;
                 return {
@@ -342,7 +226,11 @@ describe("admin product SKU invariant boundaries", () => {
                         updateSets.push(values);
                         return {
                             where() {
-                                return {};
+                                return {
+                                    returning() {
+                                        return { statement: "update" };
+                                    },
+                                };
                             },
                         };
                     },
@@ -355,9 +243,11 @@ describe("admin product SKU invariant boundaries", () => {
                     },
                 };
             },
-            batch: async () => {
+            batch: async (statements: unknown[]) => {
                 batchCalled = true;
-                return [];
+                return statements.map((_, index) =>
+                    index === 1 ? [{ aggregateRevision: 2 }] : []
+                );
             },
         };
 
@@ -376,6 +266,7 @@ describe("admin product SKU invariant boundaries", () => {
         let defaultSkuInserted = false;
 
         const db = {
+            run() { return { kind: "guard" }; },
             select() {
                 selectCount++;
                 return {
@@ -403,7 +294,12 @@ describe("admin product SKU invariant boundaries", () => {
                     set() {
                         return {
                             where() {
-                                return { statement: "update" };
+                                return {
+                                    statement: "update",
+                                    returning() {
+                                        return { statement: "update" };
+                                    },
+                                };
                             },
                         };
                     },
@@ -419,13 +315,15 @@ describe("admin product SKU invariant boundaries", () => {
             },
             batch: async (statements: unknown[]) => {
                 batchStatements.push(...statements);
-                return [];
+                return statements.map((_, index) =>
+                    index === 1 ? [{ aggregateRevision: 2 }] : []
+                );
             },
         };
 
-        await restoreProduct(db as never, "prod_1");
+        await restoreProduct(db as never, "prod_1", 1);
 
         expect(defaultSkuInserted).toBe(true);
-        expect(batchStatements).toHaveLength(2);
+        expect(batchStatements).toHaveLength(3);
     });
 });

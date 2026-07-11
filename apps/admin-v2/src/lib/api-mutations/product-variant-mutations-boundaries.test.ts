@@ -11,10 +11,8 @@ const VARIANT_MUTATION_HOOKS = [
   "useUpdateProductVariant",
   "useDeleteProductVariant",
   "useBulkCreateProductVariants",
-  "useBulkUpdateProductVariants",
   "useApplyProductVariantEditPlan",
   "useBulkDeleteProductVariants",
-  "useDuplicateProductVariant",
 ];
 
 describe("product variant mutation cache boundaries", () => {
@@ -33,5 +31,6 @@ describe("product variant mutation cache boundaries", () => {
         ),
       );
     }
+    expect(source).not.toContain("useDuplicateProductVariant");
   });
 });

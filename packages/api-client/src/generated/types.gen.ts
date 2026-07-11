@@ -27646,6 +27646,27 @@ export type GetApiV1AdminProductsLookupBarcodeErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type GetApiV1AdminProductsLookupBarcodeError = GetApiV1AdminProductsLookupBarcodeErrors[keyof GetApiV1AdminProductsLookupBarcodeErrors];
@@ -27809,6 +27830,7 @@ export type GetApiV1AdminProductsResponses = {
                 discountType: string;
                 discountAmount: number;
                 freeDelivery: boolean;
+                aggregateRevision: number;
                 createdAt: string | number;
                 updatedAt: string | number;
                 category: {
@@ -27965,6 +27987,7 @@ export type PostApiV1AdminProductsResponses = {
         success: true;
         data: {
             id: string;
+            aggregateRevision: number;
         };
     };
 };
@@ -28077,7 +28100,10 @@ export type GetApiV1AdminProductsByIdsResponse = GetApiV1AdminProductsByIdsRespo
 
 export type PostApiV1AdminProductsBulkDeleteData = {
     body?: {
-        productIds: Array<string>;
+        products: Array<{
+            id: string;
+            expectedAggregateRevision: number;
+        }>;
         permanent?: boolean;
     };
     path?: never;
@@ -28131,9 +28157,19 @@ export type PostApiV1AdminProductsBulkDeleteErrors = {
         };
     };
     /**
-     * Conflict
+     * Product revision or domain conflict
      */
     409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
         success: false;
         error: {
             code: string;
@@ -28169,9 +28205,18 @@ export type PostApiV1AdminProductsBulkDeleteError = PostApiV1AdminProductsBulkDe
 
 export type PostApiV1AdminProductsBulkDeleteResponses = {
     /**
-     * No content
+     * Products deleted
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                aggregateRevision: number;
+            }>;
+            deletedIds: Array<string>;
+        };
+    };
 };
 
 export type PostApiV1AdminProductsBulkDeleteResponse = PostApiV1AdminProductsBulkDeleteResponses[keyof PostApiV1AdminProductsBulkDeleteResponses];
@@ -28181,7 +28226,9 @@ export type DeleteApiV1AdminProductsByIdData = {
     path: {
         id: string;
     };
-    query?: never;
+    query: {
+        expectedAggregateRevision: number;
+    };
     url: '/api/v1/admin/products/{id}';
 };
 
@@ -28231,6 +28278,27 @@ export type DeleteApiV1AdminProductsByIdErrors = {
         };
     };
     /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -28258,9 +28326,14 @@ export type DeleteApiV1AdminProductsByIdError = DeleteApiV1AdminProductsByIdErro
 
 export type DeleteApiV1AdminProductsByIdResponses = {
     /**
-     * No content
+     * Product moved to trash
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            aggregateRevision: number;
+        };
+    };
 };
 
 export type DeleteApiV1AdminProductsByIdResponse = DeleteApiV1AdminProductsByIdResponses[keyof DeleteApiV1AdminProductsByIdResponses];
@@ -28317,6 +28390,7 @@ export type GetApiV1AdminProductsByIdResponses = {
             variantOption2Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
             variantImagesEnabled: boolean;
             variantImageAxis: 'option1' | 'option2';
+            aggregateRevision: number;
             discountPercentage: number | null;
             discountType: 'percentage' | 'flat' | null;
             discountAmount: number | null;
@@ -28444,6 +28518,7 @@ export type PutApiV1AdminProductsByIdData = {
             sortOrder: number;
         }>;
         id: string;
+        expectedAggregateRevision: number;
     };
     path: {
         id: string;
@@ -28498,6 +28573,27 @@ export type PutApiV1AdminProductsByIdErrors = {
         };
     };
     /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -28530,7 +28626,7 @@ export type PutApiV1AdminProductsByIdResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            aggregateRevision: number;
         };
     };
 };
@@ -28542,7 +28638,9 @@ export type PostApiV1AdminProductsByIdRestoreData = {
     path: {
         id: string;
     };
-    query?: never;
+    query: {
+        expectedAggregateRevision: number;
+    };
     url: '/api/v1/admin/products/{id}/restore';
 };
 
@@ -28592,6 +28690,27 @@ export type PostApiV1AdminProductsByIdRestoreErrors = {
         };
     };
     /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -28624,7 +28743,7 @@ export type PostApiV1AdminProductsByIdRestoreResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            aggregateRevision: number;
         };
     };
 };
@@ -28636,7 +28755,9 @@ export type DeleteApiV1AdminProductsByIdPermanentData = {
     path: {
         id: string;
     };
-    query?: never;
+    query: {
+        expectedAggregateRevision: number;
+    };
     url: '/api/v1/admin/products/{id}/permanent';
 };
 
@@ -28686,9 +28807,19 @@ export type DeleteApiV1AdminProductsByIdPermanentErrors = {
         };
     };
     /**
-     * Conflict
+     * Product revision or domain conflict
      */
     409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
         success: false;
         error: {
             code: string;
@@ -28786,6 +28917,27 @@ export type GetApiV1AdminProductsByIdVariantsErrors = {
         };
     };
     /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -28870,6 +29022,7 @@ export type PostApiV1AdminProductsByIdVariantsData = {
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
         discountAmount?: number | null;
+        expectedAggregateRevision: number;
     };
     path: {
         id: string;
@@ -28916,6 +29069,27 @@ export type PostApiV1AdminProductsByIdVariantsErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
         success: false;
         error: {
             code: string;
@@ -28986,6 +29160,7 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
             deletedAt?: string | number | null;
             stockVersion?: number;
             version?: number;
+            aggregateRevision: number;
         };
     };
 };
@@ -28998,7 +29173,9 @@ export type DeleteApiV1AdminProductsByIdVariantsByVariantIdData = {
         id: string;
         variantId: string;
     };
-    query?: never;
+    query: {
+        expectedAggregateRevision: number;
+    };
     url: '/api/v1/admin/products/{id}/variants/{variantId}';
 };
 
@@ -29048,6 +29225,27 @@ export type DeleteApiV1AdminProductsByIdVariantsByVariantIdErrors = {
         };
     };
     /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -29075,9 +29273,14 @@ export type DeleteApiV1AdminProductsByIdVariantsByVariantIdError = DeleteApiV1Ad
 
 export type DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses = {
     /**
-     * No content
+     * Variant deleted
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            aggregateRevision: number;
+        };
+    };
 };
 
 export type DeleteApiV1AdminProductsByIdVariantsByVariantIdResponse = DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses[keyof DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses];
@@ -29096,6 +29299,7 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
         discountAmount?: number | null;
+        expectedAggregateRevision: number;
     };
     path: {
         id: string;
@@ -29151,9 +29355,19 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdErrors = {
         };
     };
     /**
-     * Conflict
+     * Product revision or domain conflict
      */
     409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
         success: false;
         error: {
             code: string;
@@ -29224,6 +29438,7 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
             deletedAt?: string | number | null;
             stockVersion?: number;
             version?: number;
+            aggregateRevision: number;
         };
     };
 };
@@ -29260,6 +29475,7 @@ export type PostApiV1AdminProductsByIdVariantsEditPlanData = {
             barcode?: string | null;
             barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
         }>;
+        expectedAggregateRevision: number;
     };
     path: {
         id: string;
@@ -29314,9 +29530,19 @@ export type PostApiV1AdminProductsByIdVariantsEditPlanErrors = {
         };
     };
     /**
-     * Conflict
+     * Product revision or domain conflict
      */
     409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
         success: false;
         error: {
             code: string;
@@ -29421,6 +29647,7 @@ export type PostApiV1AdminProductsByIdVariantsEditPlanResponses = {
                 stockVersion?: number;
                 version?: number;
             }>;
+            aggregateRevision: number;
         };
     };
 };
@@ -29445,6 +29672,7 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateData = {
             colorSortOrder?: number;
             sizeSortOrder?: number;
         }>;
+        expectedAggregateRevision: number;
     };
     path: {
         id: string;
@@ -29491,6 +29719,27 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
         success: false;
         error: {
             code: string;
@@ -29564,6 +29813,7 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateResponses = {
                 version?: number;
             }>;
             count: number;
+            aggregateRevision: number;
         };
     };
 };
@@ -29573,6 +29823,7 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateResponse = PostApiV1Admi
 export type PostApiV1AdminProductsByIdVariantsBulkDeleteData = {
     body?: {
         variantIds: Array<string>;
+        expectedAggregateRevision: number;
     };
     path: {
         id: string;
@@ -29627,6 +29878,27 @@ export type PostApiV1AdminProductsByIdVariantsBulkDeleteErrors = {
         };
     };
     /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -29654,254 +29926,17 @@ export type PostApiV1AdminProductsByIdVariantsBulkDeleteError = PostApiV1AdminPr
 
 export type PostApiV1AdminProductsByIdVariantsBulkDeleteResponses = {
     /**
-     * No content
-     */
-    204: void;
-};
-
-export type PostApiV1AdminProductsByIdVariantsBulkDeleteResponse = PostApiV1AdminProductsByIdVariantsBulkDeleteResponses[keyof PostApiV1AdminProductsByIdVariantsBulkDeleteResponses];
-
-export type PostApiV1AdminProductsByIdVariantsBulkUpdateData = {
-    body?: {
-        updates: Array<{
-            id: string;
-            size?: string | null;
-            color?: string | null;
-            weight?: number | null;
-            sku?: string;
-            price?: number;
-            stock?: number;
-            trackInventory?: boolean;
-            barcode?: string | null;
-            barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
-        }>;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/products/{id}/variants/bulk-update';
-};
-
-export type PostApiV1AdminProductsByIdVariantsBulkUpdateErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminProductsByIdVariantsBulkUpdateError = PostApiV1AdminProductsByIdVariantsBulkUpdateErrors[keyof PostApiV1AdminProductsByIdVariantsBulkUpdateErrors];
-
-export type PostApiV1AdminProductsByIdVariantsBulkUpdateResponses = {
-    /**
-     * Variants updated
+     * Variants deleted
      */
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            aggregateRevision: number;
         };
     };
 };
 
-export type PostApiV1AdminProductsByIdVariantsBulkUpdateResponse = PostApiV1AdminProductsByIdVariantsBulkUpdateResponses[keyof PostApiV1AdminProductsByIdVariantsBulkUpdateResponses];
-
-export type PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateData = {
-    body?: never;
-    path: {
-        id: string;
-        variantId: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/products/{id}/variants/{variantId}/duplicate';
-};
-
-export type PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateError = PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateErrors[keyof PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateErrors];
-
-export type PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateResponses = {
-    /**
-     * Variant duplicated
-     */
-    201: {
-        success: true;
-        data: {
-            id: string;
-            productId: string;
-            size: string | null;
-            color: string | null;
-            weight: number | null;
-            sku: string;
-            price: number;
-            stock: number;
-            reservedStock: number;
-            preorderStock?: number;
-            isDefault?: boolean;
-            trackInventory?: boolean;
-            lowStockThreshold?: number | null;
-            allowPreorder?: boolean;
-            preorderDate?: string | number | null;
-            preorderMessage?: string | null;
-            allowBackorder?: boolean;
-            backorderLimit?: number;
-            discountPercentage?: number | null;
-            discountType?: string | null;
-            discountAmount?: number | null;
-            barcode?: string | null;
-            barcodeType?: string | null;
-            colorSortOrder?: number | null;
-            sizeSortOrder?: number | null;
-            createdAt?: string | number;
-            updatedAt?: string | number;
-            deletedAt?: string | number | null;
-            stockVersion?: number;
-            version?: number;
-        };
-    };
-};
-
-export type PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateResponse = PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateResponses[keyof PostApiV1AdminProductsByIdVariantsByVariantIdDuplicateResponses];
+export type PostApiV1AdminProductsByIdVariantsBulkDeleteResponse = PostApiV1AdminProductsByIdVariantsBulkDeleteResponses[keyof PostApiV1AdminProductsByIdVariantsBulkDeleteResponses];
 
 export type GetApiV1AdminProductsByIdVariantsSortOrderData = {
     body?: never;
@@ -30014,6 +30049,7 @@ export type PostApiV1AdminProductsByIdVariantsSortOrderData = {
             value: string;
             sortOrder: number;
         }>;
+        expectedAggregateRevision: number;
     };
     path: {
         id: string;
@@ -30068,6 +30104,27 @@ export type PostApiV1AdminProductsByIdVariantsSortOrderErrors = {
         };
     };
     /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -30100,7 +30157,7 @@ export type PostApiV1AdminProductsByIdVariantsSortOrderResponses = {
     200: {
         success: true;
         data: {
-            message: string;
+            aggregateRevision: number;
         };
     };
 };
@@ -33266,6 +33323,7 @@ export type GetApiV1AdminTaxesClassificationsResponses = {
                 taxClassId: string | null;
                 taxClassName: string | null;
                 version: number;
+                aggregateRevision: number;
             }>;
             total: number;
         };
@@ -33278,6 +33336,7 @@ export type PutApiV1AdminTaxesClassificationsByKindByIdData = {
     body: {
         taxClassId: string | null;
         expectedVersion: number;
+        expectedAggregateRevision: number;
     };
     path: {
         kind: 'product' | 'variant';
@@ -33348,6 +33407,7 @@ export type PutApiV1AdminTaxesClassificationsByKindByIdResponses = {
                 id: string;
                 taxClassId: string | null;
                 version: number;
+                aggregateRevision: number;
             };
         };
     };

@@ -3,7 +3,6 @@
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@scalius/database/schema";
 import {
-    inventoryMovements,
     orders,
     orderItems,
     OrderStatus,
@@ -14,7 +13,6 @@ import { and, sql, eq, inArray, isNull, ne, not } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
-import { safeBatch } from "@scalius/database/client";
 import { checkAndAlertLowStock } from "../inventory/alerts";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import {
@@ -27,6 +25,16 @@ import {
 } from "./products.types";
 import { normalizeDefaultSkuOptions } from "./products.public-eligibility";
 import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
+import {
+    getBarcodeIdentityKey,
+    getBarcodeValidationError,
+    normalizeBarcodeValue,
+    type BarcodeType,
+} from "@scalius/shared/barcode-identity";
+import {
+    executeProductAggregateMutationBatch,
+    type ProductAggregateRevisionResult,
+} from "./products.aggregate-revision";
 
 function normalizeOptionValue(value: string | null | undefined): string | null {
     const normalized = value?.trim();
@@ -67,6 +75,61 @@ function normalizeSku(value: string): string {
 
 function normalizedSkuKey(value: string): string {
     return normalizeSku(value).toLocaleLowerCase("en-US");
+}
+
+export function normalizeVariantBarcode(
+    barcode: string | null | undefined,
+    barcodeType: BarcodeType | null | undefined,
+): { barcode: string | null; barcodeType: BarcodeType | null } {
+    const normalizedBarcode = normalizeBarcodeValue(barcode);
+    const normalizedType = barcodeType ?? null;
+    const validationError = getBarcodeValidationError(normalizedBarcode, normalizedType);
+    if (validationError) throw new ValidationError(validationError);
+    return { barcode: normalizedBarcode, barcodeType: normalizedType };
+}
+
+export async function assertUniqueVariantBarcodes(
+    db: DrizzleD1Database<typeof schema>,
+    candidates: Array<{
+        id?: string;
+        barcode: string | null;
+        barcodeType: BarcodeType | null;
+    }>,
+): Promise<void> {
+    const keyedCandidates = candidates.flatMap((candidate, index) => {
+        const key = getBarcodeIdentityKey(candidate.barcode);
+        return key ? [{ ...candidate, key, owner: candidate.id ?? `new:${index}` }] : [];
+    });
+    const ownerByKey = new Map<string, string>();
+    for (const candidate of keyedCandidates) {
+        if (ownerByKey.has(candidate.key)) {
+            throw new ValidationError("Each SKU must use a unique barcode.");
+        }
+        ownerByKey.set(candidate.key, candidate.owner);
+    }
+    if (ownerByKey.size === 0) return;
+
+    const candidateById = new Map(
+        keyedCandidates.flatMap((candidate) =>
+            candidate.id ? [[candidate.id, candidate] as const] : []
+        ),
+    );
+    const rows = await db
+        .select({ id: productVariants.id, barcode: productVariants.barcode })
+        .from(productVariants)
+        .where(sql`lower(trim(${productVariants.barcode})) IN (
+            SELECT CAST(value AS TEXT)
+            FROM json_each(${JSON.stringify([...ownerByKey.keys()])})
+        )`);
+    for (const row of rows) {
+        const rowKey = getBarcodeIdentityKey(row.barcode);
+        if (!rowKey) continue;
+        const plannedRow = candidateById.get(row.id);
+        if (plannedRow && plannedRow.key !== rowKey) continue;
+        if (ownerByKey.get(rowKey) !== row.id) {
+            throw new ConflictError("A SKU with this barcode already exists.");
+        }
+    }
 }
 
 function assertUniqueNormalizedValues(
@@ -147,23 +210,6 @@ function customerOptionPredicate() {
     return sql`(trim(coalesce(${productVariants.size}, '')) <> '' OR trim(coalesce(${productVariants.color}, '')) <> '')`;
 }
 
-async function variantHasOrderOrInventoryHistory(db: DrizzleD1Database<typeof schema>, variantId: string): Promise<boolean> {
-    const orderReference = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(orderItems)
-        .where(eq(orderItems.variantId, variantId))
-        .get();
-    if ((orderReference?.count ?? 0) > 0) return true;
-
-    const movementReference = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(inventoryMovements)
-        .where(eq(inventoryMovements.variantId, variantId))
-        .get();
-
-    return (movementReference?.count ?? 0) > 0;
-}
-
 async function variantHasOpenOrderReference(db: DrizzleD1Database<typeof schema>, variantId: string): Promise<boolean> {
     const openOrderReference = await db
         .select({ count: sql<number>`count(*)` })
@@ -177,27 +223,6 @@ async function variantHasOpenOrderReference(db: DrizzleD1Database<typeof schema>
         .get();
 
     return (openOrderReference?.count ?? 0) > 0;
-}
-
-async function loadHistoryBackedVariantIds(db: DrizzleD1Database<typeof schema>, variantIds: string[]): Promise<Set<string>> {
-    const [orderReferences, movementReferences] = await Promise.all([
-        db
-            .select({ variantId: orderItems.variantId })
-            .from(orderItems)
-            .where(inArray(orderItems.variantId, variantIds))
-            .groupBy(orderItems.variantId),
-        db
-            .select({ variantId: inventoryMovements.variantId })
-            .from(inventoryMovements)
-            .where(inArray(inventoryMovements.variantId, variantIds))
-            .groupBy(inventoryMovements.variantId),
-    ]);
-
-    return new Set(
-        [...orderReferences, ...movementReferences]
-            .map((row) => row.variantId)
-            .filter((id): id is string => Boolean(id)),
-    );
 }
 
 async function loadOpenOrderBackedVariantIds(db: DrizzleD1Database<typeof schema>, variantIds: string[]): Promise<Set<string>> {
@@ -229,7 +254,9 @@ function uniqueVariantIds(variantIds: string[]): string[] {
  * Used by barcode scanners in the admin interface.
  */
 export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barcode: string) {
-    const variant = await db
+    const barcodeKey = getBarcodeIdentityKey(barcode);
+    if (!barcodeKey) return null;
+    const matches = await db
         .select({
             variantId: productVariants.id,
             variantSku: productVariants.sku,
@@ -252,12 +279,19 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
         .innerJoin(products, eq(productVariants.productId, products.id))
         .where(
             and(
-                eq(productVariants.barcode, barcode),
+                sql`lower(trim(${productVariants.barcode})) = ${barcodeKey}`,
                 isNull(productVariants.deletedAt),
                 isNull(products.deletedAt),
             ),
         )
-        .get();
+        .limit(2);
+
+    if (matches.length > 1) {
+        throw new ConflictError(
+            "Multiple SKUs use this barcode. Repair the catalog before scanning it.",
+        );
+    }
+    const variant = matches[0];
 
     if (!variant) return null;
 
@@ -332,11 +366,17 @@ export async function getProductVariants(db: DrizzleD1Database<typeof schema>, p
     }));
 }
 
-export async function createVariant(db: DrizzleD1Database<typeof schema>, productId: string, data: z.infer<typeof createVariantSchema>) {
+export async function createVariant(
+    db: DrizzleD1Database<typeof schema>,
+    productId: string,
+    data: z.infer<typeof createVariantSchema>,
+): Promise<PersistedVariant & ProductAggregateRevisionResult> {
     assertNormalVariantHasCustomerOption(data);
     const size = normalizeOptionValue(data.size);
     const color = normalizeOptionValue(data.color);
+    const barcodeIdentity = normalizeVariantBarcode(data.barcode, data.barcodeType);
     await assertProductVariantOptionAxes(db, productId, [{ size, color }]);
+    await assertUniqueVariantBarcodes(db, [{ ...barcodeIdentity }]);
 
     const existingVariant = await db
         .select({ id: productVariants.id })
@@ -363,8 +403,8 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
         stockVersion: 1,
         isDefault: false,
         trackInventory: data.trackInventory ?? true,
-        barcode: data.barcode || null,
-        barcodeType: data.barcodeType || null,
+        barcode: barcodeIdentity.barcode,
+        barcodeType: barcodeIdentity.barcodeType,
         discountType: data.discountType || "percentage",
         discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
         discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
@@ -373,8 +413,15 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
     };
     const insert = db.insert(productVariants).values(variantValues).returning();
     if (data.stock === 0) {
-        const [variant] = await insert;
-        return variant;
+        const result = await executeProductAggregateMutationBatch(
+            db,
+            productId,
+            data.expectedAggregateRevision,
+            [insert],
+        );
+        const variant = (result.mutationResults[0] as PersistedVariant[] | undefined)?.[0];
+        if (!variant) throw new ConflictError("The created variant could not be confirmed.");
+        return { ...variant, aggregateRevision: result.aggregateRevision };
     }
 
     const movement = buildStockMovementClaim(db, {
@@ -408,18 +455,31 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
             isNull(productVariants.deletedAt),
         ))
         .returning();
-    const [, movementRows, updatedRows] = await safeBatch(
+    const result = await executeProductAggregateMutationBatch(
         db,
-        [insert, movement, update] as never,
-    ) as [PersistedVariant[], Array<{ id: string }>, PersistedVariant[]];
+        productId,
+        data.expectedAggregateRevision,
+        [insert, movement, update],
+    );
+    const [, movementRows, updatedRows] = result.mutationResults as [
+        PersistedVariant[],
+        Array<{ id: string }>,
+        PersistedVariant[],
+    ];
     if ((movementRows?.length ?? 0) === 0 || (updatedRows?.length ?? 0) === 0) {
         throw new ConflictError("Initial variant stock could not be recorded");
     }
     await checkAndAlertLowStock(db, variantId);
-    return updatedRows[0];
+    return { ...updatedRows[0]!, aggregateRevision: result.aggregateRevision };
 }
 
-export async function updateVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string, data: z.infer<typeof updateVariantSchema>, adminUserId?: string) {
+export async function updateVariant(
+    db: DrizzleD1Database<typeof schema>,
+    productId: string,
+    variantId: string,
+    data: z.infer<typeof updateVariantSchema>,
+    adminUserId?: string,
+): Promise<PersistedVariant & ProductAggregateRevisionResult> {
     const existingVariant = await db
         .select({
             id: productVariants.id,
@@ -431,6 +491,8 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
             preorderStock: productVariants.preorderStock,
             stockVersion: productVariants.stockVersion,
             trackInventory: productVariants.trackInventory,
+            barcode: productVariants.barcode,
+            barcodeType: productVariants.barcodeType,
         })
         .from(productVariants)
         .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
@@ -462,6 +524,15 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
         throw new ConflictError("A variant with this SKU already exists");
     }
 
+    const barcodeIdentity = normalizeVariantBarcode(
+        data.barcode === undefined ? existingVariant.barcode : data.barcode,
+        data.barcodeType === undefined ? existingVariant.barcodeType : data.barcodeType,
+    );
+    await assertUniqueVariantBarcodes(db, [{
+        id: variantId,
+        ...barcodeIdentity,
+    }]);
+
     const simpleProductPricing = existingIsSimpleSku
         ? await db
             .select({
@@ -483,8 +554,8 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
         sku: data.sku,
         price: simpleProductPricing?.price ?? data.price,
         trackInventory: data.trackInventory ?? existingVariant.trackInventory,
-        barcode: data.barcode || null,
-        barcodeType: data.barcodeType || null,
+        barcode: barcodeIdentity.barcode,
+        barcodeType: barcodeIdentity.barcodeType,
         discountType: existingIsSimpleSku ? "percentage" : data.discountType || "percentage",
         discountPercentage: existingIsSimpleSku
             ? 0
@@ -531,11 +602,37 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
                 isNull(productVariants.deletedAt),
             ))
             .returning();
+        const stockGuard = db.run(sql`
+            SELECT CASE WHEN EXISTS (
+                SELECT 1 FROM ${productVariants}
+                WHERE ${productVariants.id} = ${variantId}
+                  AND ${productVariants.productId} = ${productId}
+                  AND ${productVariants.stockVersion} = ${existingVariant.stockVersion}
+                  AND ${productVariants.deletedAt} IS NULL
+            ) THEN 1 ELSE json_extract('VARIANT_EDIT_CONFLICT', '$') END
+        `);
 
-        const [movementRows, variantRows] = await safeBatch(
-            db,
-            [movementInsert, variantUpdate] as never,
-        ) as [Array<{ id: string }>, Array<typeof productVariants.$inferSelect>];
+        let result;
+        try {
+            result = await executeProductAggregateMutationBatch(
+                db,
+                productId,
+                data.expectedAggregateRevision,
+                [stockGuard, movementInsert, variantUpdate],
+            );
+        } catch (error) {
+            if (isAtomicVariantConflict(error)) {
+                throw new ConflictError(
+                    "Stock changed concurrently before the SKU could be saved. Reload and try again.",
+                );
+            }
+            throw error;
+        }
+        const [, movementRows, variantRows] = result.mutationResults as [
+            unknown,
+            Array<{ id: string }>,
+            PersistedVariant[],
+        ];
 
         if ((movementRows?.length ?? 0) === 0 || (variantRows?.length ?? 0) === 0) {
             throw new ConflictError("Stock changed concurrently before variant update could be saved");
@@ -543,10 +640,10 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
 
         await checkAndAlertLowStock(db, variantId);
 
-        return variantRows[0];
+        return { ...variantRows[0]!, aggregateRevision: result.aggregateRevision };
     }
 
-    const [variant] = await db
+    const variantUpdate = db
         .update(productVariants)
         .set(updateValues)
         .where(and(
@@ -555,11 +652,23 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
             isNull(productVariants.deletedAt),
         ))
         .returning();
-
-    return variant;
+    const result = await executeProductAggregateMutationBatch(
+        db,
+        productId,
+        data.expectedAggregateRevision,
+        [variantUpdate],
+    );
+    const variant = (result.mutationResults[0] as PersistedVariant[] | undefined)?.[0];
+    if (!variant) throw new NotFoundError("Variant not found");
+    return { ...variant, aggregateRevision: result.aggregateRevision };
 }
 
-export async function deleteVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string) {
+export async function deleteVariant(
+    db: DrizzleD1Database<typeof schema>,
+    productId: string,
+    variantId: string,
+    expectedAggregateRevision: number,
+): Promise<ProductAggregateRevisionResult> {
     const existingVariant = await db
         .select({
             id: productVariants.id,
@@ -605,7 +714,6 @@ export async function deleteVariant(db: DrizzleD1Database<typeof schema>, produc
         throw new ValidationError("Add another customer option, or deactivate this product, before removing its final customer option.");
     }
 
-    const hasHistory = await variantHasOrderOrInventoryHistory(db, variantId);
     const deleteGuard = and(
         eq(productVariants.id, variantId),
         eq(productVariants.productId, productId),
@@ -613,84 +721,65 @@ export async function deleteVariant(db: DrizzleD1Database<typeof schema>, produc
         eq(productVariants.reservedStock, 0),
     );
 
-    const affectedRows = hasHistory
-        ? await db
-            .update(productVariants)
-            .set({
-                deletedAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            })
-            .where(deleteGuard)
-            .returning({ id: productVariants.id })
-        : await db
-            .delete(productVariants)
-            .where(deleteGuard)
-            .returning({ id: productVariants.id });
+    const transactionalDeleteGuard = db.run(sql`
+        SELECT CASE WHEN EXISTS (
+            SELECT 1 FROM ${productVariants}
+            WHERE ${productVariants.id} = ${variantId}
+              AND ${productVariants.productId} = ${productId}
+              AND ${productVariants.isDefault} = 0
+              AND ${productVariants.reservedStock} = 0
+              AND ${productVariants.deletedAt} IS NULL
+        ) AND NOT EXISTS (
+            SELECT 1 FROM ${orderItems}
+            INNER JOIN ${orders} ON ${orderItems.orderId} = ${orders.id}
+            WHERE ${orderItems.variantId} = ${variantId}
+              AND ${orders.deletedAt} IS NULL
+              AND ${not(inArray(orders.status, ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT))}
+        ) AND (
+            coalesce((
+                SELECT ${products.isActive} FROM ${products}
+                WHERE ${products.id} = ${productId}
+            ), 0) = 0
+            OR EXISTS (
+                SELECT 1 FROM ${productVariants}
+                WHERE ${productVariants.productId} = ${productId}
+                  AND ${productVariants.id} != ${variantId}
+                  AND ${productVariants.deletedAt} IS NULL
+                  AND ${customerOptionPredicate()}
+            )
+        ) THEN 1 ELSE json_extract('VARIANT_DELETE_CONFLICT', '$') END
+    `);
+    const deleteStatement = db
+        .update(productVariants)
+        .set({
+            deletedAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(deleteGuard)
+        .returning({ id: productVariants.id });
+
+    let result;
+    try {
+        result = await executeProductAggregateMutationBatch(
+            db,
+            productId,
+            expectedAggregateRevision,
+            [transactionalDeleteGuard, deleteStatement],
+        );
+    } catch (error) {
+        if (isAtomicVariantConflict(error)) {
+            throw new ConflictError(
+                "The SKU can no longer be removed. Reload the latest product and try again.",
+            );
+        }
+        throw error;
+    }
+    const affectedRows = result.mutationResults[1] as Array<{ id: string }> | undefined;
 
     if ((affectedRows?.length ?? 0) === 0) {
         throw new ConflictError("Variant changed before it could be deleted. Refresh and try again.");
     }
-}
-
-export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string) {
-    const [existingVariant] = await db
-        .select()
-        .from(productVariants)
-        .where(sql`${productVariants.id} = ${variantId} AND ${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`)
-        .limit(1);
-
-    if (!existingVariant) {
-        throw new NotFoundError("Variant not found");
-    }
-
-    if (existingVariant.isDefault || !hasCustomerOption(existingVariant)) {
-        throw new ValidationError("The simple product SKU cannot be duplicated as a normal option. Add a customer option instead.");
-    }
-
-    let newSku = `${existingVariant.sku}-COPY`;
-    let counter = 1;
-
-    while (true) {
-        const existing = await db
-            .select({ id: productVariants.id })
-            .from(productVariants)
-            .where(sql`${productVariants.sku} = ${newSku} AND ${productVariants.deletedAt} IS NULL`)
-            .get();
-
-        if (!existing) break;
-
-        counter++;
-        newSku = `${existingVariant.sku}-COPY${counter}`;
-    }
-
-    const [newVariant] = await db
-        .insert(productVariants)
-        .values({
-            id: "var_" + nanoid(),
-            productId,
-            size: existingVariant.size,
-            color: existingVariant.color,
-            weight: existingVariant.weight,
-            sku: newSku,
-            price: existingVariant.price,
-            stock: 0,
-            reservedStock: 0,
-            preorderStock: 0,
-            isDefault: false,
-            trackInventory: existingVariant.trackInventory,
-            version: 1,
-            stockVersion: 1,
-            barcode: existingVariant.barcode,
-            barcodeType: existingVariant.barcodeType,
-            discountType: existingVariant.discountType,
-            discountPercentage: existingVariant.discountPercentage,
-            discountAmount: existingVariant.discountAmount,
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .returning();
-
-    return newVariant;
+    return { aggregateRevision: result.aggregateRevision };
 }
 
 type PersistedVariant = typeof productVariants.$inferSelect;
@@ -716,7 +805,11 @@ export async function applyVariantEditPlan(
     productId: string,
     input: VariantEditPlan,
     adminUserId?: string,
-): Promise<{ created: PersistedVariant[]; updated: PersistedVariant[] }> {
+): Promise<{
+    created: PersistedVariant[];
+    updated: PersistedVariant[];
+    aggregateRevision: number;
+}> {
     const parsed = variantEditPlanSchema.safeParse(input);
     if (!parsed.success) {
         throw new ValidationError(firstValidationMessage(parsed.error));
@@ -764,12 +857,16 @@ export async function applyVariantEditPlan(
         size: string | null;
         color: string | null;
         sku: string;
+        barcode: string | null;
+        barcodeType: BarcodeType | null;
     }> = currentVariants.map((variant) => ({
         id: variant.id,
         isDefault: variant.isDefault,
         size: normalizeOptionValue(variant.size),
         color: normalizeOptionValue(variant.color),
         sku: normalizeSku(variant.sku),
+        barcode: variant.barcode,
+        barcodeType: variant.barcodeType,
     }));
     const effectiveById = new Map(effectiveVariants.map((variant) => [variant.id, variant]));
 
@@ -778,23 +875,53 @@ export async function applyVariantEditPlan(
         if ("size" in update) effective.size = normalizeOptionValue(update.size);
         if ("color" in update) effective.color = normalizeOptionValue(update.color);
         if ("sku" in update && update.sku) effective.sku = normalizeSku(update.sku);
+        if ("barcode" in update) effective.barcode = normalizeBarcodeValue(update.barcode);
+        if ("barcodeType" in update) effective.barcodeType = update.barcodeType ?? null;
+        Object.assign(
+            effective,
+            normalizeVariantBarcode(effective.barcode, effective.barcodeType),
+        );
         assertNormalVariantHasCustomerOption(effective);
     }
 
-    const createsWithIds = plan.creates.map((variant) => ({
-        ...variant,
-        id: `var_${nanoid()}`,
-        size: normalizeOptionValue(variant.size),
-        color: normalizeOptionValue(variant.color),
-        sku: normalizeSku(variant.sku),
-    }));
+    const createsWithIds = plan.creates.map((variant) => {
+        const barcodeIdentity = normalizeVariantBarcode(
+            variant.barcode,
+            variant.barcodeType,
+        );
+        return {
+            ...variant,
+            ...barcodeIdentity,
+            id: `var_${nanoid()}`,
+            size: normalizeOptionValue(variant.size),
+            color: normalizeOptionValue(variant.color),
+            sku: normalizeSku(variant.sku),
+        };
+    });
     effectiveVariants.push(...createsWithIds.map((variant) => ({
         id: variant.id,
         isDefault: false,
         size: variant.size,
         color: variant.color,
         sku: variant.sku,
+        barcode: variant.barcode,
+        barcodeType: variant.barcodeType,
     })));
+
+    await assertUniqueVariantBarcodes(db, [
+        ...createsWithIds.map((variant) => ({
+            barcode: variant.barcode,
+            barcodeType: variant.barcodeType,
+        })),
+        ...plan.updates.map((update) => {
+            const effective = effectiveById.get(update.id)!;
+            return {
+                id: update.id,
+                barcode: effective.barcode,
+                barcodeType: effective.barcodeType,
+            };
+        }),
+    ]);
 
     assertUniqueNormalizedValues(
         effectiveVariants.map((variant) => variant.sku),
@@ -911,8 +1038,8 @@ export async function applyVariantEditPlan(
                 allowPreorder: false,
                 allowBackorder: false,
                 backorderLimit: 0,
-                barcode: variant.barcode || null,
-                barcodeType: variant.barcodeType || null,
+                barcode: variant.barcode,
+                barcodeType: variant.barcodeType,
                 discountType: variant.discountType,
                 discountPercentage: variant.discountPercentage ?? 0,
                 discountAmount: variant.discountAmount ?? 0,
@@ -968,6 +1095,7 @@ export async function applyVariantEditPlan(
 
     for (const update of plan.updates) {
         const current = currentById.get(update.id)!;
+        const effective = effectiveById.get(update.id)!;
         const stockChanged = update.stock !== undefined && update.stock !== current.stock;
 
         if (stockChanged) {
@@ -1003,8 +1131,12 @@ export async function applyVariantEditPlan(
             ...(update.price !== undefined ? { price: update.price } : {}),
             ...(update.stock !== undefined ? { stock: update.stock } : {}),
             ...(update.trackInventory !== undefined ? { trackInventory: update.trackInventory } : {}),
-            ...(update.barcode !== undefined ? { barcode: update.barcode || null } : {}),
-            ...(update.barcodeType !== undefined ? { barcodeType: update.barcodeType } : {}),
+            ...(update.barcode !== undefined || update.barcodeType !== undefined
+                ? {
+                    barcode: effective.barcode,
+                    barcodeType: effective.barcodeType,
+                }
+                : {}),
             version: sql`${productVariants.version} + 1`,
             ...(stockChanged
                 ? { stockVersion: sql`${productVariants.stockVersion} + 1` }
@@ -1025,8 +1157,16 @@ export async function applyVariantEditPlan(
     }
 
     let results: Array<Array<PersistedVariant | { id: string }> | undefined>;
+    let aggregateRevision: number;
     try {
-        results = await safeBatch(db, statements as never) as typeof results;
+        const aggregateResult = await executeProductAggregateMutationBatch(
+            db,
+            productId,
+            plan.expectedAggregateRevision,
+            statements,
+        );
+        results = aggregateResult.mutationResults as typeof results;
+        aggregateRevision = aggregateResult.aggregateRevision;
     } catch (error) {
         if (isAtomicVariantConflict(error)) {
             throw new ConflictError(
@@ -1057,90 +1197,45 @@ export async function applyVariantEditPlan(
     return {
         created: created as PersistedVariant[],
         updated: updated as PersistedVariant[],
+        aggregateRevision,
     };
 }
 
-export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, productId: string, variants: z.infer<typeof bulkVariantSchema>[]) {
+export async function bulkCreateVariants(
+    db: DrizzleD1Database<typeof schema>,
+    productId: string,
+    variants: z.infer<typeof bulkVariantSchema>[],
+    expectedAggregateRevision: number,
+): Promise<{
+    variants: PersistedVariant[];
+    aggregateRevision: number;
+}> {
     variants.forEach(assertNormalVariantHasCustomerOption);
-    await assertProductVariantOptionAxes(
+    assertConsistentVariantOptionAxes(variants);
+    variants.forEach((variant) => {
+        normalizeVariantBarcode(variant.barcode, variant.barcodeType);
+    });
+    const result = await applyVariantEditPlan(
         db,
         productId,
-        variants.map((variant) => ({
-            size: normalizeOptionValue(variant.size),
-            color: normalizeOptionValue(variant.color),
-        })),
+        {
+            creates: variants,
+            updates: [],
+            expectedAggregateRevision,
+        },
     );
-
-    const skus = variants.map((v) => v.sku);
-    const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
-
-    if (duplicateSkus.length > 0) {
-        throw new ValidationError(`Duplicate SKUs found in request: ${duplicateSkus.join(", ")}`);
-    }
-
-    const existingVariants: Array<{ sku: string }> = await db
-        .select({ sku: productVariants.sku })
-        .from(productVariants)
-        .where(sql`${productVariants.sku} IN ${skus} AND ${productVariants.deletedAt} IS NULL`)
-        .all();
-
-    if (existingVariants.length > 0) {
-        throw new ConflictError(`One or more SKUs already exist: ${existingVariants.map((v) => v.sku).join(", ")}`);
-    }
-
-    const variantsToCreate = variants.map((variant) => ({
-        id: "var_" + nanoid(),
-        productId,
-        size: normalizeOptionValue(variant.size),
-        color: normalizeOptionValue(variant.color),
-        weight: variant.weight || null,
-        sku: variant.sku,
-        price: variant.price ?? 0,
-        stock: variant.stock ?? 0,
-        isDefault: false,
-        trackInventory: variant.trackInventory ?? true,
-        reservedStock: 0,
-        preorderStock: 0,
-        version: 1,
-        stockVersion: 1,
-        allowPreorder: false,
-        allowBackorder: false,
-        backorderLimit: 0,
-        barcode: variant.barcode || null,
-        barcodeType: variant.barcodeType || null,
-        discountType: variant.discountType || "percentage",
-        discountPercentage: variant.discountPercentage ?? 0,
-        discountAmount: variant.discountAmount ?? 0,
-        colorSortOrder: variant.colorSortOrder ?? 0,
-        sizeSortOrder: variant.sizeSortOrder ?? 0,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-    }));
-
-    // D1 has a 100 bound parameter limit per query.
-    // Each variant has ~22 params, so max 4 per chunk (4 × 22 = 88 < 100).
-    const chunkSize = 4;
-    const insertStatements = [];
-    for (let i = 0; i < variantsToCreate.length; i += chunkSize) {
-        const chunk = variantsToCreate.slice(i, i + chunkSize);
-        insertStatements.push(
-            db
-                .insert(productVariants)
-                .values(chunk)
-                .returning(),
-        );
-    }
-
-    // D1 batch is transactional: every chunk is committed together or none is.
-    // Executing chunks one-by-one leaves an earlier chunk persisted if a later
-    // insert encounters a concurrent SKU conflict.
-    const results = await safeBatch(db, insertStatements as never) as Array<
-        Array<typeof productVariants.$inferSelect> | undefined
-    >;
-    return results.flatMap((rows) => rows ?? []);
+    return {
+        variants: result.created,
+        aggregateRevision: result.aggregateRevision,
+    };
 }
 
-export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, productId: string, variantIds: string[]) {
+export async function bulkDeleteVariants(
+    db: DrizzleD1Database<typeof schema>,
+    productId: string,
+    variantIds: string[],
+    expectedAggregateRevision: number,
+): Promise<ProductAggregateRevisionResult> {
     const ids = uniqueVariantIds(variantIds);
     if (ids.length === 0) throw new ValidationError("No variant IDs provided");
 
@@ -1196,50 +1291,79 @@ export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, p
         throw new ValidationError("Add another customer option, or deactivate this product, before removing the final customer option.");
     }
 
-    const historyBackedVariantIds = await loadHistoryBackedVariantIds(db, ids);
-    const softDeleteIds = ids.filter((id) => historyBackedVariantIds.has(id));
-    const hardDeleteIds = ids.filter((id) => !historyBackedVariantIds.has(id));
-    const statements = [];
+    const idSet = JSON.stringify(ids);
+    const transactionalDeleteGuard = db.run(sql`
+        SELECT CASE WHEN (
+            SELECT count(*) FROM ${productVariants}
+            WHERE ${productVariants.productId} = ${productId}
+              AND ${productVariants.id} IN (
+                  SELECT CAST(value AS TEXT) FROM json_each(${idSet})
+              )
+              AND ${productVariants.isDefault} = 0
+              AND ${productVariants.reservedStock} = 0
+              AND ${productVariants.deletedAt} IS NULL
+        ) = ${ids.length} AND NOT EXISTS (
+            SELECT 1 FROM ${orderItems}
+            INNER JOIN ${orders} ON ${orderItems.orderId} = ${orders.id}
+            WHERE ${orderItems.variantId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${idSet})
+            )
+              AND ${orders.deletedAt} IS NULL
+              AND ${not(inArray(orders.status, ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT))}
+        ) AND (
+            coalesce((
+                SELECT ${products.isActive} FROM ${products}
+                WHERE ${products.id} = ${productId}
+            ), 0) = 0
+            OR EXISTS (
+                SELECT 1 FROM ${productVariants}
+                WHERE ${productVariants.productId} = ${productId}
+                  AND ${productVariants.id} NOT IN (
+                      SELECT CAST(value AS TEXT) FROM json_each(${idSet})
+                  )
+                  AND ${productVariants.deletedAt} IS NULL
+                  AND ${customerOptionPredicate()}
+            )
+        ) THEN 1 ELSE json_extract('VARIANT_DELETE_CONFLICT', '$') END
+    `);
+    const deleteStatement = db
+        .update(productVariants)
+        .set({
+            deletedAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(productVariants.productId, productId),
+            sql`${productVariants.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${idSet})
+            )`,
+            isNull(productVariants.deletedAt),
+            eq(productVariants.reservedStock, 0),
+        ))
+        .returning({ id: productVariants.id });
 
-    if (softDeleteIds.length > 0) {
-        statements.push(
-            db
-                .update(productVariants)
-                .set({
-                    deletedAt: sql`unixepoch()`,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(and(
-                    eq(productVariants.productId, productId),
-                    inArray(productVariants.id, softDeleteIds),
-                    isNull(productVariants.deletedAt),
-                    eq(productVariants.reservedStock, 0),
-                ))
-                .returning({ id: productVariants.id }),
+    let aggregateResult;
+    try {
+        aggregateResult = await executeProductAggregateMutationBatch(
+            db,
+            productId,
+            expectedAggregateRevision,
+            [transactionalDeleteGuard, deleteStatement],
         );
+    } catch (error) {
+        if (isAtomicVariantConflict(error)) {
+            throw new ConflictError(
+                "One or more SKUs can no longer be removed. Reload the latest product and try again.",
+            );
+        }
+        throw error;
     }
-
-    if (hardDeleteIds.length > 0) {
-        statements.push(
-            db
-                .delete(productVariants)
-                .where(and(
-                    eq(productVariants.productId, productId),
-                    inArray(productVariants.id, hardDeleteIds),
-                    isNull(productVariants.deletedAt),
-                    eq(productVariants.reservedStock, 0),
-                ))
-                .returning({ id: productVariants.id }),
-        );
-    }
-
-    const results = statements.length > 0
-        ? await safeBatch(db, statements as never) as Array<Array<{ id: string }> | undefined>
-        : [];
-    const affectedCount = results.reduce((count, rows) => count + (rows?.length ?? 0), 0);
+    const affectedRows = aggregateResult.mutationResults[1] as Array<{ id: string }> | undefined;
+    const affectedCount = affectedRows?.length ?? 0;
     if (affectedCount !== ids.length) {
         throw new ConflictError("One or more variants changed before they could be deleted. Refresh and try again.");
     }
+    return { aggregateRevision: aggregateResult.aggregateRevision };
 }
 
 export async function getVariantSortOrder(db: DrizzleD1Database<typeof schema>, productId: string) {
@@ -1283,8 +1407,12 @@ export async function getVariantSortOrder(db: DrizzleD1Database<typeof schema>, 
     return { colors, sizes };
 }
 
-export async function updateVariantSortOrder(db: DrizzleD1Database<typeof schema>, productId: string, data: z.infer<typeof updateSortOrderSchema>) {
-    const batchOps: unknown[] = [];
+export async function updateVariantSortOrder(
+    db: DrizzleD1Database<typeof schema>,
+    productId: string,
+    data: z.infer<typeof updateSortOrderSchema>,
+): Promise<ProductAggregateRevisionResult> {
+    const batchOps = [];
 
     for (const color of data.colors) {
         batchOps.push(
@@ -1322,8 +1450,11 @@ export async function updateVariantSortOrder(db: DrizzleD1Database<typeof schema
         );
     }
 
-    if (batchOps.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-        await db.batch(batchOps as any);
-    }
+    const result = await executeProductAggregateMutationBatch(
+        db,
+        productId,
+        data.expectedAggregateRevision,
+        batchOps,
+    );
+    return { aggregateRevision: result.aggregateRevision };
 }

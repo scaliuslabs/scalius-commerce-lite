@@ -5,10 +5,6 @@ const variantSource = readFileSync(
   new URL("./products.variants.ts", import.meta.url),
   "utf8",
 );
-const adminSource = readFileSync(
-  new URL("./products.admin.ts", import.meta.url),
-  "utf8",
-);
 
 describe("product-editor low-stock reconciliation boundaries", () => {
   it("reconciles alerts after every single-variant stock transition", () => {
@@ -17,9 +13,9 @@ describe("product-editor low-stock reconciliation boundaries", () => {
   });
 
   it("reconciles alerts after every successful bulk stock transition", () => {
-    expect(adminSource).toContain(
-      "await checkAndAlertLowStock(db, pair.variantId)",
+    expect(variantSource).toContain(
+      "Array.from(new Set(stockChangedVariantIds)).map((variantId)",
     );
-    expect(adminSource).not.toContain("if (pair.delta < 0)");
+    expect(variantSource).toContain("checkAndAlertLowStock(db, variantId)");
   });
 });

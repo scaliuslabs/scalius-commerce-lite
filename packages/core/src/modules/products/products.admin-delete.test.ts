@@ -16,6 +16,7 @@ function createProductDeleteDb(selectRows: unknown[][]) {
     const deleteStatements: DeleteStatement[] = [];
 
     const db = {
+        run: vi.fn(() => ({ kind: "guard" })),
         select: vi.fn(() => ({
             from: vi.fn(() => ({
                 where: vi.fn(async () => selectRows[selectIndex++] ?? []),
@@ -65,7 +66,7 @@ describe("admin product permanent delete inventory guards", () => {
         ]);
 
         await expect(
-            permanentlyDeleteProduct(db as never, "prod_1"),
+            permanentlyDeleteProduct(db as never, "prod_1", 1),
         ).rejects.toBeInstanceOf(ConflictError);
 
         expect(db.delete).not.toHaveBeenCalled();
@@ -81,7 +82,10 @@ describe("admin product permanent delete inventory guards", () => {
         ]);
 
         await expect(
-            bulkDeleteProducts(db as never, ["prod_1", "prod_2"], true),
+            bulkDeleteProducts(db as never, [
+                { id: "prod_1", expectedAggregateRevision: 1 },
+                { id: "prod_2", expectedAggregateRevision: 1 },
+            ], true),
         ).rejects.toBeInstanceOf(ConflictError);
 
         expect(db.delete).not.toHaveBeenCalled();
@@ -96,10 +100,13 @@ describe("admin product permanent delete inventory guards", () => {
             [{ count: 0 }],
         ]);
 
-        await permanentlyDeleteProduct(db as never, "prod_1");
+        await permanentlyDeleteProduct(db as never, "prod_1", 1);
 
         expect(db.delete).toHaveBeenCalledWith(productLowStockAlerts);
         expect(batchCalls).toHaveLength(1);
+        expect(batchCalls[0]?.filter((statement) =>
+            (statement as { kind?: string }).kind === "guard"
+        )).toHaveLength(2);
         expectLowStockAlertCleanupBeforeVariantDelete(batchCalls[0]!);
     });
 
@@ -111,10 +118,16 @@ describe("admin product permanent delete inventory guards", () => {
             [{ count: 0 }],
         ]);
 
-        await bulkDeleteProducts(db as never, ["prod_1", "prod_2"], true);
+        await bulkDeleteProducts(db as never, [
+            { id: "prod_1", expectedAggregateRevision: 1 },
+            { id: "prod_2", expectedAggregateRevision: 1 },
+        ], true);
 
         expect(db.delete).toHaveBeenCalledWith(productLowStockAlerts);
         expect(batchCalls).toHaveLength(1);
+        expect(batchCalls[0]?.filter((statement) =>
+            (statement as { kind?: string }).kind === "guard"
+        )).toHaveLength(3);
         expectLowStockAlertCleanupBeforeVariantDelete(batchCalls[0]!);
     });
 });

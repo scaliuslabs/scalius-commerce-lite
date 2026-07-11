@@ -348,6 +348,7 @@ const classificationItemSchema = z.object({
   taxClassId: z.string().nullable(),
   taxClassName: z.string().nullable(),
   version: z.number().int(),
+  aggregateRevision: z.number().int().min(1),
 });
 const listClassificationsRoute = createRoute({
   method: "get",
@@ -380,6 +381,7 @@ const updateClassificationRoute = createRoute({
     body: { required: true, content: { "application/json": { schema: z.object({
       taxClassId: z.string().max(180).nullable(),
       expectedVersion: z.number().int().min(1),
+      expectedAggregateRevision: z.number().int().min(1),
     }).strict() } } },
   },
   responses: {
@@ -389,6 +391,7 @@ const updateClassificationRoute = createRoute({
         id: z.string(),
         taxClassId: z.string().nullable(),
         version: z.number().int(),
+        aggregateRevision: z.number().int().min(1),
       }),
     })) } } },
     400: errorResponses[400],

@@ -213,4 +213,30 @@ describe("api.server cookie forwarding", () => {
       });
     },
   );
+
+  it("preserves typed conflict details for client recovery", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: false,
+            error: {
+              code: "PRODUCT_REVISION_CONFLICT",
+              message: "This product changed while you were editing.",
+              details: { expectedRevision: 7, currentRevision: 8 },
+            },
+          }),
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const { apiPut } = await import("./api.server");
+    await expect(apiPut("/products/product_1", {})).rejects.toMatchObject({
+      status: 409,
+      code: "PRODUCT_REVISION_CONFLICT",
+      details: { expectedRevision: 7, currentRevision: 8 },
+    });
+  });
 });

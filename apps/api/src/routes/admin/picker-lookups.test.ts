@@ -23,7 +23,6 @@ vi.mock("@scalius/core/modules/products/products.admin", () => ({
     deleteProduct: vi.fn(),
     restoreProduct: vi.fn(),
     permanentlyDeleteProduct: vi.fn(),
-    bulkUpdateVariants: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/collections", () => ({

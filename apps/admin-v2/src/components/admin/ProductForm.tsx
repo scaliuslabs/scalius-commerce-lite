@@ -26,7 +26,7 @@ import {
   OrganizationCard,
   InfoBanner,
   useProductSubmit,
-  useProductVariants,
+  extractUniqueVariantOptionValues,
   productFormSchema,
   cleanMetaDescription,
   hasVariantImagesEnabled,
@@ -41,7 +41,11 @@ import {
   type ProductVariantImageMappingFormValue,
   type Category,
 } from "./product-form";
-import type { VariantOptionLabels } from "./product-form/variants/types";
+import type {
+  ProductVariant as EditorProductVariant,
+  VariantOptionLabels,
+} from "./product-form/variants/types";
+import type { ProductRevisionConflict } from "@/lib/admin-api-error";
 
 interface ProductFormProps {
   categories: Category[];
@@ -49,12 +53,26 @@ interface ProductFormProps {
     ProductFormValues & { attributes?: Array<{ attributeId: string; value: string }>; additionalInfo?: Array<{ id: string; title: string; content: string }> }
   >;
   isEdit?: boolean;
+  aggregateRevision?: number;
+  editorVariants?: EditorProductVariant[];
+  revisionConflict?: ProductRevisionConflict | null;
+  onAggregateRevisionChange?: (revision: number) => void;
+  onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
+  onOpenRevisionConflict?: () => void;
+  onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
 }
 
 export function ProductForm({
   categories,
   defaultValues,
   isEdit = false,
+  aggregateRevision,
+  editorVariants = [],
+  revisionConflict = null,
+  onAggregateRevisionChange,
+  onRevisionConflict,
+  onOpenRevisionConflict,
+  onProductSaved,
 }: ProductFormProps) {
   const { storefrontUrl, getStorefrontPath } = useStorefrontUrl();
 
@@ -75,15 +93,15 @@ export function ProductForm({
     };
   }, [defaultValues]);
 
-  const {
-    variants,
-    uniqueOptionOneValues,
-    uniqueOptionTwoValues,
-    isLoading: variantsLoading,
-  } = useProductVariants({
-    productId: defaultValues?.id,
-    isEdit,
-  });
+  const variants = editorVariants;
+  const uniqueOptionOneValues = React.useMemo(
+    () => extractUniqueVariantOptionValues(variants, "option1"),
+    [variants],
+  );
+  const uniqueOptionTwoValues = React.useMemo(
+    () => extractUniqueVariantOptionValues(variants, "option2"),
+    [variants],
+  );
   // Initialize form
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
@@ -213,6 +231,12 @@ export function ProductForm({
       variantImageAxis: effectiveVariantImageAxis,
       variantImageMappings,
       form,
+      aggregateRevision,
+      revisionConflict,
+      onAggregateRevisionChange,
+      onRevisionConflict,
+      onOpenRevisionConflict,
+      onProductSaved,
     });
 
   // Auto-generate slug from name - ONLY for new products
@@ -249,7 +273,11 @@ export function ProductForm({
           noValidate
         >
           <div className="mb-4">
-            <h1 className="text-xl font-semibold tracking-tight">
+            <h1
+              id="product-form-heading"
+              tabIndex={-1}
+              className="text-xl font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
               {isEdit ? "Edit Product" : "Create Product"}
             </h1>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -309,7 +337,7 @@ export function ProductForm({
                 form={form}
                 variants={variants}
                 variantState={
-                  isEdit ? (variantsLoading ? "loading" : "loaded") : "unavailable"
+                  isEdit ? "loaded" : "unavailable"
                 }
                 storefrontUrl={storefrontUrl}
               />
@@ -350,7 +378,12 @@ export function ProductForm({
         isEdit={isEdit}
         isSubmitting={isSubmitting}
         isDirty={form.formState.isDirty}
-        onSave={() => form.handleSubmit(handleSubmit)()}
+        hasRevisionConflict={revisionConflict !== null}
+        onSave={
+          revisionConflict
+            ? onOpenRevisionConflict
+            : () => form.handleSubmit(handleSubmit)()
+        }
       />
     </>
     </ErrorBoundary>

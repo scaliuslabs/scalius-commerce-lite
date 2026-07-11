@@ -31,6 +31,7 @@ export const productSummarySchema = z
     discountType: z.string(),
     discountAmount: z.number(),
     freeDelivery: z.boolean(),
+    aggregateRevision: z.number().int().min(1),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
     category: z.object({ name: z.string() }),
@@ -87,6 +88,11 @@ export const productVariantSchema = z
     version: z.number().optional(),
   });
 
+/** Product variant returned by aggregate-mutating variant endpoints. */
+export const productVariantMutationSchema = productVariantSchema.extend({
+  aggregateRevision: z.number().int().min(1),
+});
+
 /** Rich content block for product detail. */
 export const productRichContentSchema = z
   .object({
@@ -137,6 +143,7 @@ export const productDetailSchema = z
     variantOption2Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
     variantImagesEnabled: z.boolean(),
     variantImageAxis: z.enum(["option1", "option2"]),
+    aggregateRevision: z.number().int().min(1),
     discountPercentage: z.number().nullable(),
     discountType: z.enum(["percentage", "flat"]).nullable(),
     discountAmount: z.number().nullable(),

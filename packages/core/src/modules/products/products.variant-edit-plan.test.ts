@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { inventoryMovements, productVariants } from "@scalius/database/schema";
+import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { checkAndAlertLowStock } from "../inventory/alerts";
-import { applyVariantEditPlan } from "./products.variants";
+import { applyVariantEditPlan, bulkCreateVariants } from "./products.variants";
 
 vi.mock("../inventory/alerts", () => ({
     checkAndAlertLowStock: vi.fn().mockResolvedValue(null),
@@ -112,14 +112,17 @@ function createAtomicDb(options: {
             return { kind: "guard" };
         },
         update(table: unknown) {
-            expect(table).toBe(productVariants);
+            expect([productVariants, products]).toContain(table);
             return {
                 set(values: Record<string, unknown>) {
                     return {
                         where() {
                             return {
                                 returning() {
-                                    return { kind: "update", values };
+                                    return {
+                                        kind: table === products ? "revision" : "update",
+                                        values,
+                                    };
                                 },
                             };
                         },
@@ -149,6 +152,7 @@ function createAtomicDb(options: {
                     }];
                 }
                 if (statement.kind === "movement") return [{ id: "movement_1" }];
+                if (statement.kind === "revision") return [{ aggregateRevision: 2 }];
                 return [{ ok: 1 }];
             });
         },
@@ -170,6 +174,7 @@ describe("atomic product variant edit plans", () => {
         };
 
         await expect(applyVariantEditPlan(db as never, "prod_1", {
+            expectedAggregateRevision: 1,
             creates: [],
             updates: [
                 { id: "var_1", price: 1 },
@@ -178,6 +183,7 @@ describe("atomic product variant edit plans", () => {
         })).rejects.toBeInstanceOf(ValidationError);
 
         await expect(applyVariantEditPlan(db as never, "prod_1", {
+            expectedAggregateRevision: 1,
             creates: [
                 createDraft,
                 { ...createDraft, size: "XL", sku: "  sku-new " },
@@ -191,27 +197,57 @@ describe("atomic product variant edit plans", () => {
         const { db, batchCalls } = createAtomicDb();
 
         const result = await applyVariantEditPlan(db as never, "prod_1", {
+            expectedAggregateRevision: 1,
             creates: [createDraft],
             updates: [{ id: "var_existing", price: 130, stock: 9 }],
         }, "admin_1");
 
         expect(batchCalls).toHaveLength(1);
-        expect(batchCalls[0]).toHaveLength(6);
+        expect(batchCalls[0]).toHaveLength(8);
         expect(batchCalls[0]).toEqual([
+            expect.objectContaining({ kind: "guard" }),
             expect.objectContaining({ kind: "guard" }),
             expect.objectContaining({ kind: "create" }),
             expect.objectContaining({ kind: "movement" }),
             expect.objectContaining({ kind: "update" }),
             expect.objectContaining({ kind: "movement" }),
             expect.objectContaining({ kind: "update" }),
+            expect.objectContaining({ kind: "revision" }),
         ]);
         expect(result.created).toHaveLength(1);
         expect(result.created[0]?.id).toMatch(/^var_/);
         expect(result.updated).toEqual([
             expect.objectContaining({ id: "var_existing", stock: 9, version: 3, stockVersion: 4 }),
         ]);
+        expect(result.aggregateRevision).toBe(2);
         expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, result.created[0]?.id);
         expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "var_existing");
+    });
+
+    it("routes bulk creates through the same initial-stock ledger transaction", async () => {
+        const { db, batchCalls } = createAtomicDb({ currentVariants: [] });
+
+        const result = await bulkCreateVariants(
+            db as never,
+            "prod_1",
+            [createDraft],
+            1,
+        );
+
+        expect(batchCalls).toHaveLength(1);
+        expect(batchCalls[0]?.map((statement) =>
+            (statement as { kind?: string }).kind
+        )).toEqual([
+            "guard",
+            "create",
+            "movement",
+            "update",
+            "revision",
+        ]);
+        expect(result.variants).toEqual([
+            expect.objectContaining({ stock: 9, stockVersion: 4 }),
+        ]);
+        expect(result.aggregateRevision).toBe(2);
     });
 
     it("surfaces a concurrent or unique conflict without reconciling any rows", async () => {
@@ -220,6 +256,7 @@ describe("atomic product variant edit plans", () => {
         });
 
         await expect(applyVariantEditPlan(db as never, "prod_1", {
+            expectedAggregateRevision: 1,
             creates: [createDraft],
             updates: [{ id: "var_existing", stock: 9 }],
         })).rejects.toBeInstanceOf(ConflictError);
@@ -232,6 +269,7 @@ describe("atomic product variant edit plans", () => {
         const { db, batchCalls } = createAtomicDb();
 
         await expect(applyVariantEditPlan(db as never, "prod_1", {
+            expectedAggregateRevision: 1,
             creates: [{ ...createDraft, size: " m " }],
             updates: [],
         })).rejects.toBeInstanceOf(ValidationError);
@@ -255,6 +293,7 @@ describe("atomic product variant edit plans", () => {
         });
 
         await expect(applyVariantEditPlan(db as never, "prod_1", {
+            expectedAggregateRevision: 1,
             creates: [],
             updates: [
                 { id: existingVariant.id, sku: secondVariant.sku },

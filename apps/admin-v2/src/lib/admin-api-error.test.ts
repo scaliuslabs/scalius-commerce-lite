@@ -3,6 +3,7 @@ import {
   AdminApiResponseError,
   isAdminApiNotFoundError,
   nullForAdminApiNotFound,
+  readProductRevisionConflict,
 } from "./admin-api-error";
 
 describe("admin API detail-loader errors", () => {
@@ -29,6 +30,44 @@ describe("admin API detail-loader errors", () => {
   it("does not disguise untyped network failures as absence", () => {
     const timeout = new Error("request timed out");
     expect(() => nullForAdminApiNotFound(timeout)).toThrow(timeout);
+  });
+
+  it("extracts only a typed product revision conflict with valid details", () => {
+    const conflict = new AdminApiResponseError(
+      "This product changed while you were editing.",
+      409,
+      "PRODUCT_REVISION_CONFLICT",
+      { expectedRevision: 3, currentRevision: 4 },
+    );
+
+    expect(readProductRevisionConflict(conflict)).toEqual({
+      expectedRevision: 3,
+      currentRevision: 4,
+    });
+    expect(
+      readProductRevisionConflict({
+        status: 409,
+        cause: {
+          code: "PRODUCT_REVISION_CONFLICT",
+          details: { expectedRevision: 4, currentRevision: null },
+        },
+      }),
+    ).toEqual({ expectedRevision: 4, currentRevision: null });
+    expect(
+      readProductRevisionConflict(
+        new AdminApiResponseError("Slug exists", 409, "CONFLICT"),
+      ),
+    ).toBeNull();
+    expect(
+      readProductRevisionConflict(
+        new AdminApiResponseError(
+          "Malformed conflict",
+          409,
+          "PRODUCT_REVISION_CONFLICT",
+          { expectedRevision: 0, currentRevision: "4" },
+        ),
+      ),
+    ).toBeNull();
   });
 
   it("fails closed for cyclic causes", () => {

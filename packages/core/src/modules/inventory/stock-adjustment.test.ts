@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { inventoryMovements, productVariants } from "@scalius/database/schema";
-import { adjustStock, setStock } from "./stock-adjustment";
+import {
+  inventoryMovements,
+  productImages,
+  productVariants,
+} from "@scalius/database/schema";
+import { ConflictError } from "@scalius/core/errors";
+import {
+  adjustStock,
+  lookupByBarcodeOrSku,
+  setStock,
+} from "./stock-adjustment";
 import { checkAndAlertLowStock } from "./alerts";
 
 vi.mock("./alerts", () => ({
@@ -75,6 +84,101 @@ function createStockDbMock(variant: {
   return { db, batchCalls };
 }
 
+type LookupRow = {
+  variantId: string;
+  variantSku: string;
+  variantSize: string | null;
+  variantColor: string | null;
+  variantPrice: number;
+  variantStock: number;
+  variantReservedStock: number;
+  variantBarcode: string | null;
+  variantBarcodeType: string | null;
+  variantLowStockThreshold: number | null;
+  productId: string;
+  productName: string;
+  productSlug: string;
+  productPrice: number;
+  productIsActive: boolean;
+};
+
+const lookupRow: LookupRow = {
+  variantId: "variant_1",
+  variantSku: "SKU-1",
+  variantSize: "M",
+  variantColor: "Red",
+  variantPrice: 120,
+  variantStock: 8,
+  variantReservedStock: 2,
+  variantBarcode: "AbC-123",
+  variantBarcodeType: "custom",
+  variantLowStockThreshold: 3,
+  productId: "product_1",
+  productName: "Main Product",
+  productSlug: "main-product",
+  productPrice: 100,
+  productIsActive: true,
+};
+
+function createLookupDbMock(options: {
+  barcodeMatches?: LookupRow[];
+  skuMatch?: LookupRow;
+  imageUrl?: string | null;
+}) {
+  let selectCount = 0;
+  let lookupSelectCount = 0;
+  const barcodeLimits: number[] = [];
+
+  const db = {
+    select() {
+      selectCount++;
+      return {
+        from(table: unknown) {
+          if (table === productImages) {
+            return {
+              where() {
+                return {
+                  get: async () =>
+                    options.imageUrl === undefined
+                      ? undefined
+                      : { url: options.imageUrl },
+                };
+              },
+            };
+          }
+
+          const lookupIndex = ++lookupSelectCount;
+          return {
+            innerJoin() {
+              return {
+                where() {
+                  if (lookupIndex === 1) {
+                    return {
+                      limit: async (limit: number) => {
+                        barcodeLimits.push(limit);
+                        return options.barcodeMatches ?? [];
+                      },
+                    };
+                  }
+                  return {
+                    get: async () => options.skuMatch,
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  return {
+    db,
+    barcodeLimits,
+    getSelectCount: () => selectCount,
+  };
+}
+
 describe("stock adjustment ledger", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -127,5 +231,80 @@ describe("stock adjustment ledger", () => {
       values: { stock: 0 },
     });
     expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
+  });
+});
+
+describe("scanner barcode identity lookup", () => {
+  it("bounds normalized barcode lookup to two rows before returning a match", async () => {
+    const { db, barcodeLimits, getSelectCount } = createLookupDbMock({
+      barcodeMatches: [lookupRow],
+      imageUrl: "https://cdn.example.com/main.jpg",
+    });
+
+    const result = await lookupByBarcodeOrSku(db as never, "  ABC-123  ");
+
+    expect(barcodeLimits).toEqual([2]);
+    expect(getSelectCount()).toBe(2);
+    expect(result).toEqual({
+      variant: {
+        id: "variant_1",
+        sku: "SKU-1",
+        size: "M",
+        color: "Red",
+        price: 120,
+        stock: 8,
+        reservedStock: 2,
+        available: 6,
+        barcode: "AbC-123",
+        barcodeType: "custom",
+        lowStockThreshold: 3,
+      },
+      product: {
+        id: "product_1",
+        name: "Main Product",
+        slug: "main-product",
+        price: 100,
+        isActive: true,
+        imageUrl: "https://cdn.example.com/main.jpg",
+      },
+    });
+  });
+
+  it("fails closed when legacy data contains two active barcode matches", async () => {
+    const { db, barcodeLimits, getSelectCount } = createLookupDbMock({
+      barcodeMatches: [
+        lookupRow,
+        { ...lookupRow, variantId: "variant_2", variantSku: "SKU-2" },
+      ],
+    });
+
+    await expect(
+      lookupByBarcodeOrSku(db as never, "abc-123"),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    expect(barcodeLimits).toEqual([2]);
+    expect(getSelectCount()).toBe(1);
+  });
+
+  it("falls back to a trimmed exact SKU when no barcode matches", async () => {
+    const { db, barcodeLimits, getSelectCount } = createLookupDbMock({
+      barcodeMatches: [],
+      skuMatch: { ...lookupRow, variantBarcode: null, variantBarcodeType: null },
+      imageUrl: null,
+    });
+
+    const result = await lookupByBarcodeOrSku(db as never, "  SKU-1  ");
+
+    expect(barcodeLimits).toEqual([2]);
+    expect(getSelectCount()).toBe(3);
+    expect(result?.variant.sku).toBe("SKU-1");
+    expect(result?.product.imageUrl).toBeNull();
+  });
+
+  it("does no database work for a blank scanner value", async () => {
+    const { db, getSelectCount } = createLookupDbMock({});
+
+    await expect(lookupByBarcodeOrSku(db as never, " \n\t ")).resolves.toBeNull();
+    expect(getSelectCount()).toBe(0);
   });
 });

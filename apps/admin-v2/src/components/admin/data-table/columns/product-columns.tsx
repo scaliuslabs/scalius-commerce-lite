@@ -8,6 +8,7 @@ import { createSelectColumn, createDateColumn, createActionsColumn } from "./col
 
 export interface ProductListItem {
   id: string;
+  aggregateRevision: number;
   name: string;
   slug: string;
   price: number;
@@ -38,9 +39,9 @@ interface ProductColumnOptions {
   canPermanentDelete: boolean;
   onView: (id: string) => void;
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  onRestore: (id: string) => void;
-  onPermanentDelete: (id: string) => void;
+  onDelete: (product: ProductListItem) => void;
+  onRestore: (product: ProductListItem) => void;
+  onPermanentDelete: (product: ProductListItem) => void;
 }
 
 function formatPrice(price: number, symbol: string): string {
@@ -202,10 +203,10 @@ export function getProductColumns(
       showTrashed: opts.showTrashed,
       onView: (p) => opts.onView(p.id),
       onEdit: opts.canEdit ? (p) => opts.onEdit(p.id) : undefined,
-      onDelete: opts.canDelete ? (p) => opts.onDelete(p.id) : undefined,
-      onRestore: opts.canRestore ? (p) => opts.onRestore(p.id) : undefined,
+      onDelete: opts.canDelete ? opts.onDelete : undefined,
+      onRestore: opts.canRestore ? opts.onRestore : undefined,
       onPermanentDelete: opts.canPermanentDelete
-        ? (p) => opts.onPermanentDelete(p.id)
+        ? opts.onPermanentDelete
         : undefined,
       getExtraActions: (p) =>
         !opts.showTrashed

@@ -93941,6 +93941,102 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "security": [
@@ -94088,6 +94184,10 @@
                               "freeDelivery": {
                                 "type": "boolean"
                               },
+                              "aggregateRevision": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -94144,6 +94244,7 @@
                               "discountType",
                               "discountAmount",
                               "freeDelivery",
+                              "aggregateRevision",
                               "createdAt",
                               "updatedAt",
                               "category",
@@ -94733,10 +94834,15 @@
                       "properties": {
                         "id": {
                           "type": "string"
+                        },
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
-                        "id"
+                        "id",
+                        "aggregateRevision"
                       ]
                     }
                   },
@@ -95343,11 +95449,26 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "productIds": {
+                  "products": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "expectedAggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "expectedAggregateRevision"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   },
                   "permanent": {
                     "type": "boolean",
@@ -95355,15 +95476,68 @@
                   }
                 },
                 "required": [
-                  "productIds"
+                  "products"
                 ]
               }
             }
           }
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Products deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "products": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "aggregateRevision": {
+                                "type": "integer",
+                                "minimum": 1
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "aggregateRevision"
+                            ]
+                          }
+                        },
+                        "deletedIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "products",
+                        "deletedIds"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -95526,40 +95700,96 @@
             }
           },
           "409": {
-            "description": "Conflict",
+            "description": "Product revision or domain conflict",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string"
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
                         },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "success",
-                    "error"
                   ]
                 }
               }
@@ -95775,6 +96005,10 @@
                             "option1",
                             "option2"
                           ]
+                        },
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
                         },
                         "discountPercentage": {
                           "type": "number",
@@ -96154,6 +96388,7 @@
                         "variantOption2Schema",
                         "variantImagesEnabled",
                         "variantImageAxis",
+                        "aggregateRevision",
                         "discountPercentage",
                         "discountType",
                         "discountAmount",
@@ -96495,6 +96730,10 @@
                   },
                   "id": {
                     "type": "string"
+                  },
+                  "expectedAggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 },
                 "required": [
@@ -96509,7 +96748,8 @@
                   "productCondition",
                   "slug",
                   "images",
-                  "id"
+                  "id",
+                  "expectedAggregateRevision"
                 ]
               }
             }
@@ -96531,7 +96771,15 @@
                     },
                     "data": {
                       "type": "object",
-                      "properties": {}
+                      "properties": {
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "aggregateRevision"
+                      ]
                     }
                   },
                   "required": [
@@ -96702,6 +96950,102 @@
               }
             }
           },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -96802,11 +97146,51 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": true,
+            "name": "expectedAggregateRevision",
+            "in": "query"
           }
         ],
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Product moved to trash",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "aggregateRevision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -96963,6 +97347,102 @@
                   "required": [
                     "success",
                     "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    }
                   ]
                 }
               }
@@ -97070,6 +97550,15 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": true,
+            "name": "expectedAggregateRevision",
+            "in": "query"
           }
         ],
         "responses": {
@@ -97088,7 +97577,15 @@
                     },
                     "data": {
                       "type": "object",
-                      "properties": {}
+                      "properties": {
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "aggregateRevision"
+                      ]
                     }
                   },
                   "required": [
@@ -97259,6 +97756,102 @@
               }
             }
           },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -97361,6 +97954,15 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": true,
+            "name": "expectedAggregateRevision",
+            "in": "query"
           }
         ],
         "responses": {
@@ -97528,40 +98130,96 @@
             }
           },
           "409": {
-            "description": "Conflict",
+            "description": "Product revision or domain conflict",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string"
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
                         },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "success",
-                    "error"
                   ]
                 }
               }
@@ -97740,6 +98398,10 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0
+                  },
+                  "expectedAggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 },
                 "required": [
@@ -97748,7 +98410,8 @@
                   "weight",
                   "sku",
                   "price",
-                  "stock"
+                  "stock",
+                  "expectedAggregateRevision"
                 ]
               }
             }
@@ -97902,6 +98565,10 @@
                         },
                         "version": {
                           "type": "number"
+                        },
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
@@ -97913,7 +98580,8 @@
                         "sku",
                         "price",
                         "stock",
-                        "reservedStock"
+                        "reservedStock",
+                        "aggregateRevision"
                       ]
                     }
                   },
@@ -98080,6 +98748,102 @@
                   "required": [
                     "success",
                     "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    }
                   ]
                 }
               }
@@ -98529,6 +99293,102 @@
               }
             }
           },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -98710,6 +99570,10 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0
+                  },
+                  "expectedAggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 },
                 "required": [
@@ -98718,7 +99582,8 @@
                   "weight",
                   "sku",
                   "price",
-                  "stock"
+                  "stock",
+                  "expectedAggregateRevision"
                 ]
               }
             }
@@ -98872,6 +99737,10 @@
                         },
                         "version": {
                           "type": "number"
+                        },
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
@@ -98883,7 +99752,8 @@
                         "sku",
                         "price",
                         "stock",
-                        "reservedStock"
+                        "reservedStock",
+                        "aggregateRevision"
                       ]
                     }
                   },
@@ -99056,40 +99926,96 @@
             }
           },
           "409": {
-            "description": "Conflict",
+            "description": "Product revision or domain conflict",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string"
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
                         },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "success",
-                    "error"
                   ]
                 }
               }
@@ -99203,11 +100129,51 @@
             "required": true,
             "name": "variantId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": true,
+            "name": "expectedAggregateRevision",
+            "in": "query"
           }
         ],
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Variant deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "aggregateRevision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -99364,6 +100330,102 @@
                   "required": [
                     "success",
                     "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    }
                   ]
                 }
               }
@@ -99634,8 +100696,15 @@
                       ]
                     },
                     "default": []
+                  },
+                  "expectedAggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   }
-                }
+                },
+                "required": [
+                  "expectedAggregateRevision"
+                ]
               }
             }
           }
@@ -99958,11 +101027,16 @@
                               "reservedStock"
                             ]
                           }
+                        },
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
                         "created",
-                        "updated"
+                        "updated",
+                        "aggregateRevision"
                       ]
                     }
                   },
@@ -100135,40 +101209,96 @@
             }
           },
           "409": {
-            "description": "Conflict",
+            "description": "Product revision or domain conflict",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string"
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
                         },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "success",
-                    "error"
                   ]
                 }
               }
@@ -100375,10 +101505,15 @@
                       ]
                     },
                     "minItems": 1
+                  },
+                  "expectedAggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 },
                 "required": [
-                  "variants"
+                  "variants",
+                  "expectedAggregateRevision"
                 ]
               }
             }
@@ -100554,663 +101689,17 @@
                         },
                         "count": {
                           "type": "number"
+                        },
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
                         "variants",
-                        "count"
+                        "count",
+                        "aggregateRevision"
                       ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          }
-        ]
-      }
-    },
-    "/api/v1/admin/products/{id}/variants/bulk-delete": {
-      "post": {
-        "tags": [
-          "Admin - Products"
-        ],
-        "summary": "Bulk delete variants",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "variantIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "required": [
-                  "variantIds"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "No content"
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          }
-        ]
-      }
-    },
-    "/api/v1/admin/products/{id}/variants/bulk-update": {
-      "post": {
-        "tags": [
-          "Admin - Products"
-        ],
-        "summary": "Bulk update variants",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "updates": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "size": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "color": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "weight": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "sku": {
-                          "type": "string"
-                        },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 1000000000000
-                        },
-                        "stock": {
-                          "type": "number",
-                          "minimum": 0
-                        },
-                        "trackInventory": {
-                          "type": "boolean"
-                        },
-                        "barcode": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 50
-                        },
-                        "barcodeType": {
-                          "type": "string",
-                          "nullable": true,
-                          "enum": [
-                            "ean13",
-                            "upc",
-                            "isbn",
-                            "gtin",
-                            "custom",
-                            null
-                          ]
-                        }
-                      },
-                      "required": [
-                        "id"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "updates"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Variants updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {}
                     }
                   },
                   "required": [
@@ -101382,40 +101871,96 @@
             }
           },
           "409": {
-            "description": "Conflict",
+            "description": "Product revision or domain conflict",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
+                  "anyOf": [
+                    {
                       "type": "object",
                       "properties": {
-                        "code": {
-                          "type": "string"
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
                         },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
                         }
                       },
                       "required": [
-                        "code",
-                        "message"
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
                       ]
                     }
-                  },
-                  "required": [
-                    "success",
-                    "error"
                   ]
                 }
               }
@@ -101509,12 +102054,12 @@
         ]
       }
     },
-    "/api/v1/admin/products/{id}/variants/{variantId}/duplicate": {
+    "/api/v1/admin/products/{id}/variants/bulk-delete": {
       "post": {
         "tags": [
           "Admin - Products"
         ],
-        "summary": "Duplicate a variant",
+        "summary": "Bulk delete variants",
         "parameters": [
           {
             "schema": {
@@ -101523,19 +102068,36 @@
             "required": true,
             "name": "id",
             "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "variantId",
-            "in": "path"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "variantIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expectedAggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "variantIds",
+                  "expectedAggregateRevision"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
-          "201": {
-            "description": "Variant duplicated",
+          "200": {
+            "description": "Variants deleted",
             "content": {
               "application/json": {
                 "schema": {
@@ -101550,149 +102112,13 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "productId": {
-                          "type": "string"
-                        },
-                        "size": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "color": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "weight": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "sku": {
-                          "type": "string"
-                        },
-                        "price": {
-                          "type": "number"
-                        },
-                        "stock": {
-                          "type": "number"
-                        },
-                        "reservedStock": {
-                          "type": "number"
-                        },
-                        "preorderStock": {
-                          "type": "number"
-                        },
-                        "isDefault": {
-                          "type": "boolean"
-                        },
-                        "trackInventory": {
-                          "type": "boolean"
-                        },
-                        "lowStockThreshold": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "allowPreorder": {
-                          "type": "boolean"
-                        },
-                        "preorderDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "preorderMessage": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "allowBackorder": {
-                          "type": "boolean"
-                        },
-                        "backorderLimit": {
-                          "type": "number"
-                        },
-                        "discountPercentage": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "discountType": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "discountAmount": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "barcode": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "barcodeType": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "colorSortOrder": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "sizeSortOrder": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "stockVersion": {
-                          "type": "number"
-                        },
-                        "version": {
-                          "type": "number"
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
-                        "id",
-                        "productId",
-                        "size",
-                        "color",
-                        "weight",
-                        "sku",
-                        "price",
-                        "stock",
-                        "reservedStock"
+                        "aggregateRevision"
                       ]
                     }
                   },
@@ -101859,6 +102285,102 @@
                   "required": [
                     "success",
                     "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    }
                   ]
                 }
               }
@@ -102339,11 +102861,16 @@
                         "sortOrder"
                       ]
                     }
+                  },
+                  "expectedAggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 },
                 "required": [
                   "colors",
-                  "sizes"
+                  "sizes",
+                  "expectedAggregateRevision"
                 ]
               }
             }
@@ -102366,12 +102893,13 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "message": {
-                          "type": "string"
+                        "aggregateRevision": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
-                        "message"
+                        "aggregateRevision"
                       ]
                     }
                   },
@@ -102538,6 +103066,102 @@
                   "required": [
                     "success",
                     "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Product revision or domain conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_REVISION_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "expectedRevision": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "currentRevision": {
+                                  "type": "integer",
+                                  "nullable": true,
+                                  "minimum": 1
+                                }
+                              },
+                              "required": [
+                                "expectedRevision",
+                                "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    }
                   ]
                 }
               }
@@ -113143,6 +113767,10 @@
                               },
                               "version": {
                                 "type": "integer"
+                              },
+                              "aggregateRevision": {
+                                "type": "integer",
+                                "minimum": 1
                               }
                             },
                             "required": [
@@ -113154,7 +113782,8 @@
                               "sku",
                               "taxClassId",
                               "taxClassName",
-                              "version"
+                              "version",
+                              "aggregateRevision"
                             ]
                           }
                         },
@@ -113469,11 +114098,16 @@
                   "expectedVersion": {
                     "type": "integer",
                     "minimum": 1
+                  },
+                  "expectedAggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 },
                 "required": [
                   "taxClassId",
-                  "expectedVersion"
+                  "expectedVersion",
+                  "expectedAggregateRevision"
                 ],
                 "additionalProperties": false
               }
@@ -113516,13 +114150,18 @@
                             },
                             "version": {
                               "type": "integer"
+                            },
+                            "aggregateRevision": {
+                              "type": "integer",
+                              "minimum": 1
                             }
                           },
                           "required": [
                             "kind",
                             "id",
                             "taxClassId",
-                            "version"
+                            "version",
+                            "aggregateRevision"
                           ]
                         }
                       },
