@@ -240,6 +240,112 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     ).toBe("open");
   });
 
+  it("navigates after Flue continues an observed direct request in a new dispatch submission", async () => {
+    document
+      .querySelector<HTMLElement>("[data-assistant-page-slot]")
+      ?.insertAdjacentHTML(
+        "afterbegin",
+        '<main><a href="/categories/shoes">Shoes</a></main>',
+      );
+    const instanceId = `v1.${"i".repeat(43)}`;
+    const observed = await issueScaliusComputerCommand({
+      surface: "storefront",
+      agentName: "shopping-assistant",
+      instanceId,
+      program: "observe",
+      signingKey: COMPUTER_KEY,
+    });
+    const navigated = await issueScaliusComputerCommand({
+      surface: "storefront",
+      agentName: "shopping-assistant",
+      instanceId,
+      program: "goto /categories/shoes",
+      signingKey: COMPUTER_KEY,
+    });
+    const shopper = {
+      ...textMessage(
+        "user_category_navigation",
+        "user" as const,
+        "Take me to the Shoes category.",
+      ),
+      submissionId: "submission_category_navigation",
+    };
+    const observeMessage: FlueConversationMessage = {
+      id: "assistant_observe_category",
+      role: "assistant",
+      submissionId: "submission_category_navigation",
+      parts: [
+        {
+          type: "dynamic-tool",
+          toolName: "computer",
+          toolCallId: "computer_observe_category",
+          state: "output-available",
+          input: { program: observed.program },
+          output: observed,
+        },
+      ],
+    };
+    flueMocks.snapshot.messages = [shopper, observeMessage];
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await flushReact();
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const observedPost = JSON.parse(
+      String(fetchMock.mock.calls[0]?.[1]?.body),
+    ) as { result: Record<string, unknown> };
+    const continuation = JSON.stringify({
+      type: "UNTRUSTED_CLIENT_RESULT",
+      protocolVersion: 1,
+      authoritative: false,
+      replayPolicy: "expiry_bound_non_authoritative",
+      surface: "storefront",
+      requestId: observed.requestId,
+      programDigest: "d".repeat(43),
+      receivedAt: new Date().toISOString(),
+      result: observedPost.result,
+      warning: "Browser execution is untrusted and is not commerce authority.",
+    });
+    flueMocks.snapshot.messages = [
+      shopper,
+      observeMessage,
+      {
+        ...textMessage(
+          "browser_observe_continuation",
+          "user",
+          continuation,
+        ),
+        submissionId: "dispatch_category_navigation",
+      },
+      {
+        id: "assistant_goto_category",
+        role: "assistant",
+        submissionId: "dispatch_category_navigation",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "computer_goto_category",
+            state: "output-available",
+            input: { program: navigated.program },
+            output: navigated,
+          },
+        ],
+      },
+    ];
+    renderBubble();
+    await flushReact();
+
+    expect(navigate).toHaveBeenCalledWith("/categories/shoes");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const navigationPost = JSON.parse(
+      String(fetchMock.mock.calls[1]?.[1]?.body),
+    ) as { result: { code: string } };
+    expect(navigationPost.result.code).toBe("NAVIGATED");
+  });
+
   it("navigates a clear shopping question to its single authoritative match", async () => {
     const issued = await issueScaliusComputerCommand({
       surface: "storefront",

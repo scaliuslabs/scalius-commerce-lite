@@ -28,6 +28,22 @@ const output = v.object({
   ticket: v.string(),
 });
 
+export const STOREFRONT_COMPUTER_DOCUMENTED_PROGRAMS = [
+  "observe",
+  "help",
+  "help goto",
+  'goto "/known-route?query=value"',
+  "click @r1.e1",
+  'fill @r1.e1 "text"',
+  'select @r1.e1 "value or label"',
+  "submit @r1.e1",
+  "refresh",
+  'fill @r1.e1 "text"; select @r1.e2 "value"; click @r1.e3',
+] as const;
+
+export const STOREFRONT_COMPUTER_TOOL_DESCRIPTION =
+  'Input exactly one JSON object {"program":"..."}. Program grammar: observe; help [command]; goto "/known-route?query=value"; click @rN.eN; fill @rN.eN "text"; select @rN.eN "value or label"; submit @rN.eN; or refresh. observe, help, goto, and refresh must each be alone. Action programs may batch fill/select plus at most one final click/submit with semicolons; every handle must come from one observed revision. Never include prose or extra properties. A client_command remains pending until a matching UNTRUSTED_CLIENT_RESULT arrives.';
+
 export function createStorefrontComputerTool(
   instanceId: string,
   signingKey: string,
@@ -41,8 +57,7 @@ export function createStorefrontComputerTool(
   let commandPending = false;
   return defineTool({
     name: "computer",
-    description:
-      "Inspect or control the shopper's active Storefront page with one compact program. Start with observe. The returned client_command is pending until a later UNTRUSTED_CLIENT_RESULT arrives.",
+    description: STOREFRONT_COMPUTER_TOOL_DESCRIPTION,
     input,
     output,
     async run({ input: { program }, signal }) {
