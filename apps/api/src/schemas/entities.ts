@@ -103,6 +103,17 @@ export const productAttributeValueSchema = z
     value: z.string(),
   })
 
+export const productVariantImageMappingSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  imageId: z.string(),
+  variantId: z.string().nullable(),
+  optionAxis: z.enum(["option1", "option2"]).nullable(),
+  optionValue: z.string().nullable(),
+  normalizedOptionValue: z.string().nullable(),
+  sortOrder: z.number(),
+});
+
 /** Product detail — returned by getProductDetails (admin). */
 export const productDetailSchema = z
   .object({
@@ -124,6 +135,8 @@ export const productDetailSchema = z
     variantOption2Label: z.string(),
     variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
     variantOption2Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
+    variantImagesEnabled: z.boolean(),
+    variantImageAxis: z.enum(["option1", "option2"]),
     discountPercentage: z.number().nullable(),
     discountType: z.enum(["percentage", "flat"]).nullable(),
     discountAmount: z.number().nullable(),
@@ -134,6 +147,7 @@ export const productDetailSchema = z
     category: z.object({ name: z.string().nullable() }).nullable(),
     variants: z.array(productVariantSchema),
     images: z.array(productImageSchema),
+    variantImageMappings: z.array(productVariantImageMappingSchema),
     additionalInfo: z.array(productRichContentSchema),
     attributes: z.array(productAttributeValueSchema),
   })

@@ -6,8 +6,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
     getStorefrontFeedProducts,
+    getStorefrontCollectionProducts,
+    getStorefrontProducts,
     searchStorefrontProducts,
 } from "./products.storefront";
+import { resolvePublicAttributeFilters } from "../attributes/attributes.public";
 
 let sqlite: DatabaseSync;
 let db: Database;
@@ -228,6 +231,19 @@ function insertMixedTopologySkus(productId: string): void {
     );
 }
 
+function insertAttribute(
+    productId: string,
+    attribute: { id: string; name: string; slug: string },
+    value: string,
+): void {
+    sqlite.prepare(
+        "INSERT OR IGNORE INTO product_attributes (id, name, slug, filterable) VALUES (?, ?, ?, 1)",
+    ).run(attribute.id, attribute.name, attribute.slug);
+    sqlite.prepare(
+        "INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES (?, ?, ?, ?)",
+    ).run(`value_${productId}_${attribute.id}`, productId, attribute.id, value);
+}
+
 describe("storefront feed category search", () => {
     beforeEach(() => {
         sqlite = new DatabaseSync(":memory:");
@@ -424,6 +440,144 @@ describe("storefront feed category search", () => {
         expect(searchResult.data[0]?.variants[0]).not.toHaveProperty("barcode");
         expect(searchResult.data[0]?.variants[0]).not.toHaveProperty("barcodeType");
         expect(searchResult.data[0]?.variants[0]).not.toHaveProperty("deletedAt");
+        expect(maxBoundParameters).toBeLessThanOrEqual(100);
+    });
+
+    it("applies OR within facets, AND across facets, and returns self-excluding counts", async () => {
+        const color = { id: "attr_color", name: "Color", slug: "color" };
+        const material = { id: "attr_material", name: "Material", slug: "material" };
+        const brand = { id: "attr_brand", name: "Brand", slug: "brand" };
+        for (const [productId, values] of [
+            ["prod_runner", ["Red", "Cotton", "A"]],
+            ["prod_loafer", ["Blue", "Cotton", "A"]],
+            ["prod_slip_on", ["Blue", "Silk", "B"]],
+        ] as const) {
+            insertAttribute(productId, color, values[0]);
+            insertAttribute(productId, material, values[1]);
+            insertAttribute(productId, brand, values[2]);
+        }
+        sqlite.prepare("UPDATE product_variants SET price = 500 WHERE product_id = 'prod_runner'").run();
+        sqlite.prepare("UPDATE product_variants SET price = 1500 WHERE product_id = 'prod_slip_on'").run();
+
+        const result = await getStorefrontProducts(db, {
+            category: "cat_shoes",
+            minPrice: 800,
+            page: 1,
+            limit: 20,
+            attributeFilters: [
+                { ...color, values: ["Red", "Blue"] },
+                { ...material, values: ["Cotton"] },
+            ],
+        });
+
+        expect(result.products.map((product) => product.id)).toEqual(["prod_loafer"]);
+        expect(result.pagination.total).toBe(1);
+        expect(result.priceRange).toEqual({ min: 500, max: 1000 });
+        expect(result.facets).toEqual([
+            {
+                ...brand,
+                values: [
+                    { value: "A", count: 1 },
+                    { value: "B", count: 0 },
+                ],
+            },
+            {
+                ...color,
+                values: [
+                    { value: "Blue", count: 1 },
+                    { value: "Red", count: 0 },
+                ],
+            },
+            {
+                ...material,
+                values: [
+                    { value: "Cotton", count: 1 },
+                    { value: "Silk", count: 1 },
+                ],
+            },
+        ]);
+        expect(maxBoundParameters).toBeLessThanOrEqual(100);
+    });
+
+    it("paginates manual collection membership in saved curated order", async () => {
+        const membership = {
+            productIds: ["prod_slip_on", "prod_runner", "prod_loafer"],
+        };
+        const firstPage = await getStorefrontCollectionProducts(db, membership, {
+            page: 1,
+            limit: 2,
+        });
+        const secondPage = await getStorefrontCollectionProducts(db, membership, {
+            page: 2,
+            limit: 2,
+        });
+
+        expect(firstPage.products.map((product) => product.id)).toEqual([
+            "prod_slip_on",
+            "prod_runner",
+        ]);
+        expect(secondPage.products.map((product) => product.id)).toEqual([
+            "prod_loafer",
+        ]);
+        expect(firstPage.pagination).toEqual({
+            page: 1,
+            limit: 2,
+            total: 3,
+            totalPages: 2,
+        });
+        expect(secondPage.pagination.total).toBe(3);
+        expect(maxBoundParameters).toBeLessThanOrEqual(100);
+    });
+
+    it("unions mixed collection membership with curated products first and no duplicates", async () => {
+        const membership = {
+            productIds: ["prod_runner", "prod_oxford"],
+            categoryIds: ["cat_shoes"],
+        };
+        const firstPage = await getStorefrontCollectionProducts(db, membership, {
+            page: 1,
+            limit: 2,
+        });
+        const secondPage = await getStorefrontCollectionProducts(db, membership, {
+            page: 2,
+            limit: 2,
+        });
+
+        expect(firstPage.products.map((product) => product.id)).toEqual([
+            "prod_runner",
+            "prod_oxford",
+        ]);
+        expect(secondPage.products.map((product) => product.id)).toEqual([
+            "prod_slip_on",
+            "prod_loafer",
+        ]);
+        expect(firstPage.pagination).toEqual({
+            page: 1,
+            limit: 2,
+            total: 4,
+            totalPages: 2,
+        });
+        expect(new Set([
+            ...firstPage.products.map((product) => product.id),
+            ...secondPage.products.map((product) => product.id),
+        ]).size).toBe(4);
+        expect(maxBoundParameters).toBeLessThanOrEqual(100);
+    });
+
+    it("resolves repeated public values by valid filterable slug and enforces the 90-value boundary", async () => {
+        const color = { id: "attr_color", name: "Color", slug: "color" };
+        insertAttribute("prod_runner", color, "Red");
+        insertAttribute("prod_loafer", color, "Blue");
+
+        await expect(resolvePublicAttributeFilters(db, {
+            color: ["Red", "Blue", "Missing"],
+            unknown: ["Anything"],
+        }, [])).resolves.toEqual([
+            { ...color, values: ["Red", "Blue"] },
+        ]);
+        await expect(resolvePublicAttributeFilters(db, {
+            color: Array.from({ length: 91 }, (_, index) => `Value ${index}`),
+        }, [])).rejects.toThrow(/At most 90 attribute filter values/);
         expect(maxBoundParameters).toBeLessThanOrEqual(100);
     });
 });

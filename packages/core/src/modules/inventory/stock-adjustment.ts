@@ -29,6 +29,8 @@ export interface StockSetResult {
 type StockVariantState = {
   id: string;
   stock: number;
+  reservedStock: number;
+  preorderStock: number;
   stockVersion: number;
 };
 
@@ -50,10 +52,20 @@ async function applyStrictStockSet(
   const movementInsert = buildStockMovementClaim(db, {
     movementId: crypto.randomUUID(),
     variantId: variant.id,
-    stockVersion: variant.stockVersion,
+    pool: "regular",
     quantity: delta,
-    previousStock,
-    newStock: targetStock,
+    before: {
+      stock: variant.stock,
+      reservedStock: variant.reservedStock,
+      preorderStock: variant.preorderStock,
+      stockVersion: variant.stockVersion,
+    },
+    after: {
+      stock: targetStock,
+      reservedStock: variant.reservedStock,
+      preorderStock: variant.preorderStock,
+      stockVersion: variant.stockVersion + 1,
+    },
     notes,
     adminUserId,
   });
@@ -105,6 +117,8 @@ export async function adjustStock(
       .select({
         id: productVariants.id,
         stock: productVariants.stock,
+        reservedStock: productVariants.reservedStock,
+        preorderStock: productVariants.preorderStock,
         stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)
@@ -160,6 +174,8 @@ export async function setStock(
       .select({
         id: productVariants.id,
         stock: productVariants.stock,
+        reservedStock: productVariants.reservedStock,
+        preorderStock: productVariants.preorderStock,
         stockVersion: productVariants.stockVersion,
       })
       .from(productVariants)

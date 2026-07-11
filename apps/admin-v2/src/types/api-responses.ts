@@ -89,6 +89,8 @@ export interface Product {
   variantOption2Label: string;
   variantOption1Schema: "size" | "color" | "material" | "pattern" | "none";
   variantOption2Schema: "size" | "color" | "material" | "pattern" | "none";
+  variantImagesEnabled: boolean;
+  variantImageAxis: "option1" | "option2";
   createdAt: Date | string | number;
   updatedAt: Date | string | number;
   deletedAt: Date | string | number | null;
@@ -185,6 +187,16 @@ export interface ProductDetail extends Product {
   category: { name: string | null };
   variants: ProductVariant[];
   images: ProductImageDetail[];
+  variantImageMappings: Array<{
+    id: string;
+    productId: string;
+    imageId: string;
+    variantId: string | null;
+    optionAxis: "option1" | "option2" | null;
+    optionValue: string | null;
+    normalizedOptionValue: string | null;
+    sortOrder: number;
+  }>;
   attributes: Array<{ attributeId: string; value: string }>;
   additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;
 }

@@ -4,11 +4,21 @@ import { eq, isNull, and } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+import { paginationSchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { CACHE_TTLS } from "../utils/cache-ttls";
-import { resolveCollectionProducts } from "@scalius/core/modules/collections/collections.service";
+import { getPublicCollectionCatalog } from "@scalius/core/modules/collections/collections.service";
 import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
+import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
 import { toIsoTimestamp } from "../utils/timestamps";
+import {
+  isPublicProductListCacheable,
+  normalizePublicFtsSearchCacheValue,
+  normalizePublicIntegerCacheValue,
+  normalizePublicListingSearchParam,
+  normalizePublicNumberCacheValue,
+  readRepeatedPublicQueryValues,
+} from "../utils/public-search-query";
 
 // Create an OpenAPIHono app for collection routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -20,6 +30,21 @@ app.use(
     ttl: CACHE_TTLS.STANDARD,
     keyPrefix: "api:collections:",
     varyByQuery: true,
+    queryDefaults: (c) =>
+      c.req.path.replace(/\/$/, "") === "/api/v1/collections"
+        ? {}
+        : { page: 1, limit: 20 },
+    queryNormalizers: {
+      search: normalizePublicFtsSearchCacheValue,
+      page: normalizePublicIntegerCacheValue,
+      limit: normalizePublicIntegerCacheValue,
+      minPrice: normalizePublicNumberCacheValue,
+      maxPrice: normalizePublicNumberCacheValue,
+    },
+    cacheCondition: (c) =>
+      c.req.path.replace(/\/$/, "") === "/api/v1/collections"
+        ? true
+        : isPublicProductListCacheable(c.req.url),
     methods: ["GET"]
   }),
 );
@@ -62,6 +87,35 @@ const collectionProductSchema = z.object({
   imageUrl: z.string().nullable(),
   discountedPrice: z.number(),
 }).passthrough();
+
+const collectionFacetSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
+});
+
+const collectionCatalogQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(1000).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  search: z.string().optional(),
+  minPrice: z.coerce.number().min(0).optional(),
+  maxPrice: z.coerce.number().min(0).optional(),
+  freeDelivery: z.enum(["true", "false"]).optional(),
+  hasDiscount: z.enum(["true", "false"]).optional(),
+}).superRefine((value, ctx) => {
+  if (
+    value.minPrice !== undefined &&
+    value.maxPrice !== undefined &&
+    value.minPrice > value.maxPrice
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["maxPrice"],
+      message: "Maximum price must be greater than or equal to minimum price",
+    });
+  }
+});
 
 // GET /collections — list all active collections
 const listCollectionsRoute = createRoute({
@@ -128,6 +182,7 @@ const getCollectionByIdRoute = createRoute({
     params: z.object({
       id: z.string(),
     }),
+    query: collectionCatalogQuerySchema,
   },
   responses: {
     200: {
@@ -137,6 +192,9 @@ const getCollectionByIdRoute = createRoute({
         categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough()),
         products: z.array(collectionProductSchema),
         featuredProduct: collectionProductSchema.optional(),
+        pagination: paginationSchema,
+        priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
+        facets: z.array(collectionFacetSchema),
       })) } },
     },
     404: errorResponses[404],
@@ -147,30 +205,28 @@ const getCollectionByIdRoute = createRoute({
 app.openapi(getCollectionByIdRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
+  const params = c.req.valid("query");
+  const attributeFilters = await resolvePublicAttributeFilters(
+    db,
+    readRepeatedPublicQueryValues(c.req.url),
+    Object.keys(params),
+  );
+  const result = await getPublicCollectionCatalog(db, id, {
+    ...params,
+    search: normalizePublicListingSearchParam(params.search),
+    attributeFilters,
+  });
 
-  const collection = await db
-    .select()
-    .from(collections)
-    .where(
-      and(
-        eq(collections.id, id),
-        eq(collections.isActive, true),
-        isNull(collections.deletedAt),
-      ),
-    )
-    .get();
-
-  if (!collection) {
+  if (!result) {
     throw new NotFoundError("Collection not found");
   }
 
-  const config = normalizeCollectionConfig(collection.config);
-  const resolved = await resolveCollectionProducts(db, config);
+  const { collection, categories, products, featuredProduct, pagination, priceRange, facets } = result;
 
   return ok(c, {
     collection: {
       ...collection,
-      config,
+      config: normalizeCollectionConfig(collection.config),
       createdAt: formatTimestamp(
         collection.createdAt,
         collection.id,
@@ -182,9 +238,12 @@ app.openapi(getCollectionByIdRoute, async (c) => {
         "updatedAt",
       )
     },
-    categories: resolved.categories,
-    products: resolved.products,
-    ...(resolved.featuredProduct && { featuredProduct: resolved.featuredProduct })
+    categories,
+    products,
+    ...(featuredProduct && { featuredProduct }),
+    pagination,
+    priceRange,
+    facets,
   });
 });
 

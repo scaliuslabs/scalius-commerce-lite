@@ -10,6 +10,22 @@ export { recordMovement } from "./movements";
 export { checkAndAlertLowStock } from "./alerts";
 export type { LowStockAlertResult } from "./alerts";
 export { releaseExpiredReservations } from "./expiry";
+export {
+  foldInventoryLedgerV2,
+  buildInventoryLedgerV2Edge,
+  getActiveReservationGeneration,
+  getNextReservationGeneration,
+  getReservationGenerationBalances,
+  validateInventoryLedgerV2Event,
+  InventoryLedgerDiscontinuityError,
+} from "./ledger-v2";
+export type {
+  InventoryCounterState,
+  InventoryLedgerPool,
+  InventoryLedgerV2Event,
+  InventoryLedgerV2EdgeFields,
+  ReservationGenerationBalance,
+} from "./ledger-v2";
 export type { ExpiryResult } from "./expiry";
 export {
   validateStockNonNegative,

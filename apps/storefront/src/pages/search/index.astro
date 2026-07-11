@@ -5,12 +5,11 @@ import ProductCard from "@/components/cards/ProductCard.astro";
 import CategoryFilters from "@/components/CategoryFilters";
 import {
   getAllProducts,
-  getFilterableAttributes,
   getLayoutData,
   type Product,
   type ProductListOptions,
   type PaginatedResponse,
-  type FilterableAttribute,
+  type ProductFacet,
   type LayoutData,
 } from "@/lib/api";
 import {
@@ -25,77 +24,31 @@ import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import {
   PRODUCT_LIST_NAVIGATION_PARAMS,
   buildProductListPaginationHref,
-  hasDynamicProductListFilterParams,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
 import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 
-const params = Astro.url.searchParams;
-const hasDynamicFilters = hasDynamicProductListFilterParams(params);
-let queryState = resolveProductListQueryState({ url: Astro.url });
-if (!hasDynamicFilters && queryState.redirectPath) {
-  return Astro.redirect(queryState.redirectPath);
+const initialQueryState = resolveProductListQueryState({
+  url: Astro.url,
+  allowUnknownAttributes: true,
+});
+if (initialQueryState.redirectPath) {
+  return Astro.redirect(initialQueryState.redirectPath);
 }
-let query = queryState.query;
-let sortBy = queryState.sortBy;
-let currentFilters = queryState.currentFilters;
 
 let productsResponse: PaginatedResponse<Product> | null = null;
-let attributes: FilterableAttribute[] = [];
 let layoutData: LayoutData | null = null;
-let error: string | null = null;
-let productListOptions: ProductListOptions = queryState.options;
+const productListOptions: ProductListOptions = initialQueryState.options;
 
 try {
-  const layoutPromise = getLayoutData();
-  const attributesPromise = getFilterableAttributes({ searchQuery: query });
-
-  if (hasDynamicFilters) {
-    attributes = (await attributesPromise) || [];
-    queryState = resolveProductListQueryState({
-      url: Astro.url,
-      attributes,
-    });
-    if (queryState.redirectPath) {
-      void layoutPromise.catch((layoutError) => {
-        console.error(
-          "Layout fetch failed before search filter redirect:",
-          layoutError,
-        );
-      });
-      return Astro.redirect(queryState.redirectPath);
-    }
-    query = queryState.query;
-    sortBy = queryState.sortBy;
-    currentFilters = queryState.currentFilters;
-    productListOptions = queryState.options;
-    const productsPromise = getAllProducts(productListOptions);
-
-    const [fetchedLayoutData, fetchedProducts] = await Promise.all([
-      layoutPromise,
-      productsPromise,
-    ]);
-    layoutData = fetchedLayoutData;
-    setRuntimeImageCdnPolicy(layoutData?.media);
-    productsResponse = fetchedProducts;
-  } else {
-    const productsPromise = getAllProducts(productListOptions);
-
-    // Parallel fetch: layout + products + attributes
-    const [fetchedLayoutData, fetchedProducts, fetchedAttributes] = await Promise.all([
-      layoutPromise,
-      productsPromise,
-      attributesPromise,
-    ]);
-    layoutData = fetchedLayoutData;
-    setRuntimeImageCdnPolicy(layoutData?.media);
-    productsResponse = fetchedProducts;
-    attributes = fetchedAttributes || [];
-  }
+  [layoutData, productsResponse] = await Promise.all([
+    getLayoutData(),
+    getAllProducts(productListOptions),
+  ]);
+  setRuntimeImageCdnPolicy(layoutData?.media);
 } catch (e: unknown) {
   console.error("Error fetching shop/search data:", e);
-  error = "An error occurred while fetching products. Please try again.";
 }
 
 if (!layoutData || !productsResponse) {
@@ -105,6 +58,13 @@ if (!layoutData || !productsResponse) {
   response.headers.set("X-Storefront-Data-State", "unavailable");
   return response;
 }
+
+const facets: ProductFacet[] = productsResponse.facets ?? [];
+const queryState = resolveProductListQueryState({ url: Astro.url, facets });
+if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
+const query = queryState.query;
+const sortBy = queryState.sortBy;
+const currentFilters = queryState.currentFilters;
 
 const products = productsResponse?.data || [];
 const pagination = productsResponse?.pagination || {
@@ -158,7 +118,9 @@ function generatePaginationLinks(
 
 const activeFilterCount = Object.keys(currentFilters).filter(
   (key) => !PRODUCT_LIST_NAVIGATION_PARAMS.includes(key as typeof PRODUCT_LIST_NAVIGATION_PARAMS[number]) && currentFilters[key]
-).length;
+).reduce((count, key) => count + (
+  Array.isArray(currentFilters[key]) ? currentFilters[key].length : 1
+), 0);
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/search");
 const shouldNoindexSearchPage = Boolean(query) || pagination.page > 1 || sortBy !== "newest" || activeFilterCount > 0;
 
@@ -263,7 +225,7 @@ const analyticsProductData = products.map((p) => ({
 
                 <CategoryFilters
                   client:load
-                  attributes={attributes}
+                  facets={facets}
                   currentFilters={currentFilters}
                   priceRange={productsResponse.priceRange}
                 />
@@ -311,15 +273,7 @@ const analyticsProductData = products.map((p) => ({
           </div>
 
           {
-            error && (
-              <div class="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-lg mb-6">
-                {error}
-              </div>
-            )
-          }
-
-          {
-            products.length === 0 && !error && (
+            products.length === 0 && (
               <div class="flex flex-col items-center justify-center py-16 px-4 bg-white rounded-lg shadow-sm border border-gray-100 text-center">
                 <Search className="w-16 h-16 text-gray-400 mb-4" />
                 <h3 class="text-xl font-bold text-gray-900 mb-2">
@@ -428,17 +382,20 @@ const analyticsProductData = products.map((p) => ({
 
 <script>
   import { buildProductListHref } from "@/lib/product-list-query";
+  import type { ProductListFilterState } from "@/lib/product-list-query";
   import { normalizeSearchQuery } from "@/lib/search-query";
 
-  function readCanonicalFilters(select: HTMLSelectElement): Record<string, string> {
+  function readCanonicalFilters(select: HTMLSelectElement): ProductListFilterState {
     try {
       const parsed = JSON.parse(select.dataset.currentFilters || "{}");
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
       return Object.fromEntries(
         Object.entries(parsed).filter(
-          ([, value]) => typeof value === "string",
+          ([, value]) =>
+            typeof value === "string" ||
+            (Array.isArray(value) && value.every((item) => typeof item === "string")),
         ),
-      ) as Record<string, string>;
+      ) as ProductListFilterState;
     } catch {
       return {};
     }
@@ -484,7 +441,10 @@ const analyticsProductData = products.map((p) => ({
 
     sortSelect.addEventListener("change", () => {
       const currentFilters = readCanonicalFilters(sortSelect);
-      const query = normalizeSearchQuery(currentFilters.q);
+      const rawQuery = currentFilters.q;
+      const query = normalizeSearchQuery(
+        Array.isArray(rawQuery) ? rawQuery.at(-1) : rawQuery,
+      );
       if (query) currentFilters.q = query;
       else delete currentFilters.q;
 

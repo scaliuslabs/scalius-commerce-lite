@@ -2,7 +2,7 @@
 // Product domain tables: products, images, variants, categories, collections,
 // attributes, attribute values, rich content, and media.
 
-import { sqliteTable, text, integer, real, unique, index, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, index, uniqueIndex, check, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
@@ -29,6 +29,8 @@ export const products = sqliteTable(
         variantOption2Label: text("variant_option_2_label").notNull().default("Color"),
         variantOption1Schema: text("variant_option_1_schema", { enum: ["size", "color", "material", "pattern", "none"] }).notNull().default("size"),
         variantOption2Schema: text("variant_option_2_schema", { enum: ["size", "color", "material", "pattern", "none"] }).notNull().default("color"),
+        variantImagesEnabled: integer("variant_images_enabled", { mode: "boolean" }).notNull().default(false),
+        variantImageAxis: text("variant_image_axis", { enum: ["option1", "option2"] }).notNull().default("option2"),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),
@@ -126,6 +128,56 @@ export const productVariants = sqliteTable("product_variants", {
     index("product_variants_track_inventory_idx").on(table.trackInventory, table.deletedAt),
     // Manual migration 0055 also creates this partial unique index (not expressible in Drizzle):
     // product_variants_one_default_per_product_idx ON (product_id) WHERE is_default = true AND deleted_at IS NULL
+]);
+
+/**
+ * Stable product-image associations for either a concrete SKU or a normalized
+ * option value. Product image order is merchandising only and never changes
+ * the association target.
+ */
+export const productVariantImageMappings = sqliteTable("product_variant_image_mappings", {
+    id: text("id").primaryKey(),
+    productId: text("product_id")
+        .notNull()
+        .references(() => products.id, { onDelete: "cascade" }),
+    imageId: text("image_id")
+        .notNull()
+        .references(() => productImages.id, { onDelete: "cascade" }),
+    variantId: text("variant_id")
+        .references(() => productVariants.id, { onDelete: "cascade" }),
+    optionAxis: text("option_axis", { enum: ["option1", "option2"] }),
+    optionValue: text("option_value"),
+    normalizedOptionValue: text("normalized_option_value"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    check(
+        "product_variant_image_mappings_target_check",
+        sql`(
+            (${table.variantId} IS NOT NULL
+                AND ${table.optionAxis} IS NULL
+                AND ${table.optionValue} IS NULL
+                AND ${table.normalizedOptionValue} IS NULL)
+            OR
+            (${table.variantId} IS NULL
+                AND ${table.optionAxis} IS NOT NULL
+                AND trim(coalesce(${table.optionValue}, '')) <> ''
+                AND trim(coalesce(${table.normalizedOptionValue}, '')) <> '')
+        )`,
+    ),
+    uniqueIndex("product_variant_image_mappings_image_uidx").on(table.imageId),
+    index("product_variant_image_mappings_option_idx").on(
+        table.productId,
+        table.optionAxis,
+        table.normalizedOptionValue,
+        table.sortOrder,
+    ),
+    index("product_variant_image_mappings_variant_idx").on(table.variantId, table.sortOrder),
 ]);
 
 export const categories = sqliteTable(
@@ -278,6 +330,7 @@ export const media = sqliteTable("media", {
 export type Product = InferSelectModel<typeof products>;
 export type ProductImage = InferSelectModel<typeof productImages>;
 export type ProductVariant = InferSelectModel<typeof productVariants>;
+export type ProductVariantImageMapping = InferSelectModel<typeof productVariantImageMappings>;
 export type Category = InferSelectModel<typeof categories>;
 export type Collection = InferSelectModel<typeof collections>;
 export type ProductAttribute = InferSelectModel<typeof productAttributes>;

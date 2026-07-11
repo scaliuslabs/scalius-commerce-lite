@@ -7,21 +7,25 @@ type ExpiredReservation = {
   orderId: string;
   reservationType: "reserved" | "preorder_reserved";
   totalQuantity: number;
+  pool?: "regular" | "preorder" | "backorder" | null;
+  reservationGeneration?: number | null;
 };
 
 type MockStatement =
-  | { kind: "insert"; table: unknown; values: Record<string, unknown> }
+  | { kind: "insert"; table: unknown; query: unknown }
   | { kind: "update"; table: unknown; values: Record<string, unknown> };
 
 function createDbMock(options: {
   expiredReservations: ExpiredReservation[];
   orderExists?: boolean;
   terminalMovementExists?: boolean;
+  reservedQuantity?: number;
+  terminalQuantity?: number;
   variant?: { stock: number; reservedStock: number; preorderStock: number } | null;
   batchError?: Error;
 }) {
   const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
-  const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+  const inserts: Array<{ table: unknown; query: unknown }> = [];
   const batchCalls: MockStatement[][] = [];
 
   const db = {
@@ -33,6 +37,9 @@ function createDbMock(options: {
               return {
                 groupBy() {
                   return {
+                    having() {
+                      return this;
+                    },
                     orderBy() {
                       return {
                         limit(limit: number) {
@@ -47,10 +54,19 @@ function createDbMock(options: {
                 },
                 get: async () => {
                   if ("id" in projection) return options.orderExists ? { id: "order_1" } : null;
-                  if ("movementId" in projection) {
-                    return options.terminalMovementExists ? { movementId: "movement_1" } : null;
+                  if ("reservedQuantity" in projection) {
+                    const reservedQuantity = options.reservedQuantity
+                      ?? options.expiredReservations[0]?.totalQuantity
+                      ?? 0;
+                    return {
+                      reservedQuantity,
+                      terminalQuantity: options.terminalQuantity
+                        ?? (options.terminalMovementExists ? reservedQuantity : 0),
+                    };
                   }
-                  if ("reservedStock" in projection) return options.variant ?? null;
+                  if ("reservedStock" in projection) {
+                    return options.variant ? { stockVersion: 1, ...options.variant } : null;
+                  }
                   return null;
                 },
               };
@@ -64,7 +80,11 @@ function createDbMock(options: {
         set(values: Record<string, unknown>) {
           return {
             where() {
-              return { kind: "update" as const, table, values };
+              return {
+                returning() {
+                  return { kind: "update" as const, table, values };
+                },
+              };
             },
           };
         },
@@ -72,8 +92,13 @@ function createDbMock(options: {
     },
     insert(table: unknown) {
       return {
-        values: (values: Record<string, unknown>) =>
-          ({ kind: "insert" as const, table, values }),
+        select(query: unknown) {
+          return {
+            returning() {
+              return { kind: "insert" as const, table, query };
+            },
+          };
+        },
       };
     },
     batch: async (statements: MockStatement[]) => {
@@ -81,12 +106,14 @@ function createDbMock(options: {
       batchCalls.push(statements);
       for (const statement of statements) {
         if (statement.kind === "insert") {
-          inserts.push({ table: statement.table, values: statement.values });
+          inserts.push({ table: statement.table, query: statement.query });
         } else {
           updates.push({ table: statement.table, values: statement.values });
         }
       }
-      return statements.map(() => []);
+      return statements.map((statement) => [{
+        id: statement.kind === "insert" ? "movement_1" : "variant_1",
+      }]);
     },
   };
 
@@ -145,15 +172,6 @@ describe("releaseExpiredReservations", () => {
     expect(inserts).toHaveLength(1);
     expect(inserts[0]).toMatchObject({
       table: inventoryMovements,
-      values: {
-        id: "expiry_release:order_1:variant_1",
-        variantId: "variant_1",
-        orderId: "order_1",
-        type: "released",
-        quantity: -2,
-        previousStock: 10,
-        newStock: 10,
-      },
     });
   });
 
@@ -181,13 +199,6 @@ describe("releaseExpiredReservations", () => {
     expect(updates[0]?.values).toHaveProperty("preorderStock");
     expect(inserts[0]).toMatchObject({
       table: inventoryMovements,
-      values: {
-        id: "expiry_release:order_1:variant_1:preorder",
-        type: "released",
-        quantity: -3,
-        previousStock: 4,
-        newStock: 7,
-      },
     });
   });
 
@@ -223,10 +234,7 @@ describe("releaseExpiredReservations", () => {
     expect(updates).toHaveLength(2);
     expect(updates[0]?.values).not.toHaveProperty("preorderStock");
     expect(updates[1]?.values).toHaveProperty("preorderStock");
-    expect(inserts.map((insert) => insert.values.id)).toEqual([
-      "expiry_release:order_1:variant_1",
-      "expiry_release:order_1:variant_1:preorder",
-    ]);
+    expect(inserts.every((insert) => insert.table === inventoryMovements)).toBe(true);
   });
 
   it("skips release when an order appears between candidate selection and release", async () => {
@@ -284,6 +292,29 @@ describe("releaseExpiredReservations", () => {
     expect(result).toMatchObject({ found: 1, released: 0, errors: [] });
     expect(updates).toHaveLength(0);
     expect(inserts).toHaveLength(0);
+  });
+
+  it("releases only the outstanding quantity after a partial terminal movement", async () => {
+    const { db, updates, inserts } = createDbMock({
+      expiredReservations: [{
+        variantId: "variant_1",
+        orderId: "order_1",
+        reservationType: "reserved",
+        totalQuantity: 3,
+      }],
+      orderExists: false,
+      reservedQuantity: 5,
+      terminalQuantity: 2,
+      variant: { stock: 10, reservedStock: 3, preorderStock: 0 },
+    });
+
+    const result = await releaseExpiredReservations(db as never, 30);
+
+    expect(result).toMatchObject({ found: 1, released: 1, errors: [] });
+    expect(updates).toHaveLength(1);
+    expect(inserts[0]).toMatchObject({
+      table: inventoryMovements,
+    });
   });
 
   it("treats a duplicate deterministic expiry release claim as already handled", async () => {

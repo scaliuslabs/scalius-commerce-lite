@@ -34,6 +34,9 @@ function collectionPayload() {
     categories: [],
     products: [],
     featuredProduct: null,
+    pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+    priceRange: { min: 0, max: 0 },
+    facets: [],
   };
 }
 
@@ -64,7 +67,15 @@ describe("storefront collection API helpers", () => {
         categories: [],
         products: [],
         featuredProduct: null,
+        pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+        priceRange: { min: 0, max: 0 },
+        facets: [],
       },
+    });
+    expect(mocks.getApiV1CollectionsById).toHaveBeenLastCalledWith({
+      client: { baseUrl: "https://api.example.test" },
+      path: { id: "col_1" },
+      query: {},
     });
   });
 

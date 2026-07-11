@@ -42,7 +42,7 @@ Last reviewed: 2026-07-12
 
 ### Batch 4 — model corrections
 
-- Explicit variant/option-value media associations and marker migration.
+- Resolved: explicit image-ID-to-variant/option-value media associations, legacy marker backfill, and stable reorder behavior.
 - Normalized option/value identities and unique active combinations.
 - Inventory ledger v2 with pool and before/after physical/reserved/preorder counters.
 - Catalog collection membership/rules separated from merchandising modules.

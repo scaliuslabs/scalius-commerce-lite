@@ -46,6 +46,11 @@ describe("storefront HTML cache path canonicalization", () => {
         "/categories/drinks?sortBy=newest&page=1&brand=Fresh&q=%20hilsa%20%20fish%20",
       ),
     ).toBe("/categories/drinks?brand=Fresh&q=hilsa+fish");
+    expect(
+      canonicalizeStorefrontHtmlCachePath(
+        "/collections/featured?sortBy=newest&page=1&brand=Fresh",
+      ),
+    ).toBe("/collections/featured?brand=Fresh");
   });
 
   it("ignores current ad click identifiers on listing HTML paths", () => {
@@ -56,17 +61,19 @@ describe("storefront HTML cache path canonicalization", () => {
     ).toBe("/search?q=fish");
   });
 
-  it("collapses repeated query params to the last rendered value", () => {
+  it("preserves repeated values so multi-select HTML cache identities stay exact", () => {
     expect(
       canonicalizeStorefrontHtmlCachePath(
         "/search?q=apple&q=banana&sortBy=price-desc&sortBy=newest&page=2&page=1",
       ),
-    ).toBe("/search?q=banana");
+    ).toBe("/search?page=2&q=apple&q=banana&sortBy=price-desc");
     expect(
       canonicalizeStorefrontHtmlCachePath(
         "/categories/drinks?brand=Fresh&brand=Local&color=Red&color=Blue",
       ),
-    ).toBe("/categories/drinks?brand=Local&color=Blue");
+    ).toBe(
+      "/categories/drinks?brand=Fresh&brand=Local&color=Blue&color=Red",
+    );
   });
 
   it("dedupes after canonicalization before applying the path cap", () => {

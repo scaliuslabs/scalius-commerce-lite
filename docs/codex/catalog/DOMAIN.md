@@ -7,8 +7,8 @@ Last reviewed: 2026-07-12
 1. **Resolved in batch 1: preorder expiry restores its source pool.** Expired preorder reservations return `preorderStock` and release `reservedStock`; regular reservations remain regular-pool changes.
 2. **Resolved in batch 1: inventory quantities are positive finite integers at mutation boundaries.** Relative adjustment remains the only signed quantity input.
 3. **Production callers have migrated off the legacy deduction/release paths.** Order, payment, fulfillment, stale-checkout, manual-edit, and trash-restore workflows now use deterministic movement claims plus stock CAS batches. The sequential exports remain isolated compatibility surfaces with no production caller; do not introduce new callers.
-4. **Expiry treats any terminal movement as fully terminal.** Partial releases and re-reservation generations can leave outstanding quantities permanently stranded.
-5. **The movement ledger contract is contradictory.** Schema comments define signed physical deltas, while reserve/deduct/release use different action semantics; the table lacks pool and before/after reserved/preorder counters. A ledger cannot be reliably folded back to SKU state.
+4. **Resolved in batch 4: expiry reconciles outstanding quantities per pool and reservation generation.** Partial releases/deductions no longer hide the remaining orphaned reservation.
+5. **Resolved for new writes in batch 4: ledger v2 has one CAS-ordered edge per SKU mutation.** It records pool/generation identity and before/after/delta values for physical, reserved, and preorder counters. Legacy v1 rows remain an explicit non-foldable history boundary.
 6. **Resolved in batch 1: stock changes reconcile low-stock alerts in both directions.** Restocks and no-op corrections clear stale alerts when the configured threshold is no longer breached.
 7. **Resolved in batch 1: dashboard low-stock truth matches alert policy.** Only an explicit positive threshold enables low-stock state.
 
@@ -21,6 +21,7 @@ Last reviewed: 2026-07-12
 - Barcodes are indexed but not unique; lookup uses `.get()` and duplication copies barcodes. Define normalized uniqueness or an explicit duplicate-code policy.
 - Product aggregate image/attribute/rich-content writes and list enrichment can exceed D1’s 100-parameter limit. Bound/chunk at 90 or use per-row batch statements.
 - Catalog money uses SQLite `REAL`; long-term price storage should use currency-aware minor units or a rigorously shared decimal representation.
+- Variant image configuration is no longer written into SEO metadata. Stable image-ID associations support SKU or normalized option-value targets; new reads retain a legacy marker fallback only for staged rollout and old-client compatibility.
 
 ## P1 attributes and collections
 

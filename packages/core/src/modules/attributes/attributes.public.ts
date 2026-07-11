@@ -2,9 +2,10 @@
 // Public/storefront attribute queries for use by API routes.
 
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, and, isNull, inArray, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { publicProductHasBuyerResolvableSku } from "../products/products.public-eligibility";
+import { ValidationError } from "@scalius/core/errors";
 
 export interface PublicAttributeFilter {
     id: string;
@@ -14,9 +15,15 @@ export interface PublicAttributeFilter {
 }
 
 export interface PublicAttributeQueryFilter {
+    id: string;
+    name: string;
     slug: string;
-    value: string;
+    values: string[];
 }
+
+const MAX_PUBLIC_ATTRIBUTE_FILTER_VALUES = 90;
+
+type PublicQueryValues = Record<string, string | string[]>;
 
 /**
  * Resolves attribute filters from raw public query parameters.
@@ -25,25 +32,88 @@ export interface PublicAttributeQueryFilter {
  */
 export async function resolvePublicAttributeFilters(
     db: Database,
-    queryParams: Record<string, string>,
+    queryParams: PublicQueryValues,
     standardQueryKeys: Iterable<string>,
 ): Promise<PublicAttributeQueryFilter[]> {
     const knownKeys = new Set(standardQueryKeys);
-    const potentialAttributeKeys = Object.keys(queryParams).filter(
-        (key) => !knownKeys.has(key) && queryParams[key],
+    const requestedFilters = Object.entries(queryParams)
+        .filter(([key]) => !knownKeys.has(key))
+        .map(([slug, rawValues]) => ({
+            slug: slug.trim(),
+            values: Array.from(new Set(
+                (Array.isArray(rawValues) ? rawValues : [rawValues])
+                    .map((value) => value.trim())
+                    .filter(Boolean),
+            )),
+        }))
+        .filter((filter) => filter.slug && filter.values.length > 0);
+
+    if (requestedFilters.length === 0) return [];
+    const requestedValueCount = requestedFilters.reduce(
+        (total, filter) => total + filter.values.length,
+        0,
     );
+    if (requestedValueCount > MAX_PUBLIC_ATTRIBUTE_FILTER_VALUES) {
+        throw new ValidationError(
+            `At most ${MAX_PUBLIC_ATTRIBUTE_FILTER_VALUES} attribute filter values are allowed.`,
+        );
+    }
 
-    if (potentialAttributeKeys.length === 0) return [];
-
-    const attributes = await db
-        .select({ slug: productAttributes.slug })
+    const requestedJson = JSON.stringify(requestedFilters);
+    const matchedValues = await db
+        .selectDistinct({
+            id: productAttributes.id,
+            name: productAttributes.name,
+            slug: productAttributes.slug,
+            value: productAttributeValues.value,
+        })
         .from(productAttributes)
-        .where(inArray(productAttributes.slug, potentialAttributeKeys));
+        .innerJoin(
+            productAttributeValues,
+            eq(productAttributeValues.attributeId, productAttributes.id),
+        )
+        .innerJoin(
+            products,
+            and(
+                eq(productAttributeValues.productId, products.id),
+                eq(products.isActive, true),
+                isNull(products.deletedAt),
+                publicProductHasBuyerResolvableSku(),
+            ),
+        )
+        .where(and(
+            eq(productAttributes.filterable, true),
+            isNull(productAttributes.deletedAt),
+            sql`EXISTS (
+                SELECT 1
+                FROM json_each(${requestedJson}) AS requested_filter
+                JOIN json_each(json_extract(requested_filter.value, '$.values')) AS requested_value
+                WHERE CAST(json_extract(requested_filter.value, '$.slug') AS TEXT) = ${productAttributes.slug}
+                  AND CAST(requested_value.value AS TEXT) = ${productAttributeValues.value}
+            )`,
+        ));
 
-    const validSlugs = new Set(attributes.map((attribute) => attribute.slug));
-    return potentialAttributeKeys
-        .filter((key) => validSlugs.has(key))
-        .map((key) => ({ slug: key, value: queryParams[key] ?? "" }));
+    const matchedBySlug = new Map<string, PublicAttributeQueryFilter>();
+    for (const row of matchedValues) {
+        const filter = matchedBySlug.get(row.slug) ?? {
+            id: row.id,
+            name: row.name,
+            slug: row.slug,
+            values: [],
+        };
+        filter.values.push(row.value);
+        matchedBySlug.set(row.slug, filter);
+    }
+
+    return requestedFilters
+        .map((requested) => {
+            const matched = matchedBySlug.get(requested.slug);
+            if (!matched) return null;
+            const available = new Set(matched.values);
+            const values = requested.values.filter((value) => available.has(value));
+            return values.length > 0 ? { ...matched, values } : null;
+        })
+        .filter((filter): filter is PublicAttributeQueryFilter => filter !== null);
 }
 
 /**

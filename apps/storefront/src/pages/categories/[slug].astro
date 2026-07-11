@@ -3,12 +3,11 @@
 import Layout from "@/layouts/Layout.astro";
 import {
   getProductsByCategory,
-  getFilterableAttributes,
   getLayoutData,
   type Product,
   type ProductListOptions,
   type CategoryProductsResponse,
-  type FilterableAttribute,
+  type ProductFacet,
   type LayoutData,
   type Category,
 } from "@/lib/api";
@@ -27,7 +26,6 @@ import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   PRODUCT_LIST_NAVIGATION_PARAMS,
   buildProductListPaginationHref,
-  hasDynamicProductListFilterParams,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
@@ -46,74 +44,25 @@ import {
 const { slug } = Astro.params;
 if (!slug) return new Response(null, { status: 404 });
 
-const params = Astro.url.searchParams;
-const hasDynamicFilters = hasDynamicProductListFilterParams(params);
-let queryState = resolveProductListQueryState({ url: Astro.url });
-if (!hasDynamicFilters && queryState.redirectPath) {
-  return Astro.redirect(queryState.redirectPath);
+const initialQueryState = resolveProductListQueryState({
+  url: Astro.url,
+  allowUnknownAttributes: true,
+});
+if (initialQueryState.redirectPath) {
+  return Astro.redirect(initialQueryState.redirectPath);
 }
-let sortBy = queryState.sortBy;
-let currentFilters = queryState.currentFilters;
 
 let category: Category | null;
 let productsResponse: CategoryProductsResponse | null;
-let attributes: FilterableAttribute[];
 let layoutData: LayoutData | null;
-let productListOptions: ProductListOptions = queryState.options;
+const productListOptions: ProductListOptions = initialQueryState.options;
 
 try {
-  const layoutPromise = getLayoutData();
-  const attributesPromise = getFilterableAttributes({ categorySlug: slug });
-
-  if (hasDynamicFilters) {
-    attributes = (await attributesPromise) || [];
-    queryState = resolveProductListQueryState({
-      url: Astro.url,
-      attributes,
-    });
-    if (queryState.redirectPath) {
-      void layoutPromise.catch((layoutError) => {
-        console.error(
-          "Layout fetch failed before category filter redirect:",
-          layoutError,
-        );
-      });
-      return Astro.redirect(queryState.redirectPath);
-    }
-    sortBy = queryState.sortBy;
-    currentFilters = queryState.currentFilters;
-    productListOptions = queryState.options;
-    const productsPromise = getProductsByCategory(slug, productListOptions);
-
-    const [
-      fetchedLayoutData,
-      fetchedProducts,
-    ] = await Promise.all([
-      layoutPromise,
-      productsPromise,
-    ]);
-    layoutData = fetchedLayoutData;
-    setRuntimeImageCdnPolicy(layoutData?.media);
-    productsResponse = fetchedProducts;
-  } else {
-    const productsPromise = getProductsByCategory(slug, productListOptions);
-
-    // Parallel fetch: layout, products/category, and filter metadata.
-    const [
-      fetchedLayoutData,
-      fetchedProducts,
-      fetchedAttributes,
-    ] = await Promise.all([
-      layoutPromise,
-      productsPromise,
-      attributesPromise,
-    ]);
-
-    layoutData = fetchedLayoutData;
-    setRuntimeImageCdnPolicy(layoutData?.media);
-    productsResponse = fetchedProducts;
-    attributes = fetchedAttributes || [];
-  }
+  [layoutData, productsResponse] = await Promise.all([
+    getLayoutData(),
+    getProductsByCategory(slug, productListOptions),
+  ]);
+  setRuntimeImageCdnPolicy(layoutData?.media);
 
   if (productsResponse?.categoryNotFound) return new Response(null, { status: 404 });
   if (!layoutData || !productsResponse || !productsResponse.category) {
@@ -133,6 +82,12 @@ try {
   response.headers.set("X-Storefront-Data-State", "unavailable");
   return response;
 }
+
+const facets: ProductFacet[] = productsResponse.facets ?? [];
+const queryState = resolveProductListQueryState({ url: Astro.url, facets });
+if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
+const sortBy = queryState.sortBy;
+const currentFilters = queryState.currentFilters;
 
 const products: Product[] = productsResponse?.data || [];
 const pagination = productsResponse?.pagination || {
@@ -194,7 +149,9 @@ function generatePaginationLinks(
 
 const activeFilterCount = Object.keys(currentFilters).filter(
   (key) => !PRODUCT_LIST_NAVIGATION_PARAMS.includes(key as typeof PRODUCT_LIST_NAVIGATION_PARAMS[number]) && currentFilters[key],
-).length;
+).reduce((count, key) => count + (
+  Array.isArray(currentFilters[key]) ? currentFilters[key].length : 1
+), 0);
 
 // Include product name for richer analytics data
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -391,7 +348,7 @@ const collectionJsonLd =
               <div class="p-4 lg:p-6">
                 <CategoryFilters
                   client:load
-                  attributes={attributes}
+                  facets={facets}
                   currentFilters={currentFilters}
                   categorySlug={slug}
                   priceRange={productsResponse.priceRange}
@@ -552,17 +509,20 @@ const collectionJsonLd =
 
 <script>
   import { buildProductListHref } from "@/lib/product-list-query";
+  import type { ProductListFilterState } from "@/lib/product-list-query";
   import { normalizeSearchQuery } from "@/lib/search-query";
 
-  function readCanonicalFilters(select: HTMLSelectElement): Record<string, string> {
+  function readCanonicalFilters(select: HTMLSelectElement): ProductListFilterState {
     try {
       const parsed = JSON.parse(select.dataset.currentFilters || "{}");
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
       return Object.fromEntries(
         Object.entries(parsed).filter(
-          ([, value]) => typeof value === "string",
+          ([, value]) =>
+            typeof value === "string" ||
+            (Array.isArray(value) && value.every((item) => typeof item === "string")),
         ),
-      ) as Record<string, string>;
+      ) as ProductListFilterState;
     } catch {
       return {};
     }
@@ -607,7 +567,10 @@ const collectionJsonLd =
 
     sortSelect.addEventListener("change", () => {
       const currentFilters = readCanonicalFilters(sortSelect);
-      const query = normalizeSearchQuery(currentFilters.q);
+      const rawQuery = currentFilters.q;
+      const query = normalizeSearchQuery(
+        Array.isArray(rawQuery) ? rawQuery.at(-1) : rawQuery,
+      );
       if (query) currentFilters.q = query;
       else delete currentFilters.q;
 

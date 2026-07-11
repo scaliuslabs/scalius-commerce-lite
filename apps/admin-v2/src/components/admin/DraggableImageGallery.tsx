@@ -37,7 +37,7 @@ import { getSortableStyle } from "./shared/sortable-style";
 
 interface DraggableImageGalleryProps {
   images: MediaFile[];
-  variantImageOptions?: string[];
+  variantImageMappingByImageId?: Record<string, string>;
   enableVariantImages: boolean;
   onImagesReorder: (images: MediaFile[]) => void;
   onImageRemove: (index: number) => void;
@@ -197,7 +197,7 @@ function ItemOverlay({
 
 export function DraggableImageGallery({
   images,
-  variantImageOptions = [],
+  variantImageMappingByImageId = {},
   enableVariantImages,
   onImagesReorder,
   onImageRemove,
@@ -281,10 +281,8 @@ export function DraggableImageGallery({
 
   const activeOptionMapping =
     activeItem &&
-    enableVariantImages &&
-    variantImageOptions.length > 0 &&
-    activeIndex < variantImageOptions.length
-      ? variantImageOptions[activeIndex]
+    enableVariantImages
+      ? variantImageMappingByImageId[activeItem.id]
       : undefined;
 
   // If option-image mapping is active, standard grid behavior usually works.
@@ -306,10 +304,8 @@ export function DraggableImageGallery({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-4 gap-y-6">
             {visibleImages.map((image, index) => {
               const optionMapping =
-                enableVariantImages &&
-                variantImageOptions.length > 0 &&
-                index < variantImageOptions.length
-                  ? variantImageOptions[index]
+                enableVariantImages
+                  ? variantImageMappingByImageId[image.id]
                   : undefined;
 
               return (

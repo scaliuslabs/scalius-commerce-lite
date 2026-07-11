@@ -45,6 +45,7 @@ function productPagePayload() {
     category: null,
     images: [],
     variants: [],
+    variantImageMappings: [],
     relatedProducts: [],
   };
 }
@@ -135,6 +136,8 @@ describe("storefront product API helpers", () => {
     await expect(getAllProducts()).resolves.toEqual({
       data: [],
       pagination,
+      facets: [],
+      priceRange: undefined,
     });
   });
 

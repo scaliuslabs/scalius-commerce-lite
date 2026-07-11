@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  addVariantImagesMarker,
   cleanMetaDescription,
   extractUniqueVariantOptionValues,
   formatFormValuesForSubmission,
   getVariantImagesAxis,
   hasVariantImagesEnabled,
   resolveVariantImageAxis,
+  reconcileVariantImageMappings,
 } from "./utils";
 import {
   DEFAULT_PRODUCT_OPTION_LABELS,
@@ -60,18 +60,6 @@ describe("product form variant image metadata", () => {
     expect(getVariantImagesAxis("<!--variant_images:option1-->")).toBe("option1");
   });
 
-  it("writes only the selected image mapping axis marker", () => {
-    expect(addVariantImagesMarker("Fresh rice", true, "option1")).toBe(
-      "Fresh rice<!--variant_images:option1-->",
-    );
-    expect(addVariantImagesMarker("Fresh rice<!--variant_images:option2-->", true, "option1")).toBe(
-      "Fresh rice<!--variant_images:option1-->",
-    );
-    expect(addVariantImagesMarker("Fresh rice<!--variant_images:option1-->", false, "option1")).toBe(
-      "Fresh rice",
-    );
-  });
-
   it("extracts sorted customer option values without default SKU drift", () => {
     expect(extractUniqueVariantOptionValues(variants, "option1")).toEqual(["1KG", "2KG"]);
     expect(extractUniqueVariantOptionValues(variants, "option2")).toEqual(["Red", "Blue"]);
@@ -82,6 +70,50 @@ describe("product form variant image metadata", () => {
     expect(resolveVariantImageAxis("option1", [], ["Red"])).toBe("option2");
     expect(resolveVariantImageAxis("option2", ["1KG"], ["Red"])).toBe("option2");
     expect(resolveVariantImageAxis("option1", [], [])).toBe("option1");
+  });
+});
+
+describe("stable product image mappings", () => {
+  const images = [
+    { id: "img_b", url: "b", filename: "b", size: 1, createdAt: new Date(2) },
+    { id: "img_a", url: "a", filename: "a", size: 1, createdAt: new Date(1) },
+  ];
+
+  it("keeps option targets attached to image IDs when gallery order changes", () => {
+    const mappings = reconcileVariantImageMappings({
+      mappings: [],
+      images,
+      axis: "option1",
+      optionValues: ["Small", "Large"],
+      fillMissing: true,
+    });
+    const reordered = reconcileVariantImageMappings({
+      mappings,
+      images: [...images].reverse(),
+      axis: "option1",
+      optionValues: ["Small", "Large"],
+    });
+
+    expect(reordered).toEqual(mappings);
+    expect(reordered).toMatchObject([
+      { imageId: "img_b", optionValue: "Small" },
+      { imageId: "img_a", optionValue: "Large" },
+    ]);
+  });
+
+  it("drops only the removed image association and never positional-remaps", () => {
+    const mappings = [
+      { imageId: "img_b", optionAxis: "option1" as const, optionValue: "Small" },
+      { imageId: "img_a", optionAxis: "option1" as const, optionValue: "Large" },
+    ];
+    expect(reconcileVariantImageMappings({
+      mappings,
+      images: [images[1]!],
+      axis: "option1",
+      optionValues: ["Small", "Large"],
+    })).toEqual([
+      expect.objectContaining({ imageId: "img_a", optionValue: "Large" }),
+    ]);
   });
 });
 
@@ -107,6 +139,9 @@ describe("product form catalog option mapping", () => {
     variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
     variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
     variantOption2Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+    variantImagesEnabled: false,
+    variantImageAxis: "option2",
+    variantImageMappings: [],
     slug: "main-shoe",
     images: [],
     attributes: [],
@@ -161,6 +196,7 @@ describe("product form catalog option mapping", () => {
         },
         false,
         "option2",
+        [],
       ),
     ).toMatchObject({
       variantOption1Label: "Pack",
@@ -182,6 +218,7 @@ describe("product form catalog option mapping", () => {
         },
         false,
         "option2",
+        [],
       ),
     ).toMatchObject({
       productCondition: "refurbished",

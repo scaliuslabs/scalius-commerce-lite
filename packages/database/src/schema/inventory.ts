@@ -1,7 +1,7 @@
 // src/db/schema/inventory.ts
 // Inventory tracking tables: inventoryMovements, productLowStockAlerts.
 
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { products, productVariants } from "./products";
 import { UNIX_NOW } from "./shared";
@@ -27,6 +27,20 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
     newStock: integer("new_stock").notNull(),
     notes: text("notes"),
     createdBy: text("created_by"),
+    // Ledger v2 fields are nullable for legacy rows. Every new production
+    // counter mutation writes a complete version edge and all counter deltas.
+    ledgerVersion: integer("ledger_version").notNull().default(1),
+    pool: text("pool"),
+    reservationGeneration: integer("reservation_generation"),
+    stockVersionBefore: integer("stock_version_before"),
+    stockVersionAfter: integer("stock_version_after"),
+    stockDelta: integer("stock_delta"),
+    previousReservedStock: integer("previous_reserved_stock"),
+    newReservedStock: integer("new_reserved_stock"),
+    reservedStockDelta: integer("reserved_stock_delta"),
+    previousPreorderStock: integer("previous_preorder_stock"),
+    newPreorderStock: integer("new_preorder_stock"),
+    preorderStockDelta: integer("preorder_stock_delta"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -34,6 +48,16 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
     index("inventory_movements_variant_idx").on(table.variantId),
     index("inventory_movements_order_idx").on(table.orderId),
     index("inventory_movements_created_at_idx").on(table.createdAt),
+    index("inventory_movements_generation_idx").on(
+        table.orderId,
+        table.variantId,
+        table.pool,
+        table.reservationGeneration,
+    ),
+    uniqueIndex("inventory_movements_variant_version_uidx").on(
+        table.variantId,
+        table.stockVersionAfter,
+    ),
 ]);
 
 export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {

@@ -11,6 +11,7 @@ import {
   normalizePublicListingSearchParam,
   normalizePublicNumberCacheValue,
   normalizePublicSearchQuery,
+  readRepeatedPublicQueryValues,
 } from "./public-search-query";
 
 describe("public search query normalization", () => {
@@ -35,6 +36,12 @@ describe("public search query normalization", () => {
     expect(normalizePublicIntegerCacheValue("4.5")).toBe("4.5");
     expect(normalizePublicNumberCacheValue("001.50")).toBe("1.5");
     expect(normalizePublicNumberCacheValue("abc")).toBe("abc");
+  });
+
+  it("preserves repeated public values for multi-select facet resolution", () => {
+    expect(readRepeatedPublicQueryValues(
+      "https://api.example.test/products?color=Red&color=Blue&page=2",
+    )).toEqual({ color: ["Red", "Blue"], page: ["2"] });
   });
 
   it("keeps invalid public search query shapes out of cache", () => {

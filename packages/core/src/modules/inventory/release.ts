@@ -10,6 +10,13 @@ import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
+import {
+  buildInventoryLedgerV2Edge,
+  getActiveReservationGeneration,
+  getReservationGenerationBalances,
+  type InventoryLedgerV2EdgeFields,
+  type InventoryLedgerV2Event,
+} from "./ledger-v2";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -27,15 +34,14 @@ interface ReleaseMovementStats {
   reservedQuantity: number;
   releasedQuantity: number;
   reservationGenerations: number;
+  reservationGeneration: number;
 }
 
-interface ReleaseMovementClaim {
+interface ReleaseMovementClaim extends InventoryLedgerV2EdgeFields {
   id: string;
   variantId: string;
   orderId: string;
   quantity: number;
-  previousStock: number;
-  newStock: number;
   notes: string;
 }
 
@@ -191,6 +197,14 @@ export async function releaseReservedStockBatch(
 
   const releaseKey = options.releaseKey ?? DEFAULT_RELEASE_KEY;
   const mergedEntries = mergeReleaseEntries(entries);
+  const multiPoolVariant = findVariantWithMultipleReleasePools(mergedEntries);
+  if (multiPoolVariant) {
+    return buildStrictReleaseFailure(
+      mergedEntries,
+      `Variant ${multiPoolVariant} cannot release multiple inventory pools in one counter mutation`,
+      true,
+    );
+  }
 
   for (let attempt = 0; attempt < STRICT_RELEASE_RETRIES; attempt++) {
     const variantLoad = await loadReleaseVariantStates(db, mergedEntries);
@@ -216,6 +230,7 @@ export async function releaseReservedStockBatch(
         reservedQuantity: 0,
         releasedQuantity: 0,
         reservationGenerations: 0,
+        reservationGeneration: 1,
       };
       const outstandingQuantity = Math.max(0, stat.reservedQuantity - stat.releasedQuantity);
 
@@ -261,8 +276,24 @@ export async function releaseReservedStockBatch(
     const claims = await Promise.all(entriesToRelease.map(async (entry) => {
       const variant = variantLoad.variants.get(entry.variantId)!;
       const stat = stats.get(entry.variantId)!;
-      const previousStock = getReleasePreviousStock(variant, entry.pool);
-      const newStock = entry.pool === "preorder" ? previousStock + entry.quantity : previousStock;
+      const edge = buildInventoryLedgerV2Edge({
+        pool: entry.pool,
+        reservationGeneration: stat.reservationGeneration,
+        before: {
+          stock: variant.stock,
+          reservedStock: variant.reservedStock,
+          preorderStock: variant.preorderStock,
+          stockVersion: variant.stockVersion,
+        },
+        after: {
+          stock: variant.stock,
+          reservedStock: variant.reservedStock - entry.quantity,
+          preorderStock: entry.pool === "preorder"
+            ? variant.preorderStock + entry.quantity
+            : variant.preorderStock,
+          stockVersion: variant.stockVersion + 1,
+        },
+      });
       return {
         id: await createReleaseMovementId({
           releaseKey,
@@ -274,9 +305,8 @@ export async function releaseReservedStockBatch(
         variantId: entry.variantId,
         orderId,
         quantity: -entry.quantity,
-        previousStock,
-        newStock,
         notes: `Released ${entry.quantity} reserved units after failed checkout commit for order ${orderId}`,
+        ...edge,
       } satisfies ReleaseMovementClaim;
     }));
     const movementQueries = claims.map((claim) =>
@@ -409,6 +439,16 @@ function mergeReleaseEntries(entries: ReservationEntry[]): StrictReleaseEntry[] 
   return Array.from(merged.values());
 }
 
+function findVariantWithMultipleReleasePools(entries: StrictReleaseEntry[]): string | null {
+  const poolByVariant = new Map<string, ReservationPool>();
+  for (const entry of entries) {
+    const existing = poolByVariant.get(entry.variantId);
+    if (existing && existing !== entry.pool) return entry.variantId;
+    poolByVariant.set(entry.variantId, entry.pool);
+  }
+  return null;
+}
+
 async function loadReleaseVariantStates(
   db: Database,
   entries: StrictReleaseEntry[],
@@ -460,7 +500,55 @@ async function loadReleaseMovementStats(
 ): Promise<Map<string, ReleaseMovementStats>> {
   const stats = new Map<string, ReleaseMovementStats>();
 
-  await Promise.all(entries.map(async (entry) => {
+  for (const entry of entries) {
+    const v2Rows = await db
+      .select({
+        id: inventoryMovements.id,
+        variantId: inventoryMovements.variantId,
+        orderId: inventoryMovements.orderId,
+        type: inventoryMovements.type,
+        ledgerVersion: inventoryMovements.ledgerVersion,
+        pool: inventoryMovements.pool,
+        reservationGeneration: inventoryMovements.reservationGeneration,
+        stockVersionBefore: inventoryMovements.stockVersionBefore,
+        stockVersionAfter: inventoryMovements.stockVersionAfter,
+        previousStock: inventoryMovements.previousStock,
+        newStock: inventoryMovements.newStock,
+        stockDelta: inventoryMovements.stockDelta,
+        previousReservedStock: inventoryMovements.previousReservedStock,
+        newReservedStock: inventoryMovements.newReservedStock,
+        reservedStockDelta: inventoryMovements.reservedStockDelta,
+        previousPreorderStock: inventoryMovements.previousPreorderStock,
+        newPreorderStock: inventoryMovements.newPreorderStock,
+        preorderStockDelta: inventoryMovements.preorderStockDelta,
+      })
+      .from(inventoryMovements)
+      .where(and(
+        eq(inventoryMovements.orderId, orderId),
+        eq(inventoryMovements.variantId, entry.variantId),
+        eq(inventoryMovements.ledgerVersion, 2),
+        eq(inventoryMovements.pool, entry.pool),
+      ))
+      .all();
+
+    const completeV2Rows = v2Rows.filter((row) => row.ledgerVersion === 2);
+    if (completeV2Rows.length > 0) {
+      const balances = getReservationGenerationBalances(
+        completeV2Rows as InventoryLedgerV2Event[],
+        { orderId, variantId: entry.variantId, pool: entry.pool },
+      );
+      const activeGeneration = getActiveReservationGeneration(balances);
+      const generation = activeGeneration ?? balances.at(-1)?.generation ?? 1;
+      const balance = balances.find((candidate) => candidate.generation === generation);
+      stats.set(entry.variantId, {
+        reservedQuantity: balance?.reserved ?? 0,
+        releasedQuantity: balance?.consumed ?? 0,
+        reservationGenerations: generation,
+        reservationGeneration: generation,
+      });
+      continue;
+    }
+
     const row = await db
       .select({
         reservedQuantity: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.type} IN ('reserved', 'preorder_reserved') THEN ${inventoryMovements.quantity} ELSE 0 END), 0)`,
@@ -480,8 +568,9 @@ async function loadReleaseMovementStats(
       reservedQuantity: Number(row?.reservedQuantity ?? 0),
       releasedQuantity: Number(row?.releasedQuantity ?? 0),
       reservationGenerations: Number(row?.reservationGenerations ?? 0),
+      reservationGeneration: Math.max(1, Number(row?.reservationGenerations ?? 0)),
     });
-  }));
+  }
 
   return stats;
 }
@@ -528,6 +617,18 @@ function buildReleaseMovementInsert(
         ${claim.newStock},
         ${claim.notes},
         NULL,
+        ${claim.ledgerVersion},
+        ${claim.pool},
+        ${claim.reservationGeneration},
+        ${claim.stockVersionBefore},
+        ${claim.stockVersionAfter},
+        ${claim.stockDelta},
+        ${claim.previousReservedStock},
+        ${claim.newReservedStock},
+        ${claim.reservedStockDelta},
+        ${claim.previousPreorderStock},
+        ${claim.newPreorderStock},
+        ${claim.preorderStockDelta},
         unixepoch()
       FROM ${productVariants}
       WHERE ${productVariants.id} = ${claim.variantId}

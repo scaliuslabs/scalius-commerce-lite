@@ -32,6 +32,9 @@ const defaultValues = {
   variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
   variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
   variantOption2Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+  variantImagesEnabled: false,
+  variantImageAxis: "option2" as const,
+  variantImageMappings: [],
   slug: "",
   images: [],
 };

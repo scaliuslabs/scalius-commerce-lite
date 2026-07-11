@@ -348,30 +348,75 @@ export async function createVariant(db: DrizzleD1Database<typeof schema>, produc
         throw new ConflictError("A variant with this SKU already exists");
     }
 
-    const [variant] = await db
-        .insert(productVariants)
-        .values({
-            id: "var_" + nanoid(),
-            productId,
-            size,
-            color,
-            weight: data.weight,
-            sku: data.sku,
-            price: data.price,
+    const variantId = `var_${nanoid()}`;
+    const variantValues = {
+        id: variantId,
+        productId,
+        size,
+        color,
+        weight: data.weight,
+        sku: data.sku,
+        price: data.price,
+        stock: data.stock > 0 ? 0 : data.stock,
+        reservedStock: 0,
+        preorderStock: 0,
+        stockVersion: 1,
+        isDefault: false,
+        trackInventory: data.trackInventory ?? true,
+        barcode: data.barcode || null,
+        barcodeType: data.barcodeType || null,
+        discountType: data.discountType || "percentage",
+        discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
+        discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+    };
+    const insert = db.insert(productVariants).values(variantValues).returning();
+    if (data.stock === 0) {
+        const [variant] = await insert;
+        return variant;
+    }
+
+    const movement = buildStockMovementClaim(db, {
+        movementId: crypto.randomUUID(),
+        variantId,
+        pool: "regular",
+        quantity: data.stock,
+        before: {
+            stock: 0,
+            reservedStock: 0,
+            preorderStock: 0,
+            stockVersion: 1,
+        },
+        after: {
             stock: data.stock,
-            isDefault: false,
-            trackInventory: data.trackInventory ?? true,
-            barcode: data.barcode || null,
-            barcodeType: data.barcodeType || null,
-            discountType: data.discountType || "percentage",
-            discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
-            discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
-            createdAt: sql`unixepoch()`,
+            reservedStock: 0,
+            preorderStock: 0,
+            stockVersion: 2,
+        },
+        notes: "Stocktake: Initial product variant stock",
+    });
+    const update = db.update(productVariants)
+        .set({
+            stock: data.stock,
+            stockVersion: sql`${productVariants.stockVersion} + 1`,
             updatedAt: sql`unixepoch()`,
         })
+        .where(and(
+            eq(productVariants.id, variantId),
+            eq(productVariants.stockVersion, 1),
+            isNull(productVariants.deletedAt),
+        ))
         .returning();
-
-    return variant;
+    const [, movementRows, updatedRows] = await safeBatch(
+        db,
+        [insert, movement, update] as never,
+    ) as [PersistedVariant[], Array<{ id: string }>, PersistedVariant[]];
+    if ((movementRows?.length ?? 0) === 0 || (updatedRows?.length ?? 0) === 0) {
+        throw new ConflictError("Initial variant stock could not be recorded");
+    }
+    await checkAndAlertLowStock(db, variantId);
+    return updatedRows[0];
 }
 
 export async function updateVariant(db: DrizzleD1Database<typeof schema>, productId: string, variantId: string, data: z.infer<typeof updateVariantSchema>, adminUserId?: string) {
@@ -382,6 +427,8 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
             size: productVariants.size,
             color: productVariants.color,
             stock: productVariants.stock,
+            reservedStock: productVariants.reservedStock,
+            preorderStock: productVariants.preorderStock,
             stockVersion: productVariants.stockVersion,
             trackInventory: productVariants.trackInventory,
         })
@@ -453,10 +500,20 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
         const movementInsert = buildStockMovementClaim(db, {
             movementId: crypto.randomUUID(),
             variantId,
-            stockVersion: existingVariant.stockVersion,
+            pool: "regular",
             quantity: delta,
-            previousStock: existingVariant.stock,
-            newStock: data.stock,
+            before: {
+                stock: existingVariant.stock,
+                reservedStock: existingVariant.reservedStock,
+                preorderStock: existingVariant.preorderStock,
+                stockVersion: existingVariant.stockVersion,
+            },
+            after: {
+                stock: data.stock,
+                reservedStock: existingVariant.reservedStock,
+                preorderStock: existingVariant.preorderStock,
+                stockVersion: existingVariant.stockVersion + 1,
+            },
             notes: "Stocktake: Product variant edit",
             adminUserId,
         });
@@ -833,7 +890,8 @@ export async function applyVariantEditPlan(
     }
 
     for (const variant of createsWithIds) {
-        createResultIndices.push(statements.length);
+        const hasInitialStock = variant.stock > 0;
+        const insertIndex = statements.length;
         statements.push(
             db.insert(productVariants).values({
                 id: variant.id,
@@ -843,7 +901,7 @@ export async function applyVariantEditPlan(
                 weight: variant.weight ?? null,
                 sku: variant.sku,
                 price: variant.price,
-                stock: variant.stock,
+                stock: hasInitialStock ? 0 : variant.stock,
                 reservedStock: 0,
                 preorderStock: 0,
                 isDefault: false,
@@ -864,19 +922,47 @@ export async function applyVariantEditPlan(
                 updatedAt: sql`unixepoch()`,
             }).returning(),
         );
-        if (variant.stock > 0) {
+        if (hasInitialStock) {
             movementResultIndices.push(statements.length);
             statements.push(buildStockMovementClaim(db, {
                 movementId: crypto.randomUUID(),
                 variantId: variant.id,
-                stockVersion: 1,
+                pool: "regular",
                 quantity: variant.stock,
-                previousStock: 0,
-                newStock: variant.stock,
+                before: {
+                    stock: 0,
+                    reservedStock: 0,
+                    preorderStock: 0,
+                    stockVersion: 1,
+                },
+                after: {
+                    stock: variant.stock,
+                    reservedStock: 0,
+                    preorderStock: 0,
+                    stockVersion: 2,
+                },
                 notes: "Stocktake: Initial product variant stock",
                 adminUserId,
             }));
+            createResultIndices.push(statements.length);
+            statements.push(
+                db.update(productVariants)
+                    .set({
+                        stock: variant.stock,
+                        stockVersion: sql`${productVariants.stockVersion} + 1`,
+                        updatedAt: sql`unixepoch()`,
+                    })
+                    .where(and(
+                        eq(productVariants.id, variant.id),
+                        eq(productVariants.productId, productId),
+                        eq(productVariants.stockVersion, 1),
+                        isNull(productVariants.deletedAt),
+                    ))
+                    .returning(),
+            );
             stockChangedVariantIds.push(variant.id);
+        } else {
+            createResultIndices.push(insertIndex);
         }
     }
 
@@ -889,10 +975,20 @@ export async function applyVariantEditPlan(
             statements.push(buildStockMovementClaim(db, {
                 movementId: crypto.randomUUID(),
                 variantId: update.id,
-                stockVersion: current.stockVersion,
+                pool: "regular",
                 quantity: update.stock! - current.stock,
-                previousStock: current.stock,
-                newStock: update.stock!,
+                before: {
+                    stock: current.stock,
+                    reservedStock: current.reservedStock,
+                    preorderStock: current.preorderStock,
+                    stockVersion: current.stockVersion,
+                },
+                after: {
+                    stock: update.stock!,
+                    reservedStock: current.reservedStock,
+                    preorderStock: current.preorderStock,
+                    stockVersion: current.stockVersion + 1,
+                },
                 notes: "Stocktake: Product variant edit plan",
                 adminUserId,
             }));

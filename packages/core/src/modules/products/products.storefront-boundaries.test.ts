@@ -58,8 +58,10 @@ describe("storefront product query boundaries", () => {
         );
 
         const countQueryIndex = source.indexOf("let countQuery = db");
+        const catalogReaderIndex = source.indexOf("async function readStorefrontCatalogPage");
         const readWaveIndex = source.indexOf(
-            "const [productsList, totalCount, rawPriceRange] = await Promise.all([",
+            "const [productsList, totalCount, rawPriceRange, facetRows] = await Promise.all([",
+            catalogReaderIndex,
         );
         const rowsReadIndex = source.indexOf(
             "query.orderBy(orderBy).limit(limit).offset(offset).all()",
@@ -83,9 +85,11 @@ describe("storefront product query boundaries", () => {
             "utf8",
         );
 
-        const categoryIdsIndex = source.indexOf("const categoryIds = [");
+        const catalogReaderIndex = source.indexOf("async function readStorefrontCatalogPage");
+        const categoryIdsIndex = source.indexOf("const categoryIds = scope.fixedCategory", catalogReaderIndex);
         const enrichmentWaveIndex = source.indexOf(
             "const [imageMap, categoriesData] = await Promise.all([",
+            categoryIdsIndex,
         );
         const imagesReadIndex = source.indexOf(
             "readPrimaryProductImageMap(db, productIds)",
@@ -162,6 +166,12 @@ describe("storefront product query boundaries", () => {
         const lookupHelper = source.slice(lookupHelperStart, lookupHelperEnd);
         const listBody = getFunctionBody(source, "getStorefrontProducts");
         const feedBody = getFunctionBody(source, "getStorefrontFeedProducts");
+        const catalogReaderStart = source.indexOf("async function readStorefrontCatalogPage");
+        const catalogReaderEnd = source.indexOf(
+            "/**\n * Returns a paginated list of active storefront products",
+            catalogReaderStart,
+        );
+        const catalogReader = source.slice(catalogReaderStart, catalogReaderEnd);
 
         expect(source).toContain("const MAX_PUBLIC_LOOKUP_TOKENS = 100;");
         expect(source).toContain("function parsePublicLookupTokens");
@@ -176,7 +186,8 @@ describe("storefront product query boundaries", () => {
         expect(lookupHelper).toContain("lookup_variant.id = public_lookup.value");
         expect(lookupHelper).toContain("lookup_variant.sku = public_lookup.value");
         expect(lookupHelper).toContain("lookup_variant.deleted_at IS NULL");
-        expect(listBody).toContain("const conditions = buildStorefrontProductConditions(params, {}, buyerPricing);");
+        expect(listBody).toContain("return readStorefrontCatalogPage(db, params);");
+        expect(catalogReader).toContain("const conditions = buildStorefrontProductConditions(params, {}, buyerPricing);");
         expect(listBody).not.toContain("includeLookupHandles");
         expect(listBody).not.toContain("includeVariantLookups");
         expect(feedBody).toContain("const conditions = buildStorefrontProductConditions(params, {");
@@ -256,7 +267,7 @@ describe("storefront product query boundaries", () => {
         expect(feedBody).not.toContain("eq(productVariants.productId, product.id)");
     });
 
-    it("keeps category products on the shared storefront list core", () => {
+    it("keeps products, categories, and collections on one result-scoped catalog core", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
             "utf8",
@@ -265,47 +276,21 @@ describe("storefront product query boundaries", () => {
         const conditionsHelperIndex = source.indexOf("function buildStorefrontProductConditions");
         const sortHelperIndex = source.indexOf("function getStorefrontProductOrderBy");
         const attributeHelperIndex = source.indexOf("function buildAttributeProductSubquery");
-        const singleFilterBranchIndex = source.indexOf(
-            "if (attributeFilters.length === 1) {",
-            attributeHelperIndex,
-        );
-        const singleFilterAliasIndex = source.indexOf(
-            ".as(alias);",
-            singleFilterBranchIndex,
-        );
         const multiFilterGroupIndex = source.indexOf(
             ".groupBy(productAttributeValues.productId)",
-            singleFilterAliasIndex,
-        );
-        const attributeInnerJoinIndex = source.indexOf(
-            ".innerJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))",
             attributeHelperIndex,
         );
-        const attributeLeftJoinIndex = source.indexOf(
-            ".leftJoin(productAttributes",
-            attributeHelperIndex,
-        );
+        const facetHelperIndex = source.indexOf("function buildResultScopedFacetQuery");
+        const catalogHelperIndex = source.indexOf("async function readStorefrontCatalogPage");
         const categoryHelperIndex = source.indexOf("export async function getStorefrontCategoryProducts");
+        const collectionHelperIndex = source.indexOf("export async function getStorefrontCollectionProducts");
         const listingSearchConditionsIndex = source.indexOf(
             'const searchConditions = [ftsMatch("products_fts", "products", search)];',
             conditionsHelperIndex,
         );
-        const invalidLookupSearchIndex = source.indexOf("conditions.push(searchCondition ?? sql`0 = 1`);");
         const newestSortIndex = source.indexOf(
             "return desc(products.createdAt);",
             sortHelperIndex,
-        );
-        const categoryConditionsIndex = source.indexOf(
-            "const conditions = buildStorefrontProductConditions(scopedParams, {}, buyerPricing);",
-            categoryHelperIndex,
-        );
-        const categorySortIndex = source.indexOf(
-            "const orderBy = getStorefrontProductOrderBy(sort, buyerPricing);",
-            categoryHelperIndex,
-        );
-        const categoryAttributeIndex = source.indexOf(
-            'buildAttributeProductSubquery(db, attributeFilters, "category_filtered_products")',
-            categoryHelperIndex,
         );
         const guardedDiscountSortIndex = source.indexOf(
             "WHEN ${products.price} > 0 AND ${products.discountType} = 'flat'",
@@ -315,22 +300,33 @@ describe("storefront product query boundaries", () => {
         expect(conditionsHelperIndex).toBeGreaterThan(-1);
         expect(sortHelperIndex).toBeGreaterThan(conditionsHelperIndex);
         expect(attributeHelperIndex).toBeGreaterThan(sortHelperIndex);
-        expect(singleFilterBranchIndex).toBeGreaterThan(attributeHelperIndex);
-        expect(singleFilterAliasIndex).toBeGreaterThan(singleFilterBranchIndex);
-        expect(multiFilterGroupIndex).toBeGreaterThan(singleFilterAliasIndex);
-        expect(attributeInnerJoinIndex).toBeGreaterThan(attributeHelperIndex);
-        expect(attributeLeftJoinIndex).toBe(-1);
+        expect(multiFilterGroupIndex).toBeGreaterThan(attributeHelperIndex);
+        expect(source.slice(attributeHelperIndex, facetHelperIndex)).toContain("json_each");
+        expect(source.slice(attributeHelperIndex, facetHelperIndex)).toContain("$.values");
+        expect(facetHelperIndex).toBeGreaterThan(attributeHelperIndex);
+        expect(source.slice(facetHelperIndex, catalogHelperIndex)).toContain(
+            "matchesOtherSelectedFacets",
+        );
+        expect(source.slice(facetHelperIndex, catalogHelperIndex)).toContain(
+            "COUNT(DISTINCT CASE",
+        );
+        expect(catalogHelperIndex).toBeGreaterThan(facetHelperIndex);
         expect(listingSearchConditionsIndex).toBeGreaterThan(conditionsHelperIndex);
         expect(source.indexOf("?? sql`0 = 1`,", listingSearchConditionsIndex)).toBeGreaterThan(
             listingSearchConditionsIndex,
         );
-        expect(invalidLookupSearchIndex).toBeGreaterThan(categoryHelperIndex);
-        expect(categoryHelperIndex).toBeGreaterThan(attributeHelperIndex);
-        expect(categoryConditionsIndex).toBeGreaterThan(categoryHelperIndex);
-        expect(categorySortIndex).toBeGreaterThan(categoryHelperIndex);
-        expect(categoryAttributeIndex).toBeGreaterThan(categoryHelperIndex);
-        expect(source.indexOf("category_price_range_filtered_products", categoryHelperIndex)).toBeGreaterThan(categoryHelperIndex);
-        expect(source.indexOf("priceRange:", categoryHelperIndex)).toBeGreaterThan(categoryHelperIndex);
+        expect(categoryHelperIndex).toBeGreaterThan(catalogHelperIndex);
+        expect(collectionHelperIndex).toBeGreaterThan(categoryHelperIndex);
+        expect(source.slice(categoryHelperIndex, collectionHelperIndex)).toContain(
+            "return readStorefrontCatalogPage",
+        );
+        expect(source.slice(collectionHelperIndex)).toContain("CAST(key AS INTEGER)");
+        expect(source.slice(catalogHelperIndex, categoryHelperIndex)).toContain(
+            "facets: groupResultScopedFacets",
+        );
+        expect(source.slice(catalogHelperIndex, categoryHelperIndex)).toContain(
+            "catalog_price_range_filtered_products",
+        );
         expect(guardedDiscountSortIndex).toBeGreaterThan(sortHelperIndex);
         expect(newestSortIndex).toBeGreaterThan(sortHelperIndex);
     });

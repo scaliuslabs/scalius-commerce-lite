@@ -44,6 +44,10 @@ import {
   resolveBuyerVariants,
 } from "@/lib/product-sellable-variants";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
+import {
+  resolveProductVariantImageConfiguration,
+  resolveVariantImageId,
+} from "@/lib/variant-image-mapping";
 
 interface ProductShortcodeProps {
   productData: ProductPageData;
@@ -52,7 +56,7 @@ interface ProductShortcodeProps {
 export default function ProductShortcode({
   productData,
 }: ProductShortcodeProps) {
-  const { product, images, variants } = productData;
+  const { product, images, variants, variantImageMappings } = productData;
   const buyerVariants = useMemo(
     () => resolveBuyerVariants(variants).variants,
     [variants],
@@ -90,12 +94,17 @@ export default function ProductShortcode({
     type: "success" | "error";
   } | null>(null);
 
-  const variantImageMarker = product.metaDescription?.match(
-    /<!--variant_images:(enabled|option1|option2)-->/,
-  )?.[1];
-  const isVariantImagesEnabled = Boolean(variantImageMarker);
-  const variantImageAxis =
-    variantImageMarker === "option1" ? "option1" : "option2";
+  const variantImageConfiguration = useMemo(
+    () => resolveProductVariantImageConfiguration({
+      product,
+      images,
+      variants: buyerVariants,
+      mappings: variantImageMappings ?? [],
+    }),
+    [buyerVariants, images, product, variantImageMappings],
+  );
+  const isVariantImagesEnabled = variantImageConfiguration.enabled;
+  const variantImageAxis = variantImageConfiguration.axis;
 
   const sizeOptions = useMemo(
     () => [
@@ -205,25 +214,30 @@ export default function ProductShortcode({
   });
 
   useEffect(() => {
-    const selectedImageOption =
+    const selectedOptionValue =
       variantImageAxis === "option1" ? selectedSize : selectedColor;
-    const imageOptions =
-      variantImageAxis === "option1" ? sizeOptions : colorOptions;
-    if (isVariantImagesEnabled && selectedImageOption) {
-      const optionIndex = imageOptions.indexOf(selectedImageOption);
-      const variantImage = optionIndex !== -1 ? images[optionIndex] : undefined;
+    if (isVariantImagesEnabled) {
+      const imageId = resolveVariantImageId({
+        enabled: true,
+        axis: variantImageAxis,
+        mappings: variantImageConfiguration.mappings,
+        images,
+        selectedVariantId: matchingVariant?.id,
+        selectedOptionValue,
+      });
+      const variantImage = images.find((image) => image.id === imageId);
       if (variantImage?.url && hasProductImage(variantImage.url)) {
         setCurrentImage(variantImage.url);
       }
     }
   }, [
-    colorOptions,
     images,
     isVariantImagesEnabled,
+    matchingVariant?.id,
     selectedColor,
     selectedSize,
-    sizeOptions,
     variantImageAxis,
+    variantImageConfiguration.mappings,
   ]);
 
   const showToast = (msg: string, type: "success" | "error") => {

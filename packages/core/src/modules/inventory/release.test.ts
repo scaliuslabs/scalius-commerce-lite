@@ -159,6 +159,26 @@ describe("releaseReservedStockBatch", () => {
     vi.clearAllMocks();
   });
 
+  it("rejects two pools for the same SKU because one CAS edge can have only one ledger event", async () => {
+    const { db, batchCalls } = createReleaseBatchDb();
+
+    const result = await releaseReservedStockBatch(
+      db,
+      [
+        { variantId: "var_a", quantity: 1, pool: "regular" },
+        { variantId: "var_a", quantity: 1, pool: "preorder" },
+      ],
+      "order_1",
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      manualReconciliationRequired: true,
+      error: expect.stringContaining("multiple inventory pools"),
+    });
+    expect(batchCalls).toHaveLength(0);
+  });
+
   it("writes the release movement claim and stock counter update in one batch", async () => {
     const { db, batchCalls } = createReleaseBatchDb();
 

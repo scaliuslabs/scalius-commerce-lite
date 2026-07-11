@@ -39,15 +39,15 @@ export function canonicalizeUrlSearchParams(
 ): URL {
   const canonicalUrl = new URL(url.toString());
   const ignored = new Set(ignoredParams);
-  const valuesByKey = new Map<string, string>();
+  const values: Array<[string, string]> = [];
 
   for (const [key, rawValue] of canonicalUrl.searchParams.entries()) {
     const value = normalizeCanonicalQueryValue(key, rawValue);
     if (ignored.has(key)) continue;
-    valuesByKey.set(key, value);
+    values.push([key, value]);
   }
 
-  const entries = [...valuesByKey.entries()].filter(([key, value]) => (
+  const entries = values.filter(([key, value]) => (
     !(dropEmptyValues && value === "") &&
     !(Object.hasOwn(defaultParams, key) && value === String(defaultParams[key]))
   ));

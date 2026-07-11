@@ -196,11 +196,12 @@ describe("atomic product variant edit plans", () => {
         }, "admin_1");
 
         expect(batchCalls).toHaveLength(1);
-        expect(batchCalls[0]).toHaveLength(5);
+        expect(batchCalls[0]).toHaveLength(6);
         expect(batchCalls[0]).toEqual([
             expect.objectContaining({ kind: "guard" }),
             expect.objectContaining({ kind: "create" }),
             expect.objectContaining({ kind: "movement" }),
+            expect.objectContaining({ kind: "update" }),
             expect.objectContaining({ kind: "movement" }),
             expect.objectContaining({ kind: "update" }),
         ]);

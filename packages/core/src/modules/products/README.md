@@ -154,7 +154,7 @@ Storefront category ([slug].astro)
 
 3. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain all business logic inline in the route handlers rather than delegating to a core service module.
 
-4. **Variant images feature uses HTML comment marker**: The variant-images-enabled flag is stored as `<!--variant_images:enabled-->` appended to `metaDescription`. Both admin and storefront parse this marker. This piggybacks on an SEO field for unrelated feature flagging.
+4. **Variant images now use explicit stable associations**: Product enable/axis settings live on `products`; `product_variant_image_mappings` links an image ID to either a SKU or normalized option value. Migration `0002_backfill_variant_image_mappings` materializes legacy positional markers without removing them so old storefront readers remain safe during a staged rollout. New reads prefer explicit mappings and clean marker text from SEO output; successful new-admin writes remove markers atomically.
 
 5. **Simple/optioned transitions need a guided stock workflow**: The backend is SKU-first. Admin edit now presents one protected default no-option SKU as a `Product SKU` panel, hides that SKU from optioned product tables, and rejects non-default/no-option SKUs everywhere new option rows can be created. The remaining workflow gap is deliberate conversion UX: merchants need explicit stock/price copy-or-merge choices when a tracked simple SKU becomes optioned, and an optioned -> simple flow with cached-cart invalidation guidance.
 

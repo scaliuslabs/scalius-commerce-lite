@@ -7,8 +7,10 @@ import type {
   Product,
   ProductVariant,
   ProductImage,
+  ProductVariantImageMapping,
   PaginatedResponse,
   BuyerPriceRange,
+  ProductFacet,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
@@ -31,6 +33,7 @@ export interface ProductPageData {
   category: Product["category"];
   images: ProductImage[];
   variants: ProductVariant[];
+  variantImageMappings?: ProductVariantImageMapping[];
   relatedProducts: Product[];
 }
 
@@ -53,7 +56,12 @@ function normalizeProductPageData(payload: unknown): ProductPageData | null {
     return null;
   }
 
-  return candidate;
+  return {
+    ...candidate,
+    variantImageMappings: Array.isArray(candidate.variantImageMappings)
+      ? candidate.variantImageMappings
+      : [],
+  };
 }
 
 /**
@@ -201,6 +209,7 @@ type ProductListPayload = {
   data?: Product[];
   pagination?: PaginatedResponse<Product>["pagination"];
   priceRange?: BuyerPriceRange;
+  facets?: ProductFacet[];
 };
 
 function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | undefined {
@@ -217,6 +226,31 @@ function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | undefined {
     return undefined;
   }
   return { min, max };
+}
+
+function normalizeProductFacets(value: unknown): ProductFacet[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const facet = candidate as Partial<ProductFacet>;
+    if (
+      typeof facet.id !== "string" ||
+      typeof facet.name !== "string" ||
+      typeof facet.slug !== "string" ||
+      !Array.isArray(facet.values)
+    ) return [];
+    const values = facet.values.flatMap((option) => (
+      option &&
+      typeof option === "object" &&
+      typeof option.value === "string" &&
+      typeof option.count === "number" &&
+      Number.isInteger(option.count) &&
+      option.count >= 0
+        ? [{ value: option.value, count: option.count }]
+        : []
+    ));
+    return [{ id: facet.id, name: facet.name, slug: facet.slug, values }];
+  });
 }
 
 type SitemapProductListPayload = {
@@ -278,6 +312,7 @@ function normalizeProductListPayload(
     data: products,
     pagination: candidate.pagination,
     priceRange: normalizeBuyerPriceRange(candidate.priceRange),
+    facets: normalizeProductFacets(candidate.facets),
   };
 }
 
@@ -381,6 +416,7 @@ export async function getProductsByCategory(
           products: Product[];
           pagination: PaginatedResponse<Product>["pagination"];
           priceRange?: BuyerPriceRange;
+          facets?: ProductFacet[];
         }>(data);
         return d
           ? {
@@ -388,6 +424,7 @@ export async function getProductsByCategory(
               data: d.products,
               pagination: d.pagination,
               priceRange: normalizeBuyerPriceRange(d.priceRange),
+              facets: normalizeProductFacets(d.facets),
             }
           : null;
       } catch (error: unknown) {
@@ -429,10 +466,7 @@ export async function getAllProducts(
           console.error("Error fetching all products:", error);
           return null;
         }
-        const d = unwrapData<{ products: Product[]; pagination: PaginatedResponse<Product>["pagination"] }>(data);
-        return d
-          ? { data: d.products, pagination: d.pagination }
-          : null;
+        return normalizeProductListPayload(data);
       } catch (error: unknown) {
         console.error("Error fetching all products:", error);
         return null;

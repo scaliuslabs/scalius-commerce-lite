@@ -114,6 +114,27 @@ export async function getInventoryOverview(db: Database, params: {
 
     if (section === "movements") {
         const countResult = await db.select({ count: sql<number>`count(*)` }).from(inventoryMovements).get();
+        const ledgerHealth = await db.select({
+            legacyRows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 1 THEN 1 ELSE 0 END), 0)`,
+            v2Rows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 2 THEN 1 ELSE 0 END), 0)`,
+            v2Variants: sql<number>`COUNT(DISTINCT CASE WHEN ${inventoryMovements.ledgerVersion} = 2 THEN ${inventoryMovements.variantId} END)`,
+            invalidV2Rows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 2 AND (
+                ${inventoryMovements.pool} IS NULL
+                OR ${inventoryMovements.pool} NOT IN ('regular', 'preorder', 'backorder')
+                OR ${inventoryMovements.stockVersionBefore} IS NULL
+                OR ${inventoryMovements.stockVersionAfter} <> ${inventoryMovements.stockVersionBefore} + 1
+                OR ${inventoryMovements.stockDelta} IS NULL
+                OR ${inventoryMovements.previousReservedStock} IS NULL
+                OR ${inventoryMovements.newReservedStock} IS NULL
+                OR ${inventoryMovements.reservedStockDelta} IS NULL
+                OR ${inventoryMovements.previousPreorderStock} IS NULL
+                OR ${inventoryMovements.newPreorderStock} IS NULL
+                OR ${inventoryMovements.preorderStockDelta} IS NULL
+                OR ${inventoryMovements.newStock} - ${inventoryMovements.previousStock} <> ${inventoryMovements.stockDelta}
+                OR ${inventoryMovements.newReservedStock} - ${inventoryMovements.previousReservedStock} <> ${inventoryMovements.reservedStockDelta}
+                OR ${inventoryMovements.newPreorderStock} - ${inventoryMovements.previousPreorderStock} <> ${inventoryMovements.preorderStockDelta}
+            ) THEN 1 ELSE 0 END), 0)`,
+        }).from(inventoryMovements).get();
 
         const movements = await db
             .select({
@@ -126,6 +147,18 @@ export async function getInventoryOverview(db: Database, params: {
                 newStock: inventoryMovements.newStock,
                 notes: inventoryMovements.notes,
                 createdBy: inventoryMovements.createdBy,
+                ledgerVersion: inventoryMovements.ledgerVersion,
+                pool: inventoryMovements.pool,
+                reservationGeneration: inventoryMovements.reservationGeneration,
+                stockVersionBefore: inventoryMovements.stockVersionBefore,
+                stockVersionAfter: inventoryMovements.stockVersionAfter,
+                stockDelta: inventoryMovements.stockDelta,
+                previousReservedStock: inventoryMovements.previousReservedStock,
+                newReservedStock: inventoryMovements.newReservedStock,
+                reservedStockDelta: inventoryMovements.reservedStockDelta,
+                previousPreorderStock: inventoryMovements.previousPreorderStock,
+                newPreorderStock: inventoryMovements.newPreorderStock,
+                preorderStockDelta: inventoryMovements.preorderStockDelta,
                 createdAt: inventoryMovements.createdAt,
                 variantSku: productVariants.sku,
                 productName: products.name,
@@ -140,6 +173,12 @@ export async function getInventoryOverview(db: Database, params: {
 
         return {
             movements,
+            ledgerHealth: ledgerHealth ?? {
+                legacyRows: 0,
+                v2Rows: 0,
+                v2Variants: 0,
+                invalidV2Rows: 0,
+            },
             pagination: {
                 page,
                 limit,
@@ -200,6 +239,7 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
             .select({
                 id: productVariants.id,
                 stock: productVariants.stock,
+                reservedStock: productVariants.reservedStock,
                 preorderStock: productVariants.preorderStock,
                 stockVersion: productVariants.stockVersion,
             })
@@ -239,10 +279,20 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
         const movementInsert = buildStockMovementClaim(db, {
             movementId: crypto.randomUUID(),
             variantId,
-            stockVersion: variant.stockVersion,
+            pool: pool === "preorderStock" ? "preorder" : "regular",
             quantity: effectiveDelta,
-            previousStock,
-            newStock,
+            before: {
+                stock: variant.stock,
+                reservedStock: variant.reservedStock,
+                preorderStock: variant.preorderStock,
+                stockVersion: variant.stockVersion,
+            },
+            after: {
+                stock: pool === "preorderStock" ? variant.stock : newStock,
+                reservedStock: variant.reservedStock,
+                preorderStock: pool === "preorderStock" ? newStock : variant.preorderStock,
+                stockVersion: variant.stockVersion + 1,
+            },
             notes: `Manual adjustment (${payload.reason})${payload.notes ? `: ${payload.notes}` : ""}`,
             adminUserId,
         });

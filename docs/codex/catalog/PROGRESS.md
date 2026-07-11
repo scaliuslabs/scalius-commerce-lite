@@ -36,6 +36,9 @@ This log records implementation state. The finding files remain the source for o
 - Reliability batch 3 integrated suite: 432 files and 3,246 tests passed after the legacy order-atomicity harness was migrated to deterministic claim/release APIs.
 - Full workspace typecheck passed across eight runnable packages; Astro reported zero errors, warnings, or hints across 287 files. Full workspace lint, Worker binding parity, admin performance constraints, distribution secret checks, production builds, SDK regeneration, and `git diff --check` passed.
 - An executable SQLite projection test proves hidden default-SKU exclusion, purchasable-SKU preference, SKU-over-product discount inheritance, sold-out fallback, and exact interval matching. Read-only production D1 probes ranked roughly 400 rows into 28 product projections in 12.10 ms cold and 1.52 ms warm with zero writes.
+- Reliability batch 4 integrated suite: 439 files and 3,283 tests passed. Full workspace TypeScript/Astro checks passed across 290 storefront files with zero diagnostics; full workspace lint passed without warnings after listing-loader cleanup.
+- Migration metadata validation passed with five contiguous SQL/journal/snapshot entries. A full SQLite 0000→0004 apply, foreign-key check, stable variant-image backfill, ledger-v2 trigger test, and no-rebuild legacy movement preservation smoke passed.
+- Read-only production preflight found three legacy variant-image marker products with valid absolute images and bounded option/image sets, plus 310 version-1 inventory movement rows across 24 SKUs and zero currently partial reservation groups. No production rows were changed.
 
 ## Deployment and live evidence
 
@@ -62,19 +65,28 @@ This log records implementation state. The finding files remain the source for o
 - Public search no longer converts backend failure into an empty result. The command palette has a retryable failure state, dialog/combobox/listbox semantics, focus containment/restoration, labelled close control, keyboard-focusable result options, and buyer-SKU prices.
 - Collection config ID arrays are write-validated and legacy-normalized to 90. Cross-collection lookup sets use one bound `json_each()` token instead of exceeding D1's parameter ceiling.
 
-## Still open after batch 3
+## Landed in reliability batch 4 (local integration verified; deployment pending)
 
-- Variant-media configuration is still stored inside SEO metadata and matched positionally; this batch only prevents the marker from leaking in admin display.
-- Partial reservation generations and the foldable pool-aware ledger-v2 model remain P1.
-- Facets remain single-select and do not yet expose result-scoped counts or zero-result disabling.
-- Public collection detail is still a capped merchandising resolver rather than a paginated catalog collection model.
+- Variant images now use stable image-ID associations to either an exact active SKU or normalized merchant option value. Reordering/removing images cannot shift later mappings, temp IDs reconcile to authoritative persisted IDs, exact SKU mapping wins over option mapping, and the protected product-page layout is unchanged.
+- Generated migration 0001 adds product configuration and the mapping table; custom migration 0002 materializes the three live legacy positional configurations but retains their markers for old-reader rollout safety. New API/storefront readers prefer explicit rows, and successful new-admin writes remove markers atomically. Database triggers plus core validation reject invalid axes, negative order, cross-product images/SKUs, default/deleted SKU targets, and stale option values.
+- Ledger v2 writes one pool-aware event in the same batch as each production stock-version CAS edge. It records physical, reserved, and preorder before/after/delta counters, reservation generation, and a unique per-SKU version sequence; database triggers reject incomplete or operation-inconsistent rows. The admin movement view shows the counters that actually changed plus pool/generation instead of implying every event changes physical stock.
+- Reservation expiry subtracts pool/generation-specific deductions and releases and frees only the outstanding orphan quantity. Re-reservation advances generation only after the prior generation closes. Multi-order or multi-pool requests that would create multiple ledger events for one CAS edge fail closed.
+- Product, category, and collection listings now return result-scoped multi-select facets. Values OR within one attribute and attributes AND across axes; counts exclude the facet's own selection, selected zero-count values remain removable, unknown values canonicalize away, and repeated cache keys retain stable identities.
+- Public collection detail is a truthful paginated buyer catalog. Membership is the deduplicated union of explicit products and categories; curated products appear first in saved order, category-derived products follow the requested/default sort, and the response includes totals, dynamic SKU price bounds, facets, categories, and optional featured product.
+
+## Still open after batch 4
+
 - The buyer projection is a derived window query. Correctness is unified, but very large catalogs should move it to a transactionally maintained projection table after write-path coverage and benchmark evidence exist.
 - The mobile admin catalog table, route-backed settings architecture, and broader keyboard/accessibility pass remain open.
 - Dedicated RBAC permissions do not yet exist for attribute restore/permanent delete, collection permanent delete, or bulk-permanent operations; the UI intentionally mirrors the current API permission map rather than inventing authority.
+- Product aggregate revision/CAS, normalized barcode uniqueness, minor-unit catalog money, and the legacy duplicate option-combination cleanup remain open P1 model work.
+- Collection membership remains JSON configuration shared with merchandising metadata; a normalized membership/rules model with revisioned ordering is still required for very large catalogs and concurrent editors.
+- Attribute visibility/export/schema roles remain coupled to `filterable`; quick-buy pricing, UCP eligible pagination, and feed cursor pagination retain their documented gaps.
+- The category/collection mobile filter drawer still needs a complete focus trap and automated accessibility coverage.
 
 ## Next implementation slice
 
-1. Migrate variant-media configuration out of SEO metadata into stable associations.
-2. Design ledger v2 and partial reservation-generation reconciliation.
-3. Add result-scoped facet counts/multi-select and a paginated catalog-collection model.
-4. Finish mobile catalog rows, route-backed settings, keyboard workflows, and automated accessibility coverage.
+1. Add product aggregate CAS/reload UX, resolve the legacy option duplicate, and enforce normalized option/barcode uniqueness.
+2. Normalize collection membership/rules with revisioned ordering and benchmark/materialize the buyer projection.
+3. Finish mobile catalog rows, route-backed settings, keyboard workflows, and automated accessibility coverage.
+4. Split attribute facet/display/export/schema roles, then harden quick-buy, UCP pagination, and feed cursors.

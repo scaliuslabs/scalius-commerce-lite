@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { FilterableAttribute } from "@/lib/api";
+import type { ProductFacet } from "@/lib/api";
 import {
   buildProductListHref,
   buildProductListPaginationHref,
@@ -7,9 +7,19 @@ import {
   resolveProductListQueryState,
 } from "./product-list-query";
 
-const attributes: FilterableAttribute[] = [
-  { id: "attr_color", name: "Color", slug: "color", values: ["Red", "Blue"] },
-  { id: "attr_size", name: "Size", slug: "size", values: ["M", "L"] },
+const facets: ProductFacet[] = [
+  {
+    id: "attr_color",
+    name: "Color",
+    slug: "color",
+    values: [{ value: "Red", count: 2 }, { value: "Blue", count: 1 }],
+  },
+  {
+    id: "attr_size",
+    name: "Size",
+    slug: "size",
+    values: [{ value: "M", count: 2 }, { value: "L", count: 1 }],
+  },
 ];
 
 describe("product list query canonicalization", () => {
@@ -25,7 +35,7 @@ describe("product list query canonicalization", () => {
   it("drops unknown render-affecting params before they fragment HTML or L2 keys", () => {
     const url = new URL("https://storefront.example.com/search?q= fish  curry &foo=1&page=2");
     expect(hasDynamicProductListFilterParams(url.searchParams)).toBe(true);
-    const state = resolveProductListQueryState({ url, attributes });
+    const state = resolveProductListQueryState({ url, facets });
     expect(state.options).toMatchObject({ page: 2, limit: 20, sort: "newest", search: "fish curry" });
     expect(state.options).not.toHaveProperty("foo");
     expect(state.redirectPath).toBe("/search?page=2&q=fish+curry");
@@ -33,10 +43,10 @@ describe("product list query canonicalization", () => {
 
   it("keeps only available dynamic attribute values", () => {
     const url = new URL("https://storefront.example.com/categories/shoes?size=M&color=Green&hasDiscount=true");
-    const state = resolveProductListQueryState({ url, attributes });
-    expect(state.options).toMatchObject({ page: 1, limit: 20, sort: "newest", size: "M", hasDiscount: true });
+    const state = resolveProductListQueryState({ url, facets });
+    expect(state.options).toMatchObject({ page: 1, limit: 20, sort: "newest", size: ["M"], hasDiscount: true });
     expect(state.options).not.toHaveProperty("color");
-    expect(state.currentFilters).toEqual({ hasDiscount: "true", size: "M" });
+    expect(state.currentFilters).toEqual({ hasDiscount: "true", size: ["M"] });
     expect(state.redirectPath).toBe("/categories/shoes?hasDiscount=true&size=M");
   });
 
@@ -68,12 +78,34 @@ describe("product list query canonicalization", () => {
     const unknownParamUrl = new URL("https://storefront.example.com/search?campaign=summer");
     expect(hasDynamicProductListFilterParams(validAttributeUrl.searchParams)).toBe(true);
     expect(hasDynamicProductListFilterParams(unknownParamUrl.searchParams)).toBe(true);
-    const attributeState = resolveProductListQueryState({ url: validAttributeUrl, attributes });
-    const unknownState = resolveProductListQueryState({ url: unknownParamUrl, attributes });
-    expect(attributeState.options).toMatchObject({ color: "Blue" });
+    const attributeState = resolveProductListQueryState({ url: validAttributeUrl, facets });
+    const unknownState = resolveProductListQueryState({ url: unknownParamUrl, facets });
+    expect(attributeState.options).toMatchObject({ color: ["Blue"] });
     expect(attributeState.redirectPath).toBe(null);
     expect(unknownState.options).not.toHaveProperty("campaign");
     expect(unknownState.redirectPath).toBe("/search");
+  });
+
+  it("forwards repeated unknown facet values only during the first server pass", () => {
+    const url = new URL(
+      "https://storefront.example.com/search?color=Red&color=Blue&campaign=summer",
+    );
+    const firstPass = resolveProductListQueryState({
+      url,
+      allowUnknownAttributes: true,
+    });
+    expect(firstPass.options).toMatchObject({
+      color: ["Red", "Blue"],
+      campaign: ["summer"],
+    });
+    expect(firstPass.redirectPath).toBeNull();
+
+    const authoritativePass = resolveProductListQueryState({ url, facets });
+    expect(authoritativePass.options).toMatchObject({ color: ["Red", "Blue"] });
+    expect(authoritativePass.options).not.toHaveProperty("campaign");
+    expect(authoritativePass.redirectPath).toBe(
+      "/search?color=Blue&color=Red",
+    );
   });
 
   it("redirects invalid navigation values to a canonical product-list URL", () => {
@@ -93,12 +125,17 @@ describe("product list query canonicalization", () => {
     expect(state.redirectPath).toBe("/search?freeDelivery=true&q=banana&sortBy=name-asc");
   });
 
-  it("uses the last repeated attribute value before canonicalizing filters", () => {
+  it("preserves repeated valid attribute values as a multi-select", () => {
     const url = new URL("https://storefront.example.com/categories/shoes?size=M&size=L&color=Blue&color=Green");
-    const state = resolveProductListQueryState({ url, attributes });
-    expect(state.options).toMatchObject({ page: 1, limit: 20, sort: "newest", size: "L" });
-    expect(state.options).not.toHaveProperty("color");
-    expect(state.redirectPath).toBe("/categories/shoes?size=L");
+    const state = resolveProductListQueryState({ url, facets });
+    expect(state.options).toMatchObject({
+      page: 1,
+      limit: 20,
+      sort: "newest",
+      size: ["M", "L"],
+      color: ["Blue"],
+    });
+    expect(state.redirectPath).toBe("/categories/shoes?color=Blue&size=L&size=M");
   });
 
   it("builds pagination links from canonical filters instead of raw URL noise", () => {
@@ -107,9 +144,14 @@ describe("product list query canonicalization", () => {
     );
     const state = resolveProductListQueryState({
       url,
-      attributes: [{ id: "attr_brand", name: "Brand", slug: "brand", values: ["Apple"] }],
+      facets: [{
+        id: "attr_brand",
+        name: "Brand",
+        slug: "brand",
+        values: [{ value: "Apple", count: 4 }],
+      }],
     });
-    expect(state.currentFilters).toEqual({ brand: "Apple", q: "fish curry" });
+    expect(state.currentFilters).toEqual({ brand: ["Apple"], q: "fish curry" });
     expect(buildProductListPaginationHref({ pathname: "/search", currentFilters: state.currentFilters, page: 2 }))
       .toBe("/search?brand=Apple&page=2&q=fish+curry");
   });

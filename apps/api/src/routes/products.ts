@@ -24,6 +24,7 @@ import {
   normalizePublicIntegerCacheValue,
   normalizePublicListingSearchParam,
   normalizePublicNumberCacheValue,
+  readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -223,6 +224,13 @@ const buyerPriceRangeSchema = z.object({
   max: z.number().min(0),
 });
 
+const productFacetSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
+});
+
 const storefrontFeedVariantSchema = z.object({
   id: z.string(),
   productId: z.string(),
@@ -292,6 +300,7 @@ const productDetailDataSchema = z.object({
   category: productDetailRecordSchema.nullable(),
   images: z.array(productDetailRecordSchema),
   variants: z.array(productDetailRecordSchema),
+  variantImageMappings: z.array(productDetailRecordSchema),
   relatedProducts: z.array(productDetailRecordSchema),
 });
 type ProductDetailData = z.infer<typeof productDetailDataSchema>;
@@ -312,6 +321,7 @@ const listProductsRoute = createRoute({
         products: z.array(storefrontProductSchema),
         pagination: paginationSchema,
         priceRange: buyerPriceRangeSchema,
+        facets: z.array(productFacetSchema),
       })) } },
     },
     400: errorResponses[400],
@@ -322,7 +332,7 @@ const listProductsRoute = createRoute({
 app.openapi(listProductsRoute, async (c) => {
   const db = c.get("db");
   const params = c.req.valid("query");
-  const queryParams = c.req.query();
+  const queryParams = readRepeatedPublicQueryValues(c.req.url);
   const search = normalizePublicListingSearchParam(params.search);
 
   const attributeFilters = await resolvePublicAttributeFilters(

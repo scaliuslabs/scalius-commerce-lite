@@ -29,6 +29,25 @@ const canonicalPathSchema = z
 const productOptionLabelSchema = z.string().trim().min(1).max(40);
 const productOptionSchemaSchema = z.enum(PRODUCT_OPTION_SCHEMA_VALUES);
 const productConditionSchema = z.enum(PRODUCT_CONDITION_VALUES);
+const variantImageAxisSchema = z.enum(["option1", "option2"]);
+
+const variantImageMappingSchema = z.object({
+    imageId: z.string().trim().min(1),
+    variantId: z.string().trim().min(1).nullable().optional(),
+    optionAxis: variantImageAxisSchema.nullable().optional(),
+    optionValue: z.string().trim().min(1).max(100).nullable().optional(),
+    sortOrder: z.number().int().min(0).optional(),
+}).superRefine((mapping, ctx) => {
+    const hasVariant = Boolean(mapping.variantId);
+    const hasOption = Boolean(mapping.optionAxis && mapping.optionValue);
+    if (hasVariant === hasOption) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Map each image to either one SKU or one option value",
+            path: [],
+        });
+    }
+});
 
 /** Shared image schema used in create and update */
 const productImageSchema = z.object({
@@ -90,6 +109,9 @@ const productBaseSchema = z.object({
     variantOption2Schema: productOptionSchemaSchema
         .optional()
         .default(DEFAULT_PRODUCT_OPTION_SCHEMA.option2),
+    variantImagesEnabled: z.boolean().optional(),
+    variantImageAxis: variantImageAxisSchema.optional(),
+    variantImageMappings: z.array(variantImageMappingSchema).max(250).optional(),
     slug: z
         .string()
         .min(3)

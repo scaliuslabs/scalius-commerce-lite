@@ -52,6 +52,8 @@ describe("product variant stock ledger routing", () => {
                           size: "M",
                           color: "Black",
                           stock: 5,
+                          reservedStock: 0,
+                          preorderStock: 0,
                           stockVersion: 3,
                           trackInventory: true,
                         }
@@ -130,6 +132,8 @@ describe("product variant stock ledger routing", () => {
                         size: "M",
                         color: "Black",
                         stock: 5,
+                        reservedStock: 0,
+                        preorderStock: 0,
                         stockVersion: 3,
                       },
                     ]

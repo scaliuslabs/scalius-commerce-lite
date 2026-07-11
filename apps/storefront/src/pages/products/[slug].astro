@@ -49,6 +49,7 @@ import {
   getDecimalPlaces,
 } from "@scalius/shared/currency";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
+import { resolveProductVariantImageConfiguration } from "@/lib/variant-image-mapping";
 
 const { slug } = Astro.params;
 if (!slug) {
@@ -78,7 +79,14 @@ if (productResult.state === "unavailable" || !layoutData) {
 }
 
 const productData = productResult.data;
-const { product, category, images, variants, relatedProducts } = productData;
+const {
+  product,
+  category,
+  images,
+  variants,
+  variantImageMappings,
+  relatedProducts,
+} = productData;
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
 const configuredCurrencyDecimalPlaces = layoutData.currency?.decimalPlaces;
@@ -137,11 +145,14 @@ const fbViewVariants = selectedBuyerVariant
         price: buyerDisplayedPrice,
       }));
 
-const variantImageMarker = product.metaDescription?.match(
-  /<!--variant_images:(enabled|option1|option2)-->/,
-)?.[1];
-const isVariantSpecificImagesEnabled = Boolean(variantImageMarker);
-const variantImageAxis = variantImageMarker === "option1" ? "option1" : "option2";
+const variantImageConfiguration = resolveProductVariantImageConfiguration({
+  product,
+  images,
+  variants: buyerVariants,
+  mappings: variantImageMappings ?? [],
+});
+const isVariantSpecificImagesEnabled = variantImageConfiguration.enabled;
+const variantImageAxis = variantImageConfiguration.axis;
 const cleanMetaDescription =
   product.metaDescription
     ?.replace(/<!--variant_images:(?:enabled|option1|option2)-->/g, "")
@@ -590,7 +601,11 @@ const productCategoryAnalytics = productCategory
       class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-4 lg:py-6"
     >
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-x-10 gap-y-3 lg:gap-y-8">
-        <ProductGallery product={product} images={images} />
+        <ProductGallery
+          product={product}
+          images={images}
+          variantImageMappings={variantImageConfiguration.mappings}
+        />
         <ProductSummary
           product={product}
           category={productCategory}
