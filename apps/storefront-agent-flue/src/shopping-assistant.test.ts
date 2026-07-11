@@ -29,6 +29,18 @@ describe("Storefront shopping-assistant contract", () => {
     expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
       "a link when a safe requested navigation can be completed",
     );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      'goto "/known-route?query=value"',
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "help [command]",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "submit @rN.eN",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "with semicolons",
+    );
   });
 
   it("directs exact Add to Cart through the approved visible control", () => {
@@ -110,6 +122,9 @@ describe("Storefront shopping-assistant contract", () => {
       "computer",
       "scalius",
     ]);
+    expect(
+      config.tools?.find((tool) => tool.name === "computer")?.description,
+    ).toContain('goto "/known-route?query=value"');
     expect(config.durability).toEqual({
       maxAttempts: 1,
       timeoutMs: 120_000,
