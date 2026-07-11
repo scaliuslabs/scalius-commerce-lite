@@ -206,6 +206,90 @@ describe("Storefront assistant computer runtime", () => {
     expect(clicked).not.toHaveBeenCalled();
   });
 
+  it("permits only the explicitly allowed, enabled Add to Cart control", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button>Add to Cart</button>
+        <button data-scalius-computer-action="allow">Add to Cart</button>
+        <button data-scalius-computer-action="allow">Buy Now</button>
+        <button data-scalius-computer-action="allow" disabled>Add to Cart</button>
+      </main>`;
+    const [unannotatedAdd, add, buy, disabledAdd] = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("button"),
+    );
+    const addClicked = vi.fn();
+    const unannotatedClicked = vi.fn();
+    const buyClicked = vi.fn();
+    const disabledClicked = vi.fn();
+    unannotatedAdd?.addEventListener("click", unannotatedClicked);
+    add?.addEventListener("click", addClicked);
+    buy?.addEventListener("click", buyClicked);
+    disabledAdd?.addEventListener("click", disabledClicked);
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: "shop-add-thread",
+      tabId: "shop-add-tab",
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const addHandles = Array.from(
+      observed.output.matchAll(/(@r\d+\.e\d+) button "Add to Cart"/gu),
+      (match) => match[1],
+    );
+    const unannotatedAddHandle = addHandles[0];
+    const addHandle = addHandles[1];
+    const buyHandle = observed.output.match(
+      /(@r\d+\.e\d+) button "Buy Now"/u,
+    )?.[1];
+    expect(addHandle).toBeTruthy();
+    expect(unannotatedAddHandle).toBeTruthy();
+    expect(buyHandle).toBeTruthy();
+
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${addHandle}`,
+      }),
+    ).resolves.toMatchObject({ ok: true, code: "EXECUTED" });
+    const refreshed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const refreshedBuyHandle = refreshed.output.match(
+      /(@r\d+\.e\d+) button "Buy Now"/u,
+    )?.[1];
+    const refreshedUnannotatedAddHandle = Array.from(
+      refreshed.output.matchAll(/(@r\d+\.e\d+) button "Add to Cart"/gu),
+      (match) => match[1],
+    )[0];
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${refreshedUnannotatedAddHandle}`,
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    const refreshedAfterBlock = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const buyAfterBlock = refreshedAfterBlock.output.match(
+      /(@r\d+\.e\d+) button "Buy Now"/u,
+    )?.[1];
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${buyAfterBlock}`,
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(addClicked).toHaveBeenCalledOnce();
+    expect(refreshedBuyHandle).toBeTruthy();
+    expect(unannotatedClicked).not.toHaveBeenCalled();
+    expect(buyHandle).toBeTruthy();
+    expect(buyClicked).not.toHaveBeenCalled();
+    expect(disabledClicked).not.toHaveBeenCalled();
+  });
+
   it("honors a commerce-surface human-only annotation for otherwise generic controls", async () => {
     document.body.innerHTML = `
       <main data-scalius-computer-human-only>

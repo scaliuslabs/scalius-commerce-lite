@@ -14,7 +14,7 @@ function source(path: string): string {
 }
 
 describe("Storefront generic-computer commerce boundaries", () => {
-  it("marks every buyer cart, buy, quick-buy, and checkout surface human-only", () => {
+  it("allows only exact Add to Cart while keeping buy, cart, and checkout human-only", () => {
     expect(source("components/header/HeaderLayout.astro")).toMatch(
       /id="cart-button"[\s\S]{0,180}data-scalius-computer-human-only/u,
     );
@@ -25,12 +25,18 @@ describe("Storefront generic-computer commerce boundaries", () => {
       source("components/product/ProductSummary.astro").match(
         /data-scalius-computer-human-only/gu,
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
+    expect(source("components/product/ProductSummary.astro")).toContain(
+      "data-scalius-computer-action={initialAddToCartAvailable",
+    );
     expect(
       source("components/ProductShortcode.tsx").match(
         /data-scalius-computer-human-only/gu,
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
+    expect(source("components/ProductShortcode.tsx")).toContain(
+      'canAddToCart ? "allow" : undefined',
+    );
     expect(source("pages/cart.astro")).toContain(
       "data-scalius-computer-human-only",
     );

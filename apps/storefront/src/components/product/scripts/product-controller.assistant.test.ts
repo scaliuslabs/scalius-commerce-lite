@@ -13,6 +13,9 @@ vi.mock("@/lib/assistant-page-context.client", () => ({
 }));
 
 import { init } from "./product-controller";
+import { createStorefrontAssistantComputerRuntime } from "@/components/assistant/computer/runtime";
+import { cartStore, clearCart } from "@/store/cart";
+import { buildStorefrontAssistantPageContext } from "@/lib/assistant-page-context";
 
 function variant(
   id: string,
@@ -80,7 +83,7 @@ function renderProductControllerDom(
       <div id="product-actions" data-option1-label="Weight" data-option2-label="Style">
         <div id="variant-unavailable-query-notice" class="hidden"></div>
         <button type="button" data-action="add-to-cart"><span data-action-label="add-to-cart">Add to Cart</span></button>
-        <button type="button" data-action="buy-now"><span data-action-label="buy-now">Buy Now</span></button>
+        <button type="button" data-action="buy-now" data-scalius-computer-human-only><span data-action-label="buy-now">Buy Now</span></button>
       </div>
       <div id="product-stock-badge" class="text-primary bg-primary/10" data-stock-tone="available">
         <span id="product-stock-text">In Stock</span>
@@ -156,6 +159,7 @@ describe("product controller assistant surface", () => {
       update: assistantMocks.update,
       unregister: assistantMocks.unregister,
     });
+    clearCart();
     renderProductControllerDom();
   });
 
@@ -505,6 +509,11 @@ describe("product controller assistant surface", () => {
     expect(
       document.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]')
         ?.disabled,
+    ).toBe(true);
+    expect(
+      document
+        .querySelector<HTMLButtonElement>('[data-action="add-to-cart"]')
+        ?.hasAttribute("data-scalius-computer-action"),
     ).toBe(false);
     expect(window.location.search).toBe("?color=Blue");
     expect(assistantMocks.update).toHaveBeenLastCalledWith(
@@ -565,6 +574,10 @@ describe("product controller assistant surface", () => {
       document.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]')
         ?.disabled,
     ).toBe(false);
+    expect(
+      document.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]')
+        ?.dataset.scaliusComputerAction,
+    ).toBe("allow");
   });
 
   it("keeps no-query sold-out singleton SSR state and hydrated pricing truthful", () => {
@@ -598,6 +611,86 @@ describe("product controller assistant surface", () => {
       displayedPrice: 4_050,
       availability: "out_of_stock",
     });
+  });
+
+  it("lets computer select exact SKUs and add two cart lines while Buy Now stays human-only", async () => {
+    renderProductControllerDom([
+      variant("var_40_red", "40", "Red", 45_000, 5),
+      variant("var_42_green", "42", "Green", 4_500, 5),
+      variant("var_40_blue", "40", "Blue", 4_500, 0),
+    ]);
+    init();
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: "shop-product-thread",
+      tabId: "shop-product-tab",
+    });
+    const observe = () =>
+      runtime.execute({ binding: runtime.binding, program: "observe" });
+    const clickNamed = async (name: string) => {
+      const snapshot = await observe();
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const handle = snapshot.output.match(
+        new RegExp(
+          `(@r\\d+\\.e\\d+) button "[^"]*${escaped}[^"]*"`,
+          "iu",
+        ),
+      )?.[1];
+      expect(handle).toBeTruthy();
+      return runtime.execute({
+        binding: runtime.binding,
+        program: `click ${handle}`,
+      });
+    };
+
+    await expect(clickNamed("40")).resolves.toMatchObject({ ok: true });
+    await expect(clickNamed("Red")).resolves.toMatchObject({ ok: true });
+    const exactAdd = document.querySelector<HTMLButtonElement>(
+      '[data-action="add-to-cart"]',
+    )!;
+    expect(exactAdd.disabled).toBe(false);
+    expect(exactAdd.dataset.scaliusComputerAction).toBe("allow");
+    await expect(clickNamed("Add to Cart")).resolves.toMatchObject({
+      ok: true,
+      code: "EXECUTED",
+    });
+    expect(Object.values(cartStore.get().items)).toEqual([
+      expect.objectContaining({ variantId: "var_40_red", quantity: 1 }),
+    ]);
+    expect(
+      buildStorefrontAssistantPageContext({
+        path: "/products/rice",
+        title: "Rice",
+        cart: cartStore.get(),
+      }).cart,
+    ).toMatchObject({
+      totalItems: 1,
+      lineCount: 1,
+      lines: [expect.objectContaining({ variantId: "var_40_red" })],
+    });
+    await expect(clickNamed("Buy Now")).resolves.toMatchObject({
+      ok: false,
+      code: "HUMAN_REQUIRED",
+    });
+
+    await expect(clickNamed("42")).resolves.toMatchObject({ ok: true });
+    expect(exactAdd.disabled).toBe(true);
+    expect(exactAdd.hasAttribute("data-scalius-computer-action")).toBe(false);
+    expect(Object.values(cartStore.get().items)).toHaveLength(1);
+    await expect(clickNamed("Green")).resolves.toMatchObject({ ok: true });
+    await expect(clickNamed("Add to Cart")).resolves.toMatchObject({
+      ok: true,
+      code: "EXECUTED",
+    });
+    expect(
+      Object.values(cartStore.get().items).map((item) => item.variantId).sort(),
+    ).toEqual(["var_40_red", "var_42_green"]);
+    expect(
+      buildStorefrontAssistantPageContext({
+        path: "/products/rice",
+        title: "Rice",
+        cart: cartStore.get(),
+      }).cart,
+    ).toMatchObject({ totalItems: 2, lineCount: 2 });
   });
 
   it("ignores partial query selections", () => {

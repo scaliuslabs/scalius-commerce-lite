@@ -7,7 +7,7 @@ import { filterVariantsBySelection } from "./product/lib/variant-state-machine";
 const COMPONENT_DIR = storefrontSourcePath("components");
 
 describe("product shortcode purchase boundaries", () => {
-  it("uses buyer-visible variants and disables purchase actions for unavailable products", () => {
+  it("uses buyer-visible exact variants for assistant Add to Cart", () => {
     const source = readFileSync(
       `${COMPONENT_DIR}/ProductShortcode.tsx`,
       "utf8",
@@ -20,9 +20,10 @@ describe("product shortcode purchase boundaries", () => {
       "!buyerVariants.some((variant) => isVariantAvailable(variant))",
     );
     expect(source).toContain("This product is not available right now.");
-    expect(
-      source.match(/disabled=\{isUnavailable\}/g)?.length,
-    ).toBeGreaterThanOrEqual(2);
+    expect(source).toContain("const canAddToCart = Boolean(");
+    expect(source).toContain("disabled={!canAddToCart}");
+    expect(source).toContain('canAddToCart ? "allow" : undefined');
+    expect(source).toContain('data-scalius-computer-human-only=""');
   });
 
   it("uses merchant-defined option labels for cart context and visible selectors", () => {

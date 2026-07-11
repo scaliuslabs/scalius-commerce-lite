@@ -86,6 +86,7 @@ export function createStorefrontAssistantComputerRuntime(
   return {
     binding,
     async execute(request) {
+      synchronizeAddToCartComputerBoundary(pageDocument);
       const generation = cancellationGeneration;
       const ownsActiveGeneration = activeGeneration === null;
       if (ownsActiveGeneration) activeGeneration = generation;
@@ -168,6 +169,7 @@ function isRestrictedStorefrontControlPath(pathname: string): boolean {
 }
 
 function isBlockedCommerceControl(target: ScaliusComputerTarget): boolean {
+  if (isAllowedAddToCartTarget(target)) return false;
   if (target.humanOnly) return true;
   if (target.route) {
     try {
@@ -180,6 +182,51 @@ function isBlockedCommerceControl(target: ScaliusComputerTarget): boolean {
     }
   }
   return COMMERCE_CONTROL_HINT.test(target.name);
+}
+
+function isAllowedAddToCartTarget(
+  target: ScaliusComputerTarget,
+): boolean {
+  return (
+    target.humanOnly !== true &&
+    target.disabled !== true &&
+    !target.route &&
+    target.actions.length === 1 &&
+    target.actions[0] === "click" &&
+    normalizeControlName(target.name) === "add to cart"
+  );
+}
+
+const RUNTIME_ADD_TO_CART_BLOCK = "data-scalius-computer-runtime-add-blocked";
+
+function synchronizeAddToCartComputerBoundary(pageDocument: Document): void {
+  for (const element of pageDocument.querySelectorAll<HTMLElement>(
+    "button, [role='button']",
+  )) {
+    const name = normalizeControlName(
+      element.getAttribute("aria-label") || element.textContent || "",
+    );
+    if (name !== "add to cart") continue;
+    const explicitlyAllowed =
+      element.getAttribute("data-scalius-computer-action") === "allow" &&
+      !(element as HTMLButtonElement).disabled &&
+      element.getAttribute("aria-disabled") !== "true";
+    if (explicitlyAllowed) {
+      if (element.hasAttribute(RUNTIME_ADD_TO_CART_BLOCK)) {
+        element.removeAttribute(RUNTIME_ADD_TO_CART_BLOCK);
+        element.removeAttribute("data-scalius-computer-human-only");
+      }
+      continue;
+    }
+    if (!element.hasAttribute("data-scalius-computer-human-only")) {
+      element.setAttribute(RUNTIME_ADD_TO_CART_BLOCK, "");
+      element.setAttribute("data-scalius-computer-human-only", "");
+    }
+  }
+}
+
+function normalizeControlName(value: string): string {
+  return value.trim().replace(/\s+/gu, " ").toLowerCase();
 }
 
 function resolveDocument(provided?: Document): Document {

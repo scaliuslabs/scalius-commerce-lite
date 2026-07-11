@@ -431,6 +431,11 @@ function updateStockAndActions(): void {
       : state.variants;
   const stockSummary = getBuyerStockSummary(stockVariants);
   const unavailable = !stockSummary.canPurchaseAny;
+  const exactAddToCartAvailable = Boolean(
+    !state.unavailableRequestedVariant &&
+      state.selection?.selectedVariant &&
+      getBuyerStockSummary([state.selection.selectedVariant]).canPurchaseAny,
+  );
 
   cache.unavailableQueryNotice?.classList.toggle(
     "hidden",
@@ -455,10 +460,17 @@ function updateStockAndActions(): void {
   updatePurchaseButton(
     cache.addToCartButton,
     cache.addToCartLabel,
-    unavailable,
+    !exactAddToCartAvailable,
     "Add to Cart",
     "Add to cart",
   );
+  if (cache.addToCartButton) {
+    if (exactAddToCartAvailable) {
+      cache.addToCartButton.dataset.scaliusComputerAction = "allow";
+    } else {
+      delete cache.addToCartButton.dataset.scaliusComputerAction;
+    }
+  }
   updatePurchaseButton(
     cache.buyNowButton,
     cache.buyNowLabel,
