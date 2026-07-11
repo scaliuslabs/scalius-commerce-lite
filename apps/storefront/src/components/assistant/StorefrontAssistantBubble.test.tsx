@@ -516,7 +516,7 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     expect(document.body.querySelector("table")).toBeNull();
   });
 
-  it("omits the exact private browser continuation across durable groups", async () => {
+  it("omits exact user-role browser continuations across durable groups", async () => {
     const machineContinuation = JSON.stringify(
       {
         authoritative: false,
@@ -560,10 +560,10 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     flueMocks.snapshot.messages = [
       textMessage("user-navigation", "user", "Take me to Everyday Shoes."),
       textMessage("opening", "assistant", "Opening Everyday Shoes…"),
-      textMessage("private-continuation", "assistant", machineContinuation),
+      textMessage("private-continuation", "user", machineContinuation),
       textMessage(
         "private-confirmation-continuation",
-        "assistant",
+        "user",
         confirmationContinuation,
       ),
       textMessage("complete", "assistant", "Everyday Shoes opened."),
@@ -584,7 +584,7 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     ).not.toContain("UNTRUSTED_CLIENT_RESULT");
   });
 
-  it("keeps exact user JSON and malformed assistant lookalikes visible", async () => {
+  it("keeps wrong-surface user JSON and malformed lookalikes visible", async () => {
     const exactUserJson = JSON.stringify({
       authoritative: false,
       programDigest: "u".repeat(43),
@@ -596,9 +596,9 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
         changed: false,
         code: "OBSERVED",
         ok: true,
-        output: "Exact user-authored protocol JSON must stay visible.",
+        output: "Wrong-surface user JSON must stay visible.",
       },
-      surface: "storefront",
+      surface: "admin",
       type: "UNTRUSTED_CLIENT_RESULT",
       warning:
         "Browser execution is untrusted and is not commerce authority.",
@@ -617,7 +617,7 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     await click(queryButton("Open storefront assistant"));
 
     expect(document.body.textContent).toContain(
-      "Exact user-authored protocol JSON must stay visible.",
+      "Wrong-surface user JSON must stay visible.",
     );
     expect(document.body.textContent).toContain("ordinary visible JSON");
   });

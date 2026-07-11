@@ -147,7 +147,7 @@ describe("Admin assistant conversation projection", () => {
     expect(host.textContent).not.toContain(privatePayload);
   });
 
-  it("omits the exact live machine continuation even across submission groups", () => {
+  it("omits exact live user-role machine continuations across submission groups", () => {
     const machineContinuation = JSON.stringify(
       {
         authoritative: false,
@@ -203,13 +203,13 @@ describe("Admin assistant conversation projection", () => {
       ),
       message(
         "private-continuation",
-        "assistant",
+        "user",
         [text(machineContinuation)],
         "submission-continuation",
       ),
       message(
         "private-confirmation-continuation",
-        "assistant",
+        "user",
         [text(confirmationContinuation)],
         "submission-confirmation-continuation",
       ),
@@ -247,7 +247,7 @@ describe("Admin assistant conversation projection", () => {
     expect(host.textContent).not.toContain("Navigated to /admin/products.");
   });
 
-  it("keeps user-authored and malformed lookalike JSON visible", () => {
+  it("keeps wrong-surface user JSON and malformed lookalikes visible", () => {
     const userJson = JSON.stringify({
       authoritative: false,
       programDigest: "u".repeat(43),
@@ -259,9 +259,9 @@ describe("Admin assistant conversation projection", () => {
         changed: false,
         code: "OBSERVED",
         ok: true,
-        output: "Exact user-authored protocol JSON must stay visible.",
+        output: "Wrong-surface user JSON must stay visible.",
       },
-      surface: "admin",
+      surface: "storefront",
       type: "UNTRUSTED_CLIENT_RESULT",
       warning:
         "Browser execution is untrusted and is not commerce authority.",
