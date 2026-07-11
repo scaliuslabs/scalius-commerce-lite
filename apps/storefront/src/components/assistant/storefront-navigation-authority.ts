@@ -3,6 +3,7 @@ import {
   normalizeScaliusComputerRoute,
   parseScaliusComputerProgram,
 } from "@scalius/shared/assistant-computer";
+import { isScaliusComputerResultContinuation } from "@scalius/shared/assistant-computer-handoff";
 import { parseScaliusCommandProgram } from "@scalius/shared/assistant-command";
 
 import { resolveStorefrontAssistantNavigationTarget } from "@/lib/assistant-page-context.client";
@@ -162,9 +163,56 @@ function findLatestUserIndex(
     index >= 0;
     index -= 1
   ) {
-    if (messages[index]?.role === "user") return index;
+    const message = messages[index];
+    if (
+      message?.role === "user" &&
+      !isCorrelatedStorefrontContinuation(messages, index, message)
+    ) {
+      return index;
+    }
   }
   return -1;
+}
+
+function isCorrelatedStorefrontContinuation(
+  messages: readonly FlueConversationMessage[],
+  messageIndex: number,
+  message: FlueConversationMessage,
+): boolean {
+  if (
+    !message.submissionId ||
+    message.parts.length !== 1 ||
+    message.parts[0]?.type !== "text"
+  ) {
+    return false;
+  }
+  const text = message.parts[0].text;
+  if (!isScaliusComputerResultContinuation(text, "storefront")) {
+    return false;
+  }
+  const requestId = (JSON.parse(text) as { requestId: string }).requestId;
+  for (let index = messageIndex - 1; index >= 0; index -= 1) {
+    const candidate = messages[index];
+    if (!candidate) continue;
+    if (candidate.role === "user") return false;
+    if (
+      candidate.role === "assistant" &&
+      Boolean(candidate.submissionId) &&
+      candidate.parts.some(
+        (part) =>
+          part.type === "dynamic-tool" &&
+          part.toolName === "computer" &&
+          part.state === "output-available" &&
+          isRecord(part.output) &&
+          part.output.type === "client_command" &&
+          part.output.surface === "storefront" &&
+          part.output.requestId === requestId,
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function messageText(message: FlueConversationMessage): string {
