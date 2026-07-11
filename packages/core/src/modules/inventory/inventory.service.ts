@@ -5,6 +5,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { buildStockMovementClaim } from "./stock-movement-claims";
+import { buildInventoryLowStockCondition } from "./low-stock-policy";
 
 export async function getInventoryOverview(db: Database, params: {
     section: string;
@@ -26,7 +27,7 @@ export async function getInventoryOverview(db: Database, params: {
         ];
 
         if (status === "low") {
-            conditions.push(sql`(${productVariants.stock} - ${productVariants.reservedStock}) > 0 AND (${productVariants.stock} - ${productVariants.reservedStock}) <= COALESCE(${productVariants.lowStockThreshold}, 5)`);
+            conditions.push(buildInventoryLowStockCondition());
         } else if (status === "out") {
             conditions.push(sql`(${productVariants.stock} - ${productVariants.reservedStock}) <= 0`);
         } else if (status === "reserved") {
@@ -86,7 +87,7 @@ export async function getInventoryOverview(db: Database, params: {
                 totalReserved: sql<number>`COALESCE(SUM(${productVariants.reservedStock}), 0)`,
                 totalAvailable: sql<number>`COALESCE(SUM(${productVariants.stock} - ${productVariants.reservedStock}), 0)`,
                 outOfStockCount: sql<number>`SUM(CASE WHEN (${productVariants.stock} - ${productVariants.reservedStock}) <= 0 THEN 1 ELSE 0 END)`,
-                lowStockCount: sql<number>`SUM(CASE WHEN (${productVariants.stock} - ${productVariants.reservedStock}) > 0 AND (${productVariants.stock} - ${productVariants.reservedStock}) <= COALESCE(${productVariants.lowStockThreshold}, 5) THEN 1 ELSE 0 END)`,
+                lowStockCount: sql<number>`SUM(CASE WHEN ${buildInventoryLowStockCondition()} THEN 1 ELSE 0 END)`,
             })
             .from(productVariants)
             .where(and(isNull(productVariants.deletedAt), eq(productVariants.trackInventory, true)))
@@ -264,7 +265,7 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
         ) as { id: string }[][];
 
         if ((movementRows?.length ?? 0) > 0 && (updateRows?.length ?? 0) > 0) {
-            if (effectiveDelta < 0 && pool === "stock") {
+            if (pool === "stock") {
                 await checkAndAlertLowStock(db, variantId);
             }
 

@@ -29,7 +29,25 @@ vi.mock("@/lib/edge-cache", () => ({
   ): Promise<T | null> => fetcher(),
 }));
 
-import { getAllProducts, searchProductsForForm } from "./products";
+import {
+  getAllProducts,
+  getProductBySlugResult,
+  searchProductsForForm,
+} from "./products";
+
+function productPagePayload() {
+  return {
+    product: {
+      id: "prod_1",
+      slug: "fresh-hilsa",
+      name: "Fresh Hilsa",
+    },
+    category: null,
+    images: [],
+    variants: [],
+    relatedProducts: [],
+  };
+}
 
 describe("storefront product API helpers", () => {
   afterEach(() => {
@@ -47,6 +65,50 @@ describe("storefront product API helpers", () => {
 
     expect(errorSpy).toHaveBeenCalledWith("Error fetching all products:", {
       message: "backend unavailable",
+    });
+  });
+
+  it("distinguishes an authoritative product 404 from a successful read", async () => {
+    mocks.getApiV1ProductsBySlug
+      .mockResolvedValueOnce({
+        error: { message: "not found" },
+        response: { status: 404 },
+      })
+      .mockResolvedValueOnce({
+        data: { success: true, data: productPagePayload() },
+        response: { status: 200 },
+      });
+
+    await expect(getProductBySlugResult("missing")).resolves.toEqual({
+      state: "not_found",
+    });
+    await expect(getProductBySlugResult("fresh-hilsa")).resolves.toEqual({
+      state: "found",
+      data: productPagePayload(),
+    });
+  });
+
+  it("treats product API failures and malformed envelopes as unavailable", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.getApiV1ProductsBySlug
+      .mockResolvedValueOnce({
+        error: { message: "backend unavailable" },
+        response: { status: 500 },
+      })
+      .mockResolvedValueOnce({
+        data: { success: true, data: { product: productPagePayload().product } },
+        response: { status: 200 },
+      })
+      .mockRejectedValueOnce(new Error("timeout"));
+
+    await expect(getProductBySlugResult("backend-error")).resolves.toEqual({
+      state: "unavailable",
+    });
+    await expect(getProductBySlugResult("bad-envelope")).resolves.toEqual({
+      state: "unavailable",
+    });
+    await expect(getProductBySlugResult("timeout")).resolves.toEqual({
+      state: "unavailable",
     });
   });
 

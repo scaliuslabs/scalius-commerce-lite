@@ -11,6 +11,7 @@ export interface CurrencySettingsPayload {
   currencyCode: string;
   currencySymbol: string;
   usdExchangeRate: string;
+  currencyCodeLocked: boolean;
 }
 
 export type UpdateCurrencySettingsInput = SettingsPayload;

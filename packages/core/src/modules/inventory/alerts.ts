@@ -5,6 +5,7 @@
 import { eq, and, sql } from "drizzle-orm";
 import { productVariants, productLowStockAlerts } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import { isLowStockThresholdEnabled } from "./low-stock-policy";
 
 /**
  * Result of a low-stock check, for observability.
@@ -55,7 +56,11 @@ export async function checkAndAlertLowStock(
     .where(eq(productVariants.id, variantId))
     .get();
 
-  if (!variant || !variant.trackInventory || variant.lowStockThreshold === null || variant.lowStockThreshold <= 0) {
+  if (
+    !variant ||
+    !variant.trackInventory ||
+    !isLowStockThresholdEnabled(variant.lowStockThreshold)
+  ) {
     // No threshold configured — nothing to do
     return null;
   }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ValidationError } from "@scalius/core/errors";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
   upsertSetting: vi.fn(),
@@ -27,6 +27,68 @@ function createCurrencyReadDb(values: Record<string, string>) {
           }))),
         })),
       })),
+    })),
+  };
+}
+
+function createCurrencyWriteDb({
+  values = {
+    currency_code: "BDT",
+    currency_symbol: "৳",
+    usd_exchange_rate: "1",
+  },
+  hasProducts = false,
+  hasOrders = false,
+}: {
+  values?: Record<string, string>;
+  hasProducts?: boolean;
+  hasOrders?: boolean;
+} = {}) {
+  let selectCount = 0;
+  const writtenValues: Array<Record<string, unknown>> = [];
+  const batch = vi.fn(async (statements: Array<{ kind: string }>) => {
+    if (statements[0]?.kind === "product-existence") {
+      return [
+        hasProducts ? [{ id: "product_1" }] : [],
+        hasOrders ? [{ id: "order_1" }] : [],
+      ];
+    }
+    return statements.map(() => ({ success: true }));
+  });
+
+  return {
+    writtenValues,
+    batch,
+    select: vi.fn(() => {
+      const index = selectCount++;
+      if (index === 0) {
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              all: vi.fn(async () => Object.entries(values).map(([key, value]) => ({
+                key,
+                value,
+              }))),
+            })),
+          })),
+        };
+      }
+
+      return {
+        from: vi.fn(() => ({
+          limit: vi.fn(() => ({
+            kind: index === 1 ? "product-existence" : "order-existence",
+          })),
+        })),
+      };
+    }),
+    insert: vi.fn(() => ({
+      values: vi.fn((inserted: Record<string, unknown>) => {
+        writtenValues.push(inserted);
+        return {
+          onConflictDoUpdate: vi.fn(() => ({ kind: "currency-write" })),
+        };
+      }),
     })),
   };
 }
@@ -66,25 +128,93 @@ describe("site currency settings", () => {
   });
 
   it("canonicalizes lowercase supported codes before persisting", async () => {
-    await saveCurrencySettings({} as never, { currencyCode: " usd " });
+    const db = createCurrencyWriteDb();
 
-    expect(mocks.upsertSetting).toHaveBeenCalledWith(
-      expect.anything(),
-      "currency",
-      "currency_code",
-      "USD",
+    await saveCurrencySettings(db as never, { currencyCode: " bdt " });
+
+    expect(db.writtenValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "currency_code", value: "BDT" }),
+      ]),
     );
   });
 
   it("rejects unsupported codes before any setting write", async () => {
+    const db = createCurrencyWriteDb();
+
     await expect(
-      saveCurrencySettings({} as never, {
+      saveCurrencySettings(db as never, {
         currencyCode: "USDT",
         currencySymbol: "$",
         usdExchangeRate: "1",
       }),
     ).rejects.toBeInstanceOf(ValidationError);
-    expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it.each(["", "0", "-1", "Infinity", "NaN", "1foo"])(
+    "rejects invalid USD exchange rate %j before any setting write",
+    async (usdExchangeRate) => {
+      const db = createCurrencyWriteDb();
+
+      await expect(
+        saveCurrencySettings(db as never, { usdExchangeRate }),
+      ).rejects.toMatchObject({
+        name: "ValidationError",
+        message: "USD exchange rate must be a finite number greater than 0.",
+      });
+      expect(db.insert).not.toHaveBeenCalled();
+      expect(db.batch).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { hasProducts: true, hasOrders: false },
+    { hasProducts: false, hasOrders: true },
+  ])("blocks currency code changes when money-bearing rows exist", async (rowState) => {
+    const db = createCurrencyWriteDb(rowState);
+
+    await expect(
+      saveCurrencySettings(db as never, { currencyCode: "USD" }),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows initial currency setup and commits all three values in one batch", async () => {
+    const db = createCurrencyWriteDb();
+
+    await saveCurrencySettings(db as never, {
+      currencyCode: "USD",
+      currencySymbol: "$",
+      usdExchangeRate: " 1.25 ",
+    });
+
+    expect(db.writtenValues).toEqual([
+      expect.objectContaining({ key: "currency_code", value: "USD" }),
+      expect.objectContaining({ key: "currency_symbol", value: "$" }),
+      expect.objectContaining({ key: "usd_exchange_rate", value: "1.25" }),
+    ]);
+    expect(db.batch).toHaveBeenCalledTimes(2);
+    expect(db.batch.mock.calls[1]?.[0]).toHaveLength(3);
+  });
+
+  it("allows same-code, symbol, and rate updates after catalog rows exist", async () => {
+    const db = createCurrencyWriteDb({ hasProducts: true, hasOrders: true });
+
+    await saveCurrencySettings(db as never, {
+      currencyCode: "BDT",
+      currencySymbol: "Tk",
+      usdExchangeRate: "120",
+    });
+
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(db.writtenValues).toEqual([
+      expect.objectContaining({ key: "currency_code", value: "BDT" }),
+      expect.objectContaining({ key: "currency_symbol", value: "Tk" }),
+      expect.objectContaining({ key: "usd_exchange_rate", value: "120" }),
+    ]);
   });
 });
 

@@ -3,11 +3,11 @@
 // Cache invalidation is intentionally NOT here — it stays in the route handlers
 // which have access to KV from the Hono context.
 
-import { siteSettings, settings } from "@scalius/database/schema";
+import { orders, products, siteSettings, settings } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { Database } from "@scalius/database/client";
-import { ValidationError } from "@scalius/core/errors";
+import { safeBatch, type Database } from "@scalius/database/client";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { upsertSetting } from "../payments/gateway-settings";
 import {
   normalizeSupportedCurrencyCode,
@@ -124,6 +124,31 @@ export interface CurrencySettings {
   usdExchangeRate: string;
 }
 
+const CURRENCY_CHANGE_CONFLICT_MESSAGE =
+  "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.";
+
+function normalizeUsdExchangeRate(value: string): string {
+  const trimmed = value.trim();
+  const rate = Number(trimmed);
+
+  if (!trimmed || !Number.isFinite(rate) || rate <= 0) {
+    throw new ValidationError(
+      "USD exchange rate must be a finite number greater than 0.",
+    );
+  }
+
+  return String(rate);
+}
+
+export async function isCurrencyCodeLocked(db: Database): Promise<boolean> {
+  const [productRows, orderRows] = await safeBatch(db, [
+    db.select({ id: products.id }).from(products).limit(1),
+    db.select({ id: orders.id }).from(orders).limit(1),
+  ]);
+
+  return Boolean(productRows?.length || orderRows?.length);
+}
+
 export async function getCurrencySettings(db: Database): Promise<CurrencySettings> {
   const rows = await db
     .select({ key: settings.key, value: settings.value })
@@ -157,36 +182,48 @@ export async function saveCurrencySettings(
     usdExchangeRate?: string;
   },
 ) {
-  const ops: Promise<void>[] = [];
+  const current = await getCurrencySettings(db);
+  const currencyCode = data.currencyCode === undefined
+    ? current.currencyCode
+    : normalizeSupportedCurrencyCode(data.currencyCode);
 
-  if (data.currencyCode !== undefined) {
-    const currencyCode = normalizeSupportedCurrencyCode(data.currencyCode);
-    if (!currencyCode) {
-      throw new ValidationError("Select a supported three-letter currency code.");
-    }
-    ops.push(
-      upsertSetting(db, "currency", "currency_code", currencyCode),
-    );
+  if (!currencyCode) {
+    throw new ValidationError("Select a supported three-letter currency code.");
   }
-  if (typeof data.currencySymbol === "string" && data.currencySymbol.trim()) {
-    ops.push(
-      upsertSetting(
-        db,
-        "currency",
-        "currency_symbol",
-        data.currencySymbol.trim(),
-      ),
-    );
-  }
-  if (typeof data.usdExchangeRate === "string" && data.usdExchangeRate.trim()) {
-    const rate = parseFloat(data.usdExchangeRate.trim());
-    if (!isNaN(rate) && rate > 0) {
-      ops.push(
-        upsertSetting(db, "currency", "usd_exchange_rate", String(rate)),
-      );
+
+  const currencySymbol = typeof data.currencySymbol === "string" && data.currencySymbol.trim()
+    ? data.currencySymbol.trim()
+    : current.currencySymbol;
+  const usdExchangeRate = data.usdExchangeRate === undefined
+    ? normalizeUsdExchangeRate(current.usdExchangeRate)
+    : normalizeUsdExchangeRate(data.usdExchangeRate);
+
+  if (currencyCode !== current.currencyCode) {
+    if (await isCurrencyCodeLocked(db)) {
+      throw new ConflictError(CURRENCY_CHANGE_CONFLICT_MESSAGE);
     }
   }
-  await Promise.all(ops);
+
+  const settingUpsert = (key: string, value: string) =>
+    db
+      .insert(settings)
+      .values({
+        id: crypto.randomUUID(),
+        key,
+        value,
+        type: "string",
+        category: "currency",
+      })
+      .onConflictDoUpdate({
+        target: [settings.key, settings.category],
+        set: { value, updatedAt: sql`unixepoch()` },
+      });
+
+  await safeBatch(db, [
+    settingUpsert("currency_code", currencyCode),
+    settingUpsert("currency_symbol", currencySymbol),
+    settingUpsert("usd_exchange_rate", usdExchangeRate),
+  ]);
 }
 
 // ─────────────────────────────────────────

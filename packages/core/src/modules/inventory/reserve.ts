@@ -8,6 +8,7 @@ import { inventoryMovements, products, productVariants } from "@scalius/database
 import { safeBatch, type Database } from "@scalius/database/client";
 import { recordMovement } from "./movements";
 import type { ReservationEntry, StockOperationResult } from "./types";
+import { validatePositiveQuantity } from "./validation";
 
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
@@ -27,6 +28,8 @@ export async function reserveStock(
   orderId?: string,
   pool: "regular" | "preorder" | "backorder" = "regular"
 ): Promise<StockOperationResult> {
+  validatePositiveQuantity(quantity);
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     // 1. Read current state with version
     const variant = await db
@@ -199,6 +202,8 @@ export async function reserveMultiple(
   entries: ReservationEntry[],
   orderId?: string
 ): Promise<{ success: boolean; results: StockOperationResult[]; error?: string }> {
+  for (const entry of entries) validatePositiveQuantity(entry.quantity);
+
   const results: StockOperationResult[] = [];
   const toRollback: ReservationEntry[] = [];
 
@@ -288,6 +293,8 @@ export async function reserveStockBatch(
   pool: ReservationPool = "regular",
   options: ReserveStockBatchOptions = {},
 ): Promise<ReserveStockBatchResult> {
+  for (const item of items) validatePositiveQuantity(item.quantity);
+
   if (items.length === 0) {
     return { success: true, results: [] };
   }

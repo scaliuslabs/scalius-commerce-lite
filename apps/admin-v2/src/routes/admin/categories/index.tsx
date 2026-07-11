@@ -128,7 +128,7 @@ function CategoriesPage() {
     [navigate],
   );
 
-  const { table, isFetching, isLoading, selectedIds, clearSelection } =
+  const { table, error, isFetching, isLoading, refetch, selectedIds, clearSelection } =
     useServerTable({
       columns,
       queryOptions: categoriesQueryOptions(mapParams(search)),
@@ -183,6 +183,8 @@ function CategoriesPage() {
         table={table}
         isFetching={isFetching}
         isLoading={isLoading}
+        error={error}
+        onRetry={() => void refetch()}
         itemLabel="categories"
         emptyState={{
           icon: Tag,
@@ -215,6 +217,7 @@ function CategoriesPage() {
                     { onSuccess: clearSelection },
                   );
                 }}
+                disabled={Boolean(error)}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 {showTrashed ? "Delete" : "Trash"} ({selectedIds.length})

@@ -17070,6 +17070,7 @@ export type GetApiV1AdminSettingsCurrencyResponses = {
             currencyCode: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CHF' | 'CAD' | 'AUD' | 'NZD' | 'CNY' | 'HKD' | 'SGD' | 'SEK' | 'NOK' | 'DKK' | 'MXN' | 'BRL' | 'BDT' | 'INR' | 'PKR' | 'LKR' | 'NPR' | 'AFN' | 'BTN' | 'MVR' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'VND' | 'MMK' | 'KHR' | 'LAK' | 'BND' | 'KRW' | 'TWD' | 'MNT' | 'KPW' | 'MOP' | 'AED' | 'SAR' | 'QAR' | 'KWD' | 'BHD' | 'OMR' | 'JOD' | 'IQD' | 'IRR' | 'YER' | 'LBP' | 'SYP' | 'ILS' | 'KZT' | 'UZS' | 'KGS' | 'TJS' | 'TMT' | 'GEL' | 'AMD' | 'AZN' | 'TRY' | 'RUB' | 'UAH' | 'PLN' | 'CZK' | 'HUF' | 'RON' | 'BGN' | 'HRK' | 'RSD' | 'BAM' | 'MKD' | 'ALL' | 'MDL' | 'BYN' | 'ISK' | 'ARS' | 'CLP' | 'COP' | 'PEN' | 'UYU' | 'PYG' | 'BOB' | 'VES' | 'GYD' | 'SRD' | 'TTD' | 'JMD' | 'BBD' | 'BSD' | 'BZD' | 'CRC' | 'CUP' | 'DOP' | 'GTQ' | 'HNL' | 'HTG' | 'NIO' | 'PAB' | 'AWG' | 'ANG' | 'KYD' | 'BMD' | 'XCD' | 'FKP' | 'NGN' | 'GHS' | 'XOF' | 'GMD' | 'GNF' | 'SLL' | 'LRD' | 'CVE' | 'MRU' | 'KES' | 'TZS' | 'UGX' | 'RWF' | 'BIF' | 'ETB' | 'SOS' | 'ERN' | 'DJF' | 'SDG' | 'SSP' | 'SCR' | 'KMF' | 'MGA' | 'MUR' | 'XAF' | 'CDF' | 'ZAR' | 'BWP' | 'LSL' | 'SZL' | 'NAD' | 'MWK' | 'ZMW' | 'MZN' | 'AOA' | 'ZWL' | 'EGP' | 'DZD' | 'MAD' | 'TND' | 'LYD' | 'STN' | 'FJD' | 'PGK' | 'WST' | 'TOP' | 'VUV' | 'SBD' | 'XPF' | 'XDR' | 'XAG' | 'XAU';
             currencySymbol: string;
             usdExchangeRate: string;
+            currencyCodeLocked: boolean;
         };
     };
 };
@@ -17125,6 +17126,17 @@ export type PostApiV1AdminSettingsCurrencyErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;

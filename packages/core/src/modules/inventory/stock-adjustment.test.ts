@@ -94,6 +94,7 @@ describe("stock adjustment ledger", () => {
       table: productVariants,
       values: { stock: 12 },
     });
+    expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
   });
 
   it("records the effective delta when a negative adjustment clamps at zero", async () => {

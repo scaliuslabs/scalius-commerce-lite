@@ -191,7 +191,7 @@ function CollectionsPage() {
   );
 
   // Server table
-  const { table, isFetching, isLoading, selectedIds, clearSelection } =
+  const { table, error, isFetching, isLoading, refetch, pagination, selectedIds, clearSelection } =
     useServerTable<CollectionItem>({
       columns,
       queryOptions: collectionsQueryOptions(mapParams(search)),
@@ -213,9 +213,19 @@ function CollectionsPage() {
     );
   }, [selectedIds, showTrashed, bulkDeleteMutation, clearSelection]);
 
-  // Drag-and-drop reorder: only enabled when sorted by sortOrder asc and not trashed
+  const loadedCollectionCount = table.getRowModel().rows.length;
+  const hasCompleteOrderedSet =
+    pagination.page === 1 &&
+    pagination.total === loadedCollectionCount;
+
+  // Reorder is safe only when every collection is loaded. Re-numbering a
+  // paginated slice would create duplicate global sort orders.
   const isDragEnabled =
-    !showTrashed && search.sort === "sortOrder" && search.order === "asc" && !search.search;
+    !showTrashed &&
+    search.sort === "sortOrder" &&
+    search.order === "asc" &&
+    !search.search &&
+    hasCompleteOrderedSet;
 
   const handleReorder = useCallback(
     (oldIndex: number, newIndex: number) => {
@@ -245,6 +255,7 @@ function CollectionsPage() {
           variant={showTrashed ? "destructive" : "outline"}
           size="sm"
           onClick={handleBulkDelete}
+          disabled={Boolean(error)}
           className={
             !showTrashed
               ? "text-destructive border-destructive hover:bg-destructive/10"
@@ -301,6 +312,12 @@ function CollectionsPage() {
             ? "View, restore, or permanently delete trashed collections."
             : isDragEnabled
               ? "Drag collections to change their display order on your store."
+              : !showTrashed &&
+                  search.sort === "sortOrder" &&
+                  search.order === "asc" &&
+                  !search.search &&
+                  pagination.total > loadedCollectionCount
+                ? "Reordering is available when the complete collection list is shown on one page."
               : "Organize your products into curated collections."}
         </p>
       </div>
@@ -309,6 +326,8 @@ function CollectionsPage() {
         table={table}
         isFetching={isFetching}
         isLoading={isLoading}
+        error={error}
+        onRetry={() => void refetch()}
         toolbar={toolbar}
         itemLabel="collections"
         sortable={isDragEnabled}

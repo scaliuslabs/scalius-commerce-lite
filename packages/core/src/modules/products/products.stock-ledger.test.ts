@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
 import { bulkUpdateVariants } from "./products.admin";
 import { duplicateVariant, updateVariant } from "./products.variants";
+import { checkAndAlertLowStock } from "../inventory/alerts";
+
+vi.mock("../inventory/alerts", () => ({
+  checkAndAlertLowStock: vi.fn(),
+}));
 
 const variantInput = {
   size: "M",
@@ -104,6 +109,7 @@ describe("product variant stock ledger routing", () => {
     expect(batchCalls[0]?.[1]).toMatchObject({ kind: "update", table: productVariants });
     expect(updateSets[0]).toMatchObject({ stock: 12 });
     expect(result?.stock).toBe(12);
+    expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
   });
 
   it("batches bulk variant stock edits with movement claims", async () => {
@@ -175,6 +181,7 @@ describe("product variant stock ledger routing", () => {
       table: productVariants,
       values: { price: 130, stock: 12 },
     });
+    expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
   });
 
   it("duplicates merchandising fields without copying physical stock", async () => {

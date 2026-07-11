@@ -44,6 +44,13 @@ function getHtmlPathDefaults(pathname: string): Record<string, string | number> 
   return {};
 }
 
+export function hasStorefrontProductVariantSelectionParams(url: URL): boolean {
+  return /^\/products\/[^/]+$/.test(url.pathname) &&
+    PRODUCT_HTML_IGNORED_QUERY_PARAMS.some((param) =>
+      url.searchParams.has(param)
+    );
+}
+
 function getIgnoredParams(pathname: string): Set<string> {
   const ignored = new Set<string>(TRACKING_QUERY_PARAMS);
   if (/^\/products\/[^/]+$/.test(pathname)) {

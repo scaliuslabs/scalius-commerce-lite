@@ -7,6 +7,7 @@ This folder contains concise engineering context. Treat source code, tests, depl
 ## Files
 
 - `PLATFORM-GOAL.md` - product, architecture, and stable-release bar.
+- `catalog/README.md` - current catalog hardening audit, evidence, decisions, and implementation order.
 
 ## Toolchain Rules
 

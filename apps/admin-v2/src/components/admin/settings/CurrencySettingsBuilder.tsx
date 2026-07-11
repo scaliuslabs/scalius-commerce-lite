@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Save, Info, Search, Check } from "lucide-react";
+import { AlertTriangle, Check, Info, Loader2, Lock, Save, Search } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@scalius/shared/utils";
@@ -21,6 +21,7 @@ import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
   getCurrencySettings,
+  type CurrencySettingsPayload,
   type SettingsPayload,
   updateCurrencySettings,
 } from "@/lib/api-functions/currency";
@@ -222,18 +223,31 @@ const CURRENCIES: CurrencyEntry[] = [
 
 const currencyMap = new Map<string, CurrencyEntry>(CURRENCIES.map((c) => [c.code, c]));
 
-interface CurrencySettings {
-  currencyCode: string;
-  currencySymbol: string;
-  usdExchangeRate: string;
+type CurrencySettings = CurrencySettingsPayload;
+
+export function isValidUsdExchangeRate(value: string): boolean {
+  const trimmed = value.trim();
+  const rate = Number(trimmed);
+  return trimmed.length > 0 && Number.isFinite(rate) && rate > 0;
 }
 
 export default function CurrencySettingsBuilder() {
   const { values, setValue, setValues, isLoading, isSaving, handleSubmit } = useSettingsForm<CurrencySettings>({
     queryKey: queryKeys.settings.currency(),
-    fetchFn: () => getCurrencySettings() as Promise<Partial<CurrencySettings>>,
-    saveFn: (v) => updateCurrencySettings({ data: v as unknown as SettingsPayload }),
-    defaultValues: { currencyCode: "BDT", currencySymbol: "\u09F3", usdExchangeRate: "1" },
+    fetchFn: () => getCurrencySettings(),
+    saveFn: (v) => updateCurrencySettings({
+      data: {
+        currencyCode: v.currencyCode,
+        currencySymbol: v.currencySymbol,
+        usdExchangeRate: v.usdExchangeRate,
+      } as SettingsPayload,
+    }),
+    defaultValues: {
+      currencyCode: "BDT",
+      currencySymbol: "\u09F3",
+      usdExchangeRate: "1",
+      currencyCodeLocked: false,
+    },
     successMessage: "Currency settings saved successfully!",
     errorMessage: "Failed to save currency settings",
   });
@@ -241,6 +255,7 @@ export default function CurrencySettingsBuilder() {
   // UI-only state for the currency picker
   const [search, setSearch] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close picker on outside click
@@ -281,6 +296,20 @@ export default function CurrencySettingsBuilder() {
   const selectedCurrency = selectedCurrencyCode
     ? currencyMap.get(selectedCurrencyCode)
     : undefined;
+  const isExchangeRateValid = isValidUsdExchangeRate(values.usdExchangeRate);
+
+  const submit = async () => {
+    setSaveError(null);
+    try {
+      await handleSubmit();
+    } catch (error) {
+      setSaveError(
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to save currency settings.",
+      );
+    }
+  };
 
   if (isLoading) {
     return (
@@ -307,6 +336,28 @@ export default function CurrencySettingsBuilder() {
             </AlertDescription>
           </Alert>
 
+          <Alert>
+            {values.currencyCodeLocked ? (
+              <Lock className="h-4 w-4" />
+            ) : (
+              <AlertTriangle className="h-4 w-4" />
+            )}
+            <AlertDescription className="text-sm">
+              {values.currencyCodeLocked
+                ? "Currency selection is locked because this store has products or orders. You can still update the symbol and USD exchange rate."
+                : "Currency selection locks after the first product or order is created."}{" "}
+              Changing the currency of existing prices requires a dedicated
+              migration and is not available on this page.
+            </AlertDescription>
+          </Alert>
+
+          {saveError && (
+            <Alert variant="destructive" role="alert">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-1.5" ref={containerRef}>
             <Label>Currency</Label>
             {selectedCurrency && (
@@ -329,9 +380,16 @@ export default function CurrencySettingsBuilder() {
                   setPickerOpen(true);
                 }}
                 onFocus={() => setPickerOpen(true)}
+                disabled={values.currencyCodeLocked}
+                aria-describedby="currency-code-lock-help"
                 className="pl-9"
               />
             </div>
+            <p id="currency-code-lock-help" className="text-xs text-muted-foreground">
+              {values.currencyCodeLocked
+                ? `${values.currencyCode} is the permanent currency code for existing catalog and order amounts.`
+                : "Choose carefully; this code becomes permanent once catalog or order data exists."}
+            </p>
             {pickerOpen && (
               <div className="border rounded-md max-h-64 overflow-y-auto mt-1">
                 {filteredCurrencies.length === 0 ? (
@@ -395,10 +453,20 @@ export default function CurrencySettingsBuilder() {
               step="any"
               placeholder="e.g. 120"
               value={values.usdExchangeRate}
-              onChange={(e) => setValue("usdExchangeRate", e.target.value)}
+              onChange={(e) => {
+                setValue("usdExchangeRate", e.target.value);
+                setSaveError(null);
+              }}
+              aria-invalid={!isExchangeRateValid}
+              aria-describedby="usd-exchange-rate-help usd-exchange-rate-error"
               className="max-w-xs"
             />
-            <p className="text-xs text-muted-foreground">
+            {!isExchangeRateValid && (
+              <p id="usd-exchange-rate-error" className="text-xs text-destructive">
+                Enter a finite number greater than 0.
+              </p>
+            )}
+            <p id="usd-exchange-rate-help" className="text-xs text-muted-foreground">
               How many {values.currencyCode} equal 1 USD. Example: if 1 USD = 120 {values.currencyCode}, enter 120.
             </p>
           </div>
@@ -407,8 +475,8 @@ export default function CurrencySettingsBuilder() {
 
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
-          onClick={() => handleSubmit()}
-          disabled={isSaving}
+          onClick={() => void submit()}
+          disabled={isSaving || !isExchangeRateValid}
           className="min-w-[140px]"
         >
           {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

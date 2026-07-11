@@ -187,6 +187,8 @@ export function DataTable<TData>({
               <DataTableEmptyState config={emptyState} />
             )}
           </div>
+        ) : showError ? (
+          renderDesktopTable(sortable)
         ) : sortable ? (
           <Suspense fallback={renderDesktopTable(true)}>
             <SortableDataTableContent

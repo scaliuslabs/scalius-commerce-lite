@@ -33,6 +33,7 @@ import { RichContent } from "../ui/rich-content";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { useCurrency } from "@/hooks/use-currency";
+import { cleanMetaDescription } from "./product-form/utils";
 
 interface ProductVariant {
   id: string;
@@ -70,6 +71,8 @@ interface ProductViewProps {
     slug: string;
     metaTitle: string | null;
     metaDescription: string | null;
+    variantOption1Label: string;
+    variantOption2Label: string;
     isActive: boolean;
     discountPercentage: number | null;
     freeDelivery: boolean;
@@ -78,7 +81,7 @@ interface ProductViewProps {
     deletedAt: Date | string | number | null;
     category: {
       name: string | null;
-    };
+    } | null;
     additionalInfo?: {
       id: string;
       title: string;
@@ -95,6 +98,7 @@ export function ProductView({ product }: ProductViewProps) {
   const { symbol } = useCurrency();
   const primaryImage = product.images.find((img) => img.isPrimary);
   const otherImages = product.images.filter((img) => !img.isPrimary);
+  const visibleMetaDescription = cleanMetaDescription(product.metaDescription);
 
   return (
     <div className="container max-w-[1400px] space-y-4 py-4">
@@ -143,7 +147,9 @@ export function ProductView({ product }: ProductViewProps) {
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <Tag className="h-4 w-4" />
                   <span>Category:</span>
-                  <span className="font-medium text-foreground">{product.category.name}</span>
+                  <span className="font-medium text-foreground">
+                    {product.category?.name || "Uncategorized"}
+                  </span>
                 </div>
               </div>
 
@@ -270,7 +276,7 @@ export function ProductView({ product }: ProductViewProps) {
             </CardContent>
           </Card>
 
-          {(product.metaTitle || product.metaDescription) && (
+          {(product.metaTitle || visibleMetaDescription) && (
             <Card>
               <CardHeader className="p-4 border-b">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -285,10 +291,10 @@ export function ProductView({ product }: ProductViewProps) {
                     <div className="text-xs font-medium text-foreground bg-muted/50 p-2 rounded-md border border-border/50">{product.metaTitle}</div>
                   </div>
                 )}
-                {product.metaDescription && (
+                {visibleMetaDescription && (
                   <div className="space-y-1">
                     <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Meta Description</div>
-                    <div className="text-xs text-foreground bg-muted/50 p-2 rounded-md border border-border/50">{product.metaDescription}</div>
+                    <div className="text-xs text-foreground bg-muted/50 p-2 rounded-md border border-border/50">{visibleMetaDescription}</div>
                   </div>
                 )}
               </CardContent>
@@ -333,8 +339,8 @@ export function ProductView({ product }: ProductViewProps) {
                       const attributes = isSimpleDefaultSku
                         ? "Product SKU"
                         : [
-                            v.size && `Option 1: ${v.size}`,
-                            v.color && `Option 2: ${v.color}`,
+                            v.size && `${product.variantOption1Label}: ${v.size}`,
+                            v.color && `${product.variantOption2Label}: ${v.color}`,
                             v.weight && `${v.weight}g`,
                           ].filter(Boolean).join(" • ") || "—";
                       return (

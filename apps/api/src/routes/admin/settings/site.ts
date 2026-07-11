@@ -14,6 +14,7 @@ import {
 } from "@scalius/shared/seo-return-policy";
 import {
   getCurrencySettings,
+  isCurrencyCodeLocked,
   saveCurrencySettings,
   getGeneralSettings,
   saveHeaderConfig,
@@ -43,6 +44,7 @@ import {
   successEnvelope,
   messageResponse,
   errorResponses,
+  conflictResponse,
 } from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
@@ -96,6 +98,7 @@ const currencySettingsSchema = z.object({
   currencyCode: z.enum(SUPPORTED_CURRENCY_CODES),
   currencySymbol: z.string(),
   usdExchangeRate: z.string(),
+  currencyCodeLocked: z.boolean(),
 });
 
 const getCurrencyRoute = createRoute({
@@ -117,13 +120,21 @@ const getCurrencyRoute = createRoute({
 app.openapi(getCurrencyRoute, async (c) => {
   const db = c.get("db");
   const result = await getCurrencySettings(db);
-  return ok(c, result);
+  const currencyCodeLocked = await isCurrencyCodeLocked(db);
+  return ok(c, { ...result, currencyCodeLocked });
 });
 
 const saveCurrencySchema = z.object({
   currencyCode: supportedCurrencyCodeSchema.optional(),
   currencySymbol: z.string().optional(),
-  usdExchangeRate: z.string().optional(),
+  usdExchangeRate: z
+    .string()
+    .trim()
+    .refine((value) => {
+      const rate = Number(value);
+      return value.length > 0 && Number.isFinite(rate) && rate > 0;
+    }, "USD exchange rate must be a finite number greater than 0.")
+    .optional(),
 });
 
 const saveCurrencyRoute = createRoute({
@@ -139,6 +150,7 @@ const saveCurrencyRoute = createRoute({
       description: "Settings saved",
       content: { "application/json": { schema: messageResponse } },
     },
+    409: conflictResponse,
     ...errorResponses,
   },
 });

@@ -28,8 +28,20 @@ import {
     DEFAULT_PRODUCT_OPTION_LABELS,
     DEFAULT_PRODUCT_OPTION_SCHEMA,
 } from "@scalius/shared/product-options";
+import { unixToDate } from "@scalius/shared/timestamps";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
+
+function requireProductTimestamp(
+    value: Date | number | string | null | undefined,
+    field: string,
+): Date {
+    const date = unixToDate(value);
+    if (!date) {
+        throw new ValidationError(`Product ${field} is invalid.`);
+    }
+    return date;
+}
 
 function defaultVariantValues(productId: string, price: number) {
     return defaultProductSkuValues(productId, price);
@@ -271,8 +283,8 @@ export async function listProducts(db: Database, options: {
         discountType: product.discountType || "percentage",
         discountAmount: product.discountAmount || 0,
         freeDelivery: product.freeDelivery,
-        createdAt: new Date(product.createdAt * 1000),
-        updatedAt: new Date(product.updatedAt * 1000),
+        createdAt: requireProductTimestamp(product.createdAt, "created timestamp"),
+        updatedAt: requireProductTimestamp(product.updatedAt, "updated timestamp"),
         category: {
             name: product.categoryName || "Uncategorized",
         },
@@ -411,15 +423,15 @@ export async function getProductDetails(
 
     return {
         ...result,
-        createdAt: new Date(Number(result.createdAt) * 1000),
-        updatedAt: new Date(Number(result.updatedAt) * 1000),
+        createdAt: requireProductTimestamp(result.createdAt, "created timestamp"),
+        updatedAt: requireProductTimestamp(result.updatedAt, "updated timestamp"),
         deletedAt: result.deletedAt
-            ? new Date(Number(result.deletedAt) * 1000)
+            ? requireProductTimestamp(result.deletedAt, "deleted timestamp")
             : null,
         variants: variants.map(normalizeDefaultSkuOptions),
         images: images.map((img) => ({
             ...img,
-            createdAt: img.createdAt instanceof Date ? img.createdAt : new Date(Number(img.createdAt) * 1000),
+            createdAt: requireProductTimestamp(img.createdAt, "image created timestamp"),
         })),
         additionalInfo: richContent.map((item) => ({
             id: item.id,
@@ -995,7 +1007,6 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
         variantId: string;
         movementIndex: number;
         updateIndex: number;
-        delta: number;
     }> = [];
     const ids = updates.map((update) => update.id).filter(Boolean);
     const currentVariants = ids.length > 0
@@ -1087,7 +1098,7 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
                     )
                     .returning({ id: productVariants.id })
             );
-            stockResultPairs.push({ variantId: id, movementIndex, updateIndex, delta });
+            stockResultPairs.push({ variantId: id, movementIndex, updateIndex });
         } else if (Object.keys(normalizedFieldsToUpdate).length > 0) {
             statements.push(
                 db
@@ -1117,9 +1128,7 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
             if ((movementRows?.length ?? 0) === 0 || (updateRows?.length ?? 0) === 0) {
                 throw new ConflictError("Stock changed concurrently before variant bulk update could be saved");
             }
-            if (pair.delta < 0) {
-                await checkAndAlertLowStock(db, pair.variantId);
-            }
+            await checkAndAlertLowStock(db, pair.variantId);
         }
     }
 }

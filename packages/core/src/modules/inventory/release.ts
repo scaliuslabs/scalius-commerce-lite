@@ -9,6 +9,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
 import type { ReservationEntry, StockOperationResult } from "./types";
+import { validatePositiveQuantity } from "./validation";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -73,6 +74,8 @@ export async function releaseReservation(
   orderId?: string,
   pool: "regular" | "preorder" | "backorder" = "regular"
 ): Promise<StockOperationResult> {
+  validatePositiveQuantity(quantity);
+
   const variant = await db
     .select({
       id: productVariants.id,
@@ -141,6 +144,8 @@ export async function releaseMultiple(
   entries: ReservationEntry[],
   orderId?: string
 ): Promise<{ success: boolean; results: StockOperationResult[]; error?: string }> {
+  for (const entry of entries) validatePositiveQuantity(entry.quantity);
+
   const results: StockOperationResult[] = [];
   let anyFailed = false;
   let lastError: string | undefined;
@@ -178,6 +183,8 @@ export async function releaseReservedStockBatch(
   orderId: string,
   options: ReleaseReservedStockBatchOptions = {},
 ): Promise<ReleaseReservedStockBatchResult> {
+  for (const entry of entries) validatePositiveQuantity(entry.quantity);
+
   if (entries.length === 0) {
     return { success: true, results: [] };
   }

@@ -33,6 +33,82 @@ export interface ProductPageData {
   relatedProducts: Product[];
 }
 
+export type ProductBySlugResult =
+  | { state: "found"; data: ProductPageData }
+  | { state: "not_found" }
+  | { state: "unavailable" };
+
+function normalizeProductPageData(payload: unknown): ProductPageData | null {
+  const candidate = unwrapData<ProductPageData>(payload);
+  if (
+    !candidate ||
+    typeof candidate !== "object" ||
+    !candidate.product ||
+    typeof candidate.product !== "object" ||
+    !Array.isArray(candidate.images) ||
+    !Array.isArray(candidate.variants) ||
+    !Array.isArray(candidate.relatedProducts)
+  ) {
+    return null;
+  }
+
+  return candidate;
+}
+
+/**
+ * Reads product detail data while preserving the distinction between an
+ * authoritative API 404 and a temporary or malformed upstream response.
+ */
+export async function getProductBySlugResult(
+  slug: string,
+  _requiresAuth = false,
+): Promise<ProductBySlugResult> {
+  if (!slug) {
+    console.error("getProductBySlugResult: slug is required.");
+    return { state: "unavailable" };
+  }
+
+  const result = await withEdgeCache<ProductBySlugResult>(
+    `product_slug_${slug}`,
+    async () => {
+      try {
+        const { data, error, response } = await getApiV1ProductsBySlug({
+          client: getConfiguredSdkClient(),
+          path: { slug },
+        });
+        if (response?.status === 404) {
+          return { state: "not_found" };
+        }
+        if (
+          error ||
+          (response && (response.status < 200 || response.status >= 300))
+        ) {
+          console.error(
+            `Error fetching product by slug "${slug}" (status ${response?.status ?? "unknown"}).`,
+          );
+          return null;
+        }
+
+        const productData = normalizeProductPageData(data);
+        if (!productData) {
+          console.error(
+            `Invalid product response for slug "${slug}".`,
+          );
+          return null;
+        }
+
+        return { state: "found", data: productData };
+      } catch (error: unknown) {
+        console.error(`Error fetching product by slug "${slug}":`, error);
+        return null;
+      }
+    },
+    { ttlSeconds: CACHE_TTL.LONG },
+  );
+
+  return result ?? { state: "unavailable" };
+}
+
 /**
  * Fetches the complete data needed for a product detail page.
  * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
@@ -44,28 +120,8 @@ export async function getProductBySlug(
   slug: string,
   _requiresAuth = false,
 ): Promise<ProductPageData | null> {
-  if (!slug) {
-    console.error("getProductBySlug: slug is required.");
-    return null;
-  }
-
-  return withEdgeCache(
-    `product_slug_${slug}`,
-    async () => {
-      try {
-        const { data, error } = await getApiV1ProductsBySlug({
-          client: getConfiguredSdkClient(),
-          path: { slug },
-        });
-        if (error) return null;
-        return unwrapData<ProductPageData>(data);
-      } catch (error: unknown) {
-        console.error(`Error fetching product by slug "${slug}":`, error);
-        return null;
-      }
-    },
-    { ttlSeconds: CACHE_TTL.LONG },
-  );
+  const result = await getProductBySlugResult(slug, _requiresAuth);
+  return result.state === "found" ? result.data : null;
 }
 
 /**

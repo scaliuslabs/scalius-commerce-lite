@@ -425,9 +425,7 @@ export async function updateVariant(db: DrizzleD1Database<typeof schema>, produc
             throw new ConflictError("Stock changed concurrently before variant update could be saved");
         }
 
-        if (delta < 0) {
-            await checkAndAlertLowStock(db, variantId);
-        }
+        await checkAndAlertLowStock(db, variantId);
 
         return variantRows[0];
     }
