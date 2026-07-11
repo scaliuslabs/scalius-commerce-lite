@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createStorefrontAssistantComputerRuntime } from "./runtime";
+import { buildStorefrontComputerAddToCartLabel } from "../../product/lib/computer-add-to-cart";
 
 describe("Storefront assistant computer runtime", () => {
   beforeEach(() => {
@@ -314,6 +315,37 @@ describe("Storefront assistant computer runtime", () => {
     expect(buyHandle).toBeTruthy();
     expect(buyClicked).not.toHaveBeenCalled();
     expect(disabledClicked).not.toHaveBeenCalled();
+  });
+
+  it("allows a bounded maximum-length product identity without losing the action suffix", async () => {
+    const variantId = `var_${"v".repeat(21)}`;
+    const label = buildStorefrontComputerAddToCartLabel({
+      productName: `Premium ${"P".repeat(92)}`,
+      variantId,
+      options: [{ name: "Size", label: "L".repeat(180) }],
+    });
+    document.body.innerHTML = `<main><button data-scalius-computer-action="allow" aria-label="${label}">Add to Cart</button></main>`;
+    const clicked = vi.fn();
+    document.querySelector("button")?.addEventListener("click", clicked);
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: "shop-long-add-thread",
+      tabId: "shop-long-add-tab",
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(/(@r\d+\.e\d+) button/u)?.[1];
+    expect(label.length).toBeLessThanOrEqual(160);
+    expect(label).toContain(`variant ${variantId}`);
+    expect(label).toMatch(/ to cart$/u);
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${handle}`,
+      }),
+    ).resolves.toMatchObject({ ok: true, code: "EXECUTED" });
+    expect(clicked).toHaveBeenCalledOnce();
   });
 
   it("honors a commerce-surface human-only annotation for otherwise generic controls", async () => {

@@ -19,6 +19,7 @@ import {
   type VariantOptionAvailability,
   type VariantOptionAxis,
 } from "./lib/variant-state-machine";
+import { buildStorefrontComputerAddToCartLabel } from "./lib/computer-add-to-cart";
 
 interface Props {
   product: Product;
@@ -118,15 +119,21 @@ const initialAddToCartAvailable = Boolean(
 );
 const initialAddToCartAriaLabel =
   initialAddToCartAvailable && initialSelectedVariant
-    ? `Add ${product.name}, variant ${initialSelectedVariant.id}${
-        initialSelectedSize
-          ? `, ${option1Label} ${initialSelectedSize}`
-          : ""
-      }${
-        initialSelectedColor
-          ? `, ${option2Label} ${initialSelectedColor}`
-          : ""
-      } to cart`
+    ? buildStorefrontComputerAddToCartLabel({
+        productName: product.name,
+        variantId: initialSelectedVariant.id,
+        options: [
+          initialSelectedSize
+            ? { name: option1Label, label: initialSelectedSize }
+            : null,
+          initialSelectedColor
+            ? { name: option2Label, label: initialSelectedColor }
+            : null,
+        ].filter(
+          (option): option is { name: string; label: string } =>
+            Boolean(option),
+        ),
+      })
     : `Select an available ${product.name} option to add to cart`;
 const stockStatus =
   buyerStockSummary.tone === "available"

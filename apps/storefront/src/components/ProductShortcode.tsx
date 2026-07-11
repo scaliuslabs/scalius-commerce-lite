@@ -44,6 +44,7 @@ import {
   resolveBuyerVariants,
 } from "@/lib/product-sellable-variants";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
+import { buildStorefrontComputerAddToCartLabel } from "@/components/product/lib/computer-add-to-cart";
 
 interface ProductShortcodeProps {
   productData: ProductPageData;
@@ -167,9 +168,14 @@ export default function ProductShortcode({
     matchingVariant && isVariantAvailable(matchingVariant),
   );
   const addToCartAriaLabel = canAddToCart && matchingVariant
-    ? `Add ${product.name}, variant ${matchingVariant.id}${
-        selectedSize ? `, ${option1Label} ${selectedSize}` : ""
-      }${selectedColor ? `, ${option2Label} ${selectedColor}` : ""} to cart`
+    ? buildStorefrontComputerAddToCartLabel({
+        productName: product.name,
+        variantId: matchingVariant.id,
+        options: [
+          selectedSize ? { name: option1Label, label: selectedSize } : null,
+          selectedColor ? { name: option2Label, label: selectedColor } : null,
+        ].filter((option): option is CartItemOption => Boolean(option)),
+      })
     : `Select an available ${product.name} option to add to cart`;
   const compatibleVariants = filterVariantsBySelection(buyerVariants, {
     selectedSize,

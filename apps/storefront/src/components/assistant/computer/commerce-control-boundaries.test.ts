@@ -29,6 +29,9 @@ describe("Storefront generic-computer commerce boundaries", () => {
     expect(source("components/product/ProductSummary.astro")).toContain(
       "data-scalius-computer-action={initialAddToCartAvailable",
     );
+    expect(source("components/product/ProductSummary.astro")).toContain(
+      "buildStorefrontComputerAddToCartLabel({",
+    );
     expect(
       source("components/ProductShortcode.tsx").match(
         /data-scalius-computer-human-only/gu,

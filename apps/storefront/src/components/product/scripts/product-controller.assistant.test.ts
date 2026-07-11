@@ -697,6 +697,53 @@ describe("product controller assistant surface", () => {
     ).toMatchObject({ totalItems: 2, lineCount: 2 });
   });
 
+  it("keeps and executes a maximum-length hydrated Add identity", async () => {
+    const longVariantId = `var_${"v".repeat(21)}`;
+    renderProductControllerDom([
+      variant(
+        longVariantId,
+        `Size-${"L".repeat(100)}`,
+        `Color-${"B".repeat(100)}`,
+        4_500,
+        5,
+      ),
+    ]);
+    const container = document.getElementById("product-container")!;
+    container.dataset.productName = `Premium ${"P".repeat(92)}`;
+    init();
+
+    const add = document.querySelector<HTMLButtonElement>(
+      '[data-action="add-to-cart"]',
+    )!;
+    const label = add.getAttribute("aria-label") ?? "";
+    expect(add.dataset.scaliusComputerAction).toBe("allow");
+    expect(label.length).toBeLessThanOrEqual(160);
+    expect(label).toContain(`variant ${longVariantId}`);
+    expect(label).toMatch(/ to cart$/u);
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: "shop-long-product-thread",
+      tabId: "shop-long-product-tab",
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const handle = observed.output.match(
+      /(@r\d+\.e\d+) button "Add [^"]+ to cart"/u,
+    )?.[1];
+    expect(handle).toBeTruthy();
+    expect(observed.output).toContain(`variant ${longVariantId}`);
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${handle}`,
+      }),
+    ).resolves.toMatchObject({ ok: true, code: "EXECUTED" });
+    expect(Object.values(cartStore.get().items)).toEqual([
+      expect.objectContaining({ variantId: longVariantId, quantity: 1 }),
+    ]);
+  });
+
   it("ignores partial query selections", () => {
     window.history.replaceState(null, "", "/products/rice?size=42");
 
