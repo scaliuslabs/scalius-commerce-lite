@@ -32,11 +32,13 @@ import {
   hasVariantImagesEnabled,
   getVariantImagesAxis,
   resolveVariantImageAxis,
+  reconcileVariantImageMappings,
   generateSlug,
   DEFAULT_PRODUCT_OPTION_LABELS,
   DEFAULT_PRODUCT_OPTION_SCHEMA,
   DEFAULT_PRODUCT_CONDITION,
   type ProductFormValues,
+  type ProductVariantImageMappingFormValue,
   type Category,
 } from "./product-form";
 import type { VariantOptionLabels } from "./product-form/variants/types";
@@ -60,19 +62,18 @@ export function ProductForm({
   const cleanedDefaultValues = React.useMemo(() => {
     if (!defaultValues) return undefined;
 
+    const legacyEnabled = hasVariantImagesEnabled(defaultValues.metaDescription);
     return {
       ...defaultValues,
       metaDescription: cleanMetaDescription(defaultValues.metaDescription),
+      variantImagesEnabled:
+        defaultValues.variantImagesEnabled ?? legacyEnabled,
+      variantImageAxis:
+        defaultValues.variantImageAxis
+        ?? getVariantImagesAxis(defaultValues.metaDescription),
+      variantImageMappings: defaultValues.variantImageMappings ?? [],
     };
   }, [defaultValues]);
-
-  // Handle variant specific images independently from form schema
-  const [enableVariantImages, setEnableVariantImages] = React.useState(
-    hasVariantImagesEnabled(defaultValues?.metaDescription) || false,
-  );
-  const [variantImageAxis, setVariantImageAxis] = React.useState(
-    getVariantImagesAxis(defaultValues?.metaDescription),
-  );
 
   const {
     variants,
@@ -83,22 +84,6 @@ export function ProductForm({
     productId: defaultValues?.id,
     isEdit,
   });
-  const effectiveVariantImageAxis = React.useMemo(
-    () =>
-      resolveVariantImageAxis(
-        variantImageAxis,
-        uniqueOptionOneValues,
-        uniqueOptionTwoValues,
-      ),
-    [uniqueOptionOneValues, uniqueOptionTwoValues, variantImageAxis],
-  );
-
-  React.useEffect(() => {
-    if (effectiveVariantImageAxis !== variantImageAxis) {
-      setVariantImageAxis(effectiveVariantImageAxis);
-    }
-  }, [effectiveVariantImageAxis, variantImageAxis]);
-
   // Initialize form
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
@@ -122,6 +107,9 @@ export function ProductForm({
       variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
       variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
       variantOption2Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+      variantImagesEnabled: false,
+      variantImageAxis: "option2",
+      variantImageMappings: [],
       slug: "",
       images: [],
       slugEdited: false,
@@ -130,6 +118,79 @@ export function ProductForm({
       ...cleanedDefaultValues,
     },
   });
+
+  const enableVariantImages = form.watch("variantImagesEnabled");
+  const variantImageAxis = form.watch("variantImageAxis");
+  const variantImageMappings = form.watch("variantImageMappings");
+  const images = form.watch("images");
+  const effectiveVariantImageAxis = React.useMemo(
+    () =>
+      resolveVariantImageAxis(
+        variantImageAxis,
+        uniqueOptionOneValues,
+        uniqueOptionTwoValues,
+      ),
+    [uniqueOptionOneValues, uniqueOptionTwoValues, variantImageAxis],
+  );
+  const optionValuesForAxis = React.useCallback(
+    (axis: "option1" | "option2") =>
+      axis === "option1" ? uniqueOptionOneValues : uniqueOptionTwoValues,
+    [uniqueOptionOneValues, uniqueOptionTwoValues],
+  );
+  const activeVariantIds = React.useMemo(
+    () => variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id),
+    [variants],
+  );
+
+  const setVariantImageMappings = React.useCallback((
+    next: ProductVariantImageMappingFormValue[],
+  ) => {
+    form.setValue("variantImageMappings", next, { shouldDirty: true });
+  }, [form]);
+
+  const setEnableVariantImages = React.useCallback((enabled: boolean) => {
+    form.setValue("variantImagesEnabled", enabled, { shouldDirty: true });
+    setVariantImageMappings(enabled
+      ? reconcileVariantImageMappings({
+          mappings: form.getValues("variantImageMappings"),
+          images: form.getValues("images"),
+          axis: effectiveVariantImageAxis,
+          optionValues: optionValuesForAxis(effectiveVariantImageAxis),
+          variantIds: activeVariantIds,
+          fillMissing: true,
+        })
+      : []);
+  }, [activeVariantIds, effectiveVariantImageAxis, form, optionValuesForAxis, setVariantImageMappings]);
+
+  const setVariantImageAxis = React.useCallback((axis: "option1" | "option2") => {
+    form.setValue("variantImageAxis", axis, { shouldDirty: true });
+    setVariantImageMappings(reconcileVariantImageMappings({
+      mappings: form.getValues("variantImageMappings").filter((mapping) => mapping.variantId),
+      images: form.getValues("images"),
+      axis,
+      optionValues: optionValuesForAxis(axis),
+      variantIds: activeVariantIds,
+      fillMissing: true,
+    }));
+  }, [activeVariantIds, form, optionValuesForAxis, setVariantImageMappings]);
+
+  React.useEffect(() => {
+    if (effectiveVariantImageAxis !== variantImageAxis) {
+      setVariantImageAxis(effectiveVariantImageAxis);
+      return;
+    }
+    const next = reconcileVariantImageMappings({
+      mappings: form.getValues("variantImageMappings"),
+      images,
+      axis: effectiveVariantImageAxis,
+      optionValues: optionValuesForAxis(effectiveVariantImageAxis),
+      variantIds: activeVariantIds,
+      fillMissing: false,
+    });
+    if (JSON.stringify(next) !== JSON.stringify(form.getValues("variantImageMappings"))) {
+      setVariantImageMappings(next);
+    }
+  }, [activeVariantIds, effectiveVariantImageAxis, form, images, optionValuesForAxis, setVariantImageAxis, setVariantImageMappings, variantImageAxis]);
 
   const variantOption1Label = form.watch("variantOption1Label");
   const variantOption2Label = form.watch("variantOption2Label");
@@ -150,6 +211,7 @@ export function ProductForm({
       productId: defaultValues?.id,
       enableVariantImages,
       variantImageAxis: effectiveVariantImageAxis,
+      variantImageMappings,
       form,
     });
 
@@ -213,6 +275,9 @@ export function ProductForm({
                 uniqueOptionOneValues={uniqueOptionOneValues}
                 uniqueOptionTwoValues={uniqueOptionTwoValues}
                 optionLabels={variantOptionLabels}
+                variantImageMappings={variantImageMappings}
+                setVariantImageMappings={setVariantImageMappings}
+                activeVariantIds={activeVariantIds}
               />
             </div>
 

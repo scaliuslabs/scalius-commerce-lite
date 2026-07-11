@@ -101,7 +101,12 @@ export async function getNavigationPreviewProductCount(
         page: 1,
         limit: 1,
         sort: "newest",
-        attributeFilters: input.attributeFilters ?? [],
+        attributeFilters: (input.attributeFilters ?? []).map((filter) => ({
+            id: filter.slug,
+            name: filter.slug,
+            slug: filter.slug,
+            values: [filter.value],
+        })),
     });
 
     return { count: result.pagination.total };

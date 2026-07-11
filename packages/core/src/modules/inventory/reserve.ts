@@ -9,6 +9,13 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { recordMovement } from "./movements";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
+import {
+  buildInventoryLedgerV2Edge,
+  getNextReservationGeneration,
+  getReservationGenerationBalances,
+  type InventoryLedgerV2EdgeFields,
+  type InventoryLedgerV2Event,
+} from "./ledger-v2";
 
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
@@ -271,7 +278,7 @@ type ReservationMovementClaim = {
   previousStock: number;
   newStock: number;
   notes: string;
-};
+} & InventoryLedgerV2EdgeFields;
 
 /**
  * Atomically reserve stock for multiple variants using D1 batch.
@@ -303,6 +310,21 @@ export async function reserveStockBatch(
   // separately by variant + order so every order keeps its own reservation trail.
   const entries = mergeReservationItemsByVariant(items);
   const movementEntries = groupReservationMovementsForAudit(items);
+  const multiOrderVariant = findVariantWithMultipleReservationOrders(movementEntries);
+  if (multiOrderVariant) {
+    return {
+      success: false,
+      results: entries.map((entry) => ({
+        success: false,
+        variantId: entry.variantId,
+        previousStock: 0,
+        newStock: 0,
+        error: `Variant ${multiOrderVariant} cannot be reserved for multiple orders in one counter mutation`,
+      })),
+      error: `Variant ${multiOrderVariant} cannot be reserved for multiple orders in one counter mutation`,
+      manualReconciliationRequired: true,
+    };
+  }
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     // Phase 1: Read all variant states
@@ -549,6 +571,58 @@ async function loadReservationReleaseGeneration(
   return result?.count ?? 0;
 }
 
+async function loadReservationLedgerGeneration(
+  db: Database,
+  orderId: string,
+  variantId: string,
+  pool: ReservationPool,
+): Promise<number> {
+  const rows = await db
+    .select({
+      id: inventoryMovements.id,
+      variantId: inventoryMovements.variantId,
+      orderId: inventoryMovements.orderId,
+      type: inventoryMovements.type,
+      ledgerVersion: inventoryMovements.ledgerVersion,
+      pool: inventoryMovements.pool,
+      reservationGeneration: inventoryMovements.reservationGeneration,
+      stockVersionBefore: inventoryMovements.stockVersionBefore,
+      stockVersionAfter: inventoryMovements.stockVersionAfter,
+      previousStock: inventoryMovements.previousStock,
+      newStock: inventoryMovements.newStock,
+      stockDelta: inventoryMovements.stockDelta,
+      previousReservedStock: inventoryMovements.previousReservedStock,
+      newReservedStock: inventoryMovements.newReservedStock,
+      reservedStockDelta: inventoryMovements.reservedStockDelta,
+      previousPreorderStock: inventoryMovements.previousPreorderStock,
+      newPreorderStock: inventoryMovements.newPreorderStock,
+      preorderStockDelta: inventoryMovements.preorderStockDelta,
+    })
+    .from(inventoryMovements)
+    .where(and(
+      eq(inventoryMovements.orderId, orderId),
+      eq(inventoryMovements.variantId, variantId),
+      eq(inventoryMovements.ledgerVersion, 2),
+      eq(inventoryMovements.pool, pool),
+    ))
+    .all();
+
+  const v2Rows = rows.filter((row) => row.ledgerVersion === 2);
+  if (v2Rows.length > 0) {
+    const balances = getReservationGenerationBalances(
+      v2Rows as InventoryLedgerV2Event[],
+      { orderId, variantId, pool },
+    );
+    return getNextReservationGeneration(balances);
+  }
+
+  // Legacy deterministic reservation IDs used zero-based release counts.
+  // Keep that hash generation via (ledger generation - 1) so an in-flight
+  // pre-migration checkout replay resolves its existing claim instead of
+  // reserving twice.
+  return (await loadReservationReleaseGeneration(db, orderId, variantId)) + 1;
+}
+
 async function buildReservationMovementClaims(
   db: Database,
   movementEntries: ReservationBatchItem[],
@@ -558,19 +632,17 @@ async function buildReservationMovementClaims(
 ): Promise<ReservationMovementClaim[]> {
   const claims: ReservationMovementClaim[] = [];
   const type = reservationMovementType(pool);
-  const preorderRunningStock = new Map<string, number>();
 
   for (const entry of movementEntries) {
     const variant = variants.get(entry.variantId)!;
-    const previousStock = pool === "preorder"
-      ? preorderRunningStock.get(entry.variantId) ?? variant.preorderStock
-      : variant.stock;
-    const newStock = pool === "preorder" ? previousStock - entry.quantity : variant.stock;
     const reservationKey = entry.reservationKey ?? options.reservationKey;
     const deterministic = Boolean(entry.movementId || (reservationKey && entry.orderId));
-    const generation = reservationKey && entry.orderId && !entry.movementId
-      ? await loadReservationReleaseGeneration(db, entry.orderId, entry.variantId)
-      : 0;
+    const reservationGeneration = entry.orderId
+      ? await loadReservationLedgerGeneration(db, entry.orderId, entry.variantId, pool)
+      : null;
+    const legacyHashGeneration = reservationGeneration == null
+      ? 0
+      : reservationGeneration - 1;
     const id = entry.movementId
       ?? (reservationKey && entry.orderId
         ? await createReservationMovementId({
@@ -578,13 +650,28 @@ async function buildReservationMovementClaims(
             orderId: entry.orderId,
             variantId: entry.variantId,
             pool,
-            generation,
+            generation: legacyHashGeneration,
           })
         : crypto.randomUUID());
 
-    if (pool === "preorder") {
-      preorderRunningStock.set(entry.variantId, newStock);
-    }
+    const edge = buildInventoryLedgerV2Edge({
+      pool,
+      reservationGeneration,
+      before: {
+        stock: variant.stock,
+        reservedStock: variant.reservedStock,
+        preorderStock: variant.preorderStock,
+        stockVersion: variant.stockVersion,
+      },
+      after: {
+        stock: variant.stock,
+        reservedStock: variant.reservedStock + entry.quantity,
+        preorderStock: pool === "preorder"
+          ? variant.preorderStock - entry.quantity
+          : variant.preorderStock,
+        stockVersion: variant.stockVersion + 1,
+      },
+    });
 
     claims.push({
       id,
@@ -593,9 +680,8 @@ async function buildReservationMovementClaims(
       orderId: entry.orderId,
       type,
       quantity: entry.quantity,
-      previousStock,
-      newStock,
       notes: `Reserved ${entry.quantity} units (batch)${entry.orderId ? ` for order ${entry.orderId}` : ""}`,
+      ...edge,
     });
   }
 
@@ -620,12 +706,38 @@ function buildReservationMovementInsert(
         ${claim.newStock},
         ${claim.notes},
         NULL,
+        ${claim.ledgerVersion},
+        ${claim.pool},
+        ${claim.reservationGeneration},
+        ${claim.stockVersionBefore},
+        ${claim.stockVersionAfter},
+        ${claim.stockDelta},
+        ${claim.previousReservedStock},
+        ${claim.newReservedStock},
+        ${claim.reservedStockDelta},
+        ${claim.previousPreorderStock},
+        ${claim.newPreorderStock},
+        ${claim.preorderStockDelta},
         unixepoch()
       FROM ${productVariants}
       WHERE ${productVariants.id} = ${claim.variantId}
         AND ${productVariants.stockVersion} = ${variant.stockVersion}
     `)
     .returning({ id: inventoryMovements.id });
+}
+
+function findVariantWithMultipleReservationOrders(
+  entries: ReservationBatchItem[],
+): string | null {
+  const ordersByVariant = new Map<string, Set<string>>();
+  for (const entry of entries) {
+    const orderKey = entry.orderId ?? "__no_order__";
+    const orders = ordersByVariant.get(entry.variantId) ?? new Set<string>();
+    orders.add(orderKey);
+    ordersByVariant.set(entry.variantId, orders);
+    if (orders.size > 1) return entry.variantId;
+  }
+  return null;
 }
 
 function isDuplicateReservationMovementClaimError(err: unknown): boolean {

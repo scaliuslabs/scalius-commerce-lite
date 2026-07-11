@@ -5,6 +5,7 @@ import {
     categories,
     productVariants,
     productImages,
+    productVariantImageMappings,
     productRichContent,
     productAttributeValues,
     productAttributes,
@@ -37,6 +38,7 @@ import {
     buyerCatalogHasSkuInPriceRange,
     type BuyerCatalogPricingProjection,
 } from "./products.buyer-projection";
+import { resolveVariantImageReadModel } from "./products.variant-images";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
@@ -325,39 +327,144 @@ function buildAttributeProductSubquery(
     alias: string,
 ) {
     if (attributeFilters.length === 0) return null;
-
-    if (attributeFilters.length === 1) {
-        const filter = attributeFilters[0]!;
-        return db
-            .select({ productId: productAttributeValues.productId })
-            .from(productAttributeValues)
-            .innerJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))
-            .where(
-                and(
-                    eq(productAttributes.slug, filter.slug),
-                    eq(productAttributeValues.value, filter.value),
-                ),
-            )
-            .as(alias);
-    }
-
+    const filtersJson = JSON.stringify(attributeFilters);
     return db
         .select({ productId: productAttributeValues.productId })
         .from(productAttributeValues)
         .innerJoin(productAttributes, eq(productAttributeValues.attributeId, productAttributes.id))
         .where(
-            or(
-                ...attributeFilters.map((filter) =>
-                    and(
-                        eq(productAttributes.slug, filter.slug),
-                        eq(productAttributeValues.value, filter.value),
-                    ),
-                ),
+            and(
+                eq(productAttributes.filterable, true),
+                isNull(productAttributes.deletedAt),
+                sql`EXISTS (
+                    SELECT 1
+                    FROM json_each(${filtersJson}) AS selected_filter
+                    JOIN json_each(json_extract(selected_filter.value, '$.values')) AS selected_value
+                    WHERE CAST(json_extract(selected_filter.value, '$.slug') AS TEXT) = ${productAttributes.slug}
+                      AND CAST(selected_value.value AS TEXT) = ${productAttributeValues.value}
+                )`,
             ),
         )
         .groupBy(productAttributeValues.productId)
         .having(sql`count(*) = ${attributeFilters.length}`)
         .as(alias);
+}
+
+export interface PublicProductFacetValue {
+    value: string;
+    count: number;
+}
+
+export interface PublicProductFacet {
+    id: string;
+    name: string;
+    slug: string;
+    values: PublicProductFacetValue[];
+}
+
+type PublicProductFacetRow = {
+    id: string;
+    name: string;
+    slug: string;
+    value: string;
+    count: number;
+};
+
+function buildResultScopedFacetQuery(
+    db: Database,
+    buyerPricing: BuyerCatalogPricingProjection,
+    baseConditions: SQL[],
+    attributeFilters: AttributeFilter[],
+) {
+    const filtersJson = JSON.stringify(attributeFilters);
+    const matchesOtherSelectedFacets = sql`NOT EXISTS (
+        SELECT 1
+        FROM json_each(${filtersJson}) AS selected_filter
+        WHERE CAST(json_extract(selected_filter.value, '$.slug') AS TEXT) <> ${productAttributes.slug}
+          AND NOT EXISTS (
+              SELECT 1
+              FROM product_attribute_values AS selected_product_value
+              INNER JOIN product_attributes AS selected_product_attribute
+                  ON selected_product_attribute.id = selected_product_value.attribute_id
+              WHERE selected_product_value.product_id = ${products.id}
+                AND selected_product_attribute.deleted_at IS NULL
+                AND selected_product_attribute.filterable = 1
+                AND selected_product_attribute.slug = CAST(json_extract(selected_filter.value, '$.slug') AS TEXT)
+                AND selected_product_value.value IN (
+                    SELECT CAST(value AS TEXT)
+                    FROM json_each(json_extract(selected_filter.value, '$.values'))
+                )
+          )
+    )`;
+
+    return db
+        .select({
+            id: productAttributes.id,
+            name: productAttributes.name,
+            slug: productAttributes.slug,
+            value: productAttributeValues.value,
+            count: sql<number>`COUNT(DISTINCT CASE
+                WHEN ${matchesOtherSelectedFacets} THEN ${products.id}
+                ELSE NULL
+            END)`,
+        })
+        .from(productAttributeValues)
+        .innerJoin(
+            productAttributes,
+            eq(productAttributeValues.attributeId, productAttributes.id),
+        )
+        .innerJoin(products, eq(productAttributeValues.productId, products.id))
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+        .where(and(
+            eq(productAttributes.filterable, true),
+            isNull(productAttributes.deletedAt),
+            ...baseConditions,
+        ))
+        .groupBy(
+            productAttributes.id,
+            productAttributes.name,
+            productAttributes.slug,
+            productAttributeValues.value,
+        )
+        .orderBy(productAttributes.name, productAttributeValues.value);
+}
+
+function groupResultScopedFacets(
+    rows: PublicProductFacetRow[],
+    selectedFilters: AttributeFilter[],
+): PublicProductFacet[] {
+    const facetsBySlug = new Map<string, PublicProductFacet>();
+    for (const row of rows) {
+        const facet = facetsBySlug.get(row.slug) ?? {
+            id: row.id,
+            name: row.name,
+            slug: row.slug,
+            values: [],
+        };
+        facet.values.push({ value: row.value, count: Number(row.count) || 0 });
+        facetsBySlug.set(row.slug, facet);
+    }
+
+    for (const selected of selectedFilters) {
+        const facet = facetsBySlug.get(selected.slug) ?? {
+            id: selected.id,
+            name: selected.name,
+            slug: selected.slug,
+            values: [],
+        };
+        const knownValues = new Set(facet.values.map(({ value }) => value));
+        for (const value of selected.values) {
+            if (!knownValues.has(value)) facet.values.push({ value, count: 0 });
+        }
+        facetsBySlug.set(selected.slug, facet);
+    }
+
+    return Array.from(facetsBySlug.values())
+        .map((facet) => ({
+            ...facet,
+            values: facet.values.sort((a, b) => a.value.localeCompare(b.value)),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function getPagination(page: number, limit: number, total: number) {
@@ -532,11 +639,17 @@ async function readStorefrontFeedVariantMap(
 // Storefront queries
 // ─────────────────────────────────────────
 
-/**
- * Returns a paginated list of active storefront products with images and categories.
- * This is the unified query backing the Hono GET /api/storefront/products route.
- */
-export async function getStorefrontProducts(db: Database, params: StorefrontProductFilterInput) {
+type StorefrontCatalogScope = {
+    condition?: SQL;
+    orderBy?: SQL | ((buyerPricing: ReturnType<typeof buildBuyerCatalogPricingProjection>) => SQL);
+    fixedCategory?: StorefrontCategoryProductCategory;
+};
+
+async function readStorefrontCatalogPage(
+    db: Database,
+    params: StorefrontProductFilterInput,
+    scope: StorefrontCatalogScope = {},
+) {
     const {
         page = 1,
         limit = 20,
@@ -550,7 +663,13 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         minPrice: undefined,
         maxPrice: undefined,
     }, {}, buyerPricing);
-    const orderBy = getStorefrontProductOrderBy(sort, buyerPricing);
+    if (scope.condition) {
+        conditions.push(scope.condition);
+        priceRangeConditions.push(scope.condition);
+    }
+    const orderBy = typeof scope.orderBy === "function"
+        ? scope.orderBy(buyerPricing)
+        : scope.orderBy ?? getStorefrontProductOrderBy(sort, buyerPricing);
     const offset = (page - 1) * limit;
 
     let query = db
@@ -574,20 +693,25 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         .from(products)
         .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
-
-    const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "filtered_products");
+    const attributeSubquery = buildAttributeProductSubquery(
+        db,
+        attributeFilters,
+        "catalog_filtered_products",
+    );
     if (attributeSubquery) {
         query = query.innerJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
     }
 
-    // Count is independent from the current page rows, so start both reads together.
     let countQuery = db
         .select({ count: sql<number>`count(*)` })
         .from(products)
         .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
-
-    const countSubquery = buildAttributeProductSubquery(db, attributeFilters, "count_filtered_products");
+    const countSubquery = buildAttributeProductSubquery(
+        db,
+        attributeFilters,
+        "catalog_count_filtered_products",
+    );
     if (countSubquery) {
         countQuery = countQuery.innerJoin(countSubquery, eq(products.id, countSubquery.productId));
     }
@@ -600,11 +724,10 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         .from(products)
         .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...priceRangeConditions));
-
     const priceRangeSubquery = buildAttributeProductSubquery(
         db,
         attributeFilters,
-        "price_range_filtered_products",
+        "catalog_price_range_filtered_products",
     );
     if (priceRangeSubquery) {
         priceRangeQuery = priceRangeQuery.innerJoin(
@@ -613,51 +736,76 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         );
     }
 
-    const [productsList, totalCount, rawPriceRange] = await Promise.all([
-        query.orderBy(orderBy).limit(limit).offset(offset).all(),
+    const facetQuery = buildResultScopedFacetQuery(
+        db,
+        buyerPricing,
+        conditions,
+        attributeFilters,
+    );
+    const [productsList, totalCount, rawPriceRange, facetRows] = await Promise.all([
+        query.orderBy(orderBy, products.id).limit(limit).offset(offset).all(),
         countQuery.get(),
         priceRangeQuery.get(),
+        facetQuery.all() as Promise<PublicProductFacetRow[]>,
     ]);
-    const productIds = productsList.map((p) => p.id);
 
-    let categoryMap = new Map<string, { id: string; name: string; slug: string }>();
-    const categoryIds = [...new Set(productsList.map((p) => p.categoryId).filter(Boolean))] as string[];
+    const productIds = productsList.map((product) => product.id);
+    const categoryIds = scope.fixedCategory
+        ? []
+        : [...new Set(
+            productsList
+                .map((product) => product.categoryId)
+                .filter((id): id is string => Boolean(id)),
+        )];
     const [imageMap, categoriesData] = await Promise.all([
         readPrimaryProductImageMap(db, productIds),
         categoryIds.length > 0
             ? db
-            .select({ id: categories.id, name: categories.name, slug: categories.slug })
-            .from(categories)
-            .where(inArray(categories.id, categoryIds))
-            .all() as Promise<Array<{ id: string; name: string; slug: string }>>
+                .select({ id: categories.id, name: categories.name, slug: categories.slug })
+                .from(categories)
+                .where(inArray(categories.id, categoryIds))
+                .all() as Promise<Array<{ id: string; name: string; slug: string }>>
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
     ]);
-    categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
-
-    const productsWithImages = productsList.map(({ hasCustomerOptions, availableForSale, ...product }: StorefrontProductListRowWithVariants) => {
-        const imgData = imageMap.get(product.id);
+    const categoryMap = new Map(categoriesData.map((category) => [category.id, category]));
+    const productsWithImages = productsList.map(({
+        hasCustomerOptions,
+        availableForSale,
+        ...product
+    }: StorefrontProductListRowWithVariants) => {
+        const image = imageMap.get(product.id);
         return {
             ...product,
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
-            imageUrl: imgData?.url || null,
-            imageAlt: imgData?.alt || null,
-            category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,
-            createdAt: unixToDate(product.createdAt)?.toISOString() || null,
-            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
-            discountedPrice: product.discountedPrice,
+            imageUrl: image?.url ?? null,
+            imageAlt: image?.alt ?? null,
+            category: scope.fixedCategory ?? (
+                product.categoryId ? categoryMap.get(product.categoryId) ?? null : null
+            ),
+            createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
+            updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
             priceVaries: product.maxBuyerPrice > product.discountedPrice,
         };
     });
 
     return {
         products: productsWithImages,
-        pagination: getPagination(page, limit, totalCount?.count || 0),
+        pagination: getPagination(page, limit, totalCount?.count ?? 0),
         priceRange: {
             min: rawPriceRange?.min ?? 0,
             max: rawPriceRange?.max ?? 0,
         },
+        facets: groupResultScopedFacets(facetRows, attributeFilters),
     };
+}
+
+/**
+ * Returns a paginated list of active storefront products with images and categories.
+ * This is the unified query backing the Hono GET /api/storefront/products route.
+ */
+export async function getStorefrontProducts(db: Database, params: StorefrontProductFilterInput) {
+    return readStorefrontCatalogPage(db, params);
 }
 
 /**
@@ -848,114 +996,53 @@ export async function getStorefrontCategoryProducts(
     category: StorefrontCategoryProductCategory,
     params: StorefrontProductFilterInput,
 ) {
-    const {
-        page = 1,
-        limit = 20,
-        sort = "newest",
-        attributeFilters = [],
-    } = params;
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
-    const scopedParams = {
-        ...params,
-        category: category.id,
-    };
-    const conditions = buildStorefrontProductConditions(scopedParams, {}, buyerPricing);
-    const priceRangeConditions = buildStorefrontProductConditions({
-        ...scopedParams,
-        minPrice: undefined,
-        maxPrice: undefined,
-    }, {}, buyerPricing);
-    const orderBy = getStorefrontProductOrderBy(sort, buyerPricing);
-    const offset = (page - 1) * limit;
-
-    let query = db
-        .select({
-            id: products.id,
-            name: products.name,
-            price: buyerPricing.basePrice,
-            slug: products.slug,
-            discountType: buyerPricing.discountType,
-            discountPercentage: buyerPricing.discountPercentage,
-            discountAmount: buyerPricing.discountAmount,
-            discountedPrice: buyerPricing.effectivePrice,
-            maxBuyerPrice: buyerPricing.maxBuyerPrice,
-            freeDelivery: products.freeDelivery,
-            categoryId: products.categoryId,
-            createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
-            updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
-        })
-        .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-        .where(and(...conditions));
-
-    const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "category_filtered_products");
-    if (attributeSubquery) {
-        query = query.innerJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
-    }
-
-    let countQuery = db
-        .select({ count: sql<number>`count(*)` })
-        .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-        .where(and(...conditions));
-
-    const countSubquery = buildAttributeProductSubquery(db, attributeFilters, "category_count_filtered_products");
-    if (countSubquery) {
-        countQuery = countQuery.innerJoin(countSubquery, eq(products.id, countSubquery.productId));
-    }
-
-    let priceRangeQuery = db
-        .select({
-            min: sql<number | null>`MIN(${buyerPricing.effectivePrice})`,
-            max: sql<number | null>`MAX(${buyerPricing.maxBuyerPrice})`,
-        })
-        .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-        .where(and(...priceRangeConditions));
-
-    const priceRangeSubquery = buildAttributeProductSubquery(
-        db,
-        attributeFilters,
-        "category_price_range_filtered_products",
-    );
-    if (priceRangeSubquery) {
-        priceRangeQuery = priceRangeQuery.innerJoin(
-            priceRangeSubquery,
-            eq(products.id, priceRangeSubquery.productId),
-        );
-    }
-
-    const [productsList, totalCount, rawPriceRange] = await Promise.all([
-        query.orderBy(orderBy).limit(limit).offset(offset).all(),
-        countQuery.get(),
-        priceRangeQuery.get(),
-    ]);
-
-    const imageMap = await readPrimaryProductImageMap(
-        db,
-        productsList.map((product) => product.id),
-    );
-    const productsWithImages = productsList.map((product: StorefrontProductListRow) => {
-        const imgData = imageMap.get(product.id);
-        return {
-            ...product,
-            imageUrl: imgData?.url || null,
-            discountedPrice: product.discountedPrice,
-            priceVaries: product.maxBuyerPrice > product.discountedPrice,
-            createdAt: unixToDate(product.createdAt)?.toISOString() || null,
-            updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
-            category,
-        };
+    return readStorefrontCatalogPage(db, params, {
+        condition: eq(products.categoryId, category.id),
+        fixedCategory: category,
     });
+}
 
-    return {
-        products: productsWithImages,
-        pagination: getPagination(page, limit, totalCount?.count || 0),
-        priceRange: {
-            min: rawPriceRange?.min ?? 0,
-            max: rawPriceRange?.max ?? 0,
-        },
-    };
+export async function getStorefrontCollectionProducts(
+    db: Database,
+    membership: { productIds?: string[]; categoryIds?: string[] },
+    params: StorefrontProductFilterInput,
+) {
+    const productIds = Array.from(new Set(
+        (membership.productIds ?? []).map((id) => id.trim()).filter(Boolean),
+    )).slice(0, STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE);
+    const categoryIds = Array.from(new Set(
+        (membership.categoryIds ?? []).map((id) => id.trim()).filter(Boolean),
+    )).slice(0, STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE);
+    const membershipEntries = [
+        ...productIds.map((id) => ({ kind: "product", id })),
+        ...categoryIds.map((id) => ({ kind: "category", id })),
+    ];
+    const membershipJson = JSON.stringify(membershipEntries);
+    const membershipCondition = membershipEntries.length > 0
+        ? sql`EXISTS (
+            SELECT 1
+            FROM json_each(${membershipJson}) AS collection_membership
+            WHERE (
+                json_extract(collection_membership.value, '$.kind') = 'product'
+                AND json_extract(collection_membership.value, '$.id') = ${products.id}
+            ) OR (
+                json_extract(collection_membership.value, '$.kind') = 'category'
+                AND json_extract(collection_membership.value, '$.id') = ${products.categoryId}
+            )
+        )`
+        : sql`0 = 1`;
+
+    return readStorefrontCatalogPage(db, params, {
+        condition: membershipCondition,
+        orderBy: productIds.length > 0
+            ? (buyerPricing) => sql`COALESCE((
+                SELECT CAST(key AS INTEGER)
+                FROM json_each(${membershipJson}) AS curated_membership
+                WHERE json_extract(curated_membership.value, '$.kind') = 'product'
+                    AND json_extract(curated_membership.value, '$.id') = ${products.id}
+            ), 2147483647), ${getStorefrontProductOrderBy(params.sort ?? "newest", buyerPricing)}`
+            : undefined,
+    });
 }
 
 /**
@@ -979,6 +1066,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             variantOption2Label: products.variantOption2Label,
             variantOption1Schema: products.variantOption1Schema,
             variantOption2Schema: products.variantOption2Schema,
+            variantImagesEnabled: products.variantImagesEnabled,
+            variantImageAxis: products.variantImageAxis,
             noIndex: products.noIndex,
             discountType: products.discountType,
             discountPercentage: products.discountPercentage,
@@ -1010,8 +1099,19 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             isPrimary: productImages.isPrimary,
             sortOrder: productImages.sortOrder,
             createdAt: sql<number>`CAST(${productImages.createdAt} AS INTEGER)`,
-        }).from(productImages).where(eq(productImages.productId, product.id)).orderBy(productImages.sortOrder).all()
-            .then((res: Array<{ id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number }>) => ({ type: "images", data: res })),
+            mappingId: productVariantImageMappings.id,
+            mappingVariantId: productVariantImageMappings.variantId,
+            mappingOptionAxis: productVariantImageMappings.optionAxis,
+            mappingOptionValue: productVariantImageMappings.optionValue,
+            mappingNormalizedOptionValue: productVariantImageMappings.normalizedOptionValue,
+            mappingSortOrder: productVariantImageMappings.sortOrder,
+        }).from(productImages)
+            .leftJoin(
+                productVariantImageMappings,
+                eq(productVariantImageMappings.imageId, productImages.id),
+            )
+            .where(eq(productImages.productId, product.id)).orderBy(productImages.sortOrder).all()
+            .then((res) => ({ type: "images", data: res })),
 
         db.select({
             id: productVariants.id,
@@ -1134,9 +1234,32 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
 
     interface VariantResult { id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
-    interface ImageResult { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number; }
+    interface ImageResult { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number; mappingId: string | null; mappingVariantId: string | null; mappingOptionAxis: "option1" | "option2" | null; mappingOptionValue: string | null; mappingNormalizedOptionValue: string | null; mappingSortOrder: number | null; }
     const typedVariants = variants as VariantResult[];
     const typedImages = images as ImageResult[];
+    const cleanImages = typedImages.map((image) => ({
+        id: image.id,
+        productId: image.productId,
+        url: image.url,
+        alt: image.alt,
+        isPrimary: image.isPrimary,
+        sortOrder: image.sortOrder,
+        createdAt: image.createdAt,
+    }));
+    const storedVariantImageMappings = typedImages.flatMap((image) =>
+        image.mappingId
+            ? [{
+                id: image.mappingId,
+                productId: product.id,
+                imageId: image.id,
+                variantId: image.mappingVariantId,
+                optionAxis: image.mappingOptionAxis,
+                optionValue: image.mappingOptionValue,
+                normalizedOptionValue: image.mappingNormalizedOptionValue,
+                sortOrder: image.mappingSortOrder ?? 0,
+            }]
+            : []
+    );
     const hasVariants = typedVariants.some((variant) =>
         variant.isDefault !== true && Boolean(variant.size?.trim() || variant.color?.trim()),
     );
@@ -1150,10 +1273,22 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
         };
     });
+    const variantImageRead = resolveVariantImageReadModel({
+        productId: product.id,
+        variantImagesEnabled: product.variantImagesEnabled,
+        variantImageAxis: product.variantImageAxis,
+        metaDescription: product.metaDescription,
+        storedMappings: storedVariantImageMappings,
+        images: cleanImages,
+        variants: typedVariants,
+    });
 
     return {
         product: {
             ...product,
+            metaDescription: variantImageRead.metaDescription,
+            variantImagesEnabled: variantImageRead.enabled,
+            variantImageAxis: variantImageRead.axis,
             hasVariants,
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
@@ -1187,12 +1322,13 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             additionalInfo,
         },
         category,
-        images: typedImages.map((img) => ({
+        images: cleanImages.map((img) => ({
             ...img,
             createdAt: unixToDate(img.createdAt)?.toISOString() || null,
             alt: img.alt || product.name,
         })),
         variants: formattedVariants,
+        variantImageMappings: variantImageRead.mappings,
         relatedProducts,
     };
 }

@@ -21,6 +21,8 @@ import {
     stringifyCollectionConfig,
 } from "./collection-config";
 import { ftsMatch } from "../../search/fts5";
+import { getStorefrontCollectionProducts } from "../products/products.storefront";
+import type { StorefrontProductFilterInput } from "../products/products.types";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -364,6 +366,74 @@ export async function reorderCollections(
 // ─────────────────────────────────────────
 // Storefront: product resolution
 // ─────────────────────────────────────────
+
+export async function getPublicCollectionCatalog(
+    db: Database,
+    id: string,
+    params: StorefrontProductFilterInput,
+) {
+    const collection = await db
+        .select()
+        .from(collections)
+        .where(and(
+            eq(collections.id, id),
+            eq(collections.isActive, true),
+            isNull(collections.deletedAt),
+        ))
+        .get();
+    if (!collection) return null;
+
+    const config = normalizeCollectionConfig(collection.config);
+    const catalog = await getStorefrontCollectionProducts(db, {
+        productIds: config.productIds,
+        categoryIds: config.categoryIds,
+    }, params);
+
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    const categoryIdsJson = JSON.stringify(config.categoryIds);
+    const categoryPromise: Promise<Array<{ id: string; name: string; slug: string }>> =
+        config.categoryIds.length > 0
+            ? db
+                .select({ id: categories.id, name: categories.name, slug: categories.slug })
+                .from(categories)
+                .where(and(
+                    sql`${categories.id} IN (
+                        SELECT CAST(value AS TEXT) FROM json_each(${categoryIdsJson})
+                    )`,
+                    isNull(categories.deletedAt),
+                ))
+                .all()
+            : Promise.resolve([]);
+    const featuredPromise: Promise<RawProduct[]> = config.featuredProductId
+            ? db
+                .select(buildCollectionProductSelect(buyerPricing))
+                .from(products)
+                .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+                .where(and(
+                    ...publicCollectionProductConditions(
+                        eq(products.id, config.featuredProductId),
+                    ),
+                ))
+                .limit(1)
+                .all() as Promise<RawProduct[]>
+            : Promise.resolve([]);
+    const [categoryRows, featuredRows] = await Promise.all([
+        categoryPromise,
+        featuredPromise,
+    ]);
+    const categoryById = new Map(categoryRows.map((category) => [category.id, category]));
+
+    return {
+        collection: { ...collection, config },
+        categories: config.categoryIds
+            .map((categoryId) => categoryById.get(categoryId))
+            .filter((category): category is { id: string; name: string; slug: string } => (
+                category !== undefined
+            )),
+        ...catalog,
+        featuredProduct: featuredRows[0] ? enrichProduct(featuredRows[0]) : null,
+    };
+}
 
 /** Product select shape used for collection product resolution. */
 const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjection) => ({

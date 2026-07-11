@@ -119,7 +119,7 @@ A reservation is considered expired when:
 
 Existing orders are not expired by this cron. Stale order cancellation must update order status, `orders.inventoryAction`, variant counters, and movement logs through explicit order transition logic.
 
-The sweep groups by `(variantId, orderId, reservationType)`, sums quantities without mixing regular and preorder pools, and processes a bounded batch per invocation (`limit` default `50`, max `200`). It reads one extra sentinel group and returns `hasMore` so cron logs can show whether more orphaned reservations remain for the next scheduled pass. For each processed expired group:
+The sweep groups by `(variantId, orderId, pool, reservation generation)`, subtracts pool-specific deducted/released quantities from reservations, and processes a bounded batch per invocation (`limit` default `50`, max `200`). It reads one extra sentinel group and returns `hasMore` so cron logs can show whether more orphaned reservations remain for the next scheduled pass. A partial terminal movement leaves the exact remainder eligible; it no longer hides the whole reservation generation. For each processed expired group:
 - Decrements `reservedStock` on the variant (clamped to 0 via `MAX(0, ...)`)
 - Restores `preorderStock` when the expired claim is `preorder_reserved`
 - Records a "released" movement that identifies the expired regular or preorder pool
@@ -166,7 +166,7 @@ Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) 
 | `barcode`          | text      | null    | Scannable barcode value                            |
 | `barcode_type`     | text enum | null    | `ean13`, `upc`, `isbn`, `gtin`, `custom`          |
 
-### `inventory_movements` (audit log)
+### `inventory_movements` (audit log and ledger v2)
 
 | Column          | Type      | Notes                                                         |
 |-----------------|-----------|---------------------------------------------------------------|
@@ -180,6 +180,8 @@ Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) 
 | `notes`         | text      | Human-readable context                                        |
 | `created_by`    | text      | Admin user ID (for manual adjustments)                        |
 | `created_at`    | timestamp | Unix epoch seconds                                            |
+
+New production counter writes use `ledger_version = 2` and additionally record `pool`, `reservation_generation`, `stock_version_before/after`, and before/after/delta values for physical, reserved, and preorder counters. `(variant_id, stock_version_after)` is unique, so the CAS version is also the deterministic per-SKU ledger sequence. Legacy rows remain version 1 history and are not falsely backfilled with counter facts that were never recorded. See `docs/codex/catalog/INVENTORY-LEDGER-V2.md` for the complete event and generation contract.
 
 Indexes: `variant_id`, `order_id`, `created_at`
 
@@ -252,4 +254,4 @@ Production order workflows use either the claimed order transition engine or `re
 ## Known Gaps
 
 - The legacy sequential reserve/deduct/release/restore exports remain for compatibility, but no production order, checkout, payment, or fulfillment caller uses them. Do not add new callers; remove the exports only with an explicit package-contract decision.
-- Partial reservation/release generations and a foldable pool-aware ledger-v2 model remain open design work.
+- Version-1 legacy movements predate complete counter snapshots and cannot be folded before the v2 boundary. Production diagnostics must report that boundary rather than claiming historical reconstruction.

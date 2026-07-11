@@ -32,6 +32,7 @@ export {
   type ProductOptionSchema,
   type Category,
   type ProductImage,
+  type ProductVariantImageMappingFormValue,
 } from "./types";
 
 // Utils

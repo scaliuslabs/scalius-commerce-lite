@@ -123,6 +123,7 @@ function HookHarness({
     isEdit: false,
     enableVariantImages: false,
     variantImageAxis: "option1",
+    variantImageMappings: [],
     form,
   });
   onResult(result);
@@ -159,6 +160,9 @@ function productValues(): ProductFormValues {
     variantOption2Label: "Color",
     variantOption1Schema: "size",
     variantOption2Schema: "color",
+    variantImagesEnabled: false,
+    variantImageAxis: "option2",
+    variantImageMappings: [],
     slug: "green-tea",
     slugEdited: false,
     images: [],

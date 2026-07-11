@@ -52,7 +52,12 @@ describe("navigation preview product count", () => {
             page: 1,
             limit: 1,
             sort: "newest",
-            attributeFilters: [{ slug: "color", value: "Blue" }],
+            attributeFilters: [{
+                id: "color",
+                name: "color",
+                slug: "color",
+                values: ["Blue"],
+            }],
         });
     });
 

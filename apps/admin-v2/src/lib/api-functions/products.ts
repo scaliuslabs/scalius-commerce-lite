@@ -97,6 +97,25 @@ export interface ProductAdditionalInfoInput {
   sortOrder: number;
 }
 
+export interface ProductVariantImageMappingInput {
+  imageId: string;
+  variantId?: string | null;
+  optionAxis?: "option1" | "option2" | null;
+  optionValue?: string | null;
+  sortOrder?: number;
+}
+
+export interface ProductVariantImageMappingDto {
+  id: string;
+  productId: string;
+  imageId: string;
+  variantId: string | null;
+  optionAxis: "option1" | "option2" | null;
+  optionValue: string | null;
+  normalizedOptionValue: string | null;
+  sortOrder: number;
+}
+
 export interface ProductWriteInput {
   name: string;
   description: string | null;
@@ -118,6 +137,9 @@ export interface ProductWriteInput {
   variantOption2Label: string;
   variantOption1Schema: ProductOptionSchema;
   variantOption2Schema: ProductOptionSchema;
+  variantImagesEnabled: boolean;
+  variantImageAxis: "option1" | "option2";
+  variantImageMappings: ProductVariantImageMappingInput[];
   slug: string;
   images: ProductImageInput[];
   attributes: ProductAttributeInput[];
@@ -192,6 +214,8 @@ export interface ProductDetailDto {
   variantOption2Label: string;
   variantOption1Schema: ProductOptionSchema;
   variantOption2Schema: ProductOptionSchema;
+  variantImagesEnabled: boolean;
+  variantImageAxis: "option1" | "option2";
   isActive: boolean;
   discountPercentage: number | null;
   discountType: ProductDiscountType | null;
@@ -203,6 +227,7 @@ export interface ProductDetailDto {
   category: { name: string | null } | null;
   variants: ProductVariantDto[];
   images: ProductImageDto[];
+  variantImageMappings: ProductVariantImageMappingDto[];
   additionalInfo: ProductAdditionalInfoInput[];
   attributes: ProductAttributeInput[];
 }

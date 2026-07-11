@@ -15,6 +15,7 @@ import {
   normalizePublicIntegerCacheValue,
   normalizePublicListingSearchParam,
   normalizePublicNumberCacheValue,
+  readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 // Create an OpenAPIHono app for category routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -98,7 +99,14 @@ const storefrontCategorySchema = z.object({
 type AppliedFilterValue =
   | string
   | number
-  | Array<{ slug: string; value: string }>;
+  | Array<{ id: string; name: string; slug: string; values: string[] }>;
+
+const productFacetSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
+});
 
 // GET /categories — list all categories
 const listCategoriesRoute = createRoute({
@@ -187,6 +195,7 @@ const getCategoryProductsRoute = createRoute({
           min: z.number().min(0),
           max: z.number().min(0),
         }),
+        facets: z.array(productFacetSchema),
         appliedFilters: z.record(z.string(), z.any()),
       })) } },
     },
@@ -200,7 +209,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
   const params = c.req.valid("query");
-  const queryParams = c.req.query();
+  const queryParams = readRepeatedPublicQueryValues(c.req.url);
   const [category, attributeFilters] = await Promise.all([
     getPublicCategoryBySlug(db, slug),
     resolvePublicAttributeFilters(db, queryParams, Object.keys(params)),
@@ -248,6 +257,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     products: result.products,
     pagination: result.pagination,
     priceRange: result.priceRange,
+    facets: result.facets,
     appliedFilters,
   });
 });

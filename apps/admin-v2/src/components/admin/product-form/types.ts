@@ -48,6 +48,14 @@ export interface Category {
   name: string;
 }
 
+export interface ProductVariantImageMappingFormValue {
+  imageId: string;
+  variantId?: string | null;
+  optionAxis?: "option1" | "option2" | null;
+  optionValue?: string | null;
+  sortOrder?: number;
+}
+
 export const productFormSchema = z.object({
   id: z.string().optional(),
   name: z
@@ -85,6 +93,15 @@ export const productFormSchema = z.object({
   variantOption2Label: productOptionLabelSchema,
   variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
   variantOption2Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
+  variantImagesEnabled: z.boolean(),
+  variantImageAxis: z.enum(["option1", "option2"]),
+  variantImageMappings: z.array(z.object({
+    imageId: z.string().min(1),
+    variantId: z.string().nullable().optional(),
+    optionAxis: z.enum(["option1", "option2"]).nullable().optional(),
+    optionValue: z.string().nullable().optional(),
+    sortOrder: z.number().int().min(0).optional(),
+  })),
   slug: z
     .string()
     .min(3, "Slug must be at least 3 characters")

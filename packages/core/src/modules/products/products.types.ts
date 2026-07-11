@@ -2,6 +2,7 @@
 // Zod schemas and TypeScript interfaces shared across product modules.
 import { z } from "zod";
 import type { Product, ProductVariant, ProductImage } from "@scalius/database/schema";
+import type { VariantImageMappingRecord } from "./products.variant-images";
 import type { ProductOptionSchema } from "@scalius/shared/product-options";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 
@@ -127,6 +128,7 @@ export interface ProductWithDetails extends Product {
     category: { name: string };
     variants: ProductVariant[];
     images: ProductImage[];
+    variantImageMappings: VariantImageMappingRecord[];
     additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;
     attributes: Array<{ attributeId: string; value: string }>;
 }
@@ -164,7 +166,12 @@ export interface StorefrontProductFilterInput {
     freeDelivery?: "true" | "false";
     hasDiscount?: "true" | "false";
     ids?: string;
-    attributeFilters?: { slug: string; value: string }[];
+    attributeFilters?: Array<{
+        id: string;
+        name: string;
+        slug: string;
+        values: string[];
+    }>;
 }
 
 export type StorefrontFeedProductFilterInput = Pick<

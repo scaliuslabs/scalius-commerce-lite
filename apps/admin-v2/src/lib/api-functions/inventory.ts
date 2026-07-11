@@ -35,6 +35,18 @@ export interface InventoryMovement {
   newStock: number;
   notes: string | null;
   createdBy: string | null;
+  ledgerVersion: number;
+  pool: "regular" | "preorder" | "backorder" | null;
+  reservationGeneration: number | null;
+  stockVersionBefore: number | null;
+  stockVersionAfter: number | null;
+  stockDelta: number | null;
+  previousReservedStock: number | null;
+  newReservedStock: number | null;
+  reservedStockDelta: number | null;
+  previousPreorderStock: number | null;
+  newPreorderStock: number | null;
+  preorderStockDelta: number | null;
   createdAt: string | number;
   variantSku: string | null;
   productName: string | null;
@@ -63,12 +75,20 @@ export interface InventoryPagination {
   totalPages: number;
 }
 
+export interface InventoryLedgerHealth {
+  legacyRows: number;
+  v2Rows: number;
+  v2Variants: number;
+  invalidV2Rows: number;
+}
+
 export interface InventoryOverviewPayload {
   variants?: InventoryVariant[];
   movements?: InventoryMovement[];
   alerts?: InventoryAlert[];
   pagination?: InventoryPagination;
   stats?: InventoryStats;
+  ledgerHealth?: InventoryLedgerHealth;
 }
 
 export interface InventoryQueryInput {

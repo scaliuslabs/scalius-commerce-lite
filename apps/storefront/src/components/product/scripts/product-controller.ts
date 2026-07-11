@@ -38,6 +38,7 @@ import {
   convertVariantToAnalyticsData,
 } from "../lib/product-analytics";
 import { TOAST_CONFIG } from "../config";
+import { resolveVariantImageId } from "@/lib/variant-image-mapping";
 const state = {
   variants: [] as Variant[],
   variantIndex: null as VariantIndex | null,
@@ -395,11 +396,7 @@ function refreshUI() {
     updateStockAndActions();
     updatePriceDisplay();
 
-    const selectedImageOption =
-      state.variantImageAxis === "option1"
-        ? state.selection?.selectedSize
-        : state.selection?.selectedColor;
-    if (state.isVariantImagesEnabled && selectedImageOption) {
+    if (state.isVariantImagesEnabled) {
       updateVariantImage();
     }
   });
@@ -588,29 +585,54 @@ function updateOptionButtonGroup(
 }
 
 function updateVariantImage() {
-  if (!state.selection) return;
-
-  const buttons =
+  const selectedOptionValue =
     state.variantImageAxis === "option1"
-      ? cache.sizeButtons
-      : cache.colorButtons;
-  const selectedValue =
-    state.variantImageAxis === "option1"
-      ? state.selection.selectedSize
-      : state.selection.selectedColor;
-  if (!selectedValue) return;
-
-  const optionIndex = buttons.findIndex(
-    (btn) =>
-      (state.variantImageAxis === "option1"
-        ? btn.dataset.size
-        : btn.dataset.color) === selectedValue,
+      ? state.selection?.selectedSize
+      : state.selection?.selectedColor;
+  const thumbnailByImageId = new Map<string, HTMLElement>();
+  cache.thumbnails.forEach((thumbnail) => {
+    const imageId = thumbnail.dataset.imageId;
+    if (imageId && !thumbnailByImageId.has(imageId)) {
+      thumbnailByImageId.set(imageId, thumbnail);
+    }
+  });
+  const mappings = Array.from(thumbnailByImageId.entries()).flatMap(
+    ([imageId, thumbnail]) => {
+      const variantId = thumbnail.dataset.variantId || null;
+      const optionAxis: "option1" | "option2" | null = thumbnail.dataset.optionAxis === "option1"
+        || thumbnail.dataset.optionAxis === "option2"
+        ? thumbnail.dataset.optionAxis
+        : null;
+      const optionValue = thumbnail.dataset.optionValue || null;
+      if (!variantId && (!optionAxis || !optionValue)) return [];
+      return [{
+        id: `dom:${imageId}`,
+        productId: cache.container?.dataset.productId || "",
+        imageId,
+        variantId,
+        optionAxis,
+        optionValue,
+        normalizedOptionValue: optionValue?.trim().toLocaleLowerCase("en-US") ?? null,
+        sortOrder: Number.parseInt(thumbnail.dataset.index || "0", 10) || 0,
+      }];
+    },
   );
-
-  if (optionIndex !== -1 && cache.thumbnails[optionIndex]) {
-    const url = cache.thumbnails[optionIndex].dataset.imageUrl;
-    if (url) switchImage(url);
-  }
+  const imageId = resolveVariantImageId({
+    enabled: state.isVariantImagesEnabled,
+    axis: state.variantImageAxis,
+    mappings,
+    images: Array.from(thumbnailByImageId.entries()).map(([id, thumbnail], index) => ({
+      id,
+      isPrimary: thumbnail.dataset.imagePrimary === "true",
+      sortOrder: Number.parseInt(thumbnail.dataset.index || String(index), 10) || index,
+    })),
+    selectedVariantId: state.selection?.selectedVariant?.id,
+    selectedOptionValue,
+  });
+  const url = imageId
+    ? thumbnailByImageId.get(imageId)?.dataset.imageUrl
+    : undefined;
+  if (url) switchImage(url);
 }
 
 function updatePriceDisplay() {

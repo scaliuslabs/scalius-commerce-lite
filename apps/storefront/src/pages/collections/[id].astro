@@ -1,6 +1,7 @@
 ---
 import Layout from "@/layouts/Layout.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
+import CategoryFilters from "@/components/CategoryFilters";
 import {
   getCollectionByIdResult,
 } from "@/lib/api";
@@ -15,15 +16,26 @@ import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
-import { ArrowLeft, Tags } from "lucide-react";
+import {
+  PRODUCT_LIST_NAVIGATION_PARAMS,
+  buildProductListPaginationHref,
+  resolveProductListQueryState,
+} from "@/lib/product-list-query";
+import { ArrowLeft, Tags, SlidersHorizontal, X, Search, ChevronLeft, ChevronRight } from "lucide-react";
 
 const { id } = Astro.params;
 if (!id) {
   return new Response(null, { status: 404 });
 }
 
+let queryState = resolveProductListQueryState({
+  url: Astro.url,
+  allowUnknownAttributes: true,
+});
+if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
+
 const { layoutData, pageData: collectionResult } = await loadPageWithLayout(() =>
-  getCollectionByIdResult(id),
+  getCollectionByIdResult(id, queryState.options),
 );
 
 if (collectionResult.state === "not_found") {
@@ -38,7 +50,15 @@ if (collectionResult.state === "unavailable" || !layoutData) {
 }
 
 const collection = collectionResult.data;
+queryState = resolveProductListQueryState({
+  url: Astro.url,
+  facets: collection.facets ?? [],
+});
+if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
 const products = collection.products ?? [];
+const facets = collection.facets ?? [];
+const pagination = collection.pagination;
+const currentFilters = queryState.currentFilters;
 const categories = collection.categories ?? [];
 const config = collection.config ?? {};
 const title = config.title || collection.name;
@@ -55,6 +75,26 @@ const discoverySettings = normalizeSeoDiscoverySettings(
 );
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const firstProductImage = products.find((product) => product.imageUrl)?.imageUrl ?? null;
+const activeFilterCount = Object.keys(currentFilters)
+  .filter((key) => (
+    !PRODUCT_LIST_NAVIGATION_PARAMS.includes(
+      key as typeof PRODUCT_LIST_NAVIGATION_PARAMS[number],
+    ) && currentFilters[key]
+  ))
+  .reduce((count, key) => count + (
+    Array.isArray(currentFilters[key]) ? currentFilters[key].length : 1
+  ), 0);
+const collectionPathname = Astro.url.pathname;
+const shouldNoindexCollectionView = collection.noIndex === true ||
+  pagination.page > 1 || activeFilterCount > 0 || Boolean(queryState.query);
+
+function getPaginationUrl(page: number) {
+  return buildProductListPaginationHref({
+    pathname: collectionPathname,
+    currentFilters,
+    page,
+  });
+}
 const ogImageUrl = firstProductImage
   ? toAbsoluteStorefrontSeoUrl(
       getProductImageUrl(firstProductImage, {
@@ -97,7 +137,7 @@ const collectionJsonLd =
       name: title,
       description: subtitle || `Browse ${collection.name}.`,
       url: canonicalUrl,
-      numberOfItems: products.length,
+      numberOfItems: pagination.total,
     })
   : null;
 ---
@@ -109,7 +149,7 @@ const collectionJsonLd =
   canonicalUrl={canonicalUrl ?? undefined}
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
-  noindex={collection.noIndex === true}
+  noindex={shouldNoindexCollectionView}
 >
   <Fragment slot="head">
     {collectionJsonLd && <script is:inline type="application/ld+json" set:html={collectionJsonLd} />}
@@ -167,20 +207,163 @@ const collectionJsonLd =
     </section>
 
     <section class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      {
-        products.length > 0 ? (
-          <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {products.map((product) => (
-              <ProductCard product={product} currencySymbol={currencySymbol} />
-            ))}
+      <button
+        id="collection-filter-toggle"
+        type="button"
+        class="relative mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground shadow-sm lg:hidden"
+      >
+        <SlidersHorizontal className="h-4 w-4" />
+        <span>Filters</span>
+        {activeFilterCount > 0 && (
+          <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-xs text-destructive-foreground">
+            {activeFilterCount}
+          </span>
+        )}
+      </button>
+
+      <div class="flex flex-col gap-6 lg:flex-row">
+        <aside
+          id="collection-filter-section"
+          class="fixed inset-0 z-50 hidden bg-black/50 lg:static lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
+        >
+          <div class="flex h-full w-4/5 max-w-sm flex-col bg-white lg:w-full lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm">
+            <div class="flex items-center justify-between border-b p-4 lg:hidden">
+              <h2 class="text-lg font-semibold">Filters</h2>
+              <button
+                id="collection-filter-close"
+                type="button"
+                class="rounded p-1 hover:bg-gray-100"
+                aria-label="Close filters"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form id="filterForm" method="get" class="grow overflow-y-auto">
+              <input type="hidden" name="page" value="1" />
+              <div class="p-4 lg:p-6">
+                <div class="relative mb-6">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="search"
+                    name="q"
+                    placeholder="Search this collection..."
+                    value={queryState.query}
+                    class="w-full rounded-lg border-gray-300 py-2.5 pl-9 pr-4 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <CategoryFilters
+                  client:load
+                  facets={facets}
+                  currentFilters={currentFilters}
+                  priceRange={collection.priceRange}
+                  resetPath={collectionPath}
+                />
+              </div>
+            </form>
           </div>
-        ) : (
-          <div class="rounded-lg border border-dashed border-gray-200 bg-white px-6 py-12 text-center">
-            <p class="text-sm font-medium text-gray-900">No products in this collection yet.</p>
+        </aside>
+
+        <div class="min-w-0 flex-1">
+          <div class="mb-5 rounded-lg border border-gray-100 bg-white px-4 py-3 shadow-sm">
+            <p class="text-sm font-medium text-gray-700">
+              Showing <span class="font-bold text-primary">{products.length}</span> of{" "}
+              <span class="font-bold text-primary">{pagination.total}</span> products
+            </p>
           </div>
-        )
-      }
+
+          {products.length > 0 ? (
+            <>
+              <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+                {products.map((product) => (
+                  <ProductCard product={product} currencySymbol={currencySymbol} />
+                ))}
+              </div>
+
+              {pagination.totalPages > 1 && (
+                <nav class="mt-8 flex items-center justify-center" aria-label="Collection pagination">
+                  <div class="flex items-center gap-1 rounded-lg border border-gray-100 bg-white p-2 shadow-sm">
+                    {pagination.page > 1 ? (
+                      <a
+                        href={getPaginationUrl(pagination.page - 1)}
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <span class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300" aria-hidden="true">
+                        <ChevronLeft className="h-4 w-4" />
+                      </span>
+                    )}
+                    <span class="px-3 text-sm font-medium text-gray-700">
+                      Page {pagination.page} of {pagination.totalPages}
+                    </span>
+                    {pagination.page < pagination.totalPages ? (
+                      <a
+                        href={getPaginationUrl(pagination.page + 1)}
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
+                        aria-label="Next page"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <span class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300" aria-hidden="true">
+                        <ChevronRight className="h-4 w-4" />
+                      </span>
+                    )}
+                  </div>
+                </nav>
+              )}
+            </>
+          ) : (
+            <div class="rounded-lg border border-dashed border-gray-200 bg-white px-6 py-12 text-center">
+              <p class="text-sm font-medium text-gray-900">
+                {activeFilterCount > 0 || queryState.query
+                  ? "No products match these filters."
+                  : "No products in this collection yet."}
+              </p>
+              {(activeFilterCount > 0 || queryState.query) && (
+                <a href={collectionPath} class="mt-3 inline-flex text-sm font-medium text-primary hover:underline">
+                  Reset filters
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </section>
 
   </div>
 </Layout>
+
+<script>
+  function setupCollectionFilters() {
+    const toggle = document.getElementById("collection-filter-toggle");
+    const close = document.getElementById("collection-filter-close");
+    const section = document.getElementById("collection-filter-section");
+    if (!toggle || !close || !section) return;
+
+    const openFilters = () => {
+      section.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+      close.focus();
+    };
+    const closeFilters = () => {
+      section.classList.add("hidden");
+      document.body.style.overflow = "";
+      toggle.focus();
+    };
+    toggle.addEventListener("click", openFilters);
+    close.addEventListener("click", closeFilters);
+    section.addEventListener("click", (event) => {
+      if (event.target === section) closeFilters();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !section.classList.contains("hidden")) {
+        closeFilters();
+      }
+    });
+  }
+
+  document.addEventListener("astro:page-load", setupCollectionFilters);
+</script>

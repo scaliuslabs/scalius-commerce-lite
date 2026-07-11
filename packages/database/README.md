@@ -143,7 +143,7 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 
 | Table | Purpose |
 |-------|---------|
-| `inventoryMovements` | Stock movement audit log. Movement type, quantity delta, previous/new stock |
+| `inventoryMovements` | Stock movement audit log. Ledger-v2 rows carry pool/generation, CAS version edges, and before/after/delta values for physical, reserved, and preorder counters; legacy rows remain version-1 history |
 | `productLowStockAlerts` | Low stock alert tracking. `variantId` (unique), alert status |
 
 ### `delivery.ts` -- Delivery Domain
@@ -308,3 +308,8 @@ Drizzle config (`drizzle.config.ts`):
 - No FTS5 virtual tables in the Drizzle schema -- FTS5 tables and sync triggers are raw SQL in the baseline and queried via helpers in `@scalius/core/search/fts5.ts`.
 - Partial unique indexes are documented beside the table definitions but remain raw-SQL migration concerns; for example `product_variants_one_default_per_product_idx` enforces at most one active hidden default SKU per product.
 - Several JSON columns (`headerConfig`, `footerConfig`, etc.) are typed as plain `text()` -- there are no Drizzle JSON mode annotations or Zod validators at the schema level. Validation happens in the service layer.
+# Product variant image associations
+
+`products.variant_images_enabled` and `products.variant_image_axis` own the product-level behavior. `product_variant_image_mappings` assigns a stable product image ID to either one active non-default SKU or one normalized option value; an image can have only one target, while a target may own multiple images. Core validation enforces same-product ownership before the transactional product write.
+
+Migration `0002_backfill_variant_image_mappings.sql` materializes legacy positional `<!--variant_images:*-->` products and installs axis/order validation triggers. It deliberately retains markers for old storefront readers during rollout. Deploy the migration and explicit-aware API/storefront readers before enabling the new admin writer; successful new writes then strip markers atomically.

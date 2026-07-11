@@ -13,7 +13,18 @@ type MockStatement = {
   values?: Record<string, unknown>;
 };
 
-function createStockDbMock(variant: { id: string; stock: number; stockVersion: number }) {
+function createStockDbMock(variant: {
+  id: string;
+  stock: number;
+  reservedStock?: number;
+  preorderStock?: number;
+  stockVersion: number;
+}) {
+  const persistedVariant = {
+    reservedStock: 0,
+    preorderStock: 0,
+    ...variant,
+  };
   const batchCalls: MockStatement[][] = [];
   const db = {
     select() {
@@ -22,7 +33,7 @@ function createStockDbMock(variant: { id: string; stock: number; stockVersion: n
           return {
             where() {
               return {
-                get: async () => variant,
+                get: async () => persistedVariant,
               };
             },
           };

@@ -5,6 +5,7 @@ import {
     categories,
     productVariants,
     productImages,
+    productVariantImageMappings,
     productRichContent,
     productAttributeValues,
     orderItems,
@@ -29,6 +30,14 @@ import {
     DEFAULT_PRODUCT_OPTION_SCHEMA,
 } from "@scalius/shared/product-options";
 import { unixToDate } from "@scalius/shared/timestamps";
+import {
+    cleanVariantImageMetaDescription,
+    prepareVariantImageMappingsForWrite,
+    readLegacyVariantImageSettings,
+    resolveVariantImageReadModel,
+    synthesizeLegacyVariantImageMappings,
+    type VariantImageAxis,
+} from "./products.variant-images";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -45,6 +54,87 @@ function requireProductTimestamp(
 
 function defaultVariantValues(productId: string, price: number) {
     return defaultProductSkuValues(productId, price);
+}
+
+function prepareProductImageRows(
+    productId: string,
+    images: CreateProductInput["images"],
+    alwaysGenerateIds = false,
+    existingImageIdByUrl: ReadonlyMap<string, string> = new Map(),
+) {
+    const imageIdMap = new Map<string, string>();
+    const submittedImageIds = new Set<string>();
+    const rows = images.map((image, index) => {
+        if (submittedImageIds.has(image.id)) {
+            throw new ValidationError("Each product image may appear only once.");
+        }
+        submittedImageIds.add(image.id);
+        const persistedId = alwaysGenerateIds
+            ? `img_${nanoid()}`
+            : image.id.startsWith("temp_")
+                ? existingImageIdByUrl.get(image.url) ?? `img_${nanoid()}`
+                : image.id;
+        imageIdMap.set(image.id, persistedId);
+        return {
+            id: persistedId,
+            productId,
+            url: image.url,
+            alt: image.filename,
+            isPrimary: index === 0,
+            sortOrder: index,
+        };
+    });
+    return { rows, imageIdMap };
+}
+
+function prepareProductVariantImageWrite(
+    productId: string,
+    data: CreateProductInput | UpdateProductInput,
+    images: ReturnType<typeof prepareProductImageRows>,
+    variants: Array<{
+        id: string;
+        size: string | null;
+        color: string | null;
+        sizeSortOrder?: number | null;
+        colorSortOrder?: number | null;
+        isDefault: boolean;
+        deletedAt?: Date | string | number | null;
+        createdAt?: Date | string | number | null;
+    }>,
+) {
+    const legacy = readLegacyVariantImageSettings(data.metaDescription);
+    const enabled = data.variantImagesEnabled ?? legacy.enabled;
+    const axis: VariantImageAxis = data.variantImageAxis ?? legacy.axis;
+    const legacyMappings = data.variantImageMappings === undefined && legacy.enabled
+        ? synthesizeLegacyVariantImageMappings({
+            productId,
+            axis,
+            images: images.rows,
+            variants,
+        })
+        : [];
+    const requestedMappings = data.variantImageMappings ?? legacyMappings.map((mapping) => ({
+        imageId: mapping.imageId,
+        variantId: mapping.variantId,
+        optionAxis: mapping.optionAxis,
+        optionValue: mapping.optionValue,
+        sortOrder: mapping.sortOrder,
+    }));
+
+    return {
+        enabled,
+        axis,
+        metaDescription: cleanVariantImageMetaDescription(data.metaDescription),
+        mappings: prepareVariantImageMappingsForWrite({
+            productId,
+            enabled,
+            axis,
+            mappings: requestedMappings,
+            imageIdMap: images.imageIdMap,
+            variants,
+            createId: () => `pvim_${nanoid()}`,
+        }),
+    };
 }
 
 function isSimpleDefaultSkuSet(variants: Array<{ isDefault: boolean; size: string | null; color: string | null }>): boolean {
@@ -378,6 +468,8 @@ export async function getProductDetails(
             variantOption2Label: products.variantOption2Label,
             variantOption1Schema: products.variantOption1Schema,
             variantOption2Schema: products.variantOption2Schema,
+            variantImagesEnabled: products.variantImagesEnabled,
+            variantImageAxis: products.variantImageAxis,
             createdAt: products.createdAt,
             updatedAt: products.updatedAt,
             deletedAt: products.deletedAt,
@@ -396,14 +488,32 @@ export async function getProductDetails(
 
     if (!result) return null;
 
-    const [variants, images, richContent, attributeValues] = await Promise.all([
+    const [variants, imageRows, richContent, attributeValues] = await Promise.all([
         db
             .select()
             .from(productVariants)
             .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt))),
         db
-            .select()
+            .select({
+                id: productImages.id,
+                productId: productImages.productId,
+                url: productImages.url,
+                alt: productImages.alt,
+                isPrimary: productImages.isPrimary,
+                sortOrder: productImages.sortOrder,
+                createdAt: productImages.createdAt,
+                mappingId: productVariantImageMappings.id,
+                mappingVariantId: productVariantImageMappings.variantId,
+                mappingOptionAxis: productVariantImageMappings.optionAxis,
+                mappingOptionValue: productVariantImageMappings.optionValue,
+                mappingNormalizedOptionValue: productVariantImageMappings.normalizedOptionValue,
+                mappingSortOrder: productVariantImageMappings.sortOrder,
+            })
             .from(productImages)
+            .leftJoin(
+                productVariantImageMappings,
+                eq(productVariantImageMappings.imageId, productImages.id),
+            )
             .where(eq(productImages.productId, id))
             .orderBy(productImages.sortOrder),
         db
@@ -420,9 +530,44 @@ export async function getProductDetails(
             .from(productAttributeValues)
             .where(eq(productAttributeValues.productId, id)),
     ]);
+    const images = imageRows.map((image) => ({
+        id: image.id,
+        productId: image.productId,
+        url: image.url,
+        alt: image.alt,
+        isPrimary: image.isPrimary,
+        sortOrder: image.sortOrder,
+        createdAt: image.createdAt,
+    }));
+    const storedMappings = imageRows.flatMap((image) =>
+        image.mappingId
+            ? [{
+                id: image.mappingId,
+                productId: id,
+                imageId: image.id,
+                variantId: image.mappingVariantId,
+                optionAxis: image.mappingOptionAxis,
+                optionValue: image.mappingOptionValue,
+                normalizedOptionValue: image.mappingNormalizedOptionValue,
+                sortOrder: image.mappingSortOrder ?? 0,
+            }]
+            : []
+    );
+    const variantImageRead = resolveVariantImageReadModel({
+        productId: id,
+        variantImagesEnabled: result.variantImagesEnabled,
+        variantImageAxis: result.variantImageAxis,
+        metaDescription: result.metaDescription,
+        storedMappings,
+        images,
+        variants,
+    });
 
     return {
         ...result,
+        metaDescription: variantImageRead.metaDescription,
+        variantImagesEnabled: variantImageRead.enabled,
+        variantImageAxis: variantImageRead.axis,
         createdAt: requireProductTimestamp(result.createdAt, "created timestamp"),
         updatedAt: requireProductTimestamp(result.updatedAt, "updated timestamp"),
         deletedAt: result.deletedAt
@@ -433,6 +578,7 @@ export async function getProductDetails(
             ...img,
             createdAt: requireProductTimestamp(img.createdAt, "image created timestamp"),
         })),
+        variantImageMappings: variantImageRead.mappings,
         additionalInfo: richContent.map((item) => ({
             id: item.id,
             title: item.title,
@@ -531,6 +677,22 @@ export async function createProduct(db: Database, data: CreateProductInput): Pro
     }
 
     const productId = "prod_" + nanoid();
+    const defaultVariant = defaultVariantValues(productId, data.price);
+    const preparedImages = prepareProductImageRows(productId, data.images, true);
+    const variantImages = prepareProductVariantImageWrite(
+        productId,
+        data,
+        preparedImages,
+        [{
+            id: defaultVariant.id,
+            size: defaultVariant.size,
+            color: defaultVariant.color,
+            sizeSortOrder: defaultVariant.sizeSortOrder,
+            colorSortOrder: defaultVariant.colorSortOrder,
+            isDefault: defaultVariant.isDefault,
+            deletedAt: null,
+        }],
+    );
 
     // Drizzle D1 batch() requires specific tuple types
     const batchOps: unknown[] = [
@@ -542,7 +704,7 @@ export async function createProduct(db: Database, data: CreateProductInput): Pro
             categoryId: data.categoryId,
             slug: data.slug,
             metaTitle: data.metaTitle || null,
-            metaDescription: data.metaDescription || null,
+            metaDescription: variantImages.metaDescription,
             canonicalPath: data.canonicalPath ?? null,
             noIndex: data.noIndex ?? false,
             excludeFromSitemap: data.excludeFromSitemap ?? false,
@@ -556,6 +718,8 @@ export async function createProduct(db: Database, data: CreateProductInput): Pro
                 data.variantOption1Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
             variantOption2Schema:
                 data.variantOption2Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+            variantImagesEnabled: variantImages.enabled,
+            variantImageAxis: variantImages.axis,
             isActive: data.isActive,
             discountType: data.discountType || "percentage",
             discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
@@ -565,22 +729,19 @@ export async function createProduct(db: Database, data: CreateProductInput): Pro
             updatedAt: sql`unixepoch()`,
             deletedAt: null,
         }),
-        db.insert(productVariants).values(defaultVariantValues(productId, data.price)),
+        db.insert(productVariants).values(defaultVariant),
     ];
 
-    if (data.images.length > 0) {
-        batchOps.push(
-            db.insert(productImages).values(
-                data.images.map((image, index) => ({
-                    id: "img_" + nanoid(),
-                    productId,
-                    url: image.url,
-                    alt: image.filename,
-                    isPrimary: index === 0,
-                    sortOrder: index,
-                })),
-            ),
-        );
+    if (preparedImages.rows.length > 0) {
+        batchOps.push(...preparedImages.rows.map((image) =>
+            db.insert(productImages).values(image)
+        ));
+    }
+
+    if (variantImages.mappings.length > 0) {
+        batchOps.push(...variantImages.mappings.map((mapping) =>
+            db.insert(productVariantImageMappings).values(mapping)
+        ));
     }
 
     if (data.additionalInfo && data.additionalInfo.length > 0) {
@@ -667,15 +828,36 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
             sortOrder: item.sortOrder,
         }));
 
-    const activeVariants = await db
-        .select({
-            id: productVariants.id,
-            isDefault: productVariants.isDefault,
-            size: productVariants.size,
-            color: productVariants.color,
-        })
-        .from(productVariants)
-        .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt)));
+    const [activeVariants, existingImages] = await Promise.all([
+        db
+            .select({
+                id: productVariants.id,
+                isDefault: productVariants.isDefault,
+                size: productVariants.size,
+                color: productVariants.color,
+                sizeSortOrder: productVariants.sizeSortOrder,
+                colorSortOrder: productVariants.colorSortOrder,
+                createdAt: productVariants.createdAt,
+            })
+            .from(productVariants)
+            .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt))),
+        db
+            .select({ id: productImages.id, url: productImages.url })
+            .from(productImages)
+            .where(eq(productImages.productId, id)),
+    ]);
+    const preparedImages = prepareProductImageRows(
+        id,
+        data.images,
+        false,
+        new Map(existingImages.map((image) => [image.url, image.id])),
+    );
+    const variantImages = prepareProductVariantImageWrite(
+        id,
+        data,
+        preparedImages,
+        activeVariants,
+    );
 
     // Drizzle D1 batch() requires specific tuple types
     const batchOps: unknown[] = [
@@ -687,7 +869,7 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
                 categoryId: data.categoryId,
                 slug: data.slug,
                 metaTitle: data.metaTitle,
-                metaDescription: data.metaDescription,
+                metaDescription: variantImages.metaDescription,
                 canonicalPath: data.canonicalPath ?? null,
                 noIndex: data.noIndex ?? false,
                 excludeFromSitemap: data.excludeFromSitemap ?? false,
@@ -701,6 +883,8 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
                     data.variantOption1Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
                 variantOption2Schema:
                     data.variantOption2Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+                variantImagesEnabled: variantImages.enabled,
+                variantImageAxis: variantImages.axis,
                 isActive: data.isActive,
                 discountType: data.discountType || "percentage",
                 discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage ?? null) : 0,
@@ -714,19 +898,10 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
         db.delete(productRichContent).where(eq(productRichContent.productId, id)),
     ];
 
-    if (data.images.length > 0) {
-        batchOps.push(
-            db.insert(productImages).values(
-                data.images.map((image, index) => ({
-                    id: image.id.startsWith("temp_") ? `img_${nanoid()}` : image.id,
-                    productId: id,
-                    url: image.url,
-                    alt: image.filename,
-                    isPrimary: index === 0,
-                    sortOrder: index,
-                })),
-            ),
-        );
+    if (preparedImages.rows.length > 0) {
+        batchOps.push(...preparedImages.rows.map((image) =>
+            db.insert(productImages).values(image)
+        ));
     }
 
     if (attributeValuesToInsert.length > 0) {
@@ -774,6 +949,12 @@ export async function updateProduct(db: Database, id: string, data: UpdateProduc
                 })
                 .where(inArray(productVariants.id, defaultOptionRepairIds)),
         );
+    }
+
+    if (variantImages.mappings.length > 0) {
+        batchOps.push(...variantImages.mappings.map((mapping) =>
+            db.insert(productVariantImageMappings).values(mapping)
+        ));
     }
 
     // Drizzle D1 batch() requires specific tuple types — safe to cast
@@ -1020,6 +1201,8 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
                 size: productVariants.size,
                 color: productVariants.color,
                 stock: productVariants.stock,
+                reservedStock: productVariants.reservedStock,
+                preorderStock: productVariants.preorderStock,
                 stockVersion: productVariants.stockVersion,
             })
             .from(productVariants)
@@ -1073,10 +1256,20 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
             statements.push(buildStockMovementClaim(db, {
                 movementId: crypto.randomUUID(),
                 variantId: id,
-                stockVersion: currentVariant.stockVersion,
+                pool: "regular",
                 quantity: delta,
-                previousStock: currentVariant.stock,
-                newStock: stock,
+                before: {
+                    stock: currentVariant.stock,
+                    reservedStock: currentVariant.reservedStock,
+                    preorderStock: currentVariant.preorderStock,
+                    stockVersion: currentVariant.stockVersion,
+                },
+                after: {
+                    stock,
+                    reservedStock: currentVariant.reservedStock,
+                    preorderStock: currentVariant.preorderStock,
+                    stockVersion: currentVariant.stockVersion + 1,
+                },
                 notes: "Stocktake: Product variant bulk edit",
                 adminUserId,
             }));

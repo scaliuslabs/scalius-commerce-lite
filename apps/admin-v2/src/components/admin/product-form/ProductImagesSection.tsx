@@ -20,9 +20,15 @@ import {
 import { ChevronDown, Info } from "lucide-react";
 import { MediaManager } from "../media-manager";
 import { cn } from "@scalius/shared/utils";
-import type { ProductFormValues } from "./types";
+import type {
+  ProductFormValues,
+  ProductVariantImageMappingFormValue,
+} from "./types";
 import { toast } from "sonner";
-import type { VariantImageAxis } from "./utils";
+import {
+  reconcileVariantImageMappings,
+  type VariantImageAxis,
+} from "./utils";
 import {
   normalizeVariantOptionLabels,
   type VariantOptionLabels,
@@ -43,6 +49,9 @@ interface ProductImagesSectionProps {
   uniqueOptionOneValues: string[];
   uniqueOptionTwoValues: string[];
   optionLabels?: VariantOptionLabels;
+  variantImageMappings: ProductVariantImageMappingFormValue[];
+  setVariantImageMappings: (mappings: ProductVariantImageMappingFormValue[]) => void;
+  activeVariantIds: string[];
 }
 
 export const ProductImagesSection = memo(function ProductImagesSection({
@@ -54,6 +63,9 @@ export const ProductImagesSection = memo(function ProductImagesSection({
   uniqueOptionOneValues,
   uniqueOptionTwoValues,
   optionLabels,
+  variantImageMappings,
+  setVariantImageMappings,
+  activeVariantIds,
 }: ProductImagesSectionProps) {
   const [isOpen, setIsOpen] = React.useState(true);
   const normalizedOptionLabels = React.useMemo(
@@ -72,6 +84,27 @@ export const ProductImagesSection = memo(function ProductImagesSection({
     variantImageAxis === "option1"
       ? normalizedOptionLabels.option1
       : normalizedOptionLabels.option2;
+  const variantImageMappingByImageId = React.useMemo(
+    () => Object.fromEntries(variantImageMappings.map((mapping) => [
+      mapping.imageId,
+      mapping.optionValue || (mapping.variantId ? "SKU image" : ""),
+    ])),
+    [variantImageMappings],
+  );
+
+  const reconcileMappingsForImages = React.useCallback((
+    images: ProductFormValues["images"],
+    fillMissing: boolean,
+  ) => {
+    setVariantImageMappings(reconcileVariantImageMappings({
+      mappings: variantImageMappings,
+      images,
+      axis: variantImageAxis,
+      optionValues: variantImageOptions,
+      variantIds: activeVariantIds,
+      fillMissing,
+    }));
+  }, [activeVariantIds, setVariantImageMappings, variantImageAxis, variantImageMappings, variantImageOptions]);
 
   React.useEffect(() => {
     if (
@@ -168,7 +201,8 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                       <div className="space-y-2 text-xs">
                         <p className="font-semibold">Option image mapping</p>
                         <p>
-                          When enabled, images map to {axisLabel} in order:
+                          Image badges are stored against {axisLabel}. Dragging
+                          images changes gallery order without changing their mapping.
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {variantImageOptions.map((optionValue, idx) => (
@@ -242,13 +276,14 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     >
                       <DraggableImageGallery
                         images={field.value}
-                        variantImageOptions={variantImageOptions}
+                        variantImageMappingByImageId={variantImageMappingByImageId}
                         enableVariantImages={enableVariantImages}
                         onImagesReorder={(newImages) => field.onChange(newImages)}
                         onImageRemove={(index) => {
                           const newImages = [...field.value];
                           newImages.splice(index, 1);
                           field.onChange(newImages);
+                          reconcileMappingsForImages(newImages, false);
                         }}
                         maxVisible={6}
                       />
@@ -262,6 +297,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                         field.value,
                       );
                       field.onChange(updatedImages);
+                      reconcileMappingsForImages(updatedImages, true);
                     }}
                     onSelectMultiple={(files) => {
                       const updatedImages = handleMultipleImageSelect(
@@ -269,6 +305,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                         field.value,
                       );
                       field.onChange(updatedImages);
+                      reconcileMappingsForImages(updatedImages, true);
                     }}
                   />
                 </div>

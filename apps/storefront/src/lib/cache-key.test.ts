@@ -90,18 +90,22 @@ describe("storefront cache key canonicalization", () => {
     );
   });
 
-  it("collapses repeated HTML query params to the last rendered value", () => {
+  it("preserves repeated values in multi-select HTML cache identities", () => {
     expect(
       buildHtmlCacheBaseUrl(
         new URL("https://storefront.example.com/search?q=apple&q=banana&page=2&page=1&sortBy=price-desc&sortBy=newest"),
       ).toString(),
-    ).toBe("https://storefront.example.com/search?q=banana");
+    ).toBe(
+      "https://storefront.example.com/search?page=2&q=apple&q=banana&sortBy=price-desc",
+    );
 
     expect(
       buildHtmlCacheBaseUrl(
         new URL("https://storefront.example.com/categories/fish?size=M&size=L&color=Red&color=Blue"),
       ).toString(),
-    ).toBe("https://storefront.example.com/categories/fish?color=Blue&size=L");
+    ).toBe(
+      "https://storefront.example.com/categories/fish?color=Blue&color=Red&size=L&size=M",
+    );
   });
 
   it("can preserve empty values when a caller needs exact query semantics", () => {

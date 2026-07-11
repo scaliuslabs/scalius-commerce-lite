@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import type { BuyerPriceRange, FilterableAttribute } from "@/lib/api";
+import type { BuyerPriceRange, ProductFacet } from "@/lib/api";
+import type { ProductListFilterState } from "@/lib/product-list-query";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
 import {
@@ -22,9 +23,10 @@ import {
 import { normalizeSearchQuery } from "@/lib/search-query";
 
 interface CategoryFiltersProps {
-  attributes: FilterableAttribute[];
-  currentFilters: Record<string, string>;
+  facets: ProductFacet[];
+  currentFilters: ProductListFilterState;
   categorySlug?: string;
+  resetPath?: string;
   priceRange?: BuyerPriceRange;
 }
 
@@ -33,25 +35,32 @@ interface CategoryFiltersProps {
  * Separates price filters from other filters for independent state management
  */
 const getInitialState = (
-  currentFilters: Record<string, string>,
+  currentFilters: ProductListFilterState,
   priceRange?: BuyerPriceRange,
 ) => {
   const defaultMinPrice = priceRange?.min ?? DEFAULT_MIN_PRICE;
   const defaultMaxPrice = priceRange?.max ?? DEFAULT_MAX_PRICE;
   const minPrice = parsePriceFilterValue(
-    currentFilters.minPrice,
+    Array.isArray(currentFilters.minPrice)
+      ? currentFilters.minPrice.at(-1)
+      : currentFilters.minPrice,
     defaultMinPrice,
   );
   const maxPrice = parsePriceFilterValue(
-    currentFilters.maxPrice,
+    Array.isArray(currentFilters.maxPrice)
+      ? currentFilters.maxPrice.at(-1)
+      : currentFilters.maxPrice,
     defaultMaxPrice,
   );
-  const filters: Record<string, string | boolean> = {};
+  const filters: Record<string, string[] | boolean> = {};
 
   // Extract non-navigation filters (exclude URL navigation and price params)
   Object.entries(currentFilters).forEach(([key, value]) => {
     if (!["q", "page", "sortBy", "minPrice", "maxPrice"].includes(key)) {
-      filters[key] = value === "true" ? true : value;
+      const values = Array.isArray(value) ? value : [value];
+      filters[key] = values.length === 1 && values[0] === "true"
+        ? true
+        : values;
     }
   });
 
@@ -80,9 +89,10 @@ const getInitialState = (
  * - All state is synchronized with URL parameters
  */
 export default function CategoryFilters({
-  attributes,
+  facets,
   currentFilters,
   categorySlug,
+  resetPath,
   priceRange,
 }: CategoryFiltersProps) {
   // Parse initial state from URL parameters
@@ -144,11 +154,15 @@ export default function CategoryFilters({
   useEffect(() => {
     if (!priceState.userModified) {
       const newMinPrice = parsePriceFilterValue(
-        currentFilters.minPrice,
+        Array.isArray(currentFilters.minPrice)
+          ? currentFilters.minPrice.at(-1)
+          : currentFilters.minPrice,
         priceRange?.min ?? DEFAULT_MIN_PRICE,
       );
       const newMaxPrice = parsePriceFilterValue(
-        currentFilters.maxPrice,
+        Array.isArray(currentFilters.maxPrice)
+          ? currentFilters.maxPrice.at(-1)
+          : currentFilters.maxPrice,
         priceRange?.max ?? DEFAULT_MAX_PRICE,
       );
 
@@ -197,7 +211,8 @@ export default function CategoryFilters({
       // Core navigation parameters
       if (query) finalParams.set("q", query);
       finalParams.set("page", "1"); // Always reset to first page
-      finalParams.set("sortBy", formData.get("sortBy")?.toString() || "newest");
+      const sortBy = formData.get("sortBy")?.toString();
+      if (sortBy && sortBy !== "newest") finalParams.set("sortBy", sortBy);
 
       // Price parameters (only if explicitly requested AND price was changed)
       appendPriceFilterParams(finalParams, {
@@ -210,9 +225,10 @@ export default function CategoryFilters({
 
       // Other filter parameters (switches, attributes)
       Object.entries(selectedFilters).forEach(([key, value]) => {
-        if (value !== "" && value !== false) {
-          finalParams.set(key, String(value));
-        }
+        if (value === false) return;
+        if (Array.isArray(value)) {
+          for (const selectedValue of value) finalParams.append(key, selectedValue);
+        } else if (value === true) finalParams.set(key, "true");
       });
 
       // Navigate to new URL
@@ -432,12 +448,17 @@ export default function CategoryFilters({
   const handleAttributeClick = (attrSlug: string, value: string | null) => {
     setSelectedFilters((prev) => {
       const newFilters = { ...prev };
-      if (value === null || newFilters[attrSlug] === value) {
-        // Remove filter if clicking "All" or same value
+      if (value === null) {
         delete newFilters[attrSlug];
       } else {
-        // Set new filter value
-        newFilters[attrSlug] = value;
+        const selected = Array.isArray(newFilters[attrSlug])
+          ? newFilters[attrSlug]
+          : [];
+        const next = selected.includes(value)
+          ? selected.filter((candidate) => candidate !== value)
+          : [...selected, value];
+        if (next.length > 0) newFilters[attrSlug] = next;
+        else delete newFilters[attrSlug];
       }
       return newFilters;
     });
@@ -466,6 +487,18 @@ export default function CategoryFilters({
     return 1_000;
   }, [priceState.maxRange, priceState.minRange]);
 
+  const selectedAttributeChips = useMemo(() => facets.flatMap((facet) => {
+    const rawSelected = selectedFilters[facet.slug];
+    const selected: string[] = Array.isArray(rawSelected)
+      ? rawSelected
+      : [];
+    return selected.map((value) => ({ slug: facet.slug, label: facet.name, value }));
+  }), [facets, selectedFilters]);
+  const selectedAttributeValues = (slug: string): string[] => {
+    const selected = selectedFilters[slug];
+    return Array.isArray(selected) ? selected : [];
+  };
+
   return (
     <>
       {/* Main Filter Content */}
@@ -473,8 +506,24 @@ export default function CategoryFilters({
         <Accordion
           type="multiple"
           className="w-full space-y-3"
-          defaultValue={["general", "price", ...attributes.map((a) => a.slug)]}
+          defaultValue={["general", "price", ...facets.map((facet) => facet.slug)]}
         >
+          {selectedAttributeChips.length > 0 && (
+            <div className="flex flex-wrap gap-1.5" aria-label="Selected filters">
+              {selectedAttributeChips.map((chip) => (
+                <button
+                  key={`${chip.slug}:${chip.value}`}
+                  type="button"
+                  onClick={() => handleAttributeClick(chip.slug, chip.value)}
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                  aria-label={`Remove ${chip.label}: ${chip.value}`}
+                >
+                  <span>{chip.label}: {chip.value}</span>
+                  <span aria-hidden="true">×</span>
+                </button>
+              ))}
+            </div>
+          )}
           {/* General Filters Section */}
           <AccordionItem
             value="general"
@@ -558,7 +607,7 @@ export default function CategoryFilters({
                 <div className="grid grid-cols-2 gap-3">
                   {/* Min Price Input */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-2">
+                    <label htmlFor="catalog-min-price" className="block text-xs font-medium text-gray-600 mb-2">
                       Minimum
                     </label>
                     <div className="relative">
@@ -566,6 +615,7 @@ export default function CategoryFilters({
                         {getCurrencySymbol()}
                       </span>
                       <Input
+                        id="catalog-min-price"
                         type="number"
                         value={priceState.minPriceInput}
                         onChange={(e) =>
@@ -582,7 +632,7 @@ export default function CategoryFilters({
 
                   {/* Max Price Input */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-2">
+                    <label htmlFor="catalog-max-price" className="block text-xs font-medium text-gray-600 mb-2">
                       Maximum
                     </label>
                     <div className="relative">
@@ -590,6 +640,7 @@ export default function CategoryFilters({
                         {getCurrencySymbol()}
                       </span>
                       <Input
+                        id="catalog-max-price"
                         type="number"
                         value={priceState.maxPriceInput}
                         onChange={(e) =>
@@ -609,7 +660,7 @@ export default function CategoryFilters({
           </AccordionItem>
 
           {/* Dynamic Attribute Filters */}
-          {attributes.map((attr) => (
+          {facets.map((attr) => (
             <AccordionItem
               key={attr.id}
               value={attr.slug}
@@ -626,7 +677,7 @@ export default function CategoryFilters({
                     onClick={() => handleAttributeClick(attr.slug, null)}
                     className={cn(
                       "font-medium rounded-lg border px-3 py-2 text-sm transition-colors",
-                      !selectedFilters[attr.slug]
+                      selectedAttributeValues(attr.slug).length === 0
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-white hover:bg-gray-50 border-gray-200",
                     )}
@@ -635,21 +686,31 @@ export default function CategoryFilters({
                   </button>
 
                   {/* Attribute Value Buttons */}
-                  {attr.values.map((value) => (
+                  {attr.values.map(({ value, count }) => {
+                    const selected = selectedAttributeValues(attr.slug).includes(value);
+                    const disabled = count === 0 && !selected;
+                    return (
                     <button
                       key={value}
                       type="button"
                       onClick={() => handleAttributeClick(attr.slug, value)}
+                      disabled={disabled}
+                      aria-pressed={selected}
                       className={cn(
-                        "font-medium rounded-lg border px-3 py-2 text-sm transition-colors",
-                        selectedFilters[attr.slug] === value
+                        "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                        selected
                           ? "bg-primary text-primary-foreground border-primary"
                           : "bg-white hover:bg-gray-50 border-gray-200",
                       )}
                     >
-                      {value}
+                      <span>{value}</span>
+                      <span className={cn(
+                        "text-[11px] tabular-nums",
+                        selected ? "text-primary-foreground/80" : "text-gray-400",
+                      )}>{count}</span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -659,7 +720,7 @@ export default function CategoryFilters({
         {/* Desktop Reset Button */}
         <div className="pt-6 hidden lg:block">
           <Button variant="outline" asChild className="w-full">
-            <a href={categorySlug ? `/categories/${categorySlug}` : "/search"}>
+            <a href={resetPath ?? (categorySlug ? `/categories/${categorySlug}` : "/search")}>
               Reset Filters
             </a>
           </Button>
@@ -671,7 +732,7 @@ export default function CategoryFilters({
         <div className="grid grid-cols-2 gap-3">
           {/* Mobile Reset Button */}
           <Button variant="outline" asChild className="h-12">
-            <a href={categorySlug ? `/categories/${categorySlug}` : "/search"}>
+            <a href={resetPath ?? (categorySlug ? `/categories/${categorySlug}` : "/search")}>
               Reset
             </a>
           </Button>

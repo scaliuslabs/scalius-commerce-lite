@@ -36,15 +36,19 @@ describe("storefront public listing indexes", () => {
         );
     });
 
-    it("registers the clean baseline as the sole migration", () => {
+    it("registers the baseline and additive catalog migrations contiguously", () => {
         const journal = JSON.parse(readFileSync(journalPath, "utf8"));
 
-        expect(journal.entries).toEqual([
-            expect.objectContaining({
-                idx: 0,
-                tag: "0000_blushing_jack_power",
-                breakpoints: true,
-            }),
+        expect(journal.entries.map((entry: { idx: number; tag: string }) => ({
+            idx: entry.idx,
+            tag: entry.tag,
+        }))).toEqual([
+            { idx: 0, tag: "0000_blushing_jack_power" },
+            { idx: 1, tag: "0001_lying_marvex" },
+            { idx: 2, tag: "0002_backfill_variant_image_mappings" },
+            { idx: 3, tag: "0003_aberrant_hex" },
+            { idx: 4, tag: "0004_validate_inventory_ledger_v2" },
         ]);
+        expect(journal.entries.every((entry: { breakpoints: boolean }) => entry.breakpoints)).toBe(true);
     });
 });

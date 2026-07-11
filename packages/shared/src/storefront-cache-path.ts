@@ -38,7 +38,11 @@ function appendSortedParams(
 }
 
 function getHtmlPathDefaults(pathname: string): Record<string, string | number> {
-  if (/^\/categories\/[^/]+$/.test(pathname) || /^\/search\/?$/.test(pathname)) {
+  if (
+    /^\/categories\/[^/]+$/.test(pathname) ||
+    /^\/collections\/[^/]+$/.test(pathname) ||
+    /^\/search\/?$/.test(pathname)
+  ) {
     return { page: 1, sortBy: "newest" };
   }
   return {};
@@ -71,20 +75,20 @@ export function canonicalizeStorefrontHtmlCachePath(path: string): string | null
 
   const ignored = getIgnoredParams(url.pathname);
   const defaults = getHtmlPathDefaults(url.pathname);
-  const valuesByKey = new Map<string, string>();
+  const entries: Array<[string, string]> = [];
 
   for (const [key, rawValue] of url.searchParams.entries()) {
     if (ignored.has(key)) continue;
     const value = normalizeStorefrontCacheQueryValue(key, rawValue);
-    valuesByKey.set(key, value);
+    entries.push([key, value]);
   }
 
-  const entries = [...valuesByKey.entries()].filter(([key, value]) => (
+  const filteredEntries = entries.filter(([key, value]) => (
     value !== "" &&
     !(Object.hasOwn(defaults, key) && value === String(defaults[key]))
   ));
   const params = new URLSearchParams();
-  appendSortedParams(params, entries);
+  appendSortedParams(params, filteredEntries);
   const query = params.toString();
   return `${url.pathname}${query ? `?${query}` : ""}`;
 }

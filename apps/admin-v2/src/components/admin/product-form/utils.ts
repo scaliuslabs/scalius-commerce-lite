@@ -1,5 +1,8 @@
 // src/components/admin/product-form/utils.ts
-import type { ProductFormValues } from "./types";
+import type {
+  ProductFormValues,
+  ProductVariantImageMappingFormValue,
+} from "./types";
 import type { CreateProductInput } from "@/lib/api-functions/products";
 
 export type VariantImageAxis = "option1" | "option2";
@@ -97,21 +100,93 @@ export const resolveVariantImageAxis = (
   return preferredAxis;
 };
 
-/**
- * Add variant images marker to meta description
- */
-export const addVariantImagesMarker = (
-  metaDescription: string | null | undefined,
-  enableVariantImages: boolean,
-  variantImageAxis: VariantImageAxis,
-): string | null => {
-  const cleaned = cleanMetaDescription(metaDescription);
+const normalizeMappingOptionValue = (value: string): string =>
+  value.trim().toLocaleLowerCase("en-US");
 
-  if (enableVariantImages) {
-    return `${cleaned || ""}<!--variant_images:${variantImageAxis}-->`;
+/**
+ * Keeps explicit image associations stable by image ID. Reordering images does
+ * not change a mapping; callers opt into filling newly-unmapped option values
+ * only for explicit enable/axis/add-image actions.
+ */
+export const reconcileVariantImageMappings = ({
+  mappings,
+  images,
+  axis,
+  optionValues,
+  variantIds = [],
+  fillMissing = false,
+}: {
+  mappings: readonly ProductVariantImageMappingFormValue[];
+  images: readonly ProductFormValues["images"][number][];
+  axis: VariantImageAxis;
+  optionValues: readonly string[];
+  variantIds?: readonly string[];
+  fillMissing?: boolean;
+}): ProductVariantImageMappingFormValue[] => {
+  const imageIds = new Set(images.map((image) => image.id));
+  const validVariantIds = new Set(variantIds);
+  const canonicalOptionValueByKey = new Map(
+    optionValues.map((value) => [normalizeMappingOptionValue(value), value.trim()]),
+  );
+  const usedImageIds = new Set<string>();
+
+  const reconciled: ProductVariantImageMappingFormValue[] = [];
+  for (const mapping of mappings) {
+    if (!imageIds.has(mapping.imageId) || usedImageIds.has(mapping.imageId)) {
+      continue;
+    }
+    if (mapping.variantId) {
+      if (!validVariantIds.has(mapping.variantId)) continue;
+      usedImageIds.add(mapping.imageId);
+      reconciled.push({
+        imageId: mapping.imageId,
+        variantId: mapping.variantId,
+        optionAxis: null,
+        optionValue: null,
+        sortOrder: mapping.sortOrder ?? 0,
+      });
+      continue;
+    }
+    if (mapping.optionAxis !== axis || !mapping.optionValue) continue;
+    const canonicalOptionValue = canonicalOptionValueByKey.get(
+      normalizeMappingOptionValue(mapping.optionValue),
+    );
+    if (!canonicalOptionValue) continue;
+    usedImageIds.add(mapping.imageId);
+    reconciled.push({
+      imageId: mapping.imageId,
+      variantId: null,
+      optionAxis: axis,
+      optionValue: canonicalOptionValue,
+      sortOrder: mapping.sortOrder ?? 0,
+    });
   }
 
-  return cleaned;
+  if (!fillMissing) return reconciled;
+
+  const mappedOptionKeys = new Set(
+    reconciled.flatMap((mapping) => mapping.optionValue
+      ? [normalizeMappingOptionValue(mapping.optionValue)]
+      : []),
+  );
+  const unusedImages = images.filter((image) => !usedImageIds.has(image.id));
+  for (const optionValue of optionValues) {
+    const optionKey = normalizeMappingOptionValue(optionValue);
+    if (mappedOptionKeys.has(optionKey)) continue;
+    const image = unusedImages.shift();
+    if (!image) break;
+    usedImageIds.add(image.id);
+    mappedOptionKeys.add(optionKey);
+    reconciled.push({
+      imageId: image.id,
+      variantId: null,
+      optionAxis: axis,
+      optionValue: optionValue.trim(),
+      sortOrder: reconciled.length,
+    });
+  }
+
+  return reconciled;
 };
 
 /**
@@ -121,12 +196,9 @@ export const formatFormValuesForSubmission = (
   values: ProductFormValues,
   enableVariantImages: boolean,
   variantImageAxis: VariantImageAxis,
+  variantImageMappings: readonly ProductVariantImageMappingFormValue[],
 ): CreateProductInput => {
-  const metaDescription = addVariantImagesMarker(
-    values.metaDescription,
-    enableVariantImages,
-    variantImageAxis,
-  );
+  const metaDescription = cleanMetaDescription(values.metaDescription);
 
   // Ensure only ONE discount type is active by clearing the unused field
   const discountPercentage =
@@ -153,6 +225,11 @@ export const formatFormValuesForSubmission = (
     variantOption2Label: values.variantOption2Label,
     variantOption1Schema: values.variantOption1Schema,
     variantOption2Schema: values.variantOption2Schema,
+    variantImagesEnabled: enableVariantImages,
+    variantImageAxis,
+    variantImageMappings: enableVariantImages
+      ? variantImageMappings.map((mapping) => ({ ...mapping }))
+      : [],
     discountPercentage,
     discountAmount,
     slug: values.slug,

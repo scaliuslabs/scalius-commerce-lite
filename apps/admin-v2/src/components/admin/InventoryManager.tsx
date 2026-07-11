@@ -47,6 +47,7 @@ import { inventoryQueryOptions } from "@/lib/api-query-options/inventory";
 import {
   adjustInventory,
   type InventoryMovement,
+  type InventoryLedgerHealth,
   type InventoryPagination,
   type InventoryStats,
   type InventoryVariant,
@@ -78,12 +79,68 @@ function getMovementBadge(type: string) {
     adjusted: { label: "Adjusted", className: "bg-amber-50 text-amber-700 border-amber-200" },
     preorder_reserved: { label: "Pre-order", className: "bg-purple-50 text-purple-700 border-purple-200" },
     preorder_deducted: { label: "Pre-order Deducted", className: "bg-purple-50 text-purple-700 border-purple-200" },
+    restored: { label: "Restored", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   };
   return map[type] ?? { label: type, className: "bg-gray-50 text-gray-700 border-gray-200" };
 }
 
-function getMovementStockDelta(movement: InventoryMovement) {
-  return movement.newStock - movement.previousStock;
+type MovementCounterChange = {
+  label: string;
+  previous: number;
+  next: number;
+  delta: number;
+};
+
+function getMovementCounterChanges(movement: InventoryMovement): MovementCounterChange[] {
+  if (movement.ledgerVersion !== 2) {
+    return [{
+      label: "Stock",
+      previous: movement.previousStock,
+      next: movement.newStock,
+      delta: movement.newStock - movement.previousStock,
+    }];
+  }
+
+  const changes: MovementCounterChange[] = [];
+  if (movement.stockDelta) {
+    changes.push({
+      label: "On hand",
+      previous: movement.previousStock,
+      next: movement.newStock,
+      delta: movement.stockDelta,
+    });
+  }
+  if (
+    movement.reservedStockDelta &&
+    movement.previousReservedStock != null &&
+    movement.newReservedStock != null
+  ) {
+    changes.push({
+      label: "Reserved",
+      previous: movement.previousReservedStock,
+      next: movement.newReservedStock,
+      delta: movement.reservedStockDelta,
+    });
+  }
+  if (
+    movement.preorderStockDelta &&
+    movement.previousPreorderStock != null &&
+    movement.newPreorderStock != null
+  ) {
+    changes.push({
+      label: "Preorder",
+      previous: movement.previousPreorderStock,
+      next: movement.newPreorderStock,
+      delta: movement.preorderStockDelta,
+    });
+  }
+
+  return changes.length > 0 ? changes : [{
+    label: "Counters",
+    previous: movement.previousStock,
+    next: movement.newStock,
+    delta: 0,
+  }];
 }
 
 function timeAgo(dateValue: string | number) {
@@ -159,15 +216,20 @@ export function InventoryManager() {
 
   const movementsData = useMemo(() => {
     const raw = movementsQuery.data;
-    if (!raw) return { movements: [] as InventoryMovement[], pagination: null as InventoryPagination | null };
+    if (!raw) return {
+      movements: [] as InventoryMovement[],
+      pagination: null as InventoryPagination | null,
+      ledgerHealth: null as InventoryLedgerHealth | null,
+    };
     return {
       movements: raw.movements || [],
       pagination: raw.pagination || null,
+      ledgerHealth: raw.ledgerHealth || null,
     };
   }, [movementsQuery.data]);
 
   const { variants, stats, pagination } = variantsData;
-  const { movements, pagination: movementsPagination } = movementsData;
+  const { movements, pagination: movementsPagination, ledgerHealth } = movementsData;
 
   const loading = activeTab === "variants" ? variantsQuery.isFetching : movementsQuery.isFetching;
   const isInitialLoad = activeTab === "variants" ? variantsQuery.isLoading : movementsQuery.isLoading;
@@ -416,6 +478,15 @@ export function InventoryManager() {
             aria-labelledby="inventory-movements-tab"
             className="p-2 sm:p-3"
           >
+            {ledgerHealth ? (
+              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                <span>{ledgerHealth.v2Rows} verified v2 movements across {ledgerHealth.v2Variants} SKUs</span>
+                {ledgerHealth.legacyRows > 0 ? <span>{ledgerHealth.legacyRows} legacy history rows</span> : null}
+                {ledgerHealth.invalidV2Rows > 0 ? (
+                  <span className="font-medium text-destructive">{ledgerHealth.invalidV2Rows} invalid v2 rows require reconciliation</span>
+                ) : null}
+              </div>
+            ) : null}
             <div className="border rounded-md overflow-hidden relative">
               {loading && movements.length > 0 && (
                 <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
@@ -453,13 +524,18 @@ export function InventoryManager() {
                   ) : (
                     movements.map((m) => {
                       const badge = getMovementBadge(m.type);
-                      const stockDelta = getMovementStockDelta(m);
+                      const counterChanges = getMovementCounterChanges(m);
                       return (
                         <TableRow key={m.id} className="hover:bg-muted/50">
                           <TableCell className="py-2 pl-3">
                             <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-medium whitespace-nowrap", badge.className)}>
                               {badge.label}
                             </Badge>
+                            {m.ledgerVersion === 2 && m.pool ? (
+                              <div className="mt-1 text-[10px] text-muted-foreground whitespace-nowrap">
+                                {m.pool}{m.reservationGeneration ? ` · g${m.reservationGeneration}` : ""}
+                              </div>
+                            ) : null}
                           </TableCell>
                           <TableCell className="py-2 text-xs">
                             <div className="font-medium text-foreground">{m.variantSku || m.variantId.slice(0, 8)}</div>
@@ -469,10 +545,17 @@ export function InventoryManager() {
                             {m.notes || "\u2014"}
                           </TableCell>
                           <TableCell className="py-2 text-right">
-                            <div className={cn("text-xs font-bold", stockDelta > 0 ? "text-emerald-600 dark:text-emerald-400" : stockDelta < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                              {stockDelta > 0 ? "+" : ""}{stockDelta}
+                            <div className="space-y-0.5">
+                              {counterChanges.map((change) => (
+                                <div key={change.label} className="whitespace-nowrap">
+                                  <span className="text-[10px] text-muted-foreground">{change.label} </span>
+                                  <span className={cn("text-xs font-bold", change.delta > 0 ? "text-emerald-600 dark:text-emerald-400" : change.delta < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                                    {change.delta > 0 ? "+" : ""}{change.delta}
+                                  </span>
+                                  <span className="ml-1 text-[10px] text-muted-foreground">{change.previous} → {change.next}</span>
+                                </div>
+                              ))}
                             </div>
-                            <div className="text-[10px] text-muted-foreground">{m.previousStock} → {m.newStock}</div>
                           </TableCell>
                           <TableCell className="py-2 text-right pr-3 text-[11px] text-muted-foreground whitespace-nowrap">
                             {timeAgo(m.createdAt)}

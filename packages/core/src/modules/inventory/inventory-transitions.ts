@@ -13,6 +13,13 @@ import { reserveStockBatch, type ReservationBatchItem } from "./reserve";
 import { checkAndAlertLowStock } from "./alerts";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
+import {
+    buildInventoryLedgerV2Edge,
+    getActiveReservationGeneration,
+    getReservationGenerationBalances,
+    type InventoryLedgerV2EdgeFields,
+    type InventoryLedgerV2Event,
+} from "./ledger-v2";
 
 // The set of order statuses that mean "this order is dead / returned"
 const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
@@ -89,10 +96,8 @@ type InventoryTransitionMovementClaim = {
     orderId: string;
     type: "deducted" | "preorder_deducted" | "released" | "restored";
     quantity: number;
-    previousStock: number;
-    newStock: number;
     notes: string;
-};
+} & InventoryLedgerV2EdgeFields;
 
 /**
  * Build inventory SQL statements for a status change WITHOUT executing them.
@@ -585,16 +590,34 @@ async function loadTransitionVariantStates(
 async function buildTransitionMovementClaims(
     db: Database,
     order: InventoryTransitionOrder,
-    operation: InventoryTransitionOperation,
+    operation: StrictMovementOperation,
     entries: ReservationEntry[],
     variants: Map<string, InventoryVariantState>,
     pool: InventoryPoolName,
     claimKey?: string,
 ): Promise<InventoryTransitionMovementClaim[]> {
-    return Promise.all(entries.map(async (entry) => {
+    const claims: InventoryTransitionMovementClaim[] = [];
+    for (const entry of entries) {
         const variant = variants.get(entry.variantId)!;
-        const { previousStock, newStock } = getTransitionStockSnapshot(operation, entry.quantity, variant, pool);
-        return {
+        const reservationGeneration = await loadTransitionReservationGeneration(
+            db,
+            order.id,
+            entry.variantId,
+            pool,
+            operation,
+        );
+        const edge = buildInventoryLedgerV2Edge({
+            pool,
+            reservationGeneration,
+            before: {
+                stock: variant.stock,
+                reservedStock: variant.reservedStock,
+                preorderStock: variant.preorderStock,
+                stockVersion: variant.stockVersion,
+            },
+            after: getTransitionCounterStateAfter(operation, entry.quantity, variant, pool),
+        });
+        claims.push({
             id: await createTransitionMovementId({
                 orderId: order.id,
                 variantId: entry.variantId,
@@ -607,11 +630,11 @@ async function buildTransitionMovementClaims(
             orderId: order.id,
             type: getTransitionMovementType(operation, pool),
             quantity: operation === "release" ? -entry.quantity : entry.quantity,
-            previousStock,
-            newStock,
             notes: getTransitionMovementNotes(order.id, operation, entry.quantity),
-        };
-    }));
+            ...edge,
+        });
+    }
+    return claims;
 }
 
 function buildTransitionMovementInsert(
@@ -639,6 +662,18 @@ function buildTransitionMovementInsert(
                 ${claim.newStock},
                 ${claim.notes},
                 NULL,
+                ${claim.ledgerVersion},
+                ${claim.pool},
+                ${claim.reservationGeneration},
+                ${claim.stockVersionBefore},
+                ${claim.stockVersionAfter},
+                ${claim.stockDelta},
+                ${claim.previousReservedStock},
+                ${claim.newReservedStock},
+                ${claim.reservedStockDelta},
+                ${claim.previousPreorderStock},
+                ${claim.newPreorderStock},
+                ${claim.preorderStockDelta},
                 unixepoch()
             FROM ${productVariants}
             WHERE ${productVariants.id} = ${claim.variantId}
@@ -812,36 +847,118 @@ function getTransitionVariantRollbackSet(
             : versionBump;
 }
 
-function getTransitionStockSnapshot(
+function getTransitionCounterStateAfter(
     operation: InventoryTransitionOperation,
     quantity: number,
     variant: InventoryVariantState,
     pool: InventoryPoolName,
-): { previousStock: number; newStock: number } {
-    const previousStock = pool === "preorder" ? variant.preorderStock : variant.stock;
-
+): InventoryVariantState {
     if (operation === "deduct") {
-        return {
-            previousStock,
-            newStock: pool === "regular" ? Math.max(0, variant.stock - quantity) : previousStock,
-        };
+        return pool === "regular"
+            ? {
+                ...variant,
+                stock: variant.stock - quantity,
+                reservedStock: variant.reservedStock - quantity,
+                stockVersion: variant.stockVersion + 1,
+            }
+            : {
+                ...variant,
+                reservedStock: variant.reservedStock - quantity,
+                stockVersion: variant.stockVersion + 1,
+            };
     }
 
     if (operation === "release") {
         return {
-            previousStock,
-            newStock: pool === "preorder" ? variant.preorderStock + quantity : previousStock,
+            ...variant,
+            reservedStock: variant.reservedStock - quantity,
+            preorderStock: pool === "preorder"
+                ? variant.preorderStock + quantity
+                : variant.preorderStock,
+            stockVersion: variant.stockVersion + 1,
         };
     }
 
     if (operation === "restore") {
-        return {
-            previousStock,
-            newStock: pool === "regular" || pool === "preorder" ? previousStock + quantity : previousStock,
-        };
+        if (pool === "regular") {
+            return { ...variant, stock: variant.stock + quantity, stockVersion: variant.stockVersion + 1 };
+        }
+        if (pool === "preorder") {
+            return {
+                ...variant,
+                preorderStock: variant.preorderStock + quantity,
+                stockVersion: variant.stockVersion + 1,
+            };
+        }
+        return { ...variant, stockVersion: variant.stockVersion + 1 };
     }
 
-    return { previousStock, newStock: previousStock };
+    return { ...variant, stockVersion: variant.stockVersion + 1 };
+}
+
+async function loadTransitionReservationGeneration(
+    db: Database,
+    orderId: string,
+    variantId: string,
+    pool: InventoryPoolName,
+    operation: StrictMovementOperation,
+): Promise<number> {
+    const rows = await db
+        .select({
+            id: inventoryMovements.id,
+            variantId: inventoryMovements.variantId,
+            orderId: inventoryMovements.orderId,
+            type: inventoryMovements.type,
+            ledgerVersion: inventoryMovements.ledgerVersion,
+            pool: inventoryMovements.pool,
+            reservationGeneration: inventoryMovements.reservationGeneration,
+            stockVersionBefore: inventoryMovements.stockVersionBefore,
+            stockVersionAfter: inventoryMovements.stockVersionAfter,
+            previousStock: inventoryMovements.previousStock,
+            newStock: inventoryMovements.newStock,
+            stockDelta: inventoryMovements.stockDelta,
+            previousReservedStock: inventoryMovements.previousReservedStock,
+            newReservedStock: inventoryMovements.newReservedStock,
+            reservedStockDelta: inventoryMovements.reservedStockDelta,
+            previousPreorderStock: inventoryMovements.previousPreorderStock,
+            newPreorderStock: inventoryMovements.newPreorderStock,
+            preorderStockDelta: inventoryMovements.preorderStockDelta,
+        })
+        .from(inventoryMovements)
+        .where(and(
+            eq(inventoryMovements.orderId, orderId),
+            eq(inventoryMovements.variantId, variantId),
+            eq(inventoryMovements.ledgerVersion, 2),
+            eq(inventoryMovements.pool, pool),
+        ))
+        .all();
+
+    const v2Rows = rows.filter((row) => row.ledgerVersion === 2);
+    if (v2Rows.length > 0) {
+        const events = v2Rows as InventoryLedgerV2Event[];
+        if (operation === "restore") {
+            const restoredGeneration = events
+                .filter((event) =>
+                    event.reservationGeneration != null &&
+                    (event.type === "deducted" || event.type === "preorder_deducted")
+                )
+                .reduce((maximum, event) => Math.max(maximum, event.reservationGeneration ?? 0), 0);
+            if (restoredGeneration > 0) return restoredGeneration;
+        }
+
+        const balances = getReservationGenerationBalances(events, { orderId, variantId, pool });
+        return getActiveReservationGeneration(balances)
+            ?? balances.at(-1)?.generation
+            ?? 1;
+    }
+
+    const legacyGeneration = await loadTransitionMovementGeneration(
+        db,
+        orderId,
+        variantId,
+        operation,
+    );
+    return Math.max(1, legacyGeneration);
 }
 
 function getTransitionMovementType(

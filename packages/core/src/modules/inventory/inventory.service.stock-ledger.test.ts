@@ -16,9 +16,11 @@ type MockStatement = {
 function createInventoryAdjustmentDbMock(variant: {
   id: string;
   stock: number;
+  reservedStock?: number;
   preorderStock: number;
   stockVersion: number;
 }) {
+  const persistedVariant = { reservedStock: 0, ...variant };
   const batchCalls: MockStatement[][] = [];
   const db = {
     select() {
@@ -27,7 +29,7 @@ function createInventoryAdjustmentDbMock(variant: {
           return {
             where() {
               return {
-                get: async () => variant,
+                get: async () => persistedVariant,
               };
             },
           };

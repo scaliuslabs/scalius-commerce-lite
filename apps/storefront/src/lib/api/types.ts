@@ -88,11 +88,24 @@ export interface PaginatedResponse<T> {
     totalPages: number;
   };
   priceRange?: BuyerPriceRange;
+  facets?: ProductFacet[];
 }
 
 export interface BuyerPriceRange {
   min: number;
   max: number;
+}
+
+export interface ProductFacetValue {
+  value: string;
+  count: number;
+}
+
+export interface ProductFacet {
+  id: string;
+  name: string;
+  slug: string;
+  values: ProductFacetValue[];
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +116,17 @@ export interface ProductRichContent {
   id: string;
   title: string;
   content: string;
+}
+
+export interface ProductVariantImageMapping {
+  id: string;
+  productId: string;
+  imageId: string;
+  variantId: string | null;
+  optionAxis: "option1" | "option2" | null;
+  optionValue: string | null;
+  normalizedOptionValue: string | null;
+  sortOrder: number;
 }
 
 export interface Product {
@@ -126,6 +150,8 @@ export interface Product {
   variantOption2Label?: string | null;
   variantOption1Schema?: ProductOptionSchema | null;
   variantOption2Schema?: ProductOptionSchema | null;
+  variantImagesEnabled?: boolean;
+  variantImageAxis?: "option1" | "option2";
   noIndex?: boolean;
   features?: string[];
   additionalInfo?: ProductRichContent[];
@@ -235,6 +261,9 @@ export interface CollectionWithProducts extends Collection {
   categories?: CategorySummary[];
   products?: Product[];
   featuredProduct?: Product | null;
+  pagination: PaginatedResponse<Product>["pagination"];
+  priceRange?: BuyerPriceRange;
+  facets?: ProductFacet[];
 }
 
 // ---------------------------------------------------------------------------

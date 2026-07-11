@@ -14,9 +14,10 @@ describe("InventoryManager boundaries", () => {
     expect(source).toContain("void movementsQuery.refetch()");
   });
 
-  it("reports the stock transition delta instead of the unsigned request quantity", () => {
-    expect(source).toContain("movement.newStock - movement.previousStock");
-    expect(source).toContain("const stockDelta = getMovementStockDelta(m)");
+  it("reports truthful physical, reserved, and preorder counter transitions", () => {
+    expect(source).toContain("getMovementCounterChanges");
+    expect(source).toContain("Reserved");
+    expect(source).toContain("Preorder");
   });
 
   it("exposes tab and adjustment controls to assistive technology", () => {

@@ -1,4 +1,4 @@
-import type { FilterableAttribute, ProductListOptions } from "@/lib/api";
+import type { ProductFacet, ProductListOptions } from "@/lib/api";
 import { HTML_CACHE_IGNORED_QUERY_PARAMS, buildCanonicalQueryString } from "./cache-key";
 import {
   DEFAULT_MIN_PRICE,
@@ -34,9 +34,11 @@ export interface ProductListQueryState {
   sortBy: ProductListSort;
   query: string;
   options: ProductListOptions;
-  currentFilters: Record<string, string>;
+  currentFilters: ProductListFilterState;
   redirectPath: string | null;
 }
+
+export type ProductListFilterState = Record<string, string | string[]>;
 
 export function buildProductListHref({
   pathname,
@@ -44,10 +46,12 @@ export function buildProductListHref({
   overrides = {},
 }: {
   pathname: string;
-  currentFilters: Record<string, string>;
+  currentFilters: ProductListFilterState;
   overrides?: Record<string, string | number | null | undefined>;
 }): string {
-  const nextFilters: Record<string, string | number> = { ...currentFilters };
+  const nextFilters: Record<string, string | number | string[]> = {
+    ...currentFilters,
+  };
   for (const [key, value] of Object.entries(overrides)) {
     if (value === null || value === undefined || value === "") {
       delete nextFilters[key];
@@ -75,7 +79,7 @@ export function buildProductListPaginationHref({
   page,
 }: {
   pathname: string;
-  currentFilters: Record<string, string>;
+  currentFilters: ProductListFilterState;
   page: number;
 }): string {
   return buildProductListHref({
@@ -128,19 +132,26 @@ function getLastParam(params: URLSearchParams, key: string): string | null {
   return values.length > 0 ? values[values.length - 1] : null;
 }
 
-function collectRenderableParams(params: URLSearchParams): Map<string, string> {
-  const valuesByKey = new Map<string, string>();
+function collectRenderableParams(params: URLSearchParams): Map<string, string[]> {
+  const valuesByKey = new Map<string, string[]>();
   for (const [key, value] of params.entries()) {
     if (IGNORED_PRODUCT_LIST_QUERY_PARAMS.has(key)) continue;
-    valuesByKey.set(key, value);
+    const values = valuesByKey.get(key) ?? [];
+    values.push(value);
+    valuesByKey.set(key, values);
   }
   return valuesByKey;
 }
 
-function hasRepeatedRenderableParams(params: URLSearchParams): boolean {
+function hasRepeatedSingletonParams(params: URLSearchParams): boolean {
   const seen = new Set<string>();
   for (const [key] of params.entries()) {
     if (IGNORED_PRODUCT_LIST_QUERY_PARAMS.has(key)) continue;
+    if (
+      !NAVIGATION_PARAM_SET.has(key) &&
+      !BOOLEAN_FILTER_SET.has(key) &&
+      !PRICE_FILTER_SET.has(key)
+    ) continue;
     if (seen.has(key)) return true;
     seen.add(key);
   }
@@ -148,19 +159,19 @@ function hasRepeatedRenderableParams(params: URLSearchParams): boolean {
 }
 
 function buildAttributeValueMap(
-  attributes: readonly FilterableAttribute[],
+  facets: readonly ProductFacet[],
 ): Map<string, Set<string>> {
   return new Map(
-    attributes.map((attribute) => [
-      attribute.slug,
-      new Set(attribute.values.filter(Boolean)),
+    facets.map((facet) => [
+      facet.slug,
+      new Set(facet.values.map(({ value }) => value).filter(Boolean)),
     ]),
   );
 }
 
 function appendCanonicalFilterParams(
   canonical: URLSearchParams,
-  currentFilters: Record<string, string>,
+  currentFilters: ProductListFilterState,
 ): void {
   const queryString = buildCanonicalQueryString(currentFilters, {
     defaultParams: {
@@ -175,10 +186,12 @@ function appendCanonicalFilterParams(
 
 export function resolveProductListQueryState({
   url,
-  attributes = [],
+  facets = [],
+  allowUnknownAttributes = false,
 }: {
   url: URL;
-  attributes?: readonly FilterableAttribute[];
+  facets?: readonly ProductFacet[];
+  allowUnknownAttributes?: boolean;
 }): ProductListQueryState {
   const params = url.searchParams;
   const rawQuery = getLastParam(params, "q");
@@ -186,17 +199,17 @@ export function resolveProductListQueryState({
   const { page, changed: pageChanged } = normalizePage(getLastParam(params, "page"));
   const { sortBy, changed: sortChanged } = normalizeSort(getLastParam(params, "sortBy"));
   const renderParams = collectRenderableParams(params);
-  const attributeValues = buildAttributeValueMap(attributes);
+  const attributeValues = buildAttributeValueMap(facets);
   const options: ProductListOptions = {
     page,
     limit: 20,
     sort: sortBy,
   };
-  const currentFilters: Record<string, string> = {};
+  const currentFilters: ProductListFilterState = {};
   let shouldRedirect =
     pageChanged ||
     sortChanged ||
-    hasRepeatedRenderableParams(params);
+    hasRepeatedSingletonParams(params);
 
   if (query) {
     options.search = query;
@@ -242,7 +255,11 @@ export function resolveProductListQueryState({
     currentFilters.maxPrice = String(maxPrice);
   }
 
-  for (const [key, value] of renderParams.entries()) {
+  for (const [key, rawValues] of renderParams.entries()) {
+    const values = Array.from(new Set(
+      rawValues.map((value) => value.trim()).filter(Boolean),
+    ));
+    const value = values.at(-1);
     if (!value) continue;
     if (NAVIGATION_PARAM_SET.has(key) || PRICE_FILTER_SET.has(key)) continue;
 
@@ -257,9 +274,25 @@ export function resolveProductListQueryState({
     }
 
     const allowedValues = attributeValues.get(key);
-    if (allowedValues?.has(value)) {
-      options[key] = value;
-      currentFilters[key] = value;
+    const validValues = allowedValues
+      ? values.filter((candidate) => allowedValues.has(candidate))
+      : [];
+    if (validValues.length > 0) {
+      if (validValues.length !== values.length) {
+        shouldRedirect = true;
+      }
+      options[key] = validValues;
+      currentFilters[key] = validValues;
+      continue;
+    }
+
+    if (
+      allowUnknownAttributes &&
+      /^[a-z0-9][a-z0-9-]{0,79}$/.test(key) &&
+      values.length > 0
+    ) {
+      options[key] = values;
+      currentFilters[key] = values;
       continue;
     }
 

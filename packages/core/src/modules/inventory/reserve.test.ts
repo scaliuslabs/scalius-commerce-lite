@@ -19,6 +19,27 @@ function createReservationReadDb(rows: unknown[]): Database {
 }
 
 describe("reserveStockBatch sellability guard", () => {
+  it("rejects reserving one SKU for multiple orders in a single CAS edge", async () => {
+    const db = createReservationReadDb([]);
+
+    const result = await reserveStockBatch(
+      db,
+      [
+        { variantId: "variant_a", quantity: 1, orderId: "order_1" },
+        { variantId: "variant_a", quantity: 1, orderId: "order_2" },
+      ],
+      "regular",
+      { reservationKey: "checkout-test" },
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      manualReconciliationRequired: true,
+      error: expect.stringContaining("multiple orders"),
+    });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
   it("fails before writing when the reservation-time variant read is not sellable", async () => {
     const db = createReservationReadDb([]);
 

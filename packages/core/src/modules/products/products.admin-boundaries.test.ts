@@ -51,6 +51,7 @@ describe("admin product SKU invariant boundaries", () => {
                                         },
                                     ]);
                                 }
+                                if (selectCount === 4) return Promise.resolve([]);
 
                                 return {
                                     get: async () => {
@@ -120,6 +121,7 @@ describe("admin product SKU invariant boundaries", () => {
                                         },
                                     ]);
                                 }
+                                if (selectCount === 4) return Promise.resolve([]);
 
                                 return {
                                     get: async () => {
@@ -320,6 +322,7 @@ describe("admin product SKU invariant boundaries", () => {
                                         },
                                     ]);
                                 }
+                                if (selectCount === 4) return Promise.resolve([]);
 
                                 return {
                                     get: async () => {

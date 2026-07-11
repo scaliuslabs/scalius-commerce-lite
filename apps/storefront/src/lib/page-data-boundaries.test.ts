@@ -4,12 +4,6 @@ import { storefrontSourcePath } from "./test-source-paths";
 
 const STOREFRONT_SRC_ROOT = storefrontSourcePath();
 
-function indexAfter(source: string, needle: string, after: number): number {
-  const index = source.indexOf(needle, after);
-  expect(index).toBeGreaterThan(-1);
-  return index;
-}
-
 describe("storefront page data boundaries", () => {
   it("keeps product detail reads in the first fetch wave", () => {
     const source = readFileSync(
@@ -37,15 +31,12 @@ describe("storefront page data boundaries", () => {
     expect(source.slice(promiseAllIndex)).toContain("shippingMethodsPromise");
   });
 
-  it("keeps category cold-cache reads in the first fetch wave", () => {
+  it("loads category products and result-scoped facets in one catalog response", () => {
     const source = readFileSync(
       `${STOREFRONT_SRC_ROOT}/pages/categories/[slug].astro`,
       "utf8",
     );
 
-    const dynamicCheckIndex = source.indexOf(
-      "const hasDynamicFilters = hasDynamicProductListFilterParams(params)",
-    );
     const paginationHelperIndex = source.indexOf(
       "buildProductListPaginationHref",
     );
@@ -56,42 +47,11 @@ describe("storefront page data boundaries", () => {
       paginationLinksIndex,
     );
     const optionsIndex = source.indexOf(
-      "let productListOptions: ProductListOptions = queryState.options",
+      "const productListOptions: ProductListOptions = initialQueryState.options",
     );
-    const layoutPromiseIndex = source.indexOf("const layoutPromise = getLayoutData()");
-    const attributesPromiseIndex = source.indexOf(
-      "const attributesPromise = getFilterableAttributes({ categorySlug: slug })",
-    );
-    const dynamicBranchIndex = source.indexOf("if (hasDynamicFilters)");
-    const dynamicAttributesAwaitIndex = indexAfter(
-      source,
-      "attributes = (await attributesPromise) || []",
-      dynamicBranchIndex,
-    );
-    const dynamicProductsPromiseIndex = indexAfter(
-      source,
-      "const productsPromise = getProductsByCategory(slug, productListOptions)",
-      dynamicAttributesAwaitIndex,
-    );
-    const dynamicPromiseAllIndex = indexAfter(
-      source,
-      "] = await Promise.all([",
-      dynamicProductsPromiseIndex,
-    );
-    const fastBranchIndex = indexAfter(source, "} else {", dynamicPromiseAllIndex);
-    const fastProductsPromiseIndex = indexAfter(
-      source,
-      "const productsPromise = getProductsByCategory(slug, productListOptions)",
-      fastBranchIndex,
-    );
+    const promiseAllIndex = source.indexOf("[layoutData, productsResponse] = await Promise.all([");
     const categoryFetchIndex = source.indexOf("getCategoryBySlug");
-    const promiseAllIndex = indexAfter(
-      source,
-      "] = await Promise.all([",
-      fastProductsPromiseIndex,
-    );
 
-    expect(dynamicCheckIndex).toBeGreaterThan(-1);
     expect(paginationHelperIndex).toBeGreaterThan(-1);
     expect(getPaginationUrlIndex).toBeGreaterThan(-1);
     expect(paginationUrlSource).toContain("currentFilters");
@@ -99,27 +59,22 @@ describe("storefront page data boundaries", () => {
     expect(paginationUrlSource).not.toContain("new URL(");
     expect(source).toContain("buildProductListHref({");
     expect(optionsIndex).toBeGreaterThan(-1);
-    expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
-    expect(attributesPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
-    expect(dynamicBranchIndex).toBeGreaterThan(attributesPromiseIndex);
-    expect(dynamicAttributesAwaitIndex).toBeGreaterThan(dynamicBranchIndex);
-    expect(dynamicProductsPromiseIndex).toBeGreaterThan(dynamicAttributesAwaitIndex);
-    expect(dynamicProductsPromiseIndex).toBeLessThan(dynamicPromiseAllIndex);
     expect(categoryFetchIndex).toBe(-1);
-    expect(promiseAllIndex).toBeGreaterThan(fastProductsPromiseIndex);
-    expect(source.slice(promiseAllIndex)).toContain("productsPromise");
-    expect(source.slice(promiseAllIndex)).toContain("attributesPromise");
+    expect(promiseAllIndex).toBeGreaterThan(optionsIndex);
+    expect(source.slice(promiseAllIndex)).toContain("getLayoutData()");
+    expect(source.slice(promiseAllIndex)).toContain(
+      "getProductsByCategory(slug, productListOptions)",
+    );
+    expect(source).toContain("const facets: ProductFacet[] = productsResponse.facets ?? []");
+    expect(source).not.toContain("getFilterableAttributes");
   });
 
-  it("keeps search cold-cache reads in the first fetch wave", () => {
+  it("loads search products and result-scoped facets in one catalog response", () => {
     const source = readFileSync(
       `${STOREFRONT_SRC_ROOT}/pages/search/index.astro`,
       "utf8",
     );
 
-    const dynamicCheckIndex = source.indexOf(
-      "const hasDynamicFilters = hasDynamicProductListFilterParams(params)",
-    );
     const paginationHelperIndex = source.indexOf(
       "buildProductListPaginationHref",
     );
@@ -130,41 +85,10 @@ describe("storefront page data boundaries", () => {
       paginationLinksIndex,
     );
     const optionsIndex = source.indexOf(
-      "let productListOptions: ProductListOptions = queryState.options",
+      "const productListOptions: ProductListOptions = initialQueryState.options",
     );
-    const layoutPromiseIndex = source.indexOf("const layoutPromise = getLayoutData()");
-    const attributesPromiseIndex = source.indexOf(
-      "const attributesPromise = getFilterableAttributes({ searchQuery: query })",
-    );
-    const dynamicBranchIndex = source.indexOf("if (hasDynamicFilters)");
-    const dynamicAttributesAwaitIndex = indexAfter(
-      source,
-      "attributes = (await attributesPromise) || []",
-      dynamicBranchIndex,
-    );
-    const dynamicProductsPromiseIndex = indexAfter(
-      source,
-      "const productsPromise = getAllProducts(productListOptions)",
-      dynamicAttributesAwaitIndex,
-    );
-    const dynamicPromiseAllIndex = indexAfter(
-      source,
-      "] = await Promise.all([",
-      dynamicProductsPromiseIndex,
-    );
-    const fastBranchIndex = indexAfter(source, "} else {", dynamicPromiseAllIndex);
-    const fastProductsPromiseIndex = indexAfter(
-      source,
-      "const productsPromise = getAllProducts(productListOptions)",
-      fastBranchIndex,
-    );
-    const fastPromiseAllIndex = indexAfter(
-      source,
-      "] = await Promise.all([",
-      fastProductsPromiseIndex,
-    );
+    const promiseAllIndex = source.indexOf("[layoutData, productsResponse] = await Promise.all([");
 
-    expect(dynamicCheckIndex).toBeGreaterThan(-1);
     expect(paginationHelperIndex).toBeGreaterThan(-1);
     expect(getPaginationUrlIndex).toBeGreaterThan(-1);
     expect(paginationUrlSource).toContain("currentFilters");
@@ -172,16 +96,11 @@ describe("storefront page data boundaries", () => {
     expect(paginationUrlSource).not.toContain("new URL(");
     expect(source).toContain("buildProductListHref({");
     expect(optionsIndex).toBeGreaterThan(-1);
-    expect(layoutPromiseIndex).toBeGreaterThan(optionsIndex);
-    expect(attributesPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
-    expect(dynamicBranchIndex).toBeGreaterThan(attributesPromiseIndex);
-    expect(dynamicAttributesAwaitIndex).toBeGreaterThan(dynamicBranchIndex);
-    expect(dynamicProductsPromiseIndex).toBeGreaterThan(dynamicAttributesAwaitIndex);
-    expect(dynamicProductsPromiseIndex).toBeLessThan(dynamicPromiseAllIndex);
-    expect(fastProductsPromiseIndex).toBeGreaterThan(dynamicPromiseAllIndex);
-    expect(fastPromiseAllIndex).toBeGreaterThan(fastProductsPromiseIndex);
-    expect(source.slice(fastPromiseAllIndex)).toContain("productsPromise");
-    expect(source.slice(fastPromiseAllIndex)).toContain("attributesPromise");
+    expect(promiseAllIndex).toBeGreaterThan(optionsIndex);
+    expect(source.slice(promiseAllIndex)).toContain("getLayoutData()");
+    expect(source.slice(promiseAllIndex)).toContain("getAllProducts(productListOptions)");
+    expect(source).toContain("const facets: ProductFacet[] = productsResponse.facets ?? []");
+    expect(source).not.toContain("getFilterableAttributes");
   });
 
   it("tracks search result pages with Search analytics instead of ViewContent", () => {

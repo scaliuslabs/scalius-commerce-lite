@@ -79,6 +79,15 @@ function EditProductPage() {
       product.variantOption1Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
     variantOption2Schema:
       product.variantOption2Schema ?? DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+    variantImagesEnabled: product.variantImagesEnabled,
+    variantImageAxis: product.variantImageAxis,
+    variantImageMappings: product.variantImageMappings.map((mapping) => ({
+      imageId: mapping.imageId,
+      variantId: mapping.variantId,
+      optionAxis: mapping.optionAxis,
+      optionValue: mapping.optionValue,
+      sortOrder: mapping.sortOrder,
+    })),
     isActive: product.isActive,
     discountType: (product.discountType || "percentage") as "percentage" | "flat",
     discountPercentage: product.discountPercentage || 0,

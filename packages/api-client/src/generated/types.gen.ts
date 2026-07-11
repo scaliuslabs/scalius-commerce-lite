@@ -722,7 +722,15 @@ export type GetApiV1CollectionsByIdData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        minPrice?: number | null;
+        maxPrice?: number | null;
+        freeDelivery?: 'true' | 'false';
+        hasDiscount?: 'true' | 'false';
+    };
     url: '/api/v1/collections/{id}';
 };
 
@@ -802,6 +810,25 @@ export type GetApiV1CollectionsByIdResponses = {
                 discountedPrice: number;
                 [key: string]: unknown;
             };
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+            priceRange: {
+                min: number;
+                max: number;
+            };
+            facets: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                values: Array<{
+                    value: string;
+                    count: number;
+                }>;
+            }>;
         };
     };
 };
@@ -4171,6 +4198,15 @@ export type GetApiV1ProductsResponses = {
                 min: number;
                 max: number;
             };
+            facets: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                values: Array<{
+                    value: string;
+                    count: number;
+                }>;
+            }>;
         };
     };
 };
@@ -4520,6 +4556,9 @@ export type GetApiV1ProductsBySlugResponses = {
             variants: Array<{
                 [key: string]: unknown;
             }>;
+            variantImageMappings: Array<{
+                [key: string]: unknown;
+            }>;
             relatedProducts: Array<{
                 [key: string]: unknown;
             }>;
@@ -4768,6 +4807,15 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 min: number;
                 max: number;
             };
+            facets: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                values: Array<{
+                    value: string;
+                    count: number;
+                }>;
+            }>;
             appliedFilters: {
                 [key: string]: unknown;
             };
@@ -27805,6 +27853,15 @@ export type PostApiV1AdminProductsData = {
         variantOption2Label?: string;
         variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
         variantOption2Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+        variantImagesEnabled?: boolean;
+        variantImageAxis?: 'option1' | 'option2';
+        variantImageMappings?: Array<{
+            imageId: string;
+            variantId?: string | null;
+            optionAxis?: 'option1' | 'option2' | null;
+            optionValue?: string | null;
+            sortOrder?: number;
+        }>;
         slug: string;
         images: Array<{
             id: string;
@@ -28258,6 +28315,8 @@ export type GetApiV1AdminProductsByIdResponses = {
             variantOption2Label: string;
             variantOption1Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
             variantOption2Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
+            variantImagesEnabled: boolean;
+            variantImageAxis: 'option1' | 'option2';
             discountPercentage: number | null;
             discountType: 'percentage' | 'flat' | null;
             discountAmount: number | null;
@@ -28309,6 +28368,16 @@ export type GetApiV1AdminProductsByIdResponses = {
                 sortOrder: number;
                 createdAt: string | number;
             }>;
+            variantImageMappings: Array<{
+                id: string;
+                productId: string;
+                imageId: string;
+                variantId: string | null;
+                optionAxis: 'option1' | 'option2' | null;
+                optionValue: string | null;
+                normalizedOptionValue: string | null;
+                sortOrder: number;
+            }>;
             additionalInfo: Array<{
                 id: string;
                 title: string;
@@ -28347,6 +28416,15 @@ export type PutApiV1AdminProductsByIdData = {
         variantOption2Label?: string;
         variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
         variantOption2Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+        variantImagesEnabled?: boolean;
+        variantImageAxis?: 'option1' | 'option2';
+        variantImageMappings?: Array<{
+            imageId: string;
+            variantId?: string | null;
+            optionAxis?: 'option1' | 'option2' | null;
+            optionValue?: string | null;
+            sortOrder?: number;
+        }>;
         slug: string;
         images: Array<{
             id: string;

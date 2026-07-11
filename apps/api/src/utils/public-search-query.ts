@@ -37,6 +37,15 @@ export function normalizePublicListingSearchParam(value: string | null | undefin
   return sanitizeFtsQuery(normalized) ? normalized : normalized;
 }
 
+export function readRepeatedPublicQueryValues(url: string): Record<string, string[]> {
+  const params = new URL(url).searchParams;
+  const values: Record<string, string[]> = {};
+  for (const key of new Set(params.keys())) {
+    values[key] = params.getAll(key);
+  }
+  return values;
+}
+
 function hasNoEmptyQueryValuesExcept(url: string, allowedKeys: ReadonlySet<string>): boolean {
   for (const [key, value] of new URL(url).searchParams.entries()) {
     if (value === "" && !allowedKeys.has(key)) return false;

@@ -2182,6 +2182,80 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true,
+              "minimum": 0
+            },
+            "required": false,
+            "name": "minPrice",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true,
+              "minimum": 0
+            },
+            "required": false,
+            "name": "maxPrice",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "freeDelivery",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "hasDiscount",
+            "in": "query"
           }
         ],
         "responses": {
@@ -2368,12 +2442,97 @@
                           "additionalProperties": {
                             "nullable": true
                           }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "number"
+                            },
+                            "limit": {
+                              "type": "number"
+                            },
+                            "total": {
+                              "type": "number"
+                            },
+                            "totalPages": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "page",
+                            "limit",
+                            "total",
+                            "totalPages"
+                          ]
+                        },
+                        "priceRange": {
+                          "type": "object",
+                          "properties": {
+                            "min": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "max": {
+                              "type": "number",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "min",
+                            "max"
+                          ]
+                        },
+                        "facets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "values": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "count": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    }
+                                  },
+                                  "required": [
+                                    "value",
+                                    "count"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug",
+                              "values"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "collection",
                         "categories",
-                        "products"
+                        "products",
+                        "pagination",
+                        "priceRange",
+                        "facets"
                       ]
                     }
                   },
@@ -13873,12 +14032,55 @@
                             "min",
                             "max"
                           ]
+                        },
+                        "facets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "values": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "count": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    }
+                                  },
+                                  "required": [
+                                    "value",
+                                    "count"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug",
+                              "values"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "products",
                         "pagination",
-                        "priceRange"
+                        "priceRange",
+                        "facets"
                       ]
                     }
                   },
@@ -14987,6 +15189,15 @@
                             }
                           }
                         },
+                        "variantImageMappings": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
                         "relatedProducts": {
                           "type": "array",
                           "items": {
@@ -15002,6 +15213,7 @@
                         "category",
                         "images",
                         "variants",
+                        "variantImageMappings",
                         "relatedProducts"
                       ]
                     }
@@ -15737,6 +15949,48 @@
                             "max"
                           ]
                         },
+                        "facets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "values": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "count": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    }
+                                  },
+                                  "required": [
+                                    "value",
+                                    "count"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "slug",
+                              "values"
+                            ]
+                          }
+                        },
                         "appliedFilters": {
                           "type": "object",
                           "additionalProperties": {
@@ -15749,6 +16003,7 @@
                         "products",
                         "pagination",
                         "priceRange",
+                        "facets",
                         "appliedFilters"
                       ]
                     }
@@ -94303,6 +94558,56 @@
                     ],
                     "default": "color"
                   },
+                  "variantImagesEnabled": {
+                    "type": "boolean"
+                  },
+                  "variantImageAxis": {
+                    "type": "string",
+                    "enum": [
+                      "option1",
+                      "option2"
+                    ]
+                  },
+                  "variantImageMappings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "imageId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "variantId": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 1
+                        },
+                        "optionAxis": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "option1",
+                            "option2",
+                            null
+                          ]
+                        },
+                        "optionValue": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "sortOrder": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "imageId"
+                      ]
+                    },
+                    "maxItems": 250
+                  },
                   "slug": {
                     "type": "string",
                     "minLength": 3,
@@ -95461,6 +95766,16 @@
                             "none"
                           ]
                         },
+                        "variantImagesEnabled": {
+                          "type": "boolean"
+                        },
+                        "variantImageAxis": {
+                          "type": "string",
+                          "enum": [
+                            "option1",
+                            "option2"
+                          ]
+                        },
                         "discountPercentage": {
                           "type": "number",
                           "nullable": true
@@ -95722,6 +96037,57 @@
                             ]
                           }
                         },
+                        "variantImageMappings": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "imageId": {
+                                "type": "string"
+                              },
+                              "variantId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "optionAxis": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "option1",
+                                  "option2",
+                                  null
+                                ]
+                              },
+                              "optionValue": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "normalizedOptionValue": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "sortOrder": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "imageId",
+                              "variantId",
+                              "optionAxis",
+                              "optionValue",
+                              "normalizedOptionValue",
+                              "sortOrder"
+                            ]
+                          }
+                        },
                         "additionalInfo": {
                           "type": "array",
                           "items": {
@@ -95786,6 +96152,8 @@
                         "variantOption2Label",
                         "variantOption1Schema",
                         "variantOption2Schema",
+                        "variantImagesEnabled",
+                        "variantImageAxis",
                         "discountPercentage",
                         "discountType",
                         "discountAmount",
@@ -95796,6 +96164,7 @@
                         "category",
                         "variants",
                         "images",
+                        "variantImageMappings",
                         "additionalInfo",
                         "attributes"
                       ]
@@ -95985,6 +96354,56 @@
                       "none"
                     ],
                     "default": "color"
+                  },
+                  "variantImagesEnabled": {
+                    "type": "boolean"
+                  },
+                  "variantImageAxis": {
+                    "type": "string",
+                    "enum": [
+                      "option1",
+                      "option2"
+                    ]
+                  },
+                  "variantImageMappings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "imageId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "variantId": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 1
+                        },
+                        "optionAxis": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "option1",
+                            "option2",
+                            null
+                          ]
+                        },
+                        "optionValue": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "sortOrder": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "imageId"
+                      ]
+                    },
+                    "maxItems": 250
                   },
                   "slug": {
                     "type": "string",
