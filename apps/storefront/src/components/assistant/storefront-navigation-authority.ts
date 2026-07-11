@@ -23,6 +23,11 @@ export interface StorefrontNavigationAuthority {
   candidates: readonly StorefrontNavigationCandidate[];
 }
 
+export interface StorefrontDirectVisibleNavigation {
+  route: string;
+  label: string;
+}
+
 type StorefrontNavigationIntent = {
   destination: string;
   mode: "direct" | "discovery";
@@ -124,6 +129,40 @@ export function isAuthorizedStorefrontGoto(
     return false;
   }
   return true;
+}
+
+/** Resolve only one explicit, direct shopper destination already proven by a
+ * visible same-origin page link. Discovery requests, ambiguous labels, and
+ * routes rejected by the Storefront runtime remain agent-owned. */
+export function resolveDirectVisibleStorefrontNavigation(input: {
+  latestUserText: string;
+  document: Document;
+  allowsRoute: (route: string) => boolean;
+}): StorefrontDirectVisibleNavigation | null {
+  const intent = storefrontNavigationIntent(input.latestUserText);
+  if (intent?.mode !== "direct") return null;
+  const visible = collectVisibleCandidateSnapshot(input.document);
+  if (visible.truncated) return null;
+  const candidates = dedupeCandidates(visible.candidates);
+  const authority: StorefrontNavigationAuthority = {
+    latestUserText: input.latestUserText,
+    candidates,
+  };
+  const routes = new Map<string, StorefrontNavigationCandidate>();
+  for (const candidate of candidates) {
+    const route = normalizeScaliusComputerRoute(candidate.route);
+    if (
+      !route ||
+      !input.allowsRoute(route) ||
+      !isAuthorizedStorefrontGoto(`goto ${JSON.stringify(route)}`, authority)
+    ) {
+      continue;
+    }
+    routes.set(route, candidate);
+  }
+  if (routes.size !== 1) return null;
+  const [route, candidate] = routes.entries().next().value ?? [];
+  return route && candidate ? { route, label: candidate.label } : null;
 }
 
 /** Return the exact route scope the browser may use for this command. For
@@ -373,21 +412,22 @@ function collectRoutesFromValue(
 function collectVisibleCandidates(
   document: Document,
 ): StorefrontNavigationCandidate[] {
+  return collectVisibleCandidateSnapshot(document).candidates;
+}
+
+function collectVisibleCandidateSnapshot(document: Document): {
+  candidates: StorefrontNavigationCandidate[];
+  truncated: boolean;
+} {
   const origin = document.defaultView?.location.origin;
-  if (!origin) return [];
+  if (!origin) return { candidates: [], truncated: false };
   const candidates: StorefrontNavigationCandidate[] = [];
+  const seen = new Set<string>();
   const elements = document.querySelectorAll<
     HTMLAnchorElement | HTMLFormElement
   >("a[href], form[action]");
   for (const element of elements) {
-    if (
-      candidates.length >= MAX_CANDIDATES ||
-      element.closest(
-        "[data-scalius-computer-exclude], [inert], [hidden], [aria-hidden='true']",
-      )
-    ) {
-      continue;
-    }
+    if (!isVisibleNavigationElement(element, document.defaultView)) continue;
     const target =
       element instanceof HTMLAnchorElement
         ? element.getAttribute("href")
@@ -399,13 +439,51 @@ function collectVisibleCandidates(
       element.getAttribute("title")?.trim() ||
       element.textContent?.trim() ||
       routeLabel(route);
-    candidates.push({
+    const candidate = {
       route,
       label: label.replace(/\s+/g, " ").slice(0, 180),
-      source: "visible-page",
-    });
+      source: "visible-page" as const,
+    };
+    const key = `${candidate.route}\n${normalizeWords(candidate.label)}`;
+    if (seen.has(key)) continue;
+    if (candidates.length >= MAX_CANDIDATES) {
+      return { candidates, truncated: true };
+    }
+    seen.add(key);
+    candidates.push(candidate);
   }
-  return candidates;
+  return { candidates, truncated: false };
+}
+
+function isVisibleNavigationElement(
+  element: HTMLAnchorElement | HTMLFormElement,
+  view: Window | null,
+): boolean {
+  if (
+    !view ||
+    element.closest(
+      "[data-scalius-computer-exclude], [inert], [hidden], [aria-hidden='true']",
+    )
+  ) {
+    return false;
+  }
+  for (
+    let current: Element | null = element;
+    current;
+    current = current.parentElement
+  ) {
+    const style = view.getComputedStyle(current);
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.visibility === "collapse" ||
+      style.opacity === "0" ||
+      style.pointerEvents === "none"
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function storefrontNavigationIntent(
