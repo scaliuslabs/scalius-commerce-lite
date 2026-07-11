@@ -6,23 +6,21 @@ import { seedOrder, seedOrderItem } from "../../../setup";
 
 const inventoryMocks = vi.hoisted(() => ({
   reserveStockBatch: vi.fn(),
+  releaseReservedStockBatch: vi.fn(),
   validateStockBatchAvailability: vi.fn(),
-  deductMultiple: vi.fn(),
-  releaseMultiple: vi.fn(),
-  restoreDeductedMultiple: vi.fn(),
+  applyClaimedInventoryEntryBatch: vi.fn(),
   applyInventoryForStatusChange: vi.fn(),
 }));
 
 vi.mock("../../../../packages/core/src/modules/inventory", () => ({
   reserveStockBatch: inventoryMocks.reserveStockBatch,
+  releaseReservedStockBatch: inventoryMocks.releaseReservedStockBatch,
   validateStockBatchAvailability: inventoryMocks.validateStockBatchAvailability,
-  deductMultiple: inventoryMocks.deductMultiple,
-  releaseMultiple: inventoryMocks.releaseMultiple,
-  restoreDeductedMultiple: inventoryMocks.restoreDeductedMultiple,
 }));
 
 vi.mock("../../../../packages/core/src/modules/inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: inventoryMocks.applyInventoryForStatusChange,
+  applyClaimedInventoryEntryBatch: inventoryMocks.applyClaimedInventoryEntryBatch,
   isStockRestoreStatus: (status: string) => ["cancelled", "returned", "refunded"].includes(status),
   isStockDeductStatus: (status: string) => ["shipped", "delivered"].includes(status),
   isStockReservableStatus: (status: string) => ["incomplete", "pending", "processing", "confirmed"].includes(status),
@@ -135,16 +133,11 @@ beforeEach(async () => {
     events.push("reserve");
     return successResult;
   });
-  inventoryMocks.deductMultiple.mockImplementation(async () => {
-    events.push("deduct");
-    return successResult;
+  inventoryMocks.applyClaimedInventoryEntryBatch.mockImplementation(async (_db, input) => {
+    events.push(input.operation === "deduct" ? "deduct" : "restore-deducted");
   });
-  inventoryMocks.releaseMultiple.mockImplementation(async () => {
+  inventoryMocks.releaseReservedStockBatch.mockImplementation(async () => {
     events.push("release");
-    return successResult;
-  });
-  inventoryMocks.restoreDeductedMultiple.mockImplementation(async () => {
-    events.push("restore-deducted");
     return successResult;
   });
   inventoryMocks.applyInventoryForStatusChange.mockResolvedValue("reserved");
@@ -277,8 +270,12 @@ function createRestoreOrderDb(options: {
   return { db, updateSets };
 }
 
-function existingOrder(overrides: Partial<ReturnType<typeof seedOrder>> = {}) {
-  return seedOrder({
+type SeedOrderWithVersion = ReturnType<typeof seedOrder> & { version: number };
+
+function existingOrder(overrides: Partial<SeedOrderWithVersion> = {}): SeedOrderWithVersion {
+  const { version = 1, ...seedOverrides } = overrides;
+  return {
+    ...seedOrder({
     id: ORDER_ID,
     customerId: "cust_atomicity",
     customerName: "Atomic Customer",
@@ -286,11 +283,13 @@ function existingOrder(overrides: Partial<ReturnType<typeof seedOrder>> = {}) {
     status: "pending",
     inventoryAction: "reserved",
     inventoryPool: "regular",
-    ...overrides,
-  });
+      ...seedOverrides,
+    }),
+    version,
+  };
 }
 
-function deletedRestoredOrder(status: string, overrides: Partial<ReturnType<typeof seedOrder>> = {}) {
+function deletedRestoredOrder(status: string, overrides: Partial<SeedOrderWithVersion> = {}) {
   return {
     ...existingOrder({
       status,
@@ -367,7 +366,7 @@ describe("updateOrder inventory atomicity", () => {
 
     expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
     expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
     expect(db.update).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalled();
@@ -392,7 +391,7 @@ describe("updateOrder inventory atomicity", () => {
 
     expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
     expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
     expect(db.update).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalled();
@@ -414,7 +413,7 @@ describe("updateOrder inventory atomicity", () => {
 
     expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
     expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
     expect(db.update).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalled();
@@ -467,9 +466,15 @@ describe("updateOrder inventory atomicity", () => {
       db,
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
+      { reservationKey: "admin-order-edit:v1:ord_atomicity:v7:reserve-positive" },
     );
-    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, positiveEntries, ORDER_ID);
-    expect(inventoryMocks.restoreDeductedMultiple).not.toHaveBeenCalled();
+    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
+      db,
+      positiveEntries,
+      ORDER_ID,
+      { releaseKey: "admin-order-edit:v1:ord_atomicity:v7:compensate-acquired" },
+    );
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
     expect(db.insert).toHaveBeenCalledTimes(1);
     expect(db.delete).toHaveBeenCalledTimes(1);
     expect(events).toEqual(["validate", "reserve", "order-cas-update", "atomic-order-edit-batch", "release"]);
@@ -495,10 +500,23 @@ describe("updateOrder inventory atomicity", () => {
       db,
       [{ variantId: EXISTING_VARIANT_ID, quantity: 3, orderId: ORDER_ID }],
       "regular",
+      { reservationKey: "admin-order-edit:v1:ord_atomicity:v3:reserve-positive-deducted" },
     );
-    expect(inventoryMocks.deductMultiple).toHaveBeenCalledWith(db, positiveEntries, ORDER_ID);
-    expect(inventoryMocks.restoreDeductedMultiple).toHaveBeenCalledWith(db, positiveEntries, ORDER_ID);
-    expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenNthCalledWith(1, db, {
+      orderId: ORDER_ID,
+      operation: "deduct",
+      entries: positiveEntries,
+      claimKey: "admin-order-edit:v1:ord_atomicity:v3:deduct-positive",
+      pool: "regular",
+    });
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenNthCalledWith(2, db, {
+      orderId: ORDER_ID,
+      operation: "restore",
+      entries: positiveEntries,
+      claimKey: "admin-order-edit:v1:ord_atomicity:v3:compensate-deducted:regular",
+      pool: "regular",
+    });
+    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
     expect(db.insert).toHaveBeenCalledTimes(1);
     expect(db.delete).toHaveBeenCalledTimes(1);
     expect(events).toEqual(["reserve", "deduct", "order-cas-update", "atomic-order-edit-batch", "restore-deducted"]);
@@ -532,10 +550,15 @@ describe("updateOrder inventory atomicity", () => {
       db,
       [{ variantId: NEW_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
+      { reservationKey: "admin-order-edit:v1:ord_atomicity:v4:reserve-reactivation" },
     );
-    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, newEntries, ORDER_ID);
-    expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
-    expect(inventoryMocks.restoreDeductedMultiple).not.toHaveBeenCalled();
+    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
+      db,
+      newEntries,
+      ORDER_ID,
+      { releaseKey: "admin-order-edit:v1:ord_atomicity:v4:compensate-acquired" },
+    );
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
     expect(db.insert).toHaveBeenCalledTimes(1);
     expect(db.delete).toHaveBeenCalledTimes(1);
     expect(events).toEqual(["reserve", "order-cas-update", "atomic-order-edit-batch", "release"]);
@@ -546,7 +569,7 @@ describe("updateOrder inventory atomicity", () => {
       existingOrder: existingOrder({ inventoryAction: "reserved" }),
       existingItems: [item(3)],
     });
-    inventoryMocks.releaseMultiple.mockImplementation(async () => {
+    inventoryMocks.releaseReservedStockBatch.mockImplementation(async () => {
       events.push("release");
       return releaseFailure;
     });
@@ -559,10 +582,11 @@ describe("updateOrder inventory atomicity", () => {
       message: releaseFailure.error,
     });
 
-    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(
+    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
       db,
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }],
       ORDER_ID,
+      { releaseKey: "admin-order-edit:v1:ord_atomicity:v1:release-negative" },
     );
     expect(db.update).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalled();
@@ -585,11 +609,17 @@ describe("updateOrder inventory atomicity", () => {
     });
 
     const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, releasedEntries, ORDER_ID);
+    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
+      db,
+      releasedEntries,
+      ORDER_ID,
+      { releaseKey: "admin-order-edit:v1:ord_atomicity:v11:release-negative" },
+    );
     expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
       db,
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
+      { reservationKey: "admin-order-edit:v1:ord_atomicity:v11:compensate-released:reserve:regular" },
     );
     expect(db.insert).toHaveBeenCalledTimes(1);
     expect(db.delete).toHaveBeenCalledTimes(1);
@@ -601,9 +631,9 @@ describe("updateOrder inventory atomicity", () => {
       existingOrder: existingOrder({ status: "shipped", inventoryAction: "deducted" }),
       existingItems: [item(3)],
     });
-    inventoryMocks.restoreDeductedMultiple.mockImplementation(async () => {
+    inventoryMocks.applyClaimedInventoryEntryBatch.mockImplementation(async (_db, input) => {
       events.push("restore-deducted");
-      return restoreFailure;
+      if (input.operation === "restore") throw new Error(restoreFailure.error);
     });
 
     await expect(
@@ -618,11 +648,13 @@ describe("updateOrder inventory atomicity", () => {
       message: restoreFailure.error,
     });
 
-    expect(inventoryMocks.restoreDeductedMultiple).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }],
-      ORDER_ID,
-    );
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenCalledWith(db, {
+      orderId: ORDER_ID,
+      operation: "restore",
+      entries: [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }],
+      claimKey: "admin-order-edit:v1:ord_atomicity:v1:restore-negative:regular",
+      pool: "regular",
+    });
     expect(db.update).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
@@ -648,8 +680,20 @@ describe("updateOrder inventory atomicity", () => {
     });
 
     const restoredEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.restoreDeductedMultiple).toHaveBeenCalledWith(db, restoredEntries, ORDER_ID);
-    expect(inventoryMocks.deductMultiple).toHaveBeenCalledWith(db, restoredEntries, ORDER_ID);
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenNthCalledWith(1, db, {
+      orderId: ORDER_ID,
+      operation: "restore",
+      entries: restoredEntries,
+      claimKey: "admin-order-edit:v1:ord_atomicity:v12:restore-negative:regular",
+      pool: "regular",
+    });
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenNthCalledWith(2, db, {
+      orderId: ORDER_ID,
+      operation: "deduct",
+      entries: restoredEntries,
+      claimKey: "admin-order-edit:v1:ord_atomicity:v12:compensate-restored:deduct:regular",
+      pool: "regular",
+    });
     expect(db.insert).toHaveBeenCalledTimes(1);
     expect(db.delete).toHaveBeenCalledTimes(1);
     expect(events).toEqual(["restore-deducted", "order-cas-update", "atomic-order-edit-batch", "deduct"]);
@@ -674,11 +718,17 @@ describe("updateOrder inventory atomicity", () => {
     });
 
     const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, releasedEntries, ORDER_ID);
+    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
+      db,
+      releasedEntries,
+      ORDER_ID,
+      { releaseKey: "admin-order-edit:v1:ord_atomicity:v13:release-all" },
+    );
     expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
       db,
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
+      { reservationKey: "admin-order-edit:v1:ord_atomicity:v13:compensate-released:reserve:regular" },
     );
     expect(db.delete).toHaveBeenCalledTimes(1);
     expect(db.insert).not.toHaveBeenCalled();
@@ -697,11 +747,17 @@ describe("updateOrder inventory atomicity", () => {
     ).rejects.toThrow("item batch failed");
 
     const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, releasedEntries, ORDER_ID);
+    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
+      db,
+      releasedEntries,
+      ORDER_ID,
+      { releaseKey: "admin-order-edit:v1:ord_atomicity:v14:release-negative" },
+    );
     expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
       db,
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
+      { reservationKey: "admin-order-edit:v1:ord_atomicity:v14:compensate-released:reserve:regular" },
     );
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect(events).toEqual(["release", "order-cas-update", "atomic-order-edit-batch", "reserve"]);
@@ -746,6 +802,7 @@ describe("restoreOrder trash inventory safety", () => {
       db,
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
+      { reservationKey: "admin-order-edit:v1:ord_atomicity:v1:trash-restore" },
     );
     expect(updateSets.at(-1)).toMatchObject({
       deletedAt: null,
@@ -765,6 +822,7 @@ describe("restoreOrder trash inventory safety", () => {
       db,
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
+      { reservationKey: "admin-order-edit:v1:ord_atomicity:v1:trash-restore" },
     );
     expect(updateSets.at(-1)).toMatchObject({
       deletedAt: null,
@@ -911,7 +969,13 @@ describe("restoreOrder trash inventory safety", () => {
       db,
       [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
       "regular",
+      { reservationKey: "admin-order-edit:v1:ord_atomicity:v1:trash-restore" },
     );
-    expect(inventoryMocks.releaseMultiple).toHaveBeenCalledWith(db, entries, ORDER_ID);
+    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
+      db,
+      entries,
+      ORDER_ID,
+      { releaseKey: "admin-order-edit:v1:ord_atomicity:v1:trash-restore-cas-rollback" },
+    );
   });
 });

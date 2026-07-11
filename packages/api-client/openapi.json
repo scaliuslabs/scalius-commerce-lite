@@ -2978,10 +2978,11 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "description": "Minimum price filter"
+              "minimum": 0,
+              "description": "Minimum effective buyer-SKU price"
             },
             "required": false,
-            "description": "Minimum price filter",
+            "description": "Minimum effective buyer-SKU price",
             "name": "minPrice",
             "in": "query"
           },
@@ -2989,10 +2990,11 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "description": "Maximum price filter"
+              "minimum": 0,
+              "description": "Maximum effective buyer-SKU price"
             },
             "required": false,
-            "description": "Maximum price filter",
+            "description": "Maximum effective buyer-SKU price",
             "name": "maxPrice",
             "in": "query"
           },
@@ -3073,13 +3075,29 @@
                               },
                               "price": {
                                 "type": "number"
+                              },
+                              "discountedPrice": {
+                                "type": "number"
+                              },
+                              "priceVaries": {
+                                "type": "boolean"
+                              },
+                              "availableForSale": {
+                                "type": "boolean"
+                              },
+                              "hasVariants": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
                               "id",
                               "name",
                               "slug",
-                              "price"
+                              "price",
+                              "discountedPrice",
+                              "priceVaries",
+                              "availableForSale",
+                              "hasVariants"
                             ],
                             "additionalProperties": {
                               "nullable": true
@@ -13635,10 +13653,11 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "description": "Minimum price filter"
+              "minimum": 0,
+              "description": "Minimum effective buyer-SKU price"
             },
             "required": false,
-            "description": "Minimum price filter",
+            "description": "Minimum effective buyer-SKU price",
             "name": "minPrice",
             "in": "query"
           },
@@ -13646,10 +13665,11 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "description": "Maximum price filter"
+              "minimum": 0,
+              "description": "Maximum effective buyer-SKU price"
             },
             "required": false,
-            "description": "Maximum price filter",
+            "description": "Maximum effective buyer-SKU price",
             "name": "maxPrice",
             "in": "query"
           },
@@ -13785,6 +13805,9 @@
                               },
                               "discountedPrice": {
                                 "type": "number"
+                              },
+                              "priceVaries": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
@@ -13803,7 +13826,8 @@
                               "category",
                               "createdAt",
                               "updatedAt",
-                              "discountedPrice"
+                              "discountedPrice",
+                              "priceVaries"
                             ],
                             "additionalProperties": {
                               "nullable": true
@@ -13832,11 +13856,29 @@
                             "total",
                             "totalPages"
                           ]
+                        },
+                        "priceRange": {
+                          "type": "object",
+                          "properties": {
+                            "min": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "max": {
+                              "type": "number",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "min",
+                            "max"
+                          ]
                         }
                       },
                       "required": [
                         "products",
-                        "pagination"
+                        "pagination",
+                        "priceRange"
                       ]
                     }
                   },
@@ -14242,10 +14284,11 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "description": "Minimum price filter"
+              "minimum": 0,
+              "description": "Minimum effective buyer-SKU price"
             },
             "required": false,
-            "description": "Minimum price filter",
+            "description": "Minimum effective buyer-SKU price",
             "name": "minPrice",
             "in": "query"
           },
@@ -14253,10 +14296,11 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "description": "Maximum price filter"
+              "minimum": 0,
+              "description": "Maximum effective buyer-SKU price"
             },
             "required": false,
-            "description": "Maximum price filter",
+            "description": "Maximum effective buyer-SKU price",
             "name": "maxPrice",
             "in": "query"
           },
@@ -15470,10 +15514,11 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "description": "Minimum price filter"
+              "minimum": 0,
+              "description": "Minimum effective buyer-SKU price"
             },
             "required": false,
-            "description": "Minimum price filter",
+            "description": "Minimum effective buyer-SKU price",
             "name": "minPrice",
             "in": "query"
           },
@@ -15481,10 +15526,11 @@
             "schema": {
               "type": "number",
               "nullable": true,
-              "description": "Maximum price filter"
+              "minimum": 0,
+              "description": "Maximum effective buyer-SKU price"
             },
             "required": false,
-            "description": "Maximum price filter",
+            "description": "Maximum effective buyer-SKU price",
             "name": "maxPrice",
             "in": "query"
           },
@@ -15630,6 +15676,9 @@
                               },
                               "discountedPrice": {
                                 "type": "number"
+                              },
+                              "priceVaries": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
@@ -15640,7 +15689,8 @@
                               "discountType",
                               "discountPercentage",
                               "discountAmount",
-                              "discountedPrice"
+                              "discountedPrice",
+                              "priceVaries"
                             ],
                             "additionalProperties": {
                               "nullable": true
@@ -15670,6 +15720,23 @@
                             "totalPages"
                           ]
                         },
+                        "priceRange": {
+                          "type": "object",
+                          "properties": {
+                            "min": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "max": {
+                              "type": "number",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "min",
+                            "max"
+                          ]
+                        },
                         "appliedFilters": {
                           "type": "object",
                           "additionalProperties": {
@@ -15681,6 +15748,7 @@
                         "category",
                         "products",
                         "pagination",
+                        "priceRange",
                         "appliedFilters"
                       ]
                     }
@@ -25809,6 +25877,396 @@
         ]
       }
     },
+    "/api/v1/admin/collections/product-options": {
+      "get": {
+        "tags": [
+          "Admin - Collections"
+        ],
+        "summary": "Search products for collection forms",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": ""
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 10000,
+              "default": "",
+              "description": "Comma-separated category IDs. At most 90 IDs are applied."
+            },
+            "required": false,
+            "description": "Comma-separated category IDs. At most 90 IDs are applied.",
+            "name": "categoryIds",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated product options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "products": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "isActive": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "price",
+                              "categoryId",
+                              "categoryName",
+                              "isActive"
+                            ]
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "number"
+                            },
+                            "limit": {
+                              "type": "number"
+                            },
+                            "total": {
+                              "type": "number"
+                            },
+                            "totalPages": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "page",
+                            "limit",
+                            "total",
+                            "totalPages"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "products",
+                        "pagination"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/collections": {
       "get": {
         "tags": [
@@ -26320,6 +26778,7 @@
                         "items": {
                           "type": "string"
                         },
+                        "maxItems": 90,
                         "default": []
                       },
                       "productIds": {
@@ -26327,6 +26786,7 @@
                         "items": {
                           "type": "string"
                         },
+                        "maxItems": 90,
                         "default": []
                       },
                       "featuredProductId": {
@@ -28987,6 +29447,7 @@
                         "items": {
                           "type": "string"
                         },
+                        "maxItems": 90,
                         "default": []
                       },
                       "productIds": {
@@ -28994,6 +29455,7 @@
                         "items": {
                           "type": "string"
                         },
+                        "maxItems": 90,
                         "default": []
                       },
                       "featuredProductId": {
@@ -98450,6 +98912,811 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/products/{id}/variants/edit-plan": {
+      "post": {
+        "tags": [
+          "Admin - Products"
+        ],
+        "summary": "Atomically create and update product variants",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "creates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "size": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "color": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "weight": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0
+                        },
+                        "sku": {
+                          "type": "string",
+                          "minLength": 3
+                        },
+                        "price": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000000000
+                        },
+                        "stock": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "trackInventory": {
+                          "type": "boolean"
+                        },
+                        "barcode": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 50
+                        },
+                        "barcodeType": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "ean13",
+                            "upc",
+                            "isbn",
+                            "gtin",
+                            "custom",
+                            null
+                          ]
+                        },
+                        "discountType": {
+                          "type": "string",
+                          "enum": [
+                            "percentage",
+                            "flat"
+                          ]
+                        },
+                        "discountPercentage": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "discountAmount": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0
+                        },
+                        "colorSortOrder": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "sizeSortOrder": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "size",
+                        "color",
+                        "weight",
+                        "sku",
+                        "price",
+                        "stock",
+                        "discountType",
+                        "discountPercentage",
+                        "discountAmount"
+                      ]
+                    },
+                    "default": []
+                  },
+                  "updates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "size": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 50
+                        },
+                        "color": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 50
+                        },
+                        "weight": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0
+                        },
+                        "sku": {
+                          "type": "string",
+                          "minLength": 3
+                        },
+                        "price": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000000000
+                        },
+                        "stock": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "trackInventory": {
+                          "type": "boolean"
+                        },
+                        "barcode": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 50
+                        },
+                        "barcodeType": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "ean13",
+                            "upc",
+                            "isbn",
+                            "gtin",
+                            "custom",
+                            null
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    },
+                    "default": []
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Variant edit plan applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "created": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "color": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "weight": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "sku": {
+                                "type": "string"
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "stock": {
+                                "type": "number"
+                              },
+                              "reservedStock": {
+                                "type": "number"
+                              },
+                              "preorderStock": {
+                                "type": "number"
+                              },
+                              "isDefault": {
+                                "type": "boolean"
+                              },
+                              "trackInventory": {
+                                "type": "boolean"
+                              },
+                              "lowStockThreshold": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "allowPreorder": {
+                                "type": "boolean"
+                              },
+                              "preorderDate": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "preorderMessage": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "allowBackorder": {
+                                "type": "boolean"
+                              },
+                              "backorderLimit": {
+                                "type": "number"
+                              },
+                              "discountPercentage": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "discountAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "barcode": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "barcodeType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "colorSortOrder": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "sizeSortOrder": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "deletedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "stockVersion": {
+                                "type": "number"
+                              },
+                              "version": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "size",
+                              "color",
+                              "weight",
+                              "sku",
+                              "price",
+                              "stock",
+                              "reservedStock"
+                            ]
+                          }
+                        },
+                        "updated": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "color": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "weight": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "sku": {
+                                "type": "string"
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "stock": {
+                                "type": "number"
+                              },
+                              "reservedStock": {
+                                "type": "number"
+                              },
+                              "preorderStock": {
+                                "type": "number"
+                              },
+                              "isDefault": {
+                                "type": "boolean"
+                              },
+                              "trackInventory": {
+                                "type": "boolean"
+                              },
+                              "lowStockThreshold": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "allowPreorder": {
+                                "type": "boolean"
+                              },
+                              "preorderDate": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "preorderMessage": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "allowBackorder": {
+                                "type": "boolean"
+                              },
+                              "backorderLimit": {
+                                "type": "number"
+                              },
+                              "discountPercentage": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "discountAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "barcode": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "barcodeType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "colorSortOrder": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "sizeSortOrder": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "deletedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "nullable": true
+                              },
+                              "stockVersion": {
+                                "type": "number"
+                              },
+                              "version": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "size",
+                              "color",
+                              "weight",
+                              "sku",
+                              "price",
+                              "stock",
+                              "reservedStock"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "created",
+                        "updated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {

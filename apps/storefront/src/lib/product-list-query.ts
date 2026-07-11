@@ -1,9 +1,7 @@
 import type { FilterableAttribute, ProductListOptions } from "@/lib/api";
 import { HTML_CACHE_IGNORED_QUERY_PARAMS, buildCanonicalQueryString } from "./cache-key";
 import {
-  DEFAULT_MAX_PRICE,
   DEFAULT_MIN_PRICE,
-  parsePriceFilterValue,
 } from "./filters/price-url";
 import { normalizeSearchQuery } from "./search-query";
 
@@ -213,29 +211,33 @@ export function resolveProductListQueryState({
     currentFilters.sortBy = sortBy;
   }
 
-  const minPrice = parsePriceFilterValue(
-    getLastParam(params, "minPrice") ?? undefined,
-    DEFAULT_MIN_PRICE,
-  );
-  const maxPrice = parsePriceFilterValue(
-    getLastParam(params, "maxPrice") ?? undefined,
-    DEFAULT_MAX_PRICE,
-  );
-  if (params.has("minPrice") && minPrice <= DEFAULT_MIN_PRICE) {
+  const minPriceParam = getLastParam(params, "minPrice");
+  const maxPriceParam = getLastParam(params, "maxPrice");
+  let minPrice = minPriceParam === null ? undefined : Number(minPriceParam);
+  let maxPrice = maxPriceParam === null ? undefined : Number(maxPriceParam);
+  if (
+    minPrice !== undefined &&
+    (!minPriceParam || !Number.isFinite(minPrice) || minPrice <= DEFAULT_MIN_PRICE)
+  ) {
+    minPrice = undefined;
     shouldRedirect = true;
   }
   if (
-    params.has("maxPrice") &&
-    maxPrice === DEFAULT_MAX_PRICE &&
-    minPrice <= DEFAULT_MIN_PRICE
+    maxPrice !== undefined &&
+    (!maxPriceParam || !Number.isFinite(maxPrice) || maxPrice < DEFAULT_MIN_PRICE)
   ) {
+    maxPrice = undefined;
     shouldRedirect = true;
   }
-  if (minPrice > DEFAULT_MIN_PRICE) {
+  if (minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice) {
+    [minPrice, maxPrice] = [maxPrice, minPrice];
+    shouldRedirect = true;
+  }
+  if (minPrice !== undefined) {
     options.minPrice = minPrice;
     currentFilters.minPrice = String(minPrice);
   }
-  if (maxPrice !== DEFAULT_MAX_PRICE || minPrice > DEFAULT_MIN_PRICE) {
+  if (maxPrice !== undefined) {
     options.maxPrice = maxPrice;
     currentFilters.maxPrice = String(maxPrice);
   }

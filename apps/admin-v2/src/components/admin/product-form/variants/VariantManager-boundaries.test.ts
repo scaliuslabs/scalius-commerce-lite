@@ -61,6 +61,23 @@ function collectTsxFiles(dir: string): string[] {
 }
 
 describe("VariantManager product mode boundaries", () => {
+  it("submits mixed spreadsheet creates and updates as one atomic edit plan", () => {
+    const source = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
+    const operationsSource = readFileSync(
+      new URL("./hooks/useVariantOperations.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain("const result = await applyVariantEditPlan(");
+    expect(source).toContain("const updatedById = new Map(result.updated.map");
+    expect(source).toContain("...result.created");
+    expect(source).toContain('role="alert"');
+    expect(source).toContain("setBulkEditError(");
+    expect(operationsSource).toContain("useApplyProductVariantEditPlan");
+    expect(operationsSource).toContain("created: result.created.map(toProductVariant)");
+    expect(operationsSource).toContain("updated: result.updated.map(toProductVariant)");
+  });
+
   it("routes one protected no-option SKU to the simple inventory panel", () => {
     const source = readFileSync(VARIANT_MANAGER_SOURCE, "utf8");
 

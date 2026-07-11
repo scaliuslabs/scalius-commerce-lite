@@ -135,6 +135,23 @@ app.use(
   }),
 );
 
+function validatePriceRange(
+  value: { minPrice?: number; maxPrice?: number },
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    value.minPrice !== undefined &&
+    value.maxPrice !== undefined &&
+    value.minPrice > value.maxPrice
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["maxPrice"],
+      message: "Maximum price must be greater than or equal to minimum price",
+    });
+  }
+}
+
 const productFilterSchema = z.object({
   category: z.string().optional().openapi({ description: "Category slug or ID filter" }),
   search: z.string().optional().openapi({ description: "Search query" }),
@@ -145,12 +162,12 @@ const productFilterSchema = z.object({
     .optional()
     .default("newest")
     .openapi({ description: "Sort order" }),
-  minPrice: z.coerce.number().optional().openapi({ description: "Minimum price filter" }),
-  maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
+  minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
+  maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Discount filter" }),
   ids: z.string().optional().openapi({ description: "Comma-separated product IDs" })
-});
+}).superRefine(validatePriceRange);
 
 const productSearchSchema = z.object({
   search: z.string().optional().default("").openapi({ description: "Search query" }),
@@ -168,12 +185,12 @@ const productFeedSchema = z.object({
     .optional()
     .default("newest")
     .openapi({ description: "Sort order" }),
-  minPrice: z.coerce.number().optional().openapi({ description: "Minimum price filter" }),
-  maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
+  minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
+  maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   ids: z.string().optional().openapi({
     description: "Comma-separated product IDs, product handles, variant IDs, or SKUs",
   }),
-});
+}).superRefine(validatePriceRange);
 
 const productSitemapSchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
@@ -198,7 +215,13 @@ const storefrontProductSchema = z.object({
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
   discountedPrice: z.number(),
+  priceVaries: z.boolean(),
 }).passthrough();
+
+const buyerPriceRangeSchema = z.object({
+  min: z.number().min(0),
+  max: z.number().min(0),
+});
 
 const storefrontFeedVariantSchema = z.object({
   id: z.string(),
@@ -288,6 +311,7 @@ const listProductsRoute = createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({
         products: z.array(storefrontProductSchema),
         pagination: paginationSchema,
+        priceRange: buyerPriceRangeSchema,
       })) } },
     },
     400: errorResponses[400],

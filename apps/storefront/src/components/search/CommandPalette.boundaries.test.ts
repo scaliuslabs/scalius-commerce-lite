@@ -19,4 +19,21 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).not.toContain("q: query,");
     expect(source).not.toContain("`/search?q=${encodeURIComponent(query)}`");
   });
+
+  it("exposes dialog/listbox semantics and keeps failures distinct from empty results", async () => {
+    const source = await readFile(
+      storefrontSourcePath("components", "search", "CommandPalette.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain('role="dialog"');
+    expect(source).toContain('aria-modal="true"');
+    expect(source).toContain('role="combobox"');
+    expect(source).toContain('role="listbox"');
+    expect(source).toContain('role="option"');
+    expect(source).toContain("setSearchError(\"Search is temporarily unavailable.\")");
+    expect(source).toContain("Search unavailable");
+    expect(source).toContain("setSearchRetry((value) => value + 1)");
+    expect(source).toContain('aria-label="Close search"');
+  });
 });

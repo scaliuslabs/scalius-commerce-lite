@@ -29,11 +29,14 @@ import type {
 import type { Database } from "@scalius/database/client";
 import {
     publicProductBaseConditions,
-    publicProductHasCustomerOptions,
-    publicProductHasAvailableBuyerSku,
     publicProductHasBuyerResolvableSku,
     normalizeDefaultSkuOptions,
 } from "./products.public-eligibility";
+import {
+    buildBuyerCatalogPricingProjection,
+    buyerCatalogHasSkuInPriceRange,
+    type BuyerCatalogPricingProjection,
+} from "./products.buyer-projection";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
@@ -56,6 +59,8 @@ type StorefrontProductListRow = {
     discountType: string | null;
     discountPercentage: number | null;
     discountAmount: number | null;
+    discountedPrice: number;
+    maxBuyerPrice: number;
     freeDelivery: boolean;
     categoryId: string | null;
     createdAt: number;
@@ -63,8 +68,8 @@ type StorefrontProductListRow = {
 };
 
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
-    hasCustomerOptions: boolean;
-    availableForSale: boolean;
+    hasCustomerOptions: number;
+    availableForSale: number;
 };
 
 type StorefrontFeedProductListRow = {
@@ -86,8 +91,8 @@ type StorefrontFeedProductListRow = {
     excludeFromProductFeed: boolean;
     productCondition: "new" | "refurbished" | "used" | null;
     updatedAt: number;
-    hasCustomerOptions: boolean;
-    availableForSale: boolean;
+    hasCustomerOptions: number;
+    availableForSale: number;
 };
 
 type StorefrontSitemapProductRow = {
@@ -217,6 +222,7 @@ function buildProductLookupCondition(
 function buildStorefrontProductConditions(
     params: StorefrontProductFilterInput,
     options: StorefrontProductConditionOptions = {},
+    buyerPricing?: BuyerCatalogPricingProjection,
 ): SQL[] {
     const {
         category,
@@ -244,14 +250,22 @@ function buildStorefrontProductConditions(
             ) ?? sql`0 = 1`,
         );
     }
-    if (minPrice !== undefined) conditions.push(sql`${products.price} >= ${minPrice}`);
-    if (maxPrice !== undefined) conditions.push(sql`${products.price} <= ${maxPrice}`);
+    if (buyerPricing && (minPrice !== undefined || maxPrice !== undefined)) {
+        conditions.push(buyerCatalogHasSkuInPriceRange(minPrice, maxPrice));
+    } else {
+        if (minPrice !== undefined) conditions.push(sql`${products.price} >= ${minPrice}`);
+        if (maxPrice !== undefined) conditions.push(sql`${products.price} <= ${maxPrice}`);
+    }
     if (freeDelivery === "true") conditions.push(eq(products.freeDelivery, true));
     else if (freeDelivery === "false") conditions.push(eq(products.freeDelivery, false));
     if (hasDiscount === "true") {
-        conditions.push(sql`(${products.discountPercentage} > 0 OR ${products.discountAmount} > 0)`);
+        conditions.push(buyerPricing
+            ? eq(buyerPricing.hasDiscount, 1)
+            : sql`(${products.discountPercentage} > 0 OR ${products.discountAmount} > 0)`);
     } else if (hasDiscount === "false") {
-        conditions.push(sql`(${products.discountPercentage} IS NULL OR ${products.discountPercentage} = 0) AND (${products.discountAmount} IS NULL OR ${products.discountAmount} = 0)`);
+        conditions.push(buyerPricing
+            ? eq(buyerPricing.hasDiscount, 0)
+            : sql`(${products.discountPercentage} IS NULL OR ${products.discountPercentage} = 0) AND (${products.discountAmount} IS NULL OR ${products.discountAmount} = 0)`);
     }
     if (ids) {
         const lookupTokens = parsePublicLookupTokens(ids);
@@ -263,12 +277,18 @@ function buildStorefrontProductConditions(
     return conditions.filter((condition): condition is SQL => Boolean(condition));
 }
 
-function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest") {
-    const effectivePriceSql = sql`CASE
+function getStorefrontProductOrderBy(
+    sort: StorefrontProductSort = "newest",
+    buyerPricing?: BuyerCatalogPricingProjection,
+) {
+    const productEffectivePrice = sql`CASE
         WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN MAX(${products.price} - ${products.discountAmount}, 0)
         WHEN ${products.discountPercentage} > 0 THEN ${products.price} * (1 - ${products.discountPercentage} / 100.0)
         ELSE ${products.price}
     END`;
+    const effectivePriceSql = buyerPricing
+        ? sql`${buyerPricing.effectivePrice}`
+        : productEffectivePrice;
 
     if (sort === "price-asc") {
         return effectivePriceSql;
@@ -283,6 +303,13 @@ function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest") {
         return desc(products.name);
     }
     if (sort === "discount") {
+        if (buyerPricing) {
+            return desc(sql`CASE
+                WHEN ${buyerPricing.basePrice} > 0
+                    THEN (${buyerPricing.basePrice} - ${buyerPricing.effectivePrice}) / ${buyerPricing.basePrice} * 100
+                ELSE 0
+            END`);
+        }
         return desc(sql`CASE
             WHEN ${products.price} > 0 AND ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN ${products.discountAmount} / ${products.price} * 100
             WHEN ${products.discountPercentage} > 0 THEN ${products.discountPercentage}
@@ -516,27 +543,36 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         sort = "newest",
         attributeFilters = [],
     } = params;
-    const conditions = buildStorefrontProductConditions(params);
-    const orderBy = getStorefrontProductOrderBy(sort);
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    const conditions = buildStorefrontProductConditions(params, {}, buyerPricing);
+    const priceRangeConditions = buildStorefrontProductConditions({
+        ...params,
+        minPrice: undefined,
+        maxPrice: undefined,
+    }, {}, buyerPricing);
+    const orderBy = getStorefrontProductOrderBy(sort, buyerPricing);
     const offset = (page - 1) * limit;
 
     let query = db
         .select({
             id: products.id,
             name: products.name,
-            price: products.price,
+            price: buyerPricing.basePrice,
             slug: products.slug,
-            discountType: products.discountType,
-            discountPercentage: products.discountPercentage,
-            discountAmount: products.discountAmount,
+            discountType: buyerPricing.discountType,
+            discountPercentage: buyerPricing.discountPercentage,
+            discountAmount: buyerPricing.discountAmount,
+            discountedPrice: buyerPricing.effectivePrice,
+            maxBuyerPrice: buyerPricing.maxBuyerPrice,
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
-            hasCustomerOptions: publicProductHasCustomerOptions(sql`${products.id}`).as("hasCustomerOptions"),
-            availableForSale: publicProductHasAvailableBuyerSku(sql`${products.id}`).as("availableForSale"),
+            hasCustomerOptions: buyerPricing.hasCustomerOptions,
+            availableForSale: buyerPricing.availableForSale,
         })
         .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
 
     const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "filtered_products");
@@ -548,6 +584,7 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
     let countQuery = db
         .select({ count: sql<number>`count(*)` })
         .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
 
     const countSubquery = buildAttributeProductSubquery(db, attributeFilters, "count_filtered_products");
@@ -555,9 +592,31 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
         countQuery = countQuery.innerJoin(countSubquery, eq(products.id, countSubquery.productId));
     }
 
-    const [productsList, totalCount] = await Promise.all([
+    let priceRangeQuery = db
+        .select({
+            min: sql<number | null>`MIN(${buyerPricing.effectivePrice})`,
+            max: sql<number | null>`MAX(${buyerPricing.maxBuyerPrice})`,
+        })
+        .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+        .where(and(...priceRangeConditions));
+
+    const priceRangeSubquery = buildAttributeProductSubquery(
+        db,
+        attributeFilters,
+        "price_range_filtered_products",
+    );
+    if (priceRangeSubquery) {
+        priceRangeQuery = priceRangeQuery.innerJoin(
+            priceRangeSubquery,
+            eq(products.id, priceRangeSubquery.productId),
+        );
+    }
+
+    const [productsList, totalCount, rawPriceRange] = await Promise.all([
         query.orderBy(orderBy).limit(limit).offset(offset).all(),
         countQuery.get(),
+        priceRangeQuery.get(),
     ]);
     const productIds = productsList.map((p) => p.id);
 
@@ -586,16 +645,18 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
             category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
-            discountedPrice: calculateDiscountedPrice(
-                product.price, product.discountType,
-                product.discountPercentage, product.discountAmount,
-            ),
+            discountedPrice: product.discountedPrice,
+            priceVaries: product.maxBuyerPrice > product.discountedPrice,
         };
     });
 
     return {
         products: productsWithImages,
         pagination: getPagination(page, limit, totalCount?.count || 0),
+        priceRange: {
+            min: rawPriceRange?.min ?? 0,
+            max: rawPriceRange?.max ?? 0,
+        },
     };
 }
 
@@ -613,13 +674,14 @@ export async function getStorefrontFeedProducts(
         limit = 100,
         sort = "newest",
     } = params;
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const conditions = buildStorefrontProductConditions(params, {
         includeLookupHandles: true,
         includeVariantLookups: true,
         includeCategorySearchMatches: true,
-    });
+    }, buyerPricing);
     conditions.push(eq(products.excludeFromProductFeed, false));
-    const orderBy = getStorefrontProductOrderBy(sort);
+    const orderBy = getStorefrontProductOrderBy(sort, buyerPricing);
     const offset = (page - 1) * limit;
 
     const query = db
@@ -642,15 +704,17 @@ export async function getStorefrontFeedProducts(
             categoryId: products.categoryId,
             excludeFromProductFeed: products.excludeFromProductFeed,
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
-            hasCustomerOptions: publicProductHasCustomerOptions(sql`${products.id}`).as("hasCustomerOptions"),
-            availableForSale: publicProductHasAvailableBuyerSku(sql`${products.id}`).as("availableForSale"),
+            hasCustomerOptions: buyerPricing.hasCustomerOptions,
+            availableForSale: buyerPricing.availableForSale,
         })
         .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
 
     const countQuery = db
         .select({ count: sql<number>`count(*)` })
         .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
 
     const [productsList, totalCount] = await Promise.all([
@@ -790,28 +854,38 @@ export async function getStorefrontCategoryProducts(
         sort = "newest",
         attributeFilters = [],
     } = params;
-    const conditions = buildStorefrontProductConditions({
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    const scopedParams = {
         ...params,
         category: category.id,
-    });
-    const orderBy = getStorefrontProductOrderBy(sort);
+    };
+    const conditions = buildStorefrontProductConditions(scopedParams, {}, buyerPricing);
+    const priceRangeConditions = buildStorefrontProductConditions({
+        ...scopedParams,
+        minPrice: undefined,
+        maxPrice: undefined,
+    }, {}, buyerPricing);
+    const orderBy = getStorefrontProductOrderBy(sort, buyerPricing);
     const offset = (page - 1) * limit;
 
     let query = db
         .select({
             id: products.id,
             name: products.name,
-            price: products.price,
+            price: buyerPricing.basePrice,
             slug: products.slug,
-            discountType: products.discountType,
-            discountPercentage: products.discountPercentage,
-            discountAmount: products.discountAmount,
+            discountType: buyerPricing.discountType,
+            discountPercentage: buyerPricing.discountPercentage,
+            discountAmount: buyerPricing.discountAmount,
+            discountedPrice: buyerPricing.effectivePrice,
+            maxBuyerPrice: buyerPricing.maxBuyerPrice,
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
         })
         .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
 
     const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "category_filtered_products");
@@ -822,6 +896,7 @@ export async function getStorefrontCategoryProducts(
     let countQuery = db
         .select({ count: sql<number>`count(*)` })
         .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
 
     const countSubquery = buildAttributeProductSubquery(db, attributeFilters, "category_count_filtered_products");
@@ -829,9 +904,31 @@ export async function getStorefrontCategoryProducts(
         countQuery = countQuery.innerJoin(countSubquery, eq(products.id, countSubquery.productId));
     }
 
-    const [productsList, totalCount] = await Promise.all([
+    let priceRangeQuery = db
+        .select({
+            min: sql<number | null>`MIN(${buyerPricing.effectivePrice})`,
+            max: sql<number | null>`MAX(${buyerPricing.maxBuyerPrice})`,
+        })
+        .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+        .where(and(...priceRangeConditions));
+
+    const priceRangeSubquery = buildAttributeProductSubquery(
+        db,
+        attributeFilters,
+        "category_price_range_filtered_products",
+    );
+    if (priceRangeSubquery) {
+        priceRangeQuery = priceRangeQuery.innerJoin(
+            priceRangeSubquery,
+            eq(products.id, priceRangeSubquery.productId),
+        );
+    }
+
+    const [productsList, totalCount, rawPriceRange] = await Promise.all([
         query.orderBy(orderBy).limit(limit).offset(offset).all(),
         countQuery.get(),
+        priceRangeQuery.get(),
     ]);
 
     const imageMap = await readPrimaryProductImageMap(
@@ -843,12 +940,8 @@ export async function getStorefrontCategoryProducts(
         return {
             ...product,
             imageUrl: imgData?.url || null,
-            discountedPrice: calculateDiscountedPrice(
-                product.price,
-                product.discountType,
-                product.discountPercentage,
-                product.discountAmount,
-            ),
+            discountedPrice: product.discountedPrice,
+            priceVaries: product.maxBuyerPrice > product.discountedPrice,
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
             category,
@@ -858,6 +951,10 @@ export async function getStorefrontCategoryProducts(
     return {
         products: productsWithImages,
         pagination: getPagination(page, limit, totalCount?.count || 0),
+        priceRange: {
+            min: rawPriceRange?.min ?? 0,
+            max: rawPriceRange?.max ?? 0,
+        },
     };
 }
 
@@ -902,6 +999,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         .get();
 
     if (!product) return null;
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
 
     const promises: Promise<{ type: string; data: unknown }>[] = [
         db.select({
@@ -977,12 +1075,18 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
         promises.push(
             (async () => {
-                const relatedProds: Array<{ id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean }> = await db.select({
-                    id: products.id, name: products.name, price: products.price,
-                    slug: products.slug, discountType: products.discountType,
-                    discountPercentage: products.discountPercentage, discountAmount: products.discountAmount,
+                const relatedProds = await db.select({
+                    id: products.id, name: products.name, price: buyerPricing.basePrice,
+                    slug: products.slug, discountType: buyerPricing.discountType,
+                    discountPercentage: buyerPricing.discountPercentage,
+                    discountAmount: buyerPricing.discountAmount,
+                    discountedPrice: buyerPricing.effectivePrice,
+                    maxBuyerPrice: buyerPricing.maxBuyerPrice,
+                    hasVariants: buyerPricing.hasCustomerOptions,
+                    availableForSale: buyerPricing.availableForSale,
                     freeDelivery: products.freeDelivery,
                 }).from(products)
+                    .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
                     .where(and(
                         eq(products.categoryId, product.categoryId!),
                         eq(products.isActive, true),
@@ -1004,13 +1108,15 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
                 return {
                     type: "relatedProducts",
-                    data: relatedProds.map((rp) => {
+                    data: relatedProds.map(({ maxBuyerPrice, ...rp }) => {
                         const imgData = relatedImageMap.get(rp.id);
                         return {
                             ...rp,
+                            hasVariants: Boolean(rp.hasVariants),
+                            availableForSale: Boolean(rp.availableForSale),
+                            priceVaries: maxBuyerPrice > rp.discountedPrice,
                             imageUrl: imgData?.url || null,
                             imageAlt: imgData?.alt || null,
-                            discountedPrice: calculateDiscountedPrice(rp.price, rp.discountType, rp.discountPercentage, rp.discountAmount),
                         };
                     }),
                 };

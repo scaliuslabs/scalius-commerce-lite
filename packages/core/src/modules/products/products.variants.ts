@@ -22,6 +22,8 @@ import {
     updateVariantSchema,
     updateSortOrderSchema,
     bulkVariantSchema,
+    variantEditPlanSchema,
+    type VariantEditPlan,
 } from "./products.types";
 import { normalizeDefaultSkuOptions } from "./products.public-eligibility";
 import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
@@ -57,6 +59,32 @@ function normalizedOptionCombinationKey(value: {
         normalizeOptionValue(value.size)?.toLowerCase() ?? "",
         normalizeOptionValue(value.color)?.toLowerCase() ?? "",
     ]);
+}
+
+function normalizeSku(value: string): string {
+    return value.trim();
+}
+
+function normalizedSkuKey(value: string): string {
+    return normalizeSku(value).toLocaleLowerCase("en-US");
+}
+
+function assertUniqueNormalizedValues(
+    values: string[],
+    label: string,
+): void {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const value of values) {
+        const key = normalizedSkuKey(value);
+        if (seen.has(key)) duplicates.add(normalizeSku(value));
+        seen.add(key);
+    }
+    if (duplicates.size > 0) {
+        throw new ValidationError(
+            `${label}: ${Array.from(duplicates).join(", ")}`,
+        );
+    }
 }
 
 export function assertUniqueChangedVariantOptions(
@@ -606,6 +634,334 @@ export async function duplicateVariant(db: DrizzleD1Database<typeof schema>, pro
         .returning();
 
     return newVariant;
+}
+
+type PersistedVariant = typeof productVariants.$inferSelect;
+
+function firstValidationMessage(error: z.ZodError): string {
+    return error.issues[0]?.message ?? "Variant edit plan is invalid";
+}
+
+function isAtomicVariantConflict(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /constraint|unique|malformed json|variant_edit_conflict/i.test(message);
+}
+
+/**
+ * Applies a mixed set of new and existing SKU edits in one D1 transaction.
+ *
+ * Validation happens before statement construction. Each write is deliberately
+ * one row per statement so it remains comfortably below D1's 100-bound-
+ * parameter ceiling, while safeBatch keeps the complete plan all-or-nothing.
+ */
+export async function applyVariantEditPlan(
+    db: DrizzleD1Database<typeof schema>,
+    productId: string,
+    input: VariantEditPlan,
+    adminUserId?: string,
+): Promise<{ created: PersistedVariant[]; updated: PersistedVariant[] }> {
+    const parsed = variantEditPlanSchema.safeParse(input);
+    if (!parsed.success) {
+        throw new ValidationError(firstValidationMessage(parsed.error));
+    }
+    const plan = parsed.data;
+
+    const updateIds = plan.updates.map((update) => update.id);
+    if (new Set(updateIds).size !== updateIds.length) {
+        throw new ValidationError("Each variant may appear only once in an edit plan.");
+    }
+    assertUniqueNormalizedValues(
+        plan.creates.map((variant) => variant.sku),
+        "Duplicate SKUs found in edit plan",
+    );
+
+    const product = await db
+        .select({ id: products.id })
+        .from(products)
+        .where(and(eq(products.id, productId), isNull(products.deletedAt)))
+        .get();
+    if (!product) throw new NotFoundError("Product not found");
+
+    const currentVariants = await db
+        .select()
+        .from(productVariants)
+        .where(and(
+            eq(productVariants.productId, productId),
+            isNull(productVariants.deletedAt),
+        ));
+    const currentById = new Map(currentVariants.map((variant) => [variant.id, variant]));
+
+    for (const update of plan.updates) {
+        const current = currentById.get(update.id);
+        if (!current) throw new NotFoundError(`Variant ${update.id} was not found`);
+        if (current.isDefault || !hasCustomerOption(current)) {
+            throw new ValidationError(
+                "The protected simple product SKU cannot be edited from the option spreadsheet.",
+            );
+        }
+    }
+
+    const effectiveVariants: Array<{
+        id: string;
+        isDefault: boolean;
+        size: string | null;
+        color: string | null;
+        sku: string;
+    }> = currentVariants.map((variant) => ({
+        id: variant.id,
+        isDefault: variant.isDefault,
+        size: normalizeOptionValue(variant.size),
+        color: normalizeOptionValue(variant.color),
+        sku: normalizeSku(variant.sku),
+    }));
+    const effectiveById = new Map(effectiveVariants.map((variant) => [variant.id, variant]));
+
+    for (const update of plan.updates) {
+        const effective = effectiveById.get(update.id)!;
+        if ("size" in update) effective.size = normalizeOptionValue(update.size);
+        if ("color" in update) effective.color = normalizeOptionValue(update.color);
+        if ("sku" in update && update.sku) effective.sku = normalizeSku(update.sku);
+        assertNormalVariantHasCustomerOption(effective);
+    }
+
+    const createsWithIds = plan.creates.map((variant) => ({
+        ...variant,
+        id: `var_${nanoid()}`,
+        size: normalizeOptionValue(variant.size),
+        color: normalizeOptionValue(variant.color),
+        sku: normalizeSku(variant.sku),
+    }));
+    effectiveVariants.push(...createsWithIds.map((variant) => ({
+        id: variant.id,
+        isDefault: false,
+        size: variant.size,
+        color: variant.color,
+        sku: variant.sku,
+    })));
+
+    assertUniqueNormalizedValues(
+        effectiveVariants.map((variant) => variant.sku),
+        "Each active SKU must be unique",
+    );
+    const optionedVariants = effectiveVariants.filter((variant) => !variant.isDefault);
+    optionedVariants.forEach(assertNormalVariantHasCustomerOption);
+    assertConsistentVariantOptionAxes(optionedVariants);
+    assertUniqueChangedVariantOptions(optionedVariants);
+
+    const candidateSkuOwner = new Map<string, string | null>();
+    const plannedUpdateSkuById = new Map(
+        plan.updates.map((update) => [
+            update.id,
+            normalizedSkuKey(effectiveById.get(update.id)!.sku),
+        ]),
+    );
+    for (const variant of createsWithIds) {
+        candidateSkuOwner.set(normalizedSkuKey(variant.sku), null);
+    }
+    for (const update of plan.updates) {
+        if ("sku" in update && update.sku) {
+            candidateSkuOwner.set(normalizedSkuKey(update.sku), update.id);
+        }
+    }
+    const candidateSkuKeys = Array.from(candidateSkuOwner.keys());
+    if (candidateSkuKeys.length > 0) {
+        const matchingSkuRows = await db
+            .select({ id: productVariants.id, sku: productVariants.sku })
+            .from(productVariants)
+            .where(and(
+                isNull(productVariants.deletedAt),
+                sql`lower(trim(${productVariants.sku})) IN (
+                    SELECT CAST(value AS TEXT)
+                    FROM json_each(${JSON.stringify(candidateSkuKeys)})
+                )`,
+            ));
+        const collision = matchingSkuRows.find((row) => {
+            const currentKey = normalizedSkuKey(row.sku);
+            const plannedKey = plannedUpdateSkuById.get(row.id);
+            if (plannedKey !== undefined && plannedKey !== currentKey) {
+                return false;
+            }
+            return candidateSkuOwner.get(currentKey) !== row.id;
+        });
+        if (collision) {
+            throw new ConflictError(`SKU ${collision.sku} is already in use.`);
+        }
+    }
+
+    const statements = [];
+    const createResultIndices: number[] = [];
+    const updateResultIndices: number[] = [];
+    const movementResultIndices: number[] = [];
+    const stockChangedVariantIds: string[] = [];
+
+    // Validate every optimistic version inside the transaction before its first
+    // write. The false branch intentionally raises a SQLite JSON error, which
+    // makes D1 roll the whole batch back instead of accepting a zero-row CAS.
+    for (const update of plan.updates) {
+        const current = currentById.get(update.id)!;
+        const stockChanged = update.stock !== undefined && update.stock !== current.stock;
+        statements.push(db.run(sql`
+            SELECT CASE WHEN EXISTS (
+                SELECT 1 FROM ${productVariants}
+                WHERE ${productVariants.id} = ${update.id}
+                  AND ${productVariants.productId} = ${productId}
+                  AND ${productVariants.deletedAt} IS NULL
+                  AND ${productVariants.version} = ${current.version}
+                  ${stockChanged
+                    ? sql`AND ${productVariants.stockVersion} = ${current.stockVersion}`
+                    : sql``}
+            ) THEN 1 ELSE json_extract('VARIANT_EDIT_CONFLICT', '$') END
+        `));
+    }
+
+    // SQLite unique constraints are immediate. Move edited SKU values to
+    // transaction-private placeholders first so swaps and reuse of an edited-
+    // away SKU remain atomic without a transient uniqueness failure.
+    for (const update of plan.updates) {
+        const current = currentById.get(update.id)!;
+        if (update.sku === undefined || normalizeSku(update.sku) === current.sku) continue;
+        statements.push(
+            db.update(productVariants)
+                .set({ sku: `__variant_edit_${update.id}_${nanoid()}` })
+                .where(and(
+                    eq(productVariants.id, update.id),
+                    eq(productVariants.productId, productId),
+                    isNull(productVariants.deletedAt),
+                ))
+                .returning({ id: productVariants.id }),
+        );
+    }
+
+    for (const variant of createsWithIds) {
+        createResultIndices.push(statements.length);
+        statements.push(
+            db.insert(productVariants).values({
+                id: variant.id,
+                productId,
+                size: variant.size,
+                color: variant.color,
+                weight: variant.weight ?? null,
+                sku: variant.sku,
+                price: variant.price,
+                stock: variant.stock,
+                reservedStock: 0,
+                preorderStock: 0,
+                isDefault: false,
+                trackInventory: variant.trackInventory ?? true,
+                version: 1,
+                stockVersion: 1,
+                allowPreorder: false,
+                allowBackorder: false,
+                backorderLimit: 0,
+                barcode: variant.barcode || null,
+                barcodeType: variant.barcodeType || null,
+                discountType: variant.discountType,
+                discountPercentage: variant.discountPercentage ?? 0,
+                discountAmount: variant.discountAmount ?? 0,
+                colorSortOrder: variant.colorSortOrder ?? 0,
+                sizeSortOrder: variant.sizeSortOrder ?? 0,
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            }).returning(),
+        );
+        if (variant.stock > 0) {
+            movementResultIndices.push(statements.length);
+            statements.push(buildStockMovementClaim(db, {
+                movementId: crypto.randomUUID(),
+                variantId: variant.id,
+                stockVersion: 1,
+                quantity: variant.stock,
+                previousStock: 0,
+                newStock: variant.stock,
+                notes: "Stocktake: Initial product variant stock",
+                adminUserId,
+            }));
+            stockChangedVariantIds.push(variant.id);
+        }
+    }
+
+    for (const update of plan.updates) {
+        const current = currentById.get(update.id)!;
+        const stockChanged = update.stock !== undefined && update.stock !== current.stock;
+
+        if (stockChanged) {
+            movementResultIndices.push(statements.length);
+            statements.push(buildStockMovementClaim(db, {
+                movementId: crypto.randomUUID(),
+                variantId: update.id,
+                stockVersion: current.stockVersion,
+                quantity: update.stock! - current.stock,
+                previousStock: current.stock,
+                newStock: update.stock!,
+                notes: "Stocktake: Product variant edit plan",
+                adminUserId,
+            }));
+            stockChangedVariantIds.push(update.id);
+        }
+
+        const updateValues = {
+            ...(update.size !== undefined ? { size: normalizeOptionValue(update.size) } : {}),
+            ...(update.color !== undefined ? { color: normalizeOptionValue(update.color) } : {}),
+            ...(update.weight !== undefined ? { weight: update.weight } : {}),
+            ...(update.sku !== undefined ? { sku: normalizeSku(update.sku) } : {}),
+            ...(update.price !== undefined ? { price: update.price } : {}),
+            ...(update.stock !== undefined ? { stock: update.stock } : {}),
+            ...(update.trackInventory !== undefined ? { trackInventory: update.trackInventory } : {}),
+            ...(update.barcode !== undefined ? { barcode: update.barcode || null } : {}),
+            ...(update.barcodeType !== undefined ? { barcodeType: update.barcodeType } : {}),
+            version: sql`${productVariants.version} + 1`,
+            ...(stockChanged
+                ? { stockVersion: sql`${productVariants.stockVersion} + 1` }
+                : {}),
+            updatedAt: sql`unixepoch()`,
+        };
+        updateResultIndices.push(statements.length);
+        statements.push(
+            db.update(productVariants)
+                .set(updateValues)
+                .where(and(
+                    eq(productVariants.id, update.id),
+                    eq(productVariants.productId, productId),
+                    isNull(productVariants.deletedAt),
+                ))
+                .returning(),
+        );
+    }
+
+    let results: Array<Array<PersistedVariant | { id: string }> | undefined>;
+    try {
+        results = await safeBatch(db, statements as never) as typeof results;
+    } catch (error) {
+        if (isAtomicVariantConflict(error)) {
+            throw new ConflictError(
+                "One or more SKUs changed while you were editing. Review the latest values and try again.",
+            );
+        }
+        throw error;
+    }
+
+    const created = createResultIndices.map((index) => results[index]?.[0] as PersistedVariant | undefined);
+    const updated = updateResultIndices.map((index) => results[index]?.[0] as PersistedVariant | undefined);
+    const hasMissingResult = [...created, ...updated].some((row) => !row)
+        || movementResultIndices.some((index) => (results[index]?.length ?? 0) === 0);
+    if (hasMissingResult) {
+        // All guarded writes should return one row. Reaching this branch means
+        // the storage adapter violated the D1 batch response contract.
+        throw new ConflictError("The variant edit could not be confirmed. Reload and try again.");
+    }
+
+    // Alert reconciliation is secondary to the authoritative stock transaction.
+    // Do not report the edit as failed after its D1 batch has already committed.
+    await Promise.allSettled(
+        Array.from(new Set(stockChangedVariantIds)).map((variantId) =>
+            checkAndAlertLowStock(db, variantId)
+        ),
+    );
+
+    return {
+        created: created as PersistedVariant[],
+        updated: updated as PersistedVariant[],
+    };
 }
 
 export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, productId: string, variants: z.infer<typeof bulkVariantSchema>[]) {

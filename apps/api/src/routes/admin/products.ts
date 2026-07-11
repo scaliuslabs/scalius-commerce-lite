@@ -10,6 +10,7 @@ import {
     bulkCreateVariantsSchema,
     bulkDeleteVariantsSchema,
     bulkUpdateVariantsSchema,
+    variantEditPlanSchema,
     updateSortOrderSchema
 } from "@scalius/core/modules/products/products.types";
 import { NotFoundError, ConflictError, ValidationError } from "../../utils/api-error";
@@ -627,6 +628,39 @@ app.openapi(deleteVariantRoute, async (c) => {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;
     }
+});
+
+// ── Atomic Variant Edit Plan ──
+
+const variantEditPlanRoute = createRoute({
+    method: "post",
+    path: "/{id}/variants/edit-plan",
+    tags: ["Admin - Products"],
+    summary: "Atomically create and update product variants",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: variantEditPlanSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Variant edit plan applied",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                created: z.array(productVariantSchema),
+                updated: z.array(productVariantSchema),
+            }) as z.ZodTypeAny) } },
+        },
+        ...conflictMutationErrorResponses,
+    },
+});
+
+app.openapi(variantEditPlanRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const plan = c.req.valid("json");
+    const user = c.get("user");
+    const result = await ProductsVariants.applyVariantEditPlan(db, id, plan, user?.id);
+    await invalidateProductCatalogCaches(db, c, [id]);
+    return ok(c, result);
 });
 
 // ── Bulk Create Variants ──

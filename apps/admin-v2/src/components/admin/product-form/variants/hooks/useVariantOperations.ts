@@ -8,8 +8,20 @@ import {
   useBulkDeleteProductVariants,
   useBulkCreateProductVariants,
   useBulkUpdateProductVariants,
+  useApplyProductVariantEditPlan,
   useDuplicateProductVariant,
 } from "@/lib/api-mutations/products";
+
+type VariantEditPlanUpdate = {
+  id: string;
+  size?: string | null;
+  color?: string | null;
+  weight?: number | null;
+  sku?: string;
+  price?: number;
+  stock?: number;
+  trackInventory?: boolean;
+};
 
 function toProductVariant(result: unknown): ProductVariant {
   const r = result as Record<string, unknown>;
@@ -50,6 +62,11 @@ export interface UseVariantOperationsReturn {
       trackInventory?: boolean;
     }>
   ) => Promise<boolean>;
+  applyVariantEditPlan: (
+    productId: string,
+    creates: BulkGeneratedVariant[],
+    updates: VariantEditPlanUpdate[],
+  ) => Promise<{ created: ProductVariant[]; updated: ProductVariant[] }>;
   duplicateVariant: (productId: string, variantId: string) => Promise<ProductVariant | null>;
   isLoading: boolean;
 }
@@ -61,6 +78,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
   const bulkDeleteMutation = useBulkDeleteProductVariants();
   const bulkCreateMutation = useBulkCreateProductVariants();
   const bulkUpdateMutation = useBulkUpdateProductVariants();
+  const editPlanMutation = useApplyProductVariantEditPlan();
   const duplicateMutation = useDuplicateProductVariant();
 
   const isLoading =
@@ -70,6 +88,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     bulkDeleteMutation.isPending ||
     bulkCreateMutation.isPending ||
     bulkUpdateMutation.isPending ||
+    editPlanMutation.isPending ||
     duplicateMutation.isPending;
 
   const createVariant = async (
@@ -168,6 +187,21 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     }
   };
 
+  const applyVariantEditPlan = async (
+    productId: string,
+    creates: BulkGeneratedVariant[],
+    updates: VariantEditPlanUpdate[],
+  ): Promise<{ created: ProductVariant[]; updated: ProductVariant[] }> => {
+    const result = await editPlanMutation.mutateAsync({
+      productId,
+      plan: { creates, updates },
+    });
+    return {
+      created: result.created.map(toProductVariant),
+      updated: result.updated.map(toProductVariant),
+    };
+  };
+
   const duplicateVariant = async (
     productId: string,
     variantId: string
@@ -187,6 +221,7 @@ export function useVariantOperations(): UseVariantOperationsReturn {
     bulkDeleteVariants,
     bulkUpdateVariants,
     bulkCreateVariants,
+    applyVariantEditPlan,
     duplicateVariant,
     isLoading,
   };

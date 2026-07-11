@@ -5,7 +5,7 @@ export function parsePriceFilterValue(
   value: string | undefined,
   fallback: number,
 ): number {
-  const parsed = Number.parseInt(value ?? "", 10);
+  const parsed = Number(value ?? "");
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
@@ -16,6 +16,7 @@ export function appendPriceFilterParams(
     priceChanged: boolean;
     minPriceInput: string;
     maxPriceInput: string;
+    defaultMaxPrice?: number;
   },
 ): void {
   if (!options.includePriceFilter || !options.priceChanged) return;
@@ -26,14 +27,14 @@ export function appendPriceFilterParams(
   );
   const maxValue = parsePriceFilterValue(
     options.maxPriceInput,
-    DEFAULT_MAX_PRICE,
+    options.defaultMaxPrice ?? DEFAULT_MAX_PRICE,
   );
 
   if (minValue > DEFAULT_MIN_PRICE) {
     params.set("minPrice", minValue.toString());
   }
 
-  if (maxValue !== DEFAULT_MAX_PRICE || minValue > DEFAULT_MIN_PRICE) {
+  if (maxValue !== (options.defaultMaxPrice ?? DEFAULT_MAX_PRICE)) {
     params.set("maxPrice", maxValue.toString());
   }
 }

@@ -8,6 +8,7 @@ import type {
   ProductVariant,
   ProductImage,
   PaginatedResponse,
+  BuyerPriceRange,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
@@ -199,7 +200,24 @@ type ProductListPayload = {
   products?: Product[];
   data?: Product[];
   pagination?: PaginatedResponse<Product>["pagination"];
+  priceRange?: BuyerPriceRange;
 };
+
+function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const { min, max } = value as { min?: unknown; max?: unknown };
+  if (
+    typeof min !== "number" ||
+    typeof max !== "number" ||
+    !Number.isFinite(min) ||
+    !Number.isFinite(max) ||
+    min < 0 ||
+    max < min
+  ) {
+    return undefined;
+  }
+  return { min, max };
+}
 
 type SitemapProductListPayload = {
   products?: SitemapProduct[];
@@ -259,6 +277,7 @@ function normalizeProductListPayload(
   return {
     data: products,
     pagination: candidate.pagination,
+    priceRange: normalizeBuyerPriceRange(candidate.priceRange),
   };
 }
 
@@ -361,9 +380,15 @@ export async function getProductsByCategory(
           category: Category;
           products: Product[];
           pagination: PaginatedResponse<Product>["pagination"];
+          priceRange?: BuyerPriceRange;
         }>(data);
         return d
-          ? { category: d.category, data: d.products, pagination: d.pagination }
+          ? {
+              category: d.category,
+              data: d.products,
+              pagination: d.pagination,
+              priceRange: normalizeBuyerPriceRange(d.priceRange),
+            }
           : null;
       } catch (error: unknown) {
         console.error(

@@ -1,14 +1,16 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
   getCollection,
   getCollectionCategoryOptions,
   getCollectionFormOptions,
+  getCollectionProductOptions,
   getCollections,
   getCollectionsByIds,
   type CollectionsByIdsPayload,
   type CollectionCategoryOptionsPayload,
   type CollectionFormOptionsPayload,
   type CollectionsQueryInput,
+  type CollectionProductOptionsInput,
 } from "../api-functions/collections";
 import { queryKeys } from "../query-keys";
 
@@ -100,3 +102,30 @@ export const collectionCategoryOptionsQueryOptions = () =>
     placeholderData: EMPTY_COLLECTION_CATEGORY_OPTIONS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
+
+export const collectionProductOptionsQueryOptions = (
+  input: Omit<CollectionProductOptionsInput, "page">,
+) => {
+  const categoryIds = normalizeLookupIds(input.categoryIds ?? []).slice(0, 90);
+  const search = input.search?.trim() ?? "";
+  const limit = input.limit ?? 10;
+
+  return infiniteQueryOptions({
+    queryKey: queryKeys.products.list({
+      surface: "collection-picker",
+      categoryIds,
+      search,
+      limit,
+    }),
+    queryFn: ({ pageParam }) =>
+      getCollectionProductOptions({
+        data: { page: pageParam, limit, search, categoryIds },
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination.page < lastPage.pagination.totalPages
+        ? lastPage.pagination.page + 1
+        : undefined,
+    staleTime: MODERATE_STALE_TIME_MS,
+  });
+};

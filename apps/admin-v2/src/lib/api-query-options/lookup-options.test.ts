@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   getCollection: vi.fn(),
   getCollectionCategoryOptions: vi.fn(),
   getCollectionFormOptions: vi.fn(),
+  getCollectionProductOptions: vi.fn(),
   getCollections: vi.fn(),
   getCollectionsByIds: vi.fn(),
 }));
@@ -27,6 +28,7 @@ vi.mock("../api-functions/collections", () => ({
   getCollection: mocks.getCollection,
   getCollectionCategoryOptions: mocks.getCollectionCategoryOptions,
   getCollectionFormOptions: mocks.getCollectionFormOptions,
+  getCollectionProductOptions: mocks.getCollectionProductOptions,
   getCollections: mocks.getCollections,
   getCollectionsByIds: mocks.getCollectionsByIds,
 }));
@@ -35,6 +37,7 @@ import { productsByIdsQueryOptions } from "./products";
 import {
   collectionCategoryOptionsQueryOptions,
   collectionFormOptionsQueryOptions,
+  collectionProductOptionsQueryOptions,
   collectionsByIdsQueryOptions,
 } from "./collections";
 
@@ -141,5 +144,42 @@ describe("lookup query options", () => {
     await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
       categories: [],
     });
+  });
+
+  it("keys and pages collection product options by normalized server filters", async () => {
+    const payload = {
+      products: [],
+      pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
+    };
+    mocks.getCollectionProductOptions.mockResolvedValue(payload);
+
+    const options = collectionProductOptionsQueryOptions({
+      categoryIds: [" cat_2 ", "cat_1", "cat_2", ""],
+      search: " blue ",
+      limit: 10,
+    });
+
+    expect(options.queryKey).toEqual([
+      "products",
+      "list",
+      {
+        surface: "collection-picker",
+        categoryIds: ["cat_2", "cat_1"],
+        search: "blue",
+        limit: 10,
+      },
+    ]);
+    await expect(
+      requireQueryFn(options)({ pageParam: 2 } as never),
+    ).resolves.toEqual(payload);
+    expect(mocks.getCollectionProductOptions).toHaveBeenCalledWith({
+      data: {
+        page: 2,
+        limit: 10,
+        search: "blue",
+        categoryIds: ["cat_2", "cat_1"],
+      },
+    });
+    expect(options.getNextPageParam?.(payload, [payload], 2, [1, 2])).toBe(3);
   });
 });

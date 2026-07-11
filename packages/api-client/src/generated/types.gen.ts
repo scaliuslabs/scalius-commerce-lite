@@ -970,11 +970,11 @@ export type GetApiV1SearchData = {
          */
         categoryId?: string;
         /**
-         * Minimum price filter
+         * Minimum effective buyer-SKU price
          */
         minPrice?: number | null;
         /**
-         * Maximum price filter
+         * Maximum effective buyer-SKU price
          */
         maxPrice?: number | null;
         /**
@@ -1043,6 +1043,10 @@ export type GetApiV1SearchResponses = {
                 name: string;
                 slug: string;
                 price: number;
+                discountedPrice: number;
+                priceVaries: boolean;
+                availableForSale: boolean;
+                hasVariants: boolean;
                 [key: string]: unknown;
             }>;
             pages: Array<{
@@ -4076,11 +4080,11 @@ export type GetApiV1ProductsData = {
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
         /**
-         * Minimum price filter
+         * Minimum effective buyer-SKU price
          */
         minPrice?: number | null;
         /**
-         * Maximum price filter
+         * Maximum effective buyer-SKU price
          */
         maxPrice?: number | null;
         /**
@@ -4154,6 +4158,7 @@ export type GetApiV1ProductsResponses = {
                 createdAt: string | null;
                 updatedAt: string | null;
                 discountedPrice: number;
+                priceVaries: boolean;
                 [key: string]: unknown;
             }>;
             pagination: {
@@ -4161,6 +4166,10 @@ export type GetApiV1ProductsResponses = {
                 limit: number;
                 total: number;
                 totalPages: number;
+            };
+            priceRange: {
+                min: number;
+                max: number;
             };
         };
     };
@@ -4272,11 +4281,11 @@ export type GetApiV1ProductsFeedData = {
          */
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
         /**
-         * Minimum price filter
+         * Minimum effective buyer-SKU price
          */
         minPrice?: number | null;
         /**
-         * Maximum price filter
+         * Maximum effective buyer-SKU price
          */
         maxPrice?: number | null;
         /**
@@ -4658,11 +4667,11 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         search?: string;
         /**
-         * Minimum price filter
+         * Minimum effective buyer-SKU price
          */
         minPrice?: number | null;
         /**
-         * Maximum price filter
+         * Maximum effective buyer-SKU price
          */
         maxPrice?: number | null;
         /**
@@ -4746,6 +4755,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 discountPercentage: number | null;
                 discountAmount: number | null;
                 discountedPrice: number;
+                priceVaries: boolean;
                 [key: string]: unknown;
             }>;
             pagination: {
@@ -4753,6 +4763,10 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 limit: number;
                 total: number;
                 totalPages: number;
+            };
+            priceRange: {
+                min: number;
+                max: number;
             };
             appliedFilters: {
                 [key: string]: unknown;
@@ -7721,6 +7735,119 @@ export type GetApiV1AdminCollectionsCategoryOptionsResponses = {
 };
 
 export type GetApiV1AdminCollectionsCategoryOptionsResponse = GetApiV1AdminCollectionsCategoryOptionsResponses[keyof GetApiV1AdminCollectionsCategoryOptionsResponses];
+
+export type GetApiV1AdminCollectionsProductOptionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        /**
+         * Comma-separated category IDs. At most 90 IDs are applied.
+         */
+        categoryIds?: string;
+    };
+    url: '/api/v1/admin/collections/product-options';
+};
+
+export type GetApiV1AdminCollectionsProductOptionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCollectionsProductOptionsError = GetApiV1AdminCollectionsProductOptionsErrors[keyof GetApiV1AdminCollectionsProductOptionsErrors];
+
+export type GetApiV1AdminCollectionsProductOptionsResponses = {
+    /**
+     * Paginated product options
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                price: number;
+                categoryId: string | null;
+                categoryName: string | null;
+                isActive: boolean;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminCollectionsProductOptionsResponse = GetApiV1AdminCollectionsProductOptionsResponses[keyof GetApiV1AdminCollectionsProductOptionsResponses];
 
 export type GetApiV1AdminCollectionsData = {
     body?: never;
@@ -29024,6 +29151,203 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
 };
 
 export type PutApiV1AdminProductsByIdVariantsByVariantIdResponse = PutApiV1AdminProductsByIdVariantsByVariantIdResponses[keyof PutApiV1AdminProductsByIdVariantsByVariantIdResponses];
+
+export type PostApiV1AdminProductsByIdVariantsEditPlanData = {
+    body?: {
+        creates?: Array<{
+            size: string | null;
+            color: string | null;
+            weight: number | null;
+            sku: string;
+            price: number;
+            stock: number;
+            trackInventory?: boolean;
+            barcode?: string | null;
+            barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
+            discountType: 'percentage' | 'flat';
+            discountPercentage: number | null;
+            discountAmount: number | null;
+            colorSortOrder?: number;
+            sizeSortOrder?: number;
+        }>;
+        updates?: Array<{
+            id: string;
+            size?: string | null;
+            color?: string | null;
+            weight?: number | null;
+            sku?: string;
+            price?: number;
+            stock?: number;
+            trackInventory?: boolean;
+            barcode?: string | null;
+            barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
+        }>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/products/{id}/variants/edit-plan';
+};
+
+export type PostApiV1AdminProductsByIdVariantsEditPlanErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsByIdVariantsEditPlanError = PostApiV1AdminProductsByIdVariantsEditPlanErrors[keyof PostApiV1AdminProductsByIdVariantsEditPlanErrors];
+
+export type PostApiV1AdminProductsByIdVariantsEditPlanResponses = {
+    /**
+     * Variant edit plan applied
+     */
+    200: {
+        success: true;
+        data: {
+            created: Array<{
+                id: string;
+                productId: string;
+                size: string | null;
+                color: string | null;
+                weight: number | null;
+                sku: string;
+                price: number;
+                stock: number;
+                reservedStock: number;
+                preorderStock?: number;
+                isDefault?: boolean;
+                trackInventory?: boolean;
+                lowStockThreshold?: number | null;
+                allowPreorder?: boolean;
+                preorderDate?: string | number | null;
+                preorderMessage?: string | null;
+                allowBackorder?: boolean;
+                backorderLimit?: number;
+                discountPercentage?: number | null;
+                discountType?: string | null;
+                discountAmount?: number | null;
+                barcode?: string | null;
+                barcodeType?: string | null;
+                colorSortOrder?: number | null;
+                sizeSortOrder?: number | null;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | null;
+                stockVersion?: number;
+                version?: number;
+            }>;
+            updated: Array<{
+                id: string;
+                productId: string;
+                size: string | null;
+                color: string | null;
+                weight: number | null;
+                sku: string;
+                price: number;
+                stock: number;
+                reservedStock: number;
+                preorderStock?: number;
+                isDefault?: boolean;
+                trackInventory?: boolean;
+                lowStockThreshold?: number | null;
+                allowPreorder?: boolean;
+                preorderDate?: string | number | null;
+                preorderMessage?: string | null;
+                allowBackorder?: boolean;
+                backorderLimit?: number;
+                discountPercentage?: number | null;
+                discountType?: string | null;
+                discountAmount?: number | null;
+                barcode?: string | null;
+                barcodeType?: string | null;
+                colorSortOrder?: number | null;
+                sizeSortOrder?: number | null;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                deletedAt?: string | number | null;
+                stockVersion?: number;
+                version?: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsByIdVariantsEditPlanResponse = PostApiV1AdminProductsByIdVariantsEditPlanResponses[keyof PostApiV1AdminProductsByIdVariantsEditPlanResponses];
 
 export type PostApiV1AdminProductsByIdVariantsBulkCreateData = {
     body?: {

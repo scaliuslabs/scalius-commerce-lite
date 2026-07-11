@@ -1,8 +1,12 @@
 import type { Database } from "@scalius/database/client";
 import { products, productImages, categories, pages } from "@scalius/database/schema";
-import { eq, sql, and, inArray, gte, lte, type SQL } from "drizzle-orm";
+import { eq, sql, and, inArray, type SQL } from "drizzle-orm";
 import { ftsMatch, sanitizeFtsQuery } from "./fts5";
 import { publicProductBaseConditions } from "../modules/products/products.public-eligibility";
+import {
+  buildBuyerCatalogPricingProjection,
+  buyerCatalogHasSkuInPriceRange,
+} from "../modules/products/products.buyer-projection";
 export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 
 // Types for search results
@@ -11,9 +15,13 @@ export type ProductSearchResult = {
   name: string;
   description: string | null;
   price: number;
+  discountedPrice: number;
+  priceVaries: boolean;
+  availableForSale: boolean;
+  hasVariants: boolean;
   slug: string;
   imageUrl?: string | null;
-  categoryId: string;
+  categoryId: string | null;
   categoryName?: string | null;
   type: "product";
 };
@@ -73,24 +81,32 @@ export async function search(
     if (options?.categoryId) {
       productConditions.push(eq(products.categoryId, options.categoryId));
     }
-    if (typeof options?.minPrice === "number") {
-      productConditions.push(gte(products.price, options.minPrice));
+    if (
+      typeof options?.minPrice === "number" ||
+      typeof options?.maxPrice === "number"
+    ) {
+      productConditions.push(
+        buyerCatalogHasSkuInPriceRange(options?.minPrice, options?.maxPrice),
+      );
     }
-    if (typeof options?.maxPrice === "number") {
-      productConditions.push(lte(products.price, options.maxPrice));
-    }
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
 
     const productQuery = db
       .select({
         id: products.id,
         name: products.name,
         description: products.description,
-        price: products.price,
+        price: buyerPricing.basePrice,
+        discountedPrice: buyerPricing.effectivePrice,
+        maxBuyerPrice: buyerPricing.maxBuyerPrice,
+        availableForSale: buyerPricing.availableForSale,
+        hasVariants: buyerPricing.hasCustomerOptions,
         slug: products.slug,
         categoryId: products.categoryId,
         categoryName: sql<string>`${categories.name}`.as("categoryName"),
       })
       .from(products)
+      .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
       .leftJoin(categories, eq(products.categoryId, categories.id))
       .where(and(...productConditions))
       .limit(limit);
@@ -164,11 +180,19 @@ export async function search(
         }
       }
 
-      formattedProducts = productsResult.map((product) => ({
+      formattedProducts = productsResult.map(({
+        maxBuyerPrice,
+        availableForSale,
+        hasVariants,
+        ...product
+      }) => ({
         ...product,
+        availableForSale: Boolean(availableForSale),
+        hasVariants: Boolean(hasVariants),
+        priceVaries: maxBuyerPrice > product.discountedPrice,
         imageUrl: imageUrlMap.get(product.id) || null,
         type: "product" as const,
-      })) as ProductSearchResult[];
+      }));
     }
 
     // Format pages
@@ -194,11 +218,6 @@ export async function search(
     };
   } catch (error: unknown) {
     console.error("Search error:", error);
-    // Return empty results in case of error
-    return {
-      products: [],
-      pages: [],
-      categories: [],
-    };
+    throw error;
   }
 }

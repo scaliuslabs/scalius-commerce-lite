@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  applyProductVariantEditPlan,
   bulkCreateProductVariants,
   bulkDeleteProducts,
   bulkDeleteProductVariants,
@@ -17,6 +18,8 @@ import {
   type BulkProductVariantInput,
   type CreateProductInput,
   type ProductVariantInput,
+  type ProductVariantEditPlanInput,
+  type ProductVariantEditPlanPayload,
   type ProductVariantUpdateInput,
   type UpdateProductInput,
 } from "../api-functions/products";
@@ -234,6 +237,23 @@ export function useBulkUpdateProductVariants() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to update options")),
+  });
+}
+
+export function useApplyProductVariantEditPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      productId: string;
+      plan: ProductVariantEditPlanInput;
+    }): Promise<ProductVariantEditPlanPayload> =>
+      applyProductVariantEditPlan({ data }),
+    onSuccess: (_data, variables) => {
+      invalidateProductVariantMutationQueries(queryClient, variables.productId);
+      toast.success("Option changes saved");
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to save option changes")),
   });
 }
 

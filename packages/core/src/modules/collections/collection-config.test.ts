@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    COLLECTION_CONFIG_ID_LIMIT,
     collectionProductIdsForLookup,
     normalizeCollectionConfig,
     stringifyCollectionConfig,
@@ -78,5 +79,17 @@ describe("collection config normalization", () => {
             subtitle: "",
         });
         expect(collectionProductIdsForLookup(config)).toEqual(["prod_1", "prod_2"]);
+    });
+
+    it("bounds legacy ID arrays below the D1 statement parameter ceiling", () => {
+        const config = normalizeCollectionConfig({
+            categoryIds: Array.from({ length: 120 }, (_, index) => `cat_${index}`),
+            productIds: Array.from({ length: 120 }, (_, index) => `prod_${index}`),
+        });
+
+        expect(config.categoryIds).toHaveLength(COLLECTION_CONFIG_ID_LIMIT);
+        expect(config.productIds).toHaveLength(COLLECTION_CONFIG_ID_LIMIT);
+        expect(config.categoryIds.at(-1)).toBe("cat_89");
+        expect(config.productIds.at(-1)).toBe("prod_89");
     });
 });

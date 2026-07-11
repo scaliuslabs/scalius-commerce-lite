@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { AlertCircle, Loader2, Search } from "lucide-react";
+import { useDebounce } from "~/hooks/use-debounce";
+import { collectionProductOptionsQueryOptions } from "~/lib/api-query-options/collections";
 import { Button } from "../../ui/button";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -14,7 +16,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../ui/popover";
-import { getProducts } from "~/lib/api-functions/products";
 import type { Product } from "./types";
 
 const PAGE_SIZE = 10;
@@ -39,118 +40,41 @@ export function ProductPickerPopover({
 }: ProductPickerPopoverProps) {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalProducts, setTotalProducts] = useState(0);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const skipNextSearchLoadRef = useRef(false);
-
-  const loadProducts = useCallback(
-    async (page = 1, search = "") => {
-      try {
-        if (page === 1) {
-          setIsSearching(true);
-        } else {
-          setIsLoadingMore(true);
-        }
-
-        if (selectedCategoryIds.length > 1) {
-          const allProducts = new Map<string, Product>();
-          await Promise.all(
-            selectedCategoryIds.map(async (categoryId) => {
-              const data = await getProducts({
-                data: {
-                  limit: 50,
-                  page: 1,
-                  search: search.trim() || undefined,
-                  categoryId,
-                },
-              });
-              for (const product of data.products || []) {
-                allProducts.set(product.id, product);
-              }
-            }),
-          );
-          const merged = Array.from(allProducts.values());
-          setDisplayedProducts(merged);
-          setTotalPages(1);
-          setTotalProducts(merged.length);
-          setCurrentPage(1);
-          return;
-        }
-
-        const data = await getProducts({
-          data: {
-            limit: PAGE_SIZE,
-            page,
-            search: search.trim() || undefined,
-            categoryId: selectedCategoryIds[0],
-          },
-        });
-
-        if (page === 1) {
-          setDisplayedProducts(data.products || []);
-        } else {
-          setDisplayedProducts((prev) => [...prev, ...(data.products || [])]);
-        }
-        setTotalPages(data.pagination?.totalPages || 1);
-        setTotalProducts(data.pagination?.total || 0);
-        setCurrentPage(page);
-      } catch (error: unknown) {
-        if (import.meta.env.DEV) console.error("Error loading products:", error);
-      } finally {
-        setIsSearching(false);
-        setIsLoadingMore(false);
-      }
-    },
+  const debouncedSearch = useDebounce(searchTerm.trim(), SEARCH_DEBOUNCE_MS);
+  const categoryIds = useMemo(
+    () =>
+      Array.from(
+        new Set(selectedCategoryIds.map((id) => id.trim()).filter(Boolean)),
+      ).slice(0, 90),
     [selectedCategoryIds],
   );
-
-  useEffect(() => {
-    if (!open) return;
-    setSearchTerm("");
-    setCurrentPage(1);
-    skipNextSearchLoadRef.current = true;
-    loadProducts(1, "");
-  }, [loadProducts, open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    if (skipNextSearchLoadRef.current && searchTerm === "") {
-      skipNextSearchLoadRef.current = false;
-      return;
-    }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    searchTimeoutRef.current = setTimeout(() => {
-      loadProducts(1, searchTerm);
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [loadProducts, open, searchTerm]);
-
   const excluded = useMemo(() => new Set(excludeProductIds), [excludeProductIds]);
+
+  const productQuery = useInfiniteQuery({
+    ...collectionProductOptionsQueryOptions({
+      categoryIds,
+      search: debouncedSearch,
+      limit: PAGE_SIZE,
+    }),
+    enabled: open,
+  });
+
+  const displayedProducts = useMemo(() => {
+    const byId = new Map<string, Product>();
+    for (const page of productQuery.data?.pages ?? []) {
+      for (const product of page.products) byId.set(product.id, product);
+    }
+    return Array.from(byId.values());
+  }, [productQuery.data]);
   const availableProducts = useMemo(
     () => displayedProducts.filter((product) => !excluded.has(product.id)),
     [displayedProducts, excluded],
   );
-
-  const loadMoreProducts = () => {
-    if (currentPage < totalPages && !isLoadingMore) {
-      loadProducts(currentPage + 1, searchTerm);
-    }
-  };
+  const totalProducts = productQuery.data?.pages[0]?.pagination.total ?? 0;
+  const isDebouncing = searchTerm.trim() !== debouncedSearch;
+  const isInitialLoading = isDebouncing || productQuery.isPending ||
+    (productQuery.isFetching && displayedProducts.length === 0);
+  const isInitialError = productQuery.isError && displayedProducts.length === 0;
 
   return (
     <Popover
@@ -181,8 +105,8 @@ export function ProductPickerPopover({
           <CommandInput
             placeholder={
               searchPlaceholder ||
-              (selectedCategoryIds.length > 0
-                ? "Search within selected categories..."
+              (categoryIds.length > 0
+                ? "Search selected categories..."
                 : "Search products...")
             }
             className="h-10 border-none focus:ring-0"
@@ -190,36 +114,70 @@ export function ProductPickerPopover({
             onValueChange={setSearchTerm}
           />
           <CommandList className="max-h-[300px] overflow-auto">
-            {isSearching ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            {isInitialLoading ? (
+              <div className="flex items-center justify-center py-6" role="status">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 <span className="text-sm text-muted-foreground">
                   Searching products...
                 </span>
               </div>
+            ) : isInitialError ? (
+              <div className="space-y-2 px-3 py-5 text-center">
+                <AlertCircle className="mx-auto h-4 w-4 text-destructive" />
+                <p className="text-sm text-muted-foreground">
+                  Products could not be loaded.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void productQuery.refetch()}
+                >
+                  Retry
+                </Button>
+              </div>
             ) : (
               <>
-                <CommandEmpty className="py-6 text-center text-sm">
-                  No products found.
-                </CommandEmpty>
-                <CommandGroup>
-                  {availableProducts.map((product) => (
-                    <CommandItem
-                      key={product.id}
-                      value={product.name}
-                      onSelect={() => {
-                        onSelectProduct(product);
-                        setOpen(false);
-                      }}
-                      className="cursor-pointer"
-                    >
-                      {product.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
+                {availableProducts.length > 0 ? (
+                  <CommandGroup>
+                    {availableProducts.map((product) => (
+                      <CommandItem
+                        key={product.id}
+                        value={product.id}
+                        onSelect={() => {
+                          onSelectProduct(product);
+                          setOpen(false);
+                        }}
+                        className="cursor-pointer items-start gap-2"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm">
+                            {product.name}
+                          </span>
+                          {product.categoryName ? (
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {product.categoryName}
+                            </span>
+                          ) : null}
+                        </span>
+                        {product.isActive === false ? (
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            Draft
+                          </span>
+                        ) : null}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                ) : (
+                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    {displayedProducts.length > 0
+                      ? "Products on this page are already selected."
+                      : "No products found."}
+                  </div>
+                )}
 
-                {currentPage < totalPages && (
-                  <div className="py-2 px-2 border-t">
+                {productQuery.hasNextPage ? (
+                  <div className="border-t p-2">
                     <Button
                       type="button"
                       variant="outline"
@@ -227,24 +185,23 @@ export function ProductPickerPopover({
                       size="sm"
                       onClick={(event) => {
                         event.preventDefault();
-                        loadMoreProducts();
+                        void productQuery.fetchNextPage();
                       }}
-                      disabled={isLoadingMore}
+                      disabled={productQuery.isFetchingNextPage}
                     >
-                      {isLoadingMore ? (
+                      {productQuery.isFetchingNextPage ? (
                         <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Loading...
                         </>
+                      ) : productQuery.isFetchNextPageError ? (
+                        "Retry loading more"
                       ) : (
-                        <>
-                          Load More ({displayedProducts.length} of{" "}
-                          {totalProducts})
-                        </>
+                        `Load more (${displayedProducts.length} of ${totalProducts})`
                       )}
                     </Button>
                   </div>
-                )}
+                ) : null}
               </>
             )}
           </CommandList>

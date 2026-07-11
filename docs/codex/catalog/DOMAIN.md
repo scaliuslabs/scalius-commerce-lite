@@ -4,20 +4,19 @@ Last reviewed: 2026-07-12
 
 ## P1 inventory integrity
 
-1. **Preorder stock is lost on reservation expiry.** `inventory/expiry.ts` releases `reservedStock` but does not restore `preorderStock` for expired `preorder_reserved` movements.
-2. **Inventory mutation boundaries do not consistently require positive finite integers.** The validator exists but is unused by several reserve/deduct/release paths; negative or fractional values can reverse counter semantics.
-3. **Legacy deduction/release paths are not replay-safe and remain used by order workflows.** They can repeat stock changes and record movements separately from state. Move all order callers to deterministic claim plus CAS batches.
+1. **Resolved in batch 1: preorder expiry restores its source pool.** Expired preorder reservations return `preorderStock` and release `reservedStock`; regular reservations remain regular-pool changes.
+2. **Resolved in batch 1: inventory quantities are positive finite integers at mutation boundaries.** Relative adjustment remains the only signed quantity input.
+3. **Production callers have migrated off the legacy deduction/release paths.** Order, payment, fulfillment, stale-checkout, manual-edit, and trash-restore workflows now use deterministic movement claims plus stock CAS batches. The sequential exports remain isolated compatibility surfaces with no production caller; do not introduce new callers.
 4. **Expiry treats any terminal movement as fully terminal.** Partial releases and re-reservation generations can leave outstanding quantities permanently stranded.
 5. **The movement ledger contract is contradictory.** Schema comments define signed physical deltas, while reserve/deduct/release use different action semantics; the table lacks pool and before/after reserved/preorder counters. A ledger cannot be reliably folded back to SKU state.
-6. **Positive restocks do not resolve low-stock alerts.** Alert reconciliation runs only for negative changes in some paths.
-7. **Dashboard low-stock calculation contradicts alert policy.** Null threshold disables alerts but list stats substitute a threshold of five.
+6. **Resolved in batch 1: stock changes reconcile low-stock alerts in both directions.** Restocks and no-op corrections clear stale alerts when the configured threshold is no longer breached.
+7. **Resolved in batch 1: dashboard low-stock truth matches alert policy.** Only an explicit positive threshold enables low-stock state.
 
 ## P1 product/variant integrity
 
-- Duplicate normalized option combinations are allowed under different SKUs, making buyer selection ambiguous. Add normalized product/option uniqueness for active non-default variants.
+- Application writes reject duplicate normalized option combinations and inconsistent option-axis shapes. A database unique index remains blocked by the documented legacy duplicate product.
 - Production preflight on 2026-07-12 found one legacy product (`prod_DgYZ43wj5zcNoug7gEdUL`) with four active `s / Red` SKUs. None currently has order or inventory movement history, but choosing the canonical SKU is a merchant data decision. Application writes now reject new normalized duplicates and allow incremental repair; a database unique index remains blocked until that legacy row set is resolved deliberately.
-- Bulk variant creation commits in chunks; a later conflict leaves earlier chunks persisted. Use one atomic D1 batch or an explicit durable import job with row results.
-- Duplicate IDs in bulk update can partially commit before a conflict is reported. Reject duplicates before reads and make claims fail atomically.
+- Resolved in batches 2–3: bulk creates and mixed create/update spreadsheet plans commit in one D1 transaction; duplicate update IDs and normalized conflicts fail before writes.
 - General variant `version` exists but metadata updates neither compare nor increment it; product aggregate updates also lack a revision. Add CAS and 409 merge/reload UX.
 - Barcodes are indexed but not unique; lookup uses `.get()` and duplication copies barcodes. Define normalized uniqueness or an explicit duplicate-code policy.
 - Product aggregate image/attribute/rich-content writes and list enrichment can exceed D1’s 100-parameter limit. Bound/chunk at 90 or use per-row batch statements.
@@ -25,7 +24,7 @@ Last reviewed: 2026-07-12
 
 ## P1 attributes and collections
 
-- Attribute preset merging is page-local and duplicates used values across pages.
+- Resolved in batch 2: attribute value search/pagination and preset reconciliation use authoritative global/search totals and complete D1-safe used-value lookups.
 - Public attribute-filter resolution accepts deleted/non-filterable keys and is not capped below the D1 parameter limit.
 - Search facets derive from categories containing hits instead of the matching product set, so offered values can produce zero results.
 - Attribute deletion paths are inconsistent; bulk can bypass single-delete usage protections.

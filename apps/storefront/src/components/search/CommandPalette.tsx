@@ -25,6 +25,8 @@ interface SearchResultItem {
   price?: number;
   imageUrl?: string;
   discountedPrice?: number;
+  priceVaries?: boolean;
+  availableForSale?: boolean;
 }
 
 interface SearchResponse {
@@ -46,8 +48,12 @@ export default function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchRetry, setSearchRetry] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchRunRef = useRef(0);
   const normalizedQuery = React.useMemo(() => normalizeSearchQuery(query), [query]);
@@ -91,6 +97,9 @@ export default function CommandPalette() {
 
   useEffect(() => {
     if (isOpen) {
+      previousFocusRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
       document.body.style.overflow = "hidden";
       setSelectedIndex(0);
       requestAnimationFrame(() => {
@@ -104,7 +113,9 @@ export default function CommandPalette() {
         setResults(null);
         setHasSearched(false);
         setIsLoading(false);
+        setSearchError(null);
       }, 200);
+      previousFocusRef.current?.focus();
     }
   }, [isOpen]);
 
@@ -120,6 +131,7 @@ export default function CommandPalette() {
       setResults(null);
       setIsLoading(false);
       setHasSearched(false);
+      setSearchError(null);
       return;
     }
 
@@ -129,6 +141,7 @@ export default function CommandPalette() {
     const runId = searchRunRef.current + 1;
     searchRunRef.current = runId;
     setIsLoading(true);
+    setSearchError(null);
 
     const timer = setTimeout(async () => {
       try {
@@ -151,10 +164,17 @@ export default function CommandPalette() {
           setResults(json.data);
           setSelectedIndex(0);
           setHasSearched(true);
+        } else {
+          throw new Error("Search response was invalid");
         }
       } catch (error: unknown) {
         if (isAbortError(error)) return;
         console.error("Search error:", error);
+        if (searchRunRef.current === runId) {
+          setResults(null);
+          setHasSearched(true);
+          setSearchError("Search is temporarily unavailable.");
+        }
       } finally {
         if (searchRunRef.current === runId) {
           setIsLoading(false);
@@ -166,7 +186,31 @@ export default function CommandPalette() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [isOpen, normalizedQuery]);
+  }, [isOpen, normalizedQuery, searchRetry]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || !modalRef.current) return;
+      const focusable = Array.from(
+        modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", trapFocus);
+    return () => document.removeEventListener("keydown", trapFocus);
+  }, [isOpen]);
 
   const handleNavigation = useCallback(
     (e: React.KeyboardEvent) => {
@@ -224,6 +268,10 @@ export default function CommandPalette() {
     <div className="fixed inset-0 z-100 flex items-start justify-center sm:pt-[10vh]">
       {/* Desktop Backdrop */}
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search catalog"
         className="fixed inset-0 bg-white/80 sm:bg-black/40 backdrop-blur-md transition-opacity animate-in fade-in duration-200"
         onClick={() => setIsOpen(false)}
       />
@@ -258,6 +306,13 @@ export default function CommandPalette() {
               onKeyDown={handleNavigation}
               autoFocus
               enterKeyHint="search"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={flatResults.length > 0}
+              aria-controls="catalog-search-results"
+              aria-activedescendant={
+                flatResults.length > 0 ? `cmd-item-${selectedIndex}` : undefined
+              }
             />
 
             {/* Loader Inside Input (No shifting) */}
@@ -270,6 +325,8 @@ export default function CommandPalette() {
 
           {/* Stable Close Button */}
           <button
+            type="button"
+            aria-label="Close search"
             onClick={() => setIsOpen(false)}
             className="shrink-0 text-sm font-medium text-gray-500 hover:text-black px-3 py-2 bg-gray-100 rounded-lg transition-colors active:scale-95"
           >
@@ -282,11 +339,13 @@ export default function CommandPalette() {
 
         {/* Results List */}
         <div
+          id="catalog-search-results"
+          role="listbox"
           className="overflow-y-auto p-0 sm:p-2 scrollbar-hide flex-1 min-h-0 bg-gray-50/50 sm:bg-white"
           onClick={handleEmptyClick}
         >
           {/* State: Empty/Start */}
-          {!query && (
+          {!normalizedQuery && (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 py-24 sm:py-20 pointer-events-none">
               <div className="p-4 bg-gray-50 rounded-full mb-4">
                 <Search className="w-6 h-6 opacity-20" />
@@ -298,7 +357,25 @@ export default function CommandPalette() {
           )}
 
           {/* State: No Results */}
-          {hasSearched && !isLoading && flatResults.length === 0 && (
+          {searchError && !isLoading && (
+            <div
+              className="flex flex-col items-center justify-center h-full text-gray-500 py-24 sm:py-20"
+              role="alert"
+            >
+              <AlertCircle className="w-8 h-8 opacity-40 mb-3 text-red-500" />
+              <p className="text-gray-900 font-medium">Search unavailable</p>
+              <p className="text-sm mt-1">Your query was not lost.</p>
+              <button
+                type="button"
+                className="mt-4 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
+                onClick={() => setSearchRetry((value) => value + 1)}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {hasSearched && !isLoading && !searchError && flatResults.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 py-24 sm:py-20">
               <AlertCircle className="w-8 h-8 opacity-20 mb-3 text-red-500" />
               <p className="text-gray-900 font-medium">No results found</p>
@@ -351,8 +428,9 @@ export default function CommandPalette() {
                               {p.name}
                             </div>
                             <div className="text-xs text-gray-500 font-medium">
-                              {p.discountedPrice ? (
+                              {p.discountedPrice !== undefined ? (
                                 <span className="text-primary">
+                                  {p.priceVaries ? "From " : ""}
                                   {getCurrencySymbol()}
                                   {p.discountedPrice.toLocaleString()}
                                 </span>
@@ -363,6 +441,11 @@ export default function CommandPalette() {
                                 </span>
                               )}
                             </div>
+                            {p.availableForSale === false ? (
+                              <div className="mt-0.5 text-[11px] font-medium text-gray-400">
+                                Sold out
+                              </div>
+                            ) : null}
                           </div>
                           <ChevronRight
                             className={cn(
@@ -474,15 +557,18 @@ function ResultRow({
   id: string;
 }) {
   return (
-    <div
+    <button
+      type="button"
       id={id}
+      role="option"
+      aria-selected={active}
       onClick={onClick}
       className={cn(
-        "flex items-center px-4 py-3 cursor-pointer transition-all duration-150 border-b border-gray-50 sm:border-none sm:rounded-lg sm:mx-2",
+        "flex w-full items-center px-4 py-3 text-left cursor-pointer transition-all duration-150 border-b border-gray-50 sm:border-none sm:rounded-lg sm:mx-2",
         active ? "bg-muted" : "bg-white hover:bg-muted/50",
       )}
     >
       {children}
-    </div>
+    </button>
   );
 }

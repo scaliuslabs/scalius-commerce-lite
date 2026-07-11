@@ -21,6 +21,7 @@ import type { Category, CollectionFormValues, Product } from "./types";
 
 const collectionApi = vi.hoisted(() => ({
   createCollection: vi.fn(),
+  getCollectionProductOptions: vi.fn(),
   updateCollection: vi.fn(),
 }));
 
