@@ -25,7 +25,6 @@ const majorListRoutes = [
   "apps/admin-v2/src/routes/admin/collections/index.tsx",
   "apps/admin-v2/src/routes/admin/discounts/index.tsx",
   "apps/admin-v2/src/routes/admin/pages/index.tsx",
-  "apps/admin-v2/src/routes/admin/widgets/index.tsx",
 ];
 
 const dndMarkers = [

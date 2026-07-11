@@ -16,11 +16,6 @@ import {
 } from "../ui/alert-dialog";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import {
-  registerAdminAssistantPageActionHandler,
-  type AdminAssistantPageAction,
-} from "./assistant/page-actions";
-import { registerAdminAssistantSurface } from "./assistant/page-state";
-import {
   ProductImagesSection,
   TitleDescriptionSection,
   SeoSection,
@@ -44,19 +39,6 @@ import {
   type ProductFormValues,
   type Category,
 } from "./product-form";
-import {
-  buildProductAssistantSurfaceLabel,
-  createProductAssistantSurfaceInstanceId,
-  createProductAssistantActionHandlers,
-  createProductAssistantSurfaceActions,
-  countProductAssistantValidationErrors,
-  focusProductAssistantFieldInForm,
-  getProductAssistantActionId,
-  getProductAssistantSurfaceId,
-  PRODUCT_ASSISTANT_SURFACE_CAPABILITIES,
-  type ProductAssistantField,
-  type ProductAssistantSurfaceRegistration,
-} from "./product-form/assistantSurface";
 import type { VariantOptionLabels } from "./product-form/variants/types";
 
 interface ProductFormProps {
@@ -171,188 +153,6 @@ export function ProductForm({
       form,
     });
 
-  // Assistant context is allowlisted product drafting state only; never widen to raw form values.
-  const assistantFormRef = React.useRef<HTMLFormElement | null>(null);
-  const assistantSkipSlugGenerationRef = React.useRef(false);
-  const assistantIsSubmittingRef = React.useRef(isSubmitting);
-  const assistantValidationErrorCountRef = React.useRef(0);
-  const assistantSubmitHandlerRef = React.useRef(handleSubmit);
-  const assistantSurfaceInstanceIdRef = React.useRef<string | null>(null);
-  if (!assistantSurfaceInstanceIdRef.current) {
-    assistantSurfaceInstanceIdRef.current =
-      createProductAssistantSurfaceInstanceId();
-  }
-  const assistantSurfaceId = getProductAssistantSurfaceId({
-    mode: isEdit ? "edit" : "create",
-    productId: defaultValues?.id,
-    instanceId: assistantSurfaceInstanceIdRef.current,
-  });
-  const assistantName = form.watch("name");
-  const assistantDescription = form.watch("description");
-  const assistantValidationErrorCount = countProductAssistantValidationErrors(
-    form.formState.errors,
-  );
-  const assistantSurfaceLabel = React.useMemo(
-    () =>
-      buildProductAssistantSurfaceLabel({
-        mode: isEdit ? "edit" : "create",
-        name: assistantName,
-        description: assistantDescription,
-      }),
-    [assistantDescription, assistantName, isEdit],
-  );
-  React.useEffect(() => {
-    assistantIsSubmittingRef.current = isSubmitting;
-    assistantValidationErrorCountRef.current = assistantValidationErrorCount;
-    assistantSubmitHandlerRef.current = handleSubmit;
-  }, [assistantValidationErrorCount, handleSubmit, isSubmitting]);
-
-  const focusAssistantField = React.useCallback(
-    (field: ProductAssistantField) =>
-      focusProductAssistantFieldInForm(assistantFormRef.current, field),
-    [],
-  );
-  const applyAssistantFieldDraft = React.useCallback(
-    (field: ProductAssistantField, value: string) => {
-      if (field === "name") {
-        assistantSkipSlugGenerationRef.current = true;
-      }
-
-      form.setValue(field, value, {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
-      void form.trigger(field);
-
-      if (field === "name") {
-        queueMicrotask(() => {
-          assistantSkipSlugGenerationRef.current = false;
-        });
-      }
-    },
-    [form],
-  );
-  const saveAssistantRegisteredForm = React.useCallback(async () => {
-    if (assistantIsSubmittingRef.current) return false;
-
-    const isValid = await form.trigger();
-    if (!isValid) return false;
-
-    let saved = false;
-    await form.handleSubmit(async (values) => {
-      saved = await assistantSubmitHandlerRef.current(values);
-    })();
-    return saved;
-  }, [form]);
-  const assistantPageActions = React.useMemo(
-    () =>
-      createProductAssistantActionHandlers({
-        focusField: focusAssistantField,
-        applyFieldDraft: applyAssistantFieldDraft,
-        saveForm: saveAssistantRegisteredForm,
-        isSubmitting: () => assistantIsSubmittingRef.current,
-        validateForm: () => form.trigger(),
-        getValidationErrorCount: () =>
-          assistantValidationErrorCountRef.current,
-      }),
-    [
-      applyAssistantFieldDraft,
-      focusAssistantField,
-      form,
-      saveAssistantRegisteredForm,
-    ],
-  );
-  const assistantSurfaceActions = React.useMemo(
-    () => createProductAssistantSurfaceActions(assistantSurfaceId),
-    [assistantSurfaceId],
-  );
-  const assistantSurfaceHandleRef = React.useRef<ReturnType<
-    typeof registerAdminAssistantSurface
-  > | null>(null);
-
-  React.useEffect(() => {
-    const handles = PRODUCT_ASSISTANT_SURFACE_CAPABILITIES.actions.map(
-      (actionName) =>
-        registerAdminAssistantPageActionHandler(
-          getProductAssistantActionId(assistantSurfaceId, actionName),
-          async (action: AdminAssistantPageAction) => {
-            if (
-              action.targetId !== assistantSurfaceId ||
-              action.type !== actionName
-            ) {
-              return false;
-            }
-
-            if (actionName === "focus_surface") {
-              const result = await assistantPageActions.focus_surface({
-                fieldName:
-                  action.type === "focus_surface"
-                    ? action.fieldName
-                    : undefined,
-              });
-              return result.ok;
-            }
-
-            if (actionName === "apply_field_draft") {
-              if (action.type !== "apply_field_draft") return false;
-              const result = await assistantPageActions.apply_field_draft({
-                fieldName: action.fieldName,
-                value:
-                  typeof action.value === "string" ? action.value : undefined,
-              });
-              return result.ok;
-            }
-
-            const result = await assistantPageActions.save_registered_form();
-            return result.ok;
-          },
-        ),
-    );
-
-    return () => {
-      handles.forEach((handle) => handle.unregister());
-    };
-  }, [assistantPageActions, assistantSurfaceId]);
-
-  React.useEffect(() => {
-    const registration: ProductAssistantSurfaceRegistration = {
-      id: assistantSurfaceId,
-      kind: "form",
-      assistantCapabilities: PRODUCT_ASSISTANT_SURFACE_CAPABILITIES,
-      assistantActions: assistantSurfaceActions,
-    };
-    const handle = registerAdminAssistantSurface(registration);
-    assistantSurfaceHandleRef.current = handle;
-
-    return () => {
-      handle.unregister();
-      if (assistantSurfaceHandleRef.current === handle) {
-        assistantSurfaceHandleRef.current = null;
-      }
-    };
-  }, [assistantSurfaceActions, assistantSurfaceId]);
-
-  React.useEffect(() => {
-    const update: Partial<ProductAssistantSurfaceRegistration> = {
-      id: assistantSurfaceId,
-      label: assistantSurfaceLabel,
-      dirty: form.formState.isDirty,
-      submitting: isSubmitting,
-      validationErrorCount: assistantValidationErrorCount,
-      assistantCapabilities: PRODUCT_ASSISTANT_SURFACE_CAPABILITIES,
-      assistantActions: assistantSurfaceActions,
-    };
-    assistantSurfaceHandleRef.current?.update(update);
-  }, [
-    assistantSurfaceActions,
-    assistantSurfaceId,
-    assistantSurfaceLabel,
-    assistantValidationErrorCount,
-    form.formState.isDirty,
-    isSubmitting,
-  ]);
-
   // Auto-generate slug from name - ONLY for new products
   React.useEffect(() => {
     if (!isEdit) {
@@ -360,8 +160,7 @@ export function ProductForm({
         if (
           name === "name" &&
           value.name &&
-          !form.getValues("slugEdited") &&
-          !assistantSkipSlugGenerationRef.current
+          !form.getValues("slugEdited")
         ) {
           const slug = generateSlug(value.name);
           form.setValue("slug", slug, {
@@ -382,7 +181,6 @@ export function ProductForm({
       />
       <Form {...form}>
         <form
-          ref={assistantFormRef}
           method="post"
           onSubmit={form.handleSubmit(handleSubmit)}
           className="-mt-4 pb-6"

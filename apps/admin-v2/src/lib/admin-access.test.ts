@@ -116,7 +116,6 @@ describe("admin shell access", () => {
       "/admin/discounts/discount-123/edit",
       "/admin/analytics/report-123/edit",
       "/admin/pages/page-123/edit",
-      "/admin/widgets/widget-123",
       "/admin/settings/account",
       "/admin/settings/cache",
       "/admin/settings/taxes",

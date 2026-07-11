@@ -17,8 +17,6 @@ describe("exact cache generations", () => {
     expect(shouldUseExactCacheGeneration("sitemap_products_page=2")).toBe(true);
     expect(shouldUseExactCacheGeneration("all_products_default")).toBe(true);
     expect(shouldUseExactCacheGeneration("category_products_shoes_default")).toBe(true);
-    expect(shouldUseExactCacheGeneration("widget_wid_1")).toBe(true);
-    expect(shouldUseExactCacheGeneration("widgets_scope_product_prod_1")).toBe(true);
     expect(shouldUseExactCacheGeneration("page_render_about-us_build")).toBe(true);
     expect(shouldUseExactCacheGeneration("html_path_/categories/drinks")).toBe(true);
     expect(shouldUseExactCacheGeneration("checkout_config")).toBe(true);

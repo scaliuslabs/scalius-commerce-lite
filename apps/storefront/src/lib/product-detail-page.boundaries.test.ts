@@ -226,17 +226,6 @@ describe("product detail page SKU boundaries", () => {
     expect(source).not.toContain('type="radio"');
   });
 
-  it("keeps assistant product context tied to the buyer-facing product name", () => {
-    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
-
-    expect(source).toContain(
-      "const pageTitle = product.metaTitle || product.name;",
-    );
-    expect(source).toContain("assistantPageTitle={product.name}");
-    expect(source).toContain('assistantPageKind="product"');
-    expect(source).not.toContain("assistantPageTitle={pageTitle}");
-  });
-
   it("uses product.hasVariants for customer option metadata instead of buyer SKU count", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 

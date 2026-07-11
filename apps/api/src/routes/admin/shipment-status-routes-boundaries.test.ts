@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 
 const ORDERS_STATUS_SOURCE = fileURLToPath(new URL("./orders-status.ts", import.meta.url));
 const SHIPMENTS_SOURCE = fileURLToPath(new URL("./shipments.ts", import.meta.url));

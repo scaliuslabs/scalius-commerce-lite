@@ -3,7 +3,6 @@
 // Dynamic route for CMS pages
 
 import Layout from "../layouts/Layout.astro";
-import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import { getPageRenderData, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
@@ -75,8 +74,6 @@ if (!layoutData) {
   response.headers.set("X-Storefront-Data-State", "unavailable");
   return response;
 }
-const pageWidgets = pageRenderData?.widgets ?? [];
-
 const title = page.metaTitle || page.title;
 const description = page.metaDescription || "";
 const sanitizedPageContent = sanitizeHtml(page.content || "");
@@ -128,13 +125,6 @@ const richContentClasses =
   ogType="website"
   noindex={page.noIndex === true}
 >
-  <WidgetPlacementZone
-    widgets={pageWidgets}
-    scope="page"
-    scopeId={page.id}
-    placementSlot="top"
-    priority
-  />
   {
     isStandaloneShortcodePage ? (
       <>
@@ -149,19 +139,7 @@ const richContentClasses =
             />
           </div>
         )}
-        <WidgetPlacementZone
-          widgets={pageWidgets}
-          scope="page"
-          scopeId={page.id}
-          placementSlot="before_content"
-        />
         <div class="w-full overflow-hidden" set:html={processedContent} />
-        <WidgetPlacementZone
-          widgets={pageWidgets}
-          scope="page"
-          scopeId={page.id}
-          placementSlot="after_content"
-        />
       </>
     ) : (
       <div class="w-full max-w-7xl mx-auto px-4 py-8">
@@ -185,25 +163,9 @@ const richContentClasses =
           </figure>
         )}
 
-        <WidgetPlacementZone
-          widgets={pageWidgets}
-          scope="page"
-          scopeId={page.id}
-          placementSlot="before_content"
-          itemClass="mb-8"
-        />
-
         <div class="w-full">
           <div class={richContentClasses} set:html={processedContent} />
         </div>
-
-        <WidgetPlacementZone
-          widgets={pageWidgets}
-          scope="page"
-          scopeId={page.id}
-          placementSlot="after_content"
-          itemClass="mt-8"
-        />
 
         <div class="text-center mt-10 pt-6 border-t border-gray-100">
           <a
@@ -229,12 +191,6 @@ const richContentClasses =
       </div>
     )
   }
-  <WidgetPlacementZone
-    widgets={pageWidgets}
-    scope="page"
-    scopeId={page.id}
-    placementSlot="bottom"
-  />
   {
     hasProductShortcode && (
       <script>import "../scripts/hydrateProductShortcodes.ts";</script>

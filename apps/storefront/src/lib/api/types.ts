@@ -29,8 +29,6 @@ import type {
   GetApiV1CheckoutLanguagesActiveResponse as GetCheckoutLanguagesActiveResponse,
   PostApiV1DiscountsValidateResponse as PostDiscountsValidateResponse,
   GetApiV1AnalyticsConfigurationsResponse as GetAnalyticsConfigurationsResponse,
-  GetApiV1WidgetsActiveHomepageResponse as GetWidgetsActiveHomepageResponse,
-  GetApiV1WidgetsByIdResponse as GetWidgetsByIdResponse,
   GetApiV1LocationsCitiesResponse as GetLocationsCitiesResponse,
   GetApiV1LocationsZonesResponse as GetLocationsZonesResponse,
   GetApiV1LocationsAreasResponse as GetLocationsAreasResponse,
@@ -58,8 +56,6 @@ export type {
   GetCheckoutLanguagesActiveResponse,
   PostDiscountsValidateResponse,
   GetAnalyticsConfigurationsResponse,
-  GetWidgetsActiveHomepageResponse,
-  GetWidgetsByIdResponse,
   GetLocationsCitiesResponse,
   GetLocationsZonesResponse,
   GetLocationsAreasResponse,
@@ -201,7 +197,7 @@ export interface CategoryProductsResponse extends PaginatedResponse<Product> {
 }
 
 // ---------------------------------------------------------------------------
-// Collection & Widget Types (local domain types — SDK only has response wrappers)
+// Collection Types (local domain types — SDK only has response wrappers)
 // ---------------------------------------------------------------------------
 
 export interface CollectionConfig {
@@ -232,38 +228,6 @@ export interface CollectionWithProducts extends Collection {
   categories?: CategorySummary[];
   products?: Product[];
   featuredProduct?: Product | null;
-}
-
-export interface ApiWidget {
-  id: string;
-  name: string;
-  htmlContent: string;
-  cssContent?: string | null;
-  jsContent?: string | null;
-  isActive: boolean;
-  displayTarget: string;
-  placementRule: string;
-  referenceCollectionId?: string | null;
-  sortOrder: number;
-  placements?: ApiWidgetPlacement[];
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string | null;
-}
-
-export interface ApiWidgetPlacement {
-  id: string;
-  widgetId: string;
-  scope: string;
-  scopeId?: string | null;
-  slot: string;
-  anchorType?: string | null;
-  anchorId?: string | null;
-  sortOrder: number;
-  isActive: boolean;
-  createdAt?: string | number | null;
-  updatedAt?: string | number | null;
-  deletedAt?: string | number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +268,6 @@ export interface Page {
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
-  widgets?: ApiWidget[];
 }
 
 // Recursive Navigation Item - supports unlimited nesting depth

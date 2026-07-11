@@ -39,36 +39,9 @@
       "bucket_name": "scalius-media"
     }
   ],
-  "ai": {
-    "binding": "AI"
-  },
   "send_email": [
     {
       "name": "EMAIL"
-    }
-  ],
-  "services": [
-    {
-      "binding": "ADMIN_AGENT",
-      "service": "scalius-admin-agent"
-    },
-    {
-      "binding": "STOREFRONT_AGENT",
-      "service": "scalius-storefront-agent"
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "WidgetDesignAgent",
-        "class_name": "WidgetDesignAgent"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "tag": "widget_design_agent_v1",
-      "new_sqlite_classes": ["WidgetDesignAgent"]
     }
   ],
   "queues": {

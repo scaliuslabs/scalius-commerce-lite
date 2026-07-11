@@ -119,7 +119,7 @@ const HAS_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 /**
  * Sanitizes admin-authored rich HTML using a parser-backed allowlist.
  *
- * The sanitizer preserves layout/content tags used by CMS pages and widgets,
+ * The sanitizer preserves layout/content tags used by CMS pages,
  * while dropping script-capable tags, event attributes, unsafe protocols, and
  * dangerous CSS patterns. Unknown tags are unwrapped so merchant-authored text
  * survives without preserving unsafe elements.

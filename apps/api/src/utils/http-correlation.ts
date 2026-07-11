@@ -30,7 +30,7 @@ export function normalizeCfRay(value: string | undefined): string | undefined {
 }
 
 function generateRequestId(): string {
-  const randomUUID = globalThis.crypto?.randomUUID?.();
+  const randomUUID = crypto?.randomUUID?.();
   if (randomUUID) return randomUUID;
 
   const time = Date.now().toString(36);

@@ -13,17 +13,6 @@ export interface MediaFileDto {
   width?: number | null;
   height?: number | null;
   folderId?: string | null;
-  sourceType?: "merchant_upload" | "ai_generated" | null;
-  generationId?: string | null;
-  generationProvider?: string | null;
-  generationModel?: string | null;
-  generationPromptHash?: string | null;
-  generationInputTokens?: number | null;
-  generationOutputTokens?: number | null;
-  generationTotalTokens?: number | null;
-  generationCostUsdMicros?: number | null;
-  generationCostStatus?: "reported" | "not_reported" | null;
-  generatedAt?: MediaTimestamp | null;
   createdAt: MediaTimestamp;
   updatedAt?: MediaTimestamp;
   deletedAt?: MediaTimestamp | null;

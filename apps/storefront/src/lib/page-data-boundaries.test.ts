@@ -11,7 +11,7 @@ function indexAfter(source: string, needle: string, after: number): number {
 }
 
 describe("storefront page data boundaries", () => {
-  it("keeps product detail scoped widget reads in the first dependent fetch wave", () => {
+  it("keeps product detail reads in the first fetch wave", () => {
     const source = readFileSync(
       `${STOREFRONT_SRC_ROOT}/pages/products/[slug].astro`,
       "utf8",
@@ -21,23 +21,20 @@ describe("storefront page data boundaries", () => {
     const productPromiseIndex = source.indexOf(
       "const productPromise = getProductBySlug(slug)",
     );
-    const widgetsPromiseIndex = source.indexOf(
-      "const productWidgetsPromise = productPromise.then",
+    const shippingPromiseIndex = source.indexOf(
+      "const shippingMethodsPromise = getShippingMethods()",
     );
     const promiseAllIndex = source.indexOf(
-      "fetchedProductWidgets] = await Promise.all([",
-    );
-    const lateWidgetAwaitIndex = source.indexOf(
-      "await getActiveWidgetsForScope(\"product\"",
-      promiseAllIndex,
+      "const [layoutData, productData, shippingMethods] = await Promise.all([",
     );
 
     expect(layoutPromiseIndex).toBeGreaterThan(-1);
     expect(productPromiseIndex).toBeGreaterThan(layoutPromiseIndex);
-    expect(widgetsPromiseIndex).toBeGreaterThan(productPromiseIndex);
-    expect(promiseAllIndex).toBeGreaterThan(widgetsPromiseIndex);
-    expect(source.slice(promiseAllIndex)).toContain("productWidgetsPromise");
-    expect(lateWidgetAwaitIndex).toBe(-1);
+    expect(shippingPromiseIndex).toBeGreaterThan(productPromiseIndex);
+    expect(promiseAllIndex).toBeGreaterThan(shippingPromiseIndex);
+    expect(source.slice(promiseAllIndex)).toContain("layoutPromise");
+    expect(source.slice(promiseAllIndex)).toContain("productPromise");
+    expect(source.slice(promiseAllIndex)).toContain("shippingMethodsPromise");
   });
 
   it("keeps category cold-cache reads in the first fetch wave", () => {
@@ -88,15 +85,10 @@ describe("storefront page data boundaries", () => {
       fastBranchIndex,
     );
     const categoryFetchIndex = source.indexOf("getCategoryBySlug");
-    const widgetsPromiseIndex = indexAfter(
-      source,
-      "const widgetsPromise = productsPromise.then",
-      fastProductsPromiseIndex,
-    );
     const promiseAllIndex = indexAfter(
       source,
       "] = await Promise.all([",
-      widgetsPromiseIndex,
+      fastProductsPromiseIndex,
     );
 
     expect(dynamicCheckIndex).toBeGreaterThan(-1);
@@ -114,11 +106,9 @@ describe("storefront page data boundaries", () => {
     expect(dynamicProductsPromiseIndex).toBeGreaterThan(dynamicAttributesAwaitIndex);
     expect(dynamicProductsPromiseIndex).toBeLessThan(dynamicPromiseAllIndex);
     expect(categoryFetchIndex).toBe(-1);
-    expect(widgetsPromiseIndex).toBeGreaterThan(fastProductsPromiseIndex);
-    expect(promiseAllIndex).toBeGreaterThan(widgetsPromiseIndex);
+    expect(promiseAllIndex).toBeGreaterThan(fastProductsPromiseIndex);
     expect(source.slice(promiseAllIndex)).toContain("productsPromise");
     expect(source.slice(promiseAllIndex)).toContain("attributesPromise");
-    expect(source.slice(promiseAllIndex)).toContain("widgetsPromise");
   });
 
   it("keeps search cold-cache reads in the first fetch wave", () => {
@@ -262,13 +252,13 @@ describe("storefront page data boundaries", () => {
     );
   });
 
-  it("trusts CMS page render data without refetching page widgets", () => {
+  it("uses the consolidated CMS page render endpoint", () => {
     const source = readFileSync(
       `${STOREFRONT_SRC_ROOT}/pages/[slug].astro`,
       "utf8",
     );
 
-    expect(source).toContain("const pageWidgets = pageRenderData?.widgets ?? []");
-    expect(source).not.toContain("getActiveWidgetsForScope(\"page\"");
+    expect(source).toContain("getPageRenderData(slug)");
+    expect(source).toContain("const page = pageRenderData?.page ?? null");
   });
 });

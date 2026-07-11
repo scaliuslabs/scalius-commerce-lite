@@ -15,7 +15,7 @@ describe("sendServerEvent", () => {
     sendMetaCapiEventMock.mockClear();
     sessionStorage.clear();
     window.__META_CAPI_BROWSER_EVENTS_ENABLED__ = true;
-    window.history.replaceState(null, "", "/products/widget");
+    window.history.replaceState(null, "", "/products/shoe");
   });
 
   it("does not call the backend when browser CAPI dispatch is not ready", () => {
@@ -58,7 +58,7 @@ describe("sendServerEvent", () => {
     expect(sendMetaCapiEventMock).toHaveBeenCalledTimes(1);
     const payload = sendMetaCapiEventMock.mock.calls[0][0];
     expect(payload.eventName).toBe("ViewContent");
-    expect(payload.eventSourceUrl).toBe("http://localhost:3000/products/widget");
+    expect(payload.eventSourceUrl).toBe("http://localhost:3000/products/shoe");
     expect(payload.userData).not.toHaveProperty("em");
     expect(payload.userData).not.toHaveProperty("ph");
     expect(payload.userData).not.toHaveProperty("fn");

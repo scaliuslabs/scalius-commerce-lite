@@ -4,12 +4,11 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 
 ## Load First
 
-- Current remediation queue: `audit/REMEDIATION_TRACKER.md`
-- Verification/deploy playbook: `audit/VERIFICATION_PLAYBOOK.md`
+- Current operations index: `audit/README.md`
+- Production operations runbook: `audit/OPERATIONAL_RUNBOOK.md`
 - Platform goal, release bar, and orchestration rules: `docs/codex/PLATFORM-GOAL.md`
 - Codex doc index and update rules: `docs/codex/README.md`
 - Architecture map when boundaries are unclear: `docs/ARCHITECTURE.md`
-- Historical full agent notes only when a missing landmine blocks you: `docs/codex/AGENTS-REFERENCE.md`
 
 ## Non-Negotiables
 
@@ -37,10 +36,8 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 - Category, collection, and CMS page admin forms share `ResourceDiscoveryReadiness`/`buildResourceDiscoveryPreview()` for canonical, sitemap, and JSON-LD outcome previews. Do not add one-off preview logic in individual forms; keep page copy honest when runtime does not emit page-specific JSON-LD.
 - Sitemap-advertised static pages need canonicals, listing query/sort/filter/page variants should canonicalize or `noindex,follow`, and sitemap XML should emit absolute `<loc>` plus truthful `<lastmod>` without ignored `<priority>` or `<changefreq>` tags. Sitemap index entries must not use request/render time as `lastmod`; omit index-level `lastmod` until a truthful child-sitemap modified timestamp exists. The browser XSL view must mirror the generated XML contract and must not show priority/change-frequency columns.
 - OnlineStore/WebSite/Product/ProductGroup/Breadcrumb/CollectionPage JSON-LD must honor `settings.seo/discovery` structured-data toggles, and logo/product image URLs must pass through the absolute storefront SEO URL helper before schema emission. OnlineStore/WebSite names and Product offer seller identity are backed only by public Business settings `companyName`/`legalName`; do not fall back to footer/logo text or the literal `"Store"` for schema identity. OnlineStore also requires an absolute Store URL and header logo; if any prerequisite is missing, omit the script entirely rather than serializing `null`, and surface a dashboard readiness warning when the missing fact is known. Product offers may include shippingDetails only from active shipping methods, product brand should be emitted only from explicit product data, and Product/Offer JSON-LD must not fabricate facts such as `priceValidUntil` or condition. Product feed `<g:condition>` and Product/Offer `itemCondition` may be emitted only from saved `products.product_condition`; null/unknown condition means omit it. Breadcrumb JSON-LD follows the breadcrumb toggle independently from CollectionPage schema, and category CollectionPage schema prefers stored category description flattened to plain text before meta-description or generic fallback copy.
-- Store-level MerchantReturnPolicy JSON-LD may be emitted only from the merchant-saved `settings.seo/return_policy` fields: enabled, country, category, finite window days, fee responsibility, return method, and optional same-origin/absolute policy URL. Business settings writes must invalidate `layout` so organization/schema identity cannot stay stale. AEO/AIO work follows the same rule: expose accurate buyer-visible commerce facts, not extra schema that does not match the page, feed, and checkout truth. SEO setting saves must invalidate API/layout/homepage caches and schedule storefront warm paths for `/robots.txt`, `/sitemap.xml`, all sitemap child XML files, canonical `/api/product-feed.xml`, and compatibility `/api/facebook-feed.xml` so dashboard discovery changes do not leave crawlers with cold or stale public XML.
+- Store-level MerchantReturnPolicy JSON-LD may be emitted only from the merchant-saved `settings.seo/return_policy` fields: enabled, country, category, finite window days, fee responsibility, return method, and optional same-origin/absolute policy URL. Business settings writes must invalidate `layout` so organization/schema identity cannot stay stale. Public discovery must expose accurate buyer-visible commerce facts, not extra schema that does not match the page, feed, and checkout truth. SEO setting saves must invalidate API/layout/homepage caches and schedule storefront warm paths for `/robots.txt`, `/sitemap.xml`, all sitemap child XML files, canonical `/api/product-feed.xml`, and compatibility `/api/facebook-feed.xml` so dashboard discovery changes do not leave crawlers with cold or stale public XML.
 - UCP discovery is currently a read-only catalog surface: `/.well-known/ucp` advertises only catalog search/lookup backed by the same buyer-resolvable SKU/feed projection as Merchant XML. Do not advertise UCP checkout, cart, order, fulfillment, payment handlers, or recovery URLs until a D1-backed UCP session/idempotency/signing/payment design is implemented and verified.
-- Admin MCP must stay dashboard-proxied and internal-only: public agent-host `/mcp/admin` returns no-store 404, while `/api/assistant/mcp` proxies only to `http://agent.internal/mcp/admin` with dashboard cookies and MCP protocol headers.
-- Assistant/chatbot navigation must stay catalog-derived. A direct, unambiguous user command to one catalog-known Admin route may navigate immediately only when the requested destination agrees with the sanitized action label/path; suggestions and ambiguous destinations stay click-confirmed. Storefront assistant navigation may only target same-origin public buyer pages. Do not let models choose arbitrary URLs or mutate commerce/admin state.
 - `robots.txt` should advertise exactly one canonical current storefront `/sitemap.xml` URL when sitemap advertising is enabled, and no sitemap directives when it is disabled. Do not preserve stale off-origin, same-origin non-canonical, or canonical-equivalent-but-non-exact `Sitemap:` lines from copied settings.
 - Public `/seo` responses are KV-cached; when expanding that response contract, bump the nested route cache namespace (currently `api:seo:v4:`) while keeping the broader `api:seo:` invalidation group intact.
 - Analytics snippets are trusted admin code, but first-class provider types must not preserve obvious placeholders as active public injection. Cloudflare Web Analytics is the Cloudflare-native default alternative: accept a real token or official beacon snippet, canonicalize it to the platform-generated beacon snippet, force it off Partytown, and block the placeholder token before activation or legacy toggles. Meta CAPI browser-event ingestion must stay fail-closed and cheap: validate same-origin event sources before work, skip dispatch while the KV `meta-capi:browser-events:circuit` marker is open, open that 15-minute circuit on non-retryable provider/config failures, and clear it after a successful Meta settings save. Do not add hot retries, success logs, raw provider payload logs, or per-event failure logs for disabled/unconfigured credentials.
@@ -52,13 +49,12 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 
 ## Work Loop
 
-1. Check `audit/REMEDIATION_TRACKER.md` before choosing or continuing a slice.
-2. Load only the task-specific docs and files needed for the slice; if docs conflict, verify against code and runtime before trusting prose.
-3. Prefer small, boring fixes that remove complexity instead of explaining it away.
-4. In goal-mode work, act as the lead: delegate independent code slices to workers with disjoint file ownership, review/integrate their patches, and keep direct edits narrow.
-5. Add focused tests around the failure mode before broad gates.
-6. For meaningful code changes, verify locally, deploy when required, smoke live behavior, update docs, then commit.
-7. When new agent guidance is needed, add the shortest pointer/rule here and put durable details beside the owning code, test, or focused doc.
+1. Load only the task-specific docs and files needed for the slice; if docs conflict, verify against code and runtime before trusting prose.
+2. Prefer small, boring fixes that remove complexity instead of explaining it away.
+3. In goal-mode work, act as the lead: delegate independent code slices to workers with disjoint file ownership, review/integrate their patches, and keep direct edits narrow.
+4. Add focused tests around the failure mode before broad gates.
+5. For meaningful code changes, verify locally, deploy when required, smoke live behavior, update docs, then commit.
+6. When new agent guidance is needed, add the shortest pointer/rule here and put durable details beside the owning code, test, or focused doc.
 
 ## Context Hygiene
 

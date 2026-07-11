@@ -19,7 +19,6 @@ import {
   type VariantOptionAvailability,
   type VariantOptionAxis,
 } from "./lib/variant-state-machine";
-import { buildStorefrontComputerAddToCartLabel } from "./lib/computer-add-to-cart";
 
 interface Props {
   product: Product;
@@ -119,21 +118,7 @@ const initialAddToCartAvailable = Boolean(
 );
 const initialAddToCartAriaLabel =
   initialAddToCartAvailable && initialSelectedVariant
-    ? buildStorefrontComputerAddToCartLabel({
-        productName: product.name,
-        variantId: initialSelectedVariant.id,
-        options: [
-          initialSelectedSize
-            ? { name: option1Label, label: initialSelectedSize }
-            : null,
-          initialSelectedColor
-            ? { name: option2Label, label: initialSelectedColor }
-            : null,
-        ].filter(
-          (option): option is { name: string; label: string } =>
-            Boolean(option),
-        ),
-      })
+    ? `Add ${product.name} to cart`
     : `Select an available ${product.name} option to add to cart`;
 const stockStatus =
   buyerStockSummary.tone === "available"
@@ -517,9 +502,6 @@ const productVariantsJson = serializeJsonForInlineScript(
         <button
           type="button"
           data-action="add-to-cart"
-          data-scalius-computer-action={initialAddToCartAvailable
-            ? "allow"
-            : undefined}
           disabled={!initialAddToCartAvailable}
           class="flex items-center justify-center rounded-lg border border-primary bg-primary/5 py-2 lg:py-2.5 text-sm font-medium text-primary shadow-sm hover:bg-primary/10 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:border-border disabled:hover:scale-100 cursor-pointer"
           aria-label={initialAddToCartAriaLabel}
@@ -532,7 +514,6 @@ const productVariantsJson = serializeJsonForInlineScript(
         <button
           type="button"
           data-action="buy-now"
-          data-scalius-computer-human-only
           disabled={purchaseUnavailable}
           class="flex items-center justify-center rounded-lg border border-primary bg-primary py-2 lg:py-2.5 text-sm font-medium text-primary-foreground shadow-md hover:bg-primary/90 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:border-border disabled:hover:scale-100 cursor-pointer"
           aria-label={purchaseUnavailable ? "Product unavailable" : "Buy now"}

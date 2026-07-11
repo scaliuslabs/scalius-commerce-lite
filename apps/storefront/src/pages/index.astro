@@ -4,7 +4,6 @@ import "../styles/global.css";
 import Collection2 from "@/components/collection2.astro";
 import Collection1 from "../components/collection1.astro";
 import Hero from "@/components/hero.astro";
-import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import {
   getHomepageData,
   type CollectionWithProducts,
@@ -32,7 +31,6 @@ const seo = homepageData?.seo ?? {
   homepageMetaDescription: null as string | null,
 };
 const hero = homepageData?.hero || { desktop: null, mobile: null };
-const activeWidgets = homepageData?.widgets || [];
 const activeCollections = homepageData?.collections || [];
 
 const homepageTitle =
@@ -67,13 +65,6 @@ function isCollection2(
   canonicalUrl={canonicalUrl ?? undefined}
   ogType="website"
 >
-  <WidgetPlacementZone
-    widgets={activeWidgets}
-    scope="homepage"
-    placementSlot="top"
-    priority
-  />
-
   <section class="w-full">
     <Hero hero={hero} />
   </section>
@@ -82,14 +73,6 @@ function isCollection2(
     {
       activeCollections.map((collection) => (
         <Fragment key={collection.id}>
-          <WidgetPlacementZone
-            widgets={activeWidgets}
-            scope="homepage"
-            placementSlot="before_collection"
-            anchorId={collection.id}
-            itemClass="mb-2"
-          />
-
           {isCollection1(collection) && (
             <Collection1
               collection={collection}
@@ -97,23 +80,8 @@ function isCollection2(
             />
           )}
           {isCollection2(collection) && <Collection2 collection={collection} />}
-
-          <WidgetPlacementZone
-            widgets={activeWidgets}
-            scope="homepage"
-            placementSlot="after_collection"
-            anchorId={collection.id}
-            itemClass="mt-2"
-          />
         </Fragment>
       ))
     }
   </div>
-
-  <WidgetPlacementZone
-    widgets={activeWidgets}
-    scope="homepage"
-    placementSlot="bottom"
-    itemClass="mt-1"
-  />
 </Layout>

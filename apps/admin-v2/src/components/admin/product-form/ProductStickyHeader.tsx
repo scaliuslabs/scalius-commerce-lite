@@ -64,7 +64,6 @@ export function ProductActionBar({
           <Button
             size="sm"
             type="button"
-            data-scalius-computer-action="allow"
             disabled={isSubmitting}
             onClick={onSave}
             className="h-8 text-xs font-medium"

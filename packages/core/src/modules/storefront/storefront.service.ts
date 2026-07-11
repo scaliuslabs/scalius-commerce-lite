@@ -14,7 +14,6 @@ import {
   metaConversionsSettings,
   pages,
   settings,
-  WidgetPlacementScope,
   type Analytics,
 } from "@scalius/database/schema";
 import { eq, isNull, and, sql } from "drizzle-orm";
@@ -35,10 +34,6 @@ import {
   normalizeSupportedCurrencyCode,
 } from "@scalius/shared/currency";
 import { getPublicPageBySlug } from "../pages/pages.service";
-import {
-  getActiveHomepageWidgets,
-  getActiveWidgetPlacements,
-} from "../widgets/widgets.service";
 import type { Database } from "@scalius/database/client";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
@@ -115,7 +110,7 @@ function normalizeSocialLink(value: unknown): SocialLink {
 
 /**
  * Fetch and shape all homepage data in two batched D1 round-trips.
- * Returns the final { seo, hero, widgets, collections } object for c.json().
+ * Returns the final { seo, hero, collections } object for c.json().
  */
 export async function getHomepageData(db: Database) {
   // === BATCH 1: Independent top-level queries ===
@@ -183,8 +178,6 @@ export async function getHomepageData(db: Database) {
     mobile: formatSlider(mobileSlider),
   };
 
-  const formattedWidgets = await getActiveHomepageWidgets(db);
-
   // === BATCH 2: Products for collections ===
   const parsedCollections = (
     collectionResults as Record<string, unknown>[]
@@ -233,7 +226,6 @@ export async function getHomepageData(db: Database) {
   return {
     seo: seoSettings,
     hero,
-    widgets: formattedWidgets,
     collections: formattedCollections,
   };
 }
@@ -244,12 +236,7 @@ export async function getPageRenderData(db: Database, slug: string) {
   const page = await getPublicPageBySlug(db, slug);
   if (!page) return null;
 
-  const widgets = await getActiveWidgetPlacements(db, {
-    scope: WidgetPlacementScope.PAGE,
-    scopeId: page.id,
-  });
-
-  return { page, widgets };
+  return { page };
 }
 
 // ── Layout data ───────────────────────────────────────────────────────────────

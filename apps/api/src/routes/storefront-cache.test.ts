@@ -72,7 +72,6 @@ describe("storefront consolidated route caching", () => {
     mocks.getHomepageData.mockResolvedValue({
       seo: { homepageTitle: "Summer Deals" },
       hero: {},
-      widgets: [],
       collections: [],
     });
 
@@ -86,7 +85,6 @@ describe("storefront consolidated route caching", () => {
     mocks.getHomepageData.mockResolvedValue({
       seo: { homepageTitle: "Should not be read on cache hit" },
       hero: {},
-      widgets: [],
       collections: [],
     });
 
@@ -122,7 +120,6 @@ describe("storefront consolidated route caching", () => {
 
     mocks.getPageRenderData.mockResolvedValue({
       page: { id: "page_1", slug: "about-us", title: "About Us" },
-      widgets: [],
     });
 
     const first = await app.request(
@@ -134,7 +131,6 @@ describe("storefront consolidated route caching", () => {
 
     mocks.getPageRenderData.mockResolvedValue({
       page: { id: "page_1", slug: "about-us", title: "Changed" },
-      widgets: [],
     });
 
     const second = await app.request(

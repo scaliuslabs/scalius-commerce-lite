@@ -6,7 +6,7 @@
  * auditable and adjustable from a single location.
  */
 export const CACHE_TTLS = {
-  /** 1 hour — standard for content that changes occasionally (products, categories, pages, widgets, collections) */
+  /** 1 hour — standard for content that changes occasionally (products, categories, pages, collections) */
   STANDARD: 3600,
 
   /** 5 minutes — for data that changes frequently (search results, order lookups, shipping methods) */

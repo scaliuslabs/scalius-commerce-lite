@@ -28,7 +28,6 @@ import { polarWebhookRoutes } from "./routes/webhooks/polar";
 import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
 import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
 import { discountRoutes } from "./routes/discounts";
-import { widgetRoutes } from "./routes/widgets";
 import { analyticsRoutes } from "./routes/analytics";
 import { partytownProxyRoutes } from "./routes/partytown-proxy";
 import {
@@ -41,7 +40,6 @@ import { shippingMethodRoutes } from "./routes/shipping-methods";
 import { seoRoutes } from "./routes/seo";
 import { metaConversionsRoutes } from "./routes/meta-conversions";
 import { storefrontRoutes } from "./routes/storefront";
-import { storefrontChatRoutes } from "./routes/storefront-chat";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { readinessRoutes } from "./routes/readiness";
@@ -62,7 +60,6 @@ import { adminCategoryRoutes } from "./routes/admin/categories";
 import { adminCollectionRoutes } from "./routes/admin/collections";
 import { adminCustomerRoutes } from "./routes/admin/customers";
 import { adminPageRoutes } from "./routes/admin/pages";
-import { adminWidgetRoutes } from "./routes/admin/widgets";
 import { adminDiscountRoutes } from "./routes/admin/discounts";
 import { adminMediaRoutes } from "./routes/admin/media";
 import { adminInventoryRoutes } from "./routes/admin/inventory";
@@ -79,16 +76,10 @@ import {
   adminAuthManagementRoutes,
   authSetupRoutes,
 } from "./routes/admin/auth-management";
-import { adminAiContextRoutes } from "./routes/admin/ai-context";
-import { adminAiPromptsRoutes } from "./routes/admin/ai-prompts";
-import { adminAiRoutes } from "./routes/admin/ai";
-import { adminWidgetGenerationRunRoutes } from "./routes/admin/widget-generation-runs";
 import { adminAttributesRoutes } from "./routes/admin/attributes";
 import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminSystemUtilsRoutes } from "./routes/admin/system-utils";
 import { adminTaxRoutes } from "./routes/admin/taxes";
-import { adminAssistantAuthorityRoutes } from "./routes/internal/admin-assistant";
-import { storefrontAssistantAuthorityRoutes } from "./routes/internal/storefront-assistant";
 
 // Create typed OpenAPIHono app with Cloudflare Workers Env bindings
 // basePath("/api/v1") — standalone worker receives full URLs (e.g. /api/v1/products)
@@ -223,18 +214,9 @@ app.route("/navigation", navigationRoutes);
 app.route("/footer", footerRoutes);
 app.route("/pages", pagesRoutes);
 app.route("/discounts", discountRoutes);
-app.route("/widgets", widgetRoutes);
 app.route("/analytics", analyticsRoutes);
 app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
-app.route("/storefront", storefrontChatRoutes);
-// Exact service-binding-only Admin assistant authority. The sub-router rejects
-// public hosts before cookie auth, request parsing, or authority work.
-app.route("/internal/admin-assistant", adminAssistantAuthorityRoutes);
-// Exact service-binding-only anonymous Storefront session authority. The
-// Storefront facade supplies the bounded client identity and per-tab
-// conversation key; public API hosts fail closed inside the sub-router.
-app.route("/internal/storefront-assistant", storefrontAssistantAuthorityRoutes);
 app.route("/checkout", checkoutRoutes);
 app.use("/customer-auth/*", cookieOriginGuardMiddleware);
 app.route("/customer-auth", customerAuthRoutes);
@@ -318,7 +300,6 @@ app.route("/admin/categories", adminCategoryRoutes);
 app.route("/admin/collections", adminCollectionRoutes);
 app.route("/admin/customers", adminCustomerRoutes);
 app.route("/admin/pages", adminPageRoutes);
-app.route("/admin/widgets", adminWidgetRoutes);
 app.route("/admin/discounts", adminDiscountRoutes);
 app.route("/admin/media", adminMediaRoutes);
 app.route("/admin/inventory", adminInventoryRoutes);
@@ -333,10 +314,6 @@ app.route("/admin/settings", adminSettingsRoutes);
 app.route("/admin/orders", adminOrdersRoutes);
 app.route("/admin/products", adminProductsRoutes);
 app.route("/admin/auth", adminAuthManagementRoutes);
-app.route("/admin/ai-context", adminAiContextRoutes);
-app.route("/admin/ai-prompts", adminAiPromptsRoutes);
-app.route("/admin/ai", adminAiRoutes);
-app.route("/admin/widget-generation-runs", adminWidgetGenerationRunRoutes);
 app.route("/admin/attributes", adminAttributesRoutes);
 app.route("/admin/taxes", adminTaxRoutes);
 app.route("/admin", adminSystemUtilsRoutes);

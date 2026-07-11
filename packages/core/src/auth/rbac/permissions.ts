@@ -75,15 +75,6 @@ export const PERMISSIONS = {
   PAGES_PUBLISH: "pages.publish",
 
   // =============================================
-  // Widgets (5 permissions)
-  // =============================================
-  WIDGETS_VIEW: "widgets.view",
-  WIDGETS_CREATE: "widgets.create",
-  WIDGETS_EDIT: "widgets.edit",
-  WIDGETS_DELETE: "widgets.delete",
-  WIDGETS_TOGGLE_STATUS: "widgets.toggle_status",
-
-  // =============================================
   // Media (4 permissions)
   // =============================================
   MEDIA_VIEW: "media.view",
@@ -581,53 +572,6 @@ export const PERMISSION_METADATA: Record<
     isSensitive: false,
   },
 
-  // Widgets
-  [PERMISSIONS.WIDGETS_VIEW]: {
-    name: PERMISSIONS.WIDGETS_VIEW,
-    displayName: "View Widgets",
-    description: "View widget listings",
-    resource: "widgets",
-    action: "view",
-    category: "Widgets",
-    isSensitive: false,
-  },
-  [PERMISSIONS.WIDGETS_CREATE]: {
-    name: PERMISSIONS.WIDGETS_CREATE,
-    displayName: "Create Widgets",
-    description: "Create new widgets",
-    resource: "widgets",
-    action: "create",
-    category: "Widgets",
-    isSensitive: false,
-  },
-  [PERMISSIONS.WIDGETS_EDIT]: {
-    name: PERMISSIONS.WIDGETS_EDIT,
-    displayName: "Edit Widgets",
-    description: "Modify existing widgets",
-    resource: "widgets",
-    action: "edit",
-    category: "Widgets",
-    isSensitive: false,
-  },
-  [PERMISSIONS.WIDGETS_DELETE]: {
-    name: PERMISSIONS.WIDGETS_DELETE,
-    displayName: "Delete Widgets",
-    description: "Delete widgets",
-    resource: "widgets",
-    action: "delete",
-    category: "Widgets",
-    isSensitive: false,
-  },
-  [PERMISSIONS.WIDGETS_TOGGLE_STATUS]: {
-    name: PERMISSIONS.WIDGETS_TOGGLE_STATUS,
-    displayName: "Toggle Widget Status",
-    description: "Enable or disable widgets",
-    resource: "widgets",
-    action: "toggle_status",
-    category: "Widgets",
-    isSensitive: false,
-  },
-
   // Media
   [PERMISSIONS.MEDIA_VIEW]: {
     name: PERMISSIONS.MEDIA_VIEW,
@@ -985,7 +929,6 @@ export function getPermissionsByCategory(): Record<
     Customers: [],
     Discounts: [],
     Pages: [],
-    Widgets: [],
     Media: [],
     Attributes: [],
     Analytics: [],

@@ -33,5 +33,4 @@ astro-docs/
 /Docs
 dev.vars
 /.wrangler
-/llms-docs
 *.vars

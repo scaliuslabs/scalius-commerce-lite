@@ -5,8 +5,6 @@ const mocks = vi.hoisted(() => {
   return {
     db,
     getDb: vi.fn(() => db),
-    cleanupExpiredGeneratedImagePreviews: vi.fn(),
-    cleanupExpiredAssistantComputerHandoffs: vi.fn(),
     releaseExpiredReservations: vi.fn(),
     cleanupStaleAbandonedCheckouts: vi.fn(),
     cleanupExpiredOrderPaymentRecoveryChallenges: vi.fn(),
@@ -31,16 +29,6 @@ vi.mock("@scalius/database/client", () => ({
 
 vi.mock("@scalius/core/modules/inventory", () => ({
   releaseExpiredReservations: mocks.releaseExpiredReservations,
-}));
-
-vi.mock("@scalius/core/modules/media", () => ({
-  cleanupExpiredGeneratedImagePreviews:
-    mocks.cleanupExpiredGeneratedImagePreviews,
-}));
-
-vi.mock("@scalius/core/modules/assistant", () => ({
-  cleanupExpiredAssistantComputerHandoffs:
-    mocks.cleanupExpiredAssistantComputerHandoffs,
 }));
 
 vi.mock("@scalius/core/modules/orders/abandoned-checkout-cleanup", () => ({
@@ -140,13 +128,6 @@ describe("runScheduledMaintenance", () => {
       hasMore: false,
       releasedVariantIds: [],
       errors: [],
-    });
-    mocks.cleanupExpiredGeneratedImagePreviews.mockResolvedValue(0);
-    mocks.cleanupExpiredAssistantComputerHandoffs.mockResolvedValue({
-      scanned: 0,
-      deleted: 0,
-      limit: 40,
-      hasMore: false,
     });
     mocks.archiveStaleIncompleteOrders.mockResolvedValue({
       found: 0,
@@ -369,14 +350,6 @@ describe("runScheduledMaintenance", () => {
     });
 
     expect(mocks.getDb).toHaveBeenCalledWith(env);
-    expect(mocks.cleanupExpiredGeneratedImagePreviews).toHaveBeenCalledWith(
-      mocks.db,
-      now,
-      env.BUCKET,
-    );
-    expect(mocks.cleanupExpiredAssistantComputerHandoffs).toHaveBeenCalledWith(
-      mocks.db,
-    );
     expect(mocks.releaseExpiredReservations).toHaveBeenCalledWith(mocks.db, 30, {
       limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
     });
@@ -427,12 +400,6 @@ describe("runScheduledMaintenance", () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("cron=*/15 * * * *"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("scheduledTime=2026-06-20T12:00:00.000Z"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("operation=inventory_expiry_sweep"));
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining("operation=generated_image_preview_cleanup"),
-    );
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining("operation=assistant_computer_handoff_cleanup"),
-    );
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_completed"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("staleQueued=1"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Meta Purchase outbox flush"));

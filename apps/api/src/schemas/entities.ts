@@ -566,65 +566,6 @@ export const pageSchema = z
   })
 
 // ─────────────────────────────────────────
-// Widgets
-// ─────────────────────────────────────────
-
-/** Widget — returned by widget service endpoints. */
-export const widgetPlacementSchema = z
-  .object({
-    id: z.string(),
-    widgetId: z.string(),
-    scope: z.string(),
-    scopeId: z.string().nullable(),
-    slot: z.string(),
-    anchorType: z.string().nullable(),
-    anchorId: z.string().nullable(),
-    sortOrder: z.number(),
-    isActive: z.boolean(),
-    createdAt: nullableTimestampSchema,
-    updatedAt: nullableTimestampSchema,
-    deletedAt: nullableTimestampSchema,
-  });
-
-export const publicWidgetPlacementSchema = z.object({
-  id: z.string(),
-  widgetId: z.string(),
-  scope: z.string(),
-  scopeId: z.string().nullable(),
-  slot: z.string(),
-  anchorType: z.string().nullable(),
-  anchorId: z.string().nullable(),
-  sortOrder: z.number(),
-  isActive: z.boolean(),
-  createdAt: nullableTimestampSchema,
-  updatedAt: nullableTimestampSchema,
-  deletedAt: nullableTimestampSchema,
-});
-
-export const widgetSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    htmlContent: z.string(),
-    cssContent: z.string().nullable(),
-    jsContent: z.string().nullable(),
-    aiContext: z.string().nullable(),
-    isActive: z.boolean(),
-    displayTarget: z.string(),
-    placementRule: z.string(),
-    referenceCollectionId: z.string().nullable(),
-    sortOrder: z.number(),
-    placements: z.array(widgetPlacementSchema).optional(),
-    createdAt: nullableTimestampSchema,
-    updatedAt: nullableTimestampSchema,
-    deletedAt: nullableTimestampSchema,
-  })
-
-export const publicWidgetSchema = widgetSchema.omit({ aiContext: true }).extend({
-  placements: z.array(publicWidgetPlacementSchema).optional(),
-});
-
-// ─────────────────────────────────────────
 // Attributes
 // ─────────────────────────────────────────
 
@@ -657,17 +598,6 @@ export const mediaSchema = z
     width: z.number().nullable().optional(),
     height: z.number().nullable().optional(),
     folderId: z.string().nullable(),
-    sourceType: z.enum(["merchant_upload", "ai_generated"]).nullable(),
-    generationId: z.string().nullable(),
-    generationProvider: z.string().nullable(),
-    generationModel: z.string().nullable(),
-    generationPromptHash: z.string().nullable(),
-    generationInputTokens: z.number().nullable(),
-    generationOutputTokens: z.number().nullable(),
-    generationTotalTokens: z.number().nullable(),
-    generationCostUsdMicros: z.number().nullable(),
-    generationCostStatus: z.enum(["reported", "not_reported"]).nullable(),
-    generatedAt: optionalNullableTimestampSchema,
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
     deletedAt: nullableTimestampSchema,

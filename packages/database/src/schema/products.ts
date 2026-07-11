@@ -263,19 +263,6 @@ export const media = sqliteTable("media", {
     width: integer("width"),
     height: integer("height"),
     folderId: text("folder_id").references(() => mediaFolders.id, { onDelete: "set null" }),
-    sourceType: text("source_type", { enum: ["merchant_upload", "ai_generated"] }),
-    generationId: text("generation_id"),
-    generationProvider: text("generation_provider"),
-    generationModel: text("generation_model"),
-    generationPromptHash: text("generation_prompt_hash"),
-    generationInputTokens: integer("generation_input_tokens"),
-    generationOutputTokens: integer("generation_output_tokens"),
-    generationTotalTokens: integer("generation_total_tokens"),
-    generationCostUsdMicros: integer("generation_cost_usd_micros"),
-    generationCostStatus: text("generation_cost_status", {
-        enum: ["reported", "not_reported"],
-    }),
-    generatedAt: integer("generated_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -286,49 +273,6 @@ export const media = sqliteTable("media", {
 }, (table) => [
     index("media_folder_id_idx").on(table.folderId),
     index("media_deleted_at_idx").on(table.deletedAt),
-    uniqueIndex("media_generation_id_unique").on(table.generationId),
-]);
-
-/**
- * Short-lived authority for generated-image previews. Image bytes stay only in
- * the browser until the merchant explicitly saves them; D1 retains hashes and
- * safe provider facts so a client cannot forge media provenance.
- */
-export const aiImageGenerationPreviews = sqliteTable("ai_image_generation_previews", {
-    id: text("id").primaryKey(),
-    userId: text("user_id").notNull(),
-    imageSha256: text("image_sha256").notNull(),
-    promptSha256: text("prompt_sha256").notNull(),
-    provider: text("provider").notNull(),
-    model: text("model").notNull(),
-    mimeType: text("mime_type").notNull(),
-    size: integer("size").notNull(),
-    inputTokens: integer("input_tokens"),
-    outputTokens: integer("output_tokens"),
-    totalTokens: integer("total_tokens"),
-    costUsdMicros: integer("cost_usd_micros"),
-    costStatus: text("cost_status", { enum: ["reported", "not_reported"] })
-        .notNull()
-        .default("not_reported"),
-    createdAt: integer("created_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-    retentionExpiresAt: integer("retention_expires_at", { mode: "timestamp" }).notNull(),
-    claimedAt: integer("claimed_at", { mode: "timestamp" }),
-    claimToken: text("claim_token"),
-    r2Key: text("r2_key"),
-    consumedAt: integer("consumed_at", { mode: "timestamp" }),
-    consumedMediaId: text("consumed_media_id"),
-}, (table) => [
-    index("ai_image_generation_previews_user_created_idx").on(
-        table.userId,
-        table.createdAt,
-    ),
-    index("ai_image_generation_previews_expires_idx").on(table.expiresAt),
-    index("ai_image_generation_previews_retention_idx").on(
-        table.retentionExpiresAt,
-    ),
 ]);
 
 export type Product = InferSelectModel<typeof products>;
@@ -340,4 +284,3 @@ export type ProductAttribute = InferSelectModel<typeof productAttributes>;
 export type ProductAttributeValue = InferSelectModel<typeof productAttributeValues>;
 export type ProductRichContent = InferSelectModel<typeof productRichContent>;
 export type Media = InferSelectModel<typeof media>;
-export type AiImageGenerationPreview = InferSelectModel<typeof aiImageGenerationPreviews>;

@@ -8,10 +8,6 @@
  *   node scripts/deploy.mjs --only admin     # typecheck + build/deploy admin
  *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
  *   node scripts/deploy.mjs --only ops-monitor # typecheck + build/deploy ops monitor
- *   node scripts/deploy.mjs --only admin-agent # typecheck + build/deploy internal Admin Agent
- *   node scripts/deploy.mjs --only storefront-agent # typecheck + build/deploy public Storefront Agent
- *   node scripts/deploy.mjs --only admin-agent-flue # build/deploy isolated Admin Flue canary
- *   node scripts/deploy.mjs --only storefront-agent-flue # build/deploy isolated Storefront Flue canary
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
  *   node scripts/deploy.mjs --migrate-only   # apply migrations to remote D1 only
  *   node scripts/deploy.mjs --migrate-only --local  # apply migrations to local D1 only
@@ -19,7 +15,7 @@
  * Runs in order (full deploy):
  *   1. turbo build       — builds all workspaces
  *   2. wrangler d1 migrations apply --remote  — applies pending migrations to D1
- *   3. wrangler deploy   — deploys the two Agent Workers, API, Admin, Storefront, and Ops Monitor
+ *   3. wrangler deploy   — deploys the API, Admin, Storefront, and Ops Monitor Workers
  *
  * The database name is read from apps/api/wrangler.jsonc (API worker owns D1).
  */
@@ -29,48 +25,24 @@ import { readFileSync } from "fs";
 import { delimiter, resolve, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
-import {
-  DEFAULT_DASHBOARD_URL,
-  normalizeHttpBaseUrl,
-  smokeAdminMcpUnauthenticated,
-  smokeAgentWorker,
-} from "./release-check.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
 const adminV2Dir = resolve(root, "apps", "admin-v2");
 const opsMonitorDir = resolve(root, "apps", "ops-monitor");
-const adminAgentDir = resolve(root, "apps", "admin-agent");
-const storefrontAgentDir = resolve(root, "apps", "storefront-agent");
-const adminAgentFlueDir = resolve(root, "apps", "admin-agent-flue");
-const storefrontAgentFlueDir = resolve(root, "apps", "storefront-agent-flue");
 const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
 const dryRun = args.includes("--dry-run");
 const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
-const deployTargets = [
-  "admin-agent",
-  "storefront-agent",
-  "api",
-  "admin",
-  "storefront",
-  "ops-monitor",
-];
-// Canary Workers are selectable explicitly but stay out of the coordinated
-// production rollout until the facades have atomically cut over to Flue.
-const canaryDeployTargets = ["admin-agent-flue", "storefront-agent-flue"];
-const selectableDeployTargets = [...deployTargets, ...canaryDeployTargets];
+const deployTargets = ["api", "admin", "storefront", "ops-monitor"];
+const selectableDeployTargets = deployTargets;
 const appDirsByTarget = {
   api: "apps/api",
   admin: "apps/admin-v2",
   storefront: "apps/storefront",
   "ops-monitor": "apps/ops-monitor",
-  "admin-agent": "apps/admin-agent",
-  "storefront-agent": "apps/storefront-agent",
-  "admin-agent-flue": "apps/admin-agent-flue",
-  "storefront-agent-flue": "apps/storefront-agent-flue",
 };
 const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
@@ -79,9 +51,6 @@ const STOREFRONT_WARM_CONCURRENCY = 4;
 const API_READYZ_SAMPLE_COUNT = 4;
 const API_READYZ_SAMPLE_DELAY_MS = 1_000;
 const API_READYZ_TIMEOUT_MS = 10_000;
-const AGENT_DEPLOY_TIMEOUT_MS = 10_000;
-const DEFAULT_STOREFRONT_AGENT_URL =
-  "https://scalius-storefront-agent.abnidaala.workers.dev";
 const pnpmExecutable = resolvePnpmExecutable();
 process.env.SCALIUS_PNPM_BIN = pnpmExecutable;
 process.env.PATH = `${dirname(pnpmExecutable)}${delimiter}${process.env.PATH || ""}`;
@@ -174,44 +143,12 @@ export function getBuildCommandForTarget(target) {
       return `${pnpm} --filter @scalius/storefront build`;
     case "ops-monitor":
       return `${pnpm} --filter @scalius/ops-monitor build`;
-    case "admin-agent":
-      return `${pnpm} --filter @scalius/admin-agent build`;
-    case "storefront-agent":
-      return `${pnpm} --filter @scalius/storefront-agent build`;
-    case "admin-agent-flue":
-      return `${pnpm} --filter @scalius/admin-agent-flue build`;
-    case "storefront-agent-flue":
-      return `${pnpm} --filter @scalius/storefront-agent-flue build`;
     default:
       throw new Error(`Unknown deploy target: ${target}`);
   }
 }
 
-export function getTypecheckCommandForTarget(target) {
-  if (target === "admin-agent-flue") {
-    return (
-      `${pnpm} --filter @scalius/shared ` +
-      `--filter @scalius/admin-agent-flue typecheck`
-    );
-  }
-  if (target === "storefront-agent-flue") {
-    return (
-      `${pnpm} --filter @scalius/shared ` +
-      `--filter @scalius/storefront-agent-flue typecheck`
-    );
-  }
-  if (target === "admin-agent") {
-    return (
-      `${pnpm} --filter @scalius/agent-runtime ` +
-      `--filter @scalius/admin-agent typecheck`
-    );
-  }
-  if (target === "storefront-agent") {
-    return (
-      `${pnpm} --filter @scalius/agent-runtime ` +
-      `--filter @scalius/storefront-agent typecheck`
-    );
-  }
+export function getTypecheckCommandForTarget(_target) {
   return `${pnpm} typecheck`;
 }
 
@@ -233,30 +170,6 @@ export function getDeployCommandForTarget(target) {
       };
     case "ops-monitor":
       return { cmd: `${pnpm} exec wrangler deploy`, label: "Deploy Ops Monitor Worker", cwd: opsMonitorDir };
-    case "admin-agent":
-      return {
-        cmd: `${pnpm} exec wrangler deploy`,
-        label: "Deploy Admin Agent Worker",
-        cwd: adminAgentDir,
-      };
-    case "storefront-agent":
-      return {
-        cmd: `${pnpm} exec wrangler deploy`,
-        label: "Deploy Storefront Agent Worker",
-        cwd: storefrontAgentDir,
-      };
-    case "admin-agent-flue":
-      return {
-        cmd: `${pnpm} exec wrangler deploy --strict --config dist/scalius_admin_agent_flue_canary/wrangler.json`,
-        label: "Deploy Admin Flue Agent canary",
-        cwd: adminAgentFlueDir,
-      };
-    case "storefront-agent-flue":
-      return {
-        cmd: `${pnpm} exec wrangler deploy --strict --config dist/scalius_storefront_agent_flue_canary/wrangler.json`,
-        label: "Deploy Storefront Flue Agent canary",
-        cwd: storefrontAgentFlueDir,
-      };
     default:
       throw new Error(`Unknown deploy target: ${target}`);
   }
@@ -268,10 +181,6 @@ function buildTarget(target) {
     admin: "Build Admin V2 workspace",
     storefront: "Build Storefront workspace",
     "ops-monitor": "Build Ops Monitor workspace",
-    "admin-agent": "Build Admin Agent workspace",
-    "storefront-agent": "Build Storefront Agent workspace",
-    "admin-agent-flue": "Build Admin Flue Agent canary workspace",
-    "storefront-agent-flue": "Build Storefront Flue Agent canary workspace",
   };
   run(getBuildCommandForTarget(target), labels[target]);
 }
@@ -659,45 +568,6 @@ async function verifyApiDeploy(config) {
   await sampleApiReadiness(apiBaseUrl);
 }
 
-function getStorefrontAgentDeployUrl() {
-  return normalizeHttpBaseUrl(
-    process.env.SCALIUS_STOREFRONT_AGENT_URL ?? DEFAULT_STOREFRONT_AGENT_URL,
-    "Storefront Agent URL",
-  );
-}
-
-function getDashboardDeployUrl() {
-  if (process.env.SCALIUS_DASHBOARD_URL) {
-    return normalizeHttpBaseUrl(process.env.SCALIUS_DASHBOARD_URL, "Dashboard URL");
-  }
-
-  const adminConfig = readJsoncFile(resolve(adminV2Dir, "wrangler.jsonc"));
-  return normalizeHttpBaseUrl(
-    adminConfig.vars?.BETTER_AUTH_URL ?? DEFAULT_DASHBOARD_URL,
-    "Dashboard URL",
-  );
-}
-
-export async function verifyAdminDeploy({
-  dashboardUrl = getDashboardDeployUrl(),
-  fetchImpl = fetch,
-  timeoutMs = AGENT_DEPLOY_TIMEOUT_MS,
-} = {}) {
-  console.log("\n▶ Verify live Admin MCP auth gate");
-  console.log(`  ${dashboardUrl}\n`);
-  const result = await smokeAdminMcpUnauthenticated({
-    dashboardUrl,
-    fetchImpl,
-    timeoutMs,
-    logger: null,
-  });
-  console.log(
-    `✓ Admin MCP rejected unauthenticated request with ${result.statusCode}; ` +
-    `Cache-Control: ${result.cacheControl || "missing"}.`,
-  );
-  return result;
-}
-
 function verifyLatestWorkerDeployment(cwd, label, configPath = null) {
   const configFlag = configPath ? ` --config ${shellQuote(configPath)}` : "";
   const deployments = runJson(
@@ -718,102 +588,15 @@ function verifyLatestWorkerDeployment(cwd, label, configPath = null) {
   return deployedVersion.version_id;
 }
 
-export async function verifyStorefrontAgentDeploy({
-  agentUrl = getStorefrontAgentDeployUrl(),
-  storefrontUrl,
-  fetchImpl = fetch,
-  timeoutMs = AGENT_DEPLOY_TIMEOUT_MS,
-} = {}) {
-  console.log("\n▶ Verify live Storefront Agent Worker /health and MCP read tools");
-  console.log(`  ${agentUrl}\n`);
-  const result = await smokeAgentWorker({
-    agentUrl,
-    storefrontUrl,
-    catalogToolSmoke: true,
-    fetchImpl,
-    timeoutMs,
-    logger: null,
-  });
-  const publicConversationUrl = new URL(
-    "/internal/conversations/conv_abcdefghijklmnopqrstuv/events?after=0",
-    agentUrl,
-  ).toString();
-  const isolationController = new AbortController();
-  const isolationTimeout = setTimeout(
-    () => isolationController.abort(),
-    timeoutMs,
-  );
-  let isolationResponse;
-  try {
-    isolationResponse = await fetchImpl(publicConversationUrl, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      signal: isolationController.signal,
-    });
-  } finally {
-    clearTimeout(isolationTimeout);
-  }
-  if (
-    isolationResponse.status !== 404 ||
-    !/\bno-store\b/i.test(isolationResponse.headers.get("Cache-Control") ?? "")
-  ) {
-    throw new Error(
-      "Storefront Agent public conversation transcript route must return a no-store 404.",
-    );
-  }
-  const catalogTool = result.mcp.catalogTool;
-  const catalogProfile = catalogTool?.profile;
-  const cartValidationTool = result.mcp.cartValidationTool;
-  const profileSummary = catalogProfile?.endpoint
-    ? `; ${catalogTool.name} call ok (` +
-      `${catalogProfile.capabilities.length} catalog capabilities, ` +
-      `endpoint ${catalogProfile.endpoint})`
-    : catalogTool
-      ? `; ${catalogTool.name} call ok`
-      : "";
-  const cartValidationSummary = cartValidationTool
-    ? `; ${cartValidationTool.name} call ok`
-    : "";
-  console.log(
-    `✓ Storefront Agent /health returned ${result.health.statusCode}; ` +
-    `MCP tools: ${result.mcp.tools.toolNames.join(", ")}${profileSummary}${cartValidationSummary}; ` +
-    "public conversation transcripts hidden.",
-  );
-  return result;
-}
-
 async function verifyPostDeployTarget(target, apiConfig) {
   if (target === "api") {
     await verifyApiDeploy(apiConfig);
   }
   if (target === "admin") {
-    await verifyAdminDeploy();
+    verifyLatestWorkerDeployment(adminV2Dir, "Admin V2 Worker");
   }
   if (target === "storefront") {
     await verifyStorefrontDeploy();
-  }
-  if (target === "admin-agent") {
-    verifyLatestWorkerDeployment(adminAgentDir, "Admin Agent Worker");
-  }
-  if (target === "storefront-agent") {
-    verifyLatestWorkerDeployment(storefrontAgentDir, "Storefront Agent Worker");
-    await verifyStorefrontAgentDeploy({
-      storefrontUrl: apiConfig.vars?.STOREFRONT_URL,
-    });
-  }
-  if (target === "admin-agent-flue") {
-    verifyLatestWorkerDeployment(
-      adminAgentFlueDir,
-      "Admin Flue Agent canary",
-      "dist/scalius_admin_agent_flue_canary/wrangler.json",
-    );
-  }
-  if (target === "storefront-agent-flue") {
-    verifyLatestWorkerDeployment(
-      storefrontAgentFlueDir,
-      "Storefront Flue Agent canary",
-      "dist/scalius_storefront_agent_flue_canary/wrangler.json",
-    );
   }
 }
 
@@ -880,9 +663,7 @@ export async function main() {
       requestedTarget
         ? getTypecheckCommandForTarget(requestedTarget)
         : `${pnpm} typecheck`,
-      requestedTarget === "admin-agent" || requestedTarget === "storefront-agent"
-        ? `Typecheck ${requestedTarget} workspace and shared runtime`
-        : "Typecheck all workspaces",
+      "Typecheck all workspaces",
     );
 
     if (requestedTarget) {
@@ -890,12 +671,6 @@ export async function main() {
       checkDistEnvFiles([requestedTarget]);
 
       if (dryRun) {
-        if (requestedTarget === "admin-agent-flue" || requestedTarget === "storefront-agent-flue") {
-          run(
-            `${pnpm} --filter @scalius/${requestedTarget} deploy:dry-run`,
-            `Validate generated ${requestedTarget} Wrangler bundle`,
-          );
-        }
         console.log("\nDRY RUN: skipping D1 migrations and Worker deploy.");
         console.log(`\n✓ Deploy dry run complete (${requestedTarget}).`);
         return;

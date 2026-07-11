@@ -22,11 +22,11 @@ describe("parser-backed HTML sanitizer", () => {
 
   it("preserves merchant layout attributes while removing dangerous CSS declarations", () => {
     const sanitized = sanitizeHtml(
-      '<div class="hero" data-widget-id="w1" aria-label="Hero" style="color:#111; background-image:url(https://cloud.scalius.com/hero.jpg); width: expression(alert(1)); behavior:url(x.htc)">Hero</div>',
+      '<div class="hero" data-section-id="s1" aria-label="Hero" style="color:#111; background-image:url(https://cloud.scalius.com/hero.jpg); width: expression(alert(1)); behavior:url(x.htc)">Hero</div>',
     );
 
     expect(sanitized).toContain('class="hero"');
-    expect(sanitized).toContain('data-widget-id="w1"');
+    expect(sanitized).toContain('data-section-id="s1"');
     expect(sanitized).toContain('aria-label="Hero"');
     expect(sanitized).toContain("color: #111");
     expect(sanitized).toContain(

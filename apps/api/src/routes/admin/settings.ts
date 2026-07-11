@@ -9,8 +9,6 @@ import { metaConversionsAdminRoutes } from "./settings/meta-conversions-admin";
 import { notificationChannelsRoutes } from "./settings/notification-channels";
 import { smsSettingsRoutes } from "./settings/sms";
 import { businessSettingsRoutes } from "./settings/business";
-import { aiSettingsRoutes } from "./settings/ai";
-import { mcpSummarySettingsRoutes } from "./settings/mcp-summary";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -26,7 +24,5 @@ app.route("/hero-sliders", heroSlidersRoutes);
 app.route("/meta-conversions", metaConversionsAdminRoutes);
 app.route("/notification-channels", notificationChannelsRoutes);
 app.route("/", smsSettingsRoutes);
-app.route("/", aiSettingsRoutes);
-app.route("/", mcpSummarySettingsRoutes);
 
 export { app as adminSettingsRoutes };

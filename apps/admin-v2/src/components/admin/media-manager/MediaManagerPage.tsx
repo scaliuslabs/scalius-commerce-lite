@@ -20,7 +20,6 @@ import {
   MediaPreview,
   MediaFilterBar,
   FolderBrowser,
-  GeneratedImagePanel,
 } from "./components";
 import { useMediaManager } from "./hooks/useMediaManager";
 
@@ -108,25 +107,6 @@ export function MediaManagerPage() {
                       : "Uncategorized files -- Max 20 files, 10MB each"}
                 </p>
               </div>
-
-              <GeneratedImagePanel
-                confirmationScope="library-page"
-                folderId={
-                  mm.currentFolderId === "all" ? null : mm.currentFolderId
-                }
-                onSaved={async () => {
-                  const folderParam =
-                    mm.currentFolderId === "all"
-                      ? "all"
-                      : mm.currentFolderId === null
-                        ? "root"
-                        : mm.currentFolderId;
-                  await mm.loadFiles(1, {
-                    ...mm.filters,
-                    folderId: folderParam,
-                  });
-                }}
-              />
 
               {/* Compact Filter bar */}
               <div className="border-b px-4 py-2 bg-muted/30 shrink-0">

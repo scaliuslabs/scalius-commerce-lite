@@ -3,7 +3,6 @@ import {
   CATALOG_CACHE_GROUPS,
   INVALIDATION_GROUPS,
   MAX_STOREFRONT_EXACT_HTML_PATHS,
-  WIDGET_CACHE_GROUPS,
   collectCmsShortcodePageInvalidation,
   collectProductAvailabilityCacheInvalidation,
   createStorefrontCacheWarmMessageForPurge,
@@ -51,7 +50,6 @@ describe("catalog cache groups", () => {
       "collections",
     ]);
     expect(getGroupsForPath("/api/v1/admin/inventory/stock-set")).toEqual([]);
-    expect(getGroupsForPath("/api/v1/admin/widgets/wid_123")).toEqual(["widgets"]);
     expect(getGroupsForPath("/api/v1/admin/attributes/attr_123")).toEqual([
       "attributes",
       "products",
@@ -65,34 +63,16 @@ describe("catalog cache groups", () => {
         "collection_by_id_",
         "filterable_attrs_",
         "global_all_collections",
-        "widgets_scope_",
       ]),
     );
     expect(getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.collections])).toEqual(
-      expect.arrayContaining(["collection_by_id_", "widgets_scope_", "storefront_homepage_"]),
+      expect.arrayContaining(["collection_by_id_", "storefront_homepage_"]),
     );
     expect(getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.categories])).toEqual(
       expect.arrayContaining([
         "category_slug_",
         "global_navigation_",
         "storefront_layout_",
-      ]),
-    );
-    expect(getStorefrontPrefixesForGroups([...WIDGET_CACHE_GROUPS])).toEqual(
-      expect.arrayContaining([
-        "widget_",
-        "global_homepage_widgets",
-        "page_render_",
-        "widgets_scope_",
-        "storefront_homepage_",
-      ]),
-    );
-    expect(getStorefrontPrefixesForGroups([...WIDGET_CACHE_GROUPS])).not.toEqual(
-      expect.arrayContaining([
-        "product_slug_",
-        "category_slug_",
-        "collection_by_id_",
-        "global_seo_settings",
       ]),
     );
   });
@@ -159,7 +139,7 @@ describe("CMS shortcode page invalidation", () => {
     expect(collectCmsShortcodePageInvalidation(targets).bumpVersion).toBe(true);
   });
 
-  it("resolves published CMS pages that reference affected product slugs or widget ids", async () => {
+  it("resolves published CMS pages that reference affected product slugs", async () => {
     const db = cmsPageDb([
       {
         id: "page_1",
@@ -167,14 +147,9 @@ describe("CMS shortcode page invalidation", () => {
         content: '<p>[product slug="phone"]</p>',
       },
       {
-        id: "page_2",
-        slug: "widget-offer",
-        content: "<p>[widget id=&quot;wid_1&quot;]</p>",
-      },
-      {
         id: "page_3",
         slug: "other-product",
-        content: '<p>[product slug="rice"] [widget id="wid_2"]</p>',
+        content: '<p>[product slug="rice"]</p>',
       },
       {
         id: "page_4",
@@ -186,11 +161,9 @@ describe("CMS shortcode page invalidation", () => {
     await expect(
       resolveCmsShortcodePageTargets(db as never, {
         productSlugs: ["phone"],
-        widgetIds: ["wid_1"],
       }),
     ).resolves.toEqual([
       { id: "page_1", slug: "combo-offer" },
-      { id: "page_2", slug: "widget-offer" },
     ]);
     expect(db.select).toHaveBeenCalledTimes(1);
     expect(db.query.where).toHaveBeenCalledTimes(1);
@@ -268,50 +241,24 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
   });
 
-  it("can be awaited by content writes that need immediate storefront consistency", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await purgeStorefrontForGroups([...WIDGET_CACHE_GROUPS], {
-      PURGE_URL: "https://storefront.example.com/api/purge-cache",
-      PURGE_TOKEN: "secret-token",
-    } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">);
-
-    expect(result).toEqual({ attempted: true, ok: true, status: 200 });
-    const [, init] = fetchMock.mock.calls[0]!;
-    expect(init?.headers).toMatchObject({
-      Authorization: "Bearer secret-token",
-      "Content-Type": "application/json",
-    });
-    const body = JSON.parse(String(init?.body));
-    expect(body).not.toHaveProperty("token");
-    expect(body).toMatchObject({
-      groups: ["widgets"],
-      bumpVersion: true,
-    });
-    expect(body.prefixes).toEqual(
-      expect.arrayContaining(["widget_", "page_render_", "widgets_scope_"]),
-    );
-  });
-
   it("can purge exact storefront prefixes without expanding to coarse groups", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await purgeStorefrontForPrefixes(
-      ["widget_wid_1", "widgets_scope_product_prod_1"],
+      ["product_slug_fish", "product_variants_prod_1"],
       {
         PURGE_URL: "https://storefront.example.com/api/purge-cache",
         PURGE_TOKEN: "secret-token",
       } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
-      { groups: ["widgets"], bumpVersion: false },
+      { groups: ["products"], bumpVersion: false },
     );
 
     expect(result).toEqual({ attempted: true, ok: true, status: 200 });
     const [, init] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(String(init?.body))).toEqual({
-      groups: ["widgets"],
-      prefixes: ["widget_wid_1", "widgets_scope_product_prod_1"],
+      groups: ["products"],
+      prefixes: ["product_slug_fish", "product_variants_prod_1"],
       bumpVersion: false,
     });
   });
@@ -431,12 +378,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     triggerStorefrontPurgeForPrefixes(
-      ["widget_wid_1", "widgets_scope_product_prod_1"],
+      ["product_slug_fish", "product_variants_prod_1"],
       {
         PURGE_URL: "https://storefront.example.com/api/purge-cache",
         PURGE_TOKEN: "secret-token",
       } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
-      { groups: ["widgets"], bumpVersion: false },
+      { groups: ["products"], bumpVersion: false },
       { waitUntil } as unknown as ExecutionContext,
     );
 
@@ -447,8 +394,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(String(init?.body))).toEqual({
-      groups: ["widgets"],
-      prefixes: ["widget_wid_1", "widgets_scope_product_prod_1"],
+      groups: ["products"],
+      prefixes: ["product_slug_fish", "product_variants_prod_1"],
       bumpVersion: false,
     });
   });
@@ -932,7 +879,6 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "collection_by_id_",
         "filterable_attrs_",
         "global_all_collections",
-        "widgets_scope_",
       ]),
     );
   });

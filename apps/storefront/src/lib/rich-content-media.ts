@@ -204,7 +204,7 @@ export function optimizeRichContentImages(
 
 /**
  * Applies the storefront image optimizer to CSS image references. This covers
- * widget CSS, inline background images, and `<style>` blocks inside rich HTML.
+ * inline background images and `<style>` blocks inside rich HTML.
  */
 export function optimizeCssImageUrls(css: string): string {
   if (!css) return "";

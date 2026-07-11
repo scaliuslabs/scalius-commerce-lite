@@ -1,7 +1,0 @@
-{
-  "extends": "@scalius/tsconfig/worker.json",
-  "compilerOptions": {
-    "noEmit": true
-  },
-  "include": ["src/**/*", "flue.config.ts"]
-}

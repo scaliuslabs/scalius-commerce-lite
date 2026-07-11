@@ -1,6 +1,6 @@
 # Platform Goal
 
-Last reviewed: 2026-07-07
+Last reviewed: 2026-07-12
 
 Scalius Commerce is a lightweight, nearly complete commerce platform for small and medium businesses in Bangladesh. The product should feel cheaper to run, easier to operate, and more reliable than closed-source ecommerce SaaS.
 
@@ -10,11 +10,10 @@ Scalius Commerce is a lightweight, nearly complete commerce platform for small a
 - Customer flows should never strand buyers: stale carts, deleted products, sold-out variants, failed OTP, failed payment, partial payment, guest receipt recovery, support requests, and post-sale history need buyer-safe repair paths.
 - Bangladesh-local integrations and UX must stay current with real merchant/buyer behavior: payment gateways, COD, partial payment, SMS, WhatsApp, delivery providers, city/zone/area data, BDT, phone identity, Meta CAPI, and analytics.
 - Every paid or external service should have a Cloudflare-native default or a first-class Cloudflare path where the platform can reasonably provide one.
-- SEO, AEO, and AIO should mean accurate public commerce truth: crawlable pages, canonical/noindex discipline, Merchant-compatible feeds, structured data matching checkout/SKU reality, and useful merchant-provided content that search engines and assistants can trust. Do not ship gimmick markup that does not reflect real buyer-visible facts.
+- SEO and public discovery should expose accurate commerce truth: crawlable pages, canonical/noindex discipline, Merchant-compatible feeds, structured data matching checkout/SKU reality, and useful merchant-provided content. Do not ship markup that does not reflect real buyer-visible facts.
 - Merchant controls should separate buyer visibility, search indexing, sitemap inclusion, feed inclusion, and structured-data output instead of hiding multiple meanings behind one switch.
 - Resource canonical overrides are route-shaped same-store path controls only. They must not allow off-origin, query-string, fragment, or arbitrary dead-path canonical hacks; products use `/products/<slug>`, categories `/categories/<slug>`, collections currently use `/collections/<collectionId>` (not a collection slug), and CMS pages use one non-reserved `/<slug>` segment. Blank or invalid persisted values must cleanly fall back to the resource's normal public route.
-- UCP (Universal Commerce Protocol) is the next commerce-discovery surface after SEO/AEO/AIO is proven: expose agent-readable commerce capabilities only from the same checkout, SKU, payment, delivery, and policy authorities that buyers already use. The first shipped UCP surface is read-only catalog search/lookup; checkout/cart/order/payment capabilities remain hidden until their own D1 session, idempotency, signing, and payment recovery model is built.
-- MCP and assistant surfaces must be trusted UI/API extensions, not alternate backdoors. Admin MCP cannot bypass Better Auth, onboarding, 2FA, RBAC, visible page-state rules, or provider-secret safeguards. Storefront MCP stays catalog/page-context/read-only cart-validation until commerce mutation sessions are designed and verified.
+- UCP (Universal Commerce Protocol) is the next commerce-discovery surface after SEO is proven: expose protocol capabilities only from the same checkout, SKU, payment, delivery, and policy authorities that buyers already use. The shipped UCP surface remains read-only catalog search/lookup; checkout/cart/order/payment capabilities remain hidden until their own D1 session, idempotency, signing, and payment recovery model is built.
 
 ## Architecture Bar
 
@@ -36,15 +35,14 @@ A stable release is credible only when:
 - Cache invalidation and rewarming are scoped to affected content and prove freshness without turning every write into a global purge.
 - Documentation and tracker entries name what was verified, what remains risky, and which commit/deployment proved the behavior.
 
-## Agent Operating Style
+## Engineering Operating Style
 
-- Treat the lead thread as tech lead and product manager for goal-mode work: assign implementation to workers when practical, keep ownership clear, review the patches, resolve conflicts, verify behavior, update docs, deploy when needed, and commit only meaningful achievements.
-- Use parallel agents as a force multiplier, not as chaos. Split work by disjoint file ownership and concrete verification targets; the lead thread owns prioritization, integration, release judgment, and final accountability.
+- Treat the lead thread as tech lead and product manager for goal-mode work: assign implementation work when practical, keep ownership clear, review patches, resolve conflicts, verify behavior, update docs, deploy when needed, and commit only meaningful achievements.
+- Use parallel workstreams only with disjoint file ownership and concrete verification targets; the lead thread owns prioritization, integration, release judgment, and final accountability.
 - After the current narrow slice, prefer not to self-implement broad code changes in the lead thread. Direct lead edits should be limited to docs, conflict resolution, tiny unblocking changes, or integration fixes that are faster and safer than another handoff.
 - Do not chase perfection by looping on one small UI or refactor while higher-risk checkout/payment/auth/order issues remain open.
 - When a user-reported complaint points to a deeper product flaw, fix the system rule, not just the symptom.
 - When an external setup blocks proof, record the exact blocker, required owner action, and safe verification command, then move to the next code-owned risk instead of inventing speculative complexity.
 - Commit after a meaningful verified achievement. Keep unfinished exploratory edits out of unrelated commits.
 - If a context file grows because the codebase is confusing, prefer making the code/test boundary clearer over adding more prose.
-- Keep root agent context as an index. Add detailed guidance only to focused docs or code-adjacent README files with a clear owner, verification note, and removal path when the rule becomes enforceable in code/tests.
-- Durable MCP/assistant guidance lives in `docs/codex/MCP-AGENT-ARCHITECTURE.md`; keep `mcp.md` as local scratch only.
+- Keep root engineering context as an index. Add detailed guidance only to focused docs or code-adjacent README files with a clear owner, verification note, and removal path when the rule becomes enforceable in code/tests.

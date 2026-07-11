@@ -3,12 +3,10 @@ import type { ProductPageData } from "./api/products";
 
 const mocks = vi.hoisted(() => ({
   getProductBySlug: vi.fn(),
-  getWidgetById: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
   getProductBySlug: mocks.getProductBySlug,
-  getWidgetById: mocks.getWidgetById,
 }));
 
 import { processShortcodes } from "./shortcodes";

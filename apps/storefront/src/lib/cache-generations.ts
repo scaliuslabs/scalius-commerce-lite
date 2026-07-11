@@ -6,8 +6,6 @@ const ALL_PRODUCTS_KEY_PREFIX = "all_products_";
 const CATEGORY_PRODUCTS_KEY_PREFIX = "category_products_";
 const FEED_PRODUCTS_KEY_PREFIX = "feed_products_";
 const SITEMAP_PRODUCTS_KEY_PREFIX = "sitemap_products_";
-const WIDGET_KEY_PREFIX = "widget_";
-const WIDGET_SCOPE_KEY_PREFIX = "widgets_scope_";
 const PAGE_RENDER_KEY_PREFIX = "page_render_";
 const HTML_PATH_KEY_PREFIX = "html_path_";
 const CHECKOUT_DATA_KEYS = [
@@ -59,8 +57,6 @@ export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | nu
   if (
     logicalKey.startsWith(PRODUCT_SLUG_KEY_PREFIX) ||
     logicalKey.startsWith(PRODUCT_VARIANTS_KEY_PREFIX) ||
-    logicalKey.startsWith(WIDGET_KEY_PREFIX) ||
-    logicalKey.startsWith(WIDGET_SCOPE_KEY_PREFIX) ||
     logicalKey.startsWith(PAGE_RENDER_KEY_PREFIX) ||
     logicalKey.startsWith(HTML_PATH_KEY_PREFIX)
   ) {

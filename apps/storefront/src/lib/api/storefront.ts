@@ -7,7 +7,6 @@ import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
 import { unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
 import type {
-  ApiWidget,
   CollectionWithProducts,
   HeaderData,
   FooterData,
@@ -53,7 +52,6 @@ export interface HomepageData {
     homepageMetaDescription: string | null;
   };
   hero: HomepageHero;
-  widgets: ApiWidget[];
   collections: CollectionWithProducts[];
 }
 

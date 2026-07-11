@@ -50,12 +50,6 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/pages/new": { permission: PERMISSIONS.PAGES_CREATE },
   "/admin/pages/trash": { permission: PERMISSIONS.PAGES_VIEW },
 
-  // Widgets
-  "/admin/widgets": { permission: PERMISSIONS.WIDGETS_VIEW },
-  "/admin/widgets/create": { permission: PERMISSIONS.WIDGETS_CREATE },
-  "/admin/widgets/new": { permission: PERMISSIONS.WIDGETS_CREATE },
-  "/admin/widgets/trash": { permission: PERMISSIONS.WIDGETS_VIEW },
-
   // Orders
   "/admin/orders": { permission: PERMISSIONS.ORDERS_VIEW },
   "/admin/orders/new": { permission: PERMISSIONS.ORDERS_CREATE },
@@ -122,8 +116,6 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     // Pages
     { pattern: /^\/admin\/pages\/[^/]+\/edit$/, config: { permission: PERMISSIONS.PAGES_EDIT } },
 
-    // Widgets (single dynamic segment, no /edit)
-    { pattern: /^\/admin\/widgets\/[^/]+$/, config: { permission: PERMISSIONS.WIDGETS_EDIT } },
   ];
 
 const DEFAULT_ADMIN_PAGE_CANDIDATES = [
@@ -134,7 +126,6 @@ const DEFAULT_ADMIN_PAGE_CANDIDATES = [
   "/admin/categories",
   "/admin/collections",
   "/admin/pages",
-  "/admin/widgets",
   "/admin/media",
   "/admin/settings/account",
 ] as const;

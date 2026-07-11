@@ -33,7 +33,6 @@ import {
 import { useCurrency } from "~/hooks/use-currency";
 import { DataTable } from "~/components/admin/data-table/DataTable";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
-import { useAdminAssistantTableSurface } from "~/components/admin/assistant/table-surface";
 import {
   getProductColumns,
   type ProductListItem,
@@ -255,12 +254,6 @@ function ProductsPage() {
       onPaginationChange,
       onSortingChange,
     });
-
-  useAdminAssistantTableSurface({
-    id: "products-table",
-    label: showTrashed ? "Product trash table" : "Products table",
-    table,
-  });
 
   // ── Bulk actions ──────────────────────────────────────────────
 

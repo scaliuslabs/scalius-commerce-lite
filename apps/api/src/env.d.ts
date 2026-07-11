@@ -105,10 +105,6 @@ interface R2Bucket {
   }>;
 }
 
-interface Fetcher {
-  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-}
-
 interface CloudflareSendEmailBinding {
   send(message: {
     to: string | { email: string; name?: string } | Array<string | { email: string; name?: string }>;
@@ -153,10 +149,6 @@ interface Env {
   CACHE: KVNamespace;
   BUCKET: R2Bucket;
   SHARED_AUTH_CACHE: KVNamespace;
-  AI?: Ai;
-  ADMIN_AGENT?: Fetcher;
-  STOREFRONT_AGENT?: Fetcher;
-  WidgetDesignAgent: DurableObjectNamespace;
   EMAIL?: CloudflareSendEmailBinding;
 
   // Cloudflare Queue bindings
@@ -171,8 +163,6 @@ interface Env {
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
   CREDENTIAL_ENCRYPTION_KEY?: string;
-  ASSISTANT_RATE_LIMIT_HMAC_KEY: string;
-  ASSISTANT_THREAD_SIGNING_KEY: string;
 
   // Note: Stripe and SSLCommerz credentials are stored in the DB settings table
   // and managed via the admin dashboard — NOT as environment variables.

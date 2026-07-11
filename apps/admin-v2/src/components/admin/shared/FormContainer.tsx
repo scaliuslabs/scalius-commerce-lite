@@ -20,8 +20,6 @@ interface FormContainerProps<T extends FieldValues> {
   newLabel?: string;
   /** Custom save button label. Defaults to "Save {title}" / "Create {title}" */
   saveLabel?: string;
-  /** Explicitly allow the assistant to click this ordinary reversible save. */
-  allowAssistantSave?: boolean;
   /** The react-hook-form instance — used for isDirty and to provide <Form> context */
   form: UseFormReturn<T>;
   /** Called when the save button is clicked or the form is submitted — typically `handleSubmit(onSave)` */
@@ -45,7 +43,6 @@ export function FormContainer<T extends FieldValues>({
   newUrl,
   newLabel,
   saveLabel,
-  allowAssistantSave = false,
   form,
   onSubmit,
   children,
@@ -78,7 +75,6 @@ export function FormContainer<T extends FieldValues>({
           newUrl={newUrl}
           newLabel={newLabel}
           saveLabel={saveLabel}
-          allowAssistantSave={allowAssistantSave}
           onSave={onSubmit}
         />
       </Form>

@@ -47,10 +47,6 @@ declare global {
     CACHE: KVNamespace;
     BUCKET: R2Bucket;
     SHARED_AUTH_CACHE: KVNamespace;
-    AI?: Ai;
-    ADMIN_AGENT?: Fetcher;
-    STOREFRONT_AGENT?: Fetcher;
-    WidgetDesignAgent: DurableObjectNamespace;
     EMAIL?: CloudflareSendEmailBinding;
 
     // Cloudflare Queue bindings
@@ -65,8 +61,6 @@ declare global {
     JWT_SECRET?: string;
     FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
     CREDENTIAL_ENCRYPTION_KEY?: string;
-    ASSISTANT_RATE_LIMIT_HMAC_KEY: string;
-    ASSISTANT_THREAD_SIGNING_KEY: string;
 
     // Variables (set in wrangler.jsonc [vars] or dashboard)
     BETTER_AUTH_URL?: string;

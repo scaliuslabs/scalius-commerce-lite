@@ -9,7 +9,6 @@ import {
   Layers3,
   Images,
   FileText,
-  Blocks,
   Settings,
   SlidersHorizontal,
   Truck,
@@ -38,7 +37,6 @@ export const NAV_PERMISSIONS = {
   ATTRIBUTES_VIEW: ADMIN_PERMISSIONS.ATTRIBUTES_VIEW,
   COLLECTIONS_VIEW: ADMIN_PERMISSIONS.COLLECTIONS_VIEW,
   PAGES_VIEW: ADMIN_PERMISSIONS.PAGES_VIEW,
-  WIDGETS_VIEW: ADMIN_PERMISSIONS.WIDGETS_VIEW,
   MEDIA_VIEW: ADMIN_PERMISSIONS.MEDIA_VIEW,
   ORDERS_VIEW: ADMIN_PERMISSIONS.ORDERS_VIEW,
   CUSTOMERS_VIEW: ADMIN_PERMISSIONS.CUSTOMERS_VIEW,
@@ -157,12 +155,6 @@ export const allNavSections: NavSection[] = [
             href: "/admin/pages",
             icon: FileText,
             requiredPermission: NAV_PERMISSIONS.PAGES_VIEW,
-          },
-          {
-            name: "Widgets",
-            href: "/admin/widgets",
-            icon: Blocks,
-            requiredPermission: NAV_PERMISSIONS.WIDGETS_VIEW,
           },
           {
             name: "Media",

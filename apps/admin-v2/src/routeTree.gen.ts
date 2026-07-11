@@ -29,7 +29,6 @@ import { Route as AdminInventoryRouteImport } from './routes/admin/inventory'
 import { Route as AdminAttributesRouteImport } from './routes/admin/attributes'
 import { Route as AdminAccessDeniedRouteImport } from './routes/admin/access-denied'
 import { Route as AdminAbandonedCheckoutsRouteImport } from './routes/admin/abandoned-checkouts'
-import { Route as AdminWidgetsIndexRouteImport } from './routes/admin/widgets/index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
 import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
 import { Route as AdminPagesIndexRouteImport } from './routes/admin/pages/index'
@@ -40,9 +39,6 @@ import { Route as AdminCollectionsIndexRouteImport } from './routes/admin/collec
 import { Route as AdminCategoriesIndexRouteImport } from './routes/admin/categories/index'
 import { Route as AdminAnalyticsIndexRouteImport } from './routes/admin/analytics/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as ApiAssistantMcpRouteImport } from './routes/api/assistant/mcp'
-import { Route as AdminWidgetsTrashRouteImport } from './routes/admin/widgets/trash'
-import { Route as AdminWidgetsWidgetIdRouteImport } from './routes/admin/widgets/$widgetId'
 import { Route as AdminSettingsThemeRouteImport } from './routes/admin/settings/theme'
 import { Route as AdminSettingsTaxesRouteImport } from './routes/admin/settings/taxes'
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
@@ -75,9 +71,6 @@ import { Route as AdminCustomersCustomerIdEditRouteImport } from './routes/admin
 import { Route as AdminCollectionsCollectionIdEditRouteImport } from './routes/admin/collections/$collectionId/edit'
 import { Route as AdminCategoriesCategoryIdEditRouteImport } from './routes/admin/categories/$categoryId/edit'
 import { Route as AdminAnalyticsAnalyticsIdEditRouteImport } from './routes/admin/analytics/$analyticsId/edit'
-import { Route as ApiAssistantFlueComputerResultsRouteImport } from './routes/api/assistant/flue/computer/results'
-import { Route as ApiAssistantFlueComputerCancelRouteImport } from './routes/api/assistant/flue/computer/cancel'
-import { Route as ApiAssistantFlueAgentsSplatRouteImport } from './routes/api/assistant/flue/agents/$'
 
 const ScannerRoute = ScannerRouteImport.update({
   id: '/scanner',
@@ -180,11 +173,6 @@ const AdminAbandonedCheckoutsRoute = AdminAbandonedCheckoutsRouteImport.update({
   path: '/abandoned-checkouts',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminWidgetsIndexRoute = AdminWidgetsIndexRouteImport.update({
-  id: '/widgets/',
-  path: '/widgets/',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminSettingsIndexRoute = AdminSettingsIndexRouteImport.update({
   id: '/settings/',
   path: '/settings/',
@@ -234,21 +222,6 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAssistantMcpRoute = ApiAssistantMcpRouteImport.update({
-  id: '/api/assistant/mcp',
-  path: '/api/assistant/mcp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminWidgetsTrashRoute = AdminWidgetsTrashRouteImport.update({
-  id: '/widgets/trash',
-  path: '/widgets/trash',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminWidgetsWidgetIdRoute = AdminWidgetsWidgetIdRouteImport.update({
-  id: '/widgets/$widgetId',
-  path: '/widgets/$widgetId',
-  getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsThemeRoute = AdminSettingsThemeRouteImport.update({
   id: '/settings/theme',
@@ -423,24 +396,6 @@ const AdminAnalyticsAnalyticsIdEditRoute =
     path: '/analytics/$analyticsId/edit',
     getParentRoute: () => AdminRoute,
   } as any)
-const ApiAssistantFlueComputerResultsRoute =
-  ApiAssistantFlueComputerResultsRouteImport.update({
-    id: '/api/assistant/flue/computer/results',
-    path: '/api/assistant/flue/computer/results',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiAssistantFlueComputerCancelRoute =
-  ApiAssistantFlueComputerCancelRouteImport.update({
-    id: '/api/assistant/flue/computer/cancel',
-    path: '/api/assistant/flue/computer/cancel',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiAssistantFlueAgentsSplatRoute =
-  ApiAssistantFlueAgentsSplatRouteImport.update({
-    id: '/api/assistant/flue/agents/$',
-    path: '/api/assistant/flue/agents/$',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -483,9 +438,6 @@ export interface FileRoutesByFullPath {
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
-  '/admin/widgets/$widgetId': typeof AdminWidgetsWidgetIdRoute
-  '/admin/widgets/trash': typeof AdminWidgetsTrashRoute
-  '/api/assistant/mcp': typeof ApiAssistantMcpRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/analytics/': typeof AdminAnalyticsIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -496,7 +448,6 @@ export interface FileRoutesByFullPath {
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
-  '/admin/widgets/': typeof AdminWidgetsIndexRoute
   '/admin/analytics/$analyticsId/edit': typeof AdminAnalyticsAnalyticsIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
   '/admin/collections/$collectionId/edit': typeof AdminCollectionsCollectionIdEditRoute
@@ -509,9 +460,6 @@ export interface FileRoutesByFullPath {
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
-  '/api/assistant/flue/agents/$': typeof ApiAssistantFlueAgentsSplatRoute
-  '/api/assistant/flue/computer/cancel': typeof ApiAssistantFlueComputerCancelRoute
-  '/api/assistant/flue/computer/results': typeof ApiAssistantFlueComputerResultsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -553,9 +501,6 @@ export interface FileRoutesByTo {
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
-  '/admin/widgets/$widgetId': typeof AdminWidgetsWidgetIdRoute
-  '/admin/widgets/trash': typeof AdminWidgetsTrashRoute
-  '/api/assistant/mcp': typeof ApiAssistantMcpRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/analytics': typeof AdminAnalyticsIndexRoute
   '/admin/categories': typeof AdminCategoriesIndexRoute
@@ -566,7 +511,6 @@ export interface FileRoutesByTo {
   '/admin/pages': typeof AdminPagesIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
-  '/admin/widgets': typeof AdminWidgetsIndexRoute
   '/admin/analytics/$analyticsId/edit': typeof AdminAnalyticsAnalyticsIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
   '/admin/collections/$collectionId/edit': typeof AdminCollectionsCollectionIdEditRoute
@@ -579,9 +523,6 @@ export interface FileRoutesByTo {
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId': typeof AdminProductsProductIdIndexRoute
-  '/api/assistant/flue/agents/$': typeof ApiAssistantFlueAgentsSplatRoute
-  '/api/assistant/flue/computer/cancel': typeof ApiAssistantFlueComputerCancelRoute
-  '/api/assistant/flue/computer/results': typeof ApiAssistantFlueComputerResultsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -625,9 +566,6 @@ export interface FileRoutesById {
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
-  '/admin/widgets/$widgetId': typeof AdminWidgetsWidgetIdRoute
-  '/admin/widgets/trash': typeof AdminWidgetsTrashRoute
-  '/api/assistant/mcp': typeof ApiAssistantMcpRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/analytics/': typeof AdminAnalyticsIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -638,7 +576,6 @@ export interface FileRoutesById {
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
-  '/admin/widgets/': typeof AdminWidgetsIndexRoute
   '/admin/analytics/$analyticsId/edit': typeof AdminAnalyticsAnalyticsIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
   '/admin/collections/$collectionId/edit': typeof AdminCollectionsCollectionIdEditRoute
@@ -651,9 +588,6 @@ export interface FileRoutesById {
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
-  '/api/assistant/flue/agents/$': typeof ApiAssistantFlueAgentsSplatRoute
-  '/api/assistant/flue/computer/cancel': typeof ApiAssistantFlueComputerCancelRoute
-  '/api/assistant/flue/computer/results': typeof ApiAssistantFlueComputerResultsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -698,9 +632,6 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications'
     | '/admin/settings/taxes'
     | '/admin/settings/theme'
-    | '/admin/widgets/$widgetId'
-    | '/admin/widgets/trash'
-    | '/api/assistant/mcp'
     | '/api/auth/$'
     | '/admin/analytics/'
     | '/admin/categories/'
@@ -711,7 +642,6 @@ export interface FileRouteTypes {
     | '/admin/pages/'
     | '/admin/products/'
     | '/admin/settings/'
-    | '/admin/widgets/'
     | '/admin/analytics/$analyticsId/edit'
     | '/admin/categories/$categoryId/edit'
     | '/admin/collections/$collectionId/edit'
@@ -724,9 +654,6 @@ export interface FileRouteTypes {
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
-    | '/api/assistant/flue/agents/$'
-    | '/api/assistant/flue/computer/cancel'
-    | '/api/assistant/flue/computer/results'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -768,9 +695,6 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications'
     | '/admin/settings/taxes'
     | '/admin/settings/theme'
-    | '/admin/widgets/$widgetId'
-    | '/admin/widgets/trash'
-    | '/api/assistant/mcp'
     | '/api/auth/$'
     | '/admin/analytics'
     | '/admin/categories'
@@ -781,7 +705,6 @@ export interface FileRouteTypes {
     | '/admin/pages'
     | '/admin/products'
     | '/admin/settings'
-    | '/admin/widgets'
     | '/admin/analytics/$analyticsId/edit'
     | '/admin/categories/$categoryId/edit'
     | '/admin/collections/$collectionId/edit'
@@ -794,9 +717,6 @@ export interface FileRouteTypes {
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId'
     | '/admin/products/$productId'
-    | '/api/assistant/flue/agents/$'
-    | '/api/assistant/flue/computer/cancel'
-    | '/api/assistant/flue/computer/results'
   id:
     | '__root__'
     | '/'
@@ -839,9 +759,6 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications'
     | '/admin/settings/taxes'
     | '/admin/settings/theme'
-    | '/admin/widgets/$widgetId'
-    | '/admin/widgets/trash'
-    | '/api/assistant/mcp'
     | '/api/auth/$'
     | '/admin/analytics/'
     | '/admin/categories/'
@@ -852,7 +769,6 @@ export interface FileRouteTypes {
     | '/admin/pages/'
     | '/admin/products/'
     | '/admin/settings/'
-    | '/admin/widgets/'
     | '/admin/analytics/$analyticsId/edit'
     | '/admin/categories/$categoryId/edit'
     | '/admin/collections/$collectionId/edit'
@@ -865,9 +781,6 @@ export interface FileRouteTypes {
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
-    | '/api/assistant/flue/agents/$'
-    | '/api/assistant/flue/computer/cancel'
-    | '/api/assistant/flue/computer/results'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -879,12 +792,8 @@ export interface RootRouteChildren {
   ScannerRoute: typeof ScannerRoute
   ApiScannerTokenRoute: typeof ApiScannerTokenRoute
   InvoiceOrderIdRoute: typeof InvoiceOrderIdRoute
-  ApiAssistantMcpRoute: typeof ApiAssistantMcpRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiV1AdminSplatRoute: typeof ApiV1AdminSplatRoute
-  ApiAssistantFlueAgentsSplatRoute: typeof ApiAssistantFlueAgentsSplatRoute
-  ApiAssistantFlueComputerCancelRoute: typeof ApiAssistantFlueComputerCancelRoute
-  ApiAssistantFlueComputerResultsRoute: typeof ApiAssistantFlueComputerResultsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1029,13 +938,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAbandonedCheckoutsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/widgets/': {
-      id: '/admin/widgets/'
-      path: '/widgets'
-      fullPath: '/admin/widgets/'
-      preLoaderRoute: typeof AdminWidgetsIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/settings/': {
       id: '/admin/settings/'
       path: '/settings'
@@ -1105,27 +1007,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/api/assistant/mcp': {
-      id: '/api/assistant/mcp'
-      path: '/api/assistant/mcp'
-      fullPath: '/api/assistant/mcp'
-      preLoaderRoute: typeof ApiAssistantMcpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/widgets/trash': {
-      id: '/admin/widgets/trash'
-      path: '/widgets/trash'
-      fullPath: '/admin/widgets/trash'
-      preLoaderRoute: typeof AdminWidgetsTrashRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/widgets/$widgetId': {
-      id: '/admin/widgets/$widgetId'
-      path: '/widgets/$widgetId'
-      fullPath: '/admin/widgets/$widgetId'
-      preLoaderRoute: typeof AdminWidgetsWidgetIdRouteImport
-      parentRoute: typeof AdminRoute
     }
     '/admin/settings/theme': {
       id: '/admin/settings/theme'
@@ -1351,27 +1232,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAnalyticsAnalyticsIdEditRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/api/assistant/flue/computer/results': {
-      id: '/api/assistant/flue/computer/results'
-      path: '/api/assistant/flue/computer/results'
-      fullPath: '/api/assistant/flue/computer/results'
-      preLoaderRoute: typeof ApiAssistantFlueComputerResultsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/assistant/flue/computer/cancel': {
-      id: '/api/assistant/flue/computer/cancel'
-      path: '/api/assistant/flue/computer/cancel'
-      fullPath: '/api/assistant/flue/computer/cancel'
-      preLoaderRoute: typeof ApiAssistantFlueComputerCancelRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/assistant/flue/agents/$': {
-      id: '/api/assistant/flue/agents/$'
-      path: '/api/assistant/flue/agents/$'
-      fullPath: '/api/assistant/flue/agents/$'
-      preLoaderRoute: typeof ApiAssistantFlueAgentsSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -1402,8 +1262,6 @@ interface AdminRouteChildren {
   AdminSettingsNotificationsRoute: typeof AdminSettingsNotificationsRoute
   AdminSettingsTaxesRoute: typeof AdminSettingsTaxesRoute
   AdminSettingsThemeRoute: typeof AdminSettingsThemeRoute
-  AdminWidgetsWidgetIdRoute: typeof AdminWidgetsWidgetIdRoute
-  AdminWidgetsTrashRoute: typeof AdminWidgetsTrashRoute
   AdminAnalyticsIndexRoute: typeof AdminAnalyticsIndexRoute
   AdminCategoriesIndexRoute: typeof AdminCategoriesIndexRoute
   AdminCollectionsIndexRoute: typeof AdminCollectionsIndexRoute
@@ -1413,7 +1271,6 @@ interface AdminRouteChildren {
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
-  AdminWidgetsIndexRoute: typeof AdminWidgetsIndexRoute
   AdminAnalyticsAnalyticsIdEditRoute: typeof AdminAnalyticsAnalyticsIdEditRoute
   AdminCategoriesCategoryIdEditRoute: typeof AdminCategoriesCategoryIdEditRoute
   AdminCollectionsCollectionIdEditRoute: typeof AdminCollectionsCollectionIdEditRoute
@@ -1454,8 +1311,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsNotificationsRoute: AdminSettingsNotificationsRoute,
   AdminSettingsTaxesRoute: AdminSettingsTaxesRoute,
   AdminSettingsThemeRoute: AdminSettingsThemeRoute,
-  AdminWidgetsWidgetIdRoute: AdminWidgetsWidgetIdRoute,
-  AdminWidgetsTrashRoute: AdminWidgetsTrashRoute,
   AdminAnalyticsIndexRoute: AdminAnalyticsIndexRoute,
   AdminCategoriesIndexRoute: AdminCategoriesIndexRoute,
   AdminCollectionsIndexRoute: AdminCollectionsIndexRoute,
@@ -1465,7 +1320,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
-  AdminWidgetsIndexRoute: AdminWidgetsIndexRoute,
   AdminAnalyticsAnalyticsIdEditRoute: AdminAnalyticsAnalyticsIdEditRoute,
   AdminCategoriesCategoryIdEditRoute: AdminCategoriesCategoryIdEditRoute,
   AdminCollectionsCollectionIdEditRoute: AdminCollectionsCollectionIdEditRoute,
@@ -1510,12 +1364,8 @@ const rootRouteChildren: RootRouteChildren = {
   ScannerRoute: ScannerRoute,
   ApiScannerTokenRoute: ApiScannerTokenRoute,
   InvoiceOrderIdRoute: InvoiceOrderIdRoute,
-  ApiAssistantMcpRoute: ApiAssistantMcpRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiV1AdminSplatRoute: ApiV1AdminSplatRoute,
-  ApiAssistantFlueAgentsSplatRoute: ApiAssistantFlueAgentsSplatRoute,
-  ApiAssistantFlueComputerCancelRoute: ApiAssistantFlueComputerCancelRoute,
-  ApiAssistantFlueComputerResultsRoute: ApiAssistantFlueComputerResultsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,20 +1,12 @@
 # Codex Working Notes
 
-Last reviewed: 2026-07-10
+Last reviewed: 2026-07-12
 
-This folder is for Codex operational context only. Treat source code, tests, deployed behavior, `audit/REMEDIATION_TRACKER.md`, and GitHub issues as the source of truth; older markdown and comments can be stale.
+This folder contains concise engineering context. Treat source code, tests, deployed behavior, fresh command output, and GitHub issues as the source of truth; older prose can be stale.
 
 ## Files
 
-- `CODEBASE-MAP.md` - implementation-derived architecture map and data-flow notes.
-- `PLATFORM-GOAL.md` - product, architecture, and stable-release bar for future agents.
-- `AGENT-PLATFORM-ARCHITECTURE.md` - accepted target ADR for the separately deployed Admin and Storefront agent platforms.
-- [`audit/AGENT-PLATFORM-REQUIREMENTS.md`](../../audit/AGENT-PLATFORM-REQUIREMENTS.md) - exhaustive target requirement-to-evidence checklist and current readiness state.
-- `MCP-AGENT-ARCHITECTURE.md` - durable assistant/MCP architecture, first-release scope, and verification gates.
-- `AGENTS-REFERENCE.md` - archived long-form agent context. Use only when the root router and focused docs do not contain the needed landmine.
-- `WIDGET-AI.md` - current widget AI provider/prompt architecture and verification targets.
-- `WIDGET-SYSTEM.md` - widget/page-builder purpose, quality bar, and reliability requirements.
-- `ISSUE-LOG.md` - historical GitHub issue verification log. Use `audit/REMEDIATION_TRACKER.md` for the current remediation queue.
+- `PLATFORM-GOAL.md` - product, architecture, and stable-release bar.
 
 ## Toolchain Rules
 

@@ -4,7 +4,7 @@ import { orderItems, pages, products, productVariants } from "@scalius/database/
 import { publicPageVisibilityCondition } from "@scalius/core/modules/pages";
 import { parseShortcodes } from "@scalius/shared/shortcodes";
 import { normalizeStorefrontHtmlCachePaths } from "@scalius/shared/storefront-cache-path";
-import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { deleteCacheByPattern } from "./kv-cache";
 import {
   API_CACHE_FENCE_GLOBAL_SCOPE,
@@ -58,7 +58,6 @@ export interface CmsShortcodePageTarget {
 
 export interface CmsShortcodeReferenceInput {
   productSlugs?: readonly string[];
-  widgetIds?: readonly string[];
 }
 
 export interface CmsShortcodePageInvalidation {
@@ -127,7 +126,6 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
       "category_products_",
       "feed_products_",
       "sitemap_products_",
-      "widgets_scope_",
       "storefront_homepage_",
     ],
   },
@@ -147,7 +145,6 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
       "global_all_categories",
       "category_products_",
       "filterable_attrs_category_",
-      "widgets_scope_",
       "storefront_homepage_",
     ],
   },
@@ -159,7 +156,6 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
     storefrontPrefixes: [
       "global_all_collections",
       "collection_by_id_",
-      "widgets_scope_",
       "storefront_homepage_",
     ],
   },
@@ -201,19 +197,15 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   },
   homepage: {
     label: "Homepage",
-    description: "Hero sliders, widgets, SEO settings",
+    description: "Hero sliders and SEO settings",
     kvPrefixes: [
       "api:hero:",
-      "api:widgets:active-homepage:",
-      "api:widgets:single:",
       "api:seo:",
       "api:storefront:homepage:",
     ],
     bumpsHtml: true,
     storefrontPrefixes: [
       "homepage_hero_sliders",
-      "global_homepage_widgets",
-      "widget_",
       "global_seo_settings",
       "storefront_homepage_",
     ],
@@ -227,25 +219,6 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
       "global_seo_settings",
       "feed_products_",
       "sitemap_products_",
-    ],
-  },
-  widgets: {
-    label: "Widgets",
-    description:
-      "Widget content, homepage widgets, scoped widget placements, and shortcode rendering",
-    kvPrefixes: [
-      "api:widgets:single:",
-      "api:widgets:active-homepage:",
-      "api:storefront:homepage:",
-      "api:storefront:page:",
-    ],
-    bumpsHtml: true,
-    storefrontPrefixes: [
-      "widget_",
-      "global_homepage_widgets",
-      "widgets_scope_",
-      "storefront_homepage_",
-      "page_render_",
     ],
   },
   checkout: {
@@ -322,16 +295,11 @@ export function getCatalogStorefrontHtmlPaths(
   ]);
 }
 
-export const WIDGET_CACHE_GROUPS = [
-  "widgets",
-] as const;
-
 export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/products": [...CATALOG_CACHE_GROUPS.products],
   "/api/v1/admin/categories": [...CATALOG_CACHE_GROUPS.categories],
   "/api/v1/admin/collections": [...CATALOG_CACHE_GROUPS.collections],
   "/api/v1/admin/pages": ["pages", "layout"],
-  "/api/v1/admin/widgets": [...WIDGET_CACHE_GROUPS],
   "/api/v1/admin/navigation": ["layout"],
   "/api/v1/admin/analytics": ["layout"],
   "/api/v1/admin/settings/header": ["layout"],
@@ -757,8 +725,8 @@ export async function purgeStorefrontForGroups(
 
 /**
  * Execute a storefront purge for already-computed logical cache prefixes.
- * This is used by writes such as widgets where the affected storefront keys
- * can be narrower than a whole invalidation group.
+ * This is used by writes where the affected storefront keys can be narrower
+ * than a whole invalidation group.
  */
 export async function purgeStorefrontForPrefixes(
   prefixes: readonly string[],
@@ -1010,17 +978,9 @@ function uniqueCmsShortcodePageTargets(
 
 function cmsShortcodeCandidateCondition(
   productSlugs: readonly string[],
-  widgetIds: readonly string[],
 ): SQL | undefined {
-  const conditions: SQL[] = [];
-  if (productSlugs.length > 0) {
-    conditions.push(sql`lower(${pages.content}) LIKE ${"%[product%"}`);
-  }
-  if (widgetIds.length > 0) {
-    conditions.push(sql`lower(${pages.content}) LIKE ${"%[widget%"}`);
-  }
-  if (conditions.length === 0) return undefined;
-  return conditions.length === 1 ? conditions[0] : or(...conditions);
+  if (productSlugs.length === 0) return undefined;
+  return sql`lower(${pages.content}) LIKE ${"%[product%"}`;
 }
 
 export async function resolveCmsShortcodePageTargets(
@@ -1028,10 +988,8 @@ export async function resolveCmsShortcodePageTargets(
   input: CmsShortcodeReferenceInput,
 ): Promise<CmsShortcodePageTarget[]> {
   const productSlugs = uniqueValues(input.productSlugs);
-  const widgetIds = uniqueValues(input.widgetIds);
   const productSlugSet = new Set(productSlugs);
-  const widgetIdSet = new Set(widgetIds);
-  const candidateCondition = cmsShortcodeCandidateCondition(productSlugs, widgetIds);
+  const candidateCondition = cmsShortcodeCandidateCondition(productSlugs);
   if (!candidateCondition) return [];
 
   const rows = await db
@@ -1046,12 +1004,9 @@ export async function resolveCmsShortcodePageTargets(
   const targets: CmsShortcodePageTarget[] = [];
   for (const row of rows) {
     const shortcodes = parseShortcodes(row.content ?? "");
-    const hasReference = shortcodes.some((shortcode) => {
-      if (shortcode.type === "product") {
-        return productSlugSet.has(shortcode.id);
-      }
-      return widgetIdSet.has(shortcode.id);
-    });
+    const hasReference = shortcodes.some((shortcode) =>
+      productSlugSet.has(shortcode.id),
+    );
     if (hasReference) {
       targets.push({ id: row.id, slug: row.slug });
     }

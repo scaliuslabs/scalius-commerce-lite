@@ -344,7 +344,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       id: "scqf_1",
     });
     mocks.processExistingMetaPurchaseOutboxForOrder.mockResolvedValue({
-      outboxId: "mcp_order_1",
+      outboxId: "mcap_order_1",
       missing: false,
       processed: true,
       status: "sent",

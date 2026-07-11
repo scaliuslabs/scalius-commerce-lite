@@ -85,45 +85,6 @@ export const DiscountValueType = {
 
 export type DiscountValueType = (typeof DiscountValueType)[keyof typeof DiscountValueType];
 
-export const WidgetPlacementRule = {
-    BEFORE_COLLECTION: "before_collection",
-    AFTER_COLLECTION: "after_collection",
-    FIXED_TOP_HOMEPAGE: "fixed_top_homepage",
-    FIXED_BOTTOM_HOMEPAGE: "fixed_bottom_homepage",
-    STANDALONE: "standalone",
-} as const;
-
-export type WidgetPlacementRule = (typeof WidgetPlacementRule)[keyof typeof WidgetPlacementRule];
-
-export const WidgetPlacementScope = {
-    HOMEPAGE: "homepage",
-    PAGE: "page",
-    PRODUCT: "product",
-    CATEGORY: "category",
-    COLLECTION: "collection",
-} as const;
-
-export type WidgetPlacementScope = (typeof WidgetPlacementScope)[keyof typeof WidgetPlacementScope];
-
-export const WidgetPlacementSlot = {
-    TOP: "top",
-    BOTTOM: "bottom",
-    BEFORE_CONTENT: "before_content",
-    AFTER_CONTENT: "after_content",
-    BEFORE_COLLECTION: "before_collection",
-    AFTER_COLLECTION: "after_collection",
-} as const;
-
-export type WidgetPlacementSlot = (typeof WidgetPlacementSlot)[keyof typeof WidgetPlacementSlot];
-
-export const WidgetPlacementAnchorType = {
-    COLLECTION: "collection",
-    CONTENT: "content",
-} as const;
-
-export type WidgetPlacementAnchorType =
-    (typeof WidgetPlacementAnchorType)[keyof typeof WidgetPlacementAnchorType];
-
 export const PaymentRecordStatus = {
     PENDING: "pending",
     CONFIRMED: "confirmed",

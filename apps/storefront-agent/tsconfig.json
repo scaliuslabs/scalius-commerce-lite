@@ -1,4 +1,0 @@
-{
-  "extends": "@scalius/tsconfig/worker.json",
-  "include": ["src/**/*"]
-}

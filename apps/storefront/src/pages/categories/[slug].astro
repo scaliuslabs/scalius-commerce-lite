@@ -11,12 +11,10 @@ import {
   type FilterableAttribute,
   type LayoutData,
   type Category,
-  type ApiWidget,
 } from "@/lib/api";
 import CategoryFilters from "@/components/CategoryFilters";
 import RichContent from "@/components/RichContent.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
-import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime-env";
@@ -25,7 +23,6 @@ import {
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
-import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   PRODUCT_LIST_NAVIGATION_PARAMS,
@@ -62,7 +59,6 @@ let category: Category | null;
 let productsResponse: CategoryProductsResponse | null;
 let attributes: FilterableAttribute[];
 let layoutData: LayoutData | null;
-let categoryWidgets: ApiWidget[];
 let productListOptions: ProductListOptions = queryState.options;
 
 try {
@@ -88,51 +84,35 @@ try {
     currentFilters = queryState.currentFilters;
     productListOptions = queryState.options;
     const productsPromise = getProductsByCategory(slug, productListOptions);
-    const widgetsPromise = productsPromise.then((fetchedProducts) =>
-      fetchedProducts?.category
-        ? getActiveWidgetsForScope("category", fetchedProducts.category.id)
-        : null,
-    );
 
     const [
       fetchedLayoutData,
       fetchedProducts,
-      fetchedWidgets,
     ] = await Promise.all([
       layoutPromise,
       productsPromise,
-      widgetsPromise,
     ]);
     layoutData = fetchedLayoutData;
     setRuntimeImageCdnPolicy(layoutData?.media);
     productsResponse = fetchedProducts;
-    categoryWidgets = fetchedWidgets || [];
   } else {
     const productsPromise = getProductsByCategory(slug, productListOptions);
-    const widgetsPromise = productsPromise.then((fetchedProducts) =>
-      fetchedProducts?.category
-        ? getActiveWidgetsForScope("category", fetchedProducts.category.id)
-        : null,
-    );
 
-    // Parallel fetch: layout + products/category + filter metadata + scoped widgets.
+    // Parallel fetch: layout, products/category, and filter metadata.
     const [
       fetchedLayoutData,
       fetchedProducts,
       fetchedAttributes,
-      fetchedWidgets,
     ] = await Promise.all([
       layoutPromise,
       productsPromise,
       attributesPromise,
-      widgetsPromise,
     ]);
 
     layoutData = fetchedLayoutData;
     setRuntimeImageCdnPolicy(layoutData?.media);
     productsResponse = fetchedProducts;
     attributes = fetchedAttributes || [];
-    categoryWidgets = fetchedWidgets || [];
   }
 
   if (productsResponse?.categoryNotFound) return new Response(null, { status: 404 });
@@ -225,19 +205,6 @@ const analyticsProductData = products.map((p) => ({
   name: p.name,
   price: p.discountedPrice,
 }));
-const assistantSurface = {
-  kind: "category" as const,
-  categoryId: category.id,
-  slug: category.slug,
-  sortBy,
-  page: pagination.page,
-  totalResults: pagination.total,
-  visibleFilters: Object.entries(currentFilters).map(([key, value]) => ({
-    key,
-    value,
-  })),
-  visibleProductIds: products.map((product) => product.id),
-};
 
 // --- SEO: per SEO-03, SEO-04, OG-02 ---
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
@@ -322,8 +289,6 @@ const collectionJsonLd =
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
   noindex={category?.noIndex === true}
-  assistantPageKind="category"
-  assistantSurface={assistantSurface}
 >
   <Fragment slot="head">
     {
@@ -342,14 +307,6 @@ const collectionJsonLd =
     data-category-name={category?.name}
     data-products-for-analytics={JSON.stringify(analyticsProductData)}
   >
-    <WidgetPlacementZone
-      widgets={categoryWidgets}
-      scope="category"
-      scopeId={category?.id}
-      placementSlot="top"
-      priority
-    />
-
     <div class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <nav class="text-sm mb-4">
@@ -389,14 +346,6 @@ const collectionJsonLd =
         </div>
       </div>
     </div>
-
-    <WidgetPlacementZone
-      widgets={categoryWidgets}
-      scope="category"
-      scopeId={category?.id}
-      placementSlot="before_content"
-      itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
-    />
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       <div class="flex flex-col lg:flex-row gap-6">
@@ -597,21 +546,6 @@ const collectionJsonLd =
       </div>
     </div>
 
-    <WidgetPlacementZone
-      widgets={categoryWidgets}
-      scope="category"
-      scopeId={category?.id}
-      placementSlot="after_content"
-      itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
-    />
-
-    <WidgetPlacementZone
-      widgets={categoryWidgets}
-      scope="category"
-      scopeId={category?.id}
-      placementSlot="bottom"
-      itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
-    />
   </div>
 </Layout>
 

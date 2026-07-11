@@ -24,7 +24,6 @@ export * from "./search";
 export * from "./orders";
 export * from "./discounts";
 export * from "./shipping";
-export * from "./widgets";
 export * from "./settings";
 export * from "./attributes";
 export * from "./tracking";
@@ -35,4 +34,3 @@ export * from "./types";
 
 export * from "./customer-auth";
 export * from "./checkout";
-

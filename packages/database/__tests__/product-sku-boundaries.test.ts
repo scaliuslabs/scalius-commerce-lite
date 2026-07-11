@@ -5,25 +5,28 @@ import { fileURLToPath } from "node:url";
 const PRODUCTS_SCHEMA_SOURCE = fileURLToPath(
     new URL("../src/schema/products.ts", import.meta.url),
 );
-const SIMPLE_SKU_REPAIR_MIGRATION = fileURLToPath(
-    new URL("../migrations/0057_simple_sku_legacy_repair.sql", import.meta.url),
-);
-const MIGRATION_METADATA_CHECK = fileURLToPath(
-    new URL("../scripts/check-migration-metadata.mjs", import.meta.url),
+const BASELINE_MIGRATION = fileURLToPath(
+    new URL("../migrations/0000_blushing_jack_power.sql", import.meta.url),
 );
 
 describe("product SKU inventory boundaries", () => {
-    it("documents and repairs legacy simple-product SKU invariants", () => {
+    it("keeps sellable SKU and inventory invariants in the clean baseline", () => {
         const schemaSource = readFileSync(PRODUCTS_SCHEMA_SOURCE, "utf8");
-        const migrationSource = readFileSync(SIMPLE_SKU_REPAIR_MIGRATION, "utf8");
-        const metadataCheckSource = readFileSync(MIGRATION_METADATA_CHECK, "utf8");
+        const baselineSource = readFileSync(BASELINE_MIGRATION, "utf8");
 
         expect(schemaSource).toContain("product_variants_one_default_per_product_idx");
-        expect(migrationSource).toContain("INSERT INTO `product_variants`");
-        expect(migrationSource).toContain("NOT EXISTS");
-        expect(migrationSource).toContain("`is_default` = true");
-        expect(migrationSource).toContain("`track_inventory` = false");
-        expect(migrationSource).toContain("`inventory_movements`");
-        expect(metadataCheckSource).toContain('"0057"');
+        expect(schemaSource).toContain('isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false)');
+        expect(schemaSource).toContain('trackInventory: integer("track_inventory", { mode: "boolean" }).notNull().default(true)');
+
+        expect(baselineSource).toContain("CREATE TABLE `product_variants`");
+        expect(baselineSource).toContain("`is_default` integer DEFAULT false NOT NULL");
+        expect(baselineSource).toContain("`track_inventory` integer DEFAULT true NOT NULL");
+        expect(baselineSource).toContain("CREATE UNIQUE INDEX `product_variants_sku_unique_idx`");
+        expect(baselineSource).toContain("CREATE UNIQUE INDEX `product_variants_one_default_per_product_idx`");
+        expect(baselineSource).toContain("WHERE `is_default` = true AND `deleted_at` IS NULL");
+        expect(baselineSource).toContain("CREATE TABLE `inventory_movements`");
+        expect(baselineSource).toContain(
+            "FOREIGN KEY (`variant_id`) REFERENCES `product_variants`(`id`) ON UPDATE no action ON DELETE restrict",
+        );
     });
 });

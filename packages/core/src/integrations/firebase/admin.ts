@@ -282,7 +282,7 @@ function randomJitterMs(maxMs: number): number {
     return 0;
   }
 
-  const runtimeCrypto = globalThis.crypto;
+  const runtimeCrypto = crypto;
   if (!runtimeCrypto?.getRandomValues) {
     return 0;
   }

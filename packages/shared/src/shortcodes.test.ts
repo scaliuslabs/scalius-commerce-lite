@@ -2,21 +2,18 @@ import { describe, expect, it } from "vitest";
 import { parseShortcodes } from "./shortcodes";
 
 describe("parseShortcodes", () => {
-  it("parses supported product and widget forms", () => {
+  it("parses supported product forms and ignores unsupported tags", () => {
     expect(
       parseShortcodes(
         [
           '[product slug="fish"]',
           "[product id='rice']",
-          '[widget id="wid_1"]',
-          "[widget slug='wid_2']",
+          '[banner id="old_1"]',
         ].join(" "),
       ),
     ).toMatchObject([
       { type: "product", id: "fish" },
       { type: "product", id: "rice" },
-      { type: "widget", id: "wid_1" },
-      { type: "widget", id: "wid_2" },
     ]);
   });
 
@@ -25,12 +22,10 @@ describe("parseShortcodes", () => {
       parseShortcodes(
         [
           "[product slug=&quot;monster-energy-drink&quot;]",
-          "[widget id=&#34;wid_1&#34;]",
           "[product slug=&apos;rice&apos;]",
-          "[widget id=&#x27;wid_2&#x27;]",
         ].join(" "),
       ).map((shortcode) => shortcode.id),
-    ).toEqual(["monster-energy-drink", "wid_1", "rice", "wid_2"]);
+    ).toEqual(["monster-energy-drink", "rice"]);
   });
 
   it("preserves current id precedence and case-sensitive tag behavior", () => {

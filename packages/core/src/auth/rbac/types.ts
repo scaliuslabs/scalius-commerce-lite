@@ -92,7 +92,6 @@ export type PermissionCategory =
   | "Customers"
   | "Discounts"
   | "Pages"
-  | "Widgets"
   | "Media"
   | "Attributes"
   | "Analytics"

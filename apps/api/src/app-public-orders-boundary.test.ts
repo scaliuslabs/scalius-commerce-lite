@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const APP_SOURCE = fileURLToPath(new URL("./app.ts", import.meta.url));

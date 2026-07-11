@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 
 const ROUTES_DIR = fileURLToPath(new URL(".", import.meta.url));
 const UTILS_DIR = fileURLToPath(new URL("../utils/", import.meta.url));

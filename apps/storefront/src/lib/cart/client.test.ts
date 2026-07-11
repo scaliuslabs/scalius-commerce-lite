@@ -154,8 +154,6 @@ describe("renderIssueAction", () => {
       totalItems: 1,
       totalAmount: 150,
       discount: null,
-      revision: 0,
-      appliedOperationIds: [],
     });
   });
 
@@ -332,8 +330,6 @@ describe("reconcileValidatedCartSnapshot", () => {
         discountValue: 10,
         discountAmount: 30,
       },
-      revision: 0,
-      appliedOperationIds: [],
     });
 
     const messages: string[] = [];
@@ -369,8 +365,6 @@ describe("reconcileValidatedCartSnapshot", () => {
       totalItems: 2,
       totalAmount: 300,
       discount: null,
-      revision: 0,
-      appliedOperationIds: [],
     });
 
     expect(reconcileValidatedCartSnapshot(validationResult(true))).toBe(true);
@@ -397,8 +391,6 @@ describe("reconcileValidatedCartSnapshot", () => {
       totalItems: 1,
       totalAmount: 150,
       discount: null,
-      revision: 0,
-      appliedOperationIds: [],
     });
 
     expect(reconcileValidatedCartSnapshot({

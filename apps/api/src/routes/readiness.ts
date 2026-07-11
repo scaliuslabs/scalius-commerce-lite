@@ -95,21 +95,6 @@ async function runProbe(
   }
 }
 
-function bindingCheck(
-  name: string,
-  binding: unknown,
-  required = true,
-): CheckResult {
-  return {
-    name,
-    required,
-    check: {
-      status: binding ? "ok" : "missing",
-      detail: binding ? undefined : "binding is not configured",
-    },
-  };
-}
-
 function queueBindingCheck(name: string, queue: unknown): CheckResult {
   const ready = typeof (queue as { send?: unknown } | undefined)?.send === "function";
   return {
@@ -205,7 +190,6 @@ app.get("/readyz", async (c) => {
 
   const checks = [
     ...asyncChecks,
-    bindingCheck("widget_design_agent_do", env.WidgetDesignAgent),
     queueBindingCheck("payment_events_queue", env.PAYMENT_EVENTS_QUEUE),
     queueBindingCheck("order_notifications_queue", env.ORDER_NOTIFICATIONS_QUEUE),
     queueBindingCheck("auth_otp_queue", env.AUTH_OTP_QUEUE),

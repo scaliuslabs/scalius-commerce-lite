@@ -419,7 +419,7 @@ describe("storefront cache purge route", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("keeps scoped widget purges exact instead of bumping the global cache version", async () => {
+  it("keeps exact page-render purges local instead of bumping the global cache version", async () => {
     mocks.cacheDelete.mockResolvedValue(true);
     const { POST } = await import("../../../pages/api/purge-cache");
     const request = new Request("https://storefront.example.com/api/purge-cache", {
@@ -429,12 +429,8 @@ describe("storefront cache purge route", () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        groups: ["widgets"],
-        prefixes: [
-          "widget_wid_page",
-          "widgets_scope_page_page_1",
-          "page_render_about-us_",
-        ],
+        groups: ["pages"],
+        prefixes: ["page_render_about-us_"],
         htmlPaths: ["/about-us"],
         bumpVersion: false,
       }),
@@ -465,9 +461,9 @@ describe("storefront cache purge route", () => {
     expect(body.details).toMatchObject({
       cacheVersionBumped: false,
       newVersion: null,
-      prefixesCleared: 3,
+      prefixesCleared: 1,
       exactKeysCleared: 0,
-      exactGenerationsBumped: 4,
+      exactGenerationsBumped: 2,
       l2ExactKeysDeleted: 0,
       htmlPathsCleared: 1,
       htmlPathsDeleted: 1,
@@ -479,14 +475,6 @@ describe("storefront cache purge route", () => {
       expect.any(String),
     );
     expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
-      "g:storefront.example.com:widget_wid_page",
-      expect.any(String),
-    );
-    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
-      "g:storefront.example.com:widgets_scope_page_page_1",
-      expect.any(String),
-    );
-    expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
       `g:storefront.example.com:page_render_about-us_${BUILD_ID}`,
       expect.any(String),
     );
@@ -495,8 +483,6 @@ describe("storefront cache purge route", () => {
       expect.any(String),
     );
     expect(mocks.clearL1ByPrefixes).toHaveBeenCalledWith([
-      "widget_wid_page",
-      "widgets_scope_page_page_1",
       "page_render_about-us_",
       `page_render_about-us_${BUILD_ID}`,
       "html_path_/about-us",

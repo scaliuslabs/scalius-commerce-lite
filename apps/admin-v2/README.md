@@ -40,7 +40,7 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 
 **Order Detail Polling**: Order detail polls order and shipment data every 30 seconds for webhook-driven updates, but it intentionally inherits the global focus/reconnect defaults. Do not re-add focus or reconnect refetches there; the interval is enough, and idle-tab resume should not refresh the old order while the merchant navigates away.
 
-**Read Timeout Behavior**: Admin read-only API transport (`GET`/`HEAD`) is bounded by `ADMIN_API_READ_TIMEOUT_MS` in `src/lib/admin-api-timeout.ts`, including slow JSON/text body reads. Write methods and POST-based streams are deliberately unbounded so committed mutations and long-running widget/AI/import operations are not reported as timed-out guesses.
+**Read Timeout Behavior**: Admin read-only API transport (`GET`/`HEAD`) is bounded by `ADMIN_API_READ_TIMEOUT_MS` in `src/lib/admin-api-timeout.ts`, including slow JSON/text body reads. Write methods are deliberately unbounded so committed mutations and long-running imports are not reported as timed-out guesses.
 
 **Checkout Readiness Preview**: The Checkout Flow panel reads `/api/v1/admin/settings/checkout-readiness` through the dashboard admin proxy in the browser and keeps the typed server-function path only for server-side execution. This avoids turning a transient TanStack server-function transport/referrer failure into a scary delivery-setup warning. If the status read still fails, the amber panel must describe it as an admin status refresh failure and surface the API error while public checkout continues to fail closed from the API checkout-readiness policy.
 
@@ -55,7 +55,7 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 | REALTIME | 10s | Cache stats |
 | FAST | 30s | Orders, inventory |
 | MODERATE | 2min | Product/category/discount lists, dashboard |
-| SLOW | 5min | Product stats, media, widget history |
+| SLOW | 5min | Product stats and media |
 | LOOKUP | 10min | Form options, attributes, admin users |
 | CONFIG | 30min | All settings (35+ queries) |
 | STATIC | 1hr | Setup status |
@@ -70,7 +70,7 @@ The exact number of server functions, query wrappers, and mutation hooks changes
 - Orders (list, create, edit, view, shipments, payments, invoices, auto-refresh)
 - Categories, Collections (with DnD reorder), Customers (with history)
 - Discounts (amount off products, amount off order, free shipping)
-- Pages/CMS (with Tiptap rich editor), Widgets (with AI generation + history)
+- Pages/CMS (with Tiptap rich editor)
 - Attributes (inline edit), Inventory, Media Manager (folders, upload, move)
 - Analytics (tracking scripts), Abandoned Checkouts
 - Settings (12+ tabs: general, checkout, payments, delivery, notifications, auth, theme, cache, etc.)

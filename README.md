@@ -76,7 +76,6 @@ scripts/          # Dev setup, deploy pipeline, dev server wrapper
 | Payments | Stripe, SSLCommerz, Polar, COD |
 | Delivery | Pathao, Steadfast (webhook-driven tracking) |
 | Notifications | Email (Cloudflare Email default, Resend fallback), SMS (4 providers), Firebase Cloud Messaging |
-| AI | AI SDK providers for widget/content generation (OpenRouter, OpenAI, Gemini, Cloudflare Workers AI) |
 | CI/CD | GitHub Actions (lint → typecheck → build → test) |
 | Deploy | Cloudflare Workers via Wrangler |
 
@@ -123,7 +122,6 @@ flowchart TB
         Firebase["Firebase FCM"]
         SMS["SMS Providers (4)"]
         EmailProvider["Cloudflare Email / Resend"]
-        AIProviders["AI providers<br/>(OpenRouter, OpenAI, Gemini, Cloudflare)"]
     end
 
     AdminV2 -->|"Service Binding (env.API)"| API
@@ -144,7 +142,6 @@ flowchart TB
     API -.->|Webhooks| Polar
     API -.->|Webhooks| Pathao
     API -.->|Webhooks| Steadfast
-    API -.-> AIProviders
 ```
 
 ### Service Binding Topology
@@ -183,7 +180,6 @@ In production, service bindings are zero-latency RPC calls (no HTTP overhead). I
 - Navigation builder with drag-and-drop hierarchy
 - CMS pages with Tiptap rich text editor
 - Hero slider management (desktop + mobile variants)
-- Homepage widgets with AI-powered generation through dashboard-configured AI providers
 
 ### Operations
 - 2 delivery providers (Pathao, Steadfast) with webhook-driven tracking
@@ -242,7 +238,6 @@ flowchart LR
 | Customers | List, create, edit, history |
 | Discounts | List, create (3 types), edit |
 | Pages (CMS) | List, create, edit with Tiptap editor |
-| Widgets | List, edit with AI generation, history/restore |
 | Attributes | List, inline edit, value management |
 | Inventory | Stock levels, adjustments, alerts |
 | Media | File browser with folders, upload, move, delete |
@@ -263,7 +258,7 @@ The storefront is an **Astro 7 SSR** application with React 19 islands for inter
 
 | Page | Description |
 |------|-------------|
-| Homepage | Hero slider, widgets, collections |
+| Homepage | Hero slider and collections |
 | Product (`/products/[slug]`) | Gallery, variants, JSON-LD, OG meta |
 | Category (`/categories/[slug]`) | Product grid with attribute filters |
 | Search (`/search`) | FTS5-powered with price/attribute filters |
@@ -284,7 +279,7 @@ The storefront is an **Astro 7 SSR** application with React 19 islands for inter
 - Dashboard-governed discovery controls for sitemaps, robots, schema families, product feed exposure, per-product sitemap/feed XML exclusion, and per-product/category/collection/page `noindex`, sitemap exclusion, or route-shaped same-store canonical path override (collections are ID-routed today), with shared discovery-readiness previews on product, category, collection, and CMS page forms plus policy-aware live proof for robots, sitemap index, child sitemaps, and feed XML
 - JSON-LD schemas for OnlineStore, WebSite/SearchAction, Product/ProductGroup, BreadcrumbList, collection/category pages, active offer shipping details, GTINs from variant barcodes, and merchant-saved return policy facts; schema identity uses Business settings only, OnlineStore requires an absolute Store URL plus header logo and never emits a `null` JSON-LD script, product schema avoids invented facts such as condition or price expiry, and seller/brand are omitted unless backed by explicit merchant data
 - Merchant-compatible product feed XML with a Google/Base canonical feed at `/api/product-feed.xml` and a Meta compatibility feed at `/api/facebook-feed.xml`; both use SKU-aware availability, absolute images, canonical product links, configurable sold-out inclusion, per-product feed exclusion, true brand/GTIN data when provided, empty-catalog-safe XML, per-item link/image/availability validation, and stock-change invalidation that reaches the rendered XML cache. Google variant rows also emit `item_group_title` and `variant_option` pairs from merchant option labels, while standard `size`/`color`/`material`/`pattern` fields are emitted only from explicit product mapping.
-- Read-only UCP catalog discovery at `/.well-known/ucp` with REST endpoints under `/ucp/catalog/*`; it advertises only catalog search/lookup, requires HTTPS storefront discovery plus `UCP-Agent` on catalog operations, maps prices to ISO minor units, and reuses the dedicated feed/SKU projection so agent-readable variants, availability, option labels, canonical URLs, GTINs, and images match Merchant XML and checkout truth. Checkout/cart/order/payment UCP capabilities are intentionally not advertised yet.
+- Read-only UCP catalog discovery at `/.well-known/ucp` with REST endpoints under `/ucp/catalog/*`; it advertises only catalog search/lookup, requires HTTPS storefront discovery plus `UCP-Agent` on catalog operations, maps prices to ISO minor units, and reuses the dedicated feed/SKU projection so protocol variants, availability, option labels, canonical URLs, GTINs, and images match Merchant XML and checkout truth. Checkout/cart/order/payment UCP capabilities are intentionally not advertised yet.
 - Bounded dashboard diagnostics for product-feed emitted rows, skipped rows, reason counts, and safe product samples
 - Absolute canonical URLs, same-store per-resource canonical path overrides, robots.txt, XML sitemap index/children, resource sitemap exclusion, resource `noindex,follow`, and noindex policy for listing variants. Sitemap XML is loc/lastmod-only: child URL sitemaps use truthful content timestamps, empty catalog/content sections remain valid XML, sitemap `<loc>` honors valid canonical path overrides for included resources, and the sitemap index omits `lastmod` rather than stamping render time.
 - Open Graph + Twitter Card meta tags with absolute storefront-safe images
@@ -348,7 +343,7 @@ Drizzle schema and SQL migrations for Cloudflare D1 (SQLite). The schema declara
 | Inventory | inventoryMovements, productLowStockAlerts |
 | Delivery | deliveryLocations, deliveryProviders, deliveryShipments |
 | Marketing | discounts, discountProducts, discountCollections, discountUsage, metaConversionsSettings, metaConversionsLogs |
-| Content | pages, widgets, widgetPlacements, widgetHistory, heroSections, heroSliders, pageTemplates |
+| Content | pages, heroSections, heroSliders, pageTemplates |
 | System | settings, siteSettings, analytics, adminFcmTokens, shippingMethods, checkoutLanguages |
 
 FTS5 full-text search with Bengali tokenizer is enabled by migration `0031`.
@@ -453,7 +448,7 @@ pnpm dev:storefront   # API + storefront only
 pnpm dev:doctor:all   # Verify full stack after pnpm dev
 ```
 
-The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, kills stale processes on the Scalius dev ports, waits for API `/api/v1/setup` before starting admin/storefront, staggers admin/storefront startup to prevent Vite inspector port conflicts, and cleans up on Ctrl+C. Astro 7 can run storefront dev in background mode during non-interactive agent sessions; the wrapper streams `astro dev logs --follow` and stops the background storefront with `astro dev stop` during cleanup. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check. It no longer kills every `workerd` process by default; set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only if you need the older aggressive cleanup.
+The dev wrapper (`scripts/dev.sh`) applies pending local D1 migrations before starting API, kills stale processes on the Scalius dev ports, waits for API `/api/v1/setup` before starting admin/storefront, staggers admin/storefront startup to prevent Vite inspector port conflicts, and cleans up on Ctrl+C. Astro 7 can run storefront dev in background mode during non-interactive CI sessions; the wrapper streams `astro dev logs --follow` and stops the background storefront with `astro dev stop` during cleanup. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` when you intentionally want to skip the migration check. It no longer kills every `workerd` process by default; set `SCALIUS_DEV_KILL_ALL_WORKERD=1` only if you need the older aggressive cleanup.
 
 Use the matching doctor command after startup: `pnpm dev:doctor:api` after `pnpm dev:api`, `pnpm dev:doctor:admin` after `pnpm dev:admin`, `pnpm dev:doctor:storefront` after `pnpm dev:storefront`, and `pnpm dev:doctor:all` after the full `pnpm dev` stack. Plain `pnpm dev:doctor` remains a non-mutating broad overview and will warn when a service is intentionally stopped.
 
@@ -468,7 +463,6 @@ pnpm --filter @scalius/storefront exec astro dev stop
 
 Most public storefront pages still require the API worker at `http://localhost:8787`, so use `pnpm dev:storefront` for end-to-end storefront testing.
 
-API local dev uses `apps/api/wrangler.local.jsonc`, which intentionally omits the remote Workers AI binding. Normal local admin/storefront/API work should not require Cloudflare remote proxy access. Production build/deploy still use `apps/api/wrangler.jsonc`.
 
 Admin production calls the API through the `env.API` service binding. Local admin dev uses HTTP fallback to `PUBLIC_API_BASE_URL` when that URL points at localhost, even though Wrangler still exposes the production binding shape. `pnpm dev:doctor` validates that local API/admin/storefront URL values point at the expected localhost ports.
 
@@ -543,7 +537,6 @@ pnpm dev:reset --admin-email owner@example.test --admin-password 'Use-12+-chars'
 | Stripe / SSLCommerz / Polar | Settings → Checkout → Payment Gateways |
 | Pathao / Steadfast | Settings → Delivery Providers |
 | SMS Providers | Settings → Notifications / SMS providers |
-| AI providers | Settings -> Widget AI / widget editor settings |
 
 ---
 

@@ -233,7 +233,7 @@ describe("API Response Envelope", () => {
     });
 
     it("202 Accepted includes success: true at top level", () => {
-      // Per CLAUDE.md: 202 responses must include success: true
+      // Accepted responses keep the same top-level success envelope.
       const acceptedResponse = {
         body: { success: true, message: "Processing started" },
         status: 202,

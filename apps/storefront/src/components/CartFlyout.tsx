@@ -174,7 +174,6 @@ export default function CartFlyout() {
     >
       <SheetContent
         side="right"
-        data-scalius-computer-human-only=""
         className={cn(
           "flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-none focus:outline-none z-100",
           // Mobile: Bottom Half Sheet

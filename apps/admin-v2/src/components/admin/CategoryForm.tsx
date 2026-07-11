@@ -158,7 +158,6 @@ export function CategoryForm({
       newUrl="/admin/categories/new"
       newLabel="New Category"
       saveLabel={isEdit ? "Save Category" : "Create Category"}
-      allowAssistantSave
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
     >

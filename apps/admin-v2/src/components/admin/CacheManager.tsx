@@ -33,7 +33,6 @@ import {
   CheckCircle2,
   ImageIcon,
   Globe2,
-  Blocks,
 } from "lucide-react";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { useHasPermission } from "@/contexts/PermissionContext";
@@ -78,7 +77,6 @@ const GROUP_CONFIG: Record<string, { icon: ComponentType<{ className?: string }>
   media: { icon: ImageIcon, bgColor: "bg-rose-100 dark:bg-rose-900/40", iconColor: "text-rose-600 dark:text-rose-400", hoverBorder: "hover:border-rose-500/50" },
   homepage: { icon: Home, bgColor: "bg-yellow-100 dark:bg-yellow-900/40", iconColor: "text-yellow-600 dark:text-yellow-400", hoverBorder: "hover:border-yellow-500/50" },
   discovery: { icon: Globe2, bgColor: "bg-teal-100 dark:bg-teal-900/40", iconColor: "text-teal-600 dark:text-teal-400", hoverBorder: "hover:border-teal-500/50" },
-  widgets: { icon: Blocks, bgColor: "bg-violet-100 dark:bg-violet-900/40", iconColor: "text-violet-600 dark:text-violet-400", hoverBorder: "hover:border-violet-500/50" },
   checkout: { icon: CreditCard, bgColor: "bg-emerald-100 dark:bg-emerald-900/40", iconColor: "text-emerald-600 dark:text-emerald-400", hoverBorder: "hover:border-emerald-500/50" },
   search: { icon: Search, bgColor: "bg-cyan-100 dark:bg-cyan-900/40", iconColor: "text-cyan-600 dark:text-cyan-400", hoverBorder: "hover:border-cyan-500/50" },
   attributes: { icon: ListTree, bgColor: "bg-indigo-100 dark:bg-indigo-900/40", iconColor: "text-indigo-600 dark:text-indigo-400", hoverBorder: "hover:border-indigo-500/50" },

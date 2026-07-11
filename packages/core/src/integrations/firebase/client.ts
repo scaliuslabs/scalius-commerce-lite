@@ -1,12 +1,12 @@
 /// <reference lib="dom" />
 
-import { initializeApp, type FirebaseApp } from "firebase/app";
+import { initializeApp, type FirebaseApp } from "@firebase/app";
 import {
   getMessaging,
   getToken,
   onMessage,
   type Messaging,
-} from "firebase/messaging";
+} from "@firebase/messaging";
 
 interface FirebaseClientConfig {
   apiKey: string;
