@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
     MAX_PRODUCT_PRICE,
     bulkCreateVariantsSchema,
-    bulkUpdateVariantsSchema,
     createVariantSchema,
     updateVariantSchema,
 } from "./products.types";
@@ -25,8 +24,8 @@ const validVariant = {
 
 describe("variant price input boundaries", () => {
     it.each([
-        ["create", (price: number) => createVariantSchema.safeParse({ ...validVariant, price })],
-        ["update", (price: number) => updateVariantSchema.safeParse({ ...validVariant, price })],
+        ["create", (price: number) => createVariantSchema.safeParse({ ...validVariant, price, expectedAggregateRevision: 1 })],
+        ["update", (price: number) => updateVariantSchema.safeParse({ ...validVariant, price, expectedAggregateRevision: 1 })],
         ["bulk create", (price: number) => bulkCreateVariantsSchema.safeParse({
             variants: [{
                 ...validVariant,
@@ -34,9 +33,7 @@ describe("variant price input boundaries", () => {
                 colorSortOrder: 0,
                 sizeSortOrder: 0,
             }],
-        })],
-        ["bulk update", (price: number) => bulkUpdateVariantsSchema.safeParse({
-            updates: [{ id: "var_1", price }],
+            expectedAggregateRevision: 1,
         })],
     ] as const)("caps %s prices at the product price maximum", (_label, parse) => {
         expect(parse(MAX_PRODUCT_PRICE).success).toBe(true);

@@ -17,7 +17,12 @@ const variantPriceSchema = z
     .min(0, "Price must be greater than or equal to 0")
     .max(MAX_PRODUCT_PRICE, `Price must be at most ${MAX_PRODUCT_PRICE}`);
 
-export const createVariantSchema = z.object({
+export const expectedProductAggregateRevisionSchema = z
+    .number()
+    .int("Product revision must be a whole number")
+    .min(1, "Product revision must be at least 1");
+
+const variantMutationSchema = z.object({
     size: z.string().nullable(),
     color: z.string().nullable(),
     weight: z.number().min(0).nullable(),
@@ -32,7 +37,13 @@ export const createVariantSchema = z.object({
     discountAmount: z.number().min(0).nullable().optional(),
 });
 
-export const updateVariantSchema = createVariantSchema;
+export const createVariantSchema = variantMutationSchema.extend({
+    expectedAggregateRevision: expectedProductAggregateRevisionSchema,
+});
+
+export const updateVariantSchema = variantMutationSchema.extend({
+    expectedAggregateRevision: expectedProductAggregateRevisionSchema,
+});
 
 const sortItemSchema = z.object({
     value: z.string(),
@@ -42,6 +53,7 @@ const sortItemSchema = z.object({
 export const updateSortOrderSchema = z.object({
     colors: z.array(sortItemSchema),
     sizes: z.array(sortItemSchema),
+    expectedAggregateRevision: expectedProductAggregateRevisionSchema,
 });
 
 export const bulkVariantSchema = z.object({
@@ -63,27 +75,12 @@ export const bulkVariantSchema = z.object({
 
 export const bulkCreateVariantsSchema = z.object({
     variants: z.array(bulkVariantSchema).min(1, "At least one variant is required"),
+    expectedAggregateRevision: expectedProductAggregateRevisionSchema,
 });
 
 export const bulkDeleteVariantsSchema = z.object({
     variantIds: z.array(z.string()),
-});
-
-export const bulkUpdateVariantsSchema = z.object({
-    updates: z.array(
-        z.object({
-            id: z.string(),
-            size: z.string().nullable().optional(),
-            color: z.string().nullable().optional(),
-            weight: z.number().nullable().optional(),
-            sku: z.string().optional(),
-            price: variantPriceSchema.optional(),
-            stock: z.number().min(0).optional(),
-            trackInventory: z.boolean().optional(),
-            barcode: z.string().max(50).nullable().optional(),
-            barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).nullable().optional(),
-        })
-    ),
+    expectedAggregateRevision: expectedProductAggregateRevisionSchema,
 });
 
 const variantEditPlanUpdateSchema = z.object({
@@ -108,6 +105,7 @@ export const variantEditPlanSchema = z.object({
         stock: z.number().int("Stock must be a whole number").min(0),
     })).default([]),
     updates: z.array(variantEditPlanUpdateSchema).default([]),
+    expectedAggregateRevision: expectedProductAggregateRevisionSchema,
 }).superRefine((plan, ctx) => {
     if (plan.creates.length === 0 && plan.updates.length === 0) {
         ctx.addIssue({
@@ -144,6 +142,7 @@ export interface ProductListItem {
     discountType: string;
     discountAmount: number;
     freeDelivery: boolean;
+    aggregateRevision: number;
     createdAt: Date;
     updatedAt: Date;
     category: {

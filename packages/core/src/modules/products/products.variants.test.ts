@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
+import { products } from "@scalius/database/schema";
 import {
     assertUniqueChangedVariantOptions,
     bulkCreateVariants,
@@ -8,6 +9,7 @@ import {
     deleteVariant,
     getVariantSortOrder,
     lookupByBarcode,
+    normalizeVariantBarcode,
     updateVariant,
 } from "./products.variants";
 
@@ -26,6 +28,7 @@ const baseVariant = {
     discountType: "percentage" as const,
     discountPercentage: 0,
     discountAmount: null,
+    expectedAggregateRevision: 1,
 };
 
 describe("product variant SKU rules", () => {
@@ -72,7 +75,7 @@ describe("product variant SKU rules", () => {
             ...baseVariant,
             size: "",
             color: null,
-        }])).rejects.toBeInstanceOf(ValidationError);
+        }], 1)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it("rejects deleting the protected simple product SKU through generic variant delete", async () => {
@@ -98,7 +101,7 @@ describe("product variant SKU rules", () => {
         };
 
         await expect(
-            deleteVariant(dbWithProtectedSku as never, "prod_1", "var_default"),
+            deleteVariant(dbWithProtectedSku as never, "prod_1", "var_default", 1),
         ).rejects.toBeInstanceOf(ValidationError);
         expect(deleteCalled).toBe(false);
     });
@@ -122,7 +125,7 @@ describe("product variant SKU rules", () => {
         };
 
         await expect(
-            bulkDeleteVariants(dbWithProtectedSku as never, "prod_1", ["var_default"]),
+            bulkDeleteVariants(dbWithProtectedSku as never, "prod_1", ["var_default"], 1),
         ).rejects.toBeInstanceOf(ValidationError);
         expect(deleteCalled).toBe(false);
     });
@@ -169,7 +172,7 @@ describe("product variant SKU rules", () => {
         };
 
         await expect(
-            deleteVariant(dbWithFinalOption as never, "prod_1", "var_option"),
+            deleteVariant(dbWithFinalOption as never, "prod_1", "var_option", 1),
         ).rejects.toBeInstanceOf(ValidationError);
         expect(deleteCalled).toBe(false);
     });
@@ -217,7 +220,7 @@ describe("product variant SKU rules", () => {
         };
 
         await expect(
-            bulkDeleteVariants(dbWithFinalOption as never, "prod_1", ["var_option"]),
+            bulkDeleteVariants(dbWithFinalOption as never, "prod_1", ["var_option"], 1),
         ).rejects.toBeInstanceOf(ValidationError);
         expect(deleteCalled).toBe(false);
     });
@@ -254,7 +257,7 @@ describe("product variant SKU rules", () => {
         };
 
         await expect(
-            deleteVariant(dbWithReservedSku as never, "prod_1", "var_reserved"),
+            deleteVariant(dbWithReservedSku as never, "prod_1", "var_reserved", 1),
         ).rejects.toBeInstanceOf(ConflictError);
         expect(updateCalled).toBe(false);
         expect(deleteCalled).toBe(false);
@@ -297,7 +300,7 @@ describe("product variant SKU rules", () => {
         };
 
         await expect(
-            deleteVariant(dbWithOpenOrder as never, "prod_1", "var_open"),
+            deleteVariant(dbWithOpenOrder as never, "prod_1", "var_open", 1),
         ).rejects.toBeInstanceOf(ConflictError);
         expect(updateCalled).toBe(false);
         expect(deleteCalled).toBe(false);
@@ -308,6 +311,7 @@ describe("product variant SKU rules", () => {
         let softDeleteValues: Record<string, unknown> | undefined;
         let hardDeleteCalled = false;
         const dbWithOrderHistory = {
+            run() { return { kind: "guard" }; },
             select() {
                 selectCount++;
                 return {
@@ -338,14 +342,16 @@ describe("product variant SKU rules", () => {
                     },
                 };
             },
-            update() {
+            update(table: unknown) {
                 return {
                     set(values: Record<string, unknown>) {
-                        softDeleteValues = values;
+                        if (table !== products) softDeleteValues = values;
                         return {
                             where() {
                                 return {
-                                    returning: async () => [{ id: "var_ordered" }],
+                                    returning() {
+                                        return { kind: table === products ? "revision" : "soft-delete" };
+                                    },
                                 };
                             },
                         };
@@ -356,9 +362,17 @@ describe("product variant SKU rules", () => {
                 hardDeleteCalled = true;
                 return {};
             },
+            batch: async (statements: Array<{ kind: string }>) =>
+                statements.map((statement) =>
+                    statement.kind === "revision"
+                        ? [{ aggregateRevision: 2 }]
+                        : statement.kind === "soft-delete"
+                            ? [{ id: "var_ordered" }]
+                            : [{ ok: 1 }]
+                ),
         };
 
-        await deleteVariant(dbWithOrderHistory as never, "prod_1", "var_ordered");
+        await deleteVariant(dbWithOrderHistory as never, "prod_1", "var_ordered", 1);
 
         expect(softDeleteValues).toMatchObject({
             deletedAt: expect.anything(),
@@ -372,6 +386,7 @@ describe("product variant SKU rules", () => {
         let softDeleteValues: Record<string, unknown> | undefined;
         let hardDeleteCalled = false;
         const dbWithMovementHistory = {
+            run() { return { kind: "guard" }; },
             select() {
                 selectCount++;
                 return {
@@ -403,14 +418,16 @@ describe("product variant SKU rules", () => {
                     },
                 };
             },
-            update() {
+            update(table: unknown) {
                 return {
                     set(values: Record<string, unknown>) {
-                        softDeleteValues = values;
+                        if (table !== products) softDeleteValues = values;
                         return {
                             where() {
                                 return {
-                                    returning: async () => [{ id: "var_moved" }],
+                                    returning() {
+                                        return { kind: table === products ? "revision" : "soft-delete" };
+                                    },
                                 };
                             },
                         };
@@ -421,9 +438,17 @@ describe("product variant SKU rules", () => {
                 hardDeleteCalled = true;
                 return {};
             },
+            batch: async (statements: Array<{ kind: string }>) =>
+                statements.map((statement) =>
+                    statement.kind === "revision"
+                        ? [{ aggregateRevision: 2 }]
+                        : statement.kind === "soft-delete"
+                            ? [{ id: "var_moved" }]
+                            : [{ ok: 1 }]
+                ),
         };
 
-        await deleteVariant(dbWithMovementHistory as never, "prod_1", "var_moved");
+        await deleteVariant(dbWithMovementHistory as never, "prod_1", "var_moved", 1);
 
         expect(softDeleteValues).toMatchObject({
             deletedAt: expect.anything(),
@@ -453,15 +478,16 @@ describe("product variant SKU rules", () => {
         };
 
         await expect(
-            bulkDeleteVariants(dbWithReservedSku as never, "prod_1", ["var_reserved"]),
+            bulkDeleteVariants(dbWithReservedSku as never, "prod_1", ["var_reserved"], 1),
         ).rejects.toBeInstanceOf(ConflictError);
         expect(batchCalled).toBe(false);
     });
 
-    it("bulk delete soft-deletes history-backed SKUs and hard-deletes only unused SKUs", async () => {
+    it("bulk delete soft-retires every SKU so audit identities are preserved", async () => {
         let selectCount = 0;
         const statements: unknown[] = [];
         const dbWithMixedHistory = {
+            run() { return { kind: "guard" }; },
             select() {
                 selectCount++;
                 return {
@@ -484,17 +510,6 @@ describe("product variant SKU rules", () => {
                                         { id: "var_unused", isDefault: false, reservedStock: 0 },
                                     ]);
                                 }
-                                if (selectCount === 5) {
-                                    return {
-                                        groupBy: async () => [{ variantId: "var_ordered" }],
-                                    };
-                                }
-                                if (selectCount === 6) {
-                                    return {
-                                        groupBy: async () => [{ variantId: "var_moved" }],
-                                    };
-                                }
-
                                 return {
                                     get: async () => {
                                         if (selectCount === 3) return { isActive: false };
@@ -506,14 +521,17 @@ describe("product variant SKU rules", () => {
                     },
                 };
             },
-            update() {
+            update(table: unknown) {
                 return {
                     set(values: Record<string, unknown>) {
                         return {
                             where() {
                                 return {
                                     returning() {
-                                        return { kind: "soft-delete", values };
+                                        return {
+                                            kind: table === products ? "revision" : "soft-delete",
+                                            values,
+                                        };
                                     },
                                 };
                             },
@@ -521,20 +539,20 @@ describe("product variant SKU rules", () => {
                     },
                 };
             },
-            delete() {
-                return {
-                    where() {
-                        return {
-                            returning() {
-                                return { kind: "hard-delete" };
-                            },
-                        };
-                    },
-                };
-            },
             batch: async (batchStatements: unknown[]) => {
                 statements.push(...batchStatements);
-                return [[{ id: "var_ordered" }, { id: "var_moved" }], [{ id: "var_unused" }]];
+                return batchStatements.map((statement) => {
+                    const candidate = statement as { kind?: string };
+                    if (candidate.kind === "soft-delete") {
+                        return [
+                            { id: "var_ordered" },
+                            { id: "var_moved" },
+                            { id: "var_unused" },
+                        ];
+                    }
+                    if (candidate.kind === "revision") return [{ aggregateRevision: 2 }];
+                    return [{ ok: 1 }];
+                });
             },
         };
 
@@ -542,11 +560,13 @@ describe("product variant SKU rules", () => {
             dbWithMixedHistory as never,
             "prod_1",
             ["var_ordered", "var_moved", "var_unused"],
+            1,
         );
 
-        expect(statements).toEqual([
+        expect(statements.filter((statement) =>
+            (statement as { kind?: string }).kind === "soft-delete"
+        )).toEqual([
             expect.objectContaining({ kind: "soft-delete" }),
-            expect.objectContaining({ kind: "hard-delete" }),
         ]);
     });
 
@@ -588,61 +608,7 @@ describe("product variant SKU rules", () => {
         await expect(bulkCreateVariants(dbShouldNotBeRead as never, "prod_1", [
             { ...baseVariant, sku: "SKU-1", size: "M", color: null },
             { ...baseVariant, sku: "SKU-2", size: null, color: "Red" },
-        ])).rejects.toBeInstanceOf(ValidationError);
-    });
-
-    it("batches every parameter-safe create chunk in one transaction", async () => {
-        let selectCount = 0;
-        const batchCalls: Array<Array<{ values: Array<Record<string, unknown>> }>> = [];
-        const dbWithBatch = {
-            select() {
-                selectCount++;
-                return {
-                    from() {
-                        return {
-                            where() {
-                                if (selectCount === 1) return Promise.resolve([]);
-                                return { all: async () => [] };
-                            },
-                        };
-                    },
-                };
-            },
-            insert() {
-                return {
-                    values(values: Array<Record<string, unknown>>) {
-                        return {
-                            returning() {
-                                return { values };
-                            },
-                        };
-                    },
-                };
-            },
-            async batch(statements: Array<{ values: Array<Record<string, unknown>> }>) {
-                batchCalls.push(statements);
-                return statements.map((statement) => statement.values);
-            },
-        };
-
-        const variants = Array.from({ length: 5 }, (_, index) => ({
-            ...baseVariant,
-            sku: `SKU-${index + 10}`,
-            size: `Size ${index + 1}`,
-        }));
-
-        const created = await bulkCreateVariants(
-            dbWithBatch as never,
-            "prod_1",
-            variants,
-        );
-
-        expect(batchCalls).toHaveLength(1);
-        expect(batchCalls[0]).toHaveLength(2);
-        expect(batchCalls[0]?.map((statement) => statement.values.length)).toEqual([
-            4, 1,
-        ]);
-        expect(created).toHaveLength(5);
+        ], 1)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it("rejects variant updates that would mix option axes with sibling SKUs", async () => {
@@ -729,6 +695,7 @@ describe("product variant SKU rules", () => {
         let selectCount = 0;
         let updateValues: Record<string, unknown> | undefined;
         const dbWithSimpleSku = {
+            run() { return { kind: "guard" }; },
             select() {
                 selectCount++;
                 return {
@@ -757,20 +724,33 @@ describe("product variant SKU rules", () => {
                     },
                 };
             },
-            update() {
+            update(table: unknown) {
                 return {
                     set(values: Record<string, unknown>) {
-                        updateValues = values;
+                        if (table !== products) updateValues = values;
                         return {
                             where() {
                                 return {
-                                    returning: async () => [{ id: "var_default", ...values }],
+                                    returning() {
+                                        return {
+                                            kind: table === products ? "revision" : "variant-update",
+                                            values,
+                                        };
+                                    },
                                 };
                             },
                         };
                     },
                 };
             },
+            batch: async (statements: Array<{ kind: string; values?: Record<string, unknown> }>) =>
+                statements.map((statement) => {
+                    if (statement.kind === "revision") return [{ aggregateRevision: 2 }];
+                    if (statement.kind === "variant-update") {
+                        return [{ id: "var_default", ...statement.values }];
+                    }
+                    return [{ ok: 1 }];
+                }),
         };
 
         await updateVariant(dbWithSimpleSku as never, "prod_1", "var_default", {
@@ -804,7 +784,7 @@ describe("product variant SKU rules", () => {
                                 return {
                                     where() {
                                         return {
-                                            get: async () => variantRow,
+                                            limit: async () => [variantRow],
                                         };
                                     },
                                 };
@@ -847,6 +827,38 @@ describe("product variant SKU rules", () => {
 
         expect(defaultResult?.variant).toMatchObject({ size: null, color: null });
         expect(optionResult?.variant).toMatchObject({ size: "2KG", color: "Red" });
+    });
+
+    it("normalizes barcode writes and enforces barcode/type validity", () => {
+        expect(normalizeVariantBarcode(" 4006381333931 ", "ean13")).toEqual({
+            barcode: "4006381333931",
+            barcodeType: "ean13",
+        });
+        expect(() => normalizeVariantBarcode("123", null)).toThrow(ValidationError);
+        expect(() => normalizeVariantBarcode("123", "ean13")).toThrow(ValidationError);
+    });
+
+    it("fails closed when a normalized barcode has multiple SKU matches", async () => {
+        const dbWithDuplicates = {
+            select() {
+                return {
+                    from() {
+                        return {
+                            innerJoin() {
+                                return {
+                                    where() {
+                                        return { limit: async () => [{}, {}] };
+                                    },
+                                };
+                            },
+                        };
+                    },
+                };
+            },
+        };
+        await expect(
+            lookupByBarcode(dbWithDuplicates as never, " ABC "),
+        ).rejects.toBeInstanceOf(ConflictError);
     });
 
     it("excludes protected default SKU drift from option sort order", async () => {

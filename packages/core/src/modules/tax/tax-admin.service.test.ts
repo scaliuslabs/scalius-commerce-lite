@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
-import { createTaxClass, createTaxRate, updateTaxClass } from "./tax-admin.service";
+import { products } from "@scalius/database/schema";
+import { createTaxClass, createTaxRate, updateTaxClass, updateTaxClassification } from "./tax-admin.service";
 
 function createRateDb(location: { id: string; name: string } | null) {
   const getResults = [{ id: "taxc_standard" }, location];
@@ -122,5 +123,58 @@ describe("tax Admin jurisdiction authority", () => {
 
     await expect(createTaxClass(db as never, { name: "vat" }))
       .rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("commits tax and product aggregate revisions in one guarded batch", async () => {
+    const statements: Array<{ kind: string }> = [];
+    let productUpdateCount = 0;
+    const db = {
+      run: vi.fn(() => ({ kind: "guard" })),
+      update(table: unknown) {
+        expect(table).toBe(products);
+        productUpdateCount += 1;
+        return {
+          set() {
+            return {
+              where() {
+                return {
+                  returning() {
+                    return {
+                      kind: productUpdateCount === 1 ? "classification" : "revision",
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+      async batch(batchStatements: Array<{ kind: string }>) {
+        statements.push(...batchStatements);
+        return batchStatements.map((statement) => {
+          if (statement.kind === "classification") {
+            return [{ id: "prod_1", taxClassId: null, version: 3 }];
+          }
+          if (statement.kind === "revision") return [{ aggregateRevision: 6 }];
+          return [{ ok: 1 }];
+        });
+      },
+    };
+
+    const result = await updateTaxClassification(db as never, {
+      kind: "product",
+      id: "prod_1",
+      taxClassId: null,
+      expectedVersion: 2,
+      expectedAggregateRevision: 5,
+    });
+
+    expect(statements.map((statement) => statement.kind)).toEqual([
+      "guard",
+      "guard",
+      "classification",
+      "revision",
+    ]);
+    expect(result).toMatchObject({ version: 3, aggregateRevision: 6 });
   });
 });

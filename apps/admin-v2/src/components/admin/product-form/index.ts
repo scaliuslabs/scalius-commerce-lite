@@ -12,15 +12,11 @@ export { OrganizationCard } from "./OrganizationCard";
 export { CollapsibleCard } from "./CollapsibleCard";
 
 // Shared Components
-export { ProductStickyHeader } from "./ProductStickyHeader";
+export { ProductActionBar } from "./ProductStickyHeader";
 export { InfoBanner } from "./InfoBanner";
-
-// Manager Components (legacy/internal use)
-export { AttributeManager } from "./AttributeManager";
 
 // Hooks
 export { useProductSubmit } from "./hooks/useProductSubmit";
-export { useProductVariants } from "./hooks/useProductVariants";
 
 // Types
 export {

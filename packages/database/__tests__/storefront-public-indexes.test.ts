@@ -48,6 +48,7 @@ describe("storefront public listing indexes", () => {
             { idx: 2, tag: "0002_backfill_variant_image_mappings" },
             { idx: 3, tag: "0003_aberrant_hex" },
             { idx: 4, tag: "0004_validate_inventory_ledger_v2" },
+            { idx: 5, tag: "0005_deep_morg" },
         ]);
         expect(journal.entries.every((entry: { breakpoints: boolean }) => entry.breakpoints)).toBe(true);
     });

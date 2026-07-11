@@ -30,6 +30,7 @@ export interface ProductsQueryInput {
 
 export interface ProductListItemDto {
   id: string;
+  aggregateRevision: number;
   name: string;
   slug: string;
   price: number;
@@ -147,9 +148,31 @@ export interface ProductWriteInput {
 }
 
 export type CreateProductInput = ProductWriteInput;
-export type UpdateProductInput = { id: string } & ProductWriteInput;
+export type UpdateProductInput = {
+  id: string;
+  expectedAggregateRevision: number;
+} & ProductWriteInput;
 
-export interface ProductIdPayload {
+export interface ProductAggregateRevisionResult {
+  aggregateRevision: number;
+}
+
+export interface ProductAggregateRevisionClaim {
+  id: string;
+  expectedAggregateRevision: number;
+}
+
+export interface BulkDeleteProductsInput {
+  products: ProductAggregateRevisionClaim[];
+  permanent?: boolean;
+}
+
+export interface BulkDeleteProductsPayload {
+  products: Array<{ id: string; aggregateRevision: number }>;
+  deletedIds: string[];
+}
+
+export interface ProductIdPayload extends ProductAggregateRevisionResult {
   id: string;
 }
 
@@ -216,6 +239,7 @@ export interface ProductDetailDto {
   variantOption2Schema: ProductOptionSchema;
   variantImagesEnabled: boolean;
   variantImageAxis: "option1" | "option2";
+  aggregateRevision: number;
   isActive: boolean;
   discountPercentage: number | null;
   discountType: ProductDiscountType | null;
@@ -275,6 +299,7 @@ export interface ProductVariantsPayload {
 export interface BulkProductVariantsPayload {
   variants: ProductVariantDto[];
   count: number;
+  aggregateRevision: number;
 }
 
 export interface ProductVariantEditPlanInput {
@@ -285,7 +310,11 @@ export interface ProductVariantEditPlanInput {
 export interface ProductVariantEditPlanPayload {
   created: ProductVariantDto[];
   updated: ProductVariantDto[];
+  aggregateRevision: number;
 }
+
+export type ProductVariantMutationPayload = ProductVariantDto &
+  ProductAggregateRevisionResult;
 
 export interface VariantSortItem {
   value: string;
@@ -297,9 +326,7 @@ export interface VariantSortOrderPayload {
   sizes: VariantSortItem[];
 }
 
-export interface MessagePayload {
-  message: string;
-}
+export type VariantSortMutationPayload = ProductAggregateRevisionResult;
 
 function toProductsParams(input: ProductsQueryInput): Record<string, string> {
   const params: Record<string, string> = {};
@@ -349,32 +376,38 @@ export const createProduct = createServerFn({ method: "POST" })
 
 export const updateProduct = createServerFn({ method: "POST" })
   .validator((data: UpdateProductInput) => data)
-  .handler(async ({ data }): Promise<Record<string, never>> => {
-    return apiPut<Record<string, never>>(`/products/${data.id}`, data);
+  .handler(async ({ data }): Promise<ProductAggregateRevisionResult> => {
+    return apiPut<ProductAggregateRevisionResult>(`/products/${data.id}`, data);
   });
 
 export const deleteProduct = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
-  .handler(async ({ data }): Promise<void> => {
-    return apiDelete(`/products/${data.id}`);
+  .validator((data: ProductAggregateRevisionClaim) => data)
+  .handler(async ({ data }): Promise<ProductAggregateRevisionResult> => {
+    return apiDelete<ProductAggregateRevisionResult>(
+      `/products/${data.id}?expectedAggregateRevision=${data.expectedAggregateRevision}`,
+    );
   });
 
 export const permanentDeleteProduct = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: ProductAggregateRevisionClaim) => data)
   .handler(async ({ data }): Promise<void> => {
-    return apiDelete(`/products/${data.id}/permanent`);
+    return apiDelete(
+      `/products/${data.id}/permanent?expectedAggregateRevision=${data.expectedAggregateRevision}`,
+    );
   });
 
 export const restoreProduct = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
-  .handler(async ({ data }): Promise<Record<string, never>> => {
-    return apiPost<Record<string, never>>(`/products/${data.id}/restore`);
+  .validator((data: ProductAggregateRevisionClaim) => data)
+  .handler(async ({ data }): Promise<ProductAggregateRevisionResult> => {
+    return apiPost<ProductAggregateRevisionResult>(
+      `/products/${data.id}/restore?expectedAggregateRevision=${data.expectedAggregateRevision}`,
+    );
   });
 
 export const bulkDeleteProducts = createServerFn({ method: "POST" })
-  .validator((data: { productIds: string[]; permanent?: boolean }) => data)
-  .handler(async ({ data }): Promise<void> => {
-    return apiPost<void>("/products/bulk-delete", data);
+  .validator((data: BulkDeleteProductsInput) => data)
+  .handler(async ({ data }): Promise<BulkDeleteProductsPayload> => {
+    return apiPost<BulkDeleteProductsPayload>("/products/bulk-delete", data);
   });
 
 export const getProductVariants = createServerFn({ method: "GET" })
@@ -385,12 +418,19 @@ export const getProductVariants = createServerFn({ method: "GET" })
 
 export const createProductVariant = createServerFn({ method: "POST" })
   .validator(
-    (data: { productId: string; variant: ProductVariantInput }) => data,
+    (data: {
+      productId: string;
+      variant: ProductVariantInput;
+      expectedAggregateRevision: number;
+    }) => data,
   )
-  .handler(async ({ data }): Promise<ProductVariantDto> => {
-    return apiPost<ProductVariantDto>(
+  .handler(async ({ data }): Promise<ProductVariantMutationPayload> => {
+    return apiPost<ProductVariantMutationPayload>(
       `/products/${data.productId}/variants`,
-      data.variant,
+      {
+        ...data.variant,
+        expectedAggregateRevision: data.expectedAggregateRevision,
+      },
     );
   });
 
@@ -400,68 +440,78 @@ export const updateProductVariant = createServerFn({ method: "POST" })
       productId: string;
       variantId: string;
       variant: ProductVariantInput;
+      expectedAggregateRevision: number;
     }) => data,
   )
-  .handler(async ({ data }): Promise<ProductVariantDto> => {
-    return apiPut<ProductVariantDto>(
+  .handler(async ({ data }): Promise<ProductVariantMutationPayload> => {
+    return apiPut<ProductVariantMutationPayload>(
       `/products/${data.productId}/variants/${data.variantId}`,
-      data.variant,
+      {
+        ...data.variant,
+        expectedAggregateRevision: data.expectedAggregateRevision,
+      },
     );
   });
 
 export const deleteProductVariant = createServerFn({ method: "POST" })
-  .validator((data: { productId: string; variantId: string }) => data)
-  .handler(async ({ data }): Promise<void> => {
-    return apiDelete(`/products/${data.productId}/variants/${data.variantId}`);
+  .validator((data: {
+    productId: string;
+    variantId: string;
+    expectedAggregateRevision: number;
+  }) => data)
+  .handler(async ({ data }): Promise<ProductAggregateRevisionResult> => {
+    return apiDelete<ProductAggregateRevisionResult>(
+      `/products/${data.productId}/variants/${data.variantId}?expectedAggregateRevision=${data.expectedAggregateRevision}`,
+    );
   });
 
 export const bulkCreateProductVariants = createServerFn({ method: "POST" })
   .validator(
-    (data: { productId: string; variants: BulkProductVariantInput[] }) => data,
+    (data: {
+      productId: string;
+      variants: BulkProductVariantInput[];
+      expectedAggregateRevision: number;
+    }) => data,
   )
   .handler(async ({ data }): Promise<BulkProductVariantsPayload> => {
     return apiPost<BulkProductVariantsPayload>(
       `/products/${data.productId}/variants/bulk-create`,
-      { variants: data.variants },
-    );
-  });
-
-export const bulkUpdateProductVariants = createServerFn({ method: "POST" })
-  .validator(
-    (data: { productId: string; updates: ProductVariantUpdateInput[] }) => data,
-  )
-  .handler(async ({ data }): Promise<Record<string, never>> => {
-    return apiPost<Record<string, never>>(
-      `/products/${data.productId}/variants/bulk-update`,
-      { updates: data.updates },
+      {
+        variants: data.variants,
+        expectedAggregateRevision: data.expectedAggregateRevision,
+      },
     );
   });
 
 export const applyProductVariantEditPlan = createServerFn({ method: "POST" })
   .validator(
-    (data: { productId: string; plan: ProductVariantEditPlanInput }) => data,
+    (data: {
+      productId: string;
+      plan: ProductVariantEditPlanInput;
+      expectedAggregateRevision: number;
+    }) => data,
   )
   .handler(async ({ data }): Promise<ProductVariantEditPlanPayload> => {
     return apiPost<ProductVariantEditPlanPayload>(
       `/products/${data.productId}/variants/edit-plan`,
-      data.plan,
+      {
+        ...data.plan,
+        expectedAggregateRevision: data.expectedAggregateRevision,
+      },
     );
   });
 
 export const bulkDeleteProductVariants = createServerFn({ method: "POST" })
-  .validator((data: { productId: string; variantIds: string[] }) => data)
-  .handler(async ({ data }): Promise<void> => {
-    return apiPost<void>(`/products/${data.productId}/variants/bulk-delete`, {
+  .validator((data: {
+    productId: string;
+    variantIds: string[];
+    expectedAggregateRevision: number;
+  }) => data)
+  .handler(async ({ data }): Promise<ProductAggregateRevisionResult> => {
+    return apiPost<ProductAggregateRevisionResult>(`/products/${data.productId}/variants/bulk-delete`, {
       variantIds: data.variantIds,
+      expectedAggregateRevision: data.expectedAggregateRevision,
     });
-  });
-
-export const duplicateProductVariant = createServerFn({ method: "POST" })
-  .validator((data: { productId: string; variantId: string }) => data)
-  .handler(async ({ data }): Promise<ProductVariantDto> => {
-    return apiPost<ProductVariantDto>(
-      `/products/${data.productId}/variants/${data.variantId}/duplicate`,
-    );
   });
 
 export const getVariantSortOrder = createServerFn({ method: "GET" })
@@ -474,11 +524,18 @@ export const getVariantSortOrder = createServerFn({ method: "GET" })
 
 export const updateVariantSortOrder = createServerFn({ method: "POST" })
   .validator(
-    (data: { productId: string } & VariantSortOrderPayload) => data,
+    (data: {
+      productId: string;
+      expectedAggregateRevision: number;
+    } & VariantSortOrderPayload) => data,
   )
-  .handler(async ({ data }): Promise<MessagePayload> => {
-    return apiPost<MessagePayload>(
+  .handler(async ({ data }): Promise<VariantSortMutationPayload> => {
+    return apiPost<VariantSortMutationPayload>(
       `/products/${data.productId}/variants/sort-order`,
-      { colors: data.colors, sizes: data.sizes },
+      {
+        colors: data.colors,
+        sizes: data.sizes,
+        expectedAggregateRevision: data.expectedAggregateRevision,
+      },
     );
   });

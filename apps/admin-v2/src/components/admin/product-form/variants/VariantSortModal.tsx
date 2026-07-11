@@ -40,6 +40,10 @@ import {
   normalizeVariantOptionLabels,
   type VariantOptionLabels,
 } from "./types";
+import {
+  readProductRevisionConflict,
+  type ProductRevisionConflict,
+} from "@/lib/admin-api-error";
 
 interface VariantSortModalProps {
   productId: string;
@@ -47,6 +51,11 @@ interface VariantSortModalProps {
   onClose: () => void;
   onSortUpdated: () => void;
   optionLabels?: VariantOptionLabels;
+  aggregateRevision: number;
+  revisionConflict: ProductRevisionConflict | null;
+  onAggregateRevisionChange: (revision: number) => void;
+  onRevisionConflict: (conflict: ProductRevisionConflict) => void;
+  onOpenRevisionConflict: () => void;
 }
 
 interface SortItem {
@@ -105,6 +114,11 @@ export function VariantSortModal({
   onClose,
   onSortUpdated,
   optionLabels,
+  aggregateRevision,
+  revisionConflict,
+  onAggregateRevisionChange,
+  onRevisionConflict,
+  onOpenRevisionConflict,
 }: VariantSortModalProps) {
   const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
   const [colors, setColors] = useState<SortItem[]>([]);
@@ -165,13 +179,30 @@ export function VariantSortModal({
   };
 
   const handleSave = async () => {
+    if (revisionConflict) {
+      onOpenRevisionConflict();
+      return;
+    }
     setIsSaving(true);
     try {
-      await updateVariantSortOrder({ data: { productId, colors, sizes } });
+      const result = await updateVariantSortOrder({
+        data: {
+          productId,
+          colors,
+          sizes,
+          expectedAggregateRevision: aggregateRevision,
+        },
+      });
+      onAggregateRevisionChange(result.aggregateRevision);
       toast.success("Success", { description: "Variant sort order updated successfully" });
       onSortUpdated();
       onClose();
     } catch (error: unknown) {
+      const conflict = readProductRevisionConflict(error);
+      if (conflict) {
+        onRevisionConflict(conflict);
+        return;
+      }
       console.error("Failed to save sort order:", error);
       toast.error("Error", { description: getServerFnError(error, "Failed to update variant sort order") });
     } finally {

@@ -13,7 +13,6 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Rich content sections (additional info): arbitrary titled HTML blocks stored in `productRichContent`, ordered by `sortOrder`
 - Product attributes: many-to-many via `productAttributeValues`, linked to global `productAttributes` definitions
 - Variant CRUD: size, color, weight, SKU (unique), price, stock, barcode, barcode type, discount (percentage or flat)
-- Variant duplicate with auto-incrementing SKU suffix (`-COPY`, `-COPY2`, etc.)
 - Bulk variant create (chunked for D1 parameter limits), guarded bulk delete, bulk update
 - Variant sort order: separate `colorSortOrder` and `sizeSortOrder` columns, updated per-value across all variants of a product
 - Soft-deleted variants filtered out: all variant queries use `isNull(deletedAt)` or `deletedAt IS NULL` conditions
@@ -30,6 +29,8 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Feature extraction from description (parses bullet-point lines)
 - SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, logically no customer options); optioned products require an explicit selected SKU; SKU-less or ambiguous no-option products fail closed. Merchant-created variants must include at least one customer option (`size` or `color`) so the hidden simple SKU stays the only no-option SKU. All customer-option SKUs for one product must use the same option axes: Option 1 only, Option 2 only, or both options on every SKU. `isDefault` is the protected simple-SKU authority; admin/API/storefront projections normalize legacy default SKU option labels to `null`, and the storefront no longer synthesizes fake `default` variants.
 - Option-axis discovery is product-owned: `variantOption1Label`, `variantOption2Label`, `variantOption1Schema`, and `variantOption2Schema` describe how generic merchant options should appear in catalog feeds and ProductGroup JSON-LD. Size/color remain defaults for ordinary merchants, but products can map axes to `size`, `color`, `material`, `pattern`, or `none`; storefront feed/schema code must not infer that every Option 1 value is a size or every Option 2 value is a color.
+- Product editor concurrency is aggregate-versioned. Admin detail and list/trash rows expose `aggregateRevision`; every direct product-editor mutation requires `expectedAggregateRevision`, increments the product revision exactly once in the same D1 batch, and returns the new revision. External category/attribute/tax cascades bump affected product revisions atomically so an open editor becomes stale. Stale direct writes fail with `PRODUCT_REVISION_CONFLICT` and safe expected/current revision details. Operational inventory transitions remain separately guarded by SKU `stockVersion` and ledger v2.
+- Barcode writes trim values, require a matching supported type, validate standard checksum/shape rules, and reject case-insensitive normalized duplicates before D1 writes. Barcode lookup and numeric admin search use `lower(trim(barcode))`; lookup reads at most two rows and fails closed if legacy duplicates exist.
 - Public catalog eligibility is centralized in `products.public-eligibility.ts`: storefront lists/details/search, global search, filterable attributes, and collection/homepage product resolution must all require a buyer-resolvable active SKU topology, while stock availability remains a separate display/checkout concern. Buyer-facing `hasVariants` means at least one non-default SKU with a real customer option, not the protected default SKU. Public product lists also project `availableForSale` from the same SKU topology (`trackInventory = false` or positive `stock - reservedStock`), so catalog feeds can match product-page JSON-LD and checkout availability without variant N+1 reads. The dedicated feed projection carries `canonicalPath`, option-axis mapping, and supported variant barcode fields so storefront XML can emit canonical product links, `variant_option` pairs, ProductGroup-compatible standard attributes, and true GTINs without expanding normal listing cards.
 - Storefront buyer availability uses `apps/storefront/src/lib/product-sellable-variants.ts` so product detail, JSON-LD, stock badges, and `/buy/{slug}` all classify simple/optioned/unavailable products through one resolver.
 
@@ -71,12 +72,12 @@ Storefront category ([slug].astro)
 | File | Description |
 |------|-------------|
 | `index.ts` | Barrel re-exports from all submodules |
-| `products.types.ts` | Zod schemas for variant operations (`createVariantSchema`, `updateVariantSchema`, `bulkVariantSchema`, `bulkCreateVariantsSchema`, `bulkDeleteVariantsSchema`, `bulkUpdateVariantsSchema`, `updateSortOrderSchema`) and TypeScript interfaces (`ProductWithDetails`, `ProductListItem`, `StorefrontProductFilterInput`). Discount percentage capped at 0-100 in all schemas. |
+| `products.types.ts` | Zod schemas for variant operations (`createVariantSchema`, `updateVariantSchema`, `bulkVariantSchema`, `bulkCreateVariantsSchema`, `bulkDeleteVariantsSchema`, `variantEditPlanSchema`, `updateSortOrderSchema`) and TypeScript interfaces (`ProductWithDetails`, `ProductListItem`, `StorefrontProductFilterInput`). Discount percentage is capped at 0-100 in all schemas. |
 | `products.validation.ts` | Zod schemas for product create/update: `createProductSchema`, `updateProductSchema` with shared sub-schemas for images, attributes (`{attributeId, value}`), and additional info (`{id, title, content, sortOrder}`). Discount percentage capped at 0-100. |
 | `products.public-eligibility.ts` | Shared public catalog predicates and default simple-SKU values. Any storefront/catalog/search surface that exposes buyer product cards must use these predicates instead of checking only `products.isActive` and `products.deletedAt`. |
-| `products.admin.ts` | Admin read queries (`getProducts`, `getProductDetails`, `getProductStats`, `getCategoryStats`) and write mutations (`createProduct`, `updateProduct`, `deleteProduct`, `restoreProduct`, `permanentDeleteProduct`, `bulkDeleteProducts`, `bulkUpdateVariants`). `getProducts` returns `discountType` and `discountAmount`. `getProductDetails` fetches `productRichContent` and `productAttributeValues`. All variant queries filter `deletedAt IS NULL`. |
+| `products.admin.ts` | Admin read queries (`getProducts`, `getProductDetails`, `getProductStats`, `getCategoryStats`) and product write mutations (`createProduct`, `updateProduct`, `deleteProduct`, `restoreProduct`, `permanentDeleteProduct`, `bulkDeleteProducts`). `getProducts` returns `discountType` and `discountAmount`. `getProductDetails` fetches `productRichContent` and `productAttributeValues`. All variant queries filter `deletedAt IS NULL`. |
 | `products.storefront.ts` | Storefront read queries (`getStorefrontProducts`, `getStorefrontProductBySlug`, `searchStorefrontProducts`) with discount calculation (percentage and flat), feature extraction, SKU/default-SKU metadata, and attribute-based filtering. All variant queries filter `isNull(deletedAt)`; buyer purchase flows must use real variant rows and cart validation as inventory proof. |
-| `products.variants.ts` | Variant-specific operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`, `duplicateVariant`, `bulkCreateVariants`, `bulkDeleteVariants`, `getVariantSortOrder`, `updateVariantSortOrder`). All queries filter soft-deleted variants. Normal variants must have a customer option and consistent option axes; hidden/simple default SKUs cannot be duplicated or converted into option rows through this API. Variant delete rejects active reservations/open order references and soft-deletes terminal-order/movement-backed SKUs instead of breaking history. |
+| `products.variants.ts` | Variant-specific operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`, `applyVariantEditPlan`, `bulkCreateVariants`, `bulkDeleteVariants`, `getVariantSortOrder`, `updateVariantSortOrder`). All queries filter soft-deleted variants. Normal variants must have a customer option and consistent option axes; persisted exact duplication is intentionally unsupported because a clone would violate option/barcode identity. Variant deletion rejects active reservations/open orders and always retires the SKU with a soft delete so audit identity is preserved. |
 
 ## API Endpoints
 
@@ -85,7 +86,7 @@ Storefront category ([slug].astro)
 | Method | Path | Handler | Description |
 |--------|------|---------|-------------|
 | GET | `/stats` | `getProductStats` | Dashboard stats: total, active, with-images, category count |
-| GET | `/lookup-barcode?barcode=X` | `lookupByBarcode` | Find variant + product by exact barcode |
+| GET | `/lookup-barcode?barcode=X` | `lookupByBarcode` | Find variant + product by normalized barcode; fail closed on duplicate legacy matches |
 | GET | `/` | `getProducts` | Paginated list with FTS search, category filter, sort, trash toggle. Returns `discountType`, `discountAmount`, `discountPercentage` per product. |
 | POST | `/` | `createProduct` | Create product with images, attributes, rich content |
 | POST | `/bulk-delete` | `bulkDeleteProducts` | Soft or permanent bulk delete |
@@ -97,11 +98,9 @@ Storefront category ([slug].astro)
 | POST | `/{id}/variants` | `createVariant` | Create single variant |
 | GET | `/{id}/variants` | `getProductVariants` | List variants for product (soft-deleted filtered) |
 | PUT | `/{id}/variants/{variantId}` | `updateVariant` | Update single variant |
-| DELETE | `/{id}/variants/{variantId}` | `deleteVariant` | Delete unused variant, or soft-delete when terminal order/inventory history exists; rejects reserved stock/open orders |
+| DELETE | `/{id}/variants/{variantId}` | `deleteVariant` | Soft-delete the SKU after transactional reservation/open-order/final-option guards |
 | POST | `/{id}/variants/bulk-create` | `bulkCreateVariants` | Bulk create (chunked for D1 parameter limits) |
-| POST | `/{id}/variants/bulk-delete` | `bulkDeleteVariants` | Bulk guarded delete; terminal-history-backed SKUs are soft-deleted and reserved/open-order SKUs are rejected |
-| POST | `/{id}/variants/bulk-update` | `bulkUpdateVariants` | Bulk update fields |
-| POST | `/{id}/variants/{variantId}/duplicate` | `duplicateVariant` | Clone variant with new SKU |
+| POST | `/{id}/variants/bulk-delete` | `bulkDeleteVariants` | Bulk soft-delete SKUs after transactional reservation/open-order/final-option guards |
 | GET | `/{id}/variants/sort-order` | `getVariantSortOrder` | Get color/size sort order |
 | POST | `/{id}/variants/sort-order` | `updateVariantSortOrder` | Set color/size sort order |
 

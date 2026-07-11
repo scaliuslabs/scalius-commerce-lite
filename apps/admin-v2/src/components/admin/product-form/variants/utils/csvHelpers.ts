@@ -5,6 +5,10 @@ import type {
   CsvImportResult,
   ProductVariant,
 } from "../types";
+import {
+  getBarcodeValidationError,
+  normalizeBarcodeValue,
+} from "@scalius/shared/barcode-identity";
 
 type BarcodeType = NonNullable<ProductVariant["barcodeType"]>;
 
@@ -204,8 +208,10 @@ function parseVariantRow(
     throw new Error("Flat discount cannot be negative");
   }
 
-  const barcode = readColumn(values, column.barcode).trim();
+  const barcode = normalizeBarcodeValue(readColumn(values, column.barcode));
   const barcodeType = parseBarcodeType(readColumn(values, column.barcodeType));
+  const barcodeError = getBarcodeValidationError(barcode, barcodeType);
+  if (barcodeError) throw new Error(barcodeError);
   const size = readColumn(values, column.size).trim() || null;
   const color = readColumn(values, column.color).trim() || null;
   if (!size && !color) {
@@ -217,7 +223,7 @@ function parseVariantRow(
     size,
     color,
     weight,
-    barcode: barcode || null,
+    barcode,
     barcodeType,
     price,
     stock,

@@ -7,6 +7,10 @@ import { eq, sql, and, isNull } from "drizzle-orm";
 import { checkAndAlertLowStock } from "./alerts";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError } from "@scalius/core/errors";
+import {
+  getBarcodeIdentityKey,
+  normalizeBarcodeValue,
+} from "@scalius/shared/barcode-identity";
 import { buildStockMovementClaim } from "./stock-movement-claims";
 
 const MAX_CAS_RETRIES = 3;
@@ -228,61 +232,60 @@ export async function lookupByBarcodeOrSku(
   db: Database,
   code: string,
 ) {
-  // Try barcode first
-  let variant = await db
-    .select({
-      variantId: productVariants.id,
-      variantSku: productVariants.sku,
-      variantSize: productVariants.size,
-      variantColor: productVariants.color,
-      variantPrice: productVariants.price,
-      variantStock: productVariants.stock,
-      variantReservedStock: productVariants.reservedStock,
-      variantBarcode: productVariants.barcode,
-      variantBarcodeType: productVariants.barcodeType,
-      variantLowStockThreshold: productVariants.lowStockThreshold,
-      productId: products.id,
-      productName: products.name,
-      productSlug: products.slug,
-      productPrice: products.price,
-      productIsActive: products.isActive,
-    })
+  const normalizedCode = normalizeBarcodeValue(code);
+  if (!normalizedCode) return null;
+
+  const barcodeIdentity = getBarcodeIdentityKey(normalizedCode)!;
+  const lookupFields = {
+    variantId: productVariants.id,
+    variantSku: productVariants.sku,
+    variantSize: productVariants.size,
+    variantColor: productVariants.color,
+    variantPrice: productVariants.price,
+    variantStock: productVariants.stock,
+    variantReservedStock: productVariants.reservedStock,
+    variantBarcode: productVariants.barcode,
+    variantBarcodeType: productVariants.barcodeType,
+    variantLowStockThreshold: productVariants.lowStockThreshold,
+    productId: products.id,
+    productName: products.name,
+    productSlug: products.slug,
+    productPrice: products.price,
+    productIsActive: products.isActive,
+  };
+
+  // Read at most two rows so legacy duplicates fail closed instead of letting
+  // `.get()` choose an arbitrary SKU before the unique index is deployed.
+  const barcodeMatches = await db
+    .select(lookupFields)
     .from(productVariants)
     .innerJoin(products, eq(productVariants.productId, products.id))
     .where(
       and(
-        eq(productVariants.barcode, code),
+        sql`lower(trim(${productVariants.barcode})) = ${barcodeIdentity}`,
         isNull(productVariants.deletedAt),
         isNull(products.deletedAt),
       ),
     )
-    .get();
+    .limit(2);
 
-  // Fall back to SKU match
+  if (barcodeMatches.length > 1) {
+    throw new ConflictError(
+      "Multiple active SKUs share this barcode. Resolve the duplicate before adjusting stock.",
+    );
+  }
+
+  let variant: (typeof barcodeMatches)[number] | null | undefined = barcodeMatches[0];
+
+  // Fall back to a trimmed, case-sensitive SKU match.
   if (!variant) {
     variant = await db
-      .select({
-        variantId: productVariants.id,
-        variantSku: productVariants.sku,
-        variantSize: productVariants.size,
-        variantColor: productVariants.color,
-        variantPrice: productVariants.price,
-        variantStock: productVariants.stock,
-        variantReservedStock: productVariants.reservedStock,
-        variantBarcode: productVariants.barcode,
-        variantBarcodeType: productVariants.barcodeType,
-        variantLowStockThreshold: productVariants.lowStockThreshold,
-        productId: products.id,
-        productName: products.name,
-        productSlug: products.slug,
-        productPrice: products.price,
-        productIsActive: products.isActive,
-      })
+      .select(lookupFields)
       .from(productVariants)
       .innerJoin(products, eq(productVariants.productId, products.id))
       .where(
         and(
-          eq(productVariants.sku, code),
+          eq(productVariants.sku, normalizedCode),
           isNull(productVariants.deletedAt),
           isNull(products.deletedAt),
         ),

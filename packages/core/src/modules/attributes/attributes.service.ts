@@ -2,12 +2,28 @@
 // All DB queries and business logic for the product attributes domain.
 
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
-import { sql, eq, and, or, like, asc, desc, count, inArray, isNull, lte } from "drizzle-orm";
+import { sql, eq, and, or, like, asc, desc, count, inArray, isNull, lte, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 
 import type { CreateAttributeInput, UpdateAttributeInput } from "./attributes.validation";
+
+function productRevisionBumpForAttributeValues(
+    db: Database,
+    condition: SQL,
+) {
+    return db.update(products)
+        .set({
+            aggregateRevision: sql`${products.aggregateRevision} + 1`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(sql`${products.id} IN (
+            SELECT ${productAttributeValues.productId}
+            FROM ${productAttributeValues}
+            WHERE ${condition}
+        )`);
+}
 
 // ─────────────────────────────────────────
 // Queries
@@ -215,9 +231,22 @@ export async function deleteAttribute(db: Database, id: string) {
 }
 
 export async function permanentlyDeleteAttribute(db: Database, id: string) {
-    await db
-        .delete(productAttributes)
-        .where(eq(productAttributes.id, id));
+    await permanentlyDeleteAttributes(db, [id]);
+}
+
+async function permanentlyDeleteAttributes(db: Database, ids: string[]): Promise<void> {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return;
+    if (uniqueIds.length > 90) {
+        throw new ValidationError("Delete at most 90 attributes at a time.");
+    }
+    await safeBatch(db, [
+        productRevisionBumpForAttributeValues(
+            db,
+            inArray(productAttributeValues.attributeId, uniqueIds),
+        ),
+        db.delete(productAttributes).where(inArray(productAttributes.id, uniqueIds)),
+    ] as never);
 }
 
 export async function restoreAttribute(db: Database, id: string) {
@@ -258,9 +287,7 @@ export async function bulkDeleteAttributes(db: Database, ids: string[], permanen
     if (ids.length === 0) return;
 
     if (permanent) {
-        await db
-            .delete(productAttributes)
-            .where(inArray(productAttributes.id, ids));
+        await permanentlyDeleteAttributes(db, ids);
     } else {
         await db
             .update(productAttributes)
@@ -567,7 +594,12 @@ export async function renameAttributeValue(
         );
     }
 
+    const affectedValueCondition = and(
+            eq(productAttributeValues.attributeId, attributeId),
+            sql`lower(trim(${productAttributeValues.value})) = ${oldValueKey}`,
+        )!;
     const batchOps: unknown[] = [
+        productRevisionBumpForAttributeValues(db, affectedValueCondition),
         db
             .update(productAttributeValues)
             .set({ value: normalizedNewValue })
@@ -592,8 +624,7 @@ export async function renameAttributeValue(
         );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    await db.batch(batchOps as any);
+    await safeBatch(db, batchOps as never);
 }
 
 export async function deleteAttributeValue(
@@ -611,7 +642,12 @@ export async function deleteAttributeValue(
 
     const normalizedValue = requireExistingAttributeValue(value);
     const normalizedValueKey = attributeValueKey(normalizedValue);
+    const affectedValueCondition = and(
+            eq(productAttributeValues.attributeId, attributeId),
+            sql`lower(trim(${productAttributeValues.value})) = ${normalizedValueKey}`,
+        )!;
     const batchOps: unknown[] = [
+        productRevisionBumpForAttributeValues(db, affectedValueCondition),
         db
             .delete(productAttributeValues)
             .where(
@@ -635,6 +671,5 @@ export async function deleteAttributeValue(
         );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    await db.batch(batchOps as any);
+    await safeBatch(db, batchOps as never);
 }

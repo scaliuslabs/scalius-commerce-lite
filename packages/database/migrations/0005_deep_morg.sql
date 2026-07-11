@@ -1,0 +1,1 @@
+ALTER TABLE `products` ADD `aggregate_revision` integer DEFAULT 1 NOT NULL;

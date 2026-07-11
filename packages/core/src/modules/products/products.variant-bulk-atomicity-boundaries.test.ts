@@ -5,32 +5,27 @@ const variantsSource = readFileSync(
   new URL("./products.variants.ts", import.meta.url),
   "utf8",
 );
-const adminSource = readFileSync(
-  new URL("./products.admin.ts", import.meta.url),
-  "utf8",
-);
-
 describe("variant bulk persistence boundaries", () => {
-  it("commits all parameter-safe create chunks in one D1 batch", () => {
-    expect(variantsSource).toContain("const insertStatements = []");
+  it("routes bulk creates through the atomic edit-plan transaction", () => {
     expect(variantsSource).toContain(
-      "await safeBatch(db, insertStatements as never)",
+      "const result = await applyVariantEditPlan(",
     );
-    expect(variantsSource).not.toContain("createdVariants.push(...result)");
+    expect(variantsSource).toContain("creates: variants");
+    expect(variantsSource).toContain("variants: result.created");
   });
 
   it("rejects duplicate update IDs before database work", () => {
-    const duplicateGuard = adminSource.indexOf(
-      "new Set(ids).size !== ids.length",
+    const duplicateGuard = variantsSource.indexOf(
+      "new Set(updateIds).size !== updateIds.length",
     );
-    const currentVariantRead = adminSource.indexOf(
-      "const currentVariants = ids.length > 0",
+    const currentVariantRead = variantsSource.indexOf(
+      "const currentVariants = await db",
     );
 
     expect(duplicateGuard).toBeGreaterThan(-1);
     expect(currentVariantRead).toBeGreaterThan(duplicateGuard);
-    expect(adminSource).toContain(
-      "Each variant may appear only once in a bulk update.",
+    expect(variantsSource).toContain(
+      "Each variant may appear only once in an edit plan.",
     );
   });
 });

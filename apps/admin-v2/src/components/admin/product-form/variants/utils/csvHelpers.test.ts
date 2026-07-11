@@ -79,8 +79,8 @@ describe("variant CSV helpers", () => {
   it("rejects duplicate imported SKUs and conflicts with existing variants", () => {
     const duplicateRows = [
       "SKU,Option 1,Option 2,Weight (g),Barcode,Barcode Type,Price,Stock,Discount Type,Discount Value",
-      "SKU-001,XL,Red,500,,custom,10,1,percentage,",
-      "SKU-001,L,Blue,500,,custom,10,1,percentage,",
+      "SKU-001,XL,Red,500,,,10,1,percentage,",
+      "SKU-001,L,Blue,500,,,10,1,percentage,",
     ].join("\n");
     const duplicateResult = parseCsvToVariants(duplicateRows);
 
@@ -95,6 +95,28 @@ describe("variant CSV helpers", () => {
     expect(conflictResult.errors[0]).toEqual({
       row: 2,
       error: "SKU already exists: SKU-001",
+    });
+  });
+
+  it("validates barcode/type pairing and checksums during import", () => {
+    const rows = [
+      "SKU,Option 1,Barcode,Barcode Type,Price,Stock",
+      "NO-TYPE,M,5901234123457,,12,1",
+      "BAD-EAN,L,5901234123458,ean13,12,1",
+      "GOOD-EAN,XL, 5901234123457 ,ean13,12,1",
+    ].join("\n");
+    const result = parseCsvToVariants(rows);
+
+    expect(result.imported).toBe(1);
+    expect(result.failed).toBe(2);
+    expect(result.errors).toEqual([
+      { row: 2, error: "Barcode and barcode type must be provided together." },
+      { row: 3, error: "EAN-13 must be 13 digits with a valid checksum." },
+    ]);
+    expect(result.variants[0]).toMatchObject({
+      sku: "GOOD-EAN",
+      barcode: "5901234123457",
+      barcodeType: "ean13",
     });
   });
 

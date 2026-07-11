@@ -98,6 +98,7 @@ export interface TaxClassificationItem {
   taxClassId: string | null;
   taxClassName: string | null;
   version: number;
+  aggregateRevision: number;
 }
 
 export interface TaxClassificationPayload {
@@ -218,11 +219,16 @@ export const updateTaxClassification = createServerFn({ method: "POST" })
     id: string;
     taxClassId: string | null;
     expectedVersion: number;
+    expectedAggregateRevision: number;
   }) => data)
   .handler(async ({ data }) =>
-    apiPut<{ classification: Pick<TaxClassificationItem, "kind" | "id" | "taxClassId" | "version"> }>(
+    apiPut<{ classification: Pick<TaxClassificationItem, "kind" | "id" | "taxClassId" | "version" | "aggregateRevision"> }>(
       `/taxes/classifications/${data.kind}/${encodedId(data.id)}`,
-      { taxClassId: data.taxClassId, expectedVersion: data.expectedVersion },
+      {
+        taxClassId: data.taxClassId,
+        expectedVersion: data.expectedVersion,
+        expectedAggregateRevision: data.expectedAggregateRevision,
+      },
     ),
   );
 

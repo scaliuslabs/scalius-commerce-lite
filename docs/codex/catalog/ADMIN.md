@@ -18,6 +18,8 @@ Last reviewed: 2026-07-12
 12. **Resolved in batch 2: option add/edit/bulk drafts participate in navigation protection.**
 13. **Resolved in batch 2: competing form actions are inert while save is in flight.**
 14. **Destructive confirmation is inconsistent.** Collection and attribute delete/permanent-delete paths can execute immediately while products/categories confirm. Permanent delete requires a consistent impact summary and confirmation.
+15. **Resolved in batch 5: product editing is conflict-safe.** A fresh editor-owned snapshot, shared product/SKU revision, draft-preserving dialog, explicit reload, terminal deleted-product action, and persistent action-bar state prevent blind overwrite.
+16. **Resolved in batch 5: option duplication is local and unsaved.** It clears SKU, barcode, stock, and one option axis; the obsolete persisted duplicate and redundant bulk-update APIs are removed.
 
 ## P2 workflow and UI findings
 

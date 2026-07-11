@@ -20,8 +20,6 @@ const mocks = vi.hoisted(() => ({
   bulkCreateVariants: vi.fn(),
   applyVariantEditPlan: vi.fn(),
   bulkDeleteVariants: vi.fn(),
-  bulkUpdateVariants: vi.fn(),
-  duplicateVariant: vi.fn(),
   getProductVariants: vi.fn(),
   getVariantSortOrder: vi.fn(),
   updateVariantSortOrder: vi.fn(),
@@ -39,7 +37,6 @@ vi.mock("@scalius/core/modules/products/products.admin", () => ({
   listProducts: mocks.listProducts,
   getProductsByIds: mocks.getProductsByIds,
   getProductDetails: mocks.getProductDetails,
-  bulkUpdateVariants: mocks.bulkUpdateVariants,
 }));
 
 vi.mock("@scalius/core/modules/products/products.variants", () => ({
@@ -49,7 +46,6 @@ vi.mock("@scalius/core/modules/products/products.variants", () => ({
   bulkCreateVariants: mocks.bulkCreateVariants,
   applyVariantEditPlan: mocks.applyVariantEditPlan,
   bulkDeleteVariants: mocks.bulkDeleteVariants,
-  duplicateVariant: mocks.duplicateVariant,
   getProductVariants: mocks.getProductVariants,
   getVariantSortOrder: mocks.getVariantSortOrder,
   updateVariantSortOrder: mocks.updateVariantSortOrder,
@@ -89,6 +85,7 @@ function createProductBody(overrides: Record<string, unknown> = {}) {
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     ],
+    expectedAggregateRevision: 1,
     ...overrides,
   };
 }
@@ -106,6 +103,7 @@ function createVariantBody(overrides: Record<string, unknown> = {}) {
     discountType: "percentage",
     discountPercentage: null,
     discountAmount: null,
+    expectedAggregateRevision: 1,
     ...overrides,
   };
 }
@@ -141,24 +139,23 @@ function createTestApp() {
     PURGE_TOKEN: "secret-token",
   } as unknown as Env;
 
-  mocks.createProduct.mockResolvedValue({ id: "prod_new" });
-  mocks.updateProduct.mockResolvedValue(undefined);
-  mocks.bulkDeleteProducts.mockResolvedValue(undefined);
-  mocks.deleteProduct.mockResolvedValue(undefined);
-  mocks.restoreProduct.mockResolvedValue(undefined);
+  mocks.createProduct.mockResolvedValue({ id: "prod_new", aggregateRevision: 1 });
+  mocks.updateProduct.mockResolvedValue({ aggregateRevision: 2 });
+  mocks.bulkDeleteProducts.mockResolvedValue([{ aggregateRevision: 2 }]);
+  mocks.deleteProduct.mockResolvedValue({ aggregateRevision: 2 });
+  mocks.restoreProduct.mockResolvedValue({ aggregateRevision: 2 });
   mocks.permanentlyDeleteProduct.mockResolvedValue(undefined);
-  mocks.createVariant.mockResolvedValue({ id: "var_1" });
-  mocks.updateVariant.mockResolvedValue({ id: "var_1" });
-  mocks.deleteVariant.mockResolvedValue(undefined);
-  mocks.bulkCreateVariants.mockResolvedValue([{ id: "var_1" }]);
+  mocks.createVariant.mockResolvedValue({ id: "var_1", aggregateRevision: 2 });
+  mocks.updateVariant.mockResolvedValue({ id: "var_1", aggregateRevision: 2 });
+  mocks.deleteVariant.mockResolvedValue({ aggregateRevision: 2 });
+  mocks.bulkCreateVariants.mockResolvedValue({ variants: [{ id: "var_1" }], aggregateRevision: 2 });
   mocks.applyVariantEditPlan.mockResolvedValue({
     created: [{ id: "var_new" }],
     updated: [{ id: "var_1" }],
+    aggregateRevision: 2,
   });
-  mocks.bulkDeleteVariants.mockResolvedValue(undefined);
-  mocks.bulkUpdateVariants.mockResolvedValue(undefined);
-  mocks.duplicateVariant.mockResolvedValue({ id: "var_2" });
-  mocks.updateVariantSortOrder.mockResolvedValue(undefined);
+  mocks.bulkDeleteVariants.mockResolvedValue({ aggregateRevision: 2 });
+  mocks.updateVariantSortOrder.mockResolvedValue({ aggregateRevision: 2 });
   mocks.invalidateCatalogCaches.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
@@ -242,10 +239,10 @@ describe("admin product cache invalidation", () => {
   });
 
   it.each([
-    { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { productIds: ["prod_1"], permanent: false } },
-    { label: "soft delete", path: "/prod_1", method: "DELETE" },
-    { label: "restore", path: "/prod_1/restore", method: "POST" },
-    { label: "permanent delete", path: "/prod_1/permanent", method: "DELETE" },
+    { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { products: [{ id: "prod_1", expectedAggregateRevision: 1 }], permanent: false } },
+    { label: "soft delete", path: "/prod_1?expectedAggregateRevision=1", method: "DELETE" },
+    { label: "restore", path: "/prod_1/restore?expectedAggregateRevision=1", method: "POST" },
+    { label: "permanent delete", path: "/prod_1/permanent?expectedAggregateRevision=1", method: "DELETE" },
   ])("warms the affected product detail page before $label", async ({ path, method, body }) => {
     const { app, env } = createTestApp();
 
@@ -262,12 +259,13 @@ describe("admin product cache invalidation", () => {
   it.each([
     { label: "create variant", path: "/prod_1/variants", method: "POST", body: createVariantBody(), status: 201 },
     { label: "update variant", path: "/prod_1/variants/var_1", method: "PUT", body: createVariantBody(), status: 200 },
-    { label: "delete variant", path: "/prod_1/variants/var_1", method: "DELETE", status: 204 },
+    { label: "delete variant", path: "/prod_1/variants/var_1?expectedAggregateRevision=1", method: "DELETE", status: 200 },
     {
       label: "bulk create variants",
       path: "/prod_1/variants/bulk-create",
       method: "POST",
       body: {
+        expectedAggregateRevision: 1,
         variants: [
           {
             ...createVariantBody(),
@@ -284,6 +282,7 @@ describe("admin product cache invalidation", () => {
       path: "/prod_1/variants/edit-plan",
       method: "POST",
       body: {
+        expectedAggregateRevision: 1,
         creates: [{
           ...createVariantBody({ size: "M", sku: "SKU-NEW" }),
           discountType: "percentage",
@@ -294,14 +293,12 @@ describe("admin product cache invalidation", () => {
       },
       status: 200,
     },
-    { label: "bulk delete variants", path: "/prod_1/variants/bulk-delete", method: "POST", body: { variantIds: ["var_1"] }, status: 204 },
-    { label: "bulk update variants", path: "/prod_1/variants/bulk-update", method: "POST", body: { updates: [{ id: "var_1", price: 1300 }] }, status: 200 },
-    { label: "duplicate variant", path: "/prod_1/variants/var_1/duplicate", method: "POST", status: 201 },
+    { label: "bulk delete variants", path: "/prod_1/variants/bulk-delete", method: "POST", body: { variantIds: ["var_1"], expectedAggregateRevision: 1 }, status: 200 },
     {
       label: "sort variants",
       path: "/prod_1/variants/sort-order",
       method: "POST",
-      body: { colors: [{ value: "red", sortOrder: 1 }], sizes: [] },
+      body: { colors: [{ value: "red", sortOrder: 1 }], sizes: [], expectedAggregateRevision: 1 },
       status: 200,
     },
   ])("warms the parent product detail page after $label", async ({ path, method, body, status }) => {

@@ -9,19 +9,15 @@ import {
     updateVariantSchema,
     bulkCreateVariantsSchema,
     bulkDeleteVariantsSchema,
-    bulkUpdateVariantsSchema,
     variantEditPlanSchema,
     updateSortOrderSchema
 } from "@scalius/core/modules/products/products.types";
-import { NotFoundError, ConflictError, ValidationError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,
     paginatedEnvelope,
     errorResponses,
-    conflictResponse,
-    messageResponse,
-    idResponse,
     noContentResponse,
 } from "../../schemas/responses";
 import {
@@ -29,6 +25,7 @@ import {
     productDetailSchema,
     productStatsSchema,
     productVariantSchema,
+    productVariantMutationSchema,
 } from "../../schemas/entities";
 import {
     invalidateCatalogCaches,
@@ -135,14 +132,54 @@ app.openapi(statsRoute, async (c) => {
     return ok(c, stats);
 });
 
+const expectedAggregateRevisionSchema = z.coerce.number().int().min(1);
+const aggregateRevisionResponseSchema = z.object({
+    aggregateRevision: z.number().int().min(1),
+});
+const expectedAggregateRevisionQuerySchema = z.object({
+    expectedAggregateRevision: expectedAggregateRevisionSchema,
+});
+
 const bulkDeleteSchema = z.object({
-    productIds: z.array(z.string()),
+    products: z.array(z.object({
+        id: z.string(),
+        expectedAggregateRevision: z.number().int().min(1),
+    })).min(1).max(90),
     permanent: z.boolean().default(false)
 });
 
+const productMutationConflictResponse = {
+    description: "Product revision or domain conflict",
+    content: {
+        "application/json": {
+            schema: z.union([
+                z.object({
+                    success: z.literal(false),
+                    error: z.object({
+                        code: z.literal("PRODUCT_REVISION_CONFLICT"),
+                        message: z.string(),
+                        details: z.object({
+                            expectedRevision: z.number().int().min(1),
+                            currentRevision: z.number().int().min(1).nullable(),
+                        }),
+                    }),
+                }),
+                z.object({
+                    success: z.literal(false),
+                    error: z.object({
+                        code: z.string(),
+                        message: z.string(),
+                        details: z.unknown().optional(),
+                    }),
+                }),
+            ]),
+        },
+    },
+} as const;
+
 const conflictMutationErrorResponses = {
     ...errorResponses,
-    409: conflictResponse,
+    409: productMutationConflictResponse,
 } as const;
 
 // ── Barcode Lookup ──
@@ -154,7 +191,7 @@ const barcodeLookupRoute = createRoute({
     summary: "Look up a product variant by barcode",
     request: {
         query: z.object({
-            barcode: z.string().min(1).openapi({ description: "Barcode value to search for" }),
+            barcode: z.string().trim().min(1).openapi({ description: "Barcode value to search for" }),
         }),
     },
     responses: {
@@ -183,6 +220,7 @@ const barcodeLookupRoute = createRoute({
             })) } },
         },
         404: errorResponses[404],
+        409: productMutationConflictResponse,
     },
 });
 
@@ -287,7 +325,10 @@ const createProductRoute = createRoute({
     responses: {
         201: {
             description: "Product created",
-            content: { "application/json": { schema: idResponse } },
+            content: { "application/json": { schema: successEnvelope(z.object({
+                id: z.string(),
+                aggregateRevision: z.number().int().min(1),
+            })) } },
         },
         ...errorResponses,
     }
@@ -324,7 +365,16 @@ const bulkDeleteRoute = createRoute({
         body: { content: { "application/json": { schema: bulkDeleteSchema } } }
     },
     responses: {
-        204: noContentResponse,
+        200: {
+            description: "Products deleted",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                products: z.array(z.object({
+                    id: z.string(),
+                    aggregateRevision: z.number().int().min(1),
+                })),
+                deletedIds: z.array(z.string()),
+            })) } },
+        },
         ...conflictMutationErrorResponses,
     }
 });
@@ -332,17 +382,17 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    try {
-        const htmlPaths = await productStorefrontHtmlPathsByIds(db, data.productIds);
-        await ProductsAdmin.bulkDeleteProducts(db, data.productIds, data.permanent);
-        await invalidateCatalogCaches("products", c, { htmlPaths });
-        return noContent(c);
-    } catch (error: unknown) {
-        if (error instanceof Error && error.message?.includes("delete")) {
-            throw new ConflictError(error.message);
-        }
-        throw error;
-    }
+    const productIds = data.products.map((product) => product.id);
+    const htmlPaths = await productStorefrontHtmlPathsByIds(db, productIds);
+    const revisions = await ProductsAdmin.bulkDeleteProducts(db, data.products, data.permanent);
+    await invalidateCatalogCaches("products", c, { htmlPaths });
+    return ok(c, {
+        products: revisions.map((revision, index) => ({
+            id: data.products[index]!.id,
+            aggregateRevision: revision.aggregateRevision,
+        })),
+        deletedIds: data.permanent ? productIds : [],
+    });
 });
 
 // ── Get Product By ID ──
@@ -386,9 +436,9 @@ const updateProductRoute = createRoute({
     responses: {
         200: {
             description: "Product updated",
-            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
         },
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 
@@ -402,9 +452,9 @@ app.openapi(updateProductRoute, async (c) => {
             ...productHtmlPath(data.slug),
             ...(await categoryHtmlPathsByIds(db, [data.categoryId])),
         ];
-        await ProductsAdmin.updateProduct(db, id, data);
+        const result = await ProductsAdmin.updateProduct(db, id, data);
         await invalidateCatalogCaches("products", c, { htmlPaths });
-        return ok(c, {});
+        return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
             if (error.message === "Product not found") throw new NotFoundError(error.message);
@@ -423,20 +473,25 @@ const deleteProductRoute = createRoute({
     summary: "Soft-delete a product",
     request: {
         params: z.object({ id: z.string() }),
+        query: expectedAggregateRevisionQuerySchema,
     },
     responses: {
-        204: noContentResponse,
-        ...errorResponses,
+        200: {
+            description: "Product moved to trash",
+            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
+        },
+        ...conflictMutationErrorResponses,
     }
 });
 
 app.openapi(deleteProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const { expectedAggregateRevision } = c.req.valid("query");
     const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
-    await ProductsAdmin.deleteProduct(db, id);
+    const result = await ProductsAdmin.deleteProduct(db, id, expectedAggregateRevision);
     await invalidateCatalogCaches("products", c, { htmlPaths });
-    return noContent(c);
+    return ok(c, result);
 });
 
 // ── Restore Product ──
@@ -448,23 +503,25 @@ const restoreProductRoute = createRoute({
     summary: "Restore a soft-deleted product",
     request: {
         params: z.object({ id: z.string() }),
+        query: expectedAggregateRevisionQuerySchema,
     },
     responses: {
         200: {
             description: "Product restored",
-            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
         },
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 
 app.openapi(restoreProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const { expectedAggregateRevision } = c.req.valid("query");
     const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
-    await ProductsAdmin.restoreProduct(db, id);
+    const result = await ProductsAdmin.restoreProduct(db, id, expectedAggregateRevision);
     await invalidateCatalogCaches("products", c, { htmlPaths });
-    return ok(c, {});
+    return ok(c, result);
 });
 
 // ── Permanent Delete Product ──
@@ -476,6 +533,7 @@ const permanentDeleteRoute = createRoute({
     summary: "Permanently delete a product",
     request: {
         params: z.object({ id: z.string() }),
+        query: expectedAggregateRevisionQuerySchema,
     },
     responses: {
         204: noContentResponse,
@@ -486,17 +544,11 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    try {
-        const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
-        await ProductsAdmin.permanentlyDeleteProduct(db, id);
-        await invalidateCatalogCaches("products", c, { htmlPaths });
-        return noContent(c);
-    } catch (error: unknown) {
-        if (error instanceof Error && error.message?.includes("delete")) {
-            throw new ConflictError(error.message);
-        }
-        throw error;
-    }
+    const { expectedAggregateRevision } = c.req.valid("query");
+    const htmlPaths = await productStorefrontHtmlPathsByIds(db, [id]);
+    await ProductsAdmin.permanentlyDeleteProduct(db, id, expectedAggregateRevision);
+    await invalidateCatalogCaches("products", c, { htmlPaths });
+    return noContent(c);
 });
 
 // ── Create Variant ──
@@ -513,9 +565,9 @@ const createVariantRoute = createRoute({
     responses: {
         201: {
             description: "Variant created",
-            content: { "application/json": { schema: successEnvelope(productVariantSchema as z.ZodTypeAny) } },
+            content: { "application/json": { schema: successEnvelope(productVariantMutationSchema as z.ZodTypeAny) } },
         },
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 
@@ -551,7 +603,7 @@ const listVariantsRoute = createRoute({
                 variants: z.array(productVariantSchema),
             }) as z.ZodTypeAny) } },
         },
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 
@@ -576,7 +628,7 @@ const updateVariantRoute = createRoute({
     responses: {
         200: {
             description: "Variant updated",
-            content: { "application/json": { schema: successEnvelope(productVariantSchema as z.ZodTypeAny) } },
+            content: { "application/json": { schema: successEnvelope(productVariantMutationSchema as z.ZodTypeAny) } },
         },
         ...conflictMutationErrorResponses,
     }
@@ -610,20 +662,30 @@ const deleteVariantRoute = createRoute({
     summary: "Delete a product variant",
     request: {
         params: z.object({ id: z.string(), variantId: z.string() }),
+        query: expectedAggregateRevisionQuerySchema,
     },
     responses: {
-        204: noContentResponse,
-        ...errorResponses,
+        200: {
+            description: "Variant deleted",
+            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
+        },
+        ...conflictMutationErrorResponses,
     }
 });
 
 app.openapi(deleteVariantRoute, async (c) => {
     const db = c.get("db");
     const { id, variantId } = c.req.valid("param");
+    const { expectedAggregateRevision } = c.req.valid("query");
     try {
-        await ProductsVariants.deleteVariant(db, id, variantId);
+        const result = await ProductsVariants.deleteVariant(
+            db,
+            id,
+            variantId,
+            expectedAggregateRevision,
+        );
         await invalidateProductCatalogCaches(db, c, [id]);
-        return noContent(c);
+        return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;
@@ -647,6 +709,7 @@ const variantEditPlanRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({
                 created: z.array(productVariantSchema),
                 updated: z.array(productVariantSchema),
+                aggregateRevision: z.number().int().min(1),
             }) as z.ZodTypeAny) } },
         },
         ...conflictMutationErrorResponses,
@@ -680,9 +743,10 @@ const bulkCreateVariantsRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({
                 variants: z.array(productVariantSchema),
                 count: z.number(),
+                aggregateRevision: z.number().int().min(1),
             }) as z.ZodTypeAny) } },
         },
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 
@@ -691,9 +755,18 @@ app.openapi(bulkCreateVariantsRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const variants = await ProductsVariants.bulkCreateVariants(db, id, data.variants);
+        const result = await ProductsVariants.bulkCreateVariants(
+            db,
+            id,
+            data.variants,
+            data.expectedAggregateRevision,
+        );
         await invalidateProductCatalogCaches(db, c, [id]);
-        return created(c, { variants, count: variants.length });
+        return created(c, {
+            variants: result.variants,
+            count: result.variants.length,
+            aggregateRevision: result.aggregateRevision,
+        });
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
         throw error;
@@ -712,8 +785,11 @@ const bulkDeleteVariantsRoute = createRoute({
         body: { content: { "application/json": { schema: bulkDeleteVariantsSchema } } }
     },
     responses: {
-        204: noContentResponse,
-        ...errorResponses,
+        200: {
+            description: "Variants deleted",
+            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
+        },
+        ...conflictMutationErrorResponses,
     }
 });
 
@@ -721,73 +797,14 @@ app.openapi(bulkDeleteVariantsRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    await ProductsVariants.bulkDeleteVariants(db, id, data.variantIds);
+    const result = await ProductsVariants.bulkDeleteVariants(
+        db,
+        id,
+        data.variantIds,
+        data.expectedAggregateRevision,
+    );
     await invalidateProductCatalogCaches(db, c, [id]);
-    return noContent(c);
-});
-
-// ── Bulk Update Variants ──
-
-const bulkUpdateVariantsRoute = createRoute({
-    method: "post",
-    path: "/{id}/variants/bulk-update",
-    tags: ["Admin - Products"],
-    summary: "Bulk update variants",
-    request: {
-        params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: bulkUpdateVariantsSchema } } }
-    },
-    responses: {
-        200: {
-            description: "Variants updated",
-            content: { "application/json": { schema: successEnvelope(z.object({})) } },
-        },
-        ...conflictMutationErrorResponses,
-    }
-});
-
-app.openapi(bulkUpdateVariantsRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
-    const user = c.get("user");
-    if (data.updates.length === 0) throw new ValidationError("No updates provided");
-    await ProductsAdmin.bulkUpdateVariants(db, id, data.updates, user?.id);
-    await invalidateProductCatalogCaches(db, c, [id]);
-    return ok(c, {});
-});
-
-// ── Duplicate Variant ──
-
-const duplicateVariantRoute = createRoute({
-    method: "post",
-    path: "/{id}/variants/{variantId}/duplicate",
-    tags: ["Admin - Products"],
-    summary: "Duplicate a variant",
-    request: {
-        params: z.object({ id: z.string(), variantId: z.string() }),
-    },
-    responses: {
-        201: {
-            description: "Variant duplicated",
-            content: { "application/json": { schema: successEnvelope(productVariantSchema as z.ZodTypeAny) } },
-        },
-        ...errorResponses,
-    }
-});
-
-app.openapi(duplicateVariantRoute, async (c) => {
-    const db = c.get("db");
-    const { id, variantId } = c.req.valid("param");
-    try {
-        const variant = await ProductsVariants.duplicateVariant(db, id, variantId);
-        if (!variant) throw new NotFoundError("Failed to duplicate variant");
-        await invalidateProductCatalogCaches(db, c, [id]);
-        return created(c, variant);
-    } catch (error: unknown) {
-        if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
-        throw error;
-    }
+    return ok(c, result);
 });
 
 // ── Get Variant Sort Order ──
@@ -833,9 +850,9 @@ const updateVariantSortOrderRoute = createRoute({
     responses: {
         200: {
             description: "Sort order updated",
-            content: { "application/json": { schema: messageResponse } },
+            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
         },
-        ...errorResponses,
+        ...conflictMutationErrorResponses,
     }
 });
 
@@ -843,9 +860,9 @@ app.openapi(updateVariantSortOrderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    await ProductsVariants.updateVariantSortOrder(db, id, data);
+    const result = await ProductsVariants.updateVariantSortOrder(db, id, data);
     await invalidateProductCatalogCaches(db, c, [id]);
-    return ok(c, { message: "Sort order updated successfully" });
+    return ok(c, result);
 });
 
 export { app as adminProductsRoutes };

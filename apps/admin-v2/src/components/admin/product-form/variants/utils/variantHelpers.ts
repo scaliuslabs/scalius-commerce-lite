@@ -249,31 +249,6 @@ export function hasDiscount(variant: ProductVariant): boolean {
 }
 
 /**
- * Duplicate a variant (without ID, with new SKU)
- */
-export function duplicateVariant(
-  variant: ProductVariant,
-  skuSuffix: string = "-COPY"
-): Omit<ProductVariant, "id" | "createdAt" | "updatedAt" | "deletedAt"> {
-  return {
-    size: variant.size,
-    color: variant.color,
-    weight: variant.weight,
-    sku: variant.sku + skuSuffix,
-    price: variant.price,
-    stock: variant.stock,
-    reservedStock: 0,
-    isDefault: false,
-    trackInventory: variant.trackInventory,
-    barcode: variant.barcode,
-    barcodeType: variant.barcodeType,
-    discountType: variant.discountType,
-    discountPercentage: variant.discountPercentage,
-    discountAmount: variant.discountAmount,
-  };
-}
-
-/**
  * Validate SKU uniqueness
  */
 export function isSkuUnique(sku: string, variants: ProductVariant[], excludeId?: string): boolean {

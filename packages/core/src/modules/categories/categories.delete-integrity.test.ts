@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { collections } from "@scalius/database/schema";
+import { collections, products } from "@scalius/database/schema";
+import { ValidationError } from "@scalius/core/errors";
 import { bulkDeleteCategories } from "./categories.service";
 
 describe("category permanent delete integrity", () => {
@@ -43,6 +44,9 @@ describe("category permanent delete integrity", () => {
           },
         };
       },
+      run() {
+        return { kind: "guard" };
+      },
       delete(table: unknown) {
         return {
           where() {
@@ -59,15 +63,20 @@ describe("category permanent delete integrity", () => {
     await bulkDeleteCategories(db as never, ["cat_delete"], true);
 
     expect(batchCalls).toHaveLength(1);
-    expect(batchCalls[0]).toHaveLength(2);
-    expect(batchCalls[0]?.[0]).toMatchObject({
+    expect(batchCalls[0]).toHaveLength(4);
+    expect(batchCalls[0]?.[0]).toEqual({ kind: "guard" });
+    expect(batchCalls[0]?.[1]).toMatchObject({
+      kind: "update",
+      table: products,
+    });
+    expect(batchCalls[0]?.[2]).toMatchObject({
       kind: "update",
       table: collections,
       values: {
         config: JSON.stringify({ categoryIds: ["cat_keep"] }),
       },
     });
-    expect(batchCalls[0]?.[1]).toMatchObject({ kind: "delete" });
+    expect(batchCalls[0]?.[3]).toMatchObject({ kind: "delete" });
   });
 
   it("routes single permanent delete through the bulk cleanup primitive", () => {
@@ -76,5 +85,41 @@ describe("category permanent delete integrity", () => {
       "utf8",
     );
     expect(source).toContain("await bulkDeleteCategories(db, [id], true)");
+  });
+
+  it("fails closed when a product is assigned after the initial usage read", async () => {
+    let selectCount = 0;
+    const db = {
+      select() {
+        selectCount++;
+        return {
+          from() {
+            return {
+              where() {
+                return selectCount === 1
+                  ? { limit: () => ({ all: async () => [] }) }
+                  : { all: async () => [] };
+              },
+            };
+          },
+        };
+      },
+      run() {
+        return { kind: "guard" };
+      },
+      update() {
+        return { set: () => ({ where: () => ({ kind: "update" }) }) };
+      },
+      delete() {
+        return { where: () => ({ kind: "delete" }) };
+      },
+      async batch() {
+        throw new Error("D1_ERROR: malformed JSON");
+      },
+    };
+
+    await expect(
+      bulkDeleteCategories(db as never, ["cat_delete"], true),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 });

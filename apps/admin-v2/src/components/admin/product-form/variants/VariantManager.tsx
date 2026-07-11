@@ -1,6 +1,13 @@
 // src/components/admin/ProductForm/variants/VariantManager.tsx
 
-import { lazy, Suspense, useState, useEffect, useMemo } from "react";
+import {
+  lazy,
+  Suspense,
+  useState,
+  useMemo,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { useCurrency } from "@/hooks/use-currency";
 import { getServerFnError } from "@/lib/api-mutations/shared";
 import {
@@ -26,6 +33,7 @@ import {
   getVariantStats,
 } from "./utils/variantHelpers";
 import { getVariantManagementMode } from "./utils/variantMode";
+import { buildDuplicateVariantDraft } from "./utils/duplicateVariantDraft";
 import {
   normalizeVariantOptionLabels,
   type ProductVariant,
@@ -37,6 +45,7 @@ import {
   type VariantSort,
   type VariantOptionLabels,
 } from "./types";
+import type { ProductRevisionConflict } from "@/lib/admin-api-error";
 
 function SimpleSkuTransitionSummary({
   variant,
@@ -119,7 +128,13 @@ interface VariantManagerProps {
   productSlug?: string;
   productName?: string;
   variants: ProductVariant[];
+  onVariantsChange: Dispatch<SetStateAction<ProductVariant[]>>;
   optionLabels?: VariantOptionLabels;
+  aggregateRevision: number;
+  revisionConflict: ProductRevisionConflict | null;
+  onAggregateRevisionChange: (revision: number) => void;
+  onRevisionConflict: (conflict: ProductRevisionConflict) => void;
+  onOpenRevisionConflict: () => void;
   onVariantChange?: () => void;
 }
 
@@ -141,7 +156,13 @@ export function VariantManager({
   productSlug,
   productName,
   variants,
+  onVariantsChange,
   optionLabels,
+  aggregateRevision,
+  revisionConflict,
+  onAggregateRevisionChange,
+  onRevisionConflict,
+  onOpenRevisionConflict,
   onVariantChange,
 }: VariantManagerProps) {
   const { symbol } = useCurrency();
@@ -149,11 +170,13 @@ export function VariantManager({
     () => normalizeVariantOptionLabels(optionLabels),
     [optionLabels],
   );
-  const [localVariants, setLocalVariants] =
-    useState<ProductVariant[]>(variants);
+  const localVariants = variants;
+  const setLocalVariants = onVariantsChange;
 
   // UI State
   const [isAdding, setIsAdding] = useState(false);
+  const [newVariantDefaults, setNewVariantDefaults] =
+    useState<Partial<VariantFormValues> | null>(null);
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedVariants, setSelectedVariants] = useState<Set<string>>(
@@ -185,20 +208,14 @@ export function VariantManager({
     bulkDeleteVariants,
     bulkCreateVariants,
     applyVariantEditPlan,
-    duplicateVariant,
     isLoading,
-  } = useVariantOperations();
-
-  // Sync variants when prop changes
-  useEffect(() => {
-    setLocalVariants(
-      variants.map((v) => ({
-        ...v,
-        createdAt: new Date(v.createdAt),
-        updatedAt: new Date(v.updatedAt),
-      })),
-    );
-  }, [variants]);
+  } = useVariantOperations({
+    aggregateRevision,
+    revisionConflict,
+    onAggregateRevisionChange,
+    onRevisionConflict,
+    onOpenRevisionConflict,
+  });
 
   const activeVariants = useMemo(
     () => localVariants.filter((variant) => variant.deletedAt === null),
@@ -270,6 +287,7 @@ export function VariantManager({
         if (savedVariant) {
           setLocalVariants((prev) => [...prev, savedVariant]);
           setIsAdding(false);
+          setNewVariantDefaults(null);
           onVariantChange?.();
           return true;
         }
@@ -282,6 +300,7 @@ export function VariantManager({
 
   const handleCancelEdit = () => {
     setIsAdding(false);
+    setNewVariantDefaults(null);
     setEditingVariantId(null);
   };
 
@@ -316,6 +335,7 @@ export function VariantManager({
       setDraftNewIds([]);
       setBulkEditError(null);
       setIsAdding(false);
+      setNewVariantDefaults(null);
       setEditingVariantId(null);
     }
   };
@@ -404,6 +424,7 @@ export function VariantManager({
         newDrafts,
         updateDrafts,
       );
+      if (!result) return;
       const updatedById = new Map(result.updated.map((variant) => [variant.id, variant]));
       setLocalVariants((previous) => [
         ...previous.map((variant) => updatedById.get(variant.id) ?? variant),
@@ -473,13 +494,14 @@ export function VariantManager({
     setIsBulkDeleteDialogOpen(false);
   };
 
-  // Duplicate variant
-  const handleDuplicate = async (id: string) => {
-    const duplicated = await duplicateVariant(productId, id);
-    if (duplicated) {
-      setLocalVariants((prev) => [...prev, duplicated]);
-      onVariantChange?.();
-    }
+  // Duplicate starts a draft. Unique identifiers and physical stock never copy.
+  const handleDuplicate = (id: string) => {
+    const source = localVariants.find((variant) => variant.id === id);
+    if (!source) return;
+
+    setNewVariantDefaults(buildDuplicateVariantDraft(source));
+    setEditingVariantId(null);
+    setIsAdding(true);
   };
 
   // Bulk generate variants
@@ -660,7 +682,10 @@ export function VariantManager({
             onAddBulkRow={handleAddBulkRow}
             onRemoveBulkRow={handleRemoveBulkRow}
             productName={productName}
-            addVariantDefaults={isFirstOptionSetup ? addVariantDefaults : undefined}
+            addVariantDefaults={
+              newVariantDefaults ??
+              (isFirstOptionSetup ? addVariantDefaults : undefined)
+            }
             optionLabels={normalizedOptionLabels}
           />
 
@@ -704,6 +729,11 @@ export function VariantManager({
             onClose={() => setIsSortModalOpen(false)}
             onSortUpdated={handleSortUpdated}
             optionLabels={normalizedOptionLabels}
+            aggregateRevision={aggregateRevision}
+            revisionConflict={revisionConflict}
+            onAggregateRevisionChange={onAggregateRevisionChange}
+            onRevisionConflict={onRevisionConflict}
+            onOpenRevisionConflict={onOpenRevisionConflict}
           />
         </Suspense>
       ) : null}

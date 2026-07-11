@@ -83,14 +83,25 @@ This log records implementation state. The finding files remain the source for o
 - The buyer projection is a derived window query. Correctness is unified, but very large catalogs should move it to a transactionally maintained projection table after write-path coverage and benchmark evidence exist.
 - The mobile admin catalog table, route-backed settings architecture, and broader keyboard/accessibility pass remain open.
 - Dedicated RBAC permissions do not yet exist for attribute restore/permanent delete, collection permanent delete, or bulk-permanent operations; the UI intentionally mirrors the current API permission map rather than inventing authority.
-- Product aggregate revision/CAS, normalized barcode uniqueness, minor-unit catalog money, and the legacy duplicate option-combination cleanup remain open P1 model work.
+- Minor-unit catalog money and the production normalized barcode/option indexes plus targeted legacy duplicate repair remain open P1 model work.
 - Collection membership remains JSON configuration shared with merchandising metadata; a normalized membership/rules model with revisioned ordering is still required for very large catalogs and concurrent editors.
 - Attribute visibility/export/schema roles remain coupled to `filterable`; quick-buy pricing, UCP eligible pagination, and feed cursor pagination retain their documented gaps.
 - The category/collection mobile filter drawer still needs a complete focus trap and automated accessibility coverage.
 
 ## Next implementation slice
 
-1. Add product aggregate CAS/reload UX, resolve the legacy option duplicate, and enforce normalized option/barcode uniqueness.
+1. Deploy and live-verify product aggregate CAS/reload UX, then apply the targeted normalized option/barcode repair/index migration and remove all legacy variant-image marker fallbacks.
 2. Normalize collection membership/rules with revisioned ordering and benchmark/materialize the buyer projection.
 3. Finish mobile catalog rows, route-backed settings, keyboard workflows, and automated accessibility coverage.
 4. Split attribute facet/display/export/schema roles, then harden quick-buy, UCP pagination, and feed cursors.
+
+## Reliability batch 5 — locally verified, deployment pending
+
+- Every product-composition mutation now requires and advances `aggregateRevision`; stale writes return typed `PRODUCT_REVISION_CONFLICT` details. Active editor writes reject trashed products, while restore/permanent delete require trash state.
+- The admin starts from a force-fetched authoritative product and owns one stable product/SKU snapshot. Background query invalidation cannot remount or rewrite a dirty draft. Explicit reload is the only replacement path.
+- The compact conflict dialog preserves drafts, exposes expected/current revisions, keeps `Out of date · Draft kept` in the action bar, blocks stale retries, and provides a terminal return action when the product no longer exists.
+- Option duplication now creates a local unsaved identity-safe draft. Persisted duplicate and redundant bulk-update APIs, permissions, hooks, tests, docs, and generated SDK routes were removed.
+- Barcode values are trimmed, paired with a supported type, checksum-validated, normalized for global duplicate detection/search/lookup, and duplicate lookup fails closed.
+- Bulk create reuses the atomic edit plan so initial stock always records ledger-v2 movement. SKU deletion always soft-retires identity and uses in-batch reservation/open-order/final-option guards. Permanent product deletion rechecks order, discount, and inventory history inside its D1 batch.
+- Attribute/category cascades use set-based revision bumps evaluated in the same transaction, closing the read-then-write race. Category permanent delete has a transactional active-product usage guard.
+- Local release evidence: 447 test files / 3,325 tests passed; full workspace typecheck/lint/build passed; SDK generation, Worker env parity, admin performance, distribution secret scan, and diff checks passed.

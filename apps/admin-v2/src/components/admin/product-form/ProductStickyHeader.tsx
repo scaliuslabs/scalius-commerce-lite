@@ -5,11 +5,11 @@ import { Loader2, Plus } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 
-interface ProductStickyHeaderProps {
-  productName: string;
+interface ProductActionBarProps {
   isEdit: boolean;
   isSubmitting: boolean;
   isDirty?: boolean;
+  hasRevisionConflict?: boolean;
   cancelUrl?: string;
   onSave?: () => void;
 }
@@ -18,9 +18,10 @@ export function ProductActionBar({
   isEdit,
   isSubmitting,
   isDirty = false,
+  hasRevisionConflict = false,
   cancelUrl = "/admin/products",
   onSave,
-}: Omit<ProductStickyHeaderProps, "productName">) {
+}: ProductActionBarProps) {
   const { products: productActions } = useCatalogActionPermissions();
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
@@ -32,11 +33,15 @@ export function ProductActionBar({
     <div className="border-t bg-background">
       <div className="flex h-12 items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex items-center gap-2 text-sm min-w-0">
-          {isDirty && (
+          {hasRevisionConflict ? (
+            <span className="text-xs font-medium text-amber-600 dark:text-amber-500">
+              Out of date · Draft kept
+            </span>
+          ) : isDirty ? (
             <span className="text-xs text-amber-600 dark:text-amber-500 font-medium">
               Unsaved changes
             </span>
-          )}
+          ) : null}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isSubmitting ? (
@@ -90,7 +95,7 @@ export function ProductActionBar({
           <Button
             size="sm"
             type="button"
-            disabled={isSubmitting}
+            disabled={isSubmitting || (isEdit && !isDirty && !hasRevisionConflict)}
             onClick={onSave}
             className="h-8 text-xs font-medium"
           >
@@ -99,6 +104,8 @@ export function ProductActionBar({
             )}
             {isSubmitting
               ? "Saving..."
+              : hasRevisionConflict
+                ? "Review conflict"
               : isEdit
                 ? "Save Product"
                 : "Create Product"}
@@ -113,22 +120,4 @@ export function ProductActionBar({
   }
 
   return bar;
-}
-
-// Legacy combined component
-export function ProductStickyHeader(props: ProductStickyHeaderProps) {
-  return (
-    <ProductActionBar
-      isEdit={props.isEdit}
-      isSubmitting={props.isSubmitting}
-      isDirty={props.isDirty}
-      cancelUrl={props.cancelUrl}
-      onSave={props.onSave}
-    />
-  );
-}
-
-// No-op — breadcrumb removed (topbar handles navigation)
-export function ProductBreadcrumb() {
-  return null;
 }
