@@ -47,8 +47,6 @@ const cartState: CartStore = {
   totalItems: 1,
   totalAmount: 100,
   discount: null,
-  revision: 0,
-  appliedOperationIds: [],
 };
 
 function createMemoryStorage(): Storage {

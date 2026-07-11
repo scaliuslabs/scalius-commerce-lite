@@ -47,15 +47,15 @@ describe("selective cache purge policy", () => {
 
   it("keeps prefix purges local when exact HTML targets are supplied", () => {
     expect(shouldBumpCacheVersionForSelectivePurge({
-      groups: ["widgets"],
-      prefixes: ["widgets_scope_product_prod_1"],
-      htmlPaths: ["/products/fish"],
+      groups: ["pages"],
+      prefixes: ["page_render_about-us_"],
+      htmlPaths: ["/about-us"],
       bumpVersion: false,
     })).toBe(false);
     expect(shouldWarmCriticalCachesForSelectivePurge({
-      groups: ["widgets"],
-      prefixes: ["widgets_scope_product_prod_1"],
-      htmlPaths: ["/products/fish"],
+      groups: ["pages"],
+      prefixes: ["page_render_about-us_"],
+      htmlPaths: ["/about-us"],
       bumpVersion: false,
     })).toBe(false);
   });

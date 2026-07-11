@@ -103,16 +103,6 @@ export const queryKeys = {
     detail: (id: string) => ["pages", "detail", id] as const,
   },
 
-  // ── Widgets ──────────────────────────────────────────────────────
-  widgets: {
-    all: ["widgets"] as const,
-    list: (params?: Record<string, unknown>) => listKey("widgets", params),
-    detail: (id: string) => ["widgets", "detail", id] as const,
-    history: (widgetId: string) => ["widgets", "history", widgetId] as const,
-    placementTargets: (params: Record<string, unknown>) =>
-      ["widgets", "placement-targets", params] as const,
-  },
-
   // ── Attributes ───────────────────────────────────────────────────
   attributes: {
     all: ["attributes"] as const,
@@ -210,7 +200,6 @@ export const queryKeys = {
         : (["settings", "tax-classifications"] as const),
     theme: () => ["settings", "theme"] as const,
     media: () => ["settings", "media"] as const,
-    widgetAi: () => ["settings", "widget-ai"] as const,
     sms: () => ["settings", "sms"] as const,
     metaConversions: () => ["settings", "meta-conversions"] as const,
     metaConversionsLogs: (params?: Record<string, unknown>) =>
@@ -243,12 +232,6 @@ export const queryKeys = {
         ? (["settings", "shipping-methods", params] as const)
         : (["settings", "shipping-methods"] as const),
     heroSliders: () => ["settings", "hero-sliders"] as const,
-  },
-
-  // ── AI ───────────────────────────────────────────────────────────
-  ai: {
-    all: ["ai"] as const,
-    prompts: (type: string) => ["ai", "prompts", type] as const,
   },
 
   // ── Cache ────────────────────────────────────────────────────────

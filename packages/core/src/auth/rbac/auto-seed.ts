@@ -72,7 +72,7 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
     {
       name: "content_editor",
       displayName: "Content Editor",
-      description: "Access to pages, widgets, media, and content settings.",
+      description: "Access to pages, media, and content settings.",
       permissions: [
         PERMISSIONS.DASHBOARD_VIEW,
         PERMISSIONS.PAGES_VIEW,
@@ -80,11 +80,6 @@ function getSystemRoleSeeds(): SystemRoleSeed[] {
         PERMISSIONS.PAGES_EDIT,
         PERMISSIONS.PAGES_DELETE,
         PERMISSIONS.PAGES_PUBLISH,
-        PERMISSIONS.WIDGETS_VIEW,
-        PERMISSIONS.WIDGETS_CREATE,
-        PERMISSIONS.WIDGETS_EDIT,
-        PERMISSIONS.WIDGETS_DELETE,
-        PERMISSIONS.WIDGETS_TOGGLE_STATUS,
         PERMISSIONS.MEDIA_VIEW,
         PERMISSIONS.MEDIA_UPLOAD,
         PERMISSIONS.MEDIA_DELETE,

@@ -323,9 +323,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/customers/sync": {
     POST: { permission: PERMISSIONS.CUSTOMERS_SYNC },
   },
-  "/api/v1/admin/customers/mcp-search": {
-    POST: { permission: PERMISSIONS.CUSTOMERS_VIEW },
-  },
   "/api/v1/admin/customers/*": {
     GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
     PUT: { permission: PERMISSIONS.CUSTOMERS_EDIT },
@@ -409,55 +406,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
 
   // =============================================
-  // Widgets API
-  // =============================================
-  "/api/v1/admin/widgets": {
-    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
-    POST: { permission: PERMISSIONS.WIDGETS_CREATE },
-  },
-  "/api/v1/admin/widgets/bulk-delete": {
-    POST: { permission: PERMISSIONS.WIDGETS_DELETE },
-    DELETE: { permission: PERMISSIONS.WIDGETS_DELETE },
-  },
-  "/api/v1/admin/widgets/bulk-restore": {
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/widgets/bulk-activate": {
-    POST: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
-  },
-  "/api/v1/admin/widgets/bulk-deactivate": {
-    POST: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
-  },
-  "/api/v1/admin/widgets/*": {
-    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
-    PUT: { permission: PERMISSIONS.WIDGETS_EDIT },
-    PATCH: { permission: PERMISSIONS.WIDGETS_EDIT },
-    DELETE: { permission: PERMISSIONS.WIDGETS_DELETE },
-  },
-  "/api/v1/admin/widgets/*/restore": {
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/widgets/*/permanent": {
-    DELETE: { permission: PERMISSIONS.WIDGETS_DELETE },
-  },
-  "/api/v1/admin/widgets/*/toggle-status": {
-    PATCH: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
-    POST: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
-    PUT: { permission: PERMISSIONS.WIDGETS_TOGGLE_STATUS },
-  },
-  "/api/v1/admin/widgets/*/history": {
-    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/widgets/*/history/*": {
-    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
-    DELETE: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/widgets/*/history/restore": {
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-
-  // =============================================
   // Media API
   // =============================================
   "/api/v1/admin/media": {
@@ -465,15 +413,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
   "/api/v1/admin/media/upload": {
-    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
-  },
-  "/api/v1/admin/media/image-generation/generate": {
-    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
-  },
-  "/api/v1/admin/media/image-generation/capabilities": {
-    GET: { permission: PERMISSIONS.MEDIA_VIEW },
-  },
-  "/api/v1/admin/media/image-generation/save": {
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
   "/api/v1/admin/media/move": {
@@ -636,9 +575,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/checkout-readiness": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  },
-  "/api/v1/admin/settings/mcp-summary": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
   "/api/v1/admin/settings/stripe": {
@@ -839,10 +775,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
 
   // Admin Settings
-  "/api/v1/admin/settings/widget-ai": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
   "/api/v1/admin/settings/shipping-methods": {
     GET: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
@@ -889,9 +821,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/settings/notification-channels/admin-channels": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
-  },
-  "/api/v1/admin/settings/notification-channels/mcp-summary": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
   "/api/v1/admin/settings/notification-channels/*": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
@@ -957,15 +886,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
 
   // =============================================
-  // System Prompt API
-  // =============================================
-  "/api/system-prompt": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
-
-  // =============================================
   // Dashboard API
   // =============================================
   "/api/v1/admin/dashboard": {
@@ -1015,37 +935,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/rbac/user-permissions": {
     POST: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
     DELETE: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
-  },
-
-  // Internal Admin assistant authority facade. These routes require any fully
-  // onboarded, 2FA-verified Admin session here, then enforce each capability's
-  // exact current permission again inside the authority facade.
-  "/api/v1/internal/admin-assistant/session/*": {
-    POST: { allowAnyAdmin: true },
-  },
-  "/api/v1/internal/admin-assistant/workflows/create": {
-    POST: { allowAnyAdmin: true },
-  },
-  "/api/v1/internal/admin-assistant/events/list": {
-    POST: { allowAnyAdmin: true },
-  },
-  "/api/v1/internal/admin-assistant/capabilities/*": {
-    POST: { allowAnyAdmin: true },
-  },
-  "/api/v1/internal/admin-assistant/flue/admit": {
-    POST: { allowAnyAdmin: true },
-  },
-  "/api/v1/internal/admin-assistant/flue/command": {
-    POST: { allowAnyAdmin: true },
-  },
-  "/api/v1/internal/admin-assistant/flue/computer-handoff/*": {
-    POST: { allowAnyAdmin: true },
-  },
-  "/api/v1/internal/admin-assistant/flue/admission/*": {
-    POST: { allowAnyAdmin: true },
-  },
-  "/api/v1/internal/admin-assistant/flue/stop/*": {
-    POST: { allowAnyAdmin: true },
   },
 
   // =============================================
@@ -1116,48 +1005,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/auth/account-security": {
     GET: { allowAnyAdmin: true },
-  },
-
-  // =============================================
-  // AI Context & Prompts API
-  // =============================================
-  "/api/v1/admin/ai-context": {
-    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/ai-context/*": {
-    GET: { permission: PERMISSIONS.WIDGETS_VIEW },
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/ai-prompts": {
-    GET: { permission: PERMISSIONS.WIDGETS_EDIT },
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/ai-prompts/*": {
-    GET: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-
-  // =============================================
-  // Widget AI Generation API
-  // =============================================
-  "/api/v1/admin/ai/chat": {
-    POST: { permission: PERMISSIONS.DASHBOARD_VIEW },
-  },
-  "/api/v1/admin/ai": {
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/ai/*": {
-    GET: { permission: PERMISSIONS.WIDGETS_EDIT },
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/widget-generation-runs": {
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/widget-generation-runs/*": {
-    POST: { permission: PERMISSIONS.WIDGETS_EDIT },
-  },
-  "/api/v1/admin/widget-generation-runs/sessions/*/status": {
-    GET: { permission: PERMISSIONS.WIDGETS_EDIT },
   },
 
 };

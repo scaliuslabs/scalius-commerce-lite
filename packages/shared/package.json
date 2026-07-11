@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./assistant-computer": "./src/assistant-computer.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {
@@ -15,12 +14,10 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",
     "@scalius/tsconfig": "workspace:*",
-    "@types/css-tree": "^2.3.11",
     "vitest": "^4.1.9"
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "css-tree": "^3.2.1",
     "currency.js": "^2.0.4",
     "domhandler": "6.0.1",
     "htmlparser2": "12.0.0",

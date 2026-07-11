@@ -1,7 +1,7 @@
 // src/lib/api/pages.ts
 
 import { getConfiguredSdkClient } from "./client";
-import type { ApiWidget, Page, PaginatedResponse } from "./types";
+import type { Page, PaginatedResponse } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
@@ -46,7 +46,6 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
 
 export interface PageRenderData {
   page: Page;
-  widgets: ApiWidget[];
 }
 
 export async function getPageRenderData(

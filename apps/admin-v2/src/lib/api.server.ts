@@ -245,20 +245,6 @@ export async function apiGet<T>(
   return readApiFetch("GET", fullPath, undefined, handleResponse<T>);
 }
 
-/** GET request returning raw text (for text/plain endpoints like ai-prompts). */
-export async function apiGetText(
-  path: string,
-  params?: Record<string, string>,
-): Promise<string> {
-  const fullPath = buildPath(path, params);
-  return readApiFetch("GET", fullPath, undefined, async (response) => {
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
-    }
-    return response.text();
-  });
-}
-
 /** POST request to an admin API endpoint. */
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const fullPath = buildPath(path);

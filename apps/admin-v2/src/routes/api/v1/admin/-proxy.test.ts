@@ -84,31 +84,6 @@ describe("admin API proxy", () => {
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBeUndefined();
   });
 
-  it("forwards browser cancellation only for pre-save image generation", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    const controller = new AbortController();
-
-    const { proxyToApi } = await import("./$");
-    const request = new Request(
-      "https://dashboard.test/api/v1/admin/media/image-generation/generate",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: "Premium product photograph" }),
-        signal: controller.signal,
-      },
-    );
-    const response = await proxyToApi(request);
-
-    expect(response.status).toBe(200);
-    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBe(
-      request.signal,
-    );
-  });
-
   it("rejects cross-origin cookie write requests before forwarding", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

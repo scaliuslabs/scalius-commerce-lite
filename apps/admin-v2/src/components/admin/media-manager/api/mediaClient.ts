@@ -5,7 +5,6 @@ import type {
   MediaFolder,
   MediaApiResponse,
   MediaFilterOptions,
-  GeneratedImagePreview,
 } from "../types";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { extractApiError, extractApiErrorDetails, unwrapEnvelope } from "~/lib/api-helpers";
@@ -51,17 +50,6 @@ function toMediaFile(file: MediaFileDto): MediaFile {
     width: file.width ?? null,
     height: file.height ?? null,
     folderId: file.folderId ?? null,
-    sourceType: file.sourceType ?? null,
-    generationId: file.generationId ?? null,
-    generationProvider: file.generationProvider ?? null,
-    generationModel: file.generationModel ?? null,
-    generationPromptHash: file.generationPromptHash ?? null,
-    generationInputTokens: file.generationInputTokens ?? null,
-    generationOutputTokens: file.generationOutputTokens ?? null,
-    generationTotalTokens: file.generationTotalTokens ?? null,
-    generationCostUsdMicros: file.generationCostUsdMicros ?? null,
-    generationCostStatus: file.generationCostStatus ?? null,
-    generatedAt: unixToDate(file.generatedAt) ?? null,
     createdAt: toDate(file.createdAt),
     updatedAt: toOptionalDate(file.updatedAt),
   };
@@ -78,169 +66,6 @@ function toMediaFolder(folder: MediaFolderDto): MediaFolder {
 }
 
 export class MediaApiClient {
-  static async getImageGenerationCapabilities(): Promise<{
-    aspectRatios: Array<"auto" | "1:1" | "2:3" | "4:5" | "3:2" | "16:9">;
-  }> {
-    const response = await fetch(
-      "/api/v1/admin/media/image-generation/capabilities",
-      { headers: { Accept: "application/json" } },
-    );
-    const rawData = await response.json() as Record<string, unknown>;
-    if (!response.ok) {
-      throw new Error(extractApiError(rawData, "Image controls are unavailable."));
-    }
-    const payload = unwrapEnvelope<{ aspectRatios?: unknown }>(rawData);
-    const allowed = new Set(["auto", "1:1", "2:3", "4:5", "3:2", "16:9"]);
-    if (!Array.isArray(payload.aspectRatios) ||
-        payload.aspectRatios.some((value) => typeof value !== "string" || !allowed.has(value))) {
-      throw new Error("Image controls returned an invalid response.");
-    }
-    return { aspectRatios: payload.aspectRatios as Array<
-      "auto" | "1:1" | "2:3" | "4:5" | "3:2" | "16:9"
-    > };
-  }
-
-  static async generateImagePreview(input: {
-    prompt: string;
-    aspectRatio: "auto" | "1:1" | "2:3" | "4:5" | "3:2" | "16:9";
-    seed?: number;
-    signal?: AbortSignal;
-  }): Promise<GeneratedImagePreview> {
-    const timeout = AbortSignal.timeout(35_000);
-    const signal = input.signal
-      ? AbortSignal.any([input.signal, timeout])
-      : timeout;
-    const response = await fetch(
-      "/api/v1/admin/media/image-generation/generate",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: input.prompt,
-          aspectRatio: input.aspectRatio,
-          ...(input.seed !== undefined ? { seed: input.seed } : {}),
-        }),
-        signal,
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(await responseErrorMessage(response, "Image generation failed."));
-    }
-
-    const mediaType = response.headers.get("content-type")?.split(";")[0]?.trim();
-    if (
-      mediaType !== "image/jpeg" &&
-      mediaType !== "image/png" &&
-      mediaType !== "image/webp"
-    ) {
-      throw new Error("Image generation returned an unsupported file type.");
-    }
-
-    const generationId = response.headers.get("x-scalius-generation-id") ?? "";
-    const provider = response.headers.get("x-scalius-generation-provider") ?? "";
-    const encodedModel = response.headers.get("x-scalius-generation-model") ?? "";
-    const promptHash = response.headers.get("x-scalius-generation-prompt-hash") ?? "";
-    const costStatus = response.headers.get("x-scalius-generation-cost-status");
-    const expiresAt = new Date(
-      response.headers.get("x-scalius-generation-expires-at") ?? "",
-    );
-
-    if (
-      !/^aig_[A-Za-z0-9_-]{10,100}$/.test(generationId) ||
-      !provider ||
-      !encodedModel ||
-      !/^[a-f0-9]{64}$/.test(promptHash) ||
-      (costStatus !== "reported" && costStatus !== "not_reported") ||
-      Number.isNaN(expiresAt.getTime())
-    ) {
-      throw new Error("Image generation returned incomplete provenance.");
-    }
-
-    let model: string;
-    try {
-      model = decodeURIComponent(encodedModel);
-    } catch {
-      throw new Error("Image generation returned invalid model provenance.");
-    }
-
-    const blob = await response.blob();
-    if (blob.size <= 0 || blob.size > 10 * 1024 * 1024 || blob.type !== mediaType) {
-      throw new Error("Image generation returned invalid image bytes.");
-    }
-
-    return {
-      generationId,
-      blob,
-      mediaType,
-      provider,
-      model,
-      promptHash,
-      usage: {
-        inputTokens: readOptionalTokenHeader(
-          response.headers,
-          "x-scalius-generation-input-tokens",
-        ),
-        outputTokens: readOptionalTokenHeader(
-          response.headers,
-          "x-scalius-generation-output-tokens",
-        ),
-        totalTokens: readOptionalTokenHeader(
-          response.headers,
-          "x-scalius-generation-total-tokens",
-        ),
-      },
-      cost: { status: costStatus },
-      expiresAt,
-    };
-  }
-
-  static async saveGeneratedImage(input: {
-    preview: GeneratedImagePreview;
-    altText?: string;
-    folderId?: string | null;
-  }): Promise<MediaFile> {
-    const formData = new FormData();
-    const extension =
-      input.preview.mediaType === "image/jpeg"
-        ? "jpg"
-        : input.preview.mediaType === "image/webp"
-          ? "webp"
-          : "png";
-    formData.append(
-      "file",
-      new File(
-        [input.preview.blob],
-        `generated-${input.preview.generationId}.${extension}`,
-        { type: input.preview.mediaType },
-      ),
-    );
-    formData.append("generationId", input.preview.generationId);
-    if (input.altText?.trim()) formData.append("altText", input.altText.trim());
-    if (input.folderId) formData.append("folderId", input.folderId);
-
-    const response = await fetch("/api/v1/admin/media/image-generation/save", {
-      method: "POST",
-      body: formData,
-    });
-    let rawData: Record<string, unknown>;
-    try {
-      rawData = await response.json();
-    } catch {
-      throw new Error("Saving the generated image returned an invalid response.");
-    }
-    if (!response.ok) {
-      throw new Error(
-        extractApiError(rawData, "Saving the generated image failed."),
-      );
-    }
-    const payload = unwrapEnvelope<{ file?: MediaFileDto }>(rawData);
-    if (!payload.file) {
-      throw new Error("Saving the generated image returned no media file.");
-    }
-    return toMediaFile(payload.file);
-  }
-
   /**
    * Fetch media files with pagination and filtering
    */
@@ -441,29 +266,5 @@ export class MediaApiClient {
       data: { fileId, update: { altText } },
     });
     return toMediaFile(data.file);
-  }
-}
-
-function readOptionalTokenHeader(
-  headers: Headers,
-  name: string,
-): number | undefined {
-  const raw = headers.get(name);
-  if (raw === null) return undefined;
-  const parsed = Number(raw);
-  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 1_000_000_000
-    ? parsed
-    : undefined;
-}
-
-async function responseErrorMessage(
-  response: Response,
-  fallback: string,
-): Promise<string> {
-  try {
-    const raw = (await response.json()) as Record<string, unknown>;
-    return extractApiError(raw, fallback);
-  } catch {
-    return fallback;
   }
 }

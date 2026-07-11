@@ -38,17 +38,14 @@ export type CartStore = {
   totalItems: number;
   totalAmount: number;
   discount: Discount | null;
-  revision: number;
-  appliedOperationIds: string[];
 };
 
 export type CartStateSnapshot = Pick<
   CartStore,
   "items" | "totalItems" | "totalAmount" | "discount"
-> &
-  Partial<Pick<CartStore, "revision" | "appliedOperationIds">>;
+>;
 
-export type CartAbsoluteQuantityPatch = {
+type CartAbsoluteQuantityPatch = {
   lineKey: string;
   productId: string;
   variantId: string;
@@ -57,21 +54,7 @@ export type CartAbsoluteQuantityPatch = {
   item?: Omit<CartItem, "quantity">;
 };
 
-export type CartPatchRequest = {
-  operationId: string;
-  expectedRevision: number;
-  expectedFingerprint: string;
-  patches: CartAbsoluteQuantityPatch[];
-};
-
-export type CartPatchFailureCode =
-  | "invalid_operation_id"
-  | "invalid_expected_revision"
-  | "invalid_fingerprint"
-  | "operation_replayed"
-  | "revision_exhausted"
-  | "revision_mismatch"
-  | "fingerprint_mismatch"
+type CartLinePatchFailureCode =
   | "invalid_patch_count"
   | "duplicate_line_key"
   | "invalid_line_key"
@@ -82,22 +65,17 @@ export type CartPatchFailureCode =
   | "item_not_allowed"
   | "item_required";
 
-export type CartPatchFailure = {
+type CartLinePatchFailure = {
   ok: false;
-  code: CartPatchFailureCode;
-  revision: number;
-  fingerprint: string;
+  code: CartLinePatchFailureCode;
 };
 
-export type CartPatchSuccess = {
+type CartLinePatchSuccess = {
   ok: true;
   state: CartStore;
-  revision: number;
-  fingerprint: string;
-  changedLineKeys: string[];
 };
 
-export type CartPatchResult = CartPatchFailure | CartPatchSuccess;
+type CartLinePatchResult = CartLinePatchFailure | CartLinePatchSuccess;
 
 export type CartLineItemUpdate = {
   lineKey: string;
@@ -107,22 +85,16 @@ export type CartLineItemUpdate = {
 };
 
 export const MAX_CART_QUANTITY = 99;
-export const MAX_CART_PATCH_LINES = 100;
-export const MAX_CART_OPERATION_HISTORY = 100;
+const MAX_CART_LINE_PATCHES = 100;
 
 const MAX_CART_ID_LENGTH = 160;
 const MAX_CART_LINE_KEY_LENGTH = 512;
-const MAX_CART_OPERATION_ID_LENGTH = 120;
-const CART_OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
-const CART_FINGERPRINT_PATTERN = /^cart_v1_[a-f0-9]{8}$/;
 
 const EMPTY_CART_STATE: CartStore = {
   items: {},
   totalItems: 0,
   totalAmount: 0,
   discount: null,
-  revision: 0,
-  appliedOperationIds: [],
 };
 
 let hasHydratedFromStorage = false;
@@ -147,38 +119,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function normalizeRevision(value: unknown): number {
-  return typeof value === "number" &&
-    Number.isSafeInteger(value) &&
-    value >= 0
-    ? value
-    : 0;
-}
-
-function nextRevision(value: unknown): number {
-  const revision = normalizeRevision(value);
-  return revision < Number.MAX_SAFE_INTEGER ? revision + 1 : revision;
-}
-
-function isValidOperationId(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= MAX_CART_OPERATION_ID_LENGTH &&
-    CART_OPERATION_ID_PATTERN.test(value)
-  );
-}
-
-function normalizeOperationIds(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-
-  const unique = new Set<string>();
-  for (const entry of value.slice(-MAX_CART_OPERATION_HISTORY * 2)) {
-    if (isValidOperationId(entry)) unique.add(entry);
-  }
-  return Array.from(unique).slice(-MAX_CART_OPERATION_HISTORY);
 }
 
 function normalizeStoredCartOptions(value: unknown): CartItemOption[] | undefined {
@@ -286,45 +226,6 @@ function normalizeCartTotals(state: CartStore): CartStore {
   };
 }
 
-export function getCartRevision(cart: CartStateSnapshot | null | undefined): number {
-  return normalizeRevision(cart?.revision);
-}
-
-function fnv1a(value: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
-function canonicalFingerprintValue(
-  cart: CartStateSnapshot | null | undefined,
-): string {
-  const items = Object.entries(cart?.items ?? {})
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-    .map(([lineKey, item]) => ({
-      lineKey,
-      id: item.id,
-      variantId: item.variantId ?? null,
-      quantity: item.quantity,
-      price: item.price,
-      size: item.size ?? null,
-      color: item.color ?? null,
-      options: (item.options ?? []).map((option) => [option.name, option.label]),
-      freeDelivery: item.freeDelivery === true,
-    }));
-  return JSON.stringify({ items, hasDiscount: Boolean(cart?.discount) });
-}
-
-/** Deterministic, non-secret state fingerprint used together with revision checks. */
-export function getCartFingerprint(
-  cart: CartStateSnapshot | null | undefined,
-): string {
-  return `cart_v1_${fnv1a(canonicalFingerprintValue(cart))}`;
-}
-
 export function normalizeStoredCart(value: unknown): CartStore {
   if (!isRecord(value) || !isRecord(value.items)) {
     return { ...EMPTY_CART_STATE };
@@ -352,8 +253,6 @@ export function normalizeStoredCart(value: unknown): CartStore {
     totalItems: 0,
     totalAmount: 0,
     discount: normalizeStoredDiscount(value.discount),
-    revision: normalizeRevision(value.revision),
-    appliedOperationIds: normalizeOperationIds(value.appliedOperationIds),
   });
 }
 
@@ -427,26 +326,10 @@ export function createCartItemKey(
 }
 
 function commitNonLineCartState(state: CartStore): CartStore {
-  const current = cartStore.get();
-  if (current.revision >= Number.MAX_SAFE_INTEGER) return current;
-  const next = normalizeCartTotals({
-    ...state,
-    revision: nextRevision(current.revision),
-    appliedOperationIds: normalizeOperationIds(current.appliedOperationIds),
-  });
+  const next = normalizeCartTotals(state);
   cartStore.set(next);
   emitCartUpdated();
   return next;
-}
-
-let localOperationSequence = 0;
-
-function createLocalCartOperationId(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return `local:${globalThis.crypto.randomUUID()}`;
-  }
-  localOperationSequence = (localOperationSequence + 1) % 1_000_000;
-  return `local:${Date.now().toString(36)}:${localOperationSequence.toString(36)}`;
 }
 
 function applyLocalLinePatch(
@@ -455,17 +338,8 @@ function applyLocalLinePatch(
     string,
     Omit<CartItem, "quantity">
   >,
-): CartPatchResult {
-  const current = cartStore.get();
-  return applyCartPatchToLiveStore(
-    {
-      operationId: createLocalCartOperationId(),
-      expectedRevision: current.revision,
-      expectedFingerprint: getCartFingerprint(current),
-      patches,
-    },
-    trustedExistingItemReplacements,
-  );
+): CartLinePatchResult {
+  return applyLinePatchesToLiveStore(patches, trustedExistingItemReplacements);
 }
 
 export function addToCart(
@@ -539,7 +413,7 @@ export function updateCartItemsByKeyAtomically(
   if (
     !Array.isArray(updatesByLine) ||
     updatesByLine.length < 1 ||
-    updatesByLine.length > MAX_CART_PATCH_LINES
+    updatesByLine.length > MAX_CART_LINE_PATCHES
   ) {
     return false;
   }
@@ -635,14 +509,11 @@ export function clearCart(): void {
 }
 
 function patchFailure(
-  state: CartStore,
-  code: CartPatchFailureCode,
-): CartPatchFailure {
+  code: CartLinePatchFailureCode,
+): CartLinePatchFailure {
   return {
     ok: false,
     code,
-    revision: getCartRevision(state),
-    fingerprint: getCartFingerprint(state),
   };
 }
 
@@ -657,7 +528,7 @@ function isValidIdentity(value: unknown): value is string {
 
 function validateNewPatchItem(
   patch: CartAbsoluteQuantityPatch,
-): CartPatchFailureCode | null {
+): CartLinePatchFailureCode | null {
   const item = patch.item;
   if (!item) return "item_required";
   const variantId = item.variantId;
@@ -689,7 +560,7 @@ function validateExistingItemReplacement(
   lineKey: string,
   item: Omit<CartItem, "quantity">,
   existing: CartItem,
-): CartPatchFailureCode | null {
+): CartLinePatchFailureCode | null {
   const variantId = item.variantId;
   if (!isValidIdentity(item.id) || item.id !== existing.id) {
     return "invalid_product";
@@ -716,95 +587,64 @@ function validateExistingItemReplacement(
 }
 
 /**
- * Plans one absolute-quantity transaction without touching the live store.
- * Every patch is validated first; any failure returns the original state.
+ * Plans one local line update without touching the live store. Every change is
+ * validated first so multi-line repair operations remain all-or-nothing.
  */
-function planAtomicCartPatchInternal(
+function planLinePatches(
   sourceState: CartStore,
-  request: CartPatchRequest,
+  patches: CartAbsoluteQuantityPatch[],
   trustedExistingItemReplacements?: ReadonlyMap<
     string,
     Omit<CartItem, "quantity">
   >,
-): CartPatchResult {
-  const state = normalizeCartTotals({
-    ...sourceState,
-    revision: getCartRevision(sourceState),
-    appliedOperationIds: normalizeOperationIds(sourceState.appliedOperationIds),
-  });
+): CartLinePatchResult {
+  const state = normalizeCartTotals(sourceState);
 
-  if (!isValidOperationId(request.operationId)) {
-    return patchFailure(state, "invalid_operation_id");
-  }
   if (
-    !Number.isSafeInteger(request.expectedRevision) ||
-    request.expectedRevision < 0
+    !Array.isArray(patches) ||
+    patches.length < 1 ||
+    patches.length > MAX_CART_LINE_PATCHES
   ) {
-    return patchFailure(state, "invalid_expected_revision");
-  }
-  if (
-    typeof request.expectedFingerprint !== "string" ||
-    !CART_FINGERPRINT_PATTERN.test(request.expectedFingerprint)
-  ) {
-    return patchFailure(state, "invalid_fingerprint");
-  }
-  if (state.appliedOperationIds.includes(request.operationId)) {
-    return patchFailure(state, "operation_replayed");
-  }
-  if (state.revision >= Number.MAX_SAFE_INTEGER) {
-    return patchFailure(state, "revision_exhausted");
-  }
-  if (request.expectedRevision !== getCartRevision(state)) {
-    return patchFailure(state, "revision_mismatch");
-  }
-  if (request.expectedFingerprint !== getCartFingerprint(state)) {
-    return patchFailure(state, "fingerprint_mismatch");
-  }
-  if (
-    !Array.isArray(request.patches) ||
-    request.patches.length < 1 ||
-    request.patches.length > MAX_CART_PATCH_LINES
-  ) {
-    return patchFailure(state, "invalid_patch_count");
+    return patchFailure("invalid_patch_count");
   }
 
   const seenLineKeys = new Set<string>();
-  for (const patch of request.patches) {
+  for (const patch of patches) {
     if (
       typeof patch.lineKey !== "string" ||
       patch.lineKey.length < 1 ||
       patch.lineKey.length > MAX_CART_LINE_KEY_LENGTH
     ) {
-      return patchFailure(state, "invalid_line_key");
+      return patchFailure("invalid_line_key");
     }
     if (seenLineKeys.has(patch.lineKey)) {
-      return patchFailure(state, "duplicate_line_key");
+      return patchFailure("duplicate_line_key");
     }
     seenLineKeys.add(patch.lineKey);
 
     if (!isValidIdentity(patch.productId)) {
-      return patchFailure(state, "invalid_product");
+      return patchFailure("invalid_product");
     }
     if (!isValidIdentity(patch.variantId) || patch.variantId === "default") {
-      return patchFailure(state, "invalid_variant");
+      return patchFailure("invalid_variant");
     }
     if (
       !Number.isInteger(patch.quantity) ||
       patch.quantity < 0 ||
       patch.quantity > MAX_CART_QUANTITY
     ) {
-      return patchFailure(state, "invalid_quantity");
+      return patchFailure("invalid_quantity");
     }
 
     const existing = state.items[patch.lineKey];
     if (existing) {
       if (existing.id !== patch.productId) {
-        return patchFailure(state, "invalid_product");
+        return patchFailure("invalid_product");
       }
       if ((existing.variantId ?? undefined) !== patch.variantId) {
-        return patchFailure(state, "invalid_variant");
+        return patchFailure("invalid_variant");
       }
-      if (patch.item) return patchFailure(state, "item_not_allowed");
+      if (patch.item) return patchFailure("item_not_allowed");
       const replacement = trustedExistingItemReplacements?.get(patch.lineKey);
       const itemError = replacement
         ? validateExistingItemReplacement(
@@ -813,19 +653,19 @@ function planAtomicCartPatchInternal(
             existing,
           )
         : null;
-      if (itemError) return patchFailure(state, itemError);
+      if (itemError) return patchFailure(itemError);
       continue;
     }
 
     if (patch.quantity === 0) {
-      return patchFailure(state, "line_not_found");
+      return patchFailure("line_not_found");
     }
     const itemError = validateNewPatchItem(patch);
-    if (itemError) return patchFailure(state, itemError);
+    if (itemError) return patchFailure(itemError);
   }
 
   const items = { ...state.items };
-  for (const patch of request.patches) {
+  for (const patch of patches) {
     const existing = items[patch.lineKey];
     if (patch.quantity === 0) {
       delete items[patch.lineKey];
@@ -848,48 +688,28 @@ function planAtomicCartPatchInternal(
     ...state,
     items,
     discount: null,
-    revision: nextRevision(state.revision),
-    appliedOperationIds: [
-      ...normalizeOperationIds(state.appliedOperationIds),
-      request.operationId,
-    ].slice(-MAX_CART_OPERATION_HISTORY),
   });
   return {
     ok: true,
     state: nextState,
-    revision: getCartRevision(nextState),
-    fingerprint: getCartFingerprint(nextState),
-    changedLineKeys: request.patches.map((patch) => patch.lineKey),
   };
 }
 
-export function planAtomicCartPatch(
-  sourceState: CartStore,
-  request: CartPatchRequest,
-): CartPatchResult {
-  return planAtomicCartPatchInternal(sourceState, request);
-}
-
-function applyCartPatchToLiveStore(
-  request: CartPatchRequest,
+function applyLinePatchesToLiveStore(
+  patches: CartAbsoluteQuantityPatch[],
   trustedExistingItemReplacements?: ReadonlyMap<
     string,
     Omit<CartItem, "quantity">
   >,
-): CartPatchResult {
+): CartLinePatchResult {
   ensureCartHydrated();
-  const result = planAtomicCartPatchInternal(
+  const result = planLinePatches(
     cartStore.get(),
-    request,
+    patches,
     trustedExistingItemReplacements,
   );
   if (!result.ok) return result;
   cartStore.set(result.state);
   emitCartUpdated();
   return result;
-}
-
-/** Applies a successful public plan with one store write and one cart-updated event. */
-export function applyAtomicCartPatch(request: CartPatchRequest): CartPatchResult {
-  return applyCartPatchToLiveStore(request);
 }

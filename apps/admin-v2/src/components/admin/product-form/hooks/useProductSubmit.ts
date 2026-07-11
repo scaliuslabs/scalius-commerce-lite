@@ -109,9 +109,8 @@ export function useProductSubmit({
       await mutation.mutateAsync(values);
       return true;
     } catch {
-      // React Query has already run the mutation's onError handler. Returning a
-      // boolean lets registered assistant saves report the real outcome while
-      // ordinary form submission keeps using the existing toast/form errors.
+      // React Query has already run the mutation's onError handler, so keep the
+      // existing toast and field errors as the authoritative failure feedback.
       return false;
     }
   };

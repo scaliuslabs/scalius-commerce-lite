@@ -1,1 +1,0 @@
-ALTER TABLE `product_attributes` ADD `options` text;

@@ -139,8 +139,6 @@ export interface ThemeSettingsPayload extends SettingsPayload {
 export type UpdateThemeSettingsInput = SettingsPayload;
 export type MediaSettingsPayload = SettingsPayload;
 export type UpdateMediaSettingsInput = SettingsPayload;
-export type WidgetAiSettingsPayload = SettingsPayload;
-export type UpdateWidgetAiSettingsInput = SettingsPayload;
 export type SmsProvider = "smsnetbd" | "bdbulksms" | "mimsms" | "gennet";
 export interface SmsSettingsPayload {
   activeProvider?: SmsProvider | string;
@@ -360,18 +358,6 @@ export const updateMediaSettings = createServerFn({ method: "POST" })
   .validator((data: UpdateMediaSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/media", data);
-  });
-
-export const getWidgetAiSettings = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<WidgetAiSettingsPayload>("/settings/widget-ai");
-  },
-);
-
-export const updateWidgetAiSettings = createServerFn({ method: "POST" })
-  .validator((data: UpdateWidgetAiSettingsInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<MessagePayload>("/settings/widget-ai", data);
   });
 
 export const getSmsSettings = createServerFn({ method: "GET" }).handler(

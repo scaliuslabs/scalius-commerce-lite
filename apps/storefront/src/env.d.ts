@@ -85,19 +85,10 @@ interface Env {
   // Service binding to the standalone API worker
   BACKEND_API: Fetcher;
 
-  // Service binding to the public shopping-agent Worker. Browser credentials
-  // are exchanged with BACKEND_API before this binding is called.
-  STOREFRONT_AGENT: Fetcher;
-
-  // Route-less Flue Worker. API-owned admission resolves the exact opaque
-  // tenant/principal/thread/instance before this binding can be called.
-  STOREFRONT_FLUE_AGENT: Fetcher;
-
   // Secrets (set via `wrangler secret put`)
   API_TOKEN?: string;
   JWT_SECRET?: string;
   PURGE_TOKEN?: string;
-  STOREFRONT_FLUE_AUTH_TOKEN?: string;
 
   // Variables (set in wrangler.jsonc vars)
   PUBLIC_API_URL?: string;

@@ -1,6 +1,5 @@
 // apps/api/src/worker.ts
 import { WorkerEntrypoint } from "cloudflare:workers";
-export { WidgetDesignAgent } from "./agents/widget-design-agent";
 
 export type { AppType } from "./app";
 

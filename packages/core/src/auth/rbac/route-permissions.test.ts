@@ -4,26 +4,6 @@ import { PERMISSIONS } from "./permissions";
 import { getRoutePermission } from "./route-permissions";
 
 describe("route permissions", () => {
-  it("gates read-only admin chat behind dashboard view instead of widget editing", () => {
-    expect(getRoutePermission("/api/v1/admin/ai/chat", "POST")).toEqual({
-      permission: PERMISSIONS.DASHBOARD_VIEW,
-    });
-  });
-
-  it("gates redacted Admin MCP notification settings summary behind settings.general.view", () => {
-    expect(
-      getRoutePermission(
-        "/api/v1/admin/settings/notification-channels/mcp-summary",
-        "GET",
-      ),
-    ).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_VIEW });
-  });
-
-  it("gates redacted Admin MCP customer search behind customers.view", () => {
-    expect(getRoutePermission("/api/v1/admin/customers/mcp-search", "POST"))
-      .toEqual({ permission: PERMISSIONS.CUSTOMERS_VIEW });
-  });
-
   it("keeps hosted-payment recovery queue and export read-only", () => {
     expect(getRoutePermission("/api/v1/admin/orders/payment-recovery", "GET"))
       .toEqual({ permission: PERMISSIONS.ORDERS_VIEW });
@@ -109,18 +89,4 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.TAXES_MANAGE });
   });
 
-  it("admits Flue threads only through the exact fully-authenticated Admin route", () => {
-    expect(getRoutePermission(
-      "/api/v1/internal/admin-assistant/flue/admit",
-      "POST",
-    )).toEqual({ allowAnyAdmin: true });
-    expect(getRoutePermission(
-      "/api/v1/internal/admin-assistant/flue/other",
-      "POST",
-    )).toBeNull();
-    expect(getRoutePermission(
-      "/api/v1/internal/admin-assistant/flue/computer-handoff/consume",
-      "POST",
-    )).toEqual({ allowAnyAdmin: true });
-  });
 });

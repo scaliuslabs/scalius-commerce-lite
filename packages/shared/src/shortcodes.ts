@@ -1,6 +1,6 @@
 export interface ShortcodeMatch {
   fullMatch: string;
-  type: "widget" | "product";
+  type: "product";
   id: string;
   attributes: Record<string, string>;
 }
@@ -25,7 +25,7 @@ export function parseShortcodes(content: string): ShortcodeMatch[] {
     const type = match[1];
     const attributesString = match[2] ?? "";
 
-    if (type === "widget" || type === "product") {
+    if (type === "product") {
       const attributes: Record<string, string> = {};
       const normalizedAttributesString =
         normalizeShortcodeAttributeQuotes(attributesString);

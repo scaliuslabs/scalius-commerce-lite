@@ -1,13 +1,9 @@
 ---
 import Layout from "@/layouts/Layout.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
-import WidgetPlacementZone from "@/components/WidgetPlacementZone.astro";
 import {
   getCollectionById,
-  type ApiWidget,
-  type CollectionWithProducts,
 } from "@/lib/api";
-import { getActiveWidgetsForScope } from "@/lib/api/widgets";
 import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
@@ -26,19 +22,10 @@ if (!id) {
   return new Response(null, { status: 404 });
 }
 
-const { layoutData, pageData } = await loadPageWithLayout(async () => {
-  const [collection, widgets] = await Promise.all([
-    getCollectionById(id),
-    getActiveWidgetsForScope("collection", id),
-  ]);
+const { layoutData, pageData: collection } = await loadPageWithLayout(() =>
+  getCollectionById(id),
+);
 
-  return {
-    collection,
-    widgets: widgets ?? [],
-  };
-});
-
-const collection = pageData.collection as CollectionWithProducts | null;
 if (!collection) {
   return new Response(null, { status: 404 });
 }
@@ -50,7 +37,6 @@ if (!layoutData) {
   return response;
 }
 
-const collectionWidgets = pageData.widgets as ApiWidget[];
 const products = collection.products ?? [];
 const categories = collection.categories ?? [];
 const config = collection.config ?? {};
@@ -113,14 +99,6 @@ const collectionJsonLd =
       numberOfItems: products.length,
     })
   : null;
-const assistantSurface = {
-  kind: "collection" as const,
-  collectionId: collection.id,
-  page: 1,
-  totalResults: products.length,
-  visibleFilters: [],
-  visibleProductIds: products.map((product) => product.id),
-};
 ---
 
 <Layout
@@ -131,8 +109,6 @@ const assistantSurface = {
   ogImage={ogImageUrl ?? undefined}
   ogType="website"
   noindex={collection.noIndex === true}
-  assistantPageKind="collection"
-  assistantSurface={assistantSurface}
 >
   <Fragment slot="head">
     {collectionJsonLd && <script is:inline type="application/ld+json" set:html={collectionJsonLd} />}
@@ -140,14 +116,6 @@ const assistantSurface = {
   </Fragment>
 
   <div class="min-h-screen bg-gray-50">
-    <WidgetPlacementZone
-      widgets={collectionWidgets}
-      scope="collection"
-      scopeId={collection.id}
-      placementSlot="top"
-      priority
-    />
-
     <section class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100">
       <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <nav class="mb-4 text-sm">
@@ -197,14 +165,6 @@ const assistantSurface = {
       </div>
     </section>
 
-    <WidgetPlacementZone
-      widgets={collectionWidgets}
-      scope="collection"
-      scopeId={collection.id}
-      placementSlot="before_content"
-      itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
-    />
-
     <section class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {
         products.length > 0 ? (
@@ -221,20 +181,5 @@ const assistantSurface = {
       }
     </section>
 
-    <WidgetPlacementZone
-      widgets={collectionWidgets}
-      scope="collection"
-      scopeId={collection.id}
-      placementSlot="after_content"
-      itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
-    />
-
-    <WidgetPlacementZone
-      widgets={collectionWidgets}
-      scope="collection"
-      scopeId={collection.id}
-      placementSlot="bottom"
-      itemClass="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3"
-    />
   </div>
 </Layout>

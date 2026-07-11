@@ -40,48 +40,6 @@ export const OrderStatus = {
 
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
-export const WidgetPlacementRule = {
-  BEFORE_COLLECTION: "before_collection",
-  AFTER_COLLECTION: "after_collection",
-  FIXED_TOP_HOMEPAGE: "fixed_top_homepage",
-  FIXED_BOTTOM_HOMEPAGE: "fixed_bottom_homepage",
-  STANDALONE: "standalone",
-} as const;
-
-export type WidgetPlacementRule =
-  (typeof WidgetPlacementRule)[keyof typeof WidgetPlacementRule];
-
-export const WidgetPlacementScope = {
-  HOMEPAGE: "homepage",
-  PAGE: "page",
-  PRODUCT: "product",
-  CATEGORY: "category",
-  COLLECTION: "collection",
-} as const;
-
-export type WidgetPlacementScope =
-  (typeof WidgetPlacementScope)[keyof typeof WidgetPlacementScope];
-
-export const WidgetPlacementSlot = {
-  TOP: "top",
-  BOTTOM: "bottom",
-  BEFORE_CONTENT: "before_content",
-  AFTER_CONTENT: "after_content",
-  BEFORE_COLLECTION: "before_collection",
-  AFTER_COLLECTION: "after_collection",
-} as const;
-
-export type WidgetPlacementSlot =
-  (typeof WidgetPlacementSlot)[keyof typeof WidgetPlacementSlot];
-
-export const WidgetPlacementAnchorType = {
-  COLLECTION: "collection",
-  CONTENT: "content",
-} as const;
-
-export type WidgetPlacementAnchorType =
-  (typeof WidgetPlacementAnchorType)[keyof typeof WidgetPlacementAnchorType];
-
 export const DeliveryProvider = {
   PATHAO: "pathao",
   STEADFAST: "steadfast",
@@ -520,82 +478,6 @@ export interface Page {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
-}
-
-export interface Widget {
-  id: string;
-  name: string;
-  htmlContent: string;
-  cssContent: string | null;
-  jsContent: string | null;
-  aiContext: string | null;
-  isActive: boolean;
-  displayTarget: string;
-  placementRule: WidgetPlacementRule;
-  referenceCollectionId: string | null;
-  sortOrder: number;
-  placements?: WidgetPlacement[];
-  createdAt: Date | string | number | null;
-  updatedAt: Date | string | number | null;
-  deletedAt: Date | string | number | null;
-}
-
-export interface WidgetPlacement {
-  id: string;
-  widgetId: string;
-  scope: WidgetPlacementScope;
-  scopeId: string | null;
-  slot: WidgetPlacementSlot;
-  anchorType: WidgetPlacementAnchorType | null;
-  anchorId: string | null;
-  sortOrder: number;
-  isActive: boolean;
-  createdAt: Date | string | number;
-  updatedAt: Date | string | number;
-  deletedAt: Date | string | number | null;
-}
-
-export interface WidgetHistoryEntry {
-  id: string;
-  widgetId: string;
-  htmlContent: string;
-  cssContent: string | null;
-  jsContent: string | null;
-  reason: string;
-  createdAt: string | number;
-}
-
-export interface WidgetListResponse {
-  widgets: Widget[];
-  availableCollections: Array<{
-    id: string;
-    name: string;
-    sortOrder: number;
-    type: "manual" | "dynamic";
-  }>;
-  availablePages?: Array<{
-    id: string;
-    title: string;
-    slug: string;
-    sortOrder: number;
-  }>;
-  referencedProducts?: Array<{
-    id: string;
-    name: string;
-    slug: string;
-  }>;
-  referencedCategories?: Array<{
-    id: string;
-    name: string;
-    slug: string;
-  }>;
-}
-
-export interface WidgetPlacementTargetOption {
-  id: string;
-  label: string;
-  description: string | null;
-  type: "page" | "product" | "category" | "collection";
 }
 
 // ---------------------------------------------------------------------------

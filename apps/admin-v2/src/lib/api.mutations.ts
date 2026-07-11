@@ -20,4 +20,3 @@ export * from "./api-mutations/pages";
 export * from "./api-mutations/products";
 export * from "./api-mutations/settings";
 export * from "./api-mutations/shipping-methods";
-export * from "./api-mutations/widgets";

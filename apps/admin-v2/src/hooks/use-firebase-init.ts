@@ -62,9 +62,9 @@ export function useFirebaseInit(userId: string | undefined) {
         return;
       }
 
-      const { initializeApp, getApps } = await import("firebase/app");
+      const { initializeApp, getApps } = await import("@firebase/app");
       const { getMessaging, getToken, onMessage } = await import(
-        "firebase/messaging"
+        "@firebase/messaging"
       );
 
       const app = getApps().length ? getApps()[0] : initializeApp(config);

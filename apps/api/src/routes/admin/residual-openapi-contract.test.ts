@@ -5,7 +5,6 @@ import { finalizeOpenApiContract, type OpenApiDocument } from "../../openapi-con
 import { adminCustomerRoutes } from "./customers";
 import { adminInventoryRoutes } from "./inventory";
 import { adminShipmentRoutes } from "./shipments";
-import { aiSettingsRoutes } from "./settings/ai";
 import { heroSlidersRoutes } from "./settings/hero-sliders";
 import { metaConversionsAdminRoutes } from "./settings/meta-conversions-admin";
 import { smsSettingsRoutes } from "./settings/sms";
@@ -52,7 +51,6 @@ function buildResidualSpec(): OpenApiDocument {
   app.route("/admin/customers", adminCustomerRoutes);
   app.route("/admin/inventory", adminInventoryRoutes);
   app.route("/admin/shipments", adminShipmentRoutes);
-  app.route("/admin/settings", aiSettingsRoutes);
   app.route("/admin/settings/hero-sliders", heroSlidersRoutes);
   app.route("/admin/settings/meta-conversions", metaConversionsAdminRoutes);
   app.route("/admin/settings", smsSettingsRoutes);
@@ -96,8 +94,6 @@ describe("admin residual OpenAPI mutation responses", () => {
     expectResponses(spec, "/api/v1/admin/settings/firebase", "post", ["200", "503"]);
     expectResponses(spec, "/api/v1/admin/settings/sms", "post", ["200", "503"]);
     expectResponses(spec, "/api/v1/admin/settings/meta-conversions", "post", ["200", "201", "503"]);
-    expectResponses(spec, "/api/v1/admin/settings/widget-ai", "post", ["200", "503"]);
-
     expectResponses(spec, "/api/v1/admin/customers/{id}", "delete", ["204", "404"]);
   });
 });

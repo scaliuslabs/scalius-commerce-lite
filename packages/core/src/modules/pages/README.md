@@ -10,10 +10,9 @@ Pages use a TipTap rich text editor in the admin (lazy-loaded via `React.lazy`).
 
 Page content supports embedded shortcodes processed at render time by `apps/storefront/src/lib/shortcodes.ts`:
 
-- `[widget id="wid_xxx"]` -- Embeds a standalone widget's HTML/CSS inline
 - `[product slug="product-slug"]` -- Embeds a product card (hydrated client-side via React)
 
-Shortcodes are parsed with regex, resolved via API calls (`getWidgetById`, `getProductBySlug`), and replaced with rendered HTML before the page is served.
+Shortcodes are parsed with regex, resolved through `getProductBySlug`, and replaced with rendered HTML before the page is served.
 
 ### Display Controls
 
@@ -133,5 +132,5 @@ Public routes return `{ page }` or `{ pages, pagination }` inside the standard `
 
 ## Known Gaps
 
-- **No version history**: Unlike widgets, pages have no content versioning system. There is no `pageHistory` table or restore-from-history capability.
+- **No version history**: Pages have no content versioning system or restore-from-history capability.
 - **Public route uses raw `db` import**: `apps/api/src/routes/pages.ts` imports `db` from `@scalius/database/client` instead of using `c.get("db")` from Hono context.

@@ -1,13 +1,12 @@
-const SHORTCODE_TAG = String.raw`(?:widget|product)`;
-const SHORTCODE = String.raw`\[${SHORTCODE_TAG}\b[^\]]+\]`;
+const PRODUCT_SHORTCODE = String.raw`\[product\b[^\]]+\]`;
 
 const PARAGRAPH_WRAPPED_SHORTCODE_PATTERN = new RegExp(
-  String.raw`<p(?:\s[^>]*)?>\s*(${SHORTCODE})\s*</p>`,
+  String.raw`<p(?:\s[^>]*)?>\s*(${PRODUCT_SHORTCODE})\s*</p>`,
   "gi",
 );
 
 const STANDALONE_SHORTCODE_PATTERN = new RegExp(
-  String.raw`^\s*(?:<p(?:\s[^>]*)?>\s*)?${SHORTCODE}\s*(?:</p>)?\s*$`,
+  String.raw`^\s*(?:<p(?:\s[^>]*)?>\s*)?${PRODUCT_SHORTCODE}\s*(?:</p>)?\s*$`,
   "i",
 );
 

@@ -44,7 +44,6 @@ import {
   resolveBuyerVariants,
 } from "@/lib/product-sellable-variants";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
-import { buildStorefrontComputerAddToCartLabel } from "@/components/product/lib/computer-add-to-cart";
 
 interface ProductShortcodeProps {
   productData: ProductPageData;
@@ -168,14 +167,7 @@ export default function ProductShortcode({
     matchingVariant && isVariantAvailable(matchingVariant),
   );
   const addToCartAriaLabel = canAddToCart && matchingVariant
-    ? buildStorefrontComputerAddToCartLabel({
-        productName: product.name,
-        variantId: matchingVariant.id,
-        options: [
-          selectedSize ? { name: option1Label, label: selectedSize } : null,
-          selectedColor ? { name: option2Label, label: selectedColor } : null,
-        ].filter((option): option is CartItemOption => Boolean(option)),
-      })
+    ? `Add ${product.name} to cart`
     : `Select an available ${product.name} option to add to cart`;
   const compatibleVariants = filterVariantsBySelection(buyerVariants, {
     selectedSize,
@@ -568,9 +560,6 @@ export default function ProductShortcode({
             <Button
               variant="outline"
               size="lg"
-              data-scalius-computer-action={
-                canAddToCart ? "allow" : undefined
-              }
               disabled={!canAddToCart}
               aria-label={addToCartAriaLabel}
               onClick={() => handleAddToCart(false)}
@@ -579,7 +568,6 @@ export default function ProductShortcode({
             </Button>
             <Button
               size="lg"
-              data-scalius-computer-human-only=""
               disabled={isUnavailable}
               onClick={() => handleAddToCart(true)}
             >

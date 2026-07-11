@@ -146,7 +146,7 @@ apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config an
 Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, the legacy customer-auth summary `authVerificationMethod`, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, and non-secret WhatsApp OTP fields such as phone-number ID and auth template name. The advanced customer auth policy lives in `settings.customer_auth/policy`; phone collection is always required, while OTP channels and email collection are configurable. `whatsapp_access_token` is legacy fallback only; new token saves go to encrypted `settings.whatsapp/access_token`, and legacy migration/cleanup requires a dedicated `migrationEncryptionKey` rather than the JWT-tolerant read key. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `customer_auth` (advanced OTP channel and email collection policy), `theme` (storefront_colors), `security` (csp_allowed_domains), `seo` (`discovery` plus `return_policy` JSON settings), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (encrypted service_account, public_config), `ai` (widget AI providers, prompts, encrypted provider keys), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `notification_provider_health` (channel/provider pause markers for merchant-actionable provider setup failures), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `customer_auth` (advanced OTP channel and email collection policy), `theme` (storefront_colors), `security` (csp_allowed_domains), `seo` (`discovery` plus `return_policy` JSON settings), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (encrypted service_account, public_config), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `notification_provider_health` (channel/provider pause markers for merchant-actionable provider setup failures), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
 SMS provider readiness is structural and local: it requires an active supported provider, decryptable required credentials, provider-required non-secret fields, and no obvious placeholder values such as `dummy`, `example`, `changeme`, `your-token-here`, or all-zero/simple numeric junk. This keeps notification and OTP settings fail-closed without issuing paid SMS test sends.
 
@@ -196,12 +196,6 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/email` | Save selected email provider + sender. Skips masked Resend key values and encrypts new Resend keys |
 | GET | `/firebase` | Get Firebase settings (masks service account) |
 | POST | `/firebase` | Save Firebase service account + public config. Service-account saves validate required fields, require `CREDENTIAL_ENCRYPTION_KEY`, store encrypted `enc:` values, and invalidate `FIREBASE_CONFIG` layout cache |
-
-### `ai.ts` -- Widget AI providers and prompts
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/widget-ai` | Get provider, model, prompt, and masked credential status |
-| POST | `/widget-ai` | Save provider config, local system prompts, and encrypted provider keys |
 
 ### `payments.ts` -- Payment gateway settings
 | Method | Path | Description |

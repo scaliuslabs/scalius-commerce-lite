@@ -37,7 +37,7 @@ All reads and writes must pass through `normalizeCollectionConfig()` or
 `stringifyCollectionConfig()` from `collection-config.ts`. The helper guarantees
 arrays are always present, clamps `maxProducts` to 1-24, drops invalid product
 IDs, and maps the retired `specificProductIds` field into canonical
-`productIds`. Admin edit, public collection routes, AI context, and storefront
+`productIds`. Admin edit, public collection routes, and storefront
 product resolution should not call `JSON.parse(collection.config)` directly.
 
 ## Validation (`collections.validation.ts`)

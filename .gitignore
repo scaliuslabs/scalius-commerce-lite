@@ -38,21 +38,3 @@ tests/
 # jetbrains setting folder
 .idea/
 .vercel
-/Docs
-!/docs/
-/.agent
-/.agents
-/.claude
-skills-lock.json
-/temp-doc
-/tanstack-router
-/docs/*
-!/docs/research/
-!/docs/research/*.md
-!/docs/codex/
-/docs/codex/*
-!/docs/codex/MCP-AGENT-ARCHITECTURE.md
-!/docs/codex/AGENT-PLATFORM-ARCHITECTURE.md
-CLAUDE.md
-mcp.md
-independent-audit.md

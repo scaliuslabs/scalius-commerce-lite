@@ -3,7 +3,6 @@ import {
   createFileRoute,
   Outlet,
   redirect,
-  useLocation,
 } from "@tanstack/react-router";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
@@ -11,8 +10,6 @@ import { AdminHeader } from "@/components/admin/layout/AdminHeader";
 import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { DeferredToaster } from "@/components/ui/deferred-toaster";
-import { AdminAssistantPageStateBridge } from "@/components/admin/assistant/AdminAssistantPageStateBridge";
-import { AdminAssistantLauncher } from "@/components/admin/assistant/AdminAssistantLauncher";
 import {
   getAdminRouteContext,
   primeAdminRouteContextCache,
@@ -45,7 +42,6 @@ export const Route = createFileRoute("/admin")({
 function AdminLayout() {
   const authContext = Route.useRouteContext();
   const { user, permissions, isSuperAdmin } = authContext;
-  const location = useLocation();
   useAdminNestedScrollRestoration();
 
   useEffect(() => {
@@ -57,26 +53,20 @@ function AdminLayout() {
       <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
         <SidebarProvider>
           <AppSidebar />
-          <AdminAssistantLauncher>
-            <SidebarInset className="h-svh min-w-0 overflow-hidden">
-              <AdminHeader user={user} />
-              <div
-                id="admin-main-scroll"
-                data-scroll-restoration-id="admin-main-scroll"
-                className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-4 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
-              >
-                <div className="max-w-7xl mx-auto">
-                  <Outlet />
-                </div>
+          <SidebarInset className="h-svh min-w-0 overflow-hidden">
+            <AdminHeader user={user} />
+            <div
+              id="admin-main-scroll"
+              data-scroll-restoration-id="admin-main-scroll"
+              className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 pt-4 pb-4 bg-gray-50 dark:bg-[#0a0a0a]"
+            >
+              <div className="max-w-7xl mx-auto">
+                <Outlet />
               </div>
-              <AdminAssistantPageStateBridge
-                enabled={isSuperAdmin}
-                routePath={location.pathname}
-              />
-              {/* Portal target for form action bars — sits OUTSIDE the scroll area */}
-              <div id="form-action-bar-slot" />
-            </SidebarInset>
-          </AdminAssistantLauncher>
+            </div>
+            {/* Portal target for form action bars — sits OUTSIDE the scroll area */}
+            <div id="form-action-bar-slot" />
+          </SidebarInset>
         </SidebarProvider>
         <DeferredToaster />
       </PermissionProvider>

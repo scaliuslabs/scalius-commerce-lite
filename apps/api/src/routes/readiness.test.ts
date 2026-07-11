@@ -77,7 +77,6 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     CACHE: createKv(),
     SHARED_AUTH_CACHE: createKv(),
     BUCKET: createBucket(),
-    WidgetDesignAgent: {} as DurableObjectNamespace,
     PAYMENT_EVENTS_QUEUE: createQueue(),
     ORDER_NOTIFICATIONS_QUEUE: createQueue(),
     AUTH_OTP_QUEUE: createQueue(),

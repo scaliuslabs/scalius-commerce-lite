@@ -25,34 +25,9 @@ vi.mock("cloudflare:workers", () => ({
   },
 }));
 
-vi.mock("agents", () => ({
-  Agent: class {
-    env: Env;
-    initialState: unknown;
-    private currentState: unknown;
-
-    constructor(_ctx?: unknown, env?: Env) {
-      this.env = env ?? ({} as Env);
-    }
-
-    get state(): unknown {
-      return this.currentState ?? this.initialState;
-    }
-
-    setState(next: unknown): void {
-      this.currentState = next;
-    }
-
-    sql(): never[] {
-      return [];
-    }
-  },
-}));
-
 describe("API Worker startup boundaries", () => {
   afterEach(() => {
     vi.doUnmock("./app");
-    vi.doUnmock("./agents/widget-design-agent-runtime");
     vi.doUnmock("./queue-consumer");
     vi.doUnmock("./scheduled-maintenance");
     vi.resetModules();
@@ -63,7 +38,6 @@ describe("API Worker startup boundaries", () => {
       app: false,
       queue: false,
       scheduled: false,
-      widgetRuntime: false,
     };
 
     vi.doMock("./app", () => {
@@ -86,20 +60,12 @@ describe("API Worker startup boundaries", () => {
         runScheduledMaintenance: vi.fn(),
       };
     });
-    vi.doMock("./agents/widget-design-agent-runtime", () => {
-      loaded.widgetRuntime = true;
-      return {
-        streamWidgetDesignAgentRun: vi.fn(),
-      };
-    });
-
     await import("./worker");
 
     expect(loaded).toEqual({
       app: false,
       queue: false,
       scheduled: false,
-      widgetRuntime: false,
     });
   });
 

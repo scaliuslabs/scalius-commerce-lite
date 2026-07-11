@@ -139,7 +139,6 @@ When the API triggers `/api/purge-cache` with `Authorization: Bearer PURGE_TOKEN
 - HTML-affecting or prefix purges bump the KV version -- all versioned HTML/L2 keys change. Direct purge callers warm critical pages through `waitUntil`; queue-driven purges pass `warm:false` and let the API enqueue a separate retryable `storefront.cache_warm` message.
 - Catalog purges may also include exact listing `htmlPaths` such as `/search` and `/categories/{slug}` while bumping the global version. Old HTML/L2 entries are abandoned by the new `cache_v`; the supplied paths are canonicalized and capped so the queue warm pass can refill only affected pages.
 - Exact product purges read the old per-key generation, write a new generation for `product_slug_*` / `product_variants_*`, delete old-generation local Cache API entries as a best-effort cleanup, and warm touched product paths without bumping the global storefront version. Exact `htmlPaths` must be relative paths; the purge endpoint dedupes them, caps them at `20`, and direct callers warm them in batches of `4`.
-- Scoped widget purges should include exact rendered `htmlPaths` for product, category, page, and collection placements. Homepage/global widget changes are the lane that intentionally bumps the global version and warms the homepage.
 - L1 in-memory cache can be cleared via `clearMemoryCache()` or selectively via `clearL1ByPrefixes()`
 - L2 entries with old version or product-generation keys are never matched
 
@@ -157,7 +156,7 @@ Cloudflare Workers Cache is intentionally not enabled globally for the storefron
 
 ## Page Data Loading
 
-Product detail pages start layout and product reads together, then chain product-scoped widgets from the product promise so widget fetches do not wait for layout. Category pages build product-list options before the first await, then start layout, category-products, filter metadata, and category-widget reads in one promise wave; `getProductsByCategory()` must use the full category object returned by `/api/v1/categories/{slug}/products` and the page must not issue a second `getCategoryBySlug()` read. Search/all-products pages build product-list options first, then start layout, product-list, and search filter metadata together. CMS page routes trust the consolidated page render-data widgets and must not issue a second scoped widget lookup when a page has no widgets. Entity-scoped widgets may chain from the entity promise because they need the entity id, but unrelated product/list/filter reads must not wait for standalone metadata lookups. Keep `src/lib/page-data-boundaries.test.ts` aligned with this shape until consolidated render-data endpoints replace the separate calls.
+Product detail pages start layout, product, and shipping reads together. Category pages build product-list options before the first await, then start layout, category-products, and filter metadata in one promise wave; `getProductsByCategory()` must use the full category object returned by `/api/v1/categories/{slug}/products` and the page must not issue a second `getCategoryBySlug()` read. Search/all-products pages build product-list options first, then start layout, product-list, and search filter metadata together. CMS page routes use the consolidated render-data endpoint. Keep `src/lib/page-data-boundaries.test.ts` aligned with these boundaries.
 
 ## API Client (`src/lib/api/`)
 
@@ -196,7 +195,6 @@ Consolidated accessors for Cloudflare Worker bindings. All delegate to `apiConte
 | `footer.ts` | Footer config |
 | `navigation.ts` | Navigation menus |
 | `pages.ts` | CMS pages |
-| `widgets.ts` | Active widgets |
 | `discounts.ts` | Discount validation |
 | `attributes.ts` | Filterable attributes |
 | `shipping.ts` | Shipping methods, locations |
@@ -273,7 +271,7 @@ Browser helpers in `src/lib/api/customer-auth.ts` use bounded same-origin proxy 
 - **JSON-LD**: OnlineStore and WebSite structured data on all pages when enabled, with schema names sourced only from business company/legal name and optional MerchantReturnPolicy sourced from saved SEO return-policy settings
 - **Product SEO**: Product pages emit Product/ProductGroup JSON-LD with price, availability, SKU, safe primary images from the same catalog-discovery media helper used by feeds/UCP, GTINs from variant barcodes, active-method shipping details, aggregate offer data, optional seller identity from business settings, and brand only from explicit product data. Product schema must not fabricate condition, price expiry, placeholder images, or a generic seller.
 - **Discovery XML**: Robots, sitemap index/children, and product feeds are dashboard-policy governed. Product-level sitemap/feed exclusions keep the product page public while removing it from matching XML output. Product, category, collection, and CMS page `noindex` controls keep public pages reachable with `noindex,follow`, remove them from sitemap XML, and suppress resource-specific JSON-LD. Valid same-store canonical path overrides become the sitemap `<loc>` for included resources. Sitemap XML stays loc/lastmod-only, the sitemap index must not advertise disabled child sections, and the browser XSL preview mirrors that contract.
-- **UCP Catalog**: `/.well-known/ucp` and `/ucp/catalog/*` stay read-only and catalog-only. UCP products are projected from the same feed-ready SKU/image/availability truth as XML feeds; products without safe catalog media are omitted instead of exposing weaker agent-readable data.
+- **UCP Catalog**: `/.well-known/ucp` and `/ucp/catalog/*` stay read-only and catalog-only. UCP products are projected from the same feed-ready SKU/image/availability truth as XML feeds; products without safe catalog media are omitted rather than exposing weaker catalog data.
 
 ## Search
 

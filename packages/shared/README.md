@@ -22,18 +22,12 @@ import { rateLimit } from "@scalius/shared/rate-limit";
 import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { validateAndFormatPhone, phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { parseJSONSafely, validateWidgetJSON } from "@scalius/shared/json-repair";
-import { parseTagBasedResponse, StreamingTagParser } from "@scalius/shared/tag-parser";
-import { parseHtmlIntoSections } from "@scalius/shared/html-section-parser";
 import { generateEAN13, validateEAN13 } from "@scalius/shared/barcode-utils";
 import { generateBarcodeSvg } from "@scalius/shared/barcode-svg";
 import { buildStorefrontPath } from "@scalius/shared/storefront-url";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
-import { sanitizeCssForStyleElement } from "@scalius/shared/css-sanitize";
-import { scopeCss } from "@scalius/shared/css-scope";
-import { normalizeWidgetPlacementSlotForScope } from "@scalius/shared/widget-placement";
 import { parseShortcodes } from "@scalius/shared/shortcodes";
 import { toISOString, fromUnixSeconds, nowUnixSeconds, unixToDate, formatDate } from "@scalius/shared/timestamps";
 import { getStatusBadgeClass } from "@scalius/shared/status-badges";
@@ -54,14 +48,8 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `rate-limit.ts` | KV-based IP rate limiter with automatic TTL expiry | `rateLimit()`, `getClientIp()` |
 | `customer-utils.ts` | Phone validation (E.164), include/exclude country policy checks, customer stats | `validateAndFormatPhone()`, `assertPhoneCountryAllowed()`, `normalizePhoneCountryPolicy()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
 | `order-utils.ts` | Random order ID generation (6 chars, A-Z0-9) | `generateOrderId()` |
-| `json-repair.ts` | Multi-strategy JSON parsing for LLM responses | `extractAndParseJSON()`, `repairJSON()`, `aggressiveRepairJSON()`, `parseJSONSafely()`, `validateWidgetJSON()` |
-| `tag-parser.ts` | XML-like tag extraction for LLM widget responses | `parseTagBasedResponse()`, `validateParsedWidget()`, `StreamingTagParser`, `getTagBasedExampleFormat()` |
-| `html-section-parser.ts` | DOM-based HTML section extraction for widget editing | `parseHtmlIntoSections()`, `reconstructWidgetFromSections()` |
 | `html-escape.ts` | HTML entity escaping for user values in templates | `escapeHtml()` -- escapes `&`, `<`, `>`, `"`, `'` |
-| `html-sanitize.ts` | Defense-in-depth XSS sanitizer for admin-authored widget content | `sanitizeHtml()` -- strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` handlers, `javascript:`/`vbscript:`/dangerous `data:` URLs |
-| `css-sanitize.ts` | Defense-in-depth sanitizer for admin-authored widget stylesheets | `sanitizeCssForStyleElement()` -- prevents style-tag breakout, removes external stylesheet/font at-rules, strips HTML tags, and neutralizes script-capable CSS values/URLs |
-| `css-scope.ts` | Scopes CSS selectors under a wrapper class | `scopeCss()` -- prevents widget styles from leaking; handles `@media`, `@keyframes`, comma-separated selectors, `body`/`html`/`*` rewriting |
-| `widget-placement.ts` | Canonical widget placement scope/slot rules shared by admin and API validation | `isWidgetPlacementSlotAllowedForScope()`, `normalizeWidgetPlacementSlotForScope()`, `isWidgetCollectionSlot()` |
+| `html-sanitize.ts` | Defense-in-depth XSS sanitizer for merchant-authored rich HTML | `sanitizeHtml()` -- strips executable/embedded tags, `on*` handlers, and dangerous URL schemes while preserving safe content structure |
 | `shortcodes.ts` | CMS shortcode parsing shared by storefront rendering and API cache invalidation | `parseShortcodes()`, `normalizeShortcodeAttributeQuotes()`, `ShortcodeMatch` |
 | `timestamps.ts` | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()`, `unixToDate()`, `formatDate()` |
 | `barcode-utils.ts` | EAN-13 barcode generation and validation (GS1 200-299 prefix) | `generateEAN13()`, `calculateEAN13CheckDigit()`, `validateEAN13()` |
@@ -76,9 +64,8 @@ Runtime dependencies (listed in `package.json`):
 | Package | Used By |
 |---------|---------|
 | `clsx` + `tailwind-merge` | `utils.ts` -- `cn()` class merging |
-| `css-tree` | `css-sanitize.ts`, `css-scope.ts`, `css-tree-runtime.ts` -- CSS parsing/sanitization/scoping |
 | `currency.js` | `currency.ts`, `price-utils.ts` -- precision arithmetic |
-| `htmlparser2` + `domhandler` | `html-sanitize.ts`, `widget-rendering.ts` -- HTML parsing and DOM traversal |
+| `htmlparser2` + `domhandler` | `html-sanitize.ts` -- HTML parsing and DOM traversal |
 | `libphonenumber-js` | `customer-utils.ts` -- E.164 phone validation |
 | `zod` | `customer-utils.ts` -- `phoneNumberSchema` |
 
@@ -96,24 +83,9 @@ Runtime dependencies (listed in `package.json`):
 
 `rate-limit.ts` uses Cloudflare KV with TTL-based expiry for automatic cleanup. Each rate-limit window is stored as a JSON entry (`{ count, resetAt }`) with `expirationTtl` matching the window duration. Uses `CF-Connecting-IP` (not spoofable) for client identification.
 
-### LLM Response Parsing
+### Rich HTML Security
 
-`json-repair.ts` and `tag-parser.ts` work together for AI-generated widget content. `tag-parser.ts` is preferred (tag-based extraction is more reliable than JSON from LLMs), with `json-repair.ts` as a fallback. Both support multi-strategy parsing: direct parse, markdown extraction, tag extraction, aggressive repair.
-
-### Widget Content Security
-
-Widget HTML and CSS use complementary utilities:
-- `html-escape.ts` (`escapeHtml`) -- for escaping user-supplied values inserted into HTML templates (email templates, barcode labels). Prevents HTML injection.
-- `html-sanitize.ts` (`sanitizeHtml`) -- defense-in-depth sanitizer for admin-authored HTML (widgets). Strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<applet>`, `<base>`, `<form>` tags, `on*` event handlers, `javascript:`/`vbscript:` URLs, and dangerous `data:` URLs while preserving all other HTML structure.
-- `css-sanitize.ts` (`sanitizeCssForStyleElement`) -- defense-in-depth sanitizer for full widget stylesheets before they are persisted or injected into `<style>` tags. It prevents `</style>` breakout, removes remote stylesheet/font at-rules (`@import`, `@font-face`, etc.), strips accidental HTML tags, and neutralizes script-capable CSS values such as `expression()`, `behavior`, `binding`, `javascript:`/`vbscript:`/`data:`/`file:` URLs, including CSS-escaped protocols.
-
-### CSS Scoping
-
-`css-scope.ts` (`scopeCss`) prefixes all CSS selectors with a unique wrapper class to prevent widget styles from leaking into the rest of the page. Handles `@media`/`@supports`/`@layer`/`@container` at-rules (prefixes inner selectors), preserves animation keyframes, and rewrites `body`/`html`/`*`/`:root` selectors to the scope class. Widget CSS should be passed through `sanitizeCssForStyleElement()` before `scopeCss()`.
-
-### Widget Placement
-
-`widget-placement.ts` keeps scope/slot rules canonical across admin forms and API validation. Homepage placements support top, bottom, before collection, and after collection slots. Page-like scoped placements support top, bottom, before content, and after content slots. Use `normalizeWidgetPlacementSlotForScope()` when a UI changes scope so hidden stale slot values cannot be submitted.
+Use `html-escape.ts` when inserting individual values into templates and `html-sanitize.ts` when accepting a merchant-authored HTML document. CMS pages, rich-content previews, and storefront rendering all share the same sanitizer so executable tags, event handlers, and unsafe URL schemes are rejected consistently.
 
 ### Timestamps
 
@@ -122,4 +94,3 @@ Widget HTML and CSS use complementary utilities:
 ## Known Gaps
 
 - `layout-cache.ts` uses in-memory state that is per-Worker-isolate; clearing in one Worker does not affect others.
-- `html-section-parser.ts` requires a browser DOM (`DOMParser`); it falls back to a single-section result on the server.

@@ -210,8 +210,6 @@ interface Env {
 
   // Service bindings
   API: Fetcher;
-  ADMIN_AGENT: Fetcher;
-  ADMIN_FLUE_AGENT: Fetcher;
 
   // Secrets (set via `wrangler secret put`)
   BETTER_AUTH_SECRET: string;
@@ -219,7 +217,6 @@ interface Env {
   JWT_SECRET?: string;
   FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
   CREDENTIAL_ENCRYPTION_KEY?: string;
-  ADMIN_FLUE_AUTH_TOKEN?: string;
 
   // Variables
   BETTER_AUTH_URL?: string;

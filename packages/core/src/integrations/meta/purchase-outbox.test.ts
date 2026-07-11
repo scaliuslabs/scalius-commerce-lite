@@ -86,7 +86,7 @@ describe("Meta Purchase outbox event building", () => {
             createdAt: 1_800_000_000,
             updatedAt: 1_800_000_000,
         });
-        expect(String(values.id)).toMatch(/^mcp_/);
+        expect(String(values.id)).toMatch(/^mcap_/);
         expect(values).not.toHaveProperty("customerName");
         expect(values).not.toHaveProperty("customerPhone");
         expect(values).not.toHaveProperty("customerEmail");

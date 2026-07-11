@@ -16,14 +16,13 @@ import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { pageSchema, publicWidgetSchema } from "../schemas/entities";
+import { pageSchema } from "../schemas/entities";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const flexibleObjectSchema = z.record(z.string(), z.any());
 const homepageDataSchema = z.object({
   seo: flexibleObjectSchema,
   hero: flexibleObjectSchema,
-  widgets: z.array(publicWidgetSchema),
   collections: z.array(flexibleObjectSchema.nullable()),
 }).passthrough();
 type HomepageData = z.infer<typeof homepageDataSchema>;
@@ -51,7 +50,7 @@ const homepageRoute = createRoute({
   method: "get",
   path: "/homepage",
   tags: ["Storefront"],
-  summary: "Get consolidated homepage data (SEO, hero, widgets, collections + products)",
+  summary: "Get consolidated homepage data (SEO, hero, collections + products)",
   responses: {
     200: {
       description: "Homepage data",
@@ -82,7 +81,7 @@ const pageBySlugRoute = createRoute({
   method: "get",
   path: "/pages/slug/{slug}",
   tags: ["Storefront"],
-  summary: "Get CMS page content with active page-scoped widgets",
+  summary: "Get CMS page content",
   request: {
     params: z.object({
       slug: z.string(),
@@ -93,7 +92,6 @@ const pageBySlugRoute = createRoute({
       description: "Page render data",
       content: { "application/json": { schema: successEnvelope(z.object({
         page: pageSchema,
-        widgets: z.array(publicWidgetSchema),
       })) } },
     },
     404: errorResponses[404],

@@ -13,8 +13,6 @@ export interface FormActionBarProps {
   newUrl?: string;
   newLabel?: string;
   saveLabel?: string;
-  /** Opt in only for ordinary reversible saves whose existing form validation remains authoritative. */
-  allowAssistantSave?: boolean;
   onSave: () => void;
 }
 
@@ -31,7 +29,6 @@ export function FormActionBar({
   newUrl,
   newLabel,
   saveLabel,
-  allowAssistantSave = false,
   onSave,
 }: FormActionBarProps) {
   const defaultSaveLabel = isSubmitting
@@ -84,9 +81,6 @@ export function FormActionBar({
           <Button
             size="sm"
             type="button"
-            data-scalius-computer-action={
-              allowAssistantSave ? "allow" : undefined
-            }
             disabled={isSubmitting}
             onClick={onSave}
             className="h-8 text-xs font-medium"

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import {
   SCANNER_COOKIE_NAME,
@@ -736,39 +736,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     await adminAuthMiddleware(
       createContext(
         "/api/v1/admin/settings/delivery-locations/import-pathao/status",
-        "GET",
-      ) as never,
-      next,
-    );
-    expect(next).toHaveBeenCalledTimes(1);
-  });
-
-  it("maps widget generation session status to widget edit permission", async () => {
-    mocks.getUserPermissions.mockResolvedValue(
-      new Set([PERMISSIONS.WIDGETS_VIEW]),
-    );
-    const next = vi.fn().mockResolvedValue(undefined);
-
-    await expect(
-      adminAuthMiddleware(
-        createContext(
-          "/api/v1/admin/widget-generation-runs/sessions/session_1/status",
-          "GET",
-        ) as never,
-        next,
-      ),
-    ).rejects.toMatchObject({
-      status: 403,
-      code: "FORBIDDEN",
-      message: "You do not have permission to perform this action",
-    });
-
-    mocks.getUserPermissions.mockResolvedValue(
-      new Set([PERMISSIONS.WIDGETS_EDIT]),
-    );
-    await adminAuthMiddleware(
-      createContext(
-        "/api/v1/admin/widget-generation-runs/sessions/session_1/status",
         "GET",
       ) as never,
       next,

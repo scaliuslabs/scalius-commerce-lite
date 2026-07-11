@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 
 const ADMIN_ORDERS_ROUTE_SOURCE = fileURLToPath(
     new URL("./orders.ts", import.meta.url),

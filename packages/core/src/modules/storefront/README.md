@@ -18,20 +18,18 @@ Batched D1 queries for the public storefront API. Shapes homepage and layout dat
 
 Fetches and shapes all homepage data in **two batched D1 round-trips**.
 
-**Batch 1** (4 parallel queries):
+**Batch 1** (3 parallel queries):
 1. SEO settings from `siteSettings` (siteTitle, homepageTitle, homepageMetaDescription)
 2. Active hero sliders from `heroSliders` (desktop + mobile)
-3. Active homepage widgets from `widgets` (displayTarget = "homepage", ordered by placementRule + sortOrder)
-4. Active collections metadata from `collections` (ordered by sortOrder)
+3. Active collections metadata from `collections` (ordered by sortOrder)
 
 **Batch 2** (driven by Batch 1 results):
 - `resolveCollectionProductsBatch()` from the collections service resolves products, categories, and featured products for all collections in a batched operation.
 
-Returns: `{ seo, hero, widgets, collections }`.
+Returns: `{ seo, hero, collections }`.
 
 - **SEO**: Defaults to "Scalius Commerce" / "Welcome to Scalius Commerce" if no settings row exists.
 - **Hero**: Separate `desktop` and `mobile` sliders. Images are JSON-parsed from the `images` column via `safeJsonParse()`.
-- **Widgets**: Shaped with `id`, `name`, `htmlContent`, `cssContent`, `isActive`, `displayTarget`, `placementRule`, `referenceCollectionId`, `sortOrder`.
 - **Collections**: Filtered to only include collections with resolved products. Config is JSON-parsed via `safeJsonParse()`. Includes `categories`, `products`, and `featuredProduct` from resolution.
 
 ### `getLayoutData(db)`
@@ -69,8 +67,8 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 ### Public Storefront (`/api/v1/storefront`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/homepage` | Consolidated homepage data (SEO, hero, widgets, collections + products) | `api:storefront:homepage:*` with CACHE_TTLS.STANDARD; product/category/collection/homepage/widget/media writes invalidate it |
-| GET | `/pages/slug/{slug}` | Consolidated CMS page render data (page + active page-scoped widgets) | `api:storefront:page:*` with CACHE_TTLS.STANDARD; page/widget writes invalidate exact page render keys |
+| GET | `/homepage` | Consolidated homepage data (SEO, hero, collections + products) | `api:storefront:homepage:*` with CACHE_TTLS.STANDARD; product/category/collection/homepage/media writes invalidate it |
+| GET | `/pages/slug/{slug}` | Consolidated CMS page render data | `api:storefront:page:*` with CACHE_TTLS.STANDARD; page writes invalidate exact page render keys |
 | GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme, media, Meta CAPI readiness, public business identity, SEO discovery) | `api:storefront:layout:*` with CACHE_TTLS.STANDARD |
 | GET | `/csp` | CSP allowed domains from `settings` (category = security) | `api:storefront:csp:*` with CACHE_TTLS.STANDARD |
 
@@ -124,7 +122,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 
 ## Dependencies
 
-- `@scalius/database` -- `siteSettings`, `categories`, `collections`, `widgets`, `heroSliders`, `analytics`, `pages`, `settings`
+- `@scalius/database` -- `siteSettings`, `categories`, `collections`, `heroSliders`, `analytics`, `pages`, `settings`
 - `@scalius/core/integrations/analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
 - `@scalius/core/modules/collections/collections.service` -- `resolveCollectionProductsBatch()`
 - `nanoid` -- fallback ID generation for footer social links/menus

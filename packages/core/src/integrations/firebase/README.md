@@ -70,7 +70,7 @@ Required fields in service account JSON: `client_email`, `private_key`, `project
 
 ### `client.ts` -- Browser-Side Firebase Client
 
-Runs in the admin dashboard browser. Uses the standard Firebase JS SDK (`firebase/app`, `firebase/messaging`).
+Runs in the admin dashboard browser. Uses the Firebase app and messaging packages.
 
 - `initFirebaseClientNotifications(userId, config)` -- Entry point called from `FirebaseInit.astro`
   1. Checks browser environment and notification support
@@ -146,7 +146,7 @@ Firebase settings in `settings` table:
 
 ## Dependencies
 
-- `firebase/app`, `firebase/messaging` -- Client-side SDK (imported dynamically in browser)
+- `@firebase/app`, `@firebase/messaging` -- Client-side SDK (imported dynamically in browser)
 - Web Crypto API (`crypto.subtle`) -- JWT signing on server (available in Cloudflare Workers)
 - `SHARED_AUTH_CACHE` KV namespace -- Optional, for encrypted Google OAuth token caching when `CREDENTIAL_ENCRYPTION_KEY` is configured
 

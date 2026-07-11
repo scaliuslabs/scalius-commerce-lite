@@ -85,7 +85,7 @@ Customer Auth Flow (storefront):
 2. User-level overrides (grant or deny from `user_permissions` table)
 3. Role-based permissions (union of all assigned roles via `user_roles` + `role_permissions`)
 
-### 81 Permissions Across 14 Categories
+### 76 Permissions Across 13 Categories
 
 | Category | Count | Sensitive |
 |----------|-------|-----------|
@@ -96,7 +96,6 @@ Customer Auth Flow (storefront):
 | Customers | 6 | No |
 | Discounts | 5 | All 5 |
 | Pages | 5 | No |
-| Widgets | 5 | No |
 | Media | 4 | No |
 | Attributes | 4 | No |
 | Analytics | 4 | No |
@@ -108,10 +107,10 @@ Customer Auth Flow (storefront):
 
 | Role | Permissions | Notes |
 |------|-------------|-------|
-| `super_admin` | All 81 | System role, cannot modify permissions |
+| `super_admin` | All 76 | System role, cannot modify permissions |
 | `manager` | All except `permanent_delete`, `orders.refund`, `delivery_providers.edit`, `fraud_checker.edit`, `team.manage_roles` | System role |
 | `sales_rep` | Dashboard, products/categories/collections (view), orders (full CRUD + shipments), customers (view/create/edit/history), discounts (view) | System role |
-| `content_editor` | Dashboard, pages/widgets (full CRUD), media (full), collections (view/edit/toggle), settings (header/footer/seo) | System role |
+| `content_editor` | Dashboard, pages (full CRUD), media (full), collections (view/edit/toggle), settings (header/footer/seo) | System role |
 | `product_specialist` | Dashboard, products (full except permanent_delete), categories (full except permanent_delete), collections (full), attributes (full), media (view/upload) | System role |
 
 ### Permission Caching

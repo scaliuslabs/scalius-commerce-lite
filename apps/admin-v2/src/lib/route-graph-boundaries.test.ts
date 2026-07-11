@@ -425,8 +425,6 @@ describe("admin route graph boundaries", () => {
       "routes/admin/pages/index.tsx",
       "routes/admin/pages/trash.tsx",
       "routes/admin/products/index.tsx",
-      "routes/admin/widgets/index.tsx",
-      "routes/admin/widgets/trash.tsx",
     ];
 
     const eagerCommandPaths = hotEntryPaths
@@ -823,7 +821,6 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "admin", "settings", "PolarSettingsForm.tsx"),
       join(ADMIN_SRC_ROOT, "components", "admin", "shared", "FormContainer.tsx"),
       join(ADMIN_SRC_ROOT, "components", "admin", "shipping-methods", "MethodFormDialog.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "widgets", "WidgetForm.tsx"),
     ];
 
     for (const path of mutationForms) {

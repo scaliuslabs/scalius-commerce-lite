@@ -639,11 +639,11 @@ function splitCustomerName(name: string): [string | null, string | null] {
 }
 
 function createOutboxId(): string {
-    return `mcp_${createRandomId()}`;
+    return `mcap_${createRandomId()}`;
 }
 
 function createClaimId(): string {
-    return `mcpc_${createRandomId()}`;
+    return `mcapc_${createRandomId()}`;
 }
 
 function createRandomId(): string {

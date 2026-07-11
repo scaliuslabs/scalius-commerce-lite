@@ -6,7 +6,6 @@ import { adminAttributesRoutes } from "./attributes";
 import { adminMediaRoutes } from "./media";
 import { adminNavigationRoutes } from "./navigation";
 import { adminRbacRoutes } from "./rbac";
-import { adminWidgetRoutes } from "./widgets";
 
 type TestOperation = {
     responses?: Record<string, unknown>;
@@ -16,7 +15,6 @@ function buildAdminMetadataAccessSpec(options: { finalize?: boolean } = {}): Ope
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     app.route("/admin/attributes", adminAttributesRoutes);
     app.route("/admin/rbac", adminRbacRoutes);
-    app.route("/admin/widgets", adminWidgetRoutes);
     app.route("/admin/navigation", adminNavigationRoutes);
     app.route("/admin/media", adminMediaRoutes);
 
@@ -124,30 +122,9 @@ describe("admin metadata/access OpenAPI error responses", () => {
         ]);
     });
 
-    it("documents widget and navigation not-found paths", () => {
+    it("documents navigation not-found paths", () => {
         const spec = buildAdminMetadataAccessSpec();
 
-        expectResponses(spec, "/api/v1/admin/widgets/{id}", "put", [
-            "200",
-            "400",
-            "401",
-            "403",
-            "404",
-            "500",
-        ]);
-        expectResponses(spec, "/api/v1/admin/widgets/bulk-activate", "post", [
-            "204",
-            "400",
-            "401",
-            "403",
-            "500",
-        ]);
-        expectResponses(spec, "/api/v1/admin/widgets/{id}/permanent", "delete", [
-            "204",
-            "401",
-            "403",
-            "500",
-        ]);
         expectResponses(spec, "/api/v1/admin/navigation/preview-products", "get", [
             "200",
             "400",

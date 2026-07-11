@@ -29,7 +29,6 @@ export function generateAdminBreadcrumbs(
     "categories",
     "collections",
     "pages",
-    "widgets",
     "discounts",
     "analytics",
     "customers",

@@ -54,7 +54,6 @@ All enums follow the pattern: `const` object with `as const`, plus a derived uni
 | `DeliveryProvider` | `pathao`, `steadfast` | Referenced by delivery logic |
 | `DiscountType` | `amount_off_products`, `amount_off_order`, `free_shipping` | `discounts.type` |
 | `DiscountValueType` | `percentage`, `fixed_amount`, `free` | `discounts.valueType` |
-| `WidgetPlacementRule` | `before_collection`, `after_collection`, `fixed_top_homepage`, `fixed_bottom_homepage`, `standalone` | `widgets.placementRule` |
 
 Some tables use inline enum arrays instead of the centralized enums:
 - `products.discountType`: `["percentage", "flat"]`
@@ -65,7 +64,6 @@ Some tables use inline enum arrays instead of the centralized enums:
 - `customerHistory.changeType`: `["created", "updated", "deleted"]`
 - `siteSettings.authVerificationMethod`: `["email", "both", "whatsapp_otp", "sms_otp"]` legacy summary only; advanced customer auth policy is stored in `settings.customer_auth/policy`, and phone collection remains mandatory.
 - `siteSettings.checkoutMode`: `["guest_cod_only", "gateways_only", "all"]`
-- `widgets.displayTarget`: `["homepage"]`
 - `metaConversionsLogs.status`: `["success", "failed"]`
 
 ## Table Inventory
@@ -172,9 +170,6 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 | Table | Purpose |
 |-------|---------|
 | `pages` | CMS pages. Slug, content, published flags/timestamps, featured image, SEO fields |
-| `widgets` | AI-generated widgets. HTML/CSS/JS content, AI context, placement defaults |
-| `widgetPlacements` | Scoped widget placement records for homepage/page/product/category/collection slots |
-| `widgetHistory` | Widget version history. Widget FK, HTML/CSS/JS content, reason |
 | `heroSections` | Legacy hero config. Type and JSON config |
 | `heroSliders` | Homepage sliders. Desktop/mobile type and image array |
 | `pageTemplates` | Page template definitions. Type and JSON config |
@@ -244,8 +239,6 @@ All entity IDs are `text` primary keys generated as `"prefix_" + nanoid()`.
 | `du_` | Discount usage | `discountUsage` |
 | `item_` | Order item | `orderItems` |
 | `page_` | CMS page | `pages` |
-| `wid_` | Widget | `widgets` |
-| `whist_` | Widget history entry | `widgetHistory` |
 | `media_` | Media file | `media` |
 | `folder_` | Media folder | `mediaFolders` |
 | `analytics_` | Analytics script | `analytics` |
@@ -269,9 +262,10 @@ Soft-delete columns (`deletedAt`) follow the same pattern but are nullable with 
 
 ## Migrations
 
-Migration SQL lives in `packages/database/migrations/`. Generated migrations
-come from Drizzle Kit (`pnpm db:generate`); intentional manual migrations must
-also be reflected in the migration metadata check.
+Migration SQL lives in `packages/database/migrations/`. The current chain starts
+from one clean baseline. New schema changes come from Drizzle Kit
+(`pnpm db:generate`); intentional manual SQL must also pass the migration
+metadata check.
 
 ```bash
 # Generate a new migration after schema changes
@@ -285,43 +279,10 @@ pnpm db:migrate:local
 # wrangler d1 migrations apply DB --remote
 ```
 
-Notable migrations:
-- `0016_fts5_search.sql` -- FTS5 virtual tables (raw SQL, not Drizzle-managed)
-- `0019-0023` -- FK indexes, order version, variant barcode, stock version
-- `0024` -- Singleton constraints on `siteSettings`/`metaConversionsSettings`, collections enum fix
-- `0025` -- Query performance indexes
-- `0026` -- Phone number E.164 normalization
-- `0028` -- Additional schema changes
-- `0029` -- Large index additions (with `IF NOT EXISTS` guards)
-- `0030` -- Payment idempotency: unique partial indexes on `orderPayments` for `stripePaymentIntentId`, `sslcommerzTranId`, `polarCheckoutId` per order (with dedup cleanup)
-- `0031` -- Bengali FTS5 tokenizer: reconfigures 5 FTS tables with `unicode61` tokenizer for Bengali script support
-- `0032` -- Additional schema changes
-- `0033` -- Media metadata: `altText`, `width`, `height`
-- `0034` -- Page featured image JSON
-- `0035` -- Scoped `widgetPlacements` table and migration from legacy widget placement fields
-- `0036` -- Atomic discount redemption triggers for max uses and one-per-customer
-- `0037` -- Scoped widget JavaScript content on widgets and widget history
-- `0038` -- Order shipment claim fields for provider/manual fulfillment coordination
-- `0039` -- SSLCommerz `val_id` payment idempotency and payment plan status normalization
-- `0040` -- Better Auth `twoFactor.verified` column
-- `0041` -- Dashboard customer activity index on `(deleted_at, created_at)`
-- `0042` -- Admin order search relevance: rebuilds `orders_fts` with `customer_email` and adds the default list index on `(deleted_at, updated_at)`
-- `0043` -- Durable `order_notification_outbox` table for idempotent order-notification queue handoff and replay
-- `0044` -- Durable `order_notification_delivery_receipts` table for per-channel order notification receipts and retry dedupe
-- `0045` -- Durable `auth_otp_delivery_receipts` table for customer OTP provider delivery receipts and retry dedupe
-- `0048` -- Durable `payment_session_attempts` table for hosted-payment session idempotency
-- `0049` -- Durable `checkout_attempts` table for synchronous storefront checkout idempotency
-- `0050` -- Immutable `discount_customer_redemptions` claims for one-per-customer discount enforcement
-- `0051` -- D1-backed `customer_auth_otp_challenges` for atomic customer OTP attempt accounting and one-time consumption
-- `0054` -- D1-backed `customer_sessions` keyed by HMAC token hash for revocable storefront customer sessions
-- `0055` -- SKU-first inventory model: hidden/default simple-product SKUs, `track_inventory`, and untracked historical variantless order items
-- `0057` -- Legacy/demo simple-SKU repair for active products with zero active SKUs or one zero-stock no-option SKU
-- `0063` -- Partial unique live payment-session single-flight index on `(order_id, gateway, payment_type)` for `processing` attempts
-- `0069` -- Rebuilds short-lived `customer_auth_otp_challenges` without raw email/phone/identifier columns; in-flight OTPs are intentionally invalidated and must be re-requested
-- `0070` -- Customer account-proof columns for claimed/verified/authenticated storefront sessions
-- `0072` -- Order notification delivery receipt provider/status index for provider-health pause recovery
-- `0073` -- Order support-request ledger and event log for customer/admin cancellation, return, and refund request workflows
-- `0074` -- Rebuilds order support-request tables with nullable `customer_id` so receipt-token guest requests use the same ledger without synthetic customer ownership
+The baseline includes raw SQL that Drizzle cannot express: FTS5 virtual tables
+and synchronization triggers, Bengali-aware tokenizers, partial unique indexes
+for payment/refund/SKU invariants, and atomic discount-usage guard triggers. Keep
+that final baseline section intact when regenerating or reviewing migrations.
 
 Validate migration metadata after schema or migration edits:
 
@@ -344,6 +305,6 @@ Drizzle config (`drizzle.config.ts`):
 
 ## Known Gaps
 
-- No FTS5 virtual tables in the Drizzle schema -- FTS5 tables are created via raw SQL in migration `0016_fts5_search.sql` and queried via helpers in `@scalius/core/search/fts5.ts`.
+- No FTS5 virtual tables in the Drizzle schema -- FTS5 tables and sync triggers are raw SQL in the baseline and queried via helpers in `@scalius/core/search/fts5.ts`.
 - Partial unique indexes are documented beside the table definitions but remain raw-SQL migration concerns; for example `product_variants_one_default_per_product_idx` enforces at most one active hidden default SKU per product.
 - Several JSON columns (`headerConfig`, `footerConfig`, etc.) are typed as plain `text()` -- there are no Drizzle JSON mode annotations or Zod validators at the schema level. Validation happens in the service layer.
