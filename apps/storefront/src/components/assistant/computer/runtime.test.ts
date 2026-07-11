@@ -65,6 +65,43 @@ describe("Storefront assistant computer runtime", () => {
     })).resolves.toMatchObject({ ok: false, code: "INVALID_BINDING" });
   });
 
+  it("prioritizes current-page product controls over duplicate global navigation", async () => {
+    document.title = "Stale merchant metadata";
+    document.body.innerHTML = `
+      <header>
+        ${Array.from(
+          { length: 80 },
+          (_, index) => `<button aria-label="Global navigation ${index + 1}"></button>`,
+        ).join("")}
+      </header>
+      <main>
+        <h1>Khaki high-top shoes</h1>
+        <section aria-label="Product options">
+          <button aria-label="Size 40, available">40</button>
+          <button aria-label="Size 41, sold out" disabled>41</button>
+          <button aria-label="Color Khaki, available">Khaki</button>
+          <button aria-label="Color Black, incompatible">Black</button>
+        </section>
+      </main>`;
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: "shop-priority-thread",
+      tabId: "shop-priority-tab",
+      pageTitle: "Khaki high-top shoes",
+    });
+
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+
+    expect(observed.output).toContain('title="Khaki high-top shoes"');
+    expect(observed.output).toContain('button "Size 40, available"');
+    expect(observed.output).toContain('button "Size 41, sold out"');
+    expect(observed.output).toContain('button "Color Khaki, available"');
+    expect(observed.output).toContain('button "Color Black, incompatible"');
+    expect(observed.output).not.toContain('button "Global navigation 65"');
+  });
+
   it.each([
     "/admin",
     "/admin/products",

@@ -17,6 +17,8 @@ const COMMERCE_CONTROL_HINT =
 export interface StorefrontAssistantComputerRuntimeOptions {
   threadId: string;
   tabId: string;
+  /** Trusted, redacted current-page title published by the Storefront. */
+  pageTitle?: string;
   document?: Document;
   navigate?: (route: string) => void | Promise<void>;
   refresh?: () => void | Promise<void>;
@@ -43,8 +45,12 @@ export function createStorefrontAssistantComputerRuntime(
     threadId: options.threadId,
     tabId: options.tabId,
   });
+  const observationDocument = createStorefrontObservationDocument(
+    pageDocument,
+    options.pageTitle,
+  );
   const browserAdapter = createScaliusBrowserComputerAdapter({
-    document: pageDocument,
+    document: observationDocument,
     origin: pageWindow.location.origin,
     currentRoute: () => currentRoute(pageWindow.location),
     goto: options.navigate ?? ((route) => pageWindow.location.assign(route)),
@@ -124,6 +130,32 @@ export function createStorefrontAssistantComputerRuntime(
     },
     cancelPending() {
       cancellationGeneration += 1;
+    },
+  };
+}
+
+/**
+ * Keep buyer-page controls ahead of global navigation in the bounded browser
+ * snapshot. The returned elements remain the real DOM nodes, so revision-bound
+ * actions still execute through the shared adapter without selector shortcuts.
+ */
+function createStorefrontObservationDocument(
+  pageDocument: Document,
+  pageTitle: string | undefined,
+): unknown {
+  const trustedTitle = pageTitle?.trim() || pageDocument.title;
+  return {
+    title: trustedTitle,
+    defaultView: pageDocument.defaultView,
+    getElementById: (id: string) => pageDocument.getElementById(id),
+    querySelectorAll: (selector: string) => {
+      const all = Array.from(pageDocument.querySelectorAll(selector));
+      const main = pageDocument.querySelector("main");
+      if (!main) return all;
+      const primary = Array.from(main.querySelectorAll(selector));
+      if (primary.length === 0) return all;
+      const seen = new Set(primary);
+      return [...primary, ...all.filter((element) => !seen.has(element))];
     },
   };
 }

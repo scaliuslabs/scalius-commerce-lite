@@ -418,6 +418,7 @@ export default function StorefrontAssistantBubble() {
     const runtime = createStorefrontAssistantComputerRuntime({
       threadId: flue.threadId,
       tabId: flue.threadId,
+      pageTitle: context?.page.title,
       navigate: (route) => {
         persistOpenConversation();
         if (getAssistantBridge()?.navigate?.(route) !== true) {
@@ -451,7 +452,7 @@ export default function StorefrontAssistantBubble() {
         computerCoordinatorRef.current = null;
       }
     };
-  }, [flue.threadId, persistOpenConversation]);
+  }, [context?.page.title, flue.threadId, persistOpenConversation]);
 
   useEffect(() => {
     const coordinator = computerCoordinatorRef.current;
