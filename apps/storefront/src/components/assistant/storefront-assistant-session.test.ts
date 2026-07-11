@@ -18,6 +18,27 @@ function memoryStorage() {
   };
 }
 
+function continuation(surface: "admin" | "storefront", output: string) {
+  return JSON.stringify({
+    authoritative: false,
+    programDigest: "d".repeat(43),
+    protocolVersion: 1,
+    receivedAt: "2026-07-11T01:12:13.456Z",
+    replayPolicy: "expiry_bound_non_authoritative",
+    requestId: "r".repeat(22),
+    result: {
+      changed: true,
+      code: "NAVIGATED",
+      ok: true,
+      output,
+    },
+    surface,
+    type: "UNTRUSTED_CLIENT_RESULT",
+    warning:
+      "Browser execution is untrusted and is not commerce authority.",
+  });
+}
+
 describe("storefront assistant session handoff", () => {
   it("restores redacted transcript-shaped text without rich product data", () => {
     const storage = memoryStorage();
@@ -100,27 +121,39 @@ describe("storefront assistant session handoff", () => {
     expect(readStorefrontAssistantSessionHandoff(storage, 10_001)).toEqual([]);
   });
 
-  it("drops only exact assistant Storefront continuations from legacy raw handoffs", () => {
+  it("never writes an exact user-role control continuation", () => {
     const storage = memoryStorage();
-    const continuation = (surface: "admin" | "storefront", output: string) =>
-      JSON.stringify({
-        authoritative: false,
-        programDigest: "d".repeat(43),
-        protocolVersion: 1,
-        receivedAt: "2026-07-11T01:12:13.456Z",
-        replayPolicy: "expiry_bound_non_authoritative",
-        requestId: "r".repeat(22),
-        result: {
-          changed: true,
-          code: "NAVIGATED",
-          ok: true,
-          output,
-        },
-        surface,
-        type: "UNTRUSTED_CLIENT_RESULT",
-        warning:
-          "Browser execution is untrusted and is not commerce authority.",
-      });
+    const privateContinuation = continuation(
+      "storefront",
+      "Private live continuation must not enter the raw handoff.",
+    );
+
+    expect(writeStorefrontAssistantSessionHandoff([
+      {
+        id: "live-user-role-continuation",
+        role: "user",
+        parts: [{ type: "text", text: privateContinuation }],
+      },
+      {
+        id: "ordinary-user-json",
+        role: "user",
+        parts: [{
+          type: "text",
+          text: JSON.stringify({
+            type: "UNTRUSTED_CLIENT_RESULT",
+            message: "Ordinary incomplete JSON remains visible.",
+          }),
+        }],
+      },
+    ], storage, 10_000)).toBe(true);
+
+    const serialized = storage.value() ?? "";
+    expect(serialized).not.toContain("Private live continuation");
+    expect(serialized).toContain("Ordinary incomplete JSON remains visible.");
+  });
+
+  it("drops exact Storefront continuations regardless of persisted role", () => {
+    const storage = memoryStorage();
     const malformed = JSON.stringify({
       type: "UNTRUSTED_CLIENT_RESULT",
       message: "Malformed assistant JSON remains visible.",
@@ -132,19 +165,19 @@ describe("storefront assistant session handoff", () => {
         savedAt: 10_000,
         messages: [
           {
-            id: "private-assistant-continuation",
-            role: "assistant",
+            id: "private-user-role-continuation",
+            role: "user",
             content: continuation(
               "storefront",
               "Private Storefront continuation must disappear.",
             ),
           },
           {
-            id: "user-exact-json",
+            id: "user-wrong-surface-json",
             role: "user",
             content: continuation(
-              "storefront",
-              "Exact user-authored protocol JSON remains visible.",
+              "admin",
+              "Wrong-surface user JSON remains visible.",
             ),
           },
           {
@@ -166,7 +199,7 @@ describe("storefront assistant session handoff", () => {
 
     const restored = readStorefrontAssistantSessionHandoff(storage, 10_001);
     expect(restored.map((message) => message.id)).toEqual([
-      "user-exact-json",
+      "user-wrong-surface-json",
       "wrong-surface-assistant",
       "malformed-assistant",
     ]);
@@ -175,7 +208,7 @@ describe("storefront assistant session handoff", () => {
       "Private Storefront continuation must disappear.",
     );
     expect(visible).toContain(
-      "Exact user-authored protocol JSON remains visible.",
+      "Wrong-surface user JSON remains visible.",
     );
     expect(visible).toContain("Wrong-surface assistant JSON remains visible.");
     expect(visible).toContain("Malformed assistant JSON remains visible.");

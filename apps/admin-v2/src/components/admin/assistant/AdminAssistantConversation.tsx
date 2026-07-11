@@ -35,6 +35,17 @@ const MAX_VISIBLE_MESSAGES = 80;
 export function projectAdminAssistantMessages(
   messages: readonly FlueConversationMessage[],
 ): FlueConversationMessage[] {
+  // Flue persists browser continuations as durable user-role messages. They are
+  // control-plane acknowledgements, not merchant-authored transcript content,
+  // so classify the exact validated envelope by content rather than role.
+  const transcriptMessages = messages.flatMap((message) => {
+    const parts = message.parts.filter(
+      (part) =>
+        part.type !== "text" ||
+        !isScaliusComputerResultContinuation(part.text, "admin"),
+    );
+    return parts.length > 0 ? [{ ...message, parts }] : [];
+  });
   const groups = new Map<
     string,
     { messages: FlueConversationMessage[]; lastIndex: number }
@@ -42,7 +53,7 @@ export function projectAdminAssistantMessages(
   const groupKeyByIndex = new Map<number, string>();
   let turn = 0;
 
-  messages.forEach((message, index) => {
+  transcriptMessages.forEach((message, index) => {
     if (message.role === "user") {
       turn += 1;
       return;
@@ -69,9 +80,7 @@ export function projectAdminAssistantMessages(
         message.parts.filter(
           (part) =>
             part.type === "text" &&
-            part.text.trim().length > 0 &&
-            (message.role !== "assistant" ||
-              !isScaliusComputerResultContinuation(part.text, "admin")),
+            part.text.trim().length > 0,
         ),
       );
     }
@@ -127,7 +136,7 @@ export function projectAdminAssistantMessages(
     projectedByIndex.set(group.lastIndex, { ...source, parts });
   }
 
-  return messages.flatMap((message, index) => {
+  return transcriptMessages.flatMap((message, index) => {
     if (message.role === "user") return [message];
     const key = groupKeyByIndex.get(index);
     const group = key ? groups.get(key) : undefined;

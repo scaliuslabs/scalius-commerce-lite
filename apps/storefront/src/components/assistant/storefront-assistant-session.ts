@@ -54,8 +54,16 @@ function toPersistedMessage(
   message: StorefrontAssistantUiMessage,
   index: number,
 ): PersistedMessage | null {
+  const transcriptMessage = {
+    ...message,
+    parts: message.parts.filter(
+      (part) =>
+        part.type !== "text" ||
+        !isScaliusComputerResultContinuation(part.text, "storefront"),
+    ),
+  };
   const content = cleanAssistantDisplayText(
-    redactAssistantPersistedText(messageToHistoryContent(message)),
+    redactAssistantPersistedText(messageToHistoryContent(transcriptMessage)),
     MAX_PERSISTED_CONTENT_CHARS,
   );
   if (!content) return null;
@@ -72,10 +80,7 @@ function toUiMessage(
 ): StorefrontAssistantUiMessage | null {
   if (message.role !== "assistant" && message.role !== "user") return null;
   if (typeof message.content !== "string") return null;
-  if (
-    message.role === "assistant" &&
-    isScaliusComputerResultContinuation(message.content, "storefront")
-  ) {
+  if (isScaliusComputerResultContinuation(message.content, "storefront")) {
     return null;
   }
   const boundedContent = cleanAssistantDisplayText(

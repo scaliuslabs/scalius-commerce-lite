@@ -15,8 +15,7 @@ export function flueMessageText(message: FlueConversationMessage): string {
     message.parts
       .flatMap((part) =>
         part.type === "text" &&
-        (message.role !== "assistant" ||
-          !isScaliusComputerResultContinuation(part.text, "storefront"))
+        !isScaliusComputerResultContinuation(part.text, "storefront")
           ? [part.text]
           : [],
       )
@@ -31,7 +30,12 @@ export function restoredToFlueMessages(
   return messages.flatMap((message) => {
     const text = cleanAssistantDisplayText(
       message.parts
-        .flatMap((part) => (part.type === "text" ? [part.text] : []))
+        .flatMap((part) =>
+          part.type === "text" &&
+          !isScaliusComputerResultContinuation(part.text, "storefront")
+            ? [part.text]
+            : [],
+        )
         .join("\n\n"),
       MAX_MESSAGE_CHARS,
     );
@@ -85,6 +89,17 @@ function isGroundedCatalogPart(part: FlueConversationPart): boolean {
 export function projectStorefrontAssistantMessages(
   messages: readonly FlueConversationMessage[],
 ): FlueConversationMessage[] {
+  // Flue persists browser continuations as durable user-role messages. They are
+  // control-plane acknowledgements, not buyer-authored transcript content, so
+  // classify the exact validated envelope by content rather than role.
+  const transcriptMessages = messages.flatMap((message) => {
+    const parts = message.parts.filter(
+      (part) =>
+        part.type !== "text" ||
+        !isScaliusComputerResultContinuation(part.text, "storefront"),
+    );
+    return parts.length > 0 ? [{ ...message, parts }] : [];
+  });
   const groups = new Map<
     string,
     { messages: FlueConversationMessage[]; lastIndex: number }
@@ -92,7 +107,7 @@ export function projectStorefrontAssistantMessages(
   const groupKeyByIndex = new Map<number, string>();
   let turn = 0;
 
-  messages.forEach((message, index) => {
+  transcriptMessages.forEach((message, index) => {
     if (message.role === "user") {
       turn += 1;
       return;
@@ -119,9 +134,7 @@ export function projectStorefrontAssistantMessages(
         message.parts.filter(
           (part) =>
             part.type === "text" &&
-            part.text.trim().length > 0 &&
-            (message.role !== "assistant" ||
-              !isScaliusComputerResultContinuation(part.text, "storefront")),
+            part.text.trim().length > 0,
         ),
       );
     }
@@ -191,7 +204,7 @@ export function projectStorefrontAssistantMessages(
     projectedByIndex.set(group.lastIndex, { ...source, parts });
   }
 
-  return messages.flatMap((message, index) => {
+  return transcriptMessages.flatMap((message, index) => {
     if (message.role === "user") return [message];
     const key = groupKeyByIndex.get(index);
     const group = key ? groups.get(key) : undefined;
