@@ -90,12 +90,12 @@ This log records implementation state. The finding files remain the source for o
 
 ## Next implementation slice
 
-1. Deploy and live-verify product aggregate CAS/reload UX, then apply the targeted normalized option/barcode repair/index migration and remove all legacy variant-image marker fallbacks.
+1. Apply the targeted normalized option/barcode repair/index migration and remove all legacy variant-image marker fallbacks.
 2. Normalize collection membership/rules with revisioned ordering and benchmark/materialize the buyer projection.
 3. Finish mobile catalog rows, route-backed settings, keyboard workflows, and automated accessibility coverage.
 4. Split attribute facet/display/export/schema roles, then harden quick-buy, UCP pagination, and feed cursors.
 
-## Reliability batch 5 — locally verified, deployment pending
+## Reliability batch 5 (deployed and live verified)
 
 - Every product-composition mutation now requires and advances `aggregateRevision`; stale writes return typed `PRODUCT_REVISION_CONFLICT` details. Active editor writes reject trashed products, while restore/permanent delete require trash state.
 - The admin starts from a force-fetched authoritative product and owns one stable product/SKU snapshot. Background query invalidation cannot remount or rewrite a dirty draft. Explicit reload is the only replacement path.
@@ -105,3 +105,7 @@ This log records implementation state. The finding files remain the source for o
 - Bulk create reuses the atomic edit plan so initial stock always records ledger-v2 movement. SKU deletion always soft-retires identity and uses in-batch reservation/open-order/final-option guards. Permanent product deletion rechecks order, discount, and inventory history inside its D1 batch.
 - Attribute/category cascades use set-based revision bumps evaluated in the same transaction, closing the read-then-write race. Category permanent delete has a transactional active-product usage guard.
 - Local release evidence: 447 test files / 3,325 tests passed; full workspace typecheck/lint/build passed; SDK generation, Worker env parity, admin performance, distribution secret scan, and diff checks passed.
+- D1 migration `0005_deep_morg.sql` applied successfully before the new Workers. A read-only production query found 30 product rows, aggregate revisions from 1 through 1, and zero null or invalid revisions.
+- API version `d31366a7-14b7-4861-9656-2b4bf6f72cf1` and admin version `ab05cbbb-a9f4-4baf-aa4c-fc6cfe1aa5a6` each serve 100% traffic. The storefront was not deployed because this batch has no storefront code or product-page UI change.
+- Authenticated Chrome loaded the live 28-product catalog and Khaki editor from fresh deployed assets. The editor showed the compact action bar, disabled no-op save, authoritative four-option table, image mapping, pricing, discovery, and option workflows without an auth or render failure.
+- Post-deploy `pnpm ops:check --queues` and `pnpm release:check` passed API health, four readiness samples, the 270-path OpenAPI contract, eight queues, dashboard/API auth rejection, storefront pages/cache policy, discovery XML and feeds, UCP search/lookup/product, and Product schema. Existing logs-only alert email and `worker:testdash` producer warnings remain operational follow-up items.
