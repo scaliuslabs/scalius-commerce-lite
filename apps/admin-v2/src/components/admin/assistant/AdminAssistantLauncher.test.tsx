@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 
-import type {
-  AgentConversationObservationSnapshot,
-  FlueConversationMessage,
-  FlueConversationPart,
+import {
+  FlueApiError,
+  type AgentConversationObservationSnapshot,
+  type FlueConversationMessage,
+  type FlueConversationPart,
 } from "@flue/sdk";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -67,7 +68,8 @@ const sdkMocks = vi.hoisted(() => {
 
 const routerMocks = vi.hoisted(() => ({ navigate: vi.fn() }));
 
-vi.mock("@flue/sdk", () => ({
+vi.mock("@flue/sdk", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@flue/sdk")>()),
   createFlueClient: sdkMocks.createFlueClient,
 }));
 
@@ -462,6 +464,35 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(sdkMocks.refresh).toHaveBeenCalledOnce();
   });
 
+  it("keeps Stop required after a blocked send until the idle thread is durably unlocked", async () => {
+    sdkMocks.send.mockRejectedValueOnce(
+      new FlueApiError(409, {
+        error: {
+          code: "ADMIN_FLUE_ADMISSION_BLOCKED",
+          message: "Stop is still being reconciled",
+        },
+      }),
+    );
+    sdkMocks.abort.mockResolvedValueOnce({ aborted: false });
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Help me");
+    await click(queryButton("Send assistant message"));
+    await flushReact();
+
+    expect(document.body.textContent).toContain(
+      "This thread has an unfinished Stop barrier. Complete Stop before sending another request.",
+    );
+    expect(queryButton("Stop assistant")).toBeTruthy();
+    expect(queryButton("Send assistant message")).toBeNull();
+
+    await click(queryButton("Stop assistant"));
+    await flushReact();
+    expect(sdkMocks.abort).toHaveBeenCalledOnce();
+    expect(queryButton("Stop assistant")).toBeNull();
+    expect(queryButton("Send assistant message")).toBeTruthy();
+  });
+
   it("executes a signed computer navigation automatically and renders no link card", async () => {
     renderLauncher();
     await click(queryButton("Open admin assistant"));
@@ -666,6 +697,44 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     expect(document.body.textContent).toContain(
       "Assistant work stopped. Review any page changes already completed before continuing.",
     );
+  });
+
+  it("keeps Stop visible and locked after an admission abort cannot be confirmed", async () => {
+    sdkMocks.send.mockImplementationOnce(
+      async (
+        _agentName: string,
+        _threadId: string,
+        options: { signal?: AbortSignal },
+      ) =>
+        await new Promise((_resolve, reject) => {
+          options.signal?.addEventListener(
+            "abort",
+            () => reject(options.signal?.reason ?? new Error("aborted")),
+            { once: true },
+          );
+        }),
+    );
+    sdkMocks.abort
+      .mockRejectedValueOnce(new Error("abort transport unavailable"))
+      .mockResolvedValueOnce({ aborted: false });
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await typeAssistantMessage("Do the task");
+    await click(queryButton("Send assistant message"));
+
+    await click(queryButton("Stop assistant"));
+    await flushReact();
+    expect(document.body.textContent).toContain(
+      "The stop request could not be confirmed. The assistant may still be working.",
+    );
+    expect(queryButton("Stop assistant")).toBeTruthy();
+    expect(queryButton("Send assistant message")).toBeNull();
+
+    await click(queryButton("Stop assistant"));
+    await flushReact();
+    expect(sdkMocks.abort).toHaveBeenCalledTimes(2);
+    expect(queryButton("Stop assistant")).toBeNull();
+    expect(queryButton("Send assistant message")).toBeTruthy();
   });
 
   it("does not claim a stop when Flue reports the thread was already idle", async () => {

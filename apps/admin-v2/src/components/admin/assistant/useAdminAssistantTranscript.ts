@@ -1,4 +1,5 @@
 import {
+  FlueApiError,
   createFlueClient,
   type AgentConversationObservation,
   type AgentConversationObservationSnapshot,
@@ -53,6 +54,7 @@ interface AdminAssistantAdmissionAttempt {
   controller: AbortController;
   optimisticId: string;
   clearDeadline: () => void;
+  stopped: boolean;
 }
 
 interface AdminAssistantTranscriptController {
@@ -102,6 +104,7 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
   );
   const [admitting, setAdmitting] = useState(false);
   const [aborting, setAborting] = useState(false);
+  const [stopRequired, setStopRequired] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const admissionAttemptRef = useRef<AdminAssistantAdmissionAttempt | null>(
     null,
@@ -191,7 +194,8 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
       message.submissionId !== undefined &&
       !settledSubmissionIds.has(message.submissionId),
   );
-  const sending = admitting || admittedPendingMessage || activeSubmission;
+  const sending =
+    admitting || admittedPendingMessage || activeSubmission || stopRequired;
   const settlementNotice = useMemo(
     () =>
       sending
@@ -255,6 +259,7 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
       const attempt: AdminAssistantAdmissionAttempt = {
         ...deadline,
         optimisticId,
+        stopped: false,
       };
       admissionAttemptRef.current = attempt;
 
@@ -294,25 +299,33 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
           transport.observation.refresh();
         }
         return true;
-      } catch {
+      } catch (error) {
         const ownsAdmission = admissionAttemptRef.current === attempt;
-        if (ownsAdmission) admissionAttemptRef.current = null;
+        const requiresStop = isAdminStopRequiredError(error);
+        if (ownsAdmission && !attempt.stopped) {
+          admissionAttemptRef.current = null;
+        }
         attempt.clearDeadline();
         setPendingMessages((current) =>
           current.filter((pending) => pending.id !== optimisticId),
         );
-        if (ownsAdmission) {
+        if (requiresStop) {
+          setStopRequired(true);
+          setOperationError(
+            "This thread has an unfinished Stop barrier. Complete Stop before sending another request.",
+          );
+        } else if (ownsAdmission && !attempt.stopped) {
           setOperationError(
             "Assistant request failed before it was admitted. Nothing was changed.",
           );
         }
         return false;
       } finally {
-        if (admissionAttemptRef.current === attempt) {
+        if (admissionAttemptRef.current === attempt && !attempt.stopped) {
           admissionAttemptRef.current = null;
           attempt.clearDeadline();
         }
-        setAdmitting(false);
+        if (!attempt.stopped) setAdmitting(false);
       }
     },
     [sending, snapshot.phase, transport],
@@ -322,7 +335,11 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     "settled" | "requested" | "idle" | "failed"
   > => {
     if (abortPromiseRef.current) return abortPromiseRef.current;
-    if (!transport || (!admitting && !admittedPendingMessage && !activeSubmission)) {
+    if (
+      !transport ||
+      (!admitting && !admittedPendingMessage && !activeSubmission &&
+        !stopRequired)
+    ) {
       return "idle";
     }
 
@@ -333,16 +350,13 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
 
       const admission = admissionAttemptRef.current;
       if (admission) {
+        admission.stopped = true;
         admission.controller.abort(
           new DOMException("Assistant admission was stopped", "AbortError"),
         );
         admission.clearDeadline();
-        admissionAttemptRef.current = null;
-        setPendingMessages((current) =>
-          current.filter((pending) => pending.id !== admission.optimisticId),
-        );
-        setAdmitting(false);
       }
+      setStopRequired(true);
 
       const deadline = deadlineController(
         ABORT_ADMISSION_DEADLINE_MS,
@@ -358,6 +372,16 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
           transport,
           result.aborted,
         );
+        if (admissionAttemptRef.current === admission) {
+          admissionAttemptRef.current = null;
+        }
+        if (admission) {
+          setPendingMessages((current) =>
+            current.filter((pending) => pending.id !== admission.optimisticId),
+          );
+          setAdmitting(false);
+        }
+        setStopRequired(false);
         if (!result.aborted || (canonical && !hasActiveSubmission(canonical))) {
           const knownIds = new Set(
             (canonical?.messages ??
@@ -392,7 +416,14 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     })();
     abortPromiseRef.current = operation;
     return operation;
-  }, [activeSubmission, admittedPendingMessage, admitting, pendingMessages, transport]);
+  }, [
+    activeSubmission,
+    admittedPendingMessage,
+    admitting,
+    pendingMessages,
+    stopRequired,
+    transport,
+  ]);
 
   const retry = useCallback(() => {
     setOperationError(null);
@@ -407,7 +438,8 @@ export function useAdminAssistantTranscript(): AdminAssistantTranscriptControlle
     sending,
     aborting,
     canAbort:
-      (admitting || admittedPendingMessage || activeSubmission) && !aborting,
+      (admitting || admittedPendingMessage || activeSubmission || stopRequired) &&
+      !aborting,
     canStartNewConversation: !sending && !aborting,
     operationError,
     settlementNotice,
@@ -473,6 +505,21 @@ function hasActiveSubmission(
     (message) =>
       message.submissionId !== undefined &&
       !settled.has(message.submissionId),
+  );
+}
+
+function isAdminStopRequiredError(error: unknown): boolean {
+  if (!(error instanceof FlueApiError) || error.status !== 409) return false;
+  const body = error.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const envelope = body as Record<string, unknown>;
+  const detail = envelope.error;
+  return Boolean(
+    detail &&
+      typeof detail === "object" &&
+      !Array.isArray(detail) &&
+      (detail as Record<string, unknown>).code ===
+        "ADMIN_FLUE_ADMISSION_BLOCKED",
   );
 }
 
