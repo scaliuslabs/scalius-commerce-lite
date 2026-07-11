@@ -31,6 +31,11 @@ export interface ProductListItem {
 interface ProductColumnOptions {
   showTrashed: boolean;
   symbol: string;
+  canSelect: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canRestore: boolean;
+  canPermanentDelete: boolean;
   onView: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
@@ -59,7 +64,13 @@ export function getProductColumns(
   opts: ProductColumnOptions,
 ): ColumnDef<ProductListItem, unknown>[] {
   return [
-    createSelectColumn<ProductListItem>({ getLabel: (r) => (r as ProductListItem).name }),
+    ...(opts.canSelect
+      ? [
+          createSelectColumn<ProductListItem>({
+            getLabel: (r) => (r as ProductListItem).name,
+          }),
+        ]
+      : []),
     {
       id: "image",
       header: () => <span className="text-xs">Image</span>,
@@ -190,10 +201,12 @@ export function getProductColumns(
     createActionsColumn<ProductListItem>({
       showTrashed: opts.showTrashed,
       onView: (p) => opts.onView(p.id),
-      onEdit: (p) => opts.onEdit(p.id),
-      onDelete: (p) => opts.onDelete(p.id),
-      onRestore: (p) => opts.onRestore(p.id),
-      onPermanentDelete: (p) => opts.onPermanentDelete(p.id),
+      onEdit: opts.canEdit ? (p) => opts.onEdit(p.id) : undefined,
+      onDelete: opts.canDelete ? (p) => opts.onDelete(p.id) : undefined,
+      onRestore: opts.canRestore ? (p) => opts.onRestore(p.id) : undefined,
+      onPermanentDelete: opts.canPermanentDelete
+        ? (p) => opts.onPermanentDelete(p.id)
+        : undefined,
       getExtraActions: (p) =>
         !opts.showTrashed
           ? [{ label: "Copy Shortcode", icon: Copy, onClick: () => copyProductShortcode(p.slug) }]

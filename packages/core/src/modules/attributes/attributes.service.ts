@@ -2,10 +2,10 @@
 // All DB queries and business logic for the product attributes domain.
 
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
-import { sql, eq, and, or, like, asc, desc, count, inArray, isNull } from "drizzle-orm";
+import { sql, eq, and, or, like, asc, desc, count, inArray, isNull, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError, ConflictError } from "@scalius/core/errors";
+import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 
 import type { CreateAttributeInput, UpdateAttributeInput } from "./attributes.validation";
 
@@ -282,6 +282,36 @@ export async function bulkRestoreAttributes(db: Database, ids: string[]) {
 // Attribute Values
 // ─────────────────────────────────────────
 
+const ATTRIBUTE_VALUE_PAGE_LIMIT = 100;
+
+function attributeValueKey(value: string): string {
+    return value.trim().toLowerCase();
+}
+
+function dedupeAttributeOptions(options: string[]): string[] {
+    const uniqueOptions: string[] = [];
+    const seenKeys = new Set<string>();
+    for (const option of options) {
+        const normalizedOption = option.trim();
+        const key = attributeValueKey(normalizedOption);
+        if (!key || seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        uniqueOptions.push(normalizedOption);
+    }
+    return uniqueOptions;
+}
+
+function normalizeAttributeValue(value: string): string {
+    const normalizedValue = value.trim();
+    if (!normalizedValue) throw new ValidationError("Attribute value is required");
+    return normalizedValue;
+}
+
+function requireExistingAttributeValue(value: string): string {
+    if (!value.trim()) throw new ValidationError("Attribute value is required");
+    return value;
+}
+
 export async function listAttributeValues(
     db: Database,
     attributeId: string,
@@ -292,12 +322,13 @@ export async function listAttributeValues(
         limit?: number;
     } = {},
 ) {
-    const {
-        search,
-        sort = "desc",
-        page = 1,
-        limit = 20,
-    } = options;
+    const search = options.search?.trim() || undefined;
+    const sort = options.sort === "asc" ? "asc" : "desc";
+    const page = Math.max(1, Math.floor(options.page ?? 1));
+    const limit = Math.min(
+        ATTRIBUTE_VALUE_PAGE_LIMIT,
+        Math.max(1, Math.floor(options.limit ?? 20)),
+    );
 
     const attribute = await db
         .select()
@@ -313,7 +344,8 @@ export async function listAttributeValues(
     if (!attribute) throw new NotFoundError("Attribute not found");
 
     const offset = (page - 1) * limit;
-    const attrOptions = (attribute.options as string[]) || [];
+    const attrOptions = dedupeAttributeOptions((attribute.options as string[]) || []);
+    const attrOptionKeys = new Set(attrOptions.map(attributeValueKey));
 
     // Build WHERE conditions for DB-level filtering
     const whereConditions = [
@@ -329,7 +361,8 @@ export async function listAttributeValues(
     // Get total count of distinct values at DB level
     const totalResult = await db
         .select({
-            total: count(sql`DISTINCT ${productAttributeValues.value}`),
+            totalValues: count(sql`DISTINCT ${productAttributeValues.value}`),
+            totalProducts: count(productAttributeValues.productId),
         })
         .from(productAttributeValues)
         .innerJoin(products, eq(productAttributeValues.productId, products.id))
@@ -337,43 +370,65 @@ export async function listAttributeValues(
         .get();
 
     // Get paginated distinct values with counts using GROUP BY
-    const dbValues = await db
-        .select({
-            value: productAttributeValues.value,
-            productCount: count(productAttributeValues.productId),
-            earliestCreatedAt: sql<number>`MIN(${productAttributeValues.createdAt})`,
-        })
-        .from(productAttributeValues)
-        .innerJoin(products, eq(productAttributeValues.productId, products.id))
-        .where(combinedWhere)
-        .groupBy(productAttributeValues.value)
-        .orderBy(
-            sort === "asc"
-                ? asc(sql`MIN(${productAttributeValues.createdAt})`)
-                : desc(sql`MIN(${productAttributeValues.createdAt})`)
-        )
-        .limit(limit)
-        .offset(offset)
-        .all();
+    const dbTotal = totalResult?.totalValues ?? 0;
+    const dbItemsToFetch = offset < dbTotal
+        ? Math.min(limit, dbTotal - offset)
+        : 0;
+    const dbValues = dbItemsToFetch > 0
+        ? await db
+            .select({
+                value: productAttributeValues.value,
+                productCount: count(productAttributeValues.productId),
+                earliestCreatedAt: sql<number>`MIN(${productAttributeValues.createdAt})`,
+            })
+            .from(productAttributeValues)
+            .innerJoin(products, eq(productAttributeValues.productId, products.id))
+            .where(combinedWhere)
+            .groupBy(productAttributeValues.value)
+            .orderBy(
+                sort === "asc"
+                    ? asc(sql`MIN(${productAttributeValues.createdAt})`)
+                    : desc(sql`MIN(${productAttributeValues.createdAt})`)
+            )
+            .limit(dbItemsToFetch)
+            .offset(offset)
+            .all()
+        : [];
 
     // Batch fetch sample product names for all values on this page
     const pageValues = dbValues.map((v) => v.value);
     const sampleProductMap = new Map<string, string[]>();
     if (pageValues.length > 0) {
-        const allSamples = await db
+        const rankedSamples = db
             .select({
                 value: productAttributeValues.value,
                 productName: products.name,
+                sampleRank: sql<number>`ROW_NUMBER() OVER (
+                    PARTITION BY ${productAttributeValues.value}
+                    ORDER BY ${products.name}, ${products.id}
+                )`.as("sample_rank"),
             })
             .from(productAttributeValues)
             .innerJoin(products, eq(productAttributeValues.productId, products.id))
             .where(
                 and(
                     eq(productAttributeValues.attributeId, attributeId),
-                    inArray(productAttributeValues.value, pageValues),
+                    sql`${productAttributeValues.value} IN (
+                        SELECT CAST(value AS TEXT)
+                        FROM json_each(${JSON.stringify(pageValues)})
+                    )`,
                     isNull(products.deletedAt),
                 )
             )
+            .as("ranked_attribute_value_samples");
+
+        const allSamples = await db
+            .select({
+                value: rankedSamples.value,
+                productName: rankedSamples.productName,
+            })
+            .from(rankedSamples)
+            .where(lte(rankedSamples.sampleRank, 5))
             .all();
 
         // Group by value, keeping at most 5 sample names per value
@@ -390,16 +445,42 @@ export async function listAttributeValues(
         value: row.value,
         productCount: row.productCount,
         createdAt: row.earliestCreatedAt,
-        isPreset: attrOptions.includes(row.value),
+        isPreset: attrOptionKeys.has(attributeValueKey(row.value)),
         sampleProducts: sampleProductMap.get(row.value) || [],
     }));
 
-    // Count preset options that have no product usage (and match search if any)
-    const unusedPresets = attrOptions
-        .filter((opt) => {
-            if (search && !opt.toLowerCase().includes(search.toLowerCase())) return false;
-            return !dbValues.some((v) => v.value === opt);
-        })
+    // Reconcile presets against every used value, not only the current page.
+    // Bind the candidate set as one JSON value so a large preset list cannot
+    // cross D1's 100-bound-parameter ceiling.
+    const normalizedSearch = search ? attributeValueKey(search) : undefined;
+    const matchingPresetOptions = normalizedSearch
+        ? attrOptions.filter((option) => attributeValueKey(option).includes(normalizedSearch))
+        : attrOptions;
+    const matchingPresetKeys = matchingPresetOptions.map(attributeValueKey);
+    const usedRows = matchingPresetOptions.length > 0
+        ? await db
+            .select({
+                valueKey: sql<string>`lower(trim(${productAttributeValues.value}))`,
+            })
+            .from(productAttributeValues)
+            .innerJoin(products, eq(productAttributeValues.productId, products.id))
+            .where(
+                and(
+                    eq(productAttributeValues.attributeId, attributeId),
+                    sql`lower(trim(${productAttributeValues.value})) IN (
+                        SELECT CAST(value AS TEXT)
+                        FROM json_each(${JSON.stringify(matchingPresetKeys)})
+                    )`,
+                    isNull(products.deletedAt),
+                ),
+            )
+            .groupBy(sql`lower(trim(${productAttributeValues.value}))`)
+            .all()
+        : [];
+    const usedPresetKeys = new Set(usedRows.map((row) => row.valueKey));
+
+    const unusedPresets = matchingPresetOptions
+        .filter((option) => !usedPresetKeys.has(attributeValueKey(option)))
         .map((opt) => ({
             value: opt,
             productCount: 0,
@@ -410,27 +491,24 @@ export async function listAttributeValues(
             sampleProducts: [] as string[],
         }));
 
-    const dbTotal = totalResult?.total ?? 0;
     const totalValues = dbTotal + unusedPresets.length;
 
-    // Merge unused presets into results if we're on a page that would include them
-    // (unused presets are appended after DB results)
-    const dbTotalPages = Math.ceil(dbTotal / limit);
-    let finalValues = values;
-    if (page > dbTotalPages || (page === dbTotalPages && values.length < limit)) {
-        // Calculate how many unused preset slots fit on this page
-        const dbItemsOnPage = values.length;
-        const slotsLeft = limit - dbItemsOnPage;
-        const presetOffset = page <= dbTotalPages ? 0 : (page - dbTotalPages - 1) * limit + (limit - dbItemsOnPage);
-        finalValues = [...values, ...unusedPresets.slice(presetOffset, presetOffset + slotsLeft)];
-    }
+    // Used values keep their database order; unused presets follow in their
+    // merchant-defined order and fill the remainder of the requested page.
+    const presetOffset = Math.max(0, offset - dbTotal);
+    const presetSlots = limit - values.length;
+    const finalValues = presetSlots > 0
+        ? [...values, ...unusedPresets.slice(presetOffset, presetOffset + presetSlots)]
+        : values;
 
     return {
         attributeId,
         attributeName: attribute.name,
         values: finalValues,
         totalValues,
+        totalProducts: totalResult?.totalProducts ?? 0,
         page,
+        limit,
         totalPages: Math.ceil(totalValues / limit)
     };
 }
@@ -448,12 +526,13 @@ export async function addAttributeValue(
 
     if (!attribute) throw new NotFoundError("Attribute not found");
 
-    const currentOptions = (attribute.options as string[]) || [];
-    if (currentOptions.includes(value)) {
-        throw new ConflictError(`Value "${value}" already exists for this attribute`);
+    const normalizedValue = normalizeAttributeValue(value);
+    const currentOptions = dedupeAttributeOptions((attribute.options as string[]) || []);
+    if (currentOptions.some((option) => attributeValueKey(option) === attributeValueKey(normalizedValue))) {
+        throw new ConflictError(`Value "${normalizedValue}" already exists for this attribute`);
     }
 
-    const newOptions = [...currentOptions, value];
+    const newOptions = [...currentOptions, normalizedValue];
     await db
         .update(productAttributes)
         .set({ options: newOptions })
@@ -474,23 +553,37 @@ export async function renameAttributeValue(
 
     if (!attribute) throw new NotFoundError("Attribute not found");
 
+    const normalizedOldValue = requireExistingAttributeValue(oldValue);
+    const normalizedNewValue = normalizeAttributeValue(newValue);
+    const oldValueKey = attributeValueKey(normalizedOldValue);
+    const newValueKey = attributeValueKey(normalizedNewValue);
+    const rawOptions = (attribute.options as string[]) || [];
+    if (
+        oldValueKey !== newValueKey &&
+        rawOptions.some((option) => attributeValueKey(option) === newValueKey)
+    ) {
+        throw new ConflictError(
+            `Value "${normalizedNewValue}" already exists for this attribute`,
+        );
+    }
+
     const batchOps: unknown[] = [
         db
             .update(productAttributeValues)
-            .set({ value: newValue })
+            .set({ value: normalizedNewValue })
             .where(
                 and(
                     eq(productAttributeValues.attributeId, attributeId),
-                    eq(productAttributeValues.value, oldValue)
+                    sql`lower(trim(${productAttributeValues.value})) = ${oldValueKey}`,
                 )
             ),
     ];
 
-    const currentOptions = (attribute.options as string[]) || [];
-    if (currentOptions.includes(oldValue)) {
-        const newOptions = currentOptions.map((o) =>
-            o === oldValue ? newValue : o
-        );
+    const currentOptions = dedupeAttributeOptions(rawOptions);
+    if (currentOptions.some((option) => attributeValueKey(option) === oldValueKey)) {
+        const newOptions = dedupeAttributeOptions(currentOptions.map((option) =>
+            attributeValueKey(option) === oldValueKey ? normalizedNewValue : option
+        ));
         batchOps.push(
             db
                 .update(productAttributes)
@@ -516,20 +609,24 @@ export async function deleteAttributeValue(
 
     if (!attribute) throw new NotFoundError("Attribute not found");
 
+    const normalizedValue = requireExistingAttributeValue(value);
+    const normalizedValueKey = attributeValueKey(normalizedValue);
     const batchOps: unknown[] = [
         db
             .delete(productAttributeValues)
             .where(
                 and(
                     eq(productAttributeValues.attributeId, attributeId),
-                    eq(productAttributeValues.value, value)
+                    sql`lower(trim(${productAttributeValues.value})) = ${normalizedValueKey}`,
                 )
             ),
     ];
 
-    const currentOptions = (attribute.options as string[]) || [];
-    if (currentOptions.includes(value)) {
-        const newOptions = currentOptions.filter((o) => o !== value);
+    const currentOptions = dedupeAttributeOptions((attribute.options as string[]) || []);
+    if (currentOptions.some((option) => attributeValueKey(option) === normalizedValueKey)) {
+        const newOptions = currentOptions.filter(
+            (option) => attributeValueKey(option) !== normalizedValueKey,
+        );
         batchOps.push(
             db
                 .update(productAttributes)

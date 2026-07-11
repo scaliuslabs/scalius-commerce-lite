@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 import {
+    assertUniqueChangedVariantOptions,
     bulkCreateVariants,
     bulkDeleteVariants,
     createVariant,
@@ -28,6 +29,36 @@ const baseVariant = {
 };
 
 describe("product variant SKU rules", () => {
+    it("normalizes case and whitespace when comparing option combinations", () => {
+        expect(() =>
+            assertUniqueChangedVariantOptions([
+                { size: " Medium ", color: "RED" },
+                { size: "medium", color: " red " },
+            ]),
+        ).toThrow(ValidationError);
+    });
+
+    it("rejects a changed option combination already used by an active sibling", () => {
+        expect(() =>
+            assertUniqueChangedVariantOptions(
+                [{ size: "M", color: "Blue" }],
+                [{ size: " m ", color: "BLUE" }],
+            ),
+        ).toThrow(ConflictError);
+    });
+
+    it("allows one changed SKU to repair a legacy duplicate incrementally", () => {
+        expect(() =>
+            assertUniqueChangedVariantOptions(
+                [{ size: "L", color: "Blue" }],
+                [
+                    { size: "M", color: "Blue" },
+                    { size: "M", color: "Blue" },
+                ],
+            ),
+        ).not.toThrow();
+    });
+
     it("rejects merchant-created variants without customer options", async () => {
         await expect(createVariant(db, "prod_1", {
             ...baseVariant,
@@ -558,6 +589,60 @@ describe("product variant SKU rules", () => {
             { ...baseVariant, sku: "SKU-1", size: "M", color: null },
             { ...baseVariant, sku: "SKU-2", size: null, color: "Red" },
         ])).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("batches every parameter-safe create chunk in one transaction", async () => {
+        let selectCount = 0;
+        const batchCalls: Array<Array<{ values: Array<Record<string, unknown>> }>> = [];
+        const dbWithBatch = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            where() {
+                                if (selectCount === 1) return Promise.resolve([]);
+                                return { all: async () => [] };
+                            },
+                        };
+                    },
+                };
+            },
+            insert() {
+                return {
+                    values(values: Array<Record<string, unknown>>) {
+                        return {
+                            returning() {
+                                return { values };
+                            },
+                        };
+                    },
+                };
+            },
+            async batch(statements: Array<{ values: Array<Record<string, unknown>> }>) {
+                batchCalls.push(statements);
+                return statements.map((statement) => statement.values);
+            },
+        };
+
+        const variants = Array.from({ length: 5 }, (_, index) => ({
+            ...baseVariant,
+            sku: `SKU-${index + 10}`,
+            size: `Size ${index + 1}`,
+        }));
+
+        const created = await bulkCreateVariants(
+            dbWithBatch as never,
+            "prod_1",
+            variants,
+        );
+
+        expect(batchCalls).toHaveLength(1);
+        expect(batchCalls[0]).toHaveLength(2);
+        expect(batchCalls[0]?.map((statement) => statement.values.length)).toEqual([
+            4, 1,
+        ]);
+        expect(created).toHaveLength(5);
     });
 
     it("rejects variant updates that would mix option axes with sibling SKUs", async () => {

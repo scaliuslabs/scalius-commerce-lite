@@ -85,9 +85,9 @@ interface ActionsColumnCallbacks<T> {
   showTrashed: boolean;
   onView?: (row: T) => void;
   onEdit?: (row: T) => void;
-  onDelete: (row: T) => void;
-  onRestore: (row: T) => void;
-  onPermanentDelete: (row: T) => void;
+  onDelete?: (row: T) => void;
+  onRestore?: (row: T) => void;
+  onPermanentDelete?: (row: T) => void;
   /** Dynamic extra actions per row. */
   getExtraActions?: (row: T) => ExtraAction[] | undefined;
   /** Column width (default 70). */
@@ -106,9 +106,13 @@ export function createActionsColumn<T>(
           showTrashed={callbacks.showTrashed}
           onView={callbacks.onView ? () => callbacks.onView!(entity) : undefined}
           onEdit={callbacks.onEdit ? () => callbacks.onEdit!(entity) : undefined}
-          onDelete={() => callbacks.onDelete(entity)}
-          onRestore={() => callbacks.onRestore(entity)}
-          onPermanentDelete={() => callbacks.onPermanentDelete(entity)}
+          onDelete={callbacks.onDelete ? () => callbacks.onDelete!(entity) : undefined}
+          onRestore={callbacks.onRestore ? () => callbacks.onRestore!(entity) : undefined}
+          onPermanentDelete={
+            callbacks.onPermanentDelete
+              ? () => callbacks.onPermanentDelete!(entity)
+              : undefined
+          }
           extraActions={callbacks.getExtraActions?.(entity)}
         />
       );

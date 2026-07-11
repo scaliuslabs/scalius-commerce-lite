@@ -187,4 +187,30 @@ describe("api.server cookie forwarding", () => {
       }),
     );
   });
+
+  it.each([401, 403, 404, 409, 500, 503])(
+    "preserves HTTP status %i on API response failures",
+    async (status) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              success: false,
+              error: { code: "CATALOG_FAILURE", message: "Catalog request failed" },
+            }),
+            { status },
+          ),
+        ),
+      );
+
+      const { apiGet } = await import("./api.server");
+      await expect(apiGet("/products/product_1")).rejects.toMatchObject({
+        name: "AdminApiResponseError",
+        message: "Catalog request failed",
+        status,
+        code: "CATALOG_FAILURE",
+      });
+    },
+  );
 });

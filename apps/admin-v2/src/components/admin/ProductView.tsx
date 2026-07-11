@@ -33,6 +33,7 @@ import { RichContent } from "../ui/rich-content";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { useCurrency } from "@/hooks/use-currency";
+import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import { cleanMetaDescription } from "./product-form/utils";
 
 interface ProductVariant {
@@ -96,6 +97,7 @@ interface ProductViewProps {
 export function ProductView({ product }: ProductViewProps) {
   const { getStorefrontPath } = useStorefrontUrl();
   const { symbol } = useCurrency();
+  const { products: productActions } = useCatalogActionPermissions();
   const primaryImage = product.images.find((img) => img.isPrimary);
   const otherImages = product.images.filter((img) => !img.isPrimary);
   const visibleMetaDescription = cleanMetaDescription(product.metaDescription);
@@ -208,12 +210,14 @@ export function ProductView({ product }: ProductViewProps) {
             </div>
 
             <div className="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0">
-              <Button size="sm" asChild className="h-8 text-xs font-medium w-full sm:w-auto">
-                <Link to={`/admin/products/${product.id}/edit` as string}>
-                  <Pencil className="mr-2 h-3.5 w-3.5" />
-                  Edit Product
-                </Link>
-              </Button>
+              {productActions.canEdit && (
+                <Button size="sm" asChild className="h-8 text-xs font-medium w-full sm:w-auto">
+                  <Link to={`/admin/products/${product.id}/edit` as string}>
+                    <Pencil className="mr-2 h-3.5 w-3.5" />
+                    Edit Product
+                  </Link>
+                </Button>
+              )}
               <Button variant="outline" size="sm" asChild className="h-8 text-xs font-medium w-full sm:w-auto">
                 <a href={getStorefrontPath(`/products/${product.slug}`)} target="_blank" rel="noreferrer">
                   <ExternalLink className="mr-2 h-3.5 w-3.5" />

@@ -19,6 +19,7 @@ import type {
 } from "~/components/admin/product-form/variants/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
+import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 
 const VariantManager = lazy(() =>
   import("~/components/admin/product-form/variants/VariantManager").then((module) => ({
@@ -29,7 +30,12 @@ const VariantManager = lazy(() =>
 export const Route = createFileRoute("/admin/products/$productId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
     const [productResult] = await Promise.all([
-      queryClient.ensureQueryData({ ...productQueryOptions(params.productId), staleTime: Infinity }).catch(() => null),
+      queryClient
+        .ensureQueryData({
+          ...productQueryOptions(params.productId),
+          staleTime: Infinity,
+        })
+        .catch(nullForAdminApiNotFound),
       queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
       queryClient.ensureQueryData(seoSettingsQueryOptions()).catch(() => null),
     ]);

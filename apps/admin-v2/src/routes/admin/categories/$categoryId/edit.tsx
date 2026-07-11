@@ -3,10 +3,16 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { CategoryForm } from "~/components/admin/CategoryForm";
 import { categoryQueryOptions } from "~/lib/api-query-options/categories";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 
 export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
-    const category = await queryClient.ensureQueryData({ ...categoryQueryOptions(params.categoryId), staleTime: Infinity }).catch(() => null);
+    const category = await queryClient
+      .ensureQueryData({
+        ...categoryQueryOptions(params.categoryId),
+        staleTime: Infinity,
+      })
+      .catch(nullForAdminApiNotFound);
     if (!category) throw redirect({ to: "/admin/categories" });
   },
   head: () => ({

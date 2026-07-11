@@ -31,6 +31,7 @@ import {
   useBulkDeleteProducts,
 } from "~/lib/api-mutations/products";
 import { useCurrency } from "~/hooks/use-currency";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { DataTable } from "~/components/admin/data-table/DataTable";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import {
@@ -127,6 +128,7 @@ function ProductsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const { symbol } = useCurrency();
+  const { products: productActions } = useCatalogActionPermissions();
   const showTrashed = search.trashed;
 
   // ── Queries ───────────────────────────────────────────────────
@@ -197,27 +199,34 @@ function ProductsPage() {
 
   const handleEdit = useCallback(
     (id: string) => {
+      if (!productActions.canEdit) return;
       void navigate({
         to: "/admin/products/$productId/edit",
         params: { productId: id },
       });
     },
-    [navigate],
+    [navigate, productActions.canEdit],
   );
 
   const handleDelete = useCallback(
-    (id: string) => setProductToDelete(id),
-    [],
+    (id: string) => {
+      if (productActions.canDelete) setProductToDelete(id);
+    },
+    [productActions.canDelete],
   );
 
   const handleRestore = useCallback(
-    (id: string) => restoreMut.mutate(id),
-    [restoreMut],
+    (id: string) => {
+      if (productActions.canRestore) restoreMut.mutate(id);
+    },
+    [restoreMut, productActions.canRestore],
   );
 
   const handlePermanentDelete = useCallback(
-    (id: string) => setProductToDelete(id),
-    [],
+    (id: string) => {
+      if (productActions.canPermanentDelete) setProductToDelete(id);
+    },
+    [productActions.canPermanentDelete],
   );
 
   // ── Columns ───────────────────────────────────────────────────
@@ -227,13 +236,27 @@ function ProductsPage() {
       getProductColumns({
         showTrashed,
         symbol,
+        canSelect: productActions.canBulkDelete,
+        canEdit: productActions.canEdit,
+        canDelete: productActions.canDelete,
+        canRestore: productActions.canRestore,
+        canPermanentDelete: productActions.canPermanentDelete,
         onView: handleView,
         onEdit: handleEdit,
         onDelete: handleDelete,
         onRestore: handleRestore,
         onPermanentDelete: handlePermanentDelete,
       }),
-    [showTrashed, symbol, handleView, handleEdit, handleDelete, handleRestore, handlePermanentDelete],
+    [
+      showTrashed,
+      symbol,
+      productActions,
+      handleView,
+      handleEdit,
+      handleDelete,
+      handleRestore,
+      handlePermanentDelete,
+    ],
   );
 
   // ── Data selector ─────────────────────────────────────────────
@@ -268,26 +291,41 @@ function ProductsPage() {
     const id = productToDelete;
     setProductToDelete(null);
     if (showTrashed) {
+      if (!productActions.canPermanentDelete) return;
       permanentDeleteMut.mutate(id);
     } else {
+      if (!productActions.canDelete) return;
       deleteMut.mutate(id);
     }
-  }, [productToDelete, showTrashed, deleteMut, permanentDeleteMut]);
+  }, [
+    productToDelete,
+    showTrashed,
+    productActions.canDelete,
+    productActions.canPermanentDelete,
+    deleteMut,
+    permanentDeleteMut,
+  ]);
 
   const handleBulkDelete = useCallback(() => {
-    if (selectedIds.length > 0) {
+    if (productActions.canBulkDelete && selectedIds.length > 0) {
       setIsConfirmBulkDeleteOpen(true);
     }
-  }, [selectedIds]);
+  }, [productActions.canBulkDelete, selectedIds]);
 
   const confirmBulkDelete = useCallback(() => {
-    if (selectedIds.length === 0) return;
+    if (!productActions.canBulkDelete || selectedIds.length === 0) return;
     setIsConfirmBulkDeleteOpen(false);
     bulkDeleteMut.mutate(
       { productIds: selectedIds, permanent: showTrashed },
       { onSuccess: () => clearSelection() },
     );
-  }, [selectedIds, showTrashed, bulkDeleteMut, clearSelection]);
+  }, [
+    productActions.canBulkDelete,
+    selectedIds,
+    showTrashed,
+    bulkDeleteMut,
+    clearSelection,
+  ]);
 
   const isProductDeleteDialogOpen = !!productToDelete || isConfirmBulkDeleteOpen;
 
@@ -316,6 +354,7 @@ function ProductsPage() {
       showTrashed={showTrashed}
       onBulkDelete={handleBulkDelete}
       isBulkDeleting={bulkDeleteMut.isPending}
+      canBulkDelete={productActions.canBulkDelete}
       bulkActionsDisabled={Boolean(error)}
     />
   );
@@ -361,7 +400,7 @@ function ProductsPage() {
                   )}
                 </Link>
               </Button>
-              {!showTrashed && (
+              {!showTrashed && productActions.canCreate && (
                 <Button size="sm" className="h-7 text-xs" asChild>
                   <Link to="/admin/products/new">
                     <Plus className="h-3.5 w-3.5 mr-1" />
@@ -427,7 +466,10 @@ function ProductsPage() {
                 ? "Products moved to trash will appear here."
                 : undefined,
               action:
-                !showTrashed && !search.search && search.category === "all" ? (
+                !showTrashed &&
+                productActions.canCreate &&
+                !search.search &&
+                search.category === "all" ? (
                   <Button size="sm" asChild className="h-7 text-xs">
                     <Link to="/admin/products/new">
                       <Plus className="h-3.5 w-3.5 mr-1" />
@@ -440,7 +482,10 @@ function ProductsPage() {
         </CardContent>
       </Card>
 
-      {isProductDeleteDialogOpen && (
+      {isProductDeleteDialogOpen &&
+        (showTrashed
+          ? productActions.canPermanentDelete || productActions.canBulkDelete
+          : productActions.canDelete || productActions.canBulkDelete) && (
         <Suspense fallback={null}>
           <ProductDeleteDialog
             showTrashed={showTrashed}

@@ -53,6 +53,7 @@ import {
   type InventoryAdjustmentReason,
 } from "@/lib/api-functions/inventory";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 
 // ---------- Types ----------
 
@@ -104,6 +105,7 @@ function timeAgo(dateValue: string | number) {
 // ---------- Main Component ----------
 
 export function InventoryManager() {
+  const { inventory: inventoryActions } = useCatalogActionPermissions();
   // Local UI state
   const [activeTab, setActiveTab] = useState<Tab>("variants");
   const [requestedPage, setRequestedPage] = useState(1);
@@ -379,14 +381,16 @@ export function InventoryManager() {
                             </Badge>
                           </TableCell>
                           <TableCell className="py-2 text-right pr-3 flex justify-end">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-[11px] font-medium"
-                              onClick={() => setAdjustingVariant(v)}
-                            >
-                              <ArrowUpDown className="h-3 w-3 mr-1" /> Adjust
-                            </Button>
+                            {inventoryActions.canAdjustStock && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-[11px] font-medium"
+                                onClick={() => setAdjustingVariant(v)}
+                              >
+                                <ArrowUpDown className="h-3 w-3 mr-1" /> Adjust
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -491,11 +495,13 @@ export function InventoryManager() {
       </CardContent>
 
       {/* Adjust Modal — shadcn Dialog */}
-      <AdjustDialog
-        variant={adjustingVariant}
-        onClose={() => setAdjustingVariant(null)}
-        onSubmit={refresh}
-      />
+      {inventoryActions.canAdjustStock && (
+        <AdjustDialog
+          variant={adjustingVariant}
+          onClose={() => setAdjustingVariant(null)}
+          onSubmit={refresh}
+        />
+      )}
     </Card>
   );
 }

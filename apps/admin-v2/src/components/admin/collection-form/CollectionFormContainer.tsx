@@ -17,6 +17,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { createCollection, updateCollection } from "~/lib/api-functions/collections";
 import { ProductSelectionSection } from "./ProductSelectionSection";
 import { LayoutSettingsSection } from "./LayoutSettingsSection";
@@ -46,13 +47,14 @@ export function CollectionForm({
 }: CollectionFormProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { collections: collectionActions } = useCatalogActionPermissions();
   const [knownProducts, setKnownProducts] = React.useState<Product[]>(products);
   const form = useForm<CollectionFormValues>({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
       name: "",
       type: "manual",
-      isActive: true,
+      isActive: false,
       canonicalPath: null,
       noIndex: false,
       excludeFromSitemap: false,
@@ -174,6 +176,16 @@ export function CollectionForm({
           className="-mt-4 pb-6"
           noValidate
         >
+          <div className="mb-4">
+            <h1 className="text-xl font-semibold tracking-tight">
+              {isEdit ? "Edit Collection" : "Create Collection"}
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isEdit
+                ? "Update collection membership, layout, and discovery settings."
+                : "Start as a draft, choose its products, and publish when the preview is ready."}
+            </p>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
             {/* Left Column (2/3) - Main content */}
             <div className="lg:col-span-2 space-y-4">
@@ -231,6 +243,7 @@ export function CollectionForm({
         cancelUrl="/admin/collections"
         newUrl="/admin/collections/new"
         newLabel="New Collection"
+        canCreateNew={collectionActions.canCreate}
         onSave={() => form.handleSubmit(handleSubmit)()}
       />
     </>

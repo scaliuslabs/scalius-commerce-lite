@@ -15,6 +15,7 @@ Last reviewed: 2026-07-12
 ## P1 product/variant integrity
 
 - Duplicate normalized option combinations are allowed under different SKUs, making buyer selection ambiguous. Add normalized product/option uniqueness for active non-default variants.
+- Production preflight on 2026-07-12 found one legacy product (`prod_DgYZ43wj5zcNoug7gEdUL`) with four active `s / Red` SKUs. None currently has order or inventory movement history, but choosing the canonical SKU is a merchant data decision. Application writes now reject new normalized duplicates and allow incremental repair; a database unique index remains blocked until that legacy row set is resolved deliberately.
 - Bulk variant creation commits in chunks; a later conflict leaves earlier chunks persisted. Use one atomic D1 batch or an explicit durable import job with row results.
 - Duplicate IDs in bulk update can partially commit before a conflict is reported. Reject duplicates before reads and make claims fail atomically.
 - General variant `version` exists but metadata updates neither compare nor increment it; product aggregate updates also lack a revision. Add CAS and 409 merge/reload UX.

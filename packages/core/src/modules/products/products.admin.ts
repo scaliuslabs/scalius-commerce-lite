@@ -1009,6 +1009,9 @@ export async function bulkUpdateVariants(db: Database, productId: string, update
         updateIndex: number;
     }> = [];
     const ids = updates.map((update) => update.id).filter(Boolean);
+    if (new Set(ids).size !== ids.length) {
+        throw new ValidationError("Each variant may appear only once in a bulk update.");
+    }
     const currentVariants = ids.length > 0
         ? await db
             .select({

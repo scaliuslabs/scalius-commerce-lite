@@ -31658,15 +31658,15 @@ export type GetApiV1AdminAttributesByIdValuesData = {
         /**
          * Sort order
          */
-        sort?: string;
+        sort?: 'asc' | 'desc';
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
     };
     url: '/api/v1/admin/attributes/{id}/values';
 };
@@ -31759,7 +31759,9 @@ export type GetApiV1AdminAttributesByIdValuesResponses = {
                 sampleProducts: Array<string>;
             }>;
             totalValues: number;
+            totalProducts: number;
             page: number;
+            limit: number;
             totalPages: number;
         };
     };
@@ -31924,6 +31926,17 @@ export type PutApiV1AdminAttributesByIdValuesErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;

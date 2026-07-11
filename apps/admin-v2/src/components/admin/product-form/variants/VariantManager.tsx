@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
 import { ArrowUpDown, PackageCheck } from "lucide-react";
 import { VariantActionsToolbar } from "./VariantActionsToolbar";
 import { VariantTable } from "./VariantTable";
@@ -525,6 +526,10 @@ export function VariantManager({
   };
 
   const isAnyRowEditing = isAdding || !!editingVariantId;
+  const hasUnsavedVariantDrafts =
+    isAnyRowEditing ||
+    (isBulkEditing &&
+      (draftNewIds.length > 0 || Object.keys(draftBulkUpdates).length > 0));
 
   const handleSortUpdated = () => {
     onVariantChange?.();
@@ -551,6 +556,10 @@ export function VariantManager({
 
   return (
     <>
+      <UnsavedChangesGuard
+        isDirty={hasUnsavedVariantDrafts}
+        isSubmitting={isSubmitting}
+      />
       <Card className="border-none shadow-none bg-transparent sm:bg-card">
         <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">

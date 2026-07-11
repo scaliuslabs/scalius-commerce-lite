@@ -14,6 +14,12 @@ export interface CollectionItem extends Collection {
 interface CollectionColumnOptions {
   showTrashed: boolean;
   savingIds: Set<string>;
+  canSelect: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canRestore: boolean;
+  canPermanentDelete: boolean;
+  canToggleStatus: boolean;
   onUpdateName: (id: string, name: string) => void;
   onToggleActive: (id: string, isActive: boolean) => void;
   onEdit: (id: string) => void;
@@ -82,8 +88,18 @@ function getContentSource(config: string) {
 export function getCollectionColumns(
   opts: CollectionColumnOptions,
 ): ColumnDef<CollectionItem, unknown>[] {
+  const canShowActions = opts.showTrashed
+    ? opts.canRestore || opts.canPermanentDelete
+    : opts.canEdit || opts.canDelete;
+
   return [
-    createSelectColumn<CollectionItem>({ getLabel: (r) => (r as CollectionItem).name }),
+    ...(opts.canSelect
+      ? [
+          createSelectColumn<CollectionItem>({
+            getLabel: (r) => (r as CollectionItem).name,
+          }),
+        ]
+      : []),
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -92,7 +108,8 @@ export function getCollectionColumns(
       cell: ({ row }) => {
         const collection = row.original;
         const isSaving = opts.savingIds.has(collection.id);
-        const isDisabled = !!collection.deletedAt || opts.showTrashed;
+        const isDisabled =
+          !opts.canEdit || !!collection.deletedAt || opts.showTrashed;
 
         return (
           <InlineEditCell
@@ -134,7 +151,8 @@ export function getCollectionColumns(
       ),
       cell: ({ row }) => {
         const collection = row.original;
-        const isDisabled = !!collection.deletedAt || opts.showTrashed;
+        const isDisabled =
+          !opts.canToggleStatus || !!collection.deletedAt || opts.showTrashed;
         const isTrashed = !!collection.deletedAt || opts.showTrashed;
 
         return (
@@ -164,12 +182,22 @@ export function getCollectionColumns(
         );
       },
     },
-    createActionsColumn<CollectionItem>({
-      showTrashed: opts.showTrashed,
-      onEdit: (c) => opts.onEdit(c.id),
-      onDelete: (c) => opts.onDelete(c.id),
-      onRestore: (c) => opts.onRestore(c.id),
-      onPermanentDelete: (c) => opts.onPermanentDelete(c.id),
-    }),
+    ...(canShowActions
+      ? [
+          createActionsColumn<CollectionItem>({
+            showTrashed: opts.showTrashed,
+            onEdit: opts.canEdit ? (c) => opts.onEdit(c.id) : undefined,
+            onDelete: opts.canDelete
+              ? (c) => opts.onDelete(c.id)
+              : undefined,
+            onRestore: opts.canRestore
+              ? (c) => opts.onRestore(c.id)
+              : undefined,
+            onPermanentDelete: opts.canPermanentDelete
+              ? (c) => opts.onPermanentDelete(c.id)
+              : undefined,
+          }),
+        ]
+      : []),
   ];
 }

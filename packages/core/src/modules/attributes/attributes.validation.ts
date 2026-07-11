@@ -3,6 +3,11 @@
 
 import { z } from "zod";
 
+const existingAttributeValueSchema = z.string().refine(
+    (value) => value.trim().length > 0,
+    "Value is required",
+);
+
 export const createAttributeSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters long"),
     slug: z
@@ -30,16 +35,16 @@ export const bulkActionSchema = z.object({
 });
 
 export const addValueSchema = z.object({
-    value: z.string().min(1, "Value is required")
+    value: z.string().trim().min(1, "Value is required")
 });
 
 export const updateValueSchema = z.object({
-    oldValue: z.string().min(1, "Old value is required"),
-    newValue: z.string().min(1, "New value is required")
+    oldValue: existingAttributeValueSchema,
+    newValue: z.string().trim().min(1, "New value is required")
 });
 
 export const deleteValueSchema = z.object({
-    value: z.string().min(1, "Value is required")
+    value: existingAttributeValueSchema
 });
 
 export type CreateAttributeInput = z.infer<typeof createAttributeSchema>;

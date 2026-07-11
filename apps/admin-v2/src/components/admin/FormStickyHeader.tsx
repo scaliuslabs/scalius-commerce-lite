@@ -12,6 +12,7 @@ export interface FormActionBarProps {
   cancelUrl: string;
   newUrl?: string;
   newLabel?: string;
+  canCreateNew?: boolean;
   saveLabel?: string;
   onSave: () => void;
 }
@@ -28,6 +29,7 @@ export function FormActionBar({
   cancelUrl,
   newUrl,
   newLabel,
+  canCreateNew = true,
   saveLabel,
   onSave,
 }: FormActionBarProps) {
@@ -54,29 +56,53 @@ export function FormActionBar({
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            asChild
-            disabled={isSubmitting}
-            className="h-8 text-xs"
-          >
-            <Link to={cancelUrl}>Discard</Link>
-          </Button>
-
-          {isEdit && newUrl && (
+          {isSubmitting ? (
             <Button
               variant="outline"
               size="sm"
-              asChild
-              className="h-8 text-xs hidden sm:inline-flex gap-1"
+              type="button"
+              disabled
+              className="h-8 text-xs"
             >
-              <Link to={newUrl!}>
+              Discard
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              asChild
+              className="h-8 text-xs"
+            >
+              <Link to={cancelUrl}>Discard</Link>
+            </Button>
+          )}
+
+          {isEdit && canCreateNew && newUrl && (
+            isSubmitting ? (
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                disabled
+                className="h-8 text-xs hidden sm:inline-flex gap-1"
+              >
                 <Plus className="h-3.5 w-3.5" />
                 {newLabel || `New ${title.replace(/s$/, "")}`}
-              </Link>
-            </Button>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="h-8 text-xs hidden sm:inline-flex gap-1"
+              >
+                <Link to={newUrl}>
+                  <Plus className="h-3.5 w-3.5" />
+                  {newLabel || `New ${title.replace(/s$/, "")}`}
+                </Link>
+              </Button>
+            )
           )}
           <Button
             size="sm"

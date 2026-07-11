@@ -27,6 +27,7 @@ import {
 } from "~/components/admin/attributes-manager/components";
 import { useAttributeActions } from "~/components/admin/attributes-manager/hooks/useAttributeActions";
 import type { NewAttribute } from "~/components/admin/attributes-manager/types";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 
 const validateAttributeSearch = createListSearchValidator(
   ["name", "slug", "filterable", "updatedAt"] as const,
@@ -66,6 +67,7 @@ function AttributesPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const showTrashed = search.trashed;
+  const { attributes: attributeActions } = useCatalogActionPermissions();
 
   // Mutations
   const updateMutation = useUpdateAttribute();
@@ -114,23 +116,26 @@ function AttributesPage() {
   // Column action callbacks
   const handleUpdateName = useCallback(
     (id: string, name: string) => {
+      if (!attributeActions.canEdit) return;
       updateMutation.mutate({ id, name });
     },
-    [updateMutation],
+    [attributeActions.canEdit, updateMutation],
   );
 
   const handleUpdateSlug = useCallback(
     (id: string, slug: string) => {
+      if (!attributeActions.canEdit) return;
       updateMutation.mutate({ id, slug });
     },
-    [updateMutation],
+    [attributeActions.canEdit, updateMutation],
   );
 
   const handleToggleFilterable = useCallback(
     (id: string, filterable: boolean) => {
+      if (!attributeActions.canEdit) return;
       updateMutation.mutate({ id, filterable });
     },
-    [updateMutation],
+    [attributeActions.canEdit, updateMutation],
   );
 
   const handleViewValues = useCallback(
@@ -142,30 +147,33 @@ function AttributesPage() {
 
   const handleEditValues = useCallback(
     (id: string, name: string) => {
-      setEditValuesFor({ id, name });
+      if (attributeActions.canEdit) setEditValuesFor({ id, name });
     },
-    [],
+    [attributeActions.canEdit],
   );
 
   const handleDelete = useCallback(
     (id: string) => {
+      if (!attributeActions.canDelete) return;
       deleteMutation.mutate(id);
     },
-    [deleteMutation],
+    [attributeActions.canDelete, deleteMutation],
   );
 
   const handleRestore = useCallback(
     (id: string) => {
+      if (!attributeActions.canRestore) return;
       restoreMutation.mutate(id);
     },
-    [restoreMutation],
+    [attributeActions.canRestore, restoreMutation],
   );
 
   const handlePermanentDelete = useCallback(
     (id: string) => {
+      if (!attributeActions.canPermanentDelete) return;
       permanentDeleteMutation.mutate(id);
     },
-    [permanentDeleteMutation],
+    [attributeActions.canPermanentDelete, permanentDeleteMutation],
   );
 
   // Create attribute handlers
@@ -181,6 +189,7 @@ function AttributesPage() {
   };
 
   const handleCreateAttribute = () => {
+    if (!attributeActions.canCreate) return;
     handleCreate(newAttribute, () => {
       setNewAttribute({ name: "", slug: "", filterable: true, options: [] });
       setShowCreateDialog(false);
@@ -193,6 +202,11 @@ function AttributesPage() {
       getAttributeColumns({
         showTrashed,
         savingIds,
+        canSelect: attributeActions.canBulkDelete,
+        canEdit: attributeActions.canEdit,
+        canDelete: attributeActions.canDelete,
+        canRestore: attributeActions.canRestore,
+        canPermanentDelete: attributeActions.canPermanentDelete,
         onUpdateName: handleUpdateName,
         onUpdateSlug: handleUpdateSlug,
         onToggleFilterable: handleToggleFilterable,
@@ -205,6 +219,7 @@ function AttributesPage() {
     [
       showTrashed,
       savingIds,
+      attributeActions,
       handleUpdateName,
       handleUpdateSlug,
       handleToggleFilterable,
@@ -276,12 +291,18 @@ function AttributesPage() {
 
   // Bulk action handlers
   const handleBulkDelete = useCallback(() => {
-    if (selectedIds.length === 0) return;
+    if (!attributeActions.canBulkDelete || selectedIds.length === 0) return;
     bulkDeleteMutation.mutate(
       { ids: selectedIds, permanent: showTrashed },
       { onSuccess: clearSelection },
     );
-  }, [selectedIds, showTrashed, bulkDeleteMutation, clearSelection]);
+  }, [
+    attributeActions.canBulkDelete,
+    selectedIds,
+    showTrashed,
+    bulkDeleteMutation,
+    clearSelection,
+  ]);
 
   // Toolbar
   const toolbar = (
@@ -290,7 +311,7 @@ function AttributesPage() {
       onSearchChange={onSearchChange}
       searchPlaceholder="Search attributes..."
       selectedCount={selectedIds.length}
-      bulkActions={
+      bulkActions={attributeActions.canBulkDelete ? (
         <Button
           variant={showTrashed ? "destructive" : "outline"}
           size="sm"
@@ -307,7 +328,7 @@ function AttributesPage() {
             ? `Delete (${selectedIds.length})`
             : `Trash (${selectedIds.length})`}
         </Button>
-      }
+      ) : undefined}
       actions={
         <div className="flex items-center gap-2">
           <Link
@@ -328,7 +349,7 @@ function AttributesPage() {
               )}
             </Button>
           </Link>
-          {!showTrashed && (
+          {!showTrashed && attributeActions.canCreate && (
             <Button onClick={() => setShowCreateDialog(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Add Attribute
@@ -373,7 +394,7 @@ function AttributesPage() {
               ? "Deleted attributes will appear here."
               : "Create your first attribute to get started.",
           action:
-            !showTrashed && !search.search ? (
+            !showTrashed && attributeActions.canCreate && !search.search ? (
               <Button onClick={() => setShowCreateDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Attribute
@@ -383,23 +404,25 @@ function AttributesPage() {
       />
 
       {/* Create Attribute Dialog */}
-      <AttributeCreateDialog
-        open={showCreateDialog}
-        newAttribute={newAttribute}
-        isCreating={isCreating}
-        onOpenChange={setShowCreateDialog}
-        onNameChange={handleNewAttributeNameChange}
-        onSlugChange={(slug) =>
-          setNewAttribute((prev) => ({ ...prev, slug }))
-        }
-        onFilterableChange={(checked) =>
-          setNewAttribute((prev) => ({ ...prev, filterable: checked }))
-        }
-        onOptionsChange={(options) =>
-          setNewAttribute((prev) => ({ ...prev, options }))
-        }
-        onCreate={handleCreateAttribute}
-      />
+      {attributeActions.canCreate && (
+        <AttributeCreateDialog
+          open={showCreateDialog}
+          newAttribute={newAttribute}
+          isCreating={isCreating}
+          onOpenChange={setShowCreateDialog}
+          onNameChange={handleNewAttributeNameChange}
+          onSlugChange={(slug) =>
+            setNewAttribute((prev) => ({ ...prev, slug }))
+          }
+          onFilterableChange={(checked) =>
+            setNewAttribute((prev) => ({ ...prev, filterable: checked }))
+          }
+          onOptionsChange={(options) =>
+            setNewAttribute((prev) => ({ ...prev, options }))
+          }
+          onCreate={handleCreateAttribute}
+        />
+      )}
 
       {/* Attribute Values Viewer */}
       <AttributeValuesViewer
@@ -409,11 +432,13 @@ function AttributesPage() {
       />
 
       {/* Attribute Value Editor */}
-      <AttributeValueEditor
-        attributeId={editValuesFor?.id || null}
-        attributeName={editValuesFor?.name || null}
-        onClose={() => setEditValuesFor(null)}
-      />
+      {attributeActions.canEdit && (
+        <AttributeValueEditor
+          attributeId={editValuesFor?.id || null}
+          attributeName={editValuesFor?.name || null}
+          onClose={() => setEditValuesFor(null)}
+        />
+      )}
     </div>
   );
 }

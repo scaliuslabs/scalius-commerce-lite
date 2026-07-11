@@ -1,5 +1,6 @@
 // src/components/admin/attributes-manager/components/AttributeValuesViewer.tsx
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -18,54 +19,55 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { Loader2, Search, Package, X } from "lucide-react";
-import { toast } from "sonner";
+import {
+  AlertTriangle,
+  Loader2,
+  Search,
+  Package,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import type { AttributeValuesViewerProps, AttributeValue } from "../types";
-import { getAttributeValues } from "~/lib/api-functions/attributes";
+import { attributeValuesQueryOptions } from "~/lib/api-query-options/attributes";
+import { useDebounce } from "~/hooks/use-debounce";
+import { AdminListPagination } from "~/components/admin/shared/AdminListPagination";
+
+const ATTRIBUTE_VALUES_PAGE_SIZE = 20;
 
 export function AttributeValuesViewer({
   attributeId,
   attributeName,
   onClose,
 }: AttributeValuesViewerProps) {
-  const [values, setValues] = useState<AttributeValue[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const debouncedSearch = useDebounce(searchQuery.trim(), 300);
+
+  const valuesQuery = useQuery({
+    ...attributeValuesQueryOptions({
+      attributeId: attributeId ?? undefined,
+      page,
+      limit: ATTRIBUTE_VALUES_PAGE_SIZE,
+      search: debouncedSearch || undefined,
+    }),
+    enabled: Boolean(attributeId),
+  });
+
+  const values: AttributeValue[] = valuesQuery.data?.values ?? [];
+  const isLoading = Boolean(attributeId) && valuesQuery.isPending;
 
   useEffect(() => {
-    if (!attributeId) {
-      setValues([]);
-      setSearchQuery("");
-      setIsLoading(false);
-      return;
-    }
-
-    // Set loading immediately when attributeId changes
-    setIsLoading(true);
-    setValues([]);
     setSearchQuery("");
-
-    const fetchValues = async () => {
-      try {
-        const data = await getAttributeValues({ data: { attributeId } });
-        setValues(data.values || []);
-      } catch (error: unknown) {
-        console.error("Error fetching attribute values:", error);
-        toast.error("Failed to load attribute values");
-        setValues([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchValues();
+    setPage(1);
   }, [attributeId]);
 
-  const filteredValues = values.filter((v) =>
-    v.value.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  useEffect(() => {
+    const totalPages = valuesQuery.data?.totalPages ?? 0;
+    if (totalPages > 0 && page > totalPages) setPage(totalPages);
+  }, [page, valuesQuery.data?.totalPages]);
 
-  const totalProducts = values.reduce((sum, v) => sum + v.productCount, 0);
+  const totalValues = valuesQuery.data?.totalValues ?? 0;
+  const totalProducts = valuesQuery.data?.totalProducts ?? 0;
 
   return (
     <Dialog open={!!attributeId} onOpenChange={onClose}>
@@ -87,7 +89,7 @@ export function AttributeValuesViewer({
             <div className="flex-1 p-3 border rounded-lg">
               <div className="text-sm text-muted-foreground">Unique Values</div>
               <div className="text-2xl font-bold">
-                {isLoading ? "-" : values.length}
+                {isLoading || valuesQuery.isError ? "-" : totalValues}
               </div>
             </div>
             <div className="flex-1 p-3 border rounded-lg">
@@ -95,7 +97,7 @@ export function AttributeValuesViewer({
                 Total Products
               </div>
               <div className="text-2xl font-bold">
-                {isLoading ? "-" : totalProducts}
+                {isLoading || valuesQuery.isError ? "-" : totalProducts}
               </div>
             </div>
           </div>
@@ -106,9 +108,12 @@ export function AttributeValuesViewer({
             <Input
               placeholder="Search values..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
               className="pl-10"
-              disabled={isLoading}
+              aria-label="Search attribute values"
             />
           </div>
 
@@ -118,7 +123,25 @@ export function AttributeValuesViewer({
               <div className="flex items-center justify-center flex-1">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
-            ) : filteredValues.length > 0 ? (
+            ) : valuesQuery.isError ? (
+              <div className="flex flex-col items-center justify-center flex-1 text-center px-6">
+                <AlertTriangle className="h-10 w-10 text-destructive/70 mb-2" />
+                <p className="text-sm font-medium">Could not load attribute values</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Retry to load the current page. An outage is never shown as an empty catalog.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => void valuesQuery.refetch()}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry
+                </Button>
+              </div>
+            ) : values.length > 0 ? (
               <div className="flex-1 overflow-auto">
                 <Table>
                   <TableHeader className="sticky top-0 bg-background z-10">
@@ -133,8 +156,8 @@ export function AttributeValuesViewer({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredValues.map((item, index) => (
-                      <TableRow key={`${item.value}-${index}`}>
+                    {values.map((item) => (
+                      <TableRow key={item.value}>
                         <TableCell className="font-medium">
                           {item.value}
                         </TableCell>
@@ -176,6 +199,20 @@ export function AttributeValuesViewer({
                 </p>
               </div>
             )}
+            {!valuesQuery.isError &&
+              valuesQuery.data &&
+              valuesQuery.data.totalValues > 0 && (
+                <AdminListPagination
+                  pagination={{
+                    total: valuesQuery.data.totalValues,
+                    page: valuesQuery.data.page,
+                    limit: valuesQuery.data.limit,
+                    totalPages: valuesQuery.data.totalPages,
+                  }}
+                  itemLabel="values"
+                  onPageChange={setPage}
+                />
+              )}
           </div>
 
           <div className="flex justify-end shrink-0">
