@@ -1,3 +1,4 @@
+import { isScaliusComputerResultContinuation } from "@scalius/shared/assistant-computer-handoff";
 import { redactAssistantPersistedText } from "@scalius/shared/assistant-redaction";
 import {
   normalizeStorefrontAssistantCatalogProductIds,
@@ -71,6 +72,12 @@ function toUiMessage(
 ): StorefrontAssistantUiMessage | null {
   if (message.role !== "assistant" && message.role !== "user") return null;
   if (typeof message.content !== "string") return null;
+  if (
+    message.role === "assistant" &&
+    isScaliusComputerResultContinuation(message.content, "storefront")
+  ) {
+    return null;
+  }
   const boundedContent = cleanAssistantDisplayText(
     redactAssistantPersistedText(message.content),
     MAX_PERSISTED_CONTENT_CHARS,

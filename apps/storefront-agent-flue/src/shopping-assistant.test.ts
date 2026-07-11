@@ -31,15 +31,63 @@ describe("Storefront shopping-assistant contract", () => {
     );
   });
 
+  it("directs exact Add to Cart through the approved visible control", () => {
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "currently selected product to the cart",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "exact persisted variant",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "only when result.ok is exactly true",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "I clicked Add to Cart.",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "I could not click Add to Cart.",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "A successful browser click does not prove the cart changed",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "never click Buy Now",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "Never claim server cart",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "when result.ok is false",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "stop without retrying",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).not.toContain(
+      "say only that the visible page action finished",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).not.toContain(
+      "Add to Cart action completed",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).not.toContain(
+      "use prepare for mutations",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).not.toContain(
+      "Use status only",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).not.toContain(
+      "cart, checkout, and customer-safe facts or operations",
+    );
+  });
+
   it("keeps browser observations and consequential commerce facts untrusted", () => {
     expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
       "client_command is still pending",
     );
     expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
-      "Browser success is never cart, checkout, inventory, payment, or order authority",
+      "Browser success is never inventory, checkout, payment, or order authority",
     );
     expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
-      "Never confirm, approve, or execute a prepared mutation yourself",
+      "Never claim server cart, inventory, checkout, payment, or order state",
     );
   });
 

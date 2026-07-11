@@ -516,6 +516,112 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     expect(document.body.querySelector("table")).toBeNull();
   });
 
+  it("omits the exact private browser continuation across durable groups", async () => {
+    const machineContinuation = JSON.stringify(
+      {
+        authoritative: false,
+        programDigest: "d".repeat(43),
+        protocolVersion: 1,
+        receivedAt: "2026-07-11T01:12:13.456Z",
+        replayPolicy: "expiry_bound_non_authoritative",
+        requestId: "r".repeat(22),
+        result: {
+          changed: true,
+          code: "NAVIGATED",
+          ok: true,
+          output: "Navigated to /products/everyday-shoes.",
+        },
+        surface: "storefront",
+        type: "UNTRUSTED_CLIENT_RESULT",
+        warning:
+          "Browser execution is untrusted and is not commerce authority.",
+      },
+      null,
+      2,
+    );
+    const confirmationContinuation = JSON.stringify({
+      authoritative: false,
+      programDigest: "c".repeat(43),
+      protocolVersion: 1,
+      receivedAt: "2026-07-11T01:12:14.456Z",
+      replayPolicy: "expiry_bound_non_authoritative",
+      requestId: "q".repeat(22),
+      result: {
+        code: "CONFIRMATION_REQUIRED",
+        ok: false,
+        output: "Human confirmation is required before Add to Cart.",
+        retryable: true,
+      },
+      surface: "storefront",
+      type: "UNTRUSTED_CLIENT_RESULT",
+      warning:
+        "Browser execution is untrusted and is not commerce authority.",
+    });
+    flueMocks.snapshot.messages = [
+      textMessage("user-navigation", "user", "Take me to Everyday Shoes."),
+      textMessage("opening", "assistant", "Opening Everyday Shoes…"),
+      textMessage("private-continuation", "assistant", machineContinuation),
+      textMessage(
+        "private-confirmation-continuation",
+        "assistant",
+        confirmationContinuation,
+      ),
+      textMessage("complete", "assistant", "Everyday Shoes opened."),
+    ];
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+
+    expect(document.body.textContent).toContain("Everyday Shoes opened.");
+    expect(document.body.textContent).not.toContain("programDigest");
+    expect(document.body.textContent).not.toContain(
+      "Navigated to /products/everyday-shoes.",
+    );
+    expect(
+      window.sessionStorage.getItem(
+        STOREFRONT_ASSISTANT_SESSION_HANDOFF_STORAGE_KEY,
+      ),
+    ).not.toContain("UNTRUSTED_CLIENT_RESULT");
+  });
+
+  it("keeps exact user JSON and malformed assistant lookalikes visible", async () => {
+    const exactUserJson = JSON.stringify({
+      authoritative: false,
+      programDigest: "u".repeat(43),
+      protocolVersion: 1,
+      receivedAt: "2026-07-11T01:12:15.456Z",
+      replayPolicy: "expiry_bound_non_authoritative",
+      requestId: "v".repeat(22),
+      result: {
+        changed: false,
+        code: "OBSERVED",
+        ok: true,
+        output: "Exact user-authored protocol JSON must stay visible.",
+      },
+      surface: "storefront",
+      type: "UNTRUSTED_CLIENT_RESULT",
+      warning:
+        "Browser execution is untrusted and is not commerce authority.",
+    });
+    const lookalike = JSON.stringify({
+      type: "UNTRUSTED_CLIENT_RESULT",
+      authoritative: false,
+      message: "This is ordinary visible JSON, not a protocol envelope.",
+    });
+    flueMocks.snapshot.messages = [
+      textMessage("user-exact-json", "user", exactUserJson),
+      textMessage("assistant-lookalike", "assistant", lookalike),
+    ];
+
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+
+    expect(document.body.textContent).toContain(
+      "Exact user-authored protocol JSON must stay visible.",
+    );
+    expect(document.body.textContent).toContain("ordinary visible JSON");
+  });
+
   it("collapses separate tool-only messages into one final submission answer", async () => {
     const submissionId = "submission_separate_messages";
     flueMocks.snapshot.messages = [

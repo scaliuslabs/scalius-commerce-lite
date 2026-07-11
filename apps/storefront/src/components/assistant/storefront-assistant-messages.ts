@@ -2,6 +2,7 @@ import type {
   FlueConversationMessage,
   FlueConversationPart,
 } from "@flue/sdk";
+import { isScaliusComputerResultContinuation } from "@scalius/shared/assistant-computer-handoff";
 
 import {
   MAX_MESSAGE_CHARS,
@@ -12,8 +13,13 @@ import {
 export function flueMessageText(message: FlueConversationMessage): string {
   return cleanAssistantDisplayText(
     message.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
+      .flatMap((part) =>
+        part.type === "text" &&
+        (message.role !== "assistant" ||
+          !isScaliusComputerResultContinuation(part.text, "storefront"))
+          ? [part.text]
+          : [],
+      )
       .join("\n\n"),
     MAX_MESSAGE_CHARS,
   );
@@ -103,6 +109,22 @@ export function projectStorefrontAssistantMessages(
 
   const projectedByIndex = new Map<number, FlueConversationMessage>();
   for (const group of groups.values()) {
+    const visibleTextParts = new Map<
+      FlueConversationMessage,
+      FlueConversationPart[]
+    >();
+    for (const message of group.messages) {
+      visibleTextParts.set(
+        message,
+        message.parts.filter(
+          (part) =>
+            part.type === "text" &&
+            part.text.trim().length > 0 &&
+            (message.role !== "assistant" ||
+              !isScaliusComputerResultContinuation(part.text, "storefront")),
+        ),
+      );
+    }
     const terminalToolCalls = new Set<string>();
     for (const message of group.messages) {
       for (const part of message.parts) {
@@ -116,11 +138,14 @@ export function projectStorefrontAssistantMessages(
       }
     }
 
-    const lastTextMessage = group.messages.findLast((message) =>
-      message.parts.some(
-        (part) => part.type === "text" && part.text.trim().length > 0,
-      ),
-    );
+    let lastTextMessage: FlueConversationMessage | undefined;
+    for (let index = group.messages.length - 1; index >= 0; index -= 1) {
+      const candidate = group.messages[index];
+      if (candidate && (visibleTextParts.get(candidate)?.length ?? 0) > 0) {
+        lastTextMessage = candidate;
+        break;
+      }
+    }
     const catalogParts = group.messages.flatMap((message) =>
       message.parts.filter(isGroundedCatalogPart),
     );
@@ -146,9 +171,7 @@ export function projectStorefrontAssistantMessages(
           )
           .slice(-2);
     const textParts = lastTextMessage
-      ? lastTextMessage.parts.filter(
-          (part) => part.type === "text" && part.text.trim().length > 0,
-        )
+      ? (visibleTextParts.get(lastTextMessage) ?? [])
       : [];
     const parts = [
       ...textParts,

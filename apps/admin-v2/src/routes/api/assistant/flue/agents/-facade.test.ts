@@ -288,7 +288,49 @@ describe("Admin same-origin Flue agent facade", () => {
     await expect(response.text()).resolves.toBe(sse);
   });
 
-  it("aborts the authorized opaque instance with no browser body or identity", async () => {
+  it("accepts a live-shaped zero-byte Stop body and completes authoritative settlement", async () => {
+    const gateOrder: string[] = [];
+    const apiFetch = vi.fn(async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const path = new URL(String(input)).pathname;
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      expect(body.instanceId).toBe(INSTANCE_ID);
+      if (path.endsWith("/stop/begin")) {
+        gateOrder.push("begin");
+        return Response.json({ success: true, data: {
+          status: "pending",
+          stoppedThroughIssuedAtMs: STOP_GENERATION,
+          pendingAdmissions: 1,
+          pendingDispatches: 0,
+        } });
+      }
+      if (path.endsWith("/stop/reconcile")) {
+        gateOrder.push("reconcile");
+        expect(body.stoppedThroughIssuedAtMs).toBe(STOP_GENERATION);
+        return Response.json({ success: true, data: {
+          status: "reconciled",
+          readiness: "ready",
+          stoppedThroughIssuedAtMs: STOP_GENERATION,
+          blockedDispatches: 0,
+          pendingAdmissions: 0,
+          pendingDispatches: 0,
+        } });
+      }
+      if (path.endsWith("/stop/status")) {
+        gateOrder.push("status");
+        return Response.json({ success: true, data: {
+          status: "ready",
+          stoppedThroughIssuedAtMs: STOP_GENERATION,
+          pendingAdmissions: 0,
+          pendingDispatches: 0,
+        } });
+      }
+      expect(path.endsWith("/stop/finish")).toBe(true);
+      gateOrder.push("finish");
+      return Response.json({ success: true, data: { status: "finished" } });
+    });
     const agentFetch = vi.fn(async (
       input: RequestInfo | URL,
       init?: RequestInit,
@@ -302,21 +344,36 @@ describe("Admin same-origin Flue agent facade", () => {
       expect(headers.get("x-flue-abort-through-generation")).toBe(
         String(STOP_GENERATION),
       );
+      gateOrder.push("flue-abort");
       return Response.json(
         { aborted: true },
         { headers: { "Set-Cookie": "internal=never" } },
       );
     });
 
+    const request = browserRequest(`${PUBLIC_PATH}/abort`, {
+      method: "POST",
+      body: "",
+    });
+    expect(request.body).not.toBeNull();
     const response = await proxyAdminFlueAgentFacade(
-      browserRequest(`${PUBLIC_PATH}/abort`, { method: "POST" }),
-      dependencies(agentFetch),
+      request,
+      dependencies(agentFetch, {
+        api: { fetch: apiFetch as unknown as Pick<Fetcher, "fetch">["fetch"] },
+      }),
     );
 
     expect(response.status).toBe(200);
     expect(response.headers.has("set-cookie")).toBe(false);
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({ aborted: true });
+    expect(gateOrder).toEqual([
+      "begin",
+      "flue-abort",
+      "reconcile",
+      "status",
+      "finish",
+    ]);
   });
 
   it("keeps a malformed abort fenced until an exact retry finishes the Stop barrier", async () => {

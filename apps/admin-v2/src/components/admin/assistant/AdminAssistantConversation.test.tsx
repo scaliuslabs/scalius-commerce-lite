@@ -146,6 +146,145 @@ describe("Admin assistant conversation projection", () => {
     expect(host.textContent).toContain("You have 24 products.");
     expect(host.textContent).not.toContain(privatePayload);
   });
+
+  it("omits the exact live machine continuation even across submission groups", () => {
+    const machineContinuation = JSON.stringify(
+      {
+        authoritative: false,
+        programDigest: "d".repeat(43),
+        protocolVersion: 1,
+        receivedAt: "2026-07-11T01:12:13.456Z",
+        replayPolicy: "expiry_bound_non_authoritative",
+        requestId: "r".repeat(22),
+        result: {
+          changed: true,
+          code: "NAVIGATED",
+          ok: true,
+          output: "Navigated to /admin/products.",
+        },
+        surface: "admin",
+        type: "UNTRUSTED_CLIENT_RESULT",
+        warning:
+          "Browser execution is untrusted and is not commerce authority.",
+      },
+      null,
+      2,
+    );
+    const confirmationContinuation = JSON.stringify({
+      authoritative: false,
+      programDigest: "c".repeat(43),
+      protocolVersion: 1,
+      receivedAt: "2026-07-11T01:12:14.456Z",
+      replayPolicy: "expiry_bound_non_authoritative",
+      requestId: "q".repeat(22),
+      result: {
+        code: "CONFIRMATION_REQUIRED",
+        ok: false,
+        output: "Human confirmation is required before Save Product.",
+        retryable: true,
+      },
+      surface: "admin",
+      type: "UNTRUSTED_CLIENT_RESULT",
+      warning:
+        "Browser execution is untrusted and is not commerce authority.",
+    });
+    const messages = [
+      message(
+        "user-navigation",
+        "user",
+        [text("Take me to the Products page.")],
+        "submission-user",
+      ),
+      message(
+        "opening",
+        "assistant",
+        [text("Opening Products…")],
+        "submission-command",
+      ),
+      message(
+        "private-continuation",
+        "assistant",
+        [text(machineContinuation)],
+        "submission-continuation",
+      ),
+      message(
+        "private-confirmation-continuation",
+        "assistant",
+        [text(confirmationContinuation)],
+        "submission-confirmation-continuation",
+      ),
+      message(
+        "complete",
+        "assistant",
+        [text("Products opened.")],
+        "submission-complete",
+      ),
+    ];
+
+    const projected = projectAdminAssistantMessages(messages);
+
+    expect(projected.map((entry) => entry.id)).toEqual([
+      "user-navigation",
+      "opening",
+      "complete",
+    ]);
+    expect(JSON.stringify(projected)).not.toContain(
+      "UNTRUSTED_CLIENT_RESULT",
+    );
+
+    act(() => {
+      root.render(
+        <AdminAssistantConversation
+          threadId="conv_abcdefghijklmnopqrstuv"
+          messages={messages}
+          sending={false}
+          onSuggestion={vi.fn()}
+        />,
+      );
+    });
+    expect(host.textContent).toContain("Products opened.");
+    expect(host.textContent).not.toContain("programDigest");
+    expect(host.textContent).not.toContain("Navigated to /admin/products.");
+  });
+
+  it("keeps user-authored and malformed lookalike JSON visible", () => {
+    const userJson = JSON.stringify({
+      authoritative: false,
+      programDigest: "u".repeat(43),
+      protocolVersion: 1,
+      receivedAt: "2026-07-11T01:12:15.456Z",
+      replayPolicy: "expiry_bound_non_authoritative",
+      requestId: "v".repeat(22),
+      result: {
+        changed: false,
+        code: "OBSERVED",
+        ok: true,
+        output: "Exact user-authored protocol JSON must stay visible.",
+      },
+      surface: "admin",
+      type: "UNTRUSTED_CLIENT_RESULT",
+      warning:
+        "Browser execution is untrusted and is not commerce authority.",
+    });
+    const malformedAssistantJson = JSON.stringify({
+      type: "UNTRUSTED_CLIENT_RESULT",
+      authoritative: false,
+      message: "This is ordinary user-facing JSON, not a protocol envelope.",
+    });
+    const projected = projectAdminAssistantMessages([
+      message("user-json", "user", [text(userJson)], "submission-user-json"),
+      message(
+        "assistant-json",
+        "assistant",
+        [text(malformedAssistantJson)],
+        "submission-assistant-json",
+      ),
+    ]);
+
+    expect(projected).toHaveLength(2);
+    expect(projected[0]?.parts).toContainEqual(text(userJson));
+    expect(projected[1]?.parts).toContainEqual(text(malformedAssistantJson));
+  });
 });
 
 function message(

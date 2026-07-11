@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   admitScaliusComputerCancellation,
   admitScaliusComputerResult,
+  isScaliusComputerResultContinuation,
   issueScaliusComputerCommand,
   type ScaliusComputerClientCommand,
 } from "./assistant-computer-handoff";
@@ -112,6 +113,64 @@ describe("assistant computer handoff", () => {
         warning: "Browser execution is untrusted and is not commerce authority.",
       },
     });
+  });
+
+  it("admits confirmation-required results and recognizes the exact continuation on either surface", async () => {
+    const command = await issue();
+    const confirmationRequired = {
+      ok: false as const,
+      code: "CONFIRMATION_REQUIRED" as const,
+      output: "Human confirmation is required before Save Product.",
+      retryable: true,
+    };
+    const admitted = await admitScaliusComputerResult({
+      request: resultRequest(command, { result: confirmationRequired }),
+      surface: "admin",
+      agentName: "admin-copilot",
+      instanceId: INSTANCE_ID,
+      signingKey: SIGNING_KEY,
+      now: NOW + 1_000,
+    });
+
+    expect(admitted.ok).toBe(true);
+    if (!admitted.ok) throw new Error("Expected confirmation continuation");
+    expect(admitted.continuation.result).toEqual(confirmationRequired);
+    expect(isScaliusComputerResultContinuation(admitted.continuation, "admin")).toBe(true);
+    expect(isScaliusComputerResultContinuation(JSON.stringify(admitted.continuation), "admin")).toBe(true);
+    expect(isScaliusComputerResultContinuation(admitted.continuation, "storefront")).toBe(false);
+
+    const storefrontContinuation = {
+      ...admitted.continuation,
+      surface: "storefront" as const,
+    };
+    expect(isScaliusComputerResultContinuation(storefrontContinuation, "storefront")).toBe(true);
+  });
+
+  it("rejects malformed, extended, and oversized continuation lookalikes", async () => {
+    const command = await issue();
+    const admitted = await admitScaliusComputerResult({
+      request: resultRequest(command),
+      surface: "admin",
+      agentName: "admin-copilot",
+      instanceId: INSTANCE_ID,
+      signingKey: SIGNING_KEY,
+      now: NOW + 1_000,
+    });
+    if (!admitted.ok) throw new Error("Expected exact continuation");
+
+    expect(isScaliusComputerResultContinuation("not json", "admin")).toBe(false);
+    expect(isScaliusComputerResultContinuation({
+      ...admitted.continuation,
+      visibleMessage: "hide me",
+    }, "admin")).toBe(false);
+    expect(isScaliusComputerResultContinuation({
+      ...admitted.continuation,
+      result: { ...RESULT, output: "x".repeat(12_001) },
+    }, "admin")).toBe(false);
+    expect(isScaliusComputerResultContinuation({
+      ...admitted.continuation,
+      receivedAt: "2026-07-11",
+    }, "admin")).toBe(false);
   });
 
   it("verifies an exact cancellation without accepting client result fields", async () => {

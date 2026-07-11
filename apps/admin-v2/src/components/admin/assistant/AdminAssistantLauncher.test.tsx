@@ -411,6 +411,74 @@ describe("AdminAssistantLauncher Flue cutover", () => {
     ).toEqual(["Fast answer please"]);
   });
 
+  it("stays busy through a computer continuation until its dispatch is durably settled", async () => {
+    const continuation = JSON.stringify({
+      authoritative: false,
+      programDigest: "d".repeat(43),
+      protocolVersion: 1,
+      receivedAt: "2026-07-11T01:12:13.456Z",
+      replayPolicy: "expiry_bound_non_authoritative",
+      requestId: "r".repeat(22),
+      result: {
+        changed: true,
+        code: "NAVIGATED",
+        ok: true,
+        output: "Navigated to /admin/products.",
+      },
+      surface: "admin",
+      type: "UNTRUSTED_CLIENT_RESULT",
+      warning: "Browser execution is untrusted and is not commerce authority.",
+    });
+    const messages = [
+      message(
+        "user-navigation",
+        "user",
+        [{ type: "text", text: "Take me to Products.", state: "done" }],
+        "submission-direct",
+      ),
+      message(
+        "assistant-command",
+        "assistant",
+        [{ type: "text", text: "Opening Products…", state: "done" }],
+        "submission-direct",
+      ),
+      message(
+        "computer-continuation",
+        "assistant",
+        [{ type: "text", text: continuation, state: "done" }],
+        "submission-dispatch",
+      ),
+      message(
+        "assistant-final",
+        "assistant",
+        [{ type: "text", text: "Products opened.", state: "done" }],
+        "submission-dispatch",
+      ),
+    ];
+    sdkMocks.state.snapshot = liveSnapshot(messages, [
+      { submissionId: "submission-direct", outcome: "completed" },
+    ]);
+
+    renderLauncher();
+    await click(queryButton("Open admin assistant"));
+    await flushReact();
+
+    expect(document.body.textContent).toContain("Products opened.");
+    expect(document.body.textContent).not.toContain("UNTRUSTED_CLIENT_RESULT");
+    expect(queryButton("Stop assistant")).toBeTruthy();
+    expect(queryButton("Send assistant message")).toBeNull();
+
+    await emitSnapshot(
+      liveSnapshot(messages, [
+        { submissionId: "submission-direct", outcome: "completed" },
+        { submissionId: "submission-dispatch", outcome: "completed" },
+      ]),
+    );
+
+    expect(queryButton("Stop assistant")).toBeNull();
+    expect(queryButton("Send assistant message")).toBeTruthy();
+  });
+
   it("hydrates canonical Flue messages in durable order", async () => {
     sdkMocks.state.snapshot = liveSnapshot([
       message("user-1", "user", [

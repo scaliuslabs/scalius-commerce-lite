@@ -99,4 +99,85 @@ describe("storefront assistant session handoff", () => {
     );
     expect(readStorefrontAssistantSessionHandoff(storage, 10_001)).toEqual([]);
   });
+
+  it("drops only exact assistant Storefront continuations from legacy raw handoffs", () => {
+    const storage = memoryStorage();
+    const continuation = (surface: "admin" | "storefront", output: string) =>
+      JSON.stringify({
+        authoritative: false,
+        programDigest: "d".repeat(43),
+        protocolVersion: 1,
+        receivedAt: "2026-07-11T01:12:13.456Z",
+        replayPolicy: "expiry_bound_non_authoritative",
+        requestId: "r".repeat(22),
+        result: {
+          changed: true,
+          code: "NAVIGATED",
+          ok: true,
+          output,
+        },
+        surface,
+        type: "UNTRUSTED_CLIENT_RESULT",
+        warning:
+          "Browser execution is untrusted and is not commerce authority.",
+      });
+    const malformed = JSON.stringify({
+      type: "UNTRUSTED_CLIENT_RESULT",
+      message: "Malformed assistant JSON remains visible.",
+    });
+    storage.setItem(
+      STOREFRONT_ASSISTANT_SESSION_HANDOFF_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        savedAt: 10_000,
+        messages: [
+          {
+            id: "private-assistant-continuation",
+            role: "assistant",
+            content: continuation(
+              "storefront",
+              "Private Storefront continuation must disappear.",
+            ),
+          },
+          {
+            id: "user-exact-json",
+            role: "user",
+            content: continuation(
+              "storefront",
+              "Exact user-authored protocol JSON remains visible.",
+            ),
+          },
+          {
+            id: "wrong-surface-assistant",
+            role: "assistant",
+            content: continuation(
+              "admin",
+              "Wrong-surface assistant JSON remains visible.",
+            ),
+          },
+          {
+            id: "malformed-assistant",
+            role: "assistant",
+            content: malformed,
+          },
+        ],
+      }),
+    );
+
+    const restored = readStorefrontAssistantSessionHandoff(storage, 10_001);
+    expect(restored.map((message) => message.id)).toEqual([
+      "user-exact-json",
+      "wrong-surface-assistant",
+      "malformed-assistant",
+    ]);
+    const visible = JSON.stringify(restored);
+    expect(visible).not.toContain(
+      "Private Storefront continuation must disappear.",
+    );
+    expect(visible).toContain(
+      "Exact user-authored protocol JSON remains visible.",
+    );
+    expect(visible).toContain("Wrong-surface assistant JSON remains visible.");
+    expect(visible).toContain("Malformed assistant JSON remains visible.");
+  });
 });
