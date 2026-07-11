@@ -43,7 +43,7 @@ Product attribute CRUD, value management, and public storefront filter queries.
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `listAttributeValues` | `(db, attributeId, { search?, sort?, page?, limit? })` | Paginated distinct values with product counts, sample product names (up to 5), preset flag. Merges unused preset options at end. |
+| `listAttributeValues` | `(db, attributeId, { search?, sort?, page?, limit? })` | Server-searchable distinct values with authoritative `totalValues`/`totalProducts`, sample product names (up to 5), and preset flag. Reconciles used presets across the full matching set before appending globally unique unused presets. Large value sets use bound `json_each()` lookups so a 100-row page remains below D1's 100-parameter limit. |
 | `addAttributeValue` | `(db, attributeId, value)` | Adds value to the attribute's `options` array. Throws `ConflictError` if already exists. |
 | `renameAttributeValue` | `(db, attributeId, oldValue, newValue)` | Uses `db.batch()` to atomically rename value in `productAttributeValues` table AND in the attribute's `options` array. |
 | `deleteAttributeValue` | `(db, attributeId, value)` | Uses `db.batch()` to atomically delete from `productAttributeValues` and remove from `options` array. |

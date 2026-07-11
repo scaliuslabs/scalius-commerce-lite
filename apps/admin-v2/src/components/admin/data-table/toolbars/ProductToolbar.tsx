@@ -27,6 +27,7 @@ interface ProductToolbarProps {
   showTrashed: boolean;
   onBulkDelete: () => void;
   isBulkDeleting: boolean;
+  canBulkDelete: boolean;
   bulkActionsDisabled?: boolean;
 }
 
@@ -40,6 +41,7 @@ export function ProductToolbar({
   showTrashed,
   onBulkDelete,
   isBulkDeleting,
+  canBulkDelete,
   bulkActionsDisabled = false,
 }: ProductToolbarProps) {
   const filters: ReactNode = (
@@ -59,7 +61,7 @@ export function ProductToolbar({
   );
 
   const bulkActions: ReactNode =
-    selectedCount > 0 ? (
+    canBulkDelete && selectedCount > 0 ? (
       <Button
         variant="outline"
         size="sm"

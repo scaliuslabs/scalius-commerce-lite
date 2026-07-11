@@ -16,7 +16,7 @@ const defaultValues = {
   description: null,
   price: 0,
   categoryId: "",
-  isActive: true,
+  isActive: false,
   discountType: "percentage" as "percentage" | "flat",
   discountPercentage: 0,
   discountAmount: 0,

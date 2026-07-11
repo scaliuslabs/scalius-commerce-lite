@@ -49,6 +49,35 @@ export function assertConsistentVariantOptionAxes(variants: Array<{ size?: strin
     }
 }
 
+function normalizedOptionCombinationKey(value: {
+    size?: string | null;
+    color?: string | null;
+}): string {
+    return JSON.stringify([
+        normalizeOptionValue(value.size)?.toLowerCase() ?? "",
+        normalizeOptionValue(value.color)?.toLowerCase() ?? "",
+    ]);
+}
+
+export function assertUniqueChangedVariantOptions(
+    changedVariants: Array<{ size?: string | null; color?: string | null }>,
+    existingVariants: Array<{ size?: string | null; color?: string | null }> = [],
+): void {
+    const changedKeys = changedVariants.map(normalizedOptionCombinationKey);
+    if (new Set(changedKeys).size !== changedKeys.length) {
+        throw new ValidationError(
+            "Each active SKU must use a unique option combination.",
+        );
+    }
+
+    const existingKeys = new Set(existingVariants.map(normalizedOptionCombinationKey));
+    if (changedKeys.some((key) => existingKeys.has(key))) {
+        throw new ConflictError(
+            "An active SKU already uses this option combination.",
+        );
+    }
+}
+
 export async function assertProductVariantOptionAxes(
     db: DrizzleD1Database<typeof schema>,
     productId: string,
@@ -56,6 +85,7 @@ export async function assertProductVariantOptionAxes(
     excludedVariantIds: string[] = [],
 ) {
     assertConsistentVariantOptionAxes(changedVariants);
+    assertUniqueChangedVariantOptions(changedVariants);
 
     const conditions = [
         eq(productVariants.productId, productId),
@@ -76,6 +106,7 @@ export async function assertProductVariantOptionAxes(
         .where(and(...conditions));
 
     assertConsistentVariantOptionAxes([...existingVariants, ...changedVariants]);
+    assertUniqueChangedVariantOptions(changedVariants, existingVariants);
 }
 
 function assertNormalVariantHasCustomerOption(value: { size?: string | null; color?: string | null }) {
@@ -634,20 +665,27 @@ export async function bulkCreateVariants(db: DrizzleD1Database<typeof schema>, p
         updatedAt: sql`unixepoch()`,
     }));
 
-    const createdVariants = [];
     // D1 has a 100 bound parameter limit per query.
     // Each variant has ~22 params, so max 4 per chunk (4 × 22 = 88 < 100).
     const chunkSize = 4;
+    const insertStatements = [];
     for (let i = 0; i < variantsToCreate.length; i += chunkSize) {
         const chunk = variantsToCreate.slice(i, i + chunkSize);
-        const result = await db
-            .insert(productVariants)
-            .values(chunk)
-            .returning();
-        createdVariants.push(...result);
+        insertStatements.push(
+            db
+                .insert(productVariants)
+                .values(chunk)
+                .returning(),
+        );
     }
 
-    return createdVariants;
+    // D1 batch is transactional: every chunk is committed together or none is.
+    // Executing chunks one-by-one leaves an earlier chunk persisted if a later
+    // insert encounters a concurrent SKU conflict.
+    const results = await safeBatch(db, insertStatements as never) as Array<
+        Array<typeof productVariants.$inferSelect> | undefined
+    >;
+    return results.flatMap((rows) => rows ?? []);
 }
 
 export async function bulkDeleteVariants(db: DrizzleD1Database<typeof schema>, productId: string, variantIds: string[]) {

@@ -12,11 +12,17 @@ import {
   collectionProductIdsForLookup,
   normalizeCollectionConfig,
 } from "@scalius/core/modules/collections/collection-config";
+import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 
 export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
     const [collection] = await Promise.all([
-      queryClient.ensureQueryData({ ...collectionQueryOptions(params.collectionId), staleTime: Infinity }).catch(() => null),
+      queryClient
+        .ensureQueryData({
+          ...collectionQueryOptions(params.collectionId),
+          staleTime: Infinity,
+        })
+        .catch(nullForAdminApiNotFound),
       queryClient.ensureQueryData(collectionCategoryOptionsQueryOptions()),
     ]);
     if (!collection) throw redirect({ to: "/admin/collections" });

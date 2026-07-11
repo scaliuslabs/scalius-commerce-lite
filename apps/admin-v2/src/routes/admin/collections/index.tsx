@@ -21,6 +21,7 @@ import {
   getCollectionColumns,
   type CollectionItem,
 } from "~/components/admin/data-table/columns/collection-columns";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 
 const validateCollectionSearch = createListSearchValidator(
   ["name", "type", "isActive", "sortOrder", "updatedAt"] as const,
@@ -60,6 +61,7 @@ function CollectionsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const showTrashed = search.trashed;
+  const { collections: collectionActions } = useCatalogActionPermissions();
 
   // Mutations
   const updateMutation = useUpdateCollection();
@@ -81,44 +83,50 @@ function CollectionsPage() {
   // Column action callbacks
   const handleUpdateName = useCallback(
     (id: string, name: string) => {
+      if (!collectionActions.canEdit) return;
       updateMutation.mutate({ id, name });
     },
-    [updateMutation],
+    [collectionActions.canEdit, updateMutation],
   );
 
   const handleToggleActive = useCallback(
     (id: string, isActive: boolean) => {
+      if (!collectionActions.canToggleStatus) return;
       updateMutation.mutate({ id, isActive });
     },
-    [updateMutation],
+    [collectionActions.canToggleStatus, updateMutation],
   );
 
   const handleEdit = useCallback(
     (id: string) => {
+      if (!collectionActions.canEdit) return;
       void navigate({ to: "/admin/collections/$collectionId/edit", params: { collectionId: id } });
     },
-    [navigate],
+    [collectionActions.canEdit, navigate],
   );
 
   const handleDelete = useCallback(
     (id: string) => {
+      if (!collectionActions.canDelete) return;
       deleteMutation.mutate(id);
     },
-    [deleteMutation],
+    [collectionActions.canDelete, deleteMutation],
   );
 
   const handleRestore = useCallback(
     (id: string) => {
+      if (!collectionActions.canRestore) return;
       restoreMutation.mutate(id);
     },
-    [restoreMutation],
+    [collectionActions.canRestore, restoreMutation],
   );
 
   const handlePermanentDelete = useCallback(
     (id: string) => {
+      if (!collectionActions.canPermanentDelete) return;
       permanentDeleteMutation.mutate(id);
     },
-    [permanentDeleteMutation],
+    [collectionActions.canPermanentDelete, permanentDeleteMutation],
   );
 
   // Columns
@@ -127,6 +135,12 @@ function CollectionsPage() {
       getCollectionColumns({
         showTrashed,
         savingIds,
+        canSelect: collectionActions.canBulkDelete,
+        canEdit: collectionActions.canEdit,
+        canDelete: collectionActions.canDelete,
+        canRestore: collectionActions.canRestore,
+        canPermanentDelete: collectionActions.canPermanentDelete,
+        canToggleStatus: collectionActions.canToggleStatus,
         onUpdateName: handleUpdateName,
         onToggleActive: handleToggleActive,
         onEdit: handleEdit,
@@ -137,6 +151,7 @@ function CollectionsPage() {
     [
       showTrashed,
       savingIds,
+      collectionActions,
       handleUpdateName,
       handleToggleActive,
       handleEdit,
@@ -206,12 +221,18 @@ function CollectionsPage() {
 
   // Bulk action handlers
   const handleBulkDelete = useCallback(() => {
-    if (selectedIds.length === 0) return;
+    if (!collectionActions.canBulkDelete || selectedIds.length === 0) return;
     bulkDeleteMutation.mutate(
       { ids: selectedIds, permanent: showTrashed },
       { onSuccess: clearSelection },
     );
-  }, [selectedIds, showTrashed, bulkDeleteMutation, clearSelection]);
+  }, [
+    collectionActions.canBulkDelete,
+    selectedIds,
+    showTrashed,
+    bulkDeleteMutation,
+    clearSelection,
+  ]);
 
   const loadedCollectionCount = table.getRowModel().rows.length;
   const hasCompleteOrderedSet =
@@ -222,6 +243,7 @@ function CollectionsPage() {
   // paginated slice would create duplicate global sort orders.
   const isDragEnabled =
     !showTrashed &&
+    collectionActions.canReorder &&
     search.sort === "sortOrder" &&
     search.order === "asc" &&
     !search.search &&
@@ -229,6 +251,7 @@ function CollectionsPage() {
 
   const handleReorder = useCallback(
     (oldIndex: number, newIndex: number) => {
+      if (!collectionActions.canReorder) return;
       const rows = table.getRowModel().rows;
       // Build the new sort order based on the reordered positions
       const items = rows.map((r) => r.original);
@@ -240,7 +263,7 @@ function CollectionsPage() {
       }));
       reorderMutation.mutate({ items: reorderData });
     },
-    [table, reorderMutation],
+    [collectionActions.canReorder, table, reorderMutation],
   );
 
   // Toolbar
@@ -250,7 +273,7 @@ function CollectionsPage() {
       onSearchChange={onSearchChange}
       searchPlaceholder="Search collections..."
       selectedCount={selectedIds.length}
-      bulkActions={
+      bulkActions={collectionActions.canBulkDelete ? (
         <Button
           variant={showTrashed ? "destructive" : "outline"}
           size="sm"
@@ -267,7 +290,7 @@ function CollectionsPage() {
             ? `Delete (${selectedIds.length})`
             : `Trash (${selectedIds.length})`}
         </Button>
-      }
+      ) : undefined}
       actions={
         <div className="flex items-center gap-2">
           <Link
@@ -288,7 +311,7 @@ function CollectionsPage() {
               )}
             </Button>
           </Link>
-          {!showTrashed && (
+          {!showTrashed && collectionActions.canCreate && (
             <Link to="/admin/collections/new">
               <Button>
                 <PlusCircle className="mr-2 h-4 w-4" />
@@ -345,7 +368,7 @@ function CollectionsPage() {
               ? "Deleted collections will appear here."
               : "Create your first collection to get started.",
           action:
-            !showTrashed && !search.search ? (
+            !showTrashed && collectionActions.canCreate && !search.search ? (
               <Button
                 onClick={() =>
                   void navigate({ to: "/admin/collections/new" })

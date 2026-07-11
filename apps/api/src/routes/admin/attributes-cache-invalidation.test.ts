@@ -1,4 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { ConflictError } from "@scalius/core/errors";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../../utils/api-response";
@@ -63,6 +64,24 @@ function createTestApp() {
     },
   });
   mocks.renameAttributeValue.mockResolvedValue(undefined);
+  mocks.listAttributeValues.mockResolvedValue({
+    attributeId: "attr_1",
+    attributeName: "Color",
+    values: [
+      {
+        value: "Navy",
+        productCount: 12,
+        createdAt: 1,
+        isPreset: true,
+        sampleProducts: ["Product A"],
+      },
+    ],
+    totalValues: 41,
+    totalProducts: 75,
+    page: 2,
+    limit: 20,
+    totalPages: 3,
+  });
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -126,5 +145,71 @@ describe("admin attribute cache invalidation", () => {
       expect.objectContaining({ env }),
       { htmlPaths: ["/search"] },
     );
+  });
+
+  it("returns a documented conflict when a value rename targets an existing preset", async () => {
+    const { app, env } = createTestApp();
+    mocks.renameAttributeValue.mockRejectedValueOnce(
+      new ConflictError('Value "Red" already exists for this attribute'),
+    );
+
+    const response = await app.request(
+      "/api/v1/admin/attributes/attr_1/values",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldValue: "Blue", newValue: "Red" }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: "CONFLICT",
+        message: 'Value "Red" already exists for this attribute',
+      },
+    });
+  });
+
+  it("passes pagination and search to attribute values and returns global totals", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/attributes/attr_1/values?page=2&limit=20&search=navy&sort=asc",
+      undefined,
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.listAttributeValues).toHaveBeenCalledWith(
+      { id: "db" },
+      "attr_1",
+      { page: 2, limit: 20, search: "navy", sort: "asc" },
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        totalValues: 41,
+        totalProducts: 75,
+        page: 2,
+        limit: 20,
+        totalPages: 3,
+      },
+    });
+  });
+
+  it("rejects attribute value pages that could exceed the D1 lookup budget", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/attributes/attr_1/values?page=1&limit=101",
+      undefined,
+      env,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.listAttributeValues).not.toHaveBeenCalled();
   });
 });

@@ -4,10 +4,16 @@ import { ProductView } from "~/components/admin/ProductView";
 import { productQueryOptions } from "~/lib/api-query-options/products";
 import type { ProductDetail } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 
 export const Route = createFileRoute("/admin/products/$productId/")({
   loader: async ({ params, context: { queryClient } }) => {
-    const product = await queryClient.ensureQueryData({ ...productQueryOptions(params.productId), staleTime: Infinity }).catch(() => null);
+    const product = await queryClient
+      .ensureQueryData({
+        ...productQueryOptions(params.productId),
+        staleTime: Infinity,
+      })
+      .catch(nullForAdminApiNotFound);
     if (!product) throw redirect({ to: "/admin/products" });
   },
   head: () => ({

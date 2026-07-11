@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 
 interface ProductStickyHeaderProps {
   productName: string;
@@ -20,6 +21,7 @@ export function ProductActionBar({
   cancelUrl = "/admin/products",
   onSave,
 }: Omit<ProductStickyHeaderProps, "productName">) {
+  const { products: productActions } = useCatalogActionPermissions();
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -37,29 +39,53 @@ export function ProductActionBar({
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            asChild
-            disabled={isSubmitting}
-            className="h-8 text-xs"
-          >
-            <Link to={cancelUrl}>Discard</Link>
-          </Button>
-
-          {isEdit && (
+          {isSubmitting ? (
             <Button
               variant="outline"
               size="sm"
-              asChild
-              className="h-8 text-xs hidden sm:inline-flex gap-1"
+              type="button"
+              disabled
+              className="h-8 text-xs"
             >
-              <Link to="/admin/products/new">
+              Discard
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              asChild
+              className="h-8 text-xs"
+            >
+              <Link to={cancelUrl}>Discard</Link>
+            </Button>
+          )}
+
+          {isEdit && productActions.canCreate && (
+            isSubmitting ? (
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                disabled
+                className="h-8 text-xs hidden sm:inline-flex gap-1"
+              >
                 <Plus className="h-3.5 w-3.5" />
                 New Product
-              </Link>
-            </Button>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="h-8 text-xs hidden sm:inline-flex gap-1"
+              >
+                <Link to="/admin/products/new">
+                  <Plus className="h-3.5 w-3.5" />
+                  New Product
+                </Link>
+              </Button>
+            )
           )}
           <Button
             size="sm"

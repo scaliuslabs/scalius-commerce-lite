@@ -5,6 +5,7 @@ import { createListSearchValidator, createDataSelector } from "~/lib/list-helper
 import { RouteErrorComponent } from "~/lib/route-error";
 import { Button } from "~/components/ui/button";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { categoriesQueryOptions } from "~/lib/api-query-options/categories";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
@@ -65,6 +66,7 @@ function CategoriesPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const { getStorefrontPath } = useStorefrontUrl();
+  const { categories: categoryActions } = useCatalogActionPermissions();
   const showTrashed = search.trashed;
 
   // Mutations
@@ -84,11 +86,20 @@ function CategoriesPage() {
     const id = deleteId;
     setDeleteId(null);
     if (showTrashed) {
+      if (!categoryActions.canPermanentDelete) return;
       permanentDeleteMutation.mutate(id);
     } else {
+      if (!categoryActions.canDelete) return;
       deleteMutation.mutate(id);
     }
-  }, [deleteId, showTrashed, deleteMutation, permanentDeleteMutation]);
+  }, [
+    deleteId,
+    showTrashed,
+    categoryActions.canDelete,
+    categoryActions.canPermanentDelete,
+    deleteMutation,
+    permanentDeleteMutation,
+  ]);
 
   const isCategoryDeleteDialogOpen = !!deleteId;
 
@@ -98,13 +109,35 @@ function CategoriesPage() {
       getCategoryColumns({
         showTrashed,
         getStorefrontPath,
+        canSelect: categoryActions.canBulkDelete,
+        canEdit: categoryActions.canEdit,
+        canDelete: categoryActions.canDelete,
+        canRestore: categoryActions.canRestore,
+        canPermanentDelete: categoryActions.canPermanentDelete,
         onEdit: (id) =>
-          void navigate({ to: "/admin/categories/$categoryId/edit", params: { categoryId: id } }),
-        onDelete: (id) => setDeleteId(id),
-        onRestore: (id) => restoreMutation.mutate(id),
-        onPermanentDelete: (id) => setDeleteId(id),
+          categoryActions.canEdit
+            ? void navigate({
+                to: "/admin/categories/$categoryId/edit",
+                params: { categoryId: id },
+              })
+            : undefined,
+        onDelete: (id) => {
+          if (categoryActions.canDelete) setDeleteId(id);
+        },
+        onRestore: (id) => {
+          if (categoryActions.canRestore) restoreMutation.mutate(id);
+        },
+        onPermanentDelete: (id) => {
+          if (categoryActions.canPermanentDelete) setDeleteId(id);
+        },
       }),
-    [showTrashed, getStorefrontPath, navigate, restoreMutation],
+    [
+      showTrashed,
+      getStorefrontPath,
+      categoryActions,
+      navigate,
+      restoreMutation,
+    ],
   );
 
   // Data selector
@@ -168,7 +201,7 @@ function CategoriesPage() {
               {showTrashed ? "View Active" : "View Trash"}
             </Button>
           </Link>
-          {!showTrashed && (
+          {!showTrashed && categoryActions.canCreate && (
             <Link to="/admin/categories/new">
               <Button size="sm">
                 <Plus className="mr-2 h-4 w-4" />
@@ -203,12 +236,13 @@ function CategoriesPage() {
             }
             searchPlaceholder="Search categories..."
             selectedCount={selectedIds.length}
-            bulkActions={
+            bulkActions={categoryActions.canBulkDelete ? (
               <Button
                 variant="outline"
                 size="sm"
                 className="text-destructive border-destructive hover:bg-destructive/10"
                 onClick={() => {
+                  if (!categoryActions.canBulkDelete) return;
                   bulkDeleteMutation.mutate(
                     {
                       categoryIds: selectedIds,
@@ -222,12 +256,15 @@ function CategoriesPage() {
                 <Trash2 className="mr-2 h-4 w-4" />
                 {showTrashed ? "Delete" : "Trash"} ({selectedIds.length})
               </Button>
-            }
+            ) : undefined}
           />
         }
       />
 
-      {isCategoryDeleteDialogOpen && (
+      {isCategoryDeleteDialogOpen &&
+        (showTrashed
+          ? categoryActions.canPermanentDelete
+          : categoryActions.canDelete) && (
         <Suspense fallback={null}>
           <CategoryDeleteDialog
             showTrashed={showTrashed}

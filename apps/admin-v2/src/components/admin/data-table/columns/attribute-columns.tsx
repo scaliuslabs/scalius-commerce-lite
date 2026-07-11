@@ -15,6 +15,11 @@ export interface AttributeItem extends ProductAttribute {
 interface AttributeColumnOptions {
   showTrashed: boolean;
   savingIds: Set<string>;
+  canSelect: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canRestore: boolean;
+  canPermanentDelete: boolean;
   onUpdateName: (id: string, name: string) => void;
   onUpdateSlug: (id: string, slug: string) => void;
   onToggleFilterable: (id: string, filterable: boolean) => void;
@@ -28,8 +33,18 @@ interface AttributeColumnOptions {
 export function getAttributeColumns(
   opts: AttributeColumnOptions,
 ): ColumnDef<AttributeItem, unknown>[] {
+  const canShowActions = opts.showTrashed
+    ? opts.canRestore || opts.canPermanentDelete
+    : opts.canEdit || opts.canDelete;
+
   return [
-    createSelectColumn<AttributeItem>({ getLabel: (r) => (r as AttributeItem).name }),
+    ...(opts.canSelect
+      ? [
+          createSelectColumn<AttributeItem>({
+            getLabel: (r) => (r as AttributeItem).name,
+          }),
+        ]
+      : []),
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -38,7 +53,8 @@ export function getAttributeColumns(
       cell: ({ row }) => {
         const attribute = row.original;
         const isSaving = opts.savingIds.has(attribute.id);
-        const isDisabled = !!attribute.deletedAt || opts.showTrashed;
+        const isDisabled =
+          !opts.canEdit || !!attribute.deletedAt || opts.showTrashed;
 
         return (
           <InlineEditCell
@@ -61,7 +77,8 @@ export function getAttributeColumns(
       cell: ({ row }) => {
         const attribute = row.original;
         const isSaving = opts.savingIds.has(attribute.id);
-        const isDisabled = !!attribute.deletedAt || opts.showTrashed;
+        const isDisabled =
+          !opts.canEdit || !!attribute.deletedAt || opts.showTrashed;
 
         return (
           <InlineEditCell
@@ -84,7 +101,8 @@ export function getAttributeColumns(
       ),
       cell: ({ row }) => {
         const attribute = row.original;
-        const isDisabled = !!attribute.deletedAt || opts.showTrashed;
+        const isDisabled =
+          !opts.canEdit || !!attribute.deletedAt || opts.showTrashed;
 
         return (
           <div className="flex items-center gap-2">
@@ -132,15 +150,31 @@ export function getAttributeColumns(
       },
       enableSorting: false,
     },
-    createActionsColumn<AttributeItem>({
-      showTrashed: opts.showTrashed,
-      onDelete: (a) => opts.onDelete(a.id),
-      onRestore: (a) => opts.onRestore(a.id),
-      onPermanentDelete: (a) => opts.onPermanentDelete(a.id),
-      getExtraActions: (a) =>
-        !opts.showTrashed
-          ? [{ label: "Edit Values", icon: Edit3, onClick: () => opts.onEditValues(a.id, a.name) }]
-          : undefined,
-    }),
+    ...(canShowActions
+      ? [
+          createActionsColumn<AttributeItem>({
+            showTrashed: opts.showTrashed,
+            onDelete: opts.canDelete
+              ? (a) => opts.onDelete(a.id)
+              : undefined,
+            onRestore: opts.canRestore
+              ? (a) => opts.onRestore(a.id)
+              : undefined,
+            onPermanentDelete: opts.canPermanentDelete
+              ? (a) => opts.onPermanentDelete(a.id)
+              : undefined,
+            getExtraActions: (a) =>
+              !opts.showTrashed && opts.canEdit
+                ? [
+                    {
+                      label: "Edit Values",
+                      icon: Edit3,
+                      onClick: () => opts.onEditValues(a.id, a.name),
+                    },
+                  ]
+                : undefined,
+          }),
+        ]
+      : []),
   ];
 }

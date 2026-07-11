@@ -25,6 +25,7 @@ import {
   createAdminApiReadTimeout,
   wrapResponseWithAdminApiReadTimeout,
 } from "./admin-api-timeout";
+import { AdminApiResponseError } from "./admin-api-error";
 
 // Admin API prefix -- all admin endpoints live under this path
 const API_PATH_PREFIX = "/api/v1/admin";
@@ -109,16 +110,19 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok) {
     let message = `API error: ${response.status} ${response.statusText}`;
+    let code: string | undefined;
     try {
       const body = (await response.json()) as ApiEnvelope;
       const err = body.error;
       if (typeof err === "string") message = err;
-      else if (err && typeof err === "object" && "message" in err)
+      else if (err && typeof err === "object" && "message" in err) {
         message = err.message ?? message;
+        code = err.code;
+      }
     } catch {
       // Use default message
     }
-    throw new Error(message);
+    throw new AdminApiResponseError(message, response.status, code);
   }
 
   if (response.status === 204) return undefined as T;

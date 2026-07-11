@@ -73,7 +73,9 @@ export interface AttributeValuesPayload {
   attributeName: string;
   values: AttributeValueDto[];
   totalValues: number;
+  totalProducts: number;
   page: number;
+  limit: number;
   totalPages: number;
 }
 

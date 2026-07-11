@@ -7,7 +7,7 @@ import { sql, and, isNull, isNotNull, eq, desc, asc, inArray, type SQL } from "d
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import type { CreateCategoryInput, UpdateCategoryInput } from "./categories.validation";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 
 // ─────────────────────────────────────────
@@ -299,11 +299,15 @@ export async function bulkDeleteCategories(
     permanent = false,
 ): Promise<void> {
     if (categoryIds.length === 0) return;
+    const uniqueCategoryIds = [...new Set(categoryIds)];
+    if (uniqueCategoryIds.length > 90) {
+        throw new ValidationError("Delete at most 90 categories at a time.");
+    }
 
     const referencedProducts = await db
         .select({ id: products.id, name: products.name, categoryId: products.categoryId })
         .from(products)
-        .where(and(inArray(products.categoryId, categoryIds), isNull(products.deletedAt)))
+        .where(and(inArray(products.categoryId, uniqueCategoryIds), isNull(products.deletedAt)))
         .limit(5)
         .all();
 
@@ -320,37 +324,47 @@ export async function bulkDeleteCategories(
     }
 
     if (permanent) {
-        // Clean up collection configs that reference deleted categories
         const affectedCollections = await db
             .select()
             .from(collections)
             .where(isNull(collections.deletedAt))
             .all();
 
+        const statements = [];
         for (const collection of affectedCollections) {
             try {
                 const config = JSON.parse(collection.config);
                 if (Array.isArray(config.categoryIds)) {
-                    const updated = config.categoryIds.filter((cid: string) => !categoryIds.includes(cid));
+                    const updated = config.categoryIds.filter((cid: string) => !uniqueCategoryIds.includes(cid));
                     if (updated.length !== config.categoryIds.length) {
                         config.categoryIds = updated;
-                        await db
-                            .update(collections)
-                            .set({ config: JSON.stringify(config) })
-                            .where(eq(collections.id, collection.id));
+                        statements.push(
+                            db
+                                .update(collections)
+                                .set({
+                                    config: JSON.stringify(config),
+                                    updatedAt: sql`unixepoch()`,
+                                })
+                                .where(eq(collections.id, collection.id)),
+                        );
                     }
                 }
-            } catch (e) {
-                console.warn(`Failed to parse collection config for ${collection.id}:`, e);
+            } catch {
+                throw new ConflictError(
+                    `Collection ${collection.id} has invalid configuration. Repair it before permanently deleting categories.`,
+                );
             }
         }
 
-        await db.delete(categories).where(inArray(categories.id, categoryIds));
+        statements.push(
+            db.delete(categories).where(inArray(categories.id, uniqueCategoryIds)),
+        );
+        await safeBatch(db, statements as never);
     } else {
         await db
             .update(categories)
             .set({ deletedAt: sql`unixepoch()` })
-            .where(inArray(categories.id, categoryIds));
+            .where(inArray(categories.id, uniqueCategoryIds));
     }
 }
 
@@ -371,9 +385,5 @@ export async function restoreCategories(db: Database, categoryIds: string[]): Pr
  * Throws ConflictError if products still reference this category.
  */
 export async function permanentlyDeleteCategory(db: Database, id: string): Promise<void> {
-    const productCount = await db.select({ count: sql<number>`count(*)` }).from(products).where(and(eq(products.categoryId, id), isNull(products.deletedAt))).get();
-    if (productCount && productCount.count > 0) {
-        throw new ConflictError(`Cannot permanently delete: ${productCount.count} products still use this category`);
-    }
-    await db.delete(categories).where(eq(categories.id, id));
+    await bulkDeleteCategories(db, [id], true);
 }

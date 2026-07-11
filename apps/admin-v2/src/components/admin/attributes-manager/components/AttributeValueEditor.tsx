@@ -1,5 +1,6 @@
 // src/components/admin/attributes-manager/components/AttributeValueEditor.tsx
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -28,16 +29,23 @@ import {
   X,
   Package,
   Plus,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AttributeValue } from "../types";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  getAttributeValues,
   renameAttributeValue,
   addAttributeValue,
   removeAttributeValue,
 } from "~/lib/api-functions/attributes";
+import { attributeValuesQueryOptions } from "~/lib/api-query-options/attributes";
+import { queryKeys } from "~/lib/query-keys";
+import { useDebounce } from "~/hooks/use-debounce";
+import { AdminListPagination } from "~/components/admin/shared/AdminListPagination";
+
+const ATTRIBUTE_VALUES_PAGE_SIZE = 20;
 
 interface AttributeValueEditorProps {
   attributeId: string | null;
@@ -50,40 +58,46 @@ export function AttributeValueEditor({
   attributeName,
   onClose,
 }: AttributeValueEditorProps) {
-  const [values, setValues] = useState<AttributeValue[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [editingValue, setEditingValue] = useState<string | null>(null);
   const [editedValue, setEditedValue] = useState("");
   const [savingValue, setSavingValue] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [newValue, setNewValue] = useState("");
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const queryClient = useQueryClient();
+  const debouncedSearch = useDebounce(searchQuery.trim(), 300);
 
-  const fetchValues = useCallback(async () => {
-    if (!attributeId) return;
+  const valuesQuery = useQuery({
+    ...attributeValuesQueryOptions({
+      attributeId: attributeId ?? undefined,
+      page,
+      limit: ATTRIBUTE_VALUES_PAGE_SIZE,
+      search: debouncedSearch || undefined,
+    }),
+    enabled: Boolean(attributeId),
+  });
 
-    setIsLoading(true);
-    try {
-      const data = await getAttributeValues({ data: { attributeId } });
-      setValues(data.values || []);
-    } catch (error: unknown) {
-      console.error("Error fetching values:", error);
-      toast.error("Failed to load attribute values");
-    } finally {
-      setIsLoading(false);
-    }
+  const values: AttributeValue[] = valuesQuery.data?.values ?? [];
+  const isLoading = Boolean(attributeId) && valuesQuery.isPending;
+
+  useEffect(() => {
+    setSearchQuery("");
+    setPage(1);
+    setEditingValue(null);
+    setNewValue("");
+    setIsAddingNew(false);
   }, [attributeId]);
 
   useEffect(() => {
-    if (attributeId) {
-      fetchValues();
-      setSearchQuery("");
-      setEditingValue(null);
-      setNewValue("");
-      setIsAddingNew(false);
-    }
-  }, [attributeId, fetchValues]);
+    const totalPages = valuesQuery.data?.totalPages ?? 0;
+    if (totalPages > 0 && page > totalPages) setPage(totalPages);
+  }, [page, valuesQuery.data?.totalPages]);
+
+  const refreshAttributeQueries = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.attributes.all });
+  };
 
   const handleStartEdit = (value: string) => {
     setEditingValue(value);
@@ -111,7 +125,7 @@ export function AttributeValueEditor({
       toast.success(`Value renamed to "${editedValue.trim()}"`);
       setEditingValue(null);
       setEditedValue("");
-      fetchValues();
+      void refreshAttributeQueries();
     } catch (error: unknown) {
       console.error("Error updating value:", error);
       toast.error(getServerFnError(error, "Failed to update value"));
@@ -132,7 +146,7 @@ export function AttributeValueEditor({
       toast.success(`Value "${newValue.trim()}" added`);
       setNewValue("");
       setIsAddingNew(false);
-      fetchValues();
+      void refreshAttributeQueries();
     } catch (error: unknown) {
       console.error("Error adding value:", error);
       toast.error(getServerFnError(error, "Failed to add value"));
@@ -150,7 +164,7 @@ export function AttributeValueEditor({
 
       toast.success(`Value "${value}" deleted from all products`);
       setDeleteConfirm(null);
-      fetchValues();
+      void refreshAttributeQueries();
     } catch (error: unknown) {
       console.error("Error deleting value:", error);
       toast.error(getServerFnError(error, "Failed to delete value"));
@@ -159,11 +173,8 @@ export function AttributeValueEditor({
     }
   };
 
-  const filteredValues = values.filter((v) =>
-    v.value.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
-  const totalProducts = values.reduce((sum, v) => sum + v.productCount, 0);
+  const totalValues = valuesQuery.data?.totalValues ?? 0;
+  const totalProducts = valuesQuery.data?.totalProducts ?? 0;
 
   return (
     <>
@@ -188,7 +199,7 @@ export function AttributeValueEditor({
                   Unique Values
                 </div>
                 <div className="text-2xl font-bold">
-                  {isLoading ? "-" : values.length}
+                  {isLoading || valuesQuery.isError ? "-" : totalValues}
                 </div>
               </div>
               <div className="flex-1 p-3 border rounded-lg">
@@ -196,7 +207,7 @@ export function AttributeValueEditor({
                   Total Products
                 </div>
                 <div className="text-2xl font-bold">
-                  {isLoading ? "-" : totalProducts}
+                  {isLoading || valuesQuery.isError ? "-" : totalProducts}
                 </div>
               </div>
             </div>
@@ -208,9 +219,12 @@ export function AttributeValueEditor({
                 <Input
                   placeholder="Search values..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
                   className="pl-10"
-                  disabled={isLoading}
+                  aria-label="Search attribute values"
                 />
               </div>
               <div className="flex gap-2">
@@ -233,7 +247,12 @@ export function AttributeValueEditor({
                     <Button
                       size="sm"
                       onClick={handleAddValue}
-                      disabled={!newValue.trim() || savingValue !== null}
+                      disabled={
+                        !newValue.trim() ||
+                        savingValue !== null ||
+                        valuesQuery.isError
+                      }
+                      aria-label="Save new value"
                     >
                       <Check className="h-4 w-4" />
                     </Button>
@@ -244,12 +263,16 @@ export function AttributeValueEditor({
                         setIsAddingNew(false);
                         setNewValue("");
                       }}
+                      aria-label="Cancel adding value"
                     >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
                 ) : (
-                  <Button onClick={() => setIsAddingNew(true)}>
+                  <Button
+                    onClick={() => setIsAddingNew(true)}
+                    disabled={valuesQuery.isError}
+                  >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Value
                   </Button>
@@ -263,7 +286,25 @@ export function AttributeValueEditor({
                 <div className="flex items-center justify-center flex-1">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
-              ) : filteredValues.length > 0 ? (
+              ) : valuesQuery.isError ? (
+                <div className="flex flex-col items-center justify-center flex-1 text-center px-6">
+                  <AlertTriangle className="h-10 w-10 text-destructive/70 mb-2" />
+                  <p className="text-sm font-medium">Could not load attribute values</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Your catalog was not changed. Retry to load the current page.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => void valuesQuery.refetch()}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              ) : values.length > 0 ? (
                 <div className="flex-1 overflow-auto">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
@@ -278,7 +319,7 @@ export function AttributeValueEditor({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredValues.map((item) => (
+                      {values.map((item) => (
                         <TableRow key={item.value}>
                           <TableCell>
                             {editingValue === item.value ? (
@@ -301,6 +342,7 @@ export function AttributeValueEditor({
                                   className="h-8 w-8 text-green-600"
                                   onClick={handleSaveEdit}
                                   disabled={savingValue === item.value}
+                                  aria-label={`Save rename for ${item.value}`}
                                 >
                                   {savingValue === item.value ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -313,6 +355,7 @@ export function AttributeValueEditor({
                                   variant="ghost"
                                   className="h-8 w-8"
                                   onClick={handleCancelEdit}
+                                  aria-label={`Cancel rename for ${item.value}`}
                                 >
                                   <X className="h-4 w-4" />
                                 </Button>
@@ -351,6 +394,7 @@ export function AttributeValueEditor({
                                   className="h-8 w-8"
                                   onClick={() => handleStartEdit(item.value)}
                                   disabled={savingValue !== null}
+                                  aria-label={`Rename ${item.value}`}
                                 >
                                   <Edit3 className="h-4 w-4" />
                                 </Button>
@@ -360,6 +404,7 @@ export function AttributeValueEditor({
                                   className="h-8 w-8 text-destructive hover:text-destructive"
                                   onClick={() => setDeleteConfirm(item.value)}
                                   disabled={savingValue !== null}
+                                  aria-label={`Delete ${item.value}`}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -381,6 +426,20 @@ export function AttributeValueEditor({
                   </p>
                 </div>
               )}
+              {!valuesQuery.isError &&
+                valuesQuery.data &&
+                valuesQuery.data.totalValues > 0 && (
+                  <AdminListPagination
+                    pagination={{
+                      total: valuesQuery.data.totalValues,
+                      page: valuesQuery.data.page,
+                      limit: valuesQuery.data.limit,
+                      totalPages: valuesQuery.data.totalPages,
+                    }}
+                    itemLabel="values"
+                    onPageChange={setPage}
+                  />
+                )}
             </div>
 
             <div className="flex justify-end shrink-0">

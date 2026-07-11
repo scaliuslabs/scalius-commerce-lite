@@ -286,9 +286,9 @@ const listValuesRoute = createRoute({
         params: z.object({ id: z.string() }),
         query: z.object({
             search: z.string().optional().openapi({ description: "Filter values" }),
-            sort: z.string().optional().default("desc").openapi({ description: "Sort order" }),
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(100).default(20).openapi({ description: "Items per page" })
+            sort: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: "Items per page" })
         })
     },
     responses: {
@@ -305,7 +305,9 @@ const listValuesRoute = createRoute({
                     sampleProducts: z.array(z.string()),
                 })),
                 totalValues: z.number(),
+                totalProducts: z.number(),
                 page: z.number(),
+                limit: z.number(),
                 totalPages: z.number(),
             })) } },
         },
@@ -373,6 +375,7 @@ const updateValueRoute = createRoute({
             content: { "application/json": { schema: messageResponse } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 

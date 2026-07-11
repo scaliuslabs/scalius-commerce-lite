@@ -114,21 +114,26 @@ describe("product variant stock ledger routing", () => {
 
   it("batches bulk variant stock edits with movement claims", async () => {
     const batchCalls: unknown[][] = [];
+    let selectCount = 0;
     const db = {
       select() {
+        selectCount++;
         return {
           from() {
             return {
-              where: async () => [
-                {
-                  id: "variant_1",
-                  isDefault: false,
-                  size: "M",
-                  color: "Black",
-                  stock: 5,
-                  stockVersion: 3,
-                },
-              ],
+              where: async () =>
+                selectCount === 1
+                  ? [
+                      {
+                        id: "variant_1",
+                        isDefault: false,
+                        size: "M",
+                        color: "Black",
+                        stock: 5,
+                        stockVersion: 3,
+                      },
+                    ]
+                  : [],
             };
           },
         };

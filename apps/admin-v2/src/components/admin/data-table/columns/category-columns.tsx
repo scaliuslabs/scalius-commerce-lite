@@ -16,6 +16,11 @@ export interface CategoryListItem extends Category {
 interface CategoryColumnOptions {
   showTrashed: boolean;
   getStorefrontPath: (path: string) => string;
+  canSelect: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canRestore: boolean;
+  canPermanentDelete: boolean;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
@@ -25,8 +30,18 @@ interface CategoryColumnOptions {
 export function getCategoryColumns(
   opts: CategoryColumnOptions,
 ): ColumnDef<CategoryListItem, unknown>[] {
+  const canShowActions = !opts.showTrashed ||
+    opts.canRestore ||
+    opts.canPermanentDelete;
+
   return [
-    createSelectColumn<CategoryListItem>({ getLabel: (r) => (r as CategoryListItem).name }),
+    ...(opts.canSelect
+      ? [
+          createSelectColumn<CategoryListItem>({
+            getLabel: (r) => (r as CategoryListItem).name,
+          }),
+        ]
+      : []),
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -52,12 +67,18 @@ export function getCategoryColumns(
               </div>
             )}
             <div className="flex flex-col min-w-0">
-              <Link
-                to={`/admin/categories/${category.id}/edit` as string}
-                className="font-medium text-sm text-foreground hover:text-primary cursor-pointer truncate"
-              >
-                {category.name}
-              </Link>
+              {opts.canEdit ? (
+                <Link
+                  to={`/admin/categories/${category.id}/edit` as string}
+                  className="font-medium text-sm text-foreground hover:text-primary cursor-pointer truncate"
+                >
+                  {category.name}
+                </Link>
+              ) : (
+                <span className="truncate text-sm font-medium text-foreground">
+                  {category.name}
+                </span>
+              )}
               <span className="text-xs text-muted-foreground truncate">
                 {category.slug}
               </span>
@@ -104,15 +125,29 @@ export function getCategoryColumns(
       size: 100,
     },
     createDateColumn<CategoryListItem>("updatedAt", "Last Updated"),
-    createActionsColumn<CategoryListItem>({
-      showTrashed: opts.showTrashed,
-      onView: !opts.showTrashed
-        ? (c) => window.open(opts.getStorefrontPath(`/categories/${c.slug}`), "_blank")
-        : undefined,
-      onEdit: (c) => opts.onEdit(c.id),
-      onDelete: (c) => opts.onDelete(c.id),
-      onRestore: (c) => opts.onRestore(c.id),
-      onPermanentDelete: (c) => opts.onPermanentDelete(c.id),
-    }),
+    ...(canShowActions
+      ? [
+          createActionsColumn<CategoryListItem>({
+            showTrashed: opts.showTrashed,
+            onView: !opts.showTrashed
+              ? (c) =>
+                  window.open(
+                    opts.getStorefrontPath(`/categories/${c.slug}`),
+                    "_blank",
+                  )
+              : undefined,
+            onEdit: opts.canEdit ? (c) => opts.onEdit(c.id) : undefined,
+            onDelete: opts.canDelete
+              ? (c) => opts.onDelete(c.id)
+              : undefined,
+            onRestore: opts.canRestore
+              ? (c) => opts.onRestore(c.id)
+              : undefined,
+            onPermanentDelete: opts.canPermanentDelete
+              ? (c) => opts.onPermanentDelete(c.id)
+              : undefined,
+          }),
+        ]
+      : []),
   ];
 }

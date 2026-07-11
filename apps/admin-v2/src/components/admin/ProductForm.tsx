@@ -107,7 +107,7 @@ export function ProductForm({
       description: null,
       price: 0,
       categoryId: "",
-      isActive: true,
+      isActive: false,
       discountType: "percentage",
       discountPercentage: 0,
       discountAmount: 0,
@@ -186,6 +186,16 @@ export function ProductForm({
           className="-mt-4 pb-6"
           noValidate
         >
+          <div className="mb-4">
+            <h1 className="text-xl font-semibold tracking-tight">
+              {isEdit ? "Edit Product" : "Create Product"}
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isEdit
+                ? "Update catalog details, merchandising, and discovery settings."
+                : "Start as a draft, then publish after pricing, media, and SKU readiness are confirmed."}
+            </p>
+          </div>
           {/* Two-Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
             {/* Left Column - Main Content (2/3 width on large screens) */}

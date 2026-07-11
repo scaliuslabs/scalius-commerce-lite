@@ -35,6 +35,7 @@ import {
   type CreateCategoryInput,
 } from "@/lib/api-functions/categories";
 import { categoryFormSchema, type CategoryFormValues } from "@/lib/form-schemas";
+import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -77,6 +78,7 @@ export function CategoryForm({
   isEdit = false,
 }: CategoryFormProps) {
   const { getStorefrontPath } = useStorefrontUrl();
+  const { categories: categoryActions } = useCatalogActionPermissions();
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
@@ -157,6 +159,7 @@ export function CategoryForm({
       backUrl="/admin/categories"
       newUrl="/admin/categories/new"
       newLabel="New Category"
+      canCreateNew={categoryActions.canCreate}
       saveLabel={isEdit ? "Save Category" : "Create Category"}
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
