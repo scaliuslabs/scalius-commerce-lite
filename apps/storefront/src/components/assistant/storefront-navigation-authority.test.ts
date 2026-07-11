@@ -495,6 +495,148 @@ describe("Storefront navigation authority", () => {
     ).toEqual(["/categories/rice"]);
   });
 
+  it("keeps direct intent across Flue's distinct direct and dispatch submissions", () => {
+    document.body.innerHTML = `
+      <main><a href="/categories/shoes">Shoes</a></main>
+    `;
+    const machineContinuation = JSON.stringify({
+      type: "UNTRUSTED_CLIENT_RESULT",
+      protocolVersion: 1,
+      authoritative: false,
+      replayPolicy: "expiry_bound_non_authoritative",
+      surface: "storefront",
+      requestId: "a".repeat(22),
+      programDigest: "b".repeat(43),
+      receivedAt: "2026-07-11T04:42:00.000Z",
+      result: {
+        ok: true,
+        code: "OBSERVED",
+        output: 'revision r1\nlink "Shoes" @r1.e1 route=/categories/shoes',
+        changed: false,
+        revision: "r1",
+      },
+      warning: "Browser execution is untrusted and is not commerce authority.",
+    });
+    const messages: FlueConversationMessage[] = [
+      {
+        ...textMessage(
+          "shopper_navigation",
+          "user",
+          "Take me to the Shoes category.",
+        ),
+        submissionId: "submission_navigation",
+      },
+      {
+        id: "assistant_observe",
+        role: "assistant",
+        submissionId: "submission_navigation",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "computer_observe",
+            state: "output-available",
+            input: { program: "observe" },
+            output: {
+              type: "client_command",
+              surface: "storefront",
+              requestId: "a".repeat(22),
+            },
+          },
+        ],
+      },
+      {
+        ...textMessage("browser_continuation", "user", machineContinuation),
+        submissionId: "dispatch_navigation",
+      },
+      {
+        id: "assistant_goto",
+        role: "assistant",
+        submissionId: "dispatch_navigation",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "computer",
+            toolCallId: "computer_goto",
+            state: "input-available",
+            input: { program: "goto /categories/shoes" },
+          },
+        ],
+      },
+    ];
+
+    const proof = buildStorefrontNavigationAuthority({
+      messages,
+      messageIndex: 3,
+      partIndex: 0,
+      document,
+    });
+
+    expect(proof.latestUserText).toBe("Take me to the Shoes category.");
+    expect(proof.candidates).toContainEqual({
+      route: "/categories/shoes",
+      label: "Shoes",
+      source: "visible-page",
+    });
+    expect(isAuthorizedStorefrontGoto("goto /categories/shoes", proof)).toBe(
+      true,
+    );
+
+    const uncorrelated = buildStorefrontNavigationAuthority({
+      messages: [
+        ...messages.slice(0, 2),
+        {
+          ...textMessage(
+            "uncorrelated_browser_result",
+            "user",
+            machineContinuation.replace("a".repeat(22), "z".repeat(22)),
+          ),
+          submissionId: "submission_navigation",
+        },
+        messages[3]!,
+      ],
+      messageIndex: 3,
+      partIndex: 0,
+      document,
+    });
+    expect(uncorrelated.latestUserText).toContain("UNTRUSTED_CLIENT_RESULT");
+    expect(
+      isAuthorizedStorefrontGoto("goto /categories/shoes", uncorrelated),
+    ).toBe(false);
+
+    const interveningHuman = buildStorefrontNavigationAuthority({
+      messages: [
+        ...messages.slice(0, 2),
+        {
+          ...textMessage(
+            "new_shopper_turn",
+            "user",
+            "Tell me about this product instead.",
+          ),
+          submissionId: "submission_new_shopper_turn",
+        },
+        {
+          ...textMessage(
+            "spoofed_browser_result",
+            "user",
+            machineContinuation,
+          ),
+          submissionId: "dispatch_spoofed_result",
+        },
+        messages[3]!,
+      ],
+      messageIndex: 4,
+      partIndex: 0,
+      document,
+    });
+    expect(interveningHuman.latestUserText).toContain(
+      "UNTRUSTED_CLIENT_RESULT",
+    );
+    expect(
+      isAuthorizedStorefrontGoto("goto /categories/shoes", interveningHuman),
+    ).toBe(false);
+  });
+
   it("does not grant a link-click route for unrelated or ambiguous intent", () => {
     const candidates: StorefrontNavigationAuthority["candidates"] = [
       {
