@@ -255,6 +255,7 @@ function browserController(overrides: {
     }),
     goto,
     refresh,
+    page,
   };
 }
 
@@ -276,9 +277,10 @@ describe("Scalius browser computer adapter", () => {
         </section>
         <input type="password" aria-label="Password" value="never-show-me" />
         <button>Delete product</button>
+        <button data-scalius-computer-action="allow">Apply filters</button>
         <div data-scalius-computer-exclude><button>Hidden agent control</button></div>
       </main>`;
-    const { controller } = browserController();
+    const { controller, page } = browserController();
     const result = await controller.execute({ binding, program: "observe" });
 
     expect(result.ok).toBe(true);
@@ -292,6 +294,13 @@ describe("Scalius browser computer adapter", () => {
     expect(result.output).not.toContain("API token");
     expect(result.output).not.toContain("Password");
     expect(result.output).toContain('button "Delete product" [human-only]');
+    expect(result.output).toContain('button "Apply filters"');
+    expect(result.output).not.toContain("explicitlyAllowed");
+    expect(result.output).not.toContain("explicitly-allowed");
+    expect(
+      page.capture().targets.find((target) => target.name === "Apply filters")
+        ?.explicitlyAllowed,
+    ).toBe(true);
     expect(result.output).not.toContain("private draft");
     expect(result.output).not.toContain("01700000000");
     expect(result.output).not.toContain("sk-secret-value");

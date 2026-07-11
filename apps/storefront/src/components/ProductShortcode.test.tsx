@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProductPageData } from "@/lib/api";
+import { createStorefrontAssistantComputerRuntime } from "@/components/assistant/computer/runtime";
 import ProductShortcode from "./ProductShortcode";
 
 const mocks = vi.hoisted(() => ({
@@ -21,7 +22,10 @@ vi.mock("@/lib/analytics", () => ({
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-function productData(variants: ProductPageData["variants"]): ProductPageData {
+function productData(
+  variants: ProductPageData["variants"],
+  productOverrides: Partial<ProductPageData["product"]> = {},
+): ProductPageData {
   return {
     product: {
       id: "prod_shoes",
@@ -45,6 +49,7 @@ function productData(variants: ProductPageData["variants"]): ProductPageData {
       deletedAt: null,
       imageUrl: "/shoes.jpg",
       hasVariants: true,
+      ...productOverrides,
     },
     category: undefined,
     images: [],
@@ -185,6 +190,9 @@ describe("ProductShortcode variant compatibility", () => {
     );
     expect(addToCart?.disabled).toBe(false);
     expect(addToCart?.dataset.scaliusComputerAction).toBe("allow");
+    expect(addToCart?.getAttribute("aria-label")).toBe(
+      "Add Shoes, variant var_40_red, Size 40, Color Red to cart",
+    );
     act(() => addToCart?.click());
     expect(mocks.addToCart).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -194,6 +202,58 @@ describe("ProductShortcode variant compatibility", () => {
         trackInventory: true,
         size: "40",
         color: "Red",
+      }),
+    );
+  });
+
+  it("gives two enabled shortcode cards distinct product and variant handles", async () => {
+    act(() => {
+      root.render(
+        <>
+          <ProductShortcode
+            productData={productData([
+              variant("var_shoe_40_red", "40", "Red", 4_500, 5),
+            ])}
+          />
+          <ProductShortcode
+            productData={productData(
+              [variant("var_hat_m_blue", "M", "Blue", 2_500, 5)],
+              { id: "prod_hats", name: "Hat", slug: "hat" },
+            )}
+          />
+        </>,
+      );
+    });
+    const runtime = createStorefrontAssistantComputerRuntime({
+      threadId: "shortcodes-thread",
+      tabId: "shortcodes-tab",
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    expect(observed.output).toContain(
+      'button "Add Shoes, variant var_shoe_40_red, Size 40, Color Red to cart"',
+    );
+    expect(observed.output).toContain(
+      'button "Add Hat, variant var_hat_m_blue, Size M, Color Blue to cart"',
+    );
+    const hatHandle = observed.output.match(
+      /(@r\d+\.e\d+) button "Add Hat, variant var_hat_m_blue, Size M, Color Blue to cart"/u,
+    )?.[1];
+    expect(hatHandle).toBeTruthy();
+
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${hatHandle}`,
+      }),
+    ).resolves.toMatchObject({ ok: true, code: "EXECUTED" });
+    expect(mocks.addToCart).toHaveBeenCalledOnce();
+    expect(mocks.addToCart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "prod_hats",
+        variantId: "var_hat_m_blue",
       }),
     );
   });

@@ -86,7 +86,6 @@ export function createStorefrontAssistantComputerRuntime(
   return {
     binding,
     async execute(request) {
-      synchronizeAddToCartComputerBoundary(pageDocument);
       const generation = cancellationGeneration;
       const ownsActiveGeneration = activeGeneration === null;
       if (ownsActiveGeneration) activeGeneration = generation;
@@ -181,7 +180,10 @@ function isBlockedCommerceControl(target: ScaliusComputerTarget): boolean {
       return true;
     }
   }
-  return COMMERCE_CONTROL_HINT.test(target.name);
+  return (
+    isAddToCartTargetName(target.name) ||
+    COMMERCE_CONTROL_HINT.test(target.name)
+  );
 }
 
 function isAllowedAddToCartTarget(
@@ -189,40 +191,17 @@ function isAllowedAddToCartTarget(
 ): boolean {
   return (
     target.humanOnly !== true &&
+    target.explicitlyAllowed === true &&
     target.disabled !== true &&
     !target.route &&
     target.actions.length === 1 &&
     target.actions[0] === "click" &&
-    normalizeControlName(target.name) === "add to cart"
+    isAddToCartTargetName(target.name)
   );
 }
 
-const RUNTIME_ADD_TO_CART_BLOCK = "data-scalius-computer-runtime-add-blocked";
-
-function synchronizeAddToCartComputerBoundary(pageDocument: Document): void {
-  for (const element of pageDocument.querySelectorAll<HTMLElement>(
-    "button, [role='button']",
-  )) {
-    const name = normalizeControlName(
-      element.getAttribute("aria-label") || element.textContent || "",
-    );
-    if (name !== "add to cart") continue;
-    const explicitlyAllowed =
-      element.getAttribute("data-scalius-computer-action") === "allow" &&
-      !(element as HTMLButtonElement).disabled &&
-      element.getAttribute("aria-disabled") !== "true";
-    if (explicitlyAllowed) {
-      if (element.hasAttribute(RUNTIME_ADD_TO_CART_BLOCK)) {
-        element.removeAttribute(RUNTIME_ADD_TO_CART_BLOCK);
-        element.removeAttribute("data-scalius-computer-human-only");
-      }
-      continue;
-    }
-    if (!element.hasAttribute("data-scalius-computer-human-only")) {
-      element.setAttribute(RUNTIME_ADD_TO_CART_BLOCK, "");
-      element.setAttribute("data-scalius-computer-human-only", "");
-    }
-  }
+function isAddToCartTargetName(value: string): boolean {
+  return /^add .+\b to cart$/u.test(normalizeControlName(value));
 }
 
 function normalizeControlName(value: string): string {

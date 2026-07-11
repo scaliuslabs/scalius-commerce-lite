@@ -100,6 +100,8 @@ export interface ScaliusComputerTarget {
   disabled?: boolean;
   sensitive?: boolean;
   humanOnly?: boolean;
+  /** Trusted adapter metadata. Used by host policy and never rendered to model output. */
+  explicitlyAllowed?: boolean;
   /** Trusted app-owned action ID; never derived from the model or label text. */
   humanConfirmationId?: string;
   /** This exact terminal control needs a local, two-phase human confirmation. */
@@ -1013,6 +1015,7 @@ function targetCanonical(target: ScaliusComputerTarget): string {
     Boolean(target.disabled),
     Boolean(target.sensitive),
     Boolean(target.humanOnly),
+    Boolean(target.explicitlyAllowed),
     target.humanConfirmationId ?? null,
     Boolean(target.confirmationRequired),
   ]);
@@ -1431,6 +1434,7 @@ function inspectTarget(
     disabled,
     sensitive,
     humanOnly,
+    ...(explicitlyAllowed ? { explicitlyAllowed: true } : {}),
     humanConfirmationId,
     confirmationRequired,
   };

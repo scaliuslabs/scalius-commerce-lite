@@ -462,7 +462,7 @@ function updateStockAndActions(): void {
     cache.addToCartLabel,
     !exactAddToCartAvailable,
     "Add to Cart",
-    "Add to cart",
+    exactAddToCartAvailable ? addToCartAccessibleName() : "Add to cart",
   );
   if (cache.addToCartButton) {
     if (exactAddToCartAvailable) {
@@ -478,6 +478,17 @@ function updateStockAndActions(): void {
     "Buy Now",
     "Buy now",
   );
+}
+
+function addToCartAccessibleName(): string {
+  const productName = cache.container?.dataset.productName?.trim() || "product";
+  const variantId = state.selection?.selectedVariant?.id;
+  const options = buildSelectedCartOptions()
+    .map((option) => `${option.name} ${option.label}`)
+    .join(", ");
+  return variantId
+    ? `Add ${productName}, variant ${variantId}${options ? `, ${options}` : ""} to cart`
+    : `Add ${productName} to cart`;
 }
 
 function updatePurchaseButton(
