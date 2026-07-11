@@ -231,6 +231,7 @@ export function CollectionForm({
         cancelUrl="/admin/collections"
         newUrl="/admin/collections/new"
         newLabel="New Collection"
+        allowAssistantSave
         onSave={() => form.handleSubmit(handleSubmit)()}
       />
     </>

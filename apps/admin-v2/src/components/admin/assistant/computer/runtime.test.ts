@@ -6,6 +6,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { FormActionBar } from "../../FormStickyHeader";
 import { ProductActionBar } from "../../product-form/ProductStickyHeader";
 
 import {
@@ -186,6 +187,158 @@ describe("Admin assistant computer runtime", () => {
       expect(deleteProduct).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    {
+      title: "Categories",
+      isEdit: false,
+      actionLabel: "Create Category",
+      richText: true,
+    },
+    {
+      title: "Categories",
+      isEdit: true,
+      actionLabel: "Save Category",
+      richText: true,
+    },
+    {
+      title: "Collections",
+      isEdit: false,
+      actionLabel: "Create Collection",
+      richText: false,
+    },
+    {
+      title: "Collections",
+      isEdit: true,
+      actionLabel: "Save Collection",
+      richText: false,
+    },
+  ])(
+    "batches catalog-container fields and executes ordinary $actionLabel",
+    async ({ title, isEdit, actionLabel, richText }) => {
+      document.body.innerHTML = `
+        <main>
+          <label for="entity-name">${title === "Categories" ? "Category" : "Collection"} name</label>
+          <input id="entity-name" />
+          ${
+            richText
+              ? `<div data-scalius-computer-rich-text="sanitized-html">
+                  <div role="textbox" contenteditable="true" aria-label="Category description"></div>
+                </div>`
+              : `<label for="buyer-subtitle">Buyer subtitle</label>
+                <input id="buyer-subtitle" />`
+          }
+          <div id="form-action-test-root"></div>
+        </main>`;
+
+      const acceptedRichText = vi.fn((event: Event) => event.preventDefault());
+      document
+        .querySelector("[data-scalius-computer-rich-text]")
+        ?.addEventListener(
+          SCALIUS_COMPUTER_RICH_TEXT_FILL_EVENT,
+          acceptedRichText,
+        );
+      const save = vi.fn();
+      const root = createRoot(document.getElementById("form-action-test-root")!);
+      mountedRoots.push(root);
+      await act(async () => {
+        root.render(
+          createElement(FormActionBar, {
+            title,
+            isEdit,
+            isSubmitting: false,
+            cancelUrl: `/admin/${title.toLowerCase()}`,
+            saveLabel: actionLabel,
+            allowAssistantSave: true,
+            onSave: save,
+          }),
+        );
+      });
+
+      const runtime = createAdminAssistantComputerRuntime({
+        threadId: `admin-${title.toLowerCase()}-${isEdit ? "edit" : "create"}`,
+        tabId: "admin-catalog-container-tab",
+      });
+      const observed = await runtime.execute({
+        binding: runtime.binding,
+        program: "observe",
+      });
+      expect(observed.output).toContain(`button "${actionLabel}"`);
+      expect(observed.output).not.toContain(
+        `button "${actionLabel}" [human-only]`,
+      );
+
+      const entityLabel =
+        title === "Categories" ? "Category name" : "Collection name";
+      const draftCommand = richText
+        ? `fill ${handleFor(observed.output, "Category description")} ${JSON.stringify("<h2>Summer edit</h2><p>Buyer-ready catalog copy.</p>")}`
+        : `fill ${handleFor(observed.output, "Buyer subtitle")} "A tightly curated buyer edit"`;
+      const result = await runtime.execute({
+        binding: runtime.binding,
+        program: [
+          `fill ${handleFor(observed.output, entityLabel)} "Summer Edit"`,
+          draftCommand,
+          `click ${handleFor(observed.output, actionLabel)}`,
+        ].join("; "),
+      });
+
+      expect(result).toMatchObject({ ok: true, code: "EXECUTED" });
+      expect(document.querySelector<HTMLInputElement>("#entity-name")?.value)
+        .toBe("Summer Edit");
+      if (richText) expect(acceptedRichText).toHaveBeenCalledOnce();
+      else {
+        expect(
+          document.querySelector<HTMLInputElement>("#buyer-subtitle")?.value,
+        ).toBe("A tightly curated buyer edit");
+      }
+      expect(save).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("keeps Order, financial, and destructive actions human-only by default", async () => {
+    document.body.innerHTML = `
+      <main>
+        <button>Refund Payment</button>
+        <button>Delete Category</button>
+        <div id="default-form-action-test-root"></div>
+      </main>`;
+    const createOrder = vi.fn();
+    const root = createRoot(
+      document.getElementById("default-form-action-test-root")!,
+    );
+    mountedRoots.push(root);
+    await act(async () => {
+      root.render(
+        createElement(FormActionBar, {
+          title: "Orders",
+          isEdit: false,
+          isSubmitting: false,
+          cancelUrl: "/admin/orders",
+          onSave: createOrder,
+        }),
+      );
+    });
+
+    const runtime = createAdminAssistantComputerRuntime({
+      threadId: "admin-order-create-default",
+      tabId: "admin-order-create-tab",
+    });
+    const observed = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    expect(observed.output).toContain('button "Create Order" [human-only]');
+    expect(observed.output).toContain('button "Refund Payment" [human-only]');
+    expect(observed.output).toContain('button "Delete Category" [human-only]');
+
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${handleFor(observed.output, "Create Order")}`,
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    expect(createOrder).not.toHaveBeenCalled();
+  });
 
   it("routes only inside the Admin tree through the injected router", async () => {
     const navigate = vi.fn();
