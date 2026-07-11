@@ -111,6 +111,11 @@ const buyerStockSummary = getBuyerStockSummary(
   initialStockVariant ? [initialStockVariant] : variants,
 );
 const purchaseUnavailable = !buyerStockSummary.canPurchaseAny;
+const initialAddToCartAvailable = Boolean(
+  initialSelectedVariant &&
+    !initialUnavailableVariant &&
+    getBuyerStockSummary([initialSelectedVariant]).canPurchaseAny,
+);
 const stockStatus =
   buyerStockSummary.tone === "available"
     ? {
@@ -493,16 +498,18 @@ const productVariantsJson = serializeJsonForInlineScript(
         <button
           type="button"
           data-action="add-to-cart"
-          data-scalius-computer-human-only
-          disabled={purchaseUnavailable}
+          data-scalius-computer-action={initialAddToCartAvailable
+            ? "allow"
+            : undefined}
+          disabled={!initialAddToCartAvailable}
           class="flex items-center justify-center rounded-lg border border-primary bg-primary/5 py-2 lg:py-2.5 text-sm font-medium text-primary shadow-sm hover:bg-primary/10 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:border-border disabled:hover:scale-100 cursor-pointer"
-          aria-label={purchaseUnavailable
-            ? "Product unavailable"
+          aria-label={!initialAddToCartAvailable
+            ? "Select an available product option"
             : "Add to cart"}
         >
           <ShoppingCart className="mr-1.5 h-4 w-4" />
           <span data-action-label="add-to-cart">
-            {purchaseUnavailable ? "Unavailable" : "Add to Cart"}
+            {initialAddToCartAvailable ? "Add to Cart" : "Select Options"}
           </span>
         </button>
         <button

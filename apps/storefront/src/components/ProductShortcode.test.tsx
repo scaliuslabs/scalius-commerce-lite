@@ -147,9 +147,10 @@ describe("ProductShortcode variant compatibility", () => {
     const addToCart = Array.from(host.querySelectorAll("button")).find(
       (button) => button.textContent?.includes("Add to Cart"),
     );
+    expect(addToCart?.disabled).toBe(true);
+    expect(addToCart?.hasAttribute("data-scalius-computer-action")).toBe(false);
     act(() => addToCart?.click());
     expect(mocks.addToCart).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Please select all required options.");
   });
 
   it("clears a selected toggle on second activation and only carts an exact in-stock SKU", () => {
@@ -182,6 +183,8 @@ describe("ProductShortcode variant compatibility", () => {
     const addToCart = Array.from(host.querySelectorAll("button")).find(
       (button) => button.textContent?.includes("Add to Cart"),
     );
+    expect(addToCart?.disabled).toBe(false);
+    expect(addToCart?.dataset.scaliusComputerAction).toBe("allow");
     act(() => addToCart?.click());
     expect(mocks.addToCart).toHaveBeenCalledWith(
       expect.objectContaining({

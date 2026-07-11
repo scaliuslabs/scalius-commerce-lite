@@ -163,6 +163,9 @@ export default function ProductShortcode({
     selectedColor,
   });
   const matchingVariant = exactSelection?.variant;
+  const canAddToCart = Boolean(
+    matchingVariant && isVariantAvailable(matchingVariant),
+  );
   const compatibleVariants = filterVariantsBySelection(buyerVariants, {
     selectedSize,
     selectedColor,
@@ -554,8 +557,10 @@ export default function ProductShortcode({
             <Button
               variant="outline"
               size="lg"
-              data-scalius-computer-human-only=""
-              disabled={isUnavailable}
+              data-scalius-computer-action={
+                canAddToCart ? "allow" : undefined
+              }
+              disabled={!canAddToCart}
               onClick={() => handleAddToCart(false)}
             >
               <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
