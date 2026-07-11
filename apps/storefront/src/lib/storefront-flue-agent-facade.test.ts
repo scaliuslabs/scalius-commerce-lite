@@ -380,6 +380,113 @@ describe("Storefront Flue agent facade", () => {
     expect(agentFetch).toHaveBeenCalledOnce();
   });
 
+  it("keeps a failed abort fenced until a retry confirms and finishes Stop", async () => {
+    let stopping = false;
+    let abortCalls = 0;
+    let stopFinishCalls = 0;
+    const backend = {
+      fetch: vi.fn(async (input: RequestInfo | URL) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith("/admission/begin")) {
+          if (stopping) {
+            return Response.json({ success: true, data: { status: "blocked" } });
+          }
+          return Response.json({ success: true, data: {
+            status: "started",
+            admissionId: "a".repeat(22),
+            admissionClaimToken: "c".repeat(43),
+            generation: NOW + 1,
+          } });
+        }
+        if (path.endsWith("/admission/finish")) {
+          return Response.json({ success: true, data: { status: "finished" } });
+        }
+        if (path.endsWith("/stop/begin")) {
+          stopping = true;
+          return Response.json({ success: true, data: {
+            status: "ready",
+            stoppedThroughIssuedAtMs: NOW + 2,
+            pendingAdmissions: 0,
+            pendingDispatches: 0,
+          } });
+        }
+        if (path.endsWith("/stop/reconcile")) {
+          return Response.json({ success: true, data: {
+            status: "reconciled",
+            readiness: "ready",
+            stoppedThroughIssuedAtMs: NOW + 2,
+            blockedDispatches: 0,
+            pendingAdmissions: 0,
+            pendingDispatches: 0,
+          } });
+        }
+        if (path.endsWith("/stop/status")) {
+          return Response.json({ success: true, data: {
+            status: "ready",
+            stoppedThroughIssuedAtMs: NOW + 2,
+            pendingAdmissions: 0,
+            pendingDispatches: 0,
+          } });
+        }
+        stopFinishCalls += 1;
+        stopping = false;
+        return Response.json({ success: true, data: { status: "finished" } });
+      }),
+    };
+    const agent = {
+      fetch: vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).endsWith("/abort")) {
+          abortCalls += 1;
+          if (abortCalls === 1) throw new Error("abort transport unavailable");
+          return Response.json({ aborted: false });
+        }
+        return Response.json({
+          streamUrl: PRIVATE_PATH,
+          offset: "next-offset",
+          submissionId: "submission_after_retry",
+        }, { status: 202 });
+      }),
+    };
+    const deps = dependencies({ backend, agent });
+
+    const failed = await proxyStorefrontFlueAgentFacade(
+      browserRequest("/abort", { method: "POST" }),
+      deps,
+    );
+    expect(failed.status).toBe(502);
+    await expect(failed.json()).resolves.toMatchObject({
+      error: { code: "STOREFRONT_FLUE_PROXY_FAILED" },
+    });
+    expect(stopFinishCalls).toBe(0);
+
+    const blocked = await proxyStorefrontFlueAgentFacade(
+      browserRequest("", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Show me shoes" }),
+      }),
+      deps,
+    );
+    expect(blocked.status).toBe(409);
+    await expect(blocked.json()).resolves.toMatchObject({
+      error: { code: "STOREFRONT_FLUE_ADMISSION_BLOCKED" },
+    });
+
+    expect((await proxyStorefrontFlueAgentFacade(
+      browserRequest("/abort", { method: "POST" }),
+      deps,
+    )).status).toBe(200);
+    expect(stopFinishCalls).toBe(1);
+    expect((await proxyStorefrontFlueAgentFacade(
+      browserRequest("", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Show me shoes" }),
+      }),
+      deps,
+    )).status).toBe(202);
+  });
+
   it("fences a delayed prompt before one abort, then reconciles and unlocks", async () => {
     const events: string[] = [];
     let releasePrompt: ((response: Response) => void) | undefined;

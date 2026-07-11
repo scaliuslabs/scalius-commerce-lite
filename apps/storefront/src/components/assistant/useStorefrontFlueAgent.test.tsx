@@ -201,6 +201,51 @@ describe("useStorefrontFlueAgent", () => {
     expect(host.querySelector("[data-sending]")?.textContent).toBe("false");
   });
 
+  it("keeps an idle Stop barrier retryable after a blocked send and failed abort", async () => {
+    sdkMocks.send.mockRejectedValueOnce(
+      new FlueApiError(409, {
+        error: {
+          code: "STOREFRONT_FLUE_ADMISSION_BLOCKED",
+          message: "Stop is still being reconciled",
+        },
+      }),
+    );
+    sdkMocks.abort
+      .mockRejectedValueOnce(new Error("abort transport unavailable"))
+      .mockResolvedValueOnce({ aborted: false });
+    await act(async () => {
+      root.render(<Harness open />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-send]")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
+    expect(host.querySelector("[data-can-change]")?.textContent).toBe("false");
+    expect(host.textContent).not.toContain("Show me shoes");
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-abort]")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(sdkMocks.abort).toHaveBeenCalledOnce();
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("true");
+    expect(host.querySelector("[data-aborting]")?.textContent).toBe("false");
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-abort]")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(sdkMocks.abort).toHaveBeenCalledTimes(2);
+    expect(host.querySelector("[data-sending]")?.textContent).toBe("false");
+    expect(host.querySelector("[data-can-change]")?.textContent).toBe("true");
+  });
+
   it("does not send until the initial cookie authority history is resolved", async () => {
     sdkMocks.snapshot = {
       conversation: undefined,

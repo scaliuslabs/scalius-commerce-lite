@@ -319,6 +319,95 @@ describe("Admin same-origin Flue agent facade", () => {
     await expect(response.json()).resolves.toEqual({ aborted: true });
   });
 
+  it("keeps a malformed abort fenced until an exact retry finishes the Stop barrier", async () => {
+    let stopping = false;
+    let abortCalls = 0;
+    let stopFinishCalls = 0;
+    const apiFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname;
+      if (path.endsWith("/admission/begin")) {
+        if (stopping) {
+          return Response.json({ success: true, data: { status: "blocked" } });
+        }
+        return Response.json({ success: true, data: {
+          status: "started",
+          admissionId: "a".repeat(22),
+          admissionClaimToken: "b".repeat(43),
+          generation: ADMISSION_GENERATION,
+        } });
+      }
+      if (path.endsWith("/admission/finish")) {
+        return Response.json({ success: true, data: { status: "finished" } });
+      }
+      if (path.endsWith("/stop/begin")) {
+        stopping = true;
+        return Response.json({ success: true, data: {
+          status: "ready",
+          stoppedThroughIssuedAtMs: STOP_GENERATION,
+          pendingAdmissions: 0,
+          pendingDispatches: 0,
+        } });
+      }
+      if (path.endsWith("/stop/reconcile")) {
+        return Response.json({ success: true, data: {
+          status: "reconciled",
+          readiness: "ready",
+          stoppedThroughIssuedAtMs: STOP_GENERATION,
+          blockedDispatches: 0,
+          pendingAdmissions: 0,
+          pendingDispatches: 0,
+        } });
+      }
+      if (path.endsWith("/stop/status")) {
+        return Response.json({ success: true, data: {
+          status: "ready",
+          stoppedThroughIssuedAtMs: STOP_GENERATION,
+          pendingAdmissions: 0,
+          pendingDispatches: 0,
+        } });
+      }
+      stopFinishCalls += 1;
+      stopping = false;
+      return Response.json({ success: true, data: { status: "finished" } });
+    });
+    const agentFetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/abort")) {
+        abortCalls += 1;
+        return abortCalls === 1
+          ? Response.json({ aborted: "yes" })
+          : Response.json({ aborted: false });
+      }
+      return sendAdmission();
+    });
+    const deps = dependencies(agentFetch, {
+      api: { fetch: apiFetch as unknown as Pick<Fetcher, "fetch">["fetch"] },
+    });
+
+    const malformed = await proxyAdminFlueAgentFacade(
+      browserRequest(`${PUBLIC_PATH}/abort`, { method: "POST" }),
+      deps,
+    );
+    expect(malformed.status).toBe(502);
+    await expect(malformed.json()).resolves.toMatchObject({
+      error: { code: "ADMIN_FLUE_ABORT_INVALID" },
+    });
+    expect(stopFinishCalls).toBe(0);
+
+    const blocked = await proxyAdminFlueAgentFacade(promptRequest(), deps);
+    expect(blocked.status).toBe(409);
+    await expect(blocked.json()).resolves.toMatchObject({
+      error: { code: "ADMIN_FLUE_ADMISSION_BLOCKED" },
+    });
+
+    const retried = await proxyAdminFlueAgentFacade(
+      browserRequest(`${PUBLIC_PATH}/abort`, { method: "POST" }),
+      deps,
+    );
+    expect(retried.status).toBe(200);
+    expect(stopFinishCalls).toBe(1);
+    expect((await proxyAdminFlueAgentFacade(promptRequest(), deps)).status).toBe(202);
+  });
+
   it("fences Flue immediately, then waits for a late prompt admission to settle", async () => {
     const order: string[] = [];
     let activeAdmission = false;

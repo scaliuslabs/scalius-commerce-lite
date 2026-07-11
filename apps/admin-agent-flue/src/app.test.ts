@@ -368,6 +368,48 @@ describe("admin Flue canary app", () => {
     expect(failAfterReceipt).not.toHaveBeenCalled();
   });
 
+  it("marks a lost handoff begin response uncertain and never redispatches it", async () => {
+    const { instanceId, command } = await issue();
+    let consumed = false;
+    const consumeComputerHandoff = vi.fn(async (input) => {
+      if (consumed) return { ok: false as const, reason: "uncertain" as const };
+      consumed = true;
+      return {
+        ok: true as const,
+        status: "claimed" as const,
+        state: "dispatched" as const,
+        requestId: input.handoff.requestId,
+        dispatchClaimToken: CLAIM_TOKEN,
+      };
+    });
+    const beginComputerHandoff = vi.fn(async () => false);
+    const markComputerHandoffUncertain = vi.fn(async () => true);
+    const dispatchComputerResult = vi.fn();
+    const testApp = createAdminCanaryApp({
+      consumeComputerHandoff,
+      beginComputerHandoff,
+      markComputerHandoffUncertain,
+      dispatchComputerResult,
+      beginAgentAdmission: async () => ({
+        admissionId: "a".repeat(22),
+        admissionClaimToken: "b".repeat(43),
+        generation: ADMISSION_GENERATION,
+      }),
+      finishAgentAdmission: async () => true,
+    });
+    const send = () => testApp.request(`/computer/results/${instanceId}`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: resultBody(command),
+    }, baseEnv() as never);
+
+    expect((await send()).status).toBe(503);
+    expect((await send()).status).toBe(503);
+    expect(beginComputerHandoff).toHaveBeenCalledOnce();
+    expect(markComputerHandoffUncertain).toHaveBeenCalledOnce();
+    expect(dispatchComputerResult).not.toHaveBeenCalled();
+  });
+
   it("fails signed handoffs closed when durable API authority is unavailable", async () => {
     const { instanceId, command } = await issue();
     const dispatchComputerResult = vi.fn();

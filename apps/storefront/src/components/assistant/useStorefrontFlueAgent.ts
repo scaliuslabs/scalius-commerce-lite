@@ -131,6 +131,20 @@ function deadlineController(milliseconds: number, label: string): {
   };
 }
 
+function isStorefrontStopRequiredError(error: unknown): boolean {
+  if (!(error instanceof FlueApiError) || error.status !== 409) return false;
+  const body = error.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const detail = (body as Record<string, unknown>).error;
+  return Boolean(
+    detail &&
+      typeof detail === "object" &&
+      !Array.isArray(detail) &&
+      (detail as Record<string, unknown>).code ===
+        "STOREFRONT_FLUE_ADMISSION_BLOCKED",
+  );
+}
+
 export function storefrontFlueBaseUrl(threadId: string): string {
   return `/api/assistant/conversations/${threadId}/flue`;
 }
@@ -157,6 +171,7 @@ export function useStorefrontFlueAgent({
   );
   const [admitting, setAdmitting] = useState(false);
   const [aborting, setAborting] = useState(false);
+  const [stopRequired, setStopRequired] = useState(false);
   const [reconnectToken, setReconnectToken] = useState(0);
   const [recentThreadIds, setRecentThreadIds] =
     useState<string[]>(readRecentThreads);
@@ -260,7 +275,8 @@ export function useStorefrontFlueAgent({
 
   const historyReady =
     snapshot.conversation !== undefined || snapshot.phase === "absent";
-  const sending = admitting || pendingSubmissionId !== null || aborting;
+  const sending =
+    admitting || pendingSubmissionId !== null || aborting || stopRequired;
   const canChangeConversation = !sending && !aborting;
 
   const messages = useMemo(() => {
@@ -282,6 +298,12 @@ export function useStorefrontFlueAgent({
 
   const state = useMemo<StorefrontFlueAgentState>(() => {
     if (!open) return INITIAL_STATE;
+    if (stopRequired) {
+      return {
+        kind: "connected",
+        message: "Complete Stop before sending another request.",
+      };
+    }
     if (snapshot.phase === "error") {
       return {
         kind: "disconnected",
@@ -315,7 +337,7 @@ export function useStorefrontFlueAgent({
       kind: "connected",
       message: "Private shopping thread connected.",
     };
-  }, [open, sending, snapshot.phase, threadId]);
+  }, [open, sending, snapshot.phase, stopRequired, threadId]);
 
   const sendMessage = useCallback(
     async (message: string) => {
@@ -396,7 +418,14 @@ export function useStorefrontFlueAgent({
         setOptimisticMessages((current) =>
           current.filter((entry) => entry.id !== optimisticId),
         );
-        if (ownsAdmission && !attempt.stopped) {
+        if (isStorefrontStopRequiredError(error)) {
+          admissionAttemptRef.current = null;
+          pendingSubmissionRef.current = null;
+          busyRef.current = true;
+          setPendingSubmissionId(null);
+          setAdmitting(false);
+          setStopRequired(true);
+        } else if (ownsAdmission && !attempt.stopped) {
           admissionAttemptRef.current = null;
           clearPending();
         }
@@ -409,10 +438,15 @@ export function useStorefrontFlueAgent({
   const abort = useCallback(async () => {
     if (abortPromiseRef.current) return abortPromiseRef.current;
     const active = activeRef.current;
-    if (!active || active.threadId !== threadId || !busyRef.current)
+    if (
+      !active ||
+      active.threadId !== threadId ||
+      (!busyRef.current && !stopRequired)
+    )
       return false;
     const operation = (async () => {
       setAborting(true);
+      setStopRequired(true);
       const admission = admissionAttemptRef.current;
       if (admission) {
         admission.stopped = true;
@@ -450,6 +484,7 @@ export function useStorefrontFlueAgent({
             admissionAttemptRef.current = null;
           }
           clearPending();
+          setStopRequired(false);
           active.observation.refresh();
           return true;
         }
@@ -466,6 +501,7 @@ export function useStorefrontFlueAgent({
           setPendingSubmissionId(null);
           setAdmitting(false);
         }
+        setStopRequired(false);
         active.observation.refresh();
         return result.aborted;
       } finally {
@@ -476,7 +512,7 @@ export function useStorefrontFlueAgent({
     })();
     abortPromiseRef.current = operation;
     return operation;
-  }, [clearPending, reconcileStoppedAdmission, threadId]);
+  }, [clearPending, reconcileStoppedAdmission, stopRequired, threadId]);
 
   const resetThreadObservation = useCallback(() => {
     const admission = admissionAttemptRef.current;
@@ -494,6 +530,7 @@ export function useStorefrontFlueAgent({
     setOptimisticMessages([]);
     clearPending();
     setAborting(false);
+    setStopRequired(false);
     abortPromiseRef.current = null;
   }, [clearPending]);
 

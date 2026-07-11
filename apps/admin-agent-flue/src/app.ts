@@ -185,7 +185,16 @@ export function createAdminCanaryApp(dependencies: AdminCanaryAppDependencies = 
         dependencies.beginComputerHandoff,
       );
       if (!begun) {
-        return c.json({ error: "Computer result was stopped before dispatch" }, 409);
+        // The transition may have committed even when its response was lost.
+        // Terminalize that ambiguity and never redispatch this requestId.
+        await transitionComputerHandoff(
+          c.env.API,
+          dispatchClaim,
+          HANDOFF_UNCERTAIN_URL,
+          "uncertain",
+          dependencies.markComputerHandoffUncertain,
+        );
+        return c.json({ error: "Computer handoff state is unavailable" }, 503);
       }
       let dispatchReturned = false;
       let terminalized = false;
