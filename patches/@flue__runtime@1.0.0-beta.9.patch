@@ -4,6 +4,9 @@ index ace28ee..9e4d254 100644
 +++ b/dist/agent-execution-store-BCmrE5Jm.d.mts
 @@ -428,0 +428 @@ interface DispatchInput {
 +  generation?: number;
+@@ -679 +680 @@ interface AgentSubmissionStore {
+-   * Only a running direct submission owned by `attempt` may transition to
++   * Only a running direct or dispatch submission owned by `attempt` may transition to
 diff --git a/dist/conversation-projections-XMug3C6A.mjs b/dist/conversation-projections-XMug3C6A.mjs
 index d052200..92abc7b 100644
 --- a/dist/conversation-projections-XMug3C6A.mjs
@@ -27,6 +30,35 @@ index 9403255..7c2f9bb 100644
 @@ -1877 +1878 @@ var Session = class {
 -			tools: frameworkTools(createTaskTool(runTask, this.config.subagents ?? {}))
 +			tools: frameworkTools
+@@ -3134,2 +3135 @@ async function reconcileInterruptedSubmission(submissions, submission, agent, cr
+-		if (submission.kind === "direct") await settleDirectSubmission(submissions, attempt, ctx, "completed", inspected.result, void 0, conversationWriter);
+-		else await submissions.completeSubmission(attempt);
++		if (!await settleSubmission(submissions, attempt, ctx, "completed", inspected.result, void 0, conversationWriter)) return { disposition: "stale" };
+@@ -3308 +3308 @@ async function processSubmission(opts) {
+-			const settled = submission.kind === "direct" ? await settleDirectSubmission(submissions, attempt, ctx, "failed", void 0, error, opts.conversationWriter) : await submissions.failSubmission(attempt, error);
++			const settled = await settleSubmission(submissions, attempt, ctx, "failed", void 0, error, opts.conversationWriter);
+@@ -3312 +3312 @@ async function processSubmission(opts) {
+-		const settled = submission.kind === "direct" ? await settleDirectSubmission(submissions, attempt, ctx, "completed", result, void 0, opts.conversationWriter) : await submissions.completeSubmission(attempt);
++		const settled = await settleSubmission(submissions, attempt, ctx, "completed", result, void 0, opts.conversationWriter);
+@@ -3334 +3334 @@ async function failInterruptedSubmission(submissions, submission, attempt, agent
+-	if (!(submission.kind === "direct" ? await settleDirectSubmission(submissions, attempt, ctx, "failed", void 0, error, conversationWriter) : await submissions.failSubmission(attempt, error))) return { disposition: "stale" };
++	if (!await settleSubmission(submissions, attempt, ctx, "failed", void 0, error, conversationWriter)) return { disposition: "stale" };
+@@ -3347,4 +3347,4 @@ async function failInterruptedSubmission(submissions, submission, attempt, agent
+-* so the abort is always visible in the message timeline. Direct submissions
+-* additionally settle through the two-phase outbox with `outcome: 'aborted'`,
+-* the durable terminal record a reconnecting waiter observes; dispatch
+-* submissions settle the operational row with `failSubmission`.
++* so the abort is always visible in the message timeline. Direct and dispatch
++* submissions additionally settle through the two-phase outbox with
++* `outcome: 'aborted'`, the durable terminal record a reconnecting waiter
++* observes.
+@@ -3367,2 +3367 @@ async function settleAbortedWithContext(submissions, submission, attempt, agent,
+-	if (submission.kind === "direct") return settleDirectSubmission(submissions, attempt, ctx, "aborted", void 0, error, conversationWriter);
+-	return submissions.failSubmission(attempt, error);
++	return settleSubmission(submissions, attempt, ctx, "aborted", void 0, error, conversationWriter);
+@@ -3370 +3369 @@ async function settleAbortedWithContext(submissions, submission, attempt, agent,
+-async function settleDirectSubmission(submissions, attempt, ctx, outcome, result, error, conversationWriter) {
++async function settleSubmission(submissions, attempt, ctx, outcome, result, error, conversationWriter) {
 diff --git a/dist/flue-app-DweeRG3g.mjs b/dist/flue-app-DweeRG3g.mjs
 index c0cd7c7..9a7abc6 100644
 --- a/dist/flue-app-DweeRG3g.mjs
@@ -100,14 +132,18 @@ index 1147b97..9125994 100644
 +	get admissionFence() {
 +		return this.prepared.admissionFence;
 +	}
-@@ -1187 +1225 @@ var CloudflareAgentCoordinator = class {
+@@ -997 +1035,2 @@ var CloudflareAgentCoordinator = class {
+-					}
++					}
++					if (settlement.record.outcome === "aborted") this.observers.fail(settlement.submissionId, new SubmissionAbortedError());
+@@ -1187 +1226 @@ var CloudflareAgentCoordinator = class {
 -	async admitAttachedSubmission(payload, onEvent, waitForResult, traceCarrier) {
 +	async admitAttachedSubmission(payload, onEvent, waitForResult, traceCarrier, generation) {
-@@ -1199,0 +1237 @@ var CloudflareAgentCoordinator = class {
+@@ -1199,0 +1238 @@ var CloudflareAgentCoordinator = class {
 +			if (!this.admissionFence.allows(generation)) throw new InvalidRequestError({ reason: "Agent admission generation was fenced by a later abort." });
-@@ -1226,0 +1265 @@ var CloudflareAgentCoordinator = class {
+@@ -1226,0 +1266 @@ var CloudflareAgentCoordinator = class {
 +		if (!this.admissionFence.allows(input.generation)) return Response.json({ error: "Agent dispatch generation was fenced by a later abort." }, { status: 409 });
-@@ -1250,0 +1290,10 @@ var CloudflareAgentCoordinator = class {
+@@ -1250,0 +1291,10 @@ var CloudflareAgentCoordinator = class {
 +function readOptionalFenceGeneration(headers, name) {
 +	const raw = headers.get(name);
 +	if (raw === null) return { ok: true, value: void 0 };
@@ -118,6 +154,13 @@ index 1147b97..9125994 100644
 +function invalidFenceGenerationResponse(name) {
 +	return Response.json({ error: `Invalid ${name} header.` }, { status: 400 });
 +}
+@@ -1585 +1636 @@ function createNodeAgentCoordinator(options) {
+-			if (!submission || submission.kind !== "direct") continue;
++			if (!submission) continue;
+@@ -1601 +1652,2 @@ function createNodeAgentCoordinator(options) {
+-				}
++				}
++				if (settlement.record.outcome === "aborted") observers.fail(settlement.submissionId, new SubmissionAbortedError());
 diff --git a/dist/types-USSZhfC6.d.mts b/dist/types-USSZhfC6.d.mts
 index e41ab79..c8b792a 100644
 --- a/dist/types-USSZhfC6.d.mts
@@ -128,3 +171,13 @@ index e41ab79..c8b792a 100644
 +   * reject generations fenced by a later abort before durable admission.
 +   */
 +  generation?: number;
+diff --git a/dist/sql-run-store-DRLffFXh.mjs b/dist/sql-run-store-DRLffFXh.mjs
+index 777173d..2aa5dfa 100644
+--- a/dist/sql-run-store-DRLffFXh.mjs
++++ b/dist/sql-run-store-DRLffFXh.mjs
+@@ -275 +275 @@ var AgentSubmissionStoreImpl = class {
+-					 WHERE submission_id = ? AND kind = 'direct' AND status = 'running' AND attempt_id = ?
++					 WHERE submission_id = ? AND kind IN ('direct', 'dispatch') AND status = 'running' AND attempt_id = ?
+@@ -282 +282 @@ var AgentSubmissionStoreImpl = class {
+-					 WHERE submission_id = ? AND kind = 'direct' AND status = 'terminalizing'
++					 WHERE submission_id = ? AND kind IN ('direct', 'dispatch') AND status = 'terminalizing'

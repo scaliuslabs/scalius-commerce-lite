@@ -5,6 +5,7 @@ import type {
 import { Bot, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
+import { isScaliusComputerResultContinuation } from "@scalius/shared/assistant-computer-handoff";
 import { cn } from "@scalius/shared/utils";
 
 import { Button } from "../../ui/button";
@@ -58,6 +59,22 @@ export function projectAdminAssistantMessages(
 
   const projectedByIndex = new Map<number, FlueConversationMessage>();
   for (const group of groups.values()) {
+    const visibleTextParts = new Map<
+      FlueConversationMessage,
+      FlueConversationPart[]
+    >();
+    for (const message of group.messages) {
+      visibleTextParts.set(
+        message,
+        message.parts.filter(
+          (part) =>
+            part.type === "text" &&
+            part.text.trim().length > 0 &&
+            (message.role !== "assistant" ||
+              !isScaliusComputerResultContinuation(part.text, "admin")),
+        ),
+      );
+    }
     const terminalToolCalls = new Set<string>();
     for (const message of group.messages) {
       for (const part of message.parts) {
@@ -74,11 +91,7 @@ export function projectAdminAssistantMessages(
     let lastTextMessage: FlueConversationMessage | undefined;
     for (let index = group.messages.length - 1; index >= 0; index -= 1) {
       const candidate = group.messages[index];
-      if (
-        candidate?.parts.some(
-          (part) => part.type === "text" && part.text.trim().length > 0,
-        )
-      ) {
+      if (candidate && (visibleTextParts.get(candidate)?.length ?? 0) > 0) {
         lastTextMessage = candidate;
         break;
       }
@@ -104,9 +117,7 @@ export function projectAdminAssistantMessages(
           )
           .slice(-2);
     const textParts = lastTextMessage
-      ? lastTextMessage.parts.filter(
-          (part) => part.type === "text" && part.text.trim().length > 0,
-        )
+      ? (visibleTextParts.get(lastTextMessage) ?? [])
       : [];
     const parts = [...textParts, ...errorParts, ...activeParts];
     if (parts.length === 0) continue;

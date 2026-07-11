@@ -27,6 +27,7 @@ const CLAIM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const RUNTIME_BASE = "http://api.internal/api/v1/internal/admin-assistant/flue";
 const STOP_SETTLEMENT_TIMEOUT_MS = 4_000;
 const STOP_SETTLEMENT_POLL_MS = 50;
+const MAX_EMPTY_BODY_CHUNKS = 16;
 
 const FORWARDED_RESPONSE_HEADERS = [
   "Content-Type",
@@ -128,7 +129,7 @@ export async function proxyAdminFlueAgentFacade(
     const promptResult = await readPrompt(request);
     if (promptResult instanceof Response) return promptResult;
     prompt = promptResult;
-  } else if (request.body) {
+  } else if (await hasRequestBodyBytes(request)) {
     return jsonError(
       400,
       "ADMIN_FLUE_BODY_FORBIDDEN",
@@ -286,6 +287,34 @@ export async function proxyAdminFlueAgentFacade(
   }
 
   return streamingAgentResponse(agentResponse, endpoint.kind);
+}
+
+/**
+ * Some Worker/framework request adapters preserve a zero-length POST as an
+ * empty ReadableStream instead of `null`. Treat that wire-equivalent request
+ * as bodyless, while still failing closed on the first byte (or a malformed
+ * stream that never terminates).
+ */
+async function hasRequestBodyBytes(request: Request): Promise<boolean> {
+  if (!request.body) return false;
+
+  const reader = request.body.getReader();
+  try {
+    for (let reads = 0; reads < MAX_EMPTY_BODY_CHUNKS; reads += 1) {
+      const next = await reader.read();
+      if (next.done) return false;
+      if (next.value.byteLength > 0) {
+        await reader.cancel();
+        return true;
+      }
+    }
+    await reader.cancel();
+    return true;
+  } catch {
+    return true;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 function matchAgentEndpoint(

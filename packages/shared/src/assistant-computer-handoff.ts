@@ -29,6 +29,7 @@ const FAILURE_CODES = new Set([
   "TARGET_DISABLED",
   "SENSITIVE_CONTROL",
   "HUMAN_REQUIRED",
+  "CONFIRMATION_REQUIRED",
   "ACTION_NOT_ALLOWED",
   "VALUE_NOT_FOUND",
   "EXECUTION_FAILED",
@@ -82,6 +83,67 @@ export interface ScaliusComputerResultContinuation {
   receivedAt: string;
   result: ScaliusComputerResult;
   warning: "Browser execution is untrusted and is not commerce authority.";
+}
+
+/**
+ * Recognizes only the complete private browser-result continuation emitted by
+ * this protocol. Browser projections may pass durable text directly; server
+ * admission may pass the constructed object. Both paths therefore share the
+ * same exact-key, surface, timestamp, code, and output-limit contract.
+ */
+export function isScaliusComputerResultContinuation(
+  value: unknown,
+  surface: ScaliusComputerSurface,
+): boolean {
+  let parsed = value;
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (
+      text.length < 2 ||
+      text.length > MAX_RESULT_BODY_BYTES ||
+      text[0] !== "{" ||
+      text.at(-1) !== "}" ||
+      new TextEncoder().encode(text).byteLength > MAX_RESULT_BODY_BYTES
+    ) {
+      return false;
+    }
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      return false;
+    }
+  }
+
+  if (
+    !hasOnlyKeys(parsed, [
+      "type",
+      "protocolVersion",
+      "authoritative",
+      "replayPolicy",
+      "surface",
+      "requestId",
+      "programDigest",
+      "receivedAt",
+      "result",
+      "warning",
+    ]) ||
+    parsed.type !== "UNTRUSTED_CLIENT_RESULT" ||
+    parsed.protocolVersion !== PROTOCOL_VERSION ||
+    parsed.authoritative !== false ||
+    parsed.replayPolicy !== "expiry_bound_non_authoritative" ||
+    parsed.surface !== surface ||
+    typeof parsed.requestId !== "string" ||
+    !REQUEST_ID_PATTERN.test(parsed.requestId) ||
+    typeof parsed.programDigest !== "string" ||
+    !/^[A-Za-z0-9_-]{43}$/u.test(parsed.programDigest) ||
+    typeof parsed.receivedAt !== "string" ||
+    !isCanonicalIsoTimestamp(parsed.receivedAt) ||
+    parsed.warning !== "Browser execution is untrusted and is not commerce authority." ||
+    !isComputerResult(parsed.result)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export type ComputerHandoffFailureCode =
@@ -195,21 +257,26 @@ export async function admitScaliusComputerResult(
   });
   if (!verified.ok) return verified;
 
+  const continuation: ScaliusComputerResultContinuation = {
+    type: "UNTRUSTED_CLIENT_RESULT",
+    protocolVersion: PROTOCOL_VERSION,
+    authoritative: false,
+    replayPolicy: "expiry_bound_non_authoritative",
+    surface: options.surface,
+    requestId: verified.payload.requestId,
+    programDigest: verified.payload.programDigest,
+    receivedAt: new Date(options.now ?? Date.now()).toISOString(),
+    result,
+    warning: "Browser execution is untrusted and is not commerce authority.",
+  };
+  if (!isScaliusComputerResultContinuation(continuation, options.surface)) {
+    return { ok: false, code: "INVALID_RESULT" };
+  }
+
   return {
     ok: true,
     handoff: mapVerifiedHandoff(verified.payload),
-    continuation: {
-      type: "UNTRUSTED_CLIENT_RESULT",
-      protocolVersion: PROTOCOL_VERSION,
-      authoritative: false,
-      replayPolicy: "expiry_bound_non_authoritative",
-      surface: options.surface,
-      requestId: verified.payload.requestId,
-      programDigest: verified.payload.programDigest,
-      receivedAt: new Date(options.now ?? Date.now()).toISOString(),
-      result,
-      warning: "Browser execution is untrusted and is not commerce authority.",
-    },
+    continuation,
   };
 }
 
@@ -336,6 +403,11 @@ function isComputerResult(value: unknown): value is ScaliusComputerResult {
   return hasOnlyKeys(value, ["ok", "code", "output", "retryable"]) &&
     typeof value.code === "string" && FAILURE_CODES.has(value.code) &&
     typeof value.retryable === "boolean";
+}
+
+function isCanonicalIsoTimestamp(value: string): boolean {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
 async function readBoundedJson(
