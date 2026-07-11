@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canonicalizeStorefrontHtmlCachePath,
+  hasStorefrontProductVariantSelectionParams,
   normalizeStorefrontHtmlCachePaths,
 } from "./storefront-cache-path";
 
@@ -14,6 +15,29 @@ describe("storefront HTML cache path canonicalization", () => {
         "/products/fish?color=red&utm_source=ad&gclid=google&gbraid=ios&wbraid=web&msclkid=bing&ttclid=tiktok",
       ),
     ).toBe("/products/fish");
+  });
+
+  it("detects product variant selection params, including empty values", () => {
+    expect(
+      hasStorefrontProductVariantSelectionParams(
+        new URL("https://store.example/products/fish?size=m"),
+      ),
+    ).toBe(true);
+    expect(
+      hasStorefrontProductVariantSelectionParams(
+        new URL("https://store.example/products/fish?color="),
+      ),
+    ).toBe(true);
+    expect(
+      hasStorefrontProductVariantSelectionParams(
+        new URL("https://store.example/products/fish?utm_source=ad"),
+      ),
+    ).toBe(false);
+    expect(
+      hasStorefrontProductVariantSelectionParams(
+        new URL("https://store.example/categories/fish?size=m"),
+      ),
+    ).toBe(false);
   });
 
   it("sorts surviving query params and elides listing defaults", () => {

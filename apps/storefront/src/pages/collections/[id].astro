@@ -2,7 +2,7 @@
 import Layout from "@/layouts/Layout.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import {
-  getCollectionById,
+  getCollectionByIdResult,
 } from "@/lib/api";
 import {
   buildResourceCanonicalSeoUrl,
@@ -22,14 +22,14 @@ if (!id) {
   return new Response(null, { status: 404 });
 }
 
-const { layoutData, pageData: collection } = await loadPageWithLayout(() =>
-  getCollectionById(id),
+const { layoutData, pageData: collectionResult } = await loadPageWithLayout(() =>
+  getCollectionByIdResult(id),
 );
 
-if (!collection) {
+if (collectionResult.state === "not_found") {
   return new Response(null, { status: 404 });
 }
-if (!layoutData) {
+if (collectionResult.state === "unavailable" || !layoutData) {
   const response = storefrontDataUnavailableResponse(
     "We could not load this collection. Please try again shortly.",
   );
@@ -37,6 +37,7 @@ if (!layoutData) {
   return response;
 }
 
+const collection = collectionResult.data;
 const products = collection.products ?? [];
 const categories = collection.categories ?? [];
 const config = collection.config ?? {};

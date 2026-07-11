@@ -81,6 +81,10 @@ function getMovementBadge(type: string) {
   return map[type] ?? { label: type, className: "bg-gray-50 text-gray-700 border-gray-200" };
 }
 
+function getMovementStockDelta(movement: InventoryMovement) {
+  return movement.newStock - movement.previousStock;
+}
+
 function timeAgo(dateValue: string | number) {
   const dateStr =
     typeof dateValue === "number" ? dateValue * 1000 : dateValue;
@@ -222,14 +226,24 @@ export function InventoryManager() {
       <CardContent className="p-0">
         {/* Tabs */}
         <div className="border-b px-2 sm:px-3">
-          <nav className="flex gap-4">
+          <nav className="flex gap-4" role="tablist" aria-label="Inventory views">
             <button
+              id="inventory-variants-tab"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "variants"}
+              aria-controls="inventory-variants-panel"
               onClick={() => setActiveTab("variants")}
               className={cn("flex items-center gap-2 py-2 text-xs font-medium border-b-2 transition-colors", activeTab === "variants" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
             >
               <Package className="h-3.5 w-3.5" /> All Variants
             </button>
             <button
+              id="inventory-movements-tab"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "movements"}
+              aria-controls="inventory-movements-panel"
               onClick={() => setActiveTab("movements")}
               className={cn("flex items-center gap-2 py-2 text-xs font-medium border-b-2 transition-colors", activeTab === "movements" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
             >
@@ -240,7 +254,12 @@ export function InventoryManager() {
 
         {/* Variants Tab */}
         {activeTab === "variants" && (
-          <div className="p-2 sm:p-3 space-y-2">
+          <div
+            id="inventory-variants-panel"
+            role="tabpanel"
+            aria-labelledby="inventory-variants-tab"
+            className="p-2 sm:p-3 space-y-2"
+          >
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <div className="flex flex-1 items-center w-full sm:w-auto space-x-1.5">
@@ -304,7 +323,22 @@ export function InventoryManager() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isInitialLoad ? (
+                  {variantsQuery.isError ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="h-24 text-center">
+                        <p className="text-xs font-medium text-destructive">Inventory could not be loaded.</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 h-7 text-xs"
+                          onClick={() => void variantsQuery.refetch()}
+                        >
+                          Retry
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ) : isInitialLoad ? (
                     <TableRow>
                       <TableCell colSpan={8} className="h-24 text-center">
                         <RefreshCw className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
@@ -372,7 +406,12 @@ export function InventoryManager() {
 
         {/* Movements Tab */}
         {activeTab === "movements" && (
-          <div className="p-2 sm:p-3">
+          <div
+            id="inventory-movements-panel"
+            role="tabpanel"
+            aria-labelledby="inventory-movements-tab"
+            className="p-2 sm:p-3"
+          >
             <div className="border rounded-md overflow-hidden relative">
               {loading && movements.length > 0 && (
                 <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
@@ -388,13 +427,29 @@ export function InventoryManager() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {movementsQuery.isLoading ? (
+                  {movementsQuery.isError ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center">
+                        <p className="text-xs font-medium text-destructive">Inventory movements could not be loaded.</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 h-7 text-xs"
+                          onClick={() => void movementsQuery.refetch()}
+                        >
+                          Retry
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ) : movementsQuery.isLoading ? (
                     <TableRow><TableCell colSpan={5} className="h-24 text-center"><RefreshCw className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : movements.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="h-24 text-center text-xs text-muted-foreground">No movements recorded yet.</TableCell></TableRow>
                   ) : (
                     movements.map((m) => {
                       const badge = getMovementBadge(m.type);
+                      const stockDelta = getMovementStockDelta(m);
                       return (
                         <TableRow key={m.id} className="hover:bg-muted/50">
                           <TableCell className="py-2 pl-3">
@@ -410,8 +465,8 @@ export function InventoryManager() {
                             {m.notes || "\u2014"}
                           </TableCell>
                           <TableCell className="py-2 text-right">
-                            <div className={cn("text-xs font-bold", m.quantity > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
-                              {m.quantity > 0 ? "+" : ""}{m.quantity}
+                            <div className={cn("text-xs font-bold", stockDelta > 0 ? "text-emerald-600 dark:text-emerald-400" : stockDelta < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                              {stockDelta > 0 ? "+" : ""}{stockDelta}
                             </div>
                             <div className="text-[10px] text-muted-foreground">{m.previousStock} → {m.newStock}</div>
                           </TableCell>
@@ -544,11 +599,11 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground">Adjustment Amount</label>
+              <label htmlFor="inventory-adjustment-amount" className="text-xs font-medium text-foreground">Adjustment Amount</label>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d - 1)}><Minus className="h-3.5 w-3.5" /></Button>
-                <Input type="number" value={delta} onChange={(e) => setDelta(parseInt(e.target.value) || 0)} className="text-center font-bold h-8" />
-                <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d + 1)}><Plus className="h-3.5 w-3.5" /></Button>
+                <Button type="button" aria-label="Decrease adjustment by one" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d - 1)}><Minus className="h-3.5 w-3.5" /></Button>
+                <Input id="inventory-adjustment-amount" type="number" step={1} value={delta} onChange={(e) => setDelta(parseInt(e.target.value, 10) || 0)} className="text-center font-bold h-8" />
+                <Button type="button" aria-label="Increase adjustment by one" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d + 1)}><Plus className="h-3.5 w-3.5" /></Button>
               </div>
               {delta !== 0 && (
                 <p className="text-[11px] text-muted-foreground text-center mt-1">
@@ -559,14 +614,14 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground">Reason</label>
+              <label htmlFor="inventory-adjustment-reason" className="text-xs font-medium text-foreground">Reason</label>
               <Select
                 value={reason}
                 onValueChange={(value) =>
                   setReason(value as InventoryAdjustmentReason)
                 }
               >
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger id="inventory-adjustment-reason" className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
@@ -581,8 +636,8 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground">Notes (optional)</label>
-              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add context for audit log..." className="h-8 text-xs" />
+              <label htmlFor="inventory-adjustment-notes" className="text-xs font-medium text-foreground">Notes (optional)</label>
+              <Input id="inventory-adjustment-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add context for audit log..." className="h-8 text-xs" />
             </div>
           </div>
         )}

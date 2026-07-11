@@ -107,4 +107,23 @@ describe("adjustInventory stock ledger", () => {
     });
     expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
   });
+
+  it("reconciles low-stock alerts after a positive manual restock", async () => {
+    const { db } = createInventoryAdjustmentDbMock({
+      id: "variant_1",
+      stock: 2,
+      preorderStock: 0,
+      stockVersion: 4,
+    });
+
+    const result = await adjustInventory(
+      db as never,
+      "variant_1",
+      { delta: 8, reason: "received", notes: "supplier delivery" },
+      "admin_1",
+    );
+
+    expect(result).toMatchObject({ previousStock: 2, newStock: 10, delta: 8 });
+    expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
+  });
 });

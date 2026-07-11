@@ -11,6 +11,7 @@ import { productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { recordMovement } from "./movements";
 import type { ReservationEntry, StockOperationResult } from "./types";
+import { validatePositiveQuantity } from "./validation";
 
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
@@ -32,6 +33,8 @@ export async function deductStock(
   orderId?: string,
   pool: "regular" | "preorder" | "backorder" = "regular"
 ): Promise<StockOperationResult> {
+  validatePositiveQuantity(quantity);
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const variant = await db
       .select({
@@ -136,6 +139,8 @@ export async function deductMultiple(
   entries: ReservationEntry[],
   orderId?: string
 ): Promise<{ success: boolean; results: StockOperationResult[]; error?: string }> {
+  for (const entry of entries) validatePositiveQuantity(entry.quantity);
+
   const results: StockOperationResult[] = [];
   const succeeded: ReservationEntry[] = [];
 

@@ -151,8 +151,12 @@ describe("VariantManager product mode boundaries", () => {
     expect(orderItemSelectionSource).not.toContain("Stock: not tracked");
     expect(productViewSource).toContain("Product SKU");
     expect(productViewSource).toContain("No stock limit");
-    expect(productViewSource).toContain("Option 1: ${v.size}");
-    expect(productViewSource).toContain("Option 2: ${v.color}");
+    expect(productViewSource).toContain(
+      "${product.variantOption1Label}: ${v.size}",
+    );
+    expect(productViewSource).toContain(
+      "${product.variantOption2Label}: ${v.color}",
+    );
     expect(productViewSource).not.toContain("Simple product SKU");
     expect(productViewSource).not.toContain("Size: ${v.size}");
     expect(productViewSource).not.toContain("Color: ${v.color}");

@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConflictError } from "@scalius/core/errors";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
@@ -8,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   invalidateSiteSettingsCache: vi.fn(),
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   getCurrencySettings: vi.fn(),
+  isCurrencyCodeLocked: vi.fn(),
   saveCurrencySettings: vi.fn(),
   getGeneralSettings: vi.fn(),
   saveHeaderConfig: vi.fn(),
@@ -40,6 +42,7 @@ vi.mock("../../../utils/cache-invalidation", () => ({
 
 vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
   getCurrencySettings: mocks.getCurrencySettings,
+  isCurrencyCodeLocked: mocks.isCurrencyCodeLocked,
   saveCurrencySettings: mocks.saveCurrencySettings,
   getGeneralSettings: mocks.getGeneralSettings,
   saveHeaderConfig: mocks.saveHeaderConfig,
@@ -95,6 +98,7 @@ function createTestApp() {
     currencySymbol: "Tk",
     usdExchangeRate: "1",
   });
+  mocks.isCurrencyCodeLocked.mockResolvedValue(false);
   mocks.saveCurrencySettings.mockResolvedValue(undefined);
   mocks.saveHeaderConfig.mockResolvedValue(undefined);
   mocks.saveFooterConfig.mockResolvedValue(undefined);
@@ -544,6 +548,23 @@ describe("site settings cache invalidation", () => {
     warn.mockRestore();
   });
 
+  it("reports the persisted-currency lock state to the admin form", async () => {
+    const { app, env } = createTestApp();
+    mocks.isCurrencyCodeLocked.mockResolvedValueOnce(true);
+
+    const response = await app.request(
+      "/api/v1/admin/settings/currency",
+      { method: "GET" },
+      env,
+    );
+    const payload = await response.json() as {
+      data?: { currencyCodeLocked?: boolean };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.data?.currencyCodeLocked).toBe(true);
+  });
+
   it("normalizes a supported lowercase currency code before saving", async () => {
     const { app, env } = createTestApp();
 
@@ -576,6 +597,49 @@ describe("site settings cache invalidation", () => {
       expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
     },
   );
+
+  it.each(["", "0", "-1", "Infinity", "NaN", "1foo"])(
+    "rejects invalid USD exchange rate %j before saving or invalidating",
+    async (usdExchangeRate) => {
+      const { app, env } = createTestApp();
+
+      const response = await requestJson(app, env, "POST", "/currency", {
+        currencyCode: "BDT",
+        currencySymbol: "Tk",
+        usdExchangeRate,
+      });
+
+      expect(response.status).toBe(400);
+      expect(mocks.saveCurrencySettings).not.toHaveBeenCalled();
+      expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns the typed currency lock conflict without invalidating caches", async () => {
+    const { app, env } = createTestApp();
+    mocks.saveCurrencySettings.mockRejectedValueOnce(
+      new ConflictError(
+        "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.",
+      ),
+    );
+
+    const response = await requestJson(app, env, "POST", "/currency", {
+      currencyCode: "USD",
+      currencySymbol: "$",
+      usdExchangeRate: "1",
+    });
+    const payload = await response.json() as {
+      error?: { code?: string; message?: string };
+    };
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toEqual({
+      code: "CONFLICT",
+      message:
+        "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.",
+    });
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
 
   it("rejects unsafe theme colors before saving or invalidating cache", async () => {
     const { app, env } = createTestApp();

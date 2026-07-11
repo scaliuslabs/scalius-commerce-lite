@@ -2,6 +2,7 @@
 
 import { defineMiddleware, sequence } from "astro:middleware";
 import { env as cfEnv } from "cloudflare:workers";
+import { hasStorefrontProductVariantSelectionParams } from "@scalius/shared/storefront-cache-path";
 import { apiContext } from "@/lib/api/context";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
 import { setEdgeCacheContext, cacheContextAls } from "@/lib/edge-cache";
@@ -126,6 +127,8 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   );
   const isGetRequest = request.method === "GET";
   const hasPrivateSession = requestHasPrivateSession(request.headers);
+  const hasProductVariantSelection =
+    hasStorefrontProductVariantSelectionParams(url);
 
   // Only enable caching if we're in Cloudflare environment and have KV binding
   const isCloudflareEnv = isCloudflareEnvironment();
@@ -192,6 +195,7 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   if (
     isGetRequest &&
     isCacheablePath &&
+    !hasProductVariantSelection &&
     !hasPrivateSession &&
     kvBinding &&
     isCloudflareEnv &&
@@ -306,7 +310,17 @@ const cachingMiddleware = defineMiddleware(async (context, next) => {
   // Pages that must NEVER be cached (contain user-specific or payment-sensitive data)
   const isNoCachePage = /^\/(cart|checkout)\/?$/.test(url.pathname);
 
-  if (isNoCachePage || (hasPrivateSession && isGetRequest && isCacheablePath)) {
+  if (hasProductVariantSelection && isGetRequest) {
+    // Product selection params affect SSR output. Never let one selected SKU's
+    // HTML become a shared Cache API response for another request.
+    response.headers.set(
+      "Cache-Control",
+      "private, no-cache, no-store, must-revalidate",
+    );
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+    response.headers.set("X-Cache-Status", "BYPASS_VARIANT_SELECTION");
+  } else if (isNoCachePage || (hasPrivateSession && isGetRequest && isCacheablePath)) {
     // Force no-store unconditionally — override any existing Cache-Control
     response.headers.set(
       "Cache-Control",

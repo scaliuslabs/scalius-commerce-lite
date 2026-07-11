@@ -261,7 +261,7 @@ function AttributesPage() {
   );
 
   // Server table
-  const { table, isFetching, isLoading, selectedIds, clearSelection } =
+  const { table, error, isFetching, isLoading, refetch, selectedIds, clearSelection } =
     useServerTable<AttributeItem>({
       columns,
       queryOptions: attributesQueryOptions(mapParams(search)),
@@ -295,6 +295,7 @@ function AttributesPage() {
           variant={showTrashed ? "destructive" : "outline"}
           size="sm"
           onClick={handleBulkDelete}
+          disabled={Boolean(error)}
           className={
             !showTrashed
               ? "text-destructive border-destructive hover:bg-destructive/10"
@@ -355,6 +356,8 @@ function AttributesPage() {
         table={table}
         isFetching={isFetching}
         isLoading={isLoading}
+        error={error}
+        onRetry={() => void refetch()}
         toolbar={toolbar}
         itemLabel="attributes"
         emptyState={{

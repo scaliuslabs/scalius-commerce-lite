@@ -43,6 +43,7 @@ async function applyStrictStockSet(
   const delta = targetStock - previousStock;
 
   if (delta === 0) {
+    await checkAndAlertLowStock(db, variant.id);
     return { variantId: variant.id, previousStock, newStock: targetStock, delta: 0 };
   }
 
@@ -78,9 +79,7 @@ async function applyStrictStockSet(
   ) as { id: string }[][];
 
   if ((movementRows?.length ?? 0) > 0 && (updateRows?.length ?? 0) > 0) {
-    if (delta < 0) {
-      await checkAndAlertLowStock(db, variant.id);
-    }
+    await checkAndAlertLowStock(db, variant.id);
 
     return { variantId: variant.id, previousStock, newStock: targetStock, delta };
   }
@@ -173,8 +172,9 @@ export async function setStock(
 
     const previousStock = variant.stock;
 
-    // No change needed
+    // No counter change is needed, but reconcile any stale alert state.
     if (targetStock === previousStock) {
+      await checkAndAlertLowStock(db, variantId);
       return { variantId, previousStock, newStock: targetStock, delta: 0 };
     }
 

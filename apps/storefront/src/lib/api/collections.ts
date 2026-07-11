@@ -13,6 +13,40 @@ import {
   getApiV1CollectionsById,
 } from "@scalius/api-client/sdk";
 
+export type CollectionByIdResult =
+  | { state: "found"; data: CollectionWithProducts }
+  | { state: "not_found" }
+  | { state: "unavailable" };
+
+function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | null {
+  const candidate = unwrapData<{
+    collection: Collection;
+    categories?: CategorySummary[];
+    products?: Product[];
+    featuredProduct?: Product | null;
+  }>(payload);
+  if (
+    !candidate?.collection ||
+    typeof candidate.collection !== "object" ||
+    (candidate.categories !== undefined && !Array.isArray(candidate.categories)) ||
+    (candidate.products !== undefined && !Array.isArray(candidate.products)) ||
+    (
+      candidate.featuredProduct !== undefined &&
+      candidate.featuredProduct !== null &&
+      typeof candidate.featuredProduct !== "object"
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    ...candidate.collection,
+    categories: candidate.categories,
+    products: candidate.products,
+    featuredProduct: candidate.featuredProduct,
+  } as CollectionWithProducts;
+}
+
 /**
  * Fetches a list of all active collections.
  * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
@@ -45,32 +79,50 @@ export async function getAllCollections(): Promise<Collection[] | null> {
 export async function getCollectionById(
   id: string,
 ): Promise<CollectionWithProducts | null> {
+  const result = await getCollectionByIdResult(id);
+  return result.state === "found" ? result.data : null;
+}
+
+/**
+ * Reads collection detail data while preserving authoritative not-found
+ * separately from temporary upstream failures and malformed responses.
+ */
+export async function getCollectionByIdResult(
+  id: string,
+): Promise<CollectionByIdResult> {
   if (!id) {
-    console.error("getCollectionById: id is required.");
-    return null;
+    console.error("getCollectionByIdResult: id is required.");
+    return { state: "unavailable" };
   }
 
-  return withEdgeCache(
+  const result = await withEdgeCache<CollectionByIdResult>(
     `collection_by_id_${id}`,
     async () => {
       try {
-        const { data, error } = await getApiV1CollectionsById({
+        const { data, error, response } = await getApiV1CollectionsById({
           client: getConfiguredSdkClient(),
           path: { id },
         });
-        if (error) return null;
-
-        const d = unwrapData<{ collection: Collection; categories?: CategorySummary[]; products?: Product[]; featuredProduct?: Product | null }>(data);
-        if (d?.collection) {
-          return {
-            ...d.collection,
-            categories: d.categories as CategorySummary[] | undefined,
-            products: d.products as Product[] | undefined,
-            featuredProduct: d.featuredProduct as Product | null | undefined,
-          } as CollectionWithProducts;
+        if (response?.status === 404) {
+          return { state: "not_found" };
+        }
+        if (
+          error ||
+          (response && (response.status < 200 || response.status >= 300))
+        ) {
+          console.error(
+            `Error fetching collection by ID "${id}" (status ${response?.status ?? "unknown"}).`,
+          );
+          return null;
         }
 
-        return null;
+        const collection = normalizeCollectionDetail(data);
+        if (!collection) {
+          console.error(`Invalid collection response for ID "${id}".`);
+          return null;
+        }
+
+        return { state: "found", data: collection };
       } catch (error: unknown) {
         console.error(`Error fetching collection by ID "${id}":`, error);
         return null;
@@ -78,4 +130,6 @@ export async function getCollectionById(
     },
     { ttlSeconds: CACHE_TTL.LONG },
   );
+
+  return result ?? { state: "unavailable" };
 }

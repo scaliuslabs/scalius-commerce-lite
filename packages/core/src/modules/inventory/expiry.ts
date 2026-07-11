@@ -36,14 +36,21 @@ export interface ExpirySweepOptions {
   limit?: number;
 }
 
+type ReservationMovementType = "reserved" | "preorder_reserved";
+
 function normalizeExpirySweepLimit(limit: number | undefined): number {
   if (limit === undefined) return DEFAULT_EXPIRY_SWEEP_LIMIT;
   if (!Number.isFinite(limit)) return DEFAULT_EXPIRY_SWEEP_LIMIT;
   return Math.max(1, Math.min(MAX_EXPIRY_SWEEP_LIMIT, Math.floor(limit)));
 }
 
-function createExpiredReleaseMovementId(orderId: string, variantId: string): string {
-  return `expiry_release:${orderId}:${variantId}`;
+function createExpiredReleaseMovementId(
+  orderId: string,
+  variantId: string,
+  reservationType: ReservationMovementType,
+): string {
+  const poolSuffix = reservationType === "preorder_reserved" ? ":preorder" : "";
+  return `expiry_release:${orderId}:${variantId}${poolSuffix}`;
 }
 
 async function reservationOrderExists(
@@ -65,7 +72,14 @@ async function reservationHasTerminalMovement(
   db: Database,
   orderId: string,
   variantId: string,
+  reservationType: ReservationMovementType,
 ): Promise<boolean> {
+  const deductionType = reservationType === "preorder_reserved"
+    ? "preorder_deducted"
+    : "deducted";
+  const releasePoolCondition = reservationType === "preorder_reserved"
+    ? sql`${inventoryMovements.newStock} > ${inventoryMovements.previousStock}`
+    : sql`${inventoryMovements.newStock} = ${inventoryMovements.previousStock}`;
   const movement = await db
     .select({
       movementId: inventoryMovements.id,
@@ -75,7 +89,13 @@ async function reservationHasTerminalMovement(
       and(
         eq(inventoryMovements.orderId, orderId),
         eq(inventoryMovements.variantId, variantId),
-        sql`${inventoryMovements.type} IN ('deducted', 'preorder_deducted', 'released')`,
+        sql`(
+          ${inventoryMovements.type} = ${deductionType}
+          OR (
+            ${inventoryMovements.type} = 'released'
+            AND ${releasePoolCondition}
+          )
+        )`,
       ),
     )
     .get();
@@ -106,6 +126,7 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
  *
  * For each expired reservation, this function:
  *   - Decrements `reservedStock` on the variant
+ *   - Restores `preorderStock` for expired preorder reservations
  *   - Records a "released" movement with note "expired reservation"
  *
  * This function is IDEMPOTENT: running it multiple times will not
@@ -142,14 +163,15 @@ export async function releaseExpiredReservations(
   // "deducted" or "released" movement for the same order.
   //
   // We use a subquery approach since D1/SQLite supports it well.
-  // Group by (variantId, orderId) to handle cases where multiple
-  // reservation movements exist for the same order+variant. Read one
-  // sentinel row beyond the processing limit so cron logs can tell whether
-  // another bounded pass is needed.
+  // Group by (variantId, orderId, reservation type) to handle repeated claims
+  // without mixing the regular and preorder pools. Read one sentinel row
+  // beyond the processing limit so cron logs can tell whether another bounded
+  // pass is needed.
   const expiredReservationCandidates = await db
     .select({
       variantId: inventoryMovements.variantId,
       orderId: inventoryMovements.orderId,
+      reservationType: inventoryMovements.type,
       totalQuantity: sql<number>`SUM(${inventoryMovements.quantity})`.as("total_quantity"),
     })
     .from(inventoryMovements)
@@ -166,24 +188,37 @@ export async function releaseExpiredReservations(
           SELECT 1 FROM orders AS o
           WHERE o.id = ${inventoryMovements}.order_id
         )`,
-        // No corresponding deduction for this order
+        // No corresponding pool-specific deduction for this order. A regular
+        // deduction must not hide an expired preorder claim (or vice versa).
         sql`NOT EXISTS (
           SELECT 1 FROM inventory_movements AS im2
           WHERE im2.order_id = ${inventoryMovements}.order_id
             AND im2.variant_id = ${inventoryMovements}.variant_id
-            AND im2.type IN ('deducted', 'preorder_deducted')
+            AND im2.type = CASE
+              WHEN ${inventoryMovements}.type = 'preorder_reserved' THEN 'preorder_deducted'
+              ELSE 'deducted'
+            END
         )`,
-        // No corresponding release for this order (prevents double-release after
-        // cancellations, payment failures, queue rollbacks, or previous sweeps)
+        // No corresponding release from the same pool. Preorder release rows
+        // increase the tracked pool (new_stock > previous_stock); regular and
+        // backorder releases leave physical stock unchanged.
         sql`NOT EXISTS (
           SELECT 1 FROM inventory_movements AS im3
           WHERE im3.order_id = ${inventoryMovements}.order_id
             AND im3.variant_id = ${inventoryMovements}.variant_id
             AND im3.type = 'released'
+            AND (
+              (${inventoryMovements}.type = 'preorder_reserved' AND im3.new_stock > im3.previous_stock)
+              OR (${inventoryMovements}.type = 'reserved' AND im3.new_stock = im3.previous_stock)
+            )
         )`
       )
     )
-    .groupBy(inventoryMovements.variantId, inventoryMovements.orderId)
+    .groupBy(
+      inventoryMovements.variantId,
+      inventoryMovements.orderId,
+      inventoryMovements.type,
+    )
     .orderBy(sql`MIN(${inventoryMovements.createdAt})`)
     .limit(limit + 1)
     .all();
@@ -199,18 +234,30 @@ export async function releaseExpiredReservations(
   // Release each expired reservation
   for (const reservation of expiredReservations) {
     const { variantId, orderId, totalQuantity } = reservation;
+    const reservationType = reservation.reservationType as ReservationMovementType;
 
-    if (!variantId || !orderId || totalQuantity <= 0) continue;
+    if (
+      !variantId ||
+      !orderId ||
+      totalQuantity <= 0 ||
+      (reservationType !== "reserved" && reservationType !== "preorder_reserved")
+    ) continue;
 
     try {
       if (await reservationOrderExists(db, orderId)) continue;
-      if (await reservationHasTerminalMovement(db, orderId, variantId)) continue;
+      if (await reservationHasTerminalMovement(
+        db,
+        orderId,
+        variantId,
+        reservationType,
+      )) continue;
 
       // Read current variant state for the movement log
       const variant = await db
         .select({
           stock: productVariants.stock,
           reservedStock: productVariants.reservedStock,
+          preorderStock: productVariants.preorderStock,
         })
         .from(productVariants)
         .where(eq(productVariants.id, variantId))
@@ -221,16 +268,25 @@ export async function releaseExpiredReservations(
         continue;
       }
 
-      const movementId = createExpiredReleaseMovementId(orderId, variantId);
+      const isPreorder = reservationType === "preorder_reserved";
+      const previousStock = isPreorder ? variant.preorderStock : variant.stock;
+      const newStock = isPreorder
+        ? variant.preorderStock + totalQuantity
+        : variant.stock;
+      const movementId = createExpiredReleaseMovementId(
+        orderId,
+        variantId,
+        reservationType,
+      );
       const releaseMovement = db.insert(inventoryMovements).values({
         id: movementId,
         variantId,
         orderId,
         type: "released",
         quantity: -totalQuantity,
-        previousStock: variant.stock,
-        newStock: variant.stock,
-        notes: `expired reservation (age > ${maxAgeMinutes}min, order ${orderId})`,
+        previousStock,
+        newStock,
+        notes: `expired ${isPreorder ? "preorder" : "regular"} reservation (age > ${maxAgeMinutes}min, order ${orderId})`,
         createdBy: null,
         createdAt: new Date(),
       });
@@ -242,6 +298,9 @@ export async function releaseExpiredReservations(
         .update(productVariants)
         .set({
           reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${totalQuantity})`,
+          ...(isPreorder
+            ? { preorderStock: sql`${productVariants.preorderStock} + ${totalQuantity}` }
+            : {}),
           stockVersion: sql`${productVariants.stockVersion} + 1`,
           updatedAt: sql`unixepoch()`,
         })
@@ -250,7 +309,9 @@ export async function releaseExpiredReservations(
       await safeBatch(db, [releaseMovement, releaseCounterUpdate]);
 
       result.released++;
-      result.releasedVariantIds.push(variantId);
+      if (!result.releasedVariantIds.includes(variantId)) {
+        result.releasedVariantIds.push(variantId);
+      }
     } catch (err: unknown) {
       if (isDuplicateExpiryReleaseClaimError(err)) continue;
 

@@ -41,6 +41,34 @@ describe("storefront HTML cache policy boundaries", () => {
     expect(source).toContain("isCacheablePublicResponse(response)");
   });
 
+  it("bypasses shared HTML caching for product variant selection queries", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/middleware.ts`,
+      "utf8",
+    );
+
+    const selectionIndex = source.indexOf(
+      "hasStorefrontProductVariantSelectionParams(url)",
+    );
+    const cacheLaneIndex = source.indexOf(
+      "!hasProductVariantSelection",
+      selectionIndex,
+    );
+    const bypassIndex = source.indexOf(
+      '"BYPASS_VARIANT_SELECTION"',
+      cacheLaneIndex,
+    );
+    const bypassBranch = source.slice(cacheLaneIndex, bypassIndex);
+
+    expect(selectionIndex).toBeGreaterThan(-1);
+    expect(cacheLaneIndex).toBeGreaterThan(selectionIndex);
+    expect(bypassIndex).toBeGreaterThan(cacheLaneIndex);
+    expect(bypassBranch).toContain("hasProductVariantSelection && isGetRequest");
+    expect(bypassBranch).toContain(
+      '"private, no-cache, no-store, must-revalidate"',
+    );
+  });
+
   it("preserves public discovery headers when exact generation lookup is unavailable", () => {
     const source = readFileSync(
       `${STOREFRONT_SRC_ROOT}/middleware.ts`,

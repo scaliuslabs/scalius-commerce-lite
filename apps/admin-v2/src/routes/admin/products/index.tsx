@@ -242,7 +242,7 @@ function ProductsPage() {
 
   // ── Server table ──────────────────────────────────────────────
 
-  const { table, isFetching, isLoading, selectedIds, clearSelection } =
+  const { table, error, isFetching, isLoading, refetch, selectedIds, clearSelection } =
     useServerTable({
       columns,
       queryOptions: productsQueryOptions(mapParams(search)),
@@ -316,6 +316,7 @@ function ProductsPage() {
       showTrashed={showTrashed}
       onBulkDelete={handleBulkDelete}
       isBulkDeleting={bulkDeleteMut.isPending}
+      bulkActionsDisabled={Boolean(error)}
     />
   );
 
@@ -411,6 +412,8 @@ function ProductsPage() {
             table={table}
             isFetching={isFetching}
             isLoading={isLoading}
+            error={error}
+            onRetry={() => void refetch()}
             toolbar={toolbar}
             itemLabel="products"
             emptyState={{

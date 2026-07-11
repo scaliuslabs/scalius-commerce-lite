@@ -5,6 +5,7 @@ import { releaseExpiredReservations } from "./expiry";
 type ExpiredReservation = {
   variantId: string;
   orderId: string;
+  reservationType: "reserved" | "preorder_reserved";
   totalQuantity: number;
 };
 
@@ -16,7 +17,7 @@ function createDbMock(options: {
   expiredReservations: ExpiredReservation[];
   orderExists?: boolean;
   terminalMovementExists?: boolean;
-  variant?: { stock: number; reservedStock: number } | null;
+  variant?: { stock: number; reservedStock: number; preorderStock: number } | null;
   batchError?: Error;
 }) {
   const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
@@ -94,14 +95,19 @@ function createDbMock(options: {
 
 describe("releaseExpiredReservations", () => {
   const expiredReservations = [
-    { variantId: "variant_1", orderId: "order_1", totalQuantity: 2 },
+    {
+      variantId: "variant_1",
+      orderId: "order_1",
+      reservationType: "reserved" as const,
+      totalQuantity: 2,
+    },
   ];
 
   it("does not release reservations for active live orders", async () => {
     const { db, updates, inserts } = createDbMock({
       expiredReservations,
       orderExists: true,
-      variant: { stock: 10, reservedStock: 2 },
+      variant: { stock: 10, reservedStock: 2, preorderStock: 0 },
     });
 
     const result = await releaseExpiredReservations(db as never, 30);
@@ -121,7 +127,7 @@ describe("releaseExpiredReservations", () => {
     const { db, updates, inserts } = createDbMock({
       expiredReservations,
       orderExists: false,
-      variant: { stock: 10, reservedStock: 2 },
+      variant: { stock: 10, reservedStock: 2, preorderStock: 0 },
     });
 
     const result = await releaseExpiredReservations(db as never, 30);
@@ -151,11 +157,83 @@ describe("releaseExpiredReservations", () => {
     });
   });
 
+  it("restores preorder stock when an orphaned preorder reservation expires", async () => {
+    const { db, updates, inserts } = createDbMock({
+      expiredReservations: [{
+        variantId: "variant_1",
+        orderId: "order_1",
+        reservationType: "preorder_reserved",
+        totalQuantity: 3,
+      }],
+      orderExists: false,
+      variant: { stock: 10, reservedStock: 3, preorderStock: 4 },
+    });
+
+    const result = await releaseExpiredReservations(db as never, 30);
+
+    expect(result).toMatchObject({
+      found: 1,
+      released: 1,
+      releasedVariantIds: ["variant_1"],
+      errors: [],
+    });
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.values).toHaveProperty("preorderStock");
+    expect(inserts[0]).toMatchObject({
+      table: inventoryMovements,
+      values: {
+        id: "expiry_release:order_1:variant_1:preorder",
+        type: "released",
+        quantity: -3,
+        previousStock: 4,
+        newStock: 7,
+      },
+    });
+  });
+
+  it("separates regular and preorder expiry claims for the same order and variant", async () => {
+    const { db, updates, inserts, batchCalls } = createDbMock({
+      expiredReservations: [
+        {
+          variantId: "variant_1",
+          orderId: "order_1",
+          reservationType: "reserved",
+          totalQuantity: 2,
+        },
+        {
+          variantId: "variant_1",
+          orderId: "order_1",
+          reservationType: "preorder_reserved",
+          totalQuantity: 3,
+        },
+      ],
+      orderExists: false,
+      variant: { stock: 10, reservedStock: 5, preorderStock: 4 },
+    });
+
+    const result = await releaseExpiredReservations(db as never, 30);
+
+    expect(result).toMatchObject({
+      found: 2,
+      released: 2,
+      releasedVariantIds: ["variant_1"],
+      errors: [],
+    });
+    expect(batchCalls).toHaveLength(2);
+    expect(updates).toHaveLength(2);
+    expect(updates[0]?.values).not.toHaveProperty("preorderStock");
+    expect(updates[1]?.values).toHaveProperty("preorderStock");
+    expect(inserts.map((insert) => insert.values.id)).toEqual([
+      "expiry_release:order_1:variant_1",
+      "expiry_release:order_1:variant_1:preorder",
+    ]);
+  });
+
   it("skips release when an order appears between candidate selection and release", async () => {
     const { db, updates, inserts } = createDbMock({
       expiredReservations,
       orderExists: true,
-      variant: { stock: 10, reservedStock: 2 },
+      variant: { stock: 10, reservedStock: 2, preorderStock: 0 },
     });
 
     const result = await releaseExpiredReservations(db as never, 30);
@@ -168,12 +246,12 @@ describe("releaseExpiredReservations", () => {
   it("limits each sweep and reports when more expired reservations remain", async () => {
     const { db, updates, inserts, batchCalls } = createDbMock({
       expiredReservations: [
-        { variantId: "variant_1", orderId: "order_1", totalQuantity: 2 },
-        { variantId: "variant_2", orderId: "order_2", totalQuantity: 3 },
-        { variantId: "variant_3", orderId: "order_3", totalQuantity: 4 },
+        { variantId: "variant_1", orderId: "order_1", reservationType: "reserved", totalQuantity: 2 },
+        { variantId: "variant_2", orderId: "order_2", reservationType: "reserved", totalQuantity: 3 },
+        { variantId: "variant_3", orderId: "order_3", reservationType: "reserved", totalQuantity: 4 },
       ],
       orderExists: false,
-      variant: { stock: 10, reservedStock: 9 },
+      variant: { stock: 10, reservedStock: 9, preorderStock: 0 },
     });
 
     const result = await releaseExpiredReservations(db as never, 30, {
@@ -198,7 +276,7 @@ describe("releaseExpiredReservations", () => {
       expiredReservations,
       orderExists: false,
       terminalMovementExists: true,
-      variant: { stock: 10, reservedStock: 2 },
+      variant: { stock: 10, reservedStock: 2, preorderStock: 0 },
     });
 
     const result = await releaseExpiredReservations(db as never, 30);
@@ -212,7 +290,7 @@ describe("releaseExpiredReservations", () => {
     const { db, updates, inserts } = createDbMock({
       expiredReservations,
       orderExists: false,
-      variant: { stock: 10, reservedStock: 2 },
+      variant: { stock: 10, reservedStock: 2, preorderStock: 0 },
       batchError: new Error(
         "D1_ERROR: UNIQUE constraint failed: inventory_movements.id expiry_release:order_1:variant_1",
       ),

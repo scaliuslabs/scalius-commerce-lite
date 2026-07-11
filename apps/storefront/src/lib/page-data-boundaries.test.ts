@@ -19,13 +19,13 @@ describe("storefront page data boundaries", () => {
 
     const layoutPromiseIndex = source.indexOf("const layoutPromise = getLayoutData()");
     const productPromiseIndex = source.indexOf(
-      "const productPromise = getProductBySlug(slug)",
+      "const productPromise = getProductBySlugResult(slug)",
     );
     const shippingPromiseIndex = source.indexOf(
       "const shippingMethodsPromise = getShippingMethods()",
     );
     const promiseAllIndex = source.indexOf(
-      "const [layoutData, productData, shippingMethods] = await Promise.all([",
+      "const [layoutData, productResult, shippingMethods] = await Promise.all([",
     );
 
     expect(layoutPromiseIndex).toBeGreaterThan(-1);
@@ -227,7 +227,10 @@ describe("storefront page data boundaries", () => {
     expect(homepageSource).toContain("storefrontDataUnavailableResponse");
     expect(homepageSource).toContain("if (!layoutData || !homepageData)");
     expect(productSource).toContain("storefrontDataUnavailableResponse");
-    expect(productSource).toContain("if (!layoutData)");
+    expect(productSource).toContain('if (productResult.state === "not_found")');
+    expect(productSource).toContain(
+      'if (productResult.state === "unavailable" || !layoutData)',
+    );
     expect(productSource).toContain(
       "const response = storefrontDataUnavailableResponse(\n    \"We could not load this product. Please try again shortly.\"",
     );
@@ -246,7 +249,12 @@ describe("storefront page data boundaries", () => {
       "const response = storefrontDataUnavailableResponse(\n    \"We could not load this page. Please try again shortly.\"",
     );
     expect(collectionSource).toContain("storefrontDataUnavailableResponse");
-    expect(collectionSource).toContain("if (!layoutData)");
+    expect(collectionSource).toContain(
+      'if (collectionResult.state === "not_found")',
+    );
+    expect(collectionSource).toContain(
+      'if (collectionResult.state === "unavailable" || !layoutData)',
+    );
     expect(collectionSource).toContain(
       "const response = storefrontDataUnavailableResponse(\n    \"We could not load this collection. Please try again shortly.\"",
     );

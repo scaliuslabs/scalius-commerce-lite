@@ -27,6 +27,7 @@ interface ProductToolbarProps {
   showTrashed: boolean;
   onBulkDelete: () => void;
   isBulkDeleting: boolean;
+  bulkActionsDisabled?: boolean;
 }
 
 export function ProductToolbar({
@@ -39,6 +40,7 @@ export function ProductToolbar({
   showTrashed,
   onBulkDelete,
   isBulkDeleting,
+  bulkActionsDisabled = false,
 }: ProductToolbarProps) {
   const filters: ReactNode = (
     <Select value={selectedCategory} onValueChange={onCategoryChange}>
@@ -63,7 +65,7 @@ export function ProductToolbar({
         size="sm"
         className="h-9 text-xs text-destructive border-destructive hover:bg-destructive/10"
         onClick={onBulkDelete}
-        disabled={isBulkDeleting}
+        disabled={isBulkDeleting || bulkActionsDisabled}
       >
         <Trash2 className="h-3.5 w-3.5 mr-1" />
         {showTrashed

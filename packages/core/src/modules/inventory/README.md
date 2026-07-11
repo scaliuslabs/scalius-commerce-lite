@@ -119,11 +119,12 @@ A reservation is considered expired when:
 
 Existing orders are not expired by this cron. Stale order cancellation must update order status, `orders.inventoryAction`, variant counters, and movement logs through explicit order transition logic.
 
-The sweep groups by `(variantId, orderId)`, sums quantities, and processes a bounded batch per invocation (`limit` default `50`, max `200`). It reads one extra sentinel group and returns `hasMore` so cron logs can show whether more orphaned reservations remain for the next scheduled pass. For each processed expired group:
+The sweep groups by `(variantId, orderId, reservationType)`, sums quantities without mixing regular and preorder pools, and processes a bounded batch per invocation (`limit` default `50`, max `200`). It reads one extra sentinel group and returns `hasMore` so cron logs can show whether more orphaned reservations remain for the next scheduled pass. For each processed expired group:
 - Decrements `reservedStock` on the variant (clamped to 0 via `MAX(0, ...)`)
-- Records a "released" movement with note `"expired reservation (age > 30min, order {orderId})"`
+- Restores `preorderStock` when the expired claim is `preorder_reserved`
+- Records a "released" movement that identifies the expired regular or preorder pool
 
-The function is **idempotent** -- the "released" movement it creates excludes that reservation from future sweeps. Expiry releases use deterministic movement ids (`expiry_release:{orderId}:{variantId}`) and run the movement insert plus variant counter update in a single D1 batch, so overlapping cron invocations cannot both claim and apply the same expiry release.
+The function is **idempotent** -- a same-pool "released" movement excludes that reservation from future sweeps. Regular expiry releases keep deterministic movement ids `expiry_release:{orderId}:{variantId}`; preorder expiry releases use `expiry_release:{orderId}:{variantId}:preorder`. The movement insert and pool-aware counter update run in one D1 batch, so overlapping cron invocations cannot both claim and apply the same expiry release.
 
 ## Files
 

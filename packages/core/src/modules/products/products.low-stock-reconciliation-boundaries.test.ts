@@ -1,0 +1,25 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+const variantSource = readFileSync(
+  new URL("./products.variants.ts", import.meta.url),
+  "utf8",
+);
+const adminSource = readFileSync(
+  new URL("./products.admin.ts", import.meta.url),
+  "utf8",
+);
+
+describe("product-editor low-stock reconciliation boundaries", () => {
+  it("reconciles alerts after every single-variant stock transition", () => {
+    expect(variantSource).toContain("await checkAndAlertLowStock(db, variantId)");
+    expect(variantSource).not.toContain("if (delta < 0)");
+  });
+
+  it("reconciles alerts after every successful bulk stock transition", () => {
+    expect(adminSource).toContain(
+      "await checkAndAlertLowStock(db, pair.variantId)",
+    );
+    expect(adminSource).not.toContain("if (pair.delta < 0)");
+  });
+});

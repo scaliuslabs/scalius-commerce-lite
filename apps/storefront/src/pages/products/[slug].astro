@@ -1,5 +1,5 @@
 ---
-import { getLayoutData, getProductBySlug, getShippingMethods } from "@/lib/api";
+import { getLayoutData, getProductBySlugResult, getShippingMethods } from "@/lib/api";
 import Layout from "@/layouts/Layout.astro";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
@@ -56,20 +56,20 @@ if (!slug) {
 }
 
 const layoutPromise = getLayoutData();
-const productPromise = getProductBySlug(slug);
+const productPromise = getProductBySlugResult(slug);
 const shippingMethodsPromise = getShippingMethods();
 
 // Parallel fetch: layout, product, and shipping data in the first cold-cache wave.
-const [layoutData, productData, shippingMethods] = await Promise.all([
+const [layoutData, productResult, shippingMethods] = await Promise.all([
   layoutPromise,
   productPromise,
   shippingMethodsPromise,
 ]);
 setRuntimeImageCdnPolicy(layoutData?.media);
-if (!productData) {
+if (productResult.state === "not_found") {
   return new Response(null, { status: 404 });
 }
-if (!layoutData) {
+if (productResult.state === "unavailable" || !layoutData) {
   const response = storefrontDataUnavailableResponse(
     "We could not load this product. Please try again shortly.",
   );
@@ -77,6 +77,7 @@ if (!layoutData) {
   return response;
 }
 
+const productData = productResult.data;
 const { product, category, images, variants, relatedProducts } = productData;
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
