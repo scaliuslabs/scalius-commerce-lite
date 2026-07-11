@@ -7,6 +7,7 @@ import {
   buildStorefrontNavigationAuthority,
   getAuthorizedStorefrontNavigationRoutes,
   isAuthorizedStorefrontGoto,
+  resolveDirectVisibleStorefrontNavigation,
   type StorefrontNavigationAuthority,
 } from "./storefront-navigation-authority";
 
@@ -493,6 +494,96 @@ describe("Storefront navigation authority", () => {
     expect(
       getAuthorizedStorefrontNavigationRoutes("click @r1.e1", proof),
     ).toEqual(["/categories/rice"]);
+  });
+
+  it("resolves one exact visible direct route and rejects ambiguity, discovery, and private routes", () => {
+    const allowsPublicRoute = (route: string) =>
+      !route.startsWith("/checkout") && !route.startsWith("/account");
+    document.body.innerHTML = `
+      <main>
+        <a href="/categories/shoes">Shoes</a>
+        <a href="/checkout">Checkout</a>
+      </main>
+    `;
+    expect(
+      resolveDirectVisibleStorefrontNavigation({
+        latestUserText: "Take me to the Shoes category.",
+        document,
+        allowsRoute: allowsPublicRoute,
+      }),
+    ).toEqual({ route: "/categories/shoes", label: "Shoes" });
+    expect(
+      resolveDirectVisibleStorefrontNavigation({
+        latestUserText: "Do you sell shoes?",
+        document,
+        allowsRoute: allowsPublicRoute,
+      }),
+    ).toBeNull();
+    expect(
+      resolveDirectVisibleStorefrontNavigation({
+        latestUserText: "Take me to checkout.",
+        document,
+        allowsRoute: allowsPublicRoute,
+      }),
+    ).toBeNull();
+
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<a href="/collections/shoes">Shoes category</a>',
+    );
+    expect(
+      resolveDirectVisibleStorefrontNavigation({
+        latestUserText: "Take me to the Shoes category.",
+        document,
+        allowsRoute: allowsPublicRoute,
+      }),
+    ).toBeNull();
+  });
+
+  it("fails closed on visible-candidate overflow and ignores truly hidden routes", () => {
+    const allowsRoute = () => true;
+    const filler = Array.from(
+      { length: 31 },
+      (_, index) =>
+        `<a href="/categories/filler-${index}">Filler ${index}</a>`,
+    ).join("");
+    document.body.innerHTML = `<main>
+      <a href="/categories/shoes">Shoes</a>
+      ${filler}
+      <a href="/collections/shoes">Shoes category</a>
+    </main>`;
+    expect(
+      resolveDirectVisibleStorefrontNavigation({
+        latestUserText: "Take me to the Shoes category.",
+        document,
+        allowsRoute,
+      }),
+    ).toBeNull();
+
+    document.body.innerHTML = `<main>
+      <a href="/categories/shoes">Shoes</a>
+      <div style="display: none">
+        <a href="/collections/shoes">Shoes category</a>
+      </div>
+    </main>`;
+    expect(
+      resolveDirectVisibleStorefrontNavigation({
+        latestUserText: "Take me to the Shoes category.",
+        document,
+        allowsRoute,
+      }),
+    ).toEqual({ route: "/categories/shoes", label: "Shoes" });
+
+    document.body.innerHTML = `<main>
+      <a style="visibility: hidden" href="/categories/shoes">Shoes</a>
+    </main>`;
+    expect(
+      resolveDirectVisibleStorefrontNavigation({
+        latestUserText: "Take me to the Shoes category.",
+        document,
+        allowsRoute,
+      }),
+    ).toBeNull();
   });
 
   it("keeps direct intent across Flue's distinct direct and dispatch submissions", () => {

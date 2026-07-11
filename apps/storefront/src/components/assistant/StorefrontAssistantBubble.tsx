@@ -45,6 +45,7 @@ import { ASSISTANT_LAUNCHER_SIZE } from "./assistant-geometry";
 import {
   MAX_MESSAGE_CHARS,
   cleanAssistantDisplayText,
+  createTextMessage,
 } from "./storefront-assistant-chat";
 import {
   flueMessageText,
@@ -65,8 +66,14 @@ import {
   StorefrontFlueComputerCoordinator,
   type StorefrontFlueComputerConsumeResult,
 } from "./computer/flue-bridge";
-import { createStorefrontAssistantComputerRuntime } from "./computer/runtime";
-import { buildStorefrontNavigationAuthority } from "./storefront-navigation-authority";
+import {
+  createStorefrontAssistantComputerRuntime,
+  isAllowedStorefrontComputerRoute,
+} from "./computer/runtime";
+import {
+  buildStorefrontNavigationAuthority,
+  resolveDirectVisibleStorefrontNavigation,
+} from "./storefront-navigation-authority";
 import { useStorefrontFlueAgent } from "./useStorefrontFlueAgent";
 import { useAssistantGeometry } from "./useAssistantGeometry";
 import "@scalius/ui/assistant/styles.css";
@@ -99,6 +106,7 @@ const DRAG_THRESHOLD = 6;
 const KEYBOARD_MOVE_STEP = 32;
 const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
 const PINNED_BOTTOM_THRESHOLD = 48;
+const LOCAL_NAVIGATION_MESSAGE_ID_PREFIX = "client-navigation:";
 
 function getAssistantBridge(): StorefrontAssistantBridge | null {
   if (typeof window === "undefined") return null;
@@ -182,13 +190,21 @@ export default function StorefrontAssistantBubble() {
     restoredToFlueMessages(readStorefrontAssistantSessionHandoff()),
   );
   const flue = useStorefrontFlueAgent({ open: isOpen });
-  const messages = useMemo(
-    () =>
-      flue.historyReady
-        ? flue.messages
-        : mergeRestoredFlueMessages(restoredMessagesRef.current, flue.messages),
-    [flue.historyReady, flue.messages],
-  );
+  const messages = useMemo(() => {
+    if (!flue.historyReady) {
+      return mergeRestoredFlueMessages(
+        restoredMessagesRef.current,
+        flue.messages,
+      );
+    }
+    const liveIds = new Set(flue.messages.map((message) => message.id));
+    const localNavigationMessages = restoredMessagesRef.current.filter(
+      (message) =>
+        message.id.startsWith(LOCAL_NAVIGATION_MESSAGE_ID_PREFIX) &&
+        !liveIds.has(message.id),
+    );
+    return [...flue.messages, ...localNavigationMessages];
+  }, [flue.historyReady, flue.messages]);
   const visibleMessages = useMemo(
     () => projectStorefrontAssistantMessages(messages),
     [messages],
@@ -516,6 +532,43 @@ export default function StorefrontAssistantBubble() {
     forceFollowRef.current = true;
     scrollToLatest(true);
     setDraft("");
+    const directNavigation = resolveDirectVisibleStorefrontNavigation({
+      latestUserText: message,
+      document,
+      allowsRoute: isAllowedStorefrontComputerRoute,
+    });
+    if (directNavigation) {
+      const currentHandoff = toSessionHandoffMessages(messagesRef.current);
+      const navigationMessageId =
+        `${LOCAL_NAVIGATION_MESSAGE_ID_PREFIX}${Date.now()}:` +
+        Math.random().toString(36).slice(2, 8);
+      const userMessage = createTextMessage("user", message);
+      const outcomeMessage = createTextMessage(
+        "assistant",
+        `Opening ${directNavigation.label || directNavigation.route}.`,
+      );
+      writeStorefrontAssistantOpenState(true);
+      writeStorefrontAssistantSessionHandoff([
+        ...currentHandoff,
+        { ...userMessage, id: `${navigationMessageId}:user` },
+        { ...outcomeMessage, id: `${navigationMessageId}:outcome` },
+      ]);
+      let navigated = false;
+      try {
+        navigated =
+          getAssistantBridge()?.navigate?.(directNavigation.route) === true;
+      } catch {
+        // Restore the prior handoff below and let Flue handle the request.
+      }
+      if (navigated) {
+        setStatus({
+          kind: "success",
+          message: `Opening ${directNavigation.label || "the requested page"}…`,
+        });
+        return;
+      }
+      writeStorefrontAssistantSessionHandoff(currentHandoff);
+    }
     setStatus({
       kind: "working",
       message: "Sending this request to the private shopping thread…",

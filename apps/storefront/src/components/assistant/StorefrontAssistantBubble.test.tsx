@@ -171,6 +171,127 @@ describe("StorefrontAssistantBubble Flue cutover", () => {
     );
   });
 
+  it("opens one exact visible category immediately and preserves the compact open-panel handoff", async () => {
+    document
+      .querySelector<HTMLElement>("[data-assistant-page-slot]")
+      ?.insertAdjacentHTML(
+        "afterbegin",
+        '<main><a href="/categories/shoes">Shoes</a></main>',
+      );
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await typeAssistantMessage("Take me to the Shoes category.");
+    await click(queryButton("Send storefront assistant message"));
+
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledWith("/categories/shoes");
+    expect(flueMocks.snapshot.sendMessage).not.toHaveBeenCalled();
+    expect(
+      window.sessionStorage.getItem(
+        STOREFRONT_ASSISTANT_OPEN_STATE_STORAGE_KEY,
+      ),
+    ).toBe("open");
+    const handoff = window.sessionStorage.getItem(
+      STOREFRONT_ASSISTANT_SESSION_HANDOFF_STORAGE_KEY,
+    );
+    expect(handoff).toContain("Take me to the Shoes category.");
+    expect(handoff).toContain("Opening Shoes.");
+
+    flueMocks.snapshot.messages = Array.from({ length: 6 }).flatMap(
+      (_, index) => [
+        textMessage(
+          `durable-user-${index + 1}`,
+          "user",
+          `Durable request ${index + 1}`,
+        ),
+        textMessage(
+          `durable-assistant-${index + 1}`,
+          "assistant",
+          `Durable answer ${index + 1}`,
+        ),
+      ],
+    );
+    act(() => root.unmount());
+    root = createRoot(host);
+    renderBubble();
+    await flushReact();
+    const firstDestinationTranscript = document.body.textContent ?? "";
+    expect(firstDestinationTranscript).toContain("Durable answer 6");
+    expect(firstDestinationTranscript.indexOf("Durable answer 6")).toBeLessThan(
+      firstDestinationTranscript.indexOf("Take me to the Shoes category."),
+    );
+    expect(
+      firstDestinationTranscript.indexOf("Take me to the Shoes category."),
+    ).toBeLessThan(firstDestinationTranscript.indexOf("Opening Shoes."));
+
+    act(() => root.unmount());
+    root = createRoot(host);
+    renderBubble();
+    await flushReact();
+    const secondDestinationTranscript = document.body.textContent ?? "";
+    expect(secondDestinationTranscript).toContain(
+      "Take me to the Shoes category.",
+    );
+    expect(secondDestinationTranscript).toContain("Opening Shoes.");
+  });
+
+  it("restores the prior handoff and falls through when the navigation bridge throws", async () => {
+    document
+      .querySelector<HTMLElement>("[data-assistant-page-slot]")
+      ?.insertAdjacentHTML(
+        "afterbegin",
+        '<main><a href="/categories/shoes">Shoes</a></main>',
+      );
+    navigate.mockImplementationOnce(() => {
+      throw new Error("navigation bridge failed");
+    });
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+    await typeAssistantMessage("Take me to the Shoes category.");
+    await click(queryButton("Send storefront assistant message"));
+
+    expect(flueMocks.snapshot.sendMessage).toHaveBeenCalledOnce();
+    expect(flueMocks.snapshot.sendMessage).toHaveBeenCalledWith(
+      "Take me to the Shoes category.",
+    );
+    expect(
+      window.sessionStorage.getItem(
+        STOREFRONT_ASSISTANT_SESSION_HANDOFF_STORAGE_KEY,
+      ) ?? "",
+    ).not.toContain("Opening Shoes.");
+  });
+
+  it("leaves ambiguous, non-navigation, and private requests to the agent without navigating", async () => {
+    document
+      .querySelector<HTMLElement>("[data-assistant-page-slot]")
+      ?.insertAdjacentHTML(
+        "afterbegin",
+        `<main>
+          <a href="/categories/shoes">Shoes</a>
+          <a href="/collections/shoes">Shoes category</a>
+          <a href="/checkout">Checkout</a>
+        </main>`,
+      );
+    renderBubble();
+    await click(queryButton("Open storefront assistant"));
+
+    for (const message of [
+      "Take me to the Shoes category.",
+      "Tell me about shoes.",
+      "Take me to checkout.",
+    ]) {
+      await typeAssistantMessage(message);
+      await click(queryButton("Send storefront assistant message"));
+    }
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(flueMocks.snapshot.sendMessage.mock.calls).toEqual([
+      ["Take me to the Shoes category."],
+      ["Tell me about shoes."],
+      ["Take me to checkout."],
+    ]);
+  });
+
   it("executes one signed same-origin computer navigation and persists the open dock", async () => {
     const issued = await issueScaliusComputerCommand({
       surface: "storefront",
